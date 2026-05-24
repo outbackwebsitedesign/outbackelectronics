@@ -3503,7 +3503,7 @@ function AdminPage({ go }) {
   return (
     <div style={{display:'flex', minHeight:'100vh', background:'var(--bg)'}}>
       <AdminSidebar section={effectiveSection} setSection={s => { setSection(s); setSearch(''); }} role={sessionInfo.role} username={sessionInfo.username}
-        onSignOut={async () => { await fetch('/api/admin/logout', { method:'POST', headers:postHeaders(), credentials:'include' }); setSessionInfo({ authed: false, role: null, username: null }); go('home'); }} />
+        onSignOut={async () => { await fetch('/api/admin/logout', { method:'POST', headers:postHeaders(), credentials:'include' }); setSessionInfo({ authed: false, role: null, username: null }); }} />
       <div style={{flex:1, minWidth:0}}>
         <AdminTopbar title={view.t} subtitle={subtitle} search={search} onSearch={setSearch}
           actions={
