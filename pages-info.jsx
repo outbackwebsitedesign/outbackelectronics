@@ -137,7 +137,7 @@ function QuotePage({ go }) {
             <span className="tag tag-rust">PHONE FIRST</span>
             <h3 className="serif" style={{fontSize:28, marginTop:12, lineHeight:1.05}}>Or just call.</h3>
             <p style={{marginTop:8, fontSize:13, color:'var(--ink-2)'}}>If it's actively smoking, on fire, or sinking, save the form.</p>
-            <div className="serif" style={{fontSize:32, marginTop:14, color:'var(--rust)'}}>{shop.phone}</div>
+            <a href={`tel:${(shop.phone||'').replace(/\s/g,'')}`} className="serif" style={{fontSize:32, marginTop:14, color:'var(--rust)', textDecoration:'none', display:'block'}}>{shop.phone}</a>
             <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:6}}>BY APPOINTMENT ONLY</div>
           </div>
           <div className="card" style={{padding: 22, marginTop: 16, background:'var(--dark)', color:'var(--paper)', borderColor:'var(--dark)'}}>
@@ -214,12 +214,12 @@ function ContactPage({ go }) {
             <div className="grid-2" style={{gap: 16}}>
               <div className="card-paper" style={{padding: 22}}>
                 <span className="eyebrow">PHONE</span>
-                <div className="serif" style={{fontSize: 28, marginTop:8, color:'var(--rust)'}}>{shop.phone}</div>
+                <a href={`tel:${(shop.phone||'').replace(/\s/g,'')}`} className="serif" style={{fontSize:28, marginTop:8, color:'var(--rust)', textDecoration:'none', display:'block'}}>{shop.phone}</a>
                 <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:4}}>CALL OR SMS TO BOOK AN APPOINTMENT</div>
               </div>
               <div className="card-paper" style={{padding: 22}}>
                 <span className="eyebrow">EMAIL</span>
-                <div style={{fontSize: 18, marginTop:8, fontWeight:600}}>outbackhutelectronics@gmail.com</div>
+                <a href="mailto:outbackhutelectronics@gmail.com" style={{fontSize:18, marginTop:8, fontWeight:600, color:'inherit', display:'block'}}>outbackhutelectronics@gmail.com</a>
                 <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:4}}>APPOINTMENTS ONLY</div>
               </div>
               <div className="card-paper" style={{padding: 22}}>

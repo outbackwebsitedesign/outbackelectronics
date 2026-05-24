@@ -273,6 +273,10 @@ function PortalNav({ user, tab, setTab, onLogout }) {
     { id: 'repairs',     label: 'Repairs' },
     { id: 'quotes',      label: 'Quotes' },
     { id: 'memberships', label: 'Membership' },
+    { id: 'rewards',     label: 'Rewards' },
+    { id: 'wallet',      label: 'Wallet' },
+    { id: 'addresses',   label: 'Addresses' },
+    { id: 'bookings',    label: 'Bookings' },
     { id: 'account',     label: 'Account' },
   ];
 
@@ -618,10 +622,19 @@ function MembershipsTab() {
 
   async function subscribe(tierId) {
     setBusy(true); setMsg(null);
-    const r = await api('/api/portal/membership/subscribe', { method: 'POST', body: JSON.stringify({ tierId }) });
+    // Request a Stripe checkout session from the server
+    const r = await api('/api/portal/membership/checkout', { method: 'POST', body: JSON.stringify({ tierId }) });
     setBusy(false);
-    if (r.ok) { setData({ subscription: r.subscription, tier: r.tier }); setMsg({ ok: true, text: `Subscribed to ${r.tier.name}.` }); }
-    else { setMsg({ ok: false, text: r.message || 'Subscription failed.' }); }
+    if (r.ok && r.url) {
+      window.location.href = r.url;
+    } else if (r.ok && !r.url) {
+      // Server acknowledged but returned no checkout URL — free/trial tier
+      const r2 = await api('/api/portal/membership/subscribe', { method: 'POST', body: JSON.stringify({ tierId }) });
+      if (r2.ok) { setData({ subscription: r2.subscription, tier: r2.tier }); setMsg({ ok: true, text: `Subscribed to ${r2.tier?.name || 'membership'}.` }); }
+      else { setMsg({ ok: false, text: r2.message || 'Subscription failed.' }); }
+    } else {
+      setMsg({ ok: false, text: r.message || 'Could not start checkout. Please contact us to subscribe.' });
+    }
   }
 
   async function cancel() {
@@ -678,13 +691,114 @@ function MembershipsTab() {
                 {isActive
                   ? <button className="btn btn-ghost btn-sm" disabled style={{width:'100%', justifyContent:'center'}}>Current plan</button>
                   : <button className="btn btn-rust btn-sm" style={{width:'100%', justifyContent:'center'}} onClick={() => subscribe(tier.id)} disabled={busy}>
-                      {activeTier ? 'Switch to this' : 'Subscribe'} →
+                      {busy ? 'Redirecting…' : activeTier ? 'Switch to this →' : tier.price > 0 ? `Pay $${tier.price}/mo →` : 'Subscribe →'}
                     </button>
                 }
               </div>
             );
           })}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Rewards ───────────────────────────────────────────────────────────────────
+
+function RewardsTab() {
+  return (
+    <div className="tab-content">
+      <div className="section-block">
+        <h2>My Rewards</h2>
+        <p style={{color:'var(--ink-2)', marginTop:8}}>Rewards and loyalty points are coming soon. Check back after your next repair or purchase.</p>
+      </div>
+    </div>
+  );
+}
+
+// ── Wallet ────────────────────────────────────────────────────────────────────
+
+function WalletTab() {
+  return (
+    <div className="tab-content">
+      <div className="section-block">
+        <h2>My Wallet</h2>
+        <p style={{color:'var(--ink-2)', marginTop:8}}>Store credit and gift card balance will appear here once the wallet feature launches.</p>
+      </div>
+    </div>
+  );
+}
+
+// ── Addresses ─────────────────────────────────────────────────────────────────
+
+function AddressesTab() {
+  const [addresses, setAddresses] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api('/api/portal/addresses')
+      .then(d => setAddresses(d.addresses || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <div className="tab-content">
+      <div className="section-block">
+        <h2>Saved Addresses</h2>
+        {loading ? <LoadingSection /> : addresses.length === 0
+          ? <p style={{color:'var(--ink-2)', marginTop:8}}>No saved addresses yet. Your delivery addresses will appear here after your first order.</p>
+          : (
+            <div style={{display:'grid', gap:16, marginTop:16}}>
+              {addresses.map((a, i) => (
+                <div key={i} className="card-paper" style={{padding:20}}>
+                  <div style={{fontWeight:600}}>{a.name}</div>
+                  <div style={{color:'var(--ink-2)', fontSize:14, marginTop:4}}>{a.line1}{a.line2 ? `, ${a.line2}` : ''}</div>
+                  <div style={{color:'var(--ink-2)', fontSize:14}}>{a.city} {a.state} {a.postcode}</div>
+                </div>
+              ))}
+            </div>
+          )
+        }
+      </div>
+    </div>
+  );
+}
+
+// ── Bookings ──────────────────────────────────────────────────────────────────
+
+function BookingsTab() {
+  const [bookings, setBookings] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api('/api/portal/bookings')
+      .then(d => setBookings(d.bookings || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <div className="tab-content">
+      <div className="section-block">
+        <h2>My Bookings</h2>
+        {loading ? <LoadingSection /> : bookings.length === 0
+          ? <EmptyState icon="tool" message="No bookings yet. Book a repair or service appointment to see it here." />
+          : (
+            <table className="data-table" style={{marginTop:16}}>
+              <thead><tr><th>Date</th><th>Service</th><th>Status</th></tr></thead>
+              <tbody>
+                {bookings.map((b, i) => (
+                  <tr key={i}>
+                    <td>{fmtDate(b.date)}</td>
+                    <td>{b.service || '—'}</td>
+                    <td><StatusTag status={b.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )
+        }
       </div>
     </div>
   );
@@ -796,17 +910,40 @@ function EmptyState({ icon, message }) {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
+const PORTAL_TABS = ['overview','orders','repairs','quotes','memberships','rewards','wallet','addresses','bookings','account'];
+
 function Dashboard({ user, setUser, onLogout }) {
-  const [tab, setTab] = useState('overview');
+  const [tab, setTab] = useState(() => {
+    const hash = window.location.hash.replace('#', '');
+    return PORTAL_TABS.includes(hash) ? hash : 'overview';
+  });
+
+  const switchTab = (id) => {
+    setTab(id);
+    window.history.replaceState({}, '', `#${id}`);
+  };
+
+  useEffect(() => {
+    const onPop = () => {
+      const hash = window.location.hash.replace('#', '');
+      if (PORTAL_TABS.includes(hash)) setTab(hash);
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
 
   return (
     <>
-      <PortalNav user={user} tab={tab} setTab={setTab} onLogout={onLogout} />
-      {tab === 'overview'    && <OverviewTab user={user} setTab={setTab} />}
+      <PortalNav user={user} tab={tab} setTab={switchTab} onLogout={onLogout} />
+      {tab === 'overview'    && <OverviewTab user={user} setTab={switchTab} />}
       {tab === 'orders'      && <OrdersTab />}
       {tab === 'repairs'     && <RepairsTab />}
       {tab === 'quotes'      && <QuotesTab user={user} />}
       {tab === 'memberships' && <MembershipsTab />}
+      {tab === 'rewards'     && <RewardsTab />}
+      {tab === 'wallet'      && <WalletTab />}
+      {tab === 'addresses'   && <AddressesTab />}
+      {tab === 'bookings'    && <BookingsTab />}
       {tab === 'account'     && <AccountTab user={user} setUser={setUser} />}
       <footer className="portal-footer">
         <div className="container">
