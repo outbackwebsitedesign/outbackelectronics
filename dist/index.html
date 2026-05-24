@@ -4,10 +4,17 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Outback Electronics — Built for where the signal ends</title>
+<meta name="description" content="Outback Electronics — rugged gear, solar kits, comms, and tools built for remote Australia. Shop online or visit us for expert off-grid advice." />
+<meta property="og:title" content="Outback Electronics — Built for where the signal ends" />
+<meta property="og:description" content="Rugged gear, solar kits, comms, and tools built for remote Australia. Shop online or visit us for expert off-grid advice." />
+<meta property="og:image" content="/assets/og-image.webp" />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://outbackelectronics.com.au" />
 <link rel="icon" type="image/png" href="/favicon.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="preload" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'" />
+<noscript><link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" /></noscript>
 <style>
   :root {
     --bg: #f4ede1;
@@ -295,6 +302,15 @@
     display: flex; gap: 14px; align-items: center;
   }
 
+  /* skip-to-content link */
+  .skip-link {
+    position: absolute; top: -100%; left: 8px;
+    background: var(--ink); color: var(--bg);
+    padding: 8px 16px; font-size: 13px; font-weight: 600;
+    z-index: 1000; text-decoration: none;
+  }
+  .skip-link:focus { top: 8px; }
+
   /* hamburger hidden on desktop; mobile.css shows it */
   .hamburger { display: none; }
   .mobile-nav { display: none; }
@@ -311,24 +327,39 @@
     0%, 100% { opacity: 0.6; }
     50% { opacity: 0.3; }
   }
+  @keyframes shimmer {
+    0% { background-position: -400px 0; }
+    100% { background-position: 400px 0; }
+  }
+  .skeleton {
+    background: linear-gradient(90deg, var(--bg-deep) 25%, var(--line) 50%, var(--bg-deep) 75%);
+    background-size: 800px 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+  }
 </style>
 <script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(function () {});
+}
+</script>
+<script>
 (function () {
-  function check() {
-    fetch('/api/maintenance-status')
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
-        if (d.enabled) {
-          var from = encodeURIComponent(window.location.pathname + window.location.search);
-          window.location.href = '/maintenance?from=' + from;
-        }
-      })
-      .catch(function () {});
+  function redirect() {
+    var from = encodeURIComponent(window.location.pathname + window.location.search);
+    window.location.href = '/maintenance?from=' + from;
   }
-  setInterval(check, 5000);
+  var es = new EventSource('/api/maintenance-events');
+  es.onmessage = function (e) {
+    try { if (JSON.parse(e.data).enabled) redirect(); } catch {}
+  };
+  es.onerror = function () {
+    es.close();
+    // fall back to a single check if SSE fails
+    fetch('/api/maintenance-status').then(function (r) { return r.json(); }).then(function (d) { if (d.enabled) redirect(); }).catch(function () {});
+  };
 }());
 </script>
-  <script type="module" crossorigin src="/assets/main-qQff0afl.js"></script>
+  <script type="module" crossorigin src="/assets/main-Dq4ypLmk.js"></script>
   <link rel="modulepreload" crossorigin href="/assets/vendor-C8w-UNLI.js">
   <link rel="modulepreload" crossorigin href="/assets/index-C0octaUy.js">
   <link rel="stylesheet" crossorigin href="/assets/index-BEyI48A_.css">
