@@ -219,8 +219,7 @@ function ContactPage({ go }) {
               </div>
               <div className="card-paper" style={{padding: 22}}>
                 <span className="eyebrow">EMAIL</span>
-                <div style={{fontSize: 18, marginTop:8, fontWeight:600}}>{shop.email || '—'}</div>
-                <a href="mailto:outbackhutelectronics@gmail.com" style={{fontSize:18, marginTop:8, fontWeight:600, color:'inherit', display:'block'}}>outbackhutelectronics@gmail.com</a>
+                <a href={shop.email ? `mailto:${shop.email}` : undefined} style={{fontSize:18, marginTop:8, fontWeight:600, color:'inherit', display:'block'}}>{shop.email || '—'}</a>
                 <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:4}}>APPOINTMENTS ONLY</div>
               </div>
               <div className="card-paper" style={{padding: 22}}>
