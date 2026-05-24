@@ -229,6 +229,13 @@ function readSettings() {
 }
 function writeSettings(data) { atomicWriteFile(SETTINGS_DB_PATH, JSON.stringify(data, null, 2)); }
 
+function maskIntegrationConfig(name, config) {
+  if (!config) return {};
+  const masked = {};
+  for (const [k, v] of Object.entries(config)) { masked[k] = v ? '***' : ''; }
+  return masked;
+}
+
 function readExpenses() { try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'expenses.db'), 'utf8')).expenses || []; } catch { return []; } }
 function writeExpenses(e) { atomicWriteFile(path.join(__dirname, 'expenses.db'), JSON.stringify({ expenses: e }, null, 2)); }
 
@@ -939,6 +946,22 @@ function emailGiftCard({ code, balance, customerName }) {
 
 // ── Stripe helpers ────────────────────────────────────────────────────────────
 
+function getStripeKey() {
+  try {
+    const s = readSettings();
+    const entry = s.integrations.find(r => r[0] === 'Stripe');
+    return entry?.[3]?.secretKey || STRIPE_SECRET_KEY;
+  } catch { return STRIPE_SECRET_KEY; }
+}
+
+function getStripeWebhookSecret() {
+  try {
+    const s = readSettings();
+    const entry = s.integrations.find(r => r[0] === 'Stripe');
+    return entry?.[3]?.webhookSecret || STRIPE_WEBHOOK_SECRET;
+  } catch { return STRIPE_WEBHOOK_SECRET; }
+}
+
 function stripeRequest(method, path, params) {
   return new Promise((resolve, reject) => {
     const body = params ? new URLSearchParams(params).toString() : '';
@@ -947,7 +970,7 @@ function stripeRequest(method, path, params) {
       path,
       method,
       headers: {
-        'Authorization': `Bearer ${STRIPE_SECRET_KEY}`,
+        'Authorization': `Bearer ${getStripeKey()}`,
         'Content-Type': 'application/x-www-form-urlencoded',
         'Content-Length': Buffer.byteLength(body),
       },
@@ -1177,12 +1200,13 @@ const mainServer = http.createServer(async (req, res) => {
 
   // ── Stripe: webhook ──────────────────────────────────────────────────────────
   if (req.method === 'POST' && url.pathname === '/api/stripe/webhook') {
+    const stripeWebhookSecret = getStripeWebhookSecret();
     const sig = req.headers['stripe-signature'];
-    if (!sig || !STRIPE_WEBHOOK_SECRET) return json(res, 400, { error: 'missing_signature' });
+    if (!sig || !stripeWebhookSecret) return json(res, 400, { error: 'missing_signature' });
 
     const rawBody = await readRawBody(req);
     let valid = false;
-    try { valid = verifyStripeSignature(rawBody, sig, STRIPE_WEBHOOK_SECRET); } catch (err) {
+    try { valid = verifyStripeSignature(rawBody, sig, stripeWebhookSecret); } catch (err) {
       console.error('Stripe signature verification error:', err);
     }
     if (!valid) return json(res, 400, { error: 'invalid_signature' });
@@ -1854,7 +1878,12 @@ const adminServer = http.createServer(async (req, res) => {
   }
   if (req.method === 'GET' && url.pathname === '/api/admin/settings') {
     const session = requireRole(req, res, 'staff'); if (!session) return;
-    return json(res, 200, readSettings());
+    const s = readSettings();
+    if (STRIPE_SECRET_KEY && !s.integrations.find(r => r[0] === 'Stripe')) {
+      s.integrations = [['Stripe', 'api.stripe.com', true, {}], ...s.integrations];
+    }
+    const masked = { ...s, integrations: s.integrations.map(r => [r[0], r[1], r[2], maskIntegrationConfig(r[0], r[3])]) };
+    return json(res, 200, masked);
   }
 
   if (req.method === 'POST' && (url.pathname === '/api/admin/forum/queue/resolve' || url.pathname === '/api/admin/forum/queue/action')) {
@@ -2218,9 +2247,19 @@ const adminServer = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/admin/settings/save') {
     const session = requireAdmin(req, res); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
-    const payload = { shop: body.shop || {}, announcement: body.announcement || { text: '', enabled: false, expiresAt: '' }, maintenance: body.maintenance || { enabled: false }, staff: body.staff || [], integrations: body.integrations || [], siteContent: body.siteContent || {} };
+    const existing = readSettings();
+    const existingByName = Object.fromEntries((existing.integrations || []).map(r => [r[0], r[3] || {}]));
+    const mergedIntegrations = (body.integrations || []).map(r => {
+      const existingConfig = existingByName[r[0]] || {};
+      const incomingConfig = r[3] || {};
+      const config = { ...existingConfig };
+      for (const [k, v] of Object.entries(incomingConfig)) { if (v !== '***') config[k] = v; }
+      return [r[0], r[1], !!r[2], config];
+    });
+    const payload = { shop: body.shop || {}, announcement: body.announcement || { text: '', enabled: false, expiresAt: '' }, maintenance: body.maintenance || { enabled: false }, staff: body.staff || [], integrations: mergedIntegrations, siteContent: body.siteContent || {} };
     writeSettings(payload);
-    return json(res, 200, { ok: true, ...payload });
+    const maskedPayload = { ...payload, integrations: payload.integrations.map(r => [r[0], r[1], r[2], maskIntegrationConfig(r[0], r[3])]) };
+    return json(res, 200, { ok: true, ...maskedPayload });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/admin/maintenance') {
