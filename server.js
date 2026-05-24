@@ -598,7 +598,7 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null) {
         'X-Frame-Options': 'SAMEORIGIN',
         'X-Content-Type-Options': 'nosniff',
         'Referrer-Policy': 'strict-origin-when-cross-origin',
-        'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none';",
+        'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://portal.outbackelectronics.com.au https://forum.outbackelectronics.com.au; frame-ancestors 'none';",
       } : { 'X-Content-Type-Options': 'nosniff' };
       res.writeHead(200, {
         'Content-Type': (types[ext] || 'application/octet-stream') + '; charset=utf-8',
