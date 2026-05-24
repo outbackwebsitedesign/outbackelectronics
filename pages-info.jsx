@@ -254,8 +254,8 @@ function ContactPage({ go }) {
                 </svg>
               </div>
               <div style={{position:'absolute', top:'45%', left:'45%', width:24, height:24, background:'var(--rust)', borderRadius:'50%', border:'3px solid var(--paper)'}}></div>
-              <div style={{position:'absolute', top:'calc(45% + 28px)', left:'calc(45% + 8px)', background:'var(--ink)', color:'var(--paper)', padding:'6px 10px', fontFamily:'JetBrains Mono, monospace', fontSize:11}}>23.6980°S, 133.8807°E</div>
-              <div style={{position:'absolute', bottom:16, left:16, background:'var(--paper)', padding:'10px 14px', fontFamily:'JetBrains Mono, monospace', fontSize:10, color:'var(--ink)'}}>MAP · ALICE SPRINGS · GAP RD</div>
+              <div style={{position:'absolute', top:'calc(45% + 28px)', left:'calc(45% + 8px)', background:'var(--ink)', color:'var(--paper)', padding:'6px 10px', fontFamily:'JetBrains Mono, monospace', fontSize:11}}>35.9833°S, 144.7500°E</div>
+              <div style={{position:'absolute', bottom:16, left:16, background:'var(--paper)', padding:'10px 14px', fontFamily:'JetBrains Mono, monospace', fontSize:10, color:'var(--ink)'}}>MAP · MOAMA NSW · PEERICOOTA FOREST RD</div>
             </div>
             <div className="card" style={{padding:18, marginTop:16}}>
               <span className="eyebrow">QUICK MESSAGE</span>
