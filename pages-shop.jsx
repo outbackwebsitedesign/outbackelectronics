@@ -12,7 +12,7 @@ function HomePage({ go, addToCart, portalUser }) {
   const [categories, setCategories] = useState([]);
   const [metrics, setMetrics] = useState({ repairCount: null, ewasteTonnes: null, forumMembers: null });
   const [testimonial, setTestimonial] = useState(null);
-  const heroProduct = useMemo(() => featuredProducts.find(p => p.stock > 0) || featuredProducts[0] || null, [featuredProducts]);
+  const heroProduct = useMemo(() => featuredProducts.find(p => p.infiniteStock || p.stock > 0) || featuredProducts[0] || null, [featuredProducts]);
   const [recentThreads, setRecentThreads] = useState([]);
   const [aiData, setAiData] = useState(null);
   const [repairServices, setRepairServices] = useState([]);
@@ -77,7 +77,7 @@ function HomePage({ go, addToCart, portalUser }) {
                   <div className="serif" style={{fontSize:22, marginTop:6, lineHeight:1.1}}>{heroProduct.name}{heroProduct.cond ? ` // ${heroProduct.cond}` : ''}</div>
                   <div className="row-flex" style={{justifyContent:'space-between', marginTop:10}}>
                     <span className="price">${Number(heroProduct.price).toLocaleString('en-AU')}</span>
-                    <span className={`tag ${heroProduct.stock > 0 ? 'tag-euc' : 'tag-outline'}`}>{heroProduct.stock > 0 ? 'IN STOCK' : 'OUT OF STOCK'}</span>
+                    <span className={`tag ${(heroProduct.infiniteStock || heroProduct.stock > 0) ? 'tag-euc' : 'tag-outline'}`}>{(heroProduct.infiniteStock || heroProduct.stock > 0) ? 'IN STOCK' : 'OUT OF STOCK'}</span>
                   </div>
                 </div>
               )}
@@ -237,6 +237,11 @@ function ProductCard({ p, onClick }) {
     else if (totalStock <= 3) { displayTag = `${totalStock} left`; displayTagClass = 'tag-ochre'; }
     else { displayTag = 'In stock'; displayTagClass = 'tag-euc'; }
     displaySku = p.variants[0].sku;
+  } else if (p.infiniteStock) {
+    displayPrice = `$${p.price.toLocaleString()}`;
+    displayTag = 'In stock';
+    displayTagClass = 'tag-euc';
+    displaySku = p.sku;
   } else {
     displayPrice = `$${p.price.toLocaleString()}`;
     displayTag = p.tag;
@@ -396,6 +401,43 @@ function ShopPage({ go, addToCart }) {
 }
 
 // ============================================================
+// PUBLIC JOB LOG
+// ============================================================
+function PublicJobLog() {
+  const [jobs, setJobs] = useState([]);
+  useEffect(() => {
+    fetch('/api/public-job-log')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d && d.jobs) setJobs(d.jobs); })
+      .catch(() => {});
+  }, []);
+
+  if (jobs.length === 0) return null;
+
+  return (
+    <div className="card-paper" style={{padding: 24, marginTop:16}}>
+      <span className="eyebrow">LATEST JOB LOG · PUBLIC</span>
+      <table style={{width:'100%', marginTop: 12, borderCollapse:'collapse', fontSize:13}}>
+        <thead>
+          <tr style={{textAlign:'left', borderBottom:'1px solid var(--line)'}}>
+            <th style={{padding:'8px 0'}}>JOB</th><th>ITEM</th><th>STATUS</th>
+          </tr>
+        </thead>
+        <tbody>
+          {jobs.map((r, i) => (
+            <tr key={i} style={{borderBottom:'1px solid var(--line)'}}>
+              <td style={{padding:'10px 0', fontFamily:'JetBrains Mono, monospace', fontSize:11}}>{r.id}</td>
+              <td>{r.item}</td>
+              <td><span className={`tag ${r.status==='Done'?'tag-euc':r.status==='Bench'?'tag-rust':'tag-outline'}`} style={{padding:'2px 6px'}}>{r.status}</span></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ============================================================
 // SERVICES
 // ============================================================
 function ServicesPage({ go }) {
@@ -482,31 +524,7 @@ function ServicesPage({ go }) {
           </div>
           <div>
             <div className="slot" style={{aspectRatio:'4/3'}}>WORKBENCH — DUST, FLUX, COPPER WIRE</div>
-            <div className="card-paper" style={{padding: 24, marginTop:16}}>
-              <span className="eyebrow">LATEST JOB LOG · PUBLIC</span>
-              <table style={{width:'100%', marginTop: 12, borderCollapse:'collapse', fontSize:13}}>
-                <thead>
-                  <tr style={{textAlign:'left', borderBottom:'1px solid var(--line)'}}>
-                    <th style={{padding:'8px 0'}}>JOB</th><th>ITEM</th><th>STATUS</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    ['J-2614','Toughbook 55','Bench'],
-                    ['J-2613','Victron 24/3000','Quoted'],
-                    ['J-2612','iPhone 14 Pro','Done'],
-                    ['J-2611','Fronius Primo 5.0','Field'],
-                    ['J-2610','Synology DS920+','Awaiting parts'],
-                  ].map((r,i) => (
-                    <tr key={i} style={{borderBottom:'1px solid var(--line)'}}>
-                      <td style={{padding:'10px 0', fontFamily:'JetBrains Mono, monospace', fontSize:11}}>{r[0]}</td>
-                      <td>{r[1]}</td>
-                      <td><span className={`tag ${r[2]==='Done'?'tag-euc':r[2]==='Bench'?'tag-rust':'tag-outline'}`} style={{padding:'2px 6px'}}>{r[2]}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <PublicJobLog />
           </div>
         </div>
       </section>
@@ -691,8 +709,12 @@ function ModelCardModal({ model, onClose, go }) {
 function AIPage({ go }) {
   const [modelCard, setModelCard] = React.useState(null);
   const [models, setModels] = useState([]);
+  const [boxes, setBoxes] = useState([]);
   useEffect(() => {
-    fetch('/api/ai').then(r => r.ok ? r.json() : Promise.reject()).then(d => setModels(d.models || [])).catch(() => {});
+    fetch('/api/ai').then(r => r.ok ? r.json() : Promise.reject()).then(d => {
+      setModels(d.models || []);
+      setBoxes(d.boxes || []);
+    }).catch(() => {});
   }, []);
   return (
     <>
@@ -757,24 +779,22 @@ function AIPage({ go }) {
         </div>
       </section>
 
+      {boxes.length > 0 && (
       <section className="container" style={{paddingTop: 56, paddingBottom: 40}}>
         <div className="grid-3">
-          {[
-            {t:'Inference Box · S', p:'$2,490', d:'Raspberry Pi 5, Coral TPU, IP66 case, PoE-in. Up to 30fps on small models.', hw:'18W typical'},
-            {t:'Inference Box · M', p:'$5,890', d:'Jetson Orin Nano, NVMe, IP66 + sunshade, 12–48V DC. Our most-shipped unit.', hw:'25W typical', highlight:true},
-            {t:'Inference Box · L', p:'$11,490', d:'Jetson Orin NX 16GB, 4× camera, mesh + sat, ruggedised for ute-roof mount.', hw:'42W typical'},
-          ].map((b,i) => (
-            <div key={i} style={{padding: 32, background: b.highlight ? 'var(--dark)' : 'var(--paper)', color: b.highlight ? 'var(--paper)' : 'var(--ink)', border:'1px solid', borderColor: b.highlight ? 'var(--dark)' : 'var(--line)'}}>
+          {boxes.map((b, i) => (
+            <div key={b.id || i} style={{padding: 32, background: b.highlight ? 'var(--dark)' : 'var(--paper)', color: b.highlight ? 'var(--paper)' : 'var(--ink)', border:'1px solid', borderColor: b.highlight ? 'var(--dark)' : 'var(--line)'}}>
               {b.highlight && <span className="tag tag-ochre">MOST SHIPPED</span>}
-              <h3 className="serif" style={{fontSize: 32, marginTop: b.highlight?14:0, lineHeight:1.05}}>{b.t}</h3>
-              <div className="price" style={{fontSize: 36, marginTop: 10}}>{b.p}</div>
-              <p style={{marginTop: 14, fontSize:14, color: b.highlight ? 'var(--bg-deep)' : 'var(--ink-2)'}}>{b.d}</p>
-              <div className="mono" style={{fontSize:11, marginTop:14, opacity:.7}}>{b.hw.toUpperCase()}</div>
+              <h3 className="serif" style={{fontSize: 32, marginTop: b.highlight?14:0, lineHeight:1.05}}>{b.name || b.t}</h3>
+              <div className="price" style={{fontSize: 36, marginTop: 10}}>{b.price != null ? `$${Number(b.price).toLocaleString()}` : (b.p || 'POA')}</div>
+              <p style={{marginTop: 14, fontSize:14, color: b.highlight ? 'var(--bg-deep)' : 'var(--ink-2)'}}>{b.description || b.d}</p>
+              {(b.wattage || b.hw) && <div className="mono" style={{fontSize:11, marginTop:14, opacity:.7}}>{(b.wattage || b.hw).toUpperCase()}</div>}
               <button className="btn btn-rust" style={{marginTop: 20, width:'100%', justifyContent:'center'}} onClick={() => go('quote')}>Spec it →</button>
             </div>
           ))}
         </div>
       </section>
+      )}
       <section className="container" style={{paddingTop: 56, paddingBottom: 56}}>
         <span className="eyebrow">AI IN ACTION</span>
         <h2 className="serif" style={{fontSize: 40, marginTop: 6, marginBottom: 8}}>What it's like to be an AI</h2>
@@ -823,9 +843,11 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
 
   const hasVariants = product.variants && product.variants.length > 0;
   const activePrice = selectedVariant ? selectedVariant.price : product.price;
-  const inStock = hasVariants
-    ? (selectedVariant ? (selectedVariant.stock || 0) > 0 : false)
-    : (product.stock == null || product.stock > 0);
+  const inStock = product.infiniteStock
+    ? true
+    : hasVariants
+      ? (selectedVariant ? (selectedVariant.stock || 0) > 0 : false)
+      : (product.stock == null || product.stock > 0);
 
   return (
     <>
@@ -982,18 +1004,19 @@ function GiftCardsPage({ go, addToCart }) {
     }
   };
 
-  const denominations = products.length > 0 ? products : [
-    { id: 'gc-025', name: 'Gift Card — $25', price: 25, description: 'Redeemable on anything in the Outback Electronics online store. Delivered by email. Never expires.' },
-    { id: 'gc-050', name: 'Gift Card — $50', price: 50, description: 'Redeemable on anything in the Outback Electronics online store. Delivered by email. Never expires.' },
-    { id: 'gc-100', name: 'Gift Card — $100', price: 100, description: 'Redeemable on anything in the Outback Electronics online store. Delivered by email. Never expires.' },
-    { id: 'gc-200', name: 'Gift Card — $200', price: 200, description: 'Redeemable on anything in the Outback Electronics online store. Delivered by email. Never expires.' },
-  ];
+  const denominations = products;
 
   return (
     <>
       <PageHead crumbs={['Outback', 'Gift Cards']} title="Gift Cards"
         lead="The perfect gift for the remote-area tinkerer in your life. Redeemable on products and services. Sent by email instantly." />
       <section className="container" style={{paddingTop:40, paddingBottom:56}}>
+        {denominations.length === 0 && (
+          <div className="notice" style={{marginBottom:24}}>
+            <span className="tag tag-outline">COMING SOON</span>
+            <div style={{fontSize:13, color:'var(--ink-2)'}}>Gift cards are not yet available. Check back soon.</div>
+          </div>
+        )}
         <div className="grid-4" style={{gap:24}}>
           {denominations.map((gc, i) => (
             <div key={gc.id || i} className="card-paper" style={{padding:28, display:'flex', flexDirection:'column', gap:16}}>
@@ -1098,14 +1121,21 @@ function MembershipsPage({ go }) {
     },
   ];
 
-  const displayTiers = tiers.length > 0 ? tiers : defaultTiers;
+  const usingDefaults = tiers.length === 0;
+  const displayTiers = usingDefaults ? defaultTiers : tiers;
 
   return (
     <>
       <PageHead crumbs={['Outback', 'Memberships']} title="Memberships"
         lead="Get access to member-only groups, exclusive content, and workshop perks. Cancel any time." />
       <section className="container" style={{paddingTop:40, paddingBottom:56}}>
-        <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:24}}>
+        {usingDefaults && (
+          <div className="notice" style={{marginBottom:24}}>
+            <span className="tag tag-outline">COMING SOON</span>
+            <div style={{fontSize:13, color:'var(--ink-2)'}}>Memberships are not yet active. Prices and tiers shown below are illustrative only — you cannot purchase a membership at this time.</div>
+          </div>
+        )}
+        <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:24, opacity: usingDefaults ? 0.5 : 1, pointerEvents: usingDefaults ? 'none' : 'auto'}}>
           {displayTiers.map((tier, i) => (
             <div key={tier.id || i}
               style={{padding:32, background: tier.highlight ? 'var(--dark)' : 'var(--paper)', color: tier.highlight ? 'var(--paper)' : 'var(--ink)', border:'1px solid', borderColor: tier.highlight ? 'var(--dark)' : 'var(--line)', display:'flex', flexDirection:'column', gap:16, position:'relative'}}>

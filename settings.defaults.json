@@ -5,7 +5,8 @@
     "address": "183 Peericoota Forest Rd, Moama NSW 2731",
     "phone": "0478 685 674 / 0497 522 768",
     "email": "",
-    "tagline": "Built for where the signal ends"
+    "tagline": "Built for where the signal ends",
+    "description": ""
   },
   "announcement": {
     "text": "",
@@ -18,8 +19,8 @@
     "enabled": false
   },
   "flags": {
-    "showBCorpBadge": true,
-    "showRepairOrgBadge": true
+    "showBCorpBadge": false,
+    "showRepairOrgBadge": false
   },
   "siteContent": {
     "aiHeading": "Edge AI\nfor the long paddock.",

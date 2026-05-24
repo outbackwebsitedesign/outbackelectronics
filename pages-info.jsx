@@ -179,7 +179,7 @@ function ContactPage({ go }) {
       if (!res.ok) throw new Error('server error');
       setQmSent(true);
     } catch {
-      setQmError('Message could not be sent. Please email us directly at outbackhutelectronics@gmail.com.');
+      setQmError(`Message could not be sent. Please email us directly at ${shop.email || 'our support address'}.`);
     } finally {
       setQmSending(false);
     }
@@ -219,7 +219,7 @@ function ContactPage({ go }) {
               </div>
               <div className="card-paper" style={{padding: 22}}>
                 <span className="eyebrow">EMAIL</span>
-                <div style={{fontSize: 18, marginTop:8, fontWeight:600}}>outbackhutelectronics@gmail.com</div>
+                <div style={{fontSize: 18, marginTop:8, fontWeight:600}}>{shop.email || '—'}</div>
                 <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:4}}>APPOINTMENTS ONLY</div>
               </div>
               <div className="card-paper" style={{padding: 22}}>
@@ -376,6 +376,7 @@ function SellersPage({ go }) {
 // POLICIES
 // ============================================================
 function PoliciesPage() {
+  const shop = useShop();
   const [policies, setPolicies] = useState([]);
   const [active, setActive] = useState(null);
   useEffect(() => {
@@ -408,7 +409,7 @@ function PoliciesPage() {
                 <hr className="thin" />
                 <div className="notice" style={{marginTop: 24}}>
                   <span className="tag tag-ink">QUESTIONS?</span>
-                  <div style={{fontSize:13, color:'var(--ink-2)'}}>Email <strong>outbackhutelectronics@gmail.com</strong> — we'll route you to whoever wrote the policy.</div>
+                  <div style={{fontSize:13, color:'var(--ink-2)'}}>Email <strong>{shop.email || 'us'}</strong> — we'll route you to whoever wrote the policy.</div>
                 </div>
               </div>
             )}
