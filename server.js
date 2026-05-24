@@ -601,7 +601,7 @@ function sendMaintenance(res) {
   const { shop } = readSettings();
   const email = (shop && shop.email) ? shop.email.trim() : '';
   const emailHtml = email
-    ? `<p class="note">Need help urgently? Email <a href="mailto:${email}">${email}</a></p>`
+    ? `<p class="note">Need help? Shoot us an email at <a href="mailto:${email}">${email}</a>!</p>`
     : '';
   const html = MAINTENANCE_HTML.replace(/\{\{CONTACT_EMAIL\}\}/g, emailHtml);
   res.writeHead(503, {
