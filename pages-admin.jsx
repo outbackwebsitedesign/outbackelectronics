@@ -1590,24 +1590,79 @@ function AdminTutorials() {
 // ============================================================
 // AI MODELS & BOXES
 // ============================================================
-const modelSeed = [
-  { name:'outback-vision-v2', task:'Part identification', size:'1.4B', acc:'94.2%', deployments:12, status:'Active' },
-  { name:'outback-ocr-v1',    task:'Serial number OCR',  size:'0.3B', acc:'98.7%', deployments:8,  status:'Active' },
-  { name:'fault-classifier',  task:'Fault diagnosis',    size:'0.8B', acc:'87.1%', deployments:3,  status:'Beta'   },
-];
-const boxSeed = [
-  { id:'BOX-001', site:'Warehouse A',    model:'outback-vision-v2', uptime:'14d 3h', sig:'4G',  battery:'82%', status:'OK'        },
-  { id:'BOX-002', site:'Workshop Floor', model:'fault-classifier',  uptime:'6d 11h', sig:'WiFi', battery:'41%', status:'Low batt' },
-  { id:'BOX-003', site:'Loading Dock',   model:'outback-ocr-v1',   uptime:'0h',     sig:'—',   battery:'—',   status:'Offline 4h'},
-];
+
+const AI_STATUS_OPTIONS = ['Active','Beta','Training','Draft','Archived'];
+const BOX_STATUS_OPTIONS = ['OK','Low batt','Offline','Maintenance'];
+
+function AIModelDrawer({ model, onChange }) {
+  const inp = { width:'100%', padding:'8px 10px', border:'1px solid var(--line-strong)', fontFamily:'inherit', fontSize:14, background:'var(--paper)', color:'var(--ink)' };
+  const f = (key, label, placeholder, extra={}) => (
+    <label className="field" key={key}>
+      <span className="label">{label}</span>
+      <input style={{...inp,...(extra.mono?{fontFamily:'monospace'}:{})}} value={model?.[key]||''} onChange={e=>onChange({...model,[key]:e.target.value})} placeholder={placeholder} />
+    </label>
+  );
+  return (
+    <div style={{display:'grid', gap:12}}>
+      {f('name','Model name','e.g. outback-vision-v3',{mono:true})}
+      {f('task','Task','e.g. Part identification')}
+      {f('size','Size','e.g. 1.4B',{mono:true})}
+      {f('acc','Accuracy','e.g. 94.2%',{mono:true})}
+      {f('deployments','Deployments','0')}
+      <label className="field">
+        <span className="label">Status</span>
+        <select style={inp} value={model?.status||'Draft'} onChange={e=>onChange({...model,status:e.target.value})}>
+          {AI_STATUS_OPTIONS.map(s=><option key={s}>{s}</option>)}
+        </select>
+      </label>
+    </div>
+  );
+}
+
+function BoxDrawer({ box, onChange, modelOptions }) {
+  const inp = { width:'100%', padding:'8px 10px', border:'1px solid var(--line-strong)', fontFamily:'inherit', fontSize:14, background:'var(--paper)', color:'var(--ink)' };
+  const f = (key, label, placeholder, extra={}) => (
+    <label className="field" key={key}>
+      <span className="label">{label}</span>
+      <input style={{...inp,...(extra.mono?{fontFamily:'monospace'}:{})}} value={box?.[key]||''} onChange={e=>onChange({...box,[key]:e.target.value})} placeholder={placeholder} />
+    </label>
+  );
+  return (
+    <div style={{display:'grid', gap:12}}>
+      {f('id','Box ID','e.g. BOX-004',{mono:true})}
+      {f('site','Site','e.g. Warehouse B')}
+      <label className="field">
+        <span className="label">Running model</span>
+        <select style={inp} value={box?.model||''} onChange={e=>onChange({...box,model:e.target.value})}>
+          <option value="">— none —</option>
+          {modelOptions.map(m=><option key={m}>{m}</option>)}
+        </select>
+      </label>
+      {f('uptime','Uptime','e.g. 14d 3h',{mono:true})}
+      {f('sig','Link / Signal','e.g. 4G or WiFi',{mono:true})}
+      {f('battery','Battery','e.g. 82%',{mono:true})}
+      <label className="field">
+        <span className="label">Status</span>
+        <select style={inp} value={box?.status||'OK'} onChange={e=>onChange({...box,status:e.target.value})}>
+          {BOX_STATUS_OPTIONS.map(s=><option key={s}>{s}</option>)}
+        </select>
+      </label>
+    </div>
+  );
+}
 
 function AdminAI() {
   const [models, setModels] = useState([]);
   const [boxes, setBoxes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [busyAction, setBusyAction] = useState('');
   const [feedback, setFeedback] = useState('');
+  const [modelDrawer, setModelDrawer] = useState(null); // null | 'new' | index
+  const [modelDraft, setModelDraft] = useState({});
+  const [boxDrawer, setBoxDrawer] = useState(null);
+  const [boxDraft, setBoxDraft] = useState({});
+  const [saving, setSaving] = useState(false);
+
   useEffect(() => {
     fetch('/api/admin/ai', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject())
@@ -1615,54 +1670,83 @@ function AdminAI() {
       .catch(() => setError('Failed to load AI data.'))
       .finally(() => setLoading(false));
   }, []);
-  const map = { OK:{bg:'#d8e7d0', fg:'#345526'}, 'Low batt':{bg:'#fff4d6', fg:'#7a5d10'}, 'Offline 4h':{bg:'var(--rust)', fg:'#fff'} };
+
+  const saveAll = async (nextModels, nextBoxes) => {
+    setSaving(true); setFeedback('');
+    const r = await fetch('/api/admin/ai/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ models:nextModels, boxes:nextBoxes }) }).catch(()=>null);
+    setSaving(false);
+    if (r && r.ok) {
+      const d = await r.json();
+      setModels(d.models || []); setBoxes(d.boxes || []);
+      return true;
+    }
+    setFeedback('Failed to save.'); return false;
+  };
+
+  const openNewModel = () => { setModelDraft({ name:'', task:'', size:'', acc:'', deployments:0, status:'Draft' }); setModelDrawer('new'); };
+  const openEditModel = (i) => { setModelDraft({...models[i]}); setModelDrawer(i); };
+  const saveModel = async () => {
+    const next = modelDrawer === 'new' ? [...models, modelDraft] : models.map((m,i)=>i===modelDrawer?modelDraft:m);
+    if (await saveAll(next, boxes)) { setModelDrawer(null); setFeedback('Model saved.'); }
+  };
+  const deleteModel = async () => {
+    if (!window.confirm('Delete this model?')) return;
+    const next = models.filter((_,i)=>i!==modelDrawer);
+    if (await saveAll(next, boxes)) { setModelDrawer(null); setFeedback('Model deleted.'); }
+  };
+
+  const openNewBox = () => { setBoxDraft({ id:'', site:'', model:'', uptime:'', sig:'', battery:'', status:'OK' }); setBoxDrawer('new'); };
+  const openEditBox = (i) => { setBoxDraft({...boxes[i]}); setBoxDrawer(i); };
+  const saveBox = async () => {
+    const next = boxDrawer === 'new' ? [...boxes, boxDraft] : boxes.map((b,i)=>i===boxDrawer?boxDraft:b);
+    if (await saveAll(models, next)) { setBoxDrawer(null); setFeedback('Box saved.'); }
+  };
+  const deleteBox = async () => {
+    if (!window.confirm('Delete this box?')) return;
+    const next = boxes.filter((_,i)=>i!==boxDrawer);
+    if (await saveAll(models, next)) { setBoxDrawer(null); setFeedback('Box deleted.'); }
+  };
+
+  const map = { OK:{bg:'#d8e7d0', fg:'#345526'}, 'Low batt':{bg:'#fff4d6', fg:'#7a5d10'}, Offline:{bg:'var(--rust)', fg:'#fff'}, Maintenance:{bg:'#e8e0d0', fg:'#555'} };
   const deployedCount = boxes.length;
   const offlineCount = boxes.filter(b => (b.status || '').toLowerCase().includes('offline')).length;
   const lowBattCount = boxes.filter(b => (b.status || '').toLowerCase().includes('low batt')).length;
-  const handleCreateModel = async () => {
-    setBusyAction('newModel');
-    setFeedback('');
-    const payload = { models:[...models, { name:`model-${Date.now()}`, task:'New model setup', size:'0.0B', acc:'—', deployments:0, status:'Draft' }], boxes };
-    const r = await fetch('/api/admin/ai/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(payload) }).catch(()=>null);
-    setBusyAction('');
-    if (r && r.ok) {
-      const d = await r.json();
-      setModels(d.models || []);
-      setBoxes(d.boxes || []);
-      setFeedback('New model created.');
-    } else setFeedback('Failed to create model.');
-  };
+  const modelOptions = models.map(m => m.name).filter(Boolean);
+
   return (
     <div style={{padding:32, display:'grid', gap:28}}>
       {loading && <div className="mono" style={{fontSize:12, color:'var(--ink-2)'}}>Loading…</div>}
       {error && <div style={{fontSize:12, color:'var(--rust)'}}>{error}</div>}
+      {feedback && <div style={{fontSize:12, color:feedback.includes('Failed')?'var(--rust)':'var(--eucalyptus)'}}>{feedback}</div>}
       <div>
         <div className="row-flex" style={{justifyContent:'space-between', marginBottom:14}}>
           <h3 className="serif" style={{fontSize:24}}>Models</h3>
-          <div className="row-flex" style={{gap:8}}>
-            <button className="btn btn-rust btn-sm" onClick={handleCreateModel} disabled={busyAction==='newModel'}>{busyAction==='newModel'?'Creating…':'+ New model'}</button>
-          </div>
+          <button className="btn btn-rust btn-sm" onClick={openNewModel}>+ New model</button>
         </div>
-        {feedback && <div style={{marginBottom:10, fontSize:12, color:feedback.includes('Failed')?'var(--rust)':'var(--eucalyptus)'}}>{feedback}</div>}
-        <Table
+        {!loading && models.length === 0 && <div className="mono" style={{fontSize:12, color:'var(--ink-3)'}}>No models yet. Click "+ New model" to add one.</div>}
+        {models.length > 0 && <Table
           columns={[
             { key:'name', label:'Model', w:'1.5fr', render:r => <span className="mono" style={{color:'var(--rust)'}}>{r.name}</span> },
             { key:'task', label:'Task', w:'2fr' },
             { key:'size', label:'Size', w:'90px', render:r => <span className="mono" style={{fontSize:12}}>{r.size}</span> },
             { key:'acc', label:'Accuracy', w:'100px', render:r => <span className="mono" style={{fontSize:12}}>{r.acc}</span> },
             { key:'deployments', label:'Deployments', w:'120px', render:r => <span className="mono">{r.deployments}</span> },
-            { key:'status', label:'Status', w:'120px', render:r => <span className={`tag ${r.status==='Training'?'tag-ochre':r.status==='Beta'?'tag-rust':'tag-euc'}`}>{r.status.toUpperCase()}</span> },
+            { key:'status', label:'Status', w:'120px', render:r => <span className={`tag ${r.status==='Training'?'tag-ochre':r.status==='Beta'?'tag-rust':'tag-euc'}`}>{(r.status||'').toUpperCase()}</span> },
           ]}
-          rows={models.length ? models : modelSeed}
-          onRowClick={()=>{}}
-        />
+          rows={models}
+          onRowClick={(_,i) => openEditModel(i)}
+        />}
       </div>
       <div>
         <div className="row-flex" style={{justifyContent:'space-between', marginBottom:14}}>
           <h3 className="serif" style={{fontSize:24}}>Field inference boxes</h3>
-          <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{deployedCount} DEPLOYED · {offlineCount} OFFLINE · {lowBattCount} LOW-BATT</span>
+          <div className="row-flex" style={{gap:12}}>
+            <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{deployedCount} DEPLOYED · {offlineCount} OFFLINE · {lowBattCount} LOW-BATT</span>
+            <button className="btn btn-rust btn-sm" onClick={openNewBox}>+ New box</button>
+          </div>
         </div>
-        <Table
+        {!loading && boxes.length === 0 && <div className="mono" style={{fontSize:12, color:'var(--ink-3)'}}>No boxes yet. Click "+ New box" to add one.</div>}
+        {boxes.length > 0 && <Table
           columns={[
             { key:'id', label:'Box', w:'120px', render:r => <span className="mono" style={{fontSize:11, color:'var(--rust)'}}>{r.id}</span> },
             { key:'site', label:'Site', w:'2fr' },
@@ -1672,9 +1756,32 @@ function AdminAI() {
             { key:'battery', label:'Battery', w:'80px', render:r => <span className="mono" style={{fontSize:12, color: r.battery && parseInt(r.battery)<50?'var(--rust)':'var(--ink)'}}>{r.battery}</span> },
             { key:'status', label:'Status', w:'130px', render:r => <StatusPill value={r.status} map={map}/> },
           ]}
-          rows={boxes.length ? boxes : boxSeed}
-        />
+          rows={boxes}
+          onRowClick={(_,i) => openEditBox(i)}
+        />}
       </div>
+
+      <Drawer open={modelDrawer !== null} onClose={()=>setModelDrawer(null)} title={modelDrawer==='new'?'New model':(modelDraft?.name||'Edit model')}
+        footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
+          {modelDrawer !== 'new' ? <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={deleteModel} disabled={saving}>Delete</button> : <span/>}
+          <div className="row-flex" style={{gap:8}}>
+            <button className="btn btn-ghost btn-sm" onClick={()=>setModelDrawer(null)}>Cancel</button>
+            <button className="btn btn-rust btn-sm" onClick={saveModel} disabled={saving}>{saving?'Saving…':'Save'}</button>
+          </div>
+        </div>}>
+        <AIModelDrawer model={modelDraft} onChange={setModelDraft} />
+      </Drawer>
+
+      <Drawer open={boxDrawer !== null} onClose={()=>setBoxDrawer(null)} title={boxDrawer==='new'?'New box':(boxDraft?.id||'Edit box')}
+        footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
+          {boxDrawer !== 'new' ? <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={deleteBox} disabled={saving}>Delete</button> : <span/>}
+          <div className="row-flex" style={{gap:8}}>
+            <button className="btn btn-ghost btn-sm" onClick={()=>setBoxDrawer(null)}>Cancel</button>
+            <button className="btn btn-rust btn-sm" onClick={saveBox} disabled={saving}>{saving?'Saving…':'Save'}</button>
+          </div>
+        </div>}>
+        <BoxDrawer box={boxDraft} onChange={setBoxDraft} modelOptions={modelOptions} />
+      </Drawer>
     </div>
   );
 }
