@@ -1863,10 +1863,35 @@ function Lobby({ onPlay }) {
 }
 
 // ── Root App ──────────────────────────────────────────────────────────────────
+const GAME_IDS = new Set(GAME_REGISTRY.map(g => g.id));
+
+function gameIdFromPath() {
+  const seg = window.location.pathname.replace(/^\/+/, '').split('/')[0];
+  return GAME_IDS.has(seg) ? seg : null;
+}
+
 function App() {
-  const [activeId, setActiveId] = useState(null);
+  const [activeId, setActiveId] = useState(gameIdFromPath);
   const active = activeId ? GAME_REGISTRY.find(g=>g.id===activeId) : null;
   const GameComponent = active ? active.component : null;
+
+  const playGame = (id) => {
+    setActiveId(id);
+    if (window.location.pathname !== '/' + id) window.history.pushState({}, '', '/' + id);
+  };
+
+  const backToLobby = () => {
+    setActiveId(null);
+    if (window.location.pathname !== '/') window.history.pushState({}, '', '/');
+  };
+
+  useEffect(() => {
+    const onPop = () => {
+      setActiveId(gameIdFromPath());
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
 
   return (
     <div style={{ display:'flex', flexDirection:'column', minHeight:'100vh' }}>
@@ -1881,8 +1906,8 @@ function App() {
         </span>
       </header>
       {GameComponent
-        ? <GameComponent key={activeId} onBack={()=>setActiveId(null)} />
-        : <Lobby onPlay={setActiveId} />}
+        ? <GameComponent key={activeId} onBack={backToLobby} />
+        : <Lobby onPlay={playGame} />}
     </div>
   );
 }

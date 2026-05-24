@@ -914,19 +914,21 @@ const PORTAL_TABS = ['overview','orders','repairs','quotes','memberships','rewar
 
 function Dashboard({ user, setUser, onLogout }) {
   const [tab, setTab] = useState(() => {
-    const hash = window.location.hash.replace('#', '');
-    return PORTAL_TABS.includes(hash) ? hash : 'overview';
+    const seg = window.location.pathname.replace(/^\/+/, '').split('/')[0];
+    return PORTAL_TABS.includes(seg) ? seg : 'overview';
   });
 
   const switchTab = (id) => {
     setTab(id);
-    window.history.replaceState({}, '', `#${id}`);
+    const target = id === 'overview' ? '/' : '/' + id;
+    if (window.location.pathname !== target) window.history.pushState({}, '', target);
   };
 
   useEffect(() => {
     const onPop = () => {
-      const hash = window.location.hash.replace('#', '');
-      if (PORTAL_TABS.includes(hash)) setTab(hash);
+      const seg = window.location.pathname.replace(/^\/+/, '').split('/')[0];
+      if (PORTAL_TABS.includes(seg)) setTab(seg);
+      else setTab('overview');
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);

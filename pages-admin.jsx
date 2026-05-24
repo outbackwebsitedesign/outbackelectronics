@@ -3230,10 +3230,22 @@ const ADMIN_VIEWS = {
   settings:   { c: AdminSettings,   t:'Settings',         staticSubtitle:'shop · staff · integrations' },
 };
 
+const ADMIN_ALL_IDS = new Set([
+  'overview','orders','repairs','quotes','ewaste',
+  'products','services','software','tutorials','ai',
+  'forum','groups','customers','sellers',
+  'gift-cards','expenses','policies','settings',
+]);
+
+function adminSectionFromPath() {
+  const seg = window.location.pathname.replace(/^\/+/, '').split('/')[0];
+  return ADMIN_ALL_IDS.has(seg) ? seg : 'overview';
+}
+
 function AdminPage({ go }) {
   const [sessionInfo, setSessionInfo] = useState({ authed: false, role: null, username: null, staffId: null });
   const [checking, setChecking] = useState(true);
-  const [section, setSection] = useState('overview');
+  const [section, setSection] = useState(adminSectionFromPath);
   const [search, setSearch] = useState('');
   const [metrics, setMetrics] = useState(null);
   const [metricsState, setMetricsState] = useState('loading');
@@ -3248,6 +3260,20 @@ function AdminPage({ go }) {
     let mounted = true;
     fetchSession(mounted).finally(() => { if (mounted) setChecking(false); });
     return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    const target = '/' + section;
+    if (window.location.pathname !== target) window.history.pushState({}, '', target);
+  }, [section]);
+
+  useEffect(() => {
+    const onPop = () => {
+      const s = adminSectionFromPath();
+      setSection(s);
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
   }, []);
 
   useEffect(() => {
