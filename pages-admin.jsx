@@ -2735,7 +2735,9 @@ function AdminSettings() {
     abn: '',
     address: '',
     phone: '',
+    email: '',
     tagline: '',
+    siteUrl: '',
   }), []);
   const defaultAnnouncement = useMemo(() => ({ text: '', enabled: false, expiresAt: '' }), []);
   const defaultSiteContent = useMemo(() => ({ aiHeading: '', aiBody: '', aiEnabled: false, workshopBlurb: '' }), []);
@@ -2747,8 +2749,11 @@ function AdminSettings() {
   const [savedSiteContent, setSavedSiteContent] = useState(defaultSiteContent);
   const [integrations, setIntegrations] = useState([]);
   const [savedIntegrations, setSavedIntegrations] = useState([]);
+  const defaultSecurity = useMemo(() => ({ adminUsername: '', adminPassword: '', confirmPassword: '' }), []);
+  const [security, setSecurity] = useState(defaultSecurity);
+  const [savedSecurity, setSavedSecurity] = useState(defaultSecurity);
   const [integrationModal, setIntegrationModal] = useState(null);
-  const [integrationForm, setIntegrationForm] = useState({ name: '', endpoint: '', secretKey: '', webhookSecret: '', apiKey: '', notes: '' });
+  const [integrationForm, setIntegrationForm] = useState({ name: '', endpoint: '', secretKey: '', publishableKey: '', webhookSecret: '', host: '', port: '', user: '', pass: '', notifyEmail: '', apiKey: '', notes: '' });
   const [staffMembers, setStaffMembers] = useState([]);
   const [staffForm, setStaffForm] = useState(null);
   const [staffBusy, setStaffBusy] = useState(false);
@@ -2763,7 +2768,8 @@ function AdminSettings() {
   const announcementDirty = JSON.stringify(announcement) !== JSON.stringify(savedAnnouncement);
   const integrationsDirty = JSON.stringify(integrations) !== JSON.stringify(savedIntegrations);
   const siteContentDirty = JSON.stringify(siteContent) !== JSON.stringify(savedSiteContent);
-  const hasUnsavedChanges = shopDirty || announcementDirty || integrationsDirty || siteContentDirty;
+  const securityDirty = security.adminUsername !== savedSecurity.adminUsername || !!security.adminPassword;
+  const hasUnsavedChanges = shopDirty || announcementDirty || integrationsDirty || siteContentDirty || securityDirty;
   const loadStaff = () => fetch('/api/admin/staff', { credentials:'include' })
     .then(r => r.ok ? r.json() : Promise.reject()).then(d => setStaffMembers(d.members || [])).catch(() => {});
   useEffect(() => {
@@ -2774,6 +2780,7 @@ function AdminSettings() {
         const nextAnnouncement = { ...defaultAnnouncement, ...(d.announcement || {}) };
         const nextIntegrations = d.integrations || [];
         const nextSiteContent = { ...defaultSiteContent, ...(d.siteContent || {}) };
+        const nextSecurity = { ...defaultSecurity, adminUsername: d.security?.adminUsername || '' };
         setShop(nextShop);
         setSavedShop(nextShop);
         setAnnouncement(nextAnnouncement);
@@ -2782,6 +2789,8 @@ function AdminSettings() {
         setSavedIntegrations(nextIntegrations);
         setSiteContent(nextSiteContent);
         setSavedSiteContent(nextSiteContent);
+        setSecurity(nextSecurity);
+        setSavedSecurity(nextSecurity);
         setMaintenanceEnabled(!!(d.maintenance && d.maintenance.enabled));
       })
       .catch(() => setError('Failed to load settings.'))
@@ -2808,6 +2817,7 @@ function AdminSettings() {
         phone: (payload.shop?.phone || '').trim(),
         email: (payload.shop?.email || '').trim(),
         tagline: (payload.shop?.tagline || '').trim(),
+        siteUrl: (payload.shop?.siteUrl || '').trim(),
       },
       announcement: {
         text: (payload.announcement?.text || '').trim(),
@@ -2821,6 +2831,10 @@ function AdminSettings() {
         aiEnabled: !!payload.siteContent?.aiEnabled,
         workshopBlurb: (payload.siteContent?.workshopBlurb || '').trim(),
       },
+      security: {
+        adminUsername: (payload.security?.adminUsername || '').trim(),
+        adminPassword: payload.security?.adminPassword || '',
+      },
     };
     const r = await fetch('/api/admin/settings/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(normalized) }).catch(()=>null);
     setSectionBusy('');
@@ -2830,6 +2844,7 @@ function AdminSettings() {
       const reconciledAnnouncement = { ...defaultAnnouncement, ...(d.announcement || {}) };
       const reconciledIntegrations = d.integrations || [];
       const reconciledSiteContent = { ...defaultSiteContent, ...(d.siteContent || {}) };
+      const reconciledSecurity = { ...defaultSecurity, adminUsername: d.security?.adminUsername || '' };
       setShop(reconciledShop);
       setSavedShop(reconciledShop);
       setAnnouncement(reconciledAnnouncement);
@@ -2838,17 +2853,20 @@ function AdminSettings() {
       setSavedIntegrations(reconciledIntegrations);
       setSiteContent(reconciledSiteContent);
       setSavedSiteContent(reconciledSiteContent);
+      setSecurity(reconciledSecurity);
+      setSavedSecurity(reconciledSecurity);
       setStatusMsg('Settings updated successfully.');
     } else setStatusMsg('Failed to update settings.');
   };
-  const onShopSubmit = (e) => { e.preventDefault(); persistSettings({ shop, announcement: savedAnnouncement, integrations: savedIntegrations, siteContent: savedSiteContent }, 'shop'); };
-  const onAnnouncementSubmit = (e) => { e.preventDefault(); persistSettings({ shop: savedShop, announcement, integrations: savedIntegrations, siteContent: savedSiteContent }, 'announcement'); };
-  const onIntegrationsSubmit = (e) => { e.preventDefault(); persistSettings({ shop: savedShop, announcement: savedAnnouncement, integrations, siteContent: savedSiteContent }, 'integrations'); };
-  const onSiteContentSubmit = (e) => { e.preventDefault(); persistSettings({ shop: savedShop, announcement: savedAnnouncement, integrations: savedIntegrations, siteContent }, 'siteContent'); };
+  const onShopSubmit = (e) => { e.preventDefault(); persistSettings({ shop, announcement: savedAnnouncement, integrations: savedIntegrations, siteContent: savedSiteContent, security: savedSecurity }, 'shop'); };
+  const onAnnouncementSubmit = (e) => { e.preventDefault(); persistSettings({ shop: savedShop, announcement, integrations: savedIntegrations, siteContent: savedSiteContent, security: savedSecurity }, 'announcement'); };
+  const onIntegrationsSubmit = (e) => { e.preventDefault(); persistSettings({ shop: savedShop, announcement: savedAnnouncement, integrations, siteContent: savedSiteContent, security: savedSecurity }, 'integrations'); };
+  const onSiteContentSubmit = (e) => { e.preventDefault(); persistSettings({ shop: savedShop, announcement: savedAnnouncement, integrations: savedIntegrations, siteContent, security: savedSecurity }, 'siteContent'); };
+  const onSecuritySubmit = (e) => { e.preventDefault(); persistSettings({ shop: savedShop, announcement: savedAnnouncement, integrations: savedIntegrations, siteContent: savedSiteContent, security }, 'security'); };
   const openIntegrationModal = (idx) => {
     const r = integrations[idx];
     const cfg = r[3] || {};
-    setIntegrationForm({ name: r[0], endpoint: r[1], secretKey: cfg.secretKey || '', webhookSecret: cfg.webhookSecret || '', apiKey: cfg.apiKey || '', notes: cfg.notes || '' });
+    setIntegrationForm({ name: r[0], endpoint: r[1], secretKey: cfg.secretKey || '', publishableKey: cfg.publishableKey || '', webhookSecret: cfg.webhookSecret || '', host: cfg.host || '', port: cfg.port || '', user: cfg.user || '', pass: cfg.pass || '', notifyEmail: cfg.notifyEmail || '', apiKey: cfg.apiKey || '', notes: cfg.notes || '' });
     setIntegrationModal({ mode: 'edit', idx });
   };
   const openAddIntegrationModal = () => {
@@ -2858,8 +2876,11 @@ function AdminSettings() {
   const saveIntegrationModal = () => {
     const { mode, idx } = integrationModal;
     const isStripe = integrationForm.name === 'Stripe';
+    const isEmail = integrationForm.name === 'Email';
     const config = isStripe
-      ? { secretKey: integrationForm.secretKey, webhookSecret: integrationForm.webhookSecret }
+      ? { secretKey: integrationForm.secretKey, publishableKey: integrationForm.publishableKey, webhookSecret: integrationForm.webhookSecret }
+      : isEmail
+      ? { host: integrationForm.host, port: integrationForm.port, user: integrationForm.user, pass: integrationForm.pass, notifyEmail: integrationForm.notifyEmail }
       : { apiKey: integrationForm.apiKey, notes: integrationForm.notes };
     if (mode === 'add') {
       if (!integrationForm.name.trim()) return;
@@ -2907,6 +2928,7 @@ function AdminSettings() {
         <label className="field"><span className="label">Phone</span><input className="input" value={shop.phone} onChange={(e) => setShop({ ...shop, phone: e.target.value })}/></label>
         <label className="field"><span className="label">Contact email</span><input className="input" type="email" value={shop.email||''} onChange={(e) => setShop({ ...shop, email: e.target.value })}/></label>
         <label className="field"><span className="label">Tagline</span><input className="input" value={shop.tagline} onChange={(e) => setShop({ ...shop, tagline: e.target.value })}/></label>
+        <label className="field"><span className="label">Site URL</span><input className="input" value={shop.siteUrl||''} onChange={(e) => setShop({ ...shop, siteUrl: e.target.value })} placeholder="https://outbackelectronics.com.au"/></label>
         <div className="row-flex" style={{gap:8, marginTop:12}}>
           <button className="btn btn-rust btn-sm" disabled={!shopDirty || sectionBusy==='shop'}>{sectionBusy==='shop'?'Saving…':'Save'}</button>
           <button type="button" className="btn btn-ghost btn-sm" disabled={!shopDirty || sectionBusy==='shop'} onClick={() => setShop(savedShop)}>Cancel</button>
@@ -3005,6 +3027,17 @@ function AdminSettings() {
           <button type="button" className="btn btn-ghost btn-sm" disabled={!integrationsDirty || sectionBusy==='integrations'} onClick={() => setIntegrations(savedIntegrations)}>Cancel</button>
         </div>
       </form>
+      <form onSubmit={onSecuritySubmit} style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24}}>
+        <span className="eyebrow">SECURITY</span>
+        <label className="field" style={{marginTop:12}}><span className="label">Admin username</span><input className="input" value={security.adminUsername} onChange={e => setSecurity({...security, adminUsername: e.target.value})}/></label>
+        <label className="field"><span className="label">New password <span style={{fontWeight:400, color:'var(--ink-3)'}}>(leave blank to keep current)</span></span><input className="input" type="password" value={security.adminPassword} onChange={e => setSecurity({...security, adminPassword: e.target.value})}/></label>
+        <label className="field"><span className="label">Confirm password</span><input className="input" type="password" value={security.confirmPassword} onChange={e => setSecurity({...security, confirmPassword: e.target.value})}/></label>
+        {security.adminPassword && security.adminPassword !== security.confirmPassword && <div style={{fontSize:11, color:'var(--rust)', marginBottom:4}}>Passwords do not match</div>}
+        <div className="row-flex" style={{gap:8, marginTop:12}}>
+          <button className="btn btn-rust btn-sm" disabled={!securityDirty || sectionBusy==='security' || !!(security.adminPassword && security.adminPassword !== security.confirmPassword)}>{sectionBusy==='security'?'Saving…':'Save'}</button>
+          <button type="button" className="btn btn-ghost btn-sm" disabled={!securityDirty || sectionBusy==='security'} onClick={() => setSecurity(savedSecurity)}>Cancel</button>
+        </div>
+      </form>
       <div style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24}}>
         <span className="eyebrow">DANGER ZONE</span>
         <div style={{marginTop:14, display:'grid', gap:10}}>
@@ -3097,10 +3130,19 @@ function AdminSettings() {
             </>}
             {integrationModal.mode === 'edit' && integrationForm.name === 'Stripe' && <>
               <label className="field"><span className="label">Secret Key</span><input className="input" type="password" value={integrationForm.secretKey} onChange={e => setIntegrationForm({...integrationForm, secretKey: e.target.value})} placeholder="sk_live_… or sk_test_…"/></label>
+              <label className="field"><span className="label">Publishable Key</span><input className="input" value={integrationForm.publishableKey} onChange={e => setIntegrationForm({...integrationForm, publishableKey: e.target.value})} placeholder="pk_live_…"/></label>
               <label className="field"><span className="label">Webhook Secret</span><input className="input" type="password" value={integrationForm.webhookSecret} onChange={e => setIntegrationForm({...integrationForm, webhookSecret: e.target.value})} placeholder="whsec_…"/></label>
               <p style={{fontSize:11, color:'var(--ink-3)', margin:'-4px 0 8px'}}>Find these in Stripe Dashboard → Developers → API keys / Webhooks</p>
             </>}
-            {integrationModal.mode === 'edit' && integrationForm.name !== 'Stripe' && <>
+            {integrationModal.mode === 'edit' && integrationForm.name === 'Email' && <>
+              <label className="field"><span className="label">SMTP Host</span><input className="input" value={integrationForm.host} onChange={e => setIntegrationForm({...integrationForm, host: e.target.value})} placeholder="smtp.gmail.com"/></label>
+              <label className="field"><span className="label">SMTP Port</span><input className="input" value={integrationForm.port} onChange={e => setIntegrationForm({...integrationForm, port: e.target.value})} placeholder="587"/></label>
+              <label className="field"><span className="label">Username</span><input className="input" value={integrationForm.user} onChange={e => setIntegrationForm({...integrationForm, user: e.target.value})} placeholder="you@gmail.com"/></label>
+              <label className="field"><span className="label">Password / App password</span><input className="input" type="password" value={integrationForm.pass} onChange={e => setIntegrationForm({...integrationForm, pass: e.target.value})}/></label>
+              <label className="field"><span className="label">Notification address</span><input className="input" value={integrationForm.notifyEmail} onChange={e => setIntegrationForm({...integrationForm, notifyEmail: e.target.value})} placeholder="orders@yourshop.com"/></label>
+              <p style={{fontSize:11, color:'var(--ink-3)', margin:'-4px 0 8px'}}>Use a Gmail app password (not your account password)</p>
+            </>}
+            {integrationModal.mode === 'edit' && integrationForm.name !== 'Stripe' && integrationForm.name !== 'Email' && <>
               <label className="field"><span className="label">Endpoint</span><input className="input" value={integrationForm.endpoint} onChange={e => setIntegrationForm({...integrationForm, endpoint: e.target.value})}/></label>
               <label className="field"><span className="label">API Key</span><input className="input" type="password" value={integrationForm.apiKey} onChange={e => setIntegrationForm({...integrationForm, apiKey: e.target.value})}/></label>
               <label className="field"><span className="label">Notes</span><input className="input" value={integrationForm.notes} onChange={e => setIntegrationForm({...integrationForm, notes: e.target.value})}/></label>
