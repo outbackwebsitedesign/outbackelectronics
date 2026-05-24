@@ -157,7 +157,14 @@ function readOrders() {
 function writeOrders(orders) { atomicWriteFile(ORDERS_DB_PATH, JSON.stringify({ orders }, null, 2)); }
 
 function readCustomers() {
-  try { const p = JSON.parse(fs.readFileSync(CUSTOMERS_DB_PATH, 'utf8')); return Array.isArray(p.customers) ? p.customers : []; } catch { return []; }
+  try {
+    const p = JSON.parse(fs.readFileSync(CUSTOMERS_DB_PATH, 'utf8'));
+    const customers = Array.isArray(p.customers) ? p.customers : [];
+    let dirty = false;
+    for (const c of customers) { if (!c.id) { c.id = 'cust-' + Date.now() + '-' + Math.random().toString(36).slice(2); dirty = true; } }
+    if (dirty) writeCustomers(customers);
+    return customers;
+  } catch { return []; }
 }
 function writeCustomers(customers) { atomicWriteFile(CUSTOMERS_DB_PATH, JSON.stringify({ customers }, null, 2)); }
 
