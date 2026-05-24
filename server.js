@@ -614,12 +614,39 @@ function sendMaintenance(res) {
 }
 
 function checkMaintenance(req, res, url) {
+  // Always handle the status poll so the maintenance page can detect when to redirect
+  if (req.method === 'GET' && url.pathname === '/api/maintenance-status') {
+    const { maintenance } = readSettings();
+    json(res, 200, { enabled: !!(maintenance && maintenance.enabled) });
+    return true;
+  }
+
   const { maintenance } = readSettings();
-  if (!maintenance || !maintenance.enabled) return false;
-  // Let the favicon through so the maintenance page renders it
+  const enabled = !!(maintenance && maintenance.enabled);
+
+  // If maintenance just turned off, redirect anyone still on /maintenance back to their original page
+  if (url.pathname === '/maintenance' && !enabled) {
+    const from = url.searchParams.get('from') || '/';
+    const safe = from.startsWith('/') && !from.startsWith('//') ? from : '/';
+    res.writeHead(302, { 'Location': safe });
+    res.end();
+    return true;
+  }
+
+  if (!enabled) return false;
+
+  // Let the favicon through so the maintenance page can render it
   if (url.pathname === '/favicon.png' || url.pathname === '/favicon.ico') return false;
+
   if (url.pathname === '/maintenance') { sendMaintenance(res); return true; }
-  if (req.method === 'GET') { res.writeHead(302, { 'Location': '/maintenance' }); res.end(); return true; }
+
+  if (req.method === 'GET') {
+    const from = encodeURIComponent(url.pathname + url.search);
+    res.writeHead(302, { 'Location': `/maintenance?from=${from}` });
+    res.end();
+    return true;
+  }
+
   json(res, 503, { error: 'maintenance', message: 'Site is temporarily under maintenance.' });
   return true;
 }

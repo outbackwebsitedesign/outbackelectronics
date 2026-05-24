@@ -51,5 +51,19 @@ h1{font-family:Georgia,'Times New Roman',serif;font-weight:400;font-size:clamp(4
   <div class="status"><span class="pulse"></span>Maintenance in progress</div>
   {{CONTACT_EMAIL}}
 </main>
+<script>
+(function () {
+  var params = new URLSearchParams(window.location.search);
+  var from = params.get('from') || '/';
+  var safe = from.charAt(0) === '/' && from.charAt(1) !== '/' ? from : '/';
+  function check() {
+    fetch('/api/maintenance-status')
+      .then(function (r) { return r.json(); })
+      .then(function (d) { if (!d.enabled) window.location.href = safe; })
+      .catch(function () {});
+  }
+  setInterval(check, 5000);
+}());
+</script>
 </body>
 </html>
