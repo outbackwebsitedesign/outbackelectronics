@@ -1,0 +1,1162 @@
+import React, { useState, useEffect, useMemo, useContext } from 'react';
+
+const _fallbackShopCtx = React.createContext({});
+const useShop = () => useContext(window.__ShopContext__ || _fallbackShopCtx);
+
+// ============================================================
+// HOME
+// ============================================================
+function HomePage({ go, addToCart, portalUser }) {
+  const shop = useShop();
+  const [featuredProducts, setFeaturedProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [metrics, setMetrics] = useState({ repairCount: null, ewasteTonnes: null, forumMembers: null });
+  const [testimonial, setTestimonial] = useState(null);
+  const heroProduct = useMemo(() => featuredProducts.find(p => p.stock > 0) || featuredProducts[0] || null, [featuredProducts]);
+  const [recentThreads, setRecentThreads] = useState([]);
+  const [aiData, setAiData] = useState(null);
+  const [repairServices, setRepairServices] = useState([]);
+  const [siteContent, setSiteContent] = useState({});
+  const skuCounts = useMemo(() => {
+    const counts = {};
+    for (const p of featuredProducts) { counts[p.category] = (counts[p.category] || 0) + 1; }
+    return counts;
+  }, [featuredProducts]);
+  useEffect(() => {
+    fetch('/api/catalog/products').then(r => r.json()).then(d => setFeaturedProducts(d.items || [])).catch(() => setFeaturedProducts(window.CATALOG_DATA?.getPublicProducts?.() || []));
+    fetch('/api/catalog/filters').then(r => r.ok ? r.json() : Promise.reject()).then(d => setCategories(d.categories || [])).catch(() => {});
+    fetch('/api/metrics').then(r => r.json()).then(d => setMetrics(d)).catch(() => {});
+    fetch('/api/testimonial').then(r => r.ok ? r.json() : Promise.reject()).then(d => setTestimonial(d.testimonial)).catch(() => {});
+    fetch('/api/forum/recent').then(r => r.ok ? r.json() : Promise.reject()).then(d => setRecentThreads(d.threads || [])).catch(() => {});
+    fetch('/api/ai').then(r => r.ok ? r.json() : Promise.reject()).then(d => setAiData(d)).catch(() => {});
+    fetch('/api/catalog/services').then(r => r.ok ? r.json() : Promise.reject()).then(d => setRepairServices(d.items || [])).catch(() => {});
+    fetch('/api/settings').then(r => r.ok ? r.json() : Promise.reject()).then(d => setSiteContent(d.siteContent || {})).catch(() => {});
+  }, []);
+  return (
+    <>
+      {/* Hero */}
+      <section style={{borderBottom: '1px solid var(--line)', background: 'var(--bg-elev)'}}>
+        <div className="container" style={{paddingTop: 56, paddingBottom: 56}}>
+          <div style={{display:'grid', gridTemplateColumns:'1.2fr 1fr', gap: 48, alignItems:'center'}}>
+            <div>
+              <span className="eyebrow">EST. 2023 · APPOINTMENT ONLY · REMOTE ELECTRONICS SUPPORT</span>
+              <h1 className="serif" style={{fontSize: 92, marginTop: 14, lineHeight: 0.95}}>
+                Built for where<br/>
+                <span className="italic" style={{color:'var(--rust)'}}>the signal ends.</span>
+              </h1>
+              <p style={{marginTop: 22, fontSize: 18, maxWidth: 520, color:'var(--ink-2)'}}>
+                Rugged laptops, satellite uplinks, off-grid power, repair benches and an obstinate community of tinkerers — serving remote Australia{shop.address ? ` from ${shop.address}` : ''} by appointment only.
+              </p>
+              <div className="row-flex" style={{marginTop: 28}}>
+                <button className="btn btn-rust" onClick={() => go('shop')}>Browse the Shop →</button>
+                <button className="btn btn-ghost" onClick={() => go('services')}>Book a Repair</button>
+                {shop.phone && <span className="mono" style={{fontSize:12, color:'var(--ink-2)'}}>OR · CALL {shop.phone}</span>}
+              </div>
+              {portalUser === null && (
+                <div style={{marginTop:18, display:'flex', alignItems:'center', gap:10, padding:'12px 16px', border:'1px solid var(--line)', background:'var(--paper)', maxWidth:'fit-content'}}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{color:'var(--ink-3)', flexShrink:0}}><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>
+                  <span style={{fontSize:13, color:'var(--ink-2)'}}>New customer?</span>
+                  <a href="https://portal.outbackelectronics.com.au/?tab=register" style={{fontSize:13, color:'var(--rust)', fontWeight:600, textDecoration:'none'}}>Create a free account</a>
+                  <span style={{fontSize:13, color:'var(--ink-3)'}}>·</span>
+                  <a href="https://portal.outbackelectronics.com.au/?tab=login" style={{fontSize:13, color:'var(--ink-2)', textDecoration:'none'}}>Sign in</a>
+                </div>
+              )}
+              <div className="row-flex" style={{marginTop: 36, gap: 32, borderTop:'1px solid var(--line)', paddingTop: 22}}>
+                <div><div className="serif" style={{fontSize:32, color:'var(--rust)'}}>{metrics.repairCount !== null ? metrics.repairCount.toLocaleString() : '—'}</div><div className="eyebrow">REPAIRS LOGGED</div></div>
+                <div><div className="serif" style={{fontSize:32, color:'var(--rust)'}}>{metrics.ewasteTonnes !== null ? metrics.ewasteTonnes.toFixed(1) + 't' : '—'}</div><div className="eyebrow">E-WASTE DIVERTED</div></div>
+                <div><div className="serif" style={{fontSize:32, color:'var(--rust)'}}>{metrics.forumMembers !== null ? metrics.forumMembers.toLocaleString() : '—'}</div><div className="eyebrow">FORUM MEMBERS</div></div>
+              </div>
+            </div>
+            <div style={{position:'relative'}}>
+              {heroProduct && heroProduct.images && heroProduct.images.length > 0
+                ? <img src={heroProduct.images[0]} alt={heroProduct.name} style={{width:'100%', aspectRatio:'4/5', objectFit:'cover', display:'block'}} />
+                : <div className="slot slot-rust" style={{aspectRatio: '4/5'}}>RUGGED LAPTOP ON RED-DIRT WORKBENCH</div>}
+              {heroProduct && (
+                <div className="card-paper" style={{position:'absolute', bottom:-24, left:-24, padding:18, width:240, boxShadow:'var(--shadow)'}}>
+                  <div className="eyebrow">FIELD-TESTED</div>
+                  <div className="serif" style={{fontSize:22, marginTop:6, lineHeight:1.1}}>{heroProduct.name}{heroProduct.cond ? ` // ${heroProduct.cond}` : ''}</div>
+                  <div className="row-flex" style={{justifyContent:'space-between', marginTop:10}}>
+                    <span className="price">${Number(heroProduct.price).toLocaleString('en-AU')}</span>
+                    <span className={`tag ${heroProduct.stock > 0 ? 'tag-euc' : 'tag-outline'}`}>{heroProduct.stock > 0 ? 'IN STOCK' : 'OUT OF STOCK'}</span>
+                  </div>
+                </div>
+              )}
+              {testimonial && (
+                <div className="card" style={{position:'absolute', top: -20, right: -16, padding:14, width:200}}>
+                  <div className="mono" style={{fontSize:10, color:'var(--ink-2)', marginBottom:6}}>// CUSTOMER NOTE</div>
+                  <p style={{fontFamily:'Instrument Serif, serif', fontSize: 18, lineHeight:1.25}}>
+                    "{testimonial.quote}"
+                  </p>
+                  <div className="mono" style={{fontSize:10, marginTop:8}}>— {testimonial.name.toUpperCase()}{testimonial.loc ? ` · ${testimonial.loc.toUpperCase()}` : ''}</div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Category strip */}
+      <section className="container" style={{paddingTop: 64, paddingBottom: 24}}>
+        <div className="row-flex" style={{justifyContent:'space-between', marginBottom: 24, alignItems:'baseline'}}>
+          <div>
+            <span className="eyebrow">SECTIONS</span>
+            <h2 className="serif" style={{fontSize: 42, marginTop:6}}>Shop by terrain.</h2>
+          </div>
+          <a className="mono" style={{fontSize:12, color:'var(--rust)', cursor:'pointer'}} onClick={() => go('shop')}>VIEW ALL CATEGORIES →</a>
+        </div>
+        <div className="grid-4">
+          {(categories.length > 0 ? categories.slice(0, 4) : []).map((cat, i) => {
+            const slotColors = ['slot-rust', 'slot', 'slot', 'slot-dark'];
+            return (
+              <div key={cat} className="product" onClick={() => go('shop')}>
+                <div className={`slot ${slotColors[i % slotColors.length]}`} style={{aspectRatio:'1/1'}}>{cat.toUpperCase()}</div>
+                <div className="body">
+                  <div className="name serif" style={{fontSize:22}}>{cat}</div>
+                  <div className="row-px"><span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>{skuCounts[cat] != null ? `${skuCounts[cat]} SKUs` : ''}</span><span className="mono" style={{fontSize:11, color:'var(--rust)'}}>SHOP →</span></div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Editorial split: AI + Services */}
+      <section className="container" style={{paddingTop: 64}}>
+        <div className="grid-2" style={{gap:32}}>
+          <div style={{background:'var(--dark)', color:'var(--paper)', padding: 40, position:'relative', overflow:'hidden'}}>
+            {siteContent.aiEnabled && <span className="tag tag-ochre">NEW · 2026</span>}
+            <h2 className="serif" style={{fontSize: 56, marginTop: 18, lineHeight:1}}>
+              {siteContent.aiHeading && siteContent.aiHeading.split('\n').map((line, i, arr) =>
+                i < arr.length - 1 ? <React.Fragment key={i}>{line}<br/></React.Fragment> : <span key={i} className="italic">{line}</span>
+              )}
+            </h2>
+            <p style={{marginTop: 16, color:'var(--bg-deep)', maxWidth: 420}}>
+              {siteContent.aiBody}
+            </p>
+            <button className="btn btn-rust" style={{marginTop: 22}} onClick={() => go('ai')}>See the AI suite →</button>
+            {aiData && (
+              <div style={{marginTop: 28, display:'grid', gridTemplateColumns:'1fr 1fr', gap:16}}>
+                <div style={{background:'#0e0c09', padding:'16px 20px'}}>
+                  <div className="mono" style={{fontSize:11, color:'var(--ochre)', letterSpacing:'.08em'}}>MODELS</div>
+                  <div className="serif" style={{fontSize:36, marginTop:4}}>{aiData.models?.length ?? '—'}</div>
+                  <div style={{fontSize:12, color:'var(--bg-deep)', marginTop:2}}>
+                    {aiData.models?.filter(m => m.status === 'Active').length ?? 0} active
+                  </div>
+                </div>
+                <div style={{background:'#0e0c09', padding:'16px 20px'}}>
+                  <div className="mono" style={{fontSize:11, color:'var(--ochre)', letterSpacing:'.08em'}}>FIELD BOXES</div>
+                  <div className="serif" style={{fontSize:36, marginTop:4}}>{aiData.boxes?.length ?? '—'}</div>
+                  <div style={{fontSize:12, color:'var(--bg-deep)', marginTop:2}}>
+                    {aiData.boxes?.filter(b => !(b.status || '').toLowerCase().includes('offline')).length ?? 0} online
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div style={{background:'var(--paper)', border:'1px solid var(--line)', padding: 40}}>
+            <span className="eyebrow">WHAT WE FIX</span>
+            <h2 className="serif" style={{fontSize: 56, marginTop: 8, lineHeight:1}}>Bench, ute,<br/>or in the field.</h2>
+            <p style={{marginTop: 16, color:'var(--ink-2)', maxWidth: 420}}>{siteContent.workshopBlurb}</p>
+            {repairServices.length > 0 && (
+              <ul className="checks" style={{marginTop: 22, fontSize:14}}>
+                {repairServices.slice(0, 4).map((s, i) => <li key={i}>{s.name}</li>)}
+              </ul>
+            )}
+            <div className="row-flex" style={{marginTop: 28, justifyContent:'space-between'}}>
+              <button className="btn" onClick={() => go('services')}>Service catalogue</button>
+              {repairServices.length > 0 && (
+                <div className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{repairServices.length} SERVICES LISTED</div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Featured products */}
+      <section className="container" style={{paddingTop: 64}}>
+        <div className="row-flex" style={{justifyContent:'space-between', marginBottom: 24, alignItems:'baseline'}}>
+          <div>
+            <span className="eyebrow">ON THE BENCH THIS WEEK</span>
+            <h2 className="serif" style={{fontSize: 42, marginTop: 6}}>Tested. Tagged. Ready.</h2>
+          </div>
+          <a className="mono" style={{fontSize:12, color:'var(--rust)', cursor:'pointer'}} onClick={() => go('shop')}>ALL {featuredProducts.length || '—'} LISTINGS →</a>
+        </div>
+        <div className="grid-4">
+          {featuredProducts.slice(0,4).map((p,i) => <ProductCard key={i} p={p} onClick={() => go('product', p)} />)}
+        </div>
+      </section>
+
+      {/* Quote + Forum */}
+      <section className="container" style={{paddingTop: 64, paddingBottom: 16}}>
+        <div className="grid-2">
+          <div className="card-paper" style={{padding: 36}}>
+            <span className="tag tag-rust">QUOTES IN 24h</span>
+            <h3 className="serif" style={{fontSize:36, marginTop: 14, lineHeight:1.05}}>Got something weird that needs powering, fixing, or talking to a satellite?</h3>
+            <p style={{marginTop: 12, color:'var(--ink-2)'}}>Tell us the use case in plain English. Our techs will spec it, price it, and ship it. No salespeople.</p>
+            <button className="btn btn-rust" style={{marginTop: 18}} onClick={() => go('quote')}>Request a quote →</button>
+          </div>
+          <div style={{padding: 36, border:'1px solid var(--line)', background:'var(--bg-elev)'}}>
+            <span className="eyebrow">FROM THE FORUM · LAST 24H</span>
+            <ul style={{listStyle:'none', padding:0, margin:'14px 0 0', display:'grid', gap:10}}>
+              {recentThreads.length === 0
+                ? <li style={{color:'var(--ink-2)', fontSize:13}}>No recent threads.</li>
+                : recentThreads.map((t,i)=>(
+                <li key={t.id || i} style={{display:'flex', justifyContent:'space-between', padding:'10px 0', borderBottom:'1px solid var(--line)'}}>
+                  <div>
+                    <a onClick={() => go('forum')} style={{fontWeight:500, cursor:'pointer'}}>{t.title}</a>
+                    <div className="mono" style={{fontSize:10, color:'var(--ink-2)', marginTop:3}}>{t.cat ? t.cat.toUpperCase() + ' · ' : ''}{t.replies} REPLIES</div>
+                  </div>
+                  <a className="mono" style={{fontSize:11, color:'var(--rust)', cursor:'pointer'}} onClick={() => go('forum')}>→</a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
+
+// ============================================================
+// SHOP
+// ============================================================
+
+function ProductCard({ p, onClick }) {
+  const hasVariants = p.variants && p.variants.length > 0;
+  let displayPrice, displayTag, displayTagClass, displaySku;
+  if (hasVariants) {
+    const prices = p.variants.map(v => v.price);
+    const minPrice = Math.min(...prices);
+    const maxPrice = Math.max(...prices);
+    displayPrice = minPrice === maxPrice
+      ? `$${minPrice.toLocaleString()}`
+      : `$${minPrice.toLocaleString()} – $${maxPrice.toLocaleString()}`;
+    const totalStock = p.variants.reduce((s, v) => s + (v.stock || 0), 0);
+    if (totalStock === 0) { displayTag = 'Out of stock'; displayTagClass = 'tag-outline'; }
+    else if (totalStock <= 3) { displayTag = `${totalStock} left`; displayTagClass = 'tag-ochre'; }
+    else { displayTag = 'In stock'; displayTagClass = 'tag-euc'; }
+    displaySku = p.variants[0].sku;
+  } else {
+    displayPrice = `$${p.price.toLocaleString()}`;
+    displayTag = p.tag;
+    displayTagClass = p.tagClass;
+    displaySku = p.sku;
+  }
+  const thumb = p.images && p.images.length > 0 ? p.images[0] : null;
+  return (
+    <div className="product" onClick={onClick}>
+      {thumb
+        ? <img src={thumb} alt={p.name} style={{width:'100%', aspectRatio:'4/3', objectFit:'cover', display:'block'}} />
+        : <div className="slot" style={{aspectRatio:'4/3'}}>{p.name.toUpperCase()}</div>}
+      <div className="body">
+        <div className="meta">{p.cond} · {displaySku}</div>
+        <div className="name">{p.name}</div>
+        <div className="row-px">
+          <div>
+            <span className="price">{displayPrice}</span>
+            {!hasVariants && p.was && <span className="price-strike" style={{marginLeft:8}}>${p.was.toLocaleString()}</span>}
+          </div>
+          <span className={`tag ${displayTagClass}`}>{displayTag.toUpperCase()}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ShopPage({ go, addToCart }) {
+  const [cat, setCat] = useState('All');
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filterMeta, setFilterMeta] = useState({ categories: [], brands: [], conditions: [] });
+  const [selectedBrands, setSelectedBrands] = useState([]);
+  const [catalogError, setCatalogError] = useState(null);
+  const [priceMin, setPriceMin] = useState('');
+  const [priceMax, setPriceMax] = useState('');
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/catalog/products')
+        .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+        .then(d => setProducts(d.items || []))
+        .catch(err => { setCatalogError(err.message || 'Failed to load products'); setProducts([]); }),
+      fetch('/api/catalog/filters')
+        .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+        .then(d => setFilterMeta(d))
+        .catch(() => {}),
+    ]).finally(() => setLoading(false));
+  }, []);
+  const [cond, setCond] = useState('Any');
+  const [sort, setSort] = useState('relevance');
+  const [visibleCount, setVisibleCount] = useState(12);
+  const chunkSize = 12;
+  const filtered = useMemo(() => {
+    let f = [...products];
+    if (cat !== 'All') f = f.filter(p => p.category === cat);
+    if (cond !== 'Any') f = f.filter(p => p.cond === cond);
+    if (selectedBrands.length > 0) f = f.filter(p => selectedBrands.includes(p.brand));
+    const min = parseFloat(priceMin);
+    const max = parseFloat(priceMax);
+    if (!isNaN(min)) f = f.filter(p => (p.price ?? (p.variants && Math.min(...p.variants.map(v => v.price)))) >= min);
+    if (!isNaN(max)) f = f.filter(p => (p.price ?? (p.variants && Math.min(...p.variants.map(v => v.price)))) <= max);
+    if (sort === 'price-asc') f.sort((a,b) => a.price-b.price);
+    if (sort === 'price-desc') f.sort((a,b) => b.price-a.price);
+    return f;
+  }, [products, cat, cond, selectedBrands, priceMin, priceMax, sort]);
+
+  const totalResults = filtered.length;
+  const visible = filtered.slice(0, visibleCount);
+
+  useEffect(() => { setVisibleCount(chunkSize); }, [cat, cond, sort, priceMin, priceMax, products.length]);
+  useEffect(() => {
+    const onScroll = () => {
+      const nearBottom = window.innerHeight + window.scrollY >= document.body.offsetHeight - 240;
+      if (nearBottom) setVisibleCount(v => Math.min(totalResults, v + chunkSize));
+    };
+    window.addEventListener('scroll', onScroll);
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [totalResults]);
+  return (
+    <>
+      <PageHead crumbs={['Outback','Shop']} title="Shop"
+        lead={`${products.length} listings · new, refurbished & field-tested gear. Every refurb passes our 38-point bench check.`} />
+      <div className="container" style={{paddingTop: 32, paddingBottom: 32, display:'grid', gridTemplateColumns:'240px 1fr', gap: 36}}>
+        <aside>
+          <div className="eyebrow" style={{marginBottom: 10}}>CATEGORY</div>
+          <div className="stack" style={{gap:4}}>
+            {['All', ...filterMeta.categories].map(c => (
+              <a key={c} onClick={() => setCat(c)} style={{padding:'6px 8px', cursor:'pointer', fontSize:14, borderLeft: cat===c ? '2px solid var(--rust)':'2px solid transparent', color: cat===c ? 'var(--rust)' : 'var(--ink)', fontWeight: cat===c ? 600 : 400}}>{c}</a>
+            ))}
+          </div>
+          <hr className="thin" />
+          <div className="eyebrow" style={{marginBottom: 10}}>CONDITION</div>
+          {['Any', ...filterMeta.conditions].map(c => (
+            <label key={c} style={{display:'flex', alignItems:'center', gap:8, fontSize:14, padding:'4px 0', cursor:'pointer'}}>
+              <input type="radio" name="cond" checked={cond===c} onChange={() => setCond(c)} />
+              {c}
+            </label>
+          ))}
+          <hr className="thin" />
+          <div className="eyebrow" style={{marginBottom: 10}}>PRICE</div>
+          <div className="row-flex" style={{gap:8}}>
+            <input className="input" placeholder="$ min" style={{padding:'8px 10px'}} type="number" min="0" value={priceMin} onChange={e => setPriceMin(e.target.value)} />
+            <input className="input" placeholder="$ max" style={{padding:'8px 10px'}} type="number" min="0" value={priceMax} onChange={e => setPriceMax(e.target.value)} />
+          </div>
+          <hr className="thin" />
+          <div className="eyebrow" style={{marginBottom: 10}}>BRAND</div>
+          <div className="stack" style={{gap:4, fontSize:14}}>
+            {filterMeta.brands.map(b => (
+              <label key={b} style={{display:'flex', alignItems:'center', gap:8, cursor:'pointer'}}>
+                <input type="checkbox" checked={selectedBrands.includes(b)} onChange={e => setSelectedBrands(prev => e.target.checked ? [...prev, b] : prev.filter(x => x !== b))} /> {b}
+              </label>
+            ))}
+          </div>
+        </aside>
+
+        <div>
+          {catalogError && (
+            <div role="alert" style={{background:'#fff3f3', border:'1px solid #f5a5a5', borderRadius:6, padding:'12px 16px', marginBottom:18, color:'#c0392b', fontSize:14}}>
+              Unable to load products — {catalogError}. Please refresh the page or try again later.
+            </div>
+          )}
+          <div className="row-flex" style={{justifyContent:'space-between', marginBottom: 18}}>
+            <div className="mono" style={{fontSize:12, color:'var(--ink-2)'}}>SHOWING {visible.length} OF {totalResults} RESULTS · {cat.toUpperCase()}</div>
+            <div className="row-flex" style={{gap:10}}>
+              <select className="select" value={sort} onChange={e => setSort(e.target.value)} style={{padding:'6px 28px 6px 10px', fontSize:13}}>
+                <option value="relevance">Sort: Relevance</option>
+                <option value="price-asc">Price: low → high</option>
+                <option value="price-desc">Price: high → low</option>
+              </select>
+            </div>
+          </div>
+          {loading ? (
+            <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:20}}>
+              {Array.from({length:6}).map((_,i) => (
+                <div key={i} style={{background:'var(--bg-elev)', borderRadius:4, height:260, animation:'pulse 1.4s ease-in-out infinite', opacity: 0.6 + (i % 2) * 0.2}} />
+              ))}
+            </div>
+          ) : (
+            <>
+              <div className="grid-3" style={{gridTemplateColumns:'repeat(3, 1fr)', gap: 20}}>
+                {visible.map((p, i) => (
+                  <ProductCard key={p.id || i} p={p} onClick={() => go('product', p)} />
+                ))}
+              </div>
+              {visible.length < totalResults && <div className="mono" style={{fontSize:12, color:'var(--ink-2)', marginTop:18, textAlign:'center'}}>Scroll for more…</div>}
+            </>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ============================================================
+// SERVICES
+// ============================================================
+function ServicesPage({ go }) {
+  const [services, setServices] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [visibleCount, setVisibleCount] = useState(6);
+  const [siteContent, setSiteContent] = useState({});
+  const chunkSize = 6;
+
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/catalog/services').then(r => r.json()).then(d => setServices(d.items || [])).catch(() => setServices(window.CATALOG_DATA?.getPublicServices?.() || [])),
+      fetch('/api/settings').then(r => r.ok ? r.json() : Promise.reject()).then(d => setSiteContent(d.siteContent || {})).catch(() => {}),
+    ]).finally(() => setLoading(false));
+  }, []);
+
+  const visible = services.slice(0, visibleCount);
+
+  useEffect(() => { setVisibleCount(chunkSize); }, [services.length]);
+  useEffect(() => {
+    const onScroll = () => {
+      const nearBottom = window.innerHeight + window.scrollY >= document.body.offsetHeight - 240;
+      if (nearBottom) setVisibleCount(v => Math.min(services.length, v + chunkSize));
+    };
+    window.addEventListener('scroll', onScroll);
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [services.length]);
+
+  return (
+    <>
+      <PageHead crumbs={['Outback','Services']} title="Services" lead={`${services.length} services · ${siteContent.workshopBlurb}`} />
+      <section className="container" style={{paddingTop: 40, paddingBottom: 40}}>
+        {loading ? (
+          <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:24}}>
+            {Array.from({length:6}).map((_,i) => (
+              <div key={i} style={{background:'var(--bg-elev)', borderRadius:4, height:220, animation:'pulse 1.4s ease-in-out infinite', opacity: 0.6 + (i % 2) * 0.2}} />
+            ))}
+          </div>
+        ) : (
+        <>
+        <div className="mono" style={{fontSize:12, color:'var(--ink-2)', marginBottom:18}}>SHOWING {visible.length} OF {services.length} SERVICES</div>
+        <div className="grid-3" style={{gap: 24}}>
+          {visible.map((s,i) => (
+            <div key={i} className="card-paper" style={{padding: 24}}>
+              <div className="row-flex" style={{justifyContent:'space-between'}}>
+                <span className="mono" style={{fontSize:11, color:'var(--rust)'}}>S/{(i+1).toString().padStart(2,'0')}</span>
+                <span className="tag">TAT · {s.tat.toUpperCase()}</span>
+              </div>
+              <h3 className="serif" style={{fontSize: 28, marginTop: 14, lineHeight:1.1}}>{s.name}</h3>
+              <p style={{marginTop: 10, color:'var(--ink-2)', fontSize:14}}>{s.description}</p>
+              <div className="row-flex" style={{justifyContent:'space-between', marginTop: 18, borderTop:'1px solid var(--line)', paddingTop:14}}>
+                <span className="price" style={{fontSize:20}}>{s.priceLine}</span>
+                <a className="mono" style={{fontSize:11, color:'var(--rust)', cursor:'pointer'}} onClick={() => go('service', s)}>VIEW →</a>
+              </div>
+            </div>
+          ))}
+        </div>
+        {visible.length < services.length && <div className="mono" style={{fontSize:12, color:'var(--ink-2)', marginTop:18, textAlign:'center'}}>Scroll for more…</div>}
+        </>
+        )}
+      </section>
+
+      <section className="container" style={{paddingBottom: 60}}>
+        <div className="grid-2">
+          <div style={{padding: 32, background:'var(--dark)', color:'var(--paper)'}}>
+            <h3 className="serif" style={{fontSize: 36, lineHeight:1.05}}>How a repair moves through the shop.</h3>
+            <div style={{marginTop: 22, display:'grid', gap: 16}}>
+              {[
+                {n:'01',t:'Intake',d:'Walked in, posted, or radioed in. Triage in ≤15 min.'},
+                {n:'02',t:'Bench Diagnosis',d:'Multimeter, scope, thermal cam, and a slow cup of tea.'},
+                {n:'03',t:'Quote',d:'Fixed-price for known faults, hourly otherwise. You decide.'},
+                {n:'04',t:'Repair',d:'Logged photo-by-photo. You get the dead parts back if you want them.'},
+                {n:'05',t:'48h Burn-in',d:'We run it harder than you will. Then sign-off.'},
+              ].map((step,i) => (
+                <div key={i} style={{display:'grid', gridTemplateColumns:'48px 1fr', gap:14, borderTop:'1px solid #3a3127', paddingTop: 14}}>
+                  <div className="serif" style={{fontSize: 28, color:'var(--ochre)'}}>{step.n}</div>
+                  <div>
+                    <div style={{fontWeight:600}}>{step.t}</div>
+                    <div style={{color:'var(--bg-deep)', fontSize:13, marginTop:2}}>{step.d}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className="slot" style={{aspectRatio:'4/3'}}>WORKBENCH — DUST, FLUX, COPPER WIRE</div>
+            <div className="card-paper" style={{padding: 24, marginTop:16}}>
+              <span className="eyebrow">LATEST JOB LOG · PUBLIC</span>
+              <table style={{width:'100%', marginTop: 12, borderCollapse:'collapse', fontSize:13}}>
+                <thead>
+                  <tr style={{textAlign:'left', borderBottom:'1px solid var(--line)'}}>
+                    <th style={{padding:'8px 0'}}>JOB</th><th>ITEM</th><th>STATUS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    ['J-2614','Toughbook 55','Bench'],
+                    ['J-2613','Victron 24/3000','Quoted'],
+                    ['J-2612','iPhone 14 Pro','Done'],
+                    ['J-2611','Fronius Primo 5.0','Field'],
+                    ['J-2610','Synology DS920+','Awaiting parts'],
+                  ].map((r,i) => (
+                    <tr key={i} style={{borderBottom:'1px solid var(--line)'}}>
+                      <td style={{padding:'10px 0', fontFamily:'JetBrains Mono, monospace', fontSize:11}}>{r[0]}</td>
+                      <td>{r[1]}</td>
+                      <td><span className={`tag ${r[2]==='Done'?'tag-euc':r[2]==='Bench'?'tag-rust':'tag-outline'}`} style={{padding:'2px 6px'}}>{r[2]}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
+
+// ============================================================
+// SOFTWARE
+// ============================================================
+function SoftwarePage({ go }) {
+  const [products, setProducts] = useState([]);
+  useEffect(() => {
+    fetch('/api/software').then(r => r.ok ? r.json() : Promise.reject()).then(d => setProducts(d.items || [])).catch(() => {});
+  }, []);
+  return (
+    <>
+      <PageHead crumbs={['Outback','Software']} title="Software"
+        lead="Tools we wrote for ourselves, then cleaned up enough to share. Mostly open source, mostly Linux, all paid-back in pull requests." />
+      <section className="container" style={{paddingTop: 40, paddingBottom: 32}}>
+        <div className="grid-2" style={{gap: 24}}>
+          {products.length === 0 && <div className="mono" style={{fontSize:13, color:'var(--ink-2)', gridColumn:'1/-1'}}>No software listed yet.</div>}
+          {products.map((p,i) => (
+            <div key={p.id||i} className="card-paper" style={{padding: 28, display:'grid', gridTemplateColumns:'1fr', gap:14}}>
+              <div className="row-flex" style={{justifyContent:'space-between'}}>
+                <span className={`tag ${(p.license||'').includes('OSS')?'tag-euc':'tag-rust'}`}>{p.license}</span>
+                <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{p.stars}</span>
+              </div>
+              <h3 className="serif" style={{fontSize: 36, lineHeight:1}}>{p.name}</h3>
+              {p.description && <p style={{color:'var(--ink-2)', fontSize:14}}>{p.description}</p>}
+              <div className="row-flex" style={{justifyContent:'space-between', borderTop:'1px solid var(--line)', paddingTop: 14}}>
+                <span className="price" style={{fontSize: 20}}>{p.price}</span>
+                <div className="row-flex" style={{gap:8}}>
+                  <button className="btn btn-sm" onClick={() => p.repo && window.open(p.repo, '_blank')}>{(p.license||'').includes('OSS') ? 'Repo →' : 'Try free →'}</button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+    </>
+  );
+}
+
+// ============================================================
+// EWASTE
+// ============================================================
+function EwastePage({ go }) {
+  const [metrics, setMetrics] = useState({ ewasteTonnes: null, resalePercent: null });
+  useEffect(() => {
+    fetch('/api/metrics').then(r => r.ok ? r.json() : Promise.reject()).then(d => setMetrics(d)).catch(() => {});
+  }, []);
+  const stats = [
+    {n: metrics.ewasteTonnes !== null ? metrics.ewasteTonnes.toFixed(1) + 't' : '—', l:'DIVERTED · TOTAL', s:'From landfill into refurb, parts, or audited recyclers.'},
+    {n: metrics.resalePercent !== null ? metrics.resalePercent + '%' : '—', l:'GEAR RESOLD OR DONATED', s:'Most of what comes in still has a working second life.'},
+    {n:'$0', l:'TO DROP OFF', s:'Counter drop-off is always free, regardless of brand.'},
+  ];
+  return (
+    <>
+      <PageHead crumbs={['Outback','eWaste']} title="eWaste"
+        lead="A take-back program for the bits no one else will touch. We sort, salvage, refurbish, or properly recycle — and pay you for what's worth saving." />
+      <section className="container" style={{paddingTop: 40, paddingBottom: 24}}>
+        <div className="grid-3">
+          {stats.map((s,i) => (
+            <div key={i} style={{padding: 32, background:'var(--paper)', border:'1px solid var(--line)'}}>
+              <div className="serif" style={{fontSize: 72, color:'var(--rust)', lineHeight:1}}>{s.n}</div>
+              <div className="eyebrow" style={{marginTop: 8}}>{s.l}</div>
+              <p style={{marginTop: 10, color:'var(--ink-2)', fontSize:14}}>{s.s}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="container" style={{paddingTop: 32, paddingBottom: 40}}>
+        <div className="grid-2" style={{gap: 36}}>
+          <div>
+            <span className="eyebrow">WHAT WE TAKE</span>
+            <h2 className="serif" style={{fontSize: 44, marginTop: 8, lineHeight:1}}>If it has a battery, a board or a buzzing transformer — bring it.</h2>
+            <div className="grid-2" style={{marginTop: 24, gap:12}}>
+              {['Laptops','Desktops','Phones','Tablets','Solar inverters','Power tools','Lead-acid batteries','LiFePO4 packs','UPS units','PV modules','Network gear','Server racks','Cables (sorted)','CRT & LCD displays','Printers','Cameras & scopes'].map((it,i) => (
+                <div key={i} className="checks"><li style={{display:'flex', gap:10, alignItems:'flex-start'}}>{it}</li></div>
+              ))}
+            </div>
+            <hr className="thin" />
+            <span className="eyebrow">WHAT WE DON'T</span>
+            <p style={{marginTop: 8, color:'var(--ink-2)', fontSize:14}}>
+              Whitegoods, vape devices, asbestos-backed PCBs, anything radioactive (it has happened). For those, we'll point you at the right council waste transfer station.
+            </p>
+          </div>
+
+          <div>
+            <div className="card-paper" style={{padding: 28}}>
+              <span className="tag tag-rust">CASH OR CREDIT</span>
+              <h3 className="serif" style={{fontSize: 32, marginTop: 12}}>Trade-in tiers, plainly.</h3>
+              <table style={{width:'100%', marginTop: 16, borderCollapse:'collapse', fontSize:13}}>
+                <thead>
+                  <tr style={{textAlign:'left', borderBottom:'2px solid var(--ink)'}}>
+                    <th style={{padding:'10px 0'}}>TIER</th><th>WHAT IT IS</th><th>YOU GET</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    ['A','Working, ≤3yrs old','60–75% of refurb price'],
+                    ['B','Working, ≤7yrs old','30–50% of refurb price'],
+                    ['C','Faulty but parts-worthy','Flat $10–80 + store credit'],
+                    ['D','Recycle-only','Free drop-off, drink coupon'],
+                  ].map((r,i)=>(
+                    <tr key={i} style={{borderBottom:'1px solid var(--line)'}}>
+                      <td style={{padding:'12px 0', fontFamily:'Instrument Serif, serif', fontSize:22, color:'var(--rust)'}}>{r[0]}</td>
+                      <td>{r[1]}</td><td style={{fontWeight:600}}>{r[2]}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="notice" style={{marginTop:16}}>
+              <span className="tag tag-euc">PICKUP</span>
+              <div style={{fontSize:13, color:'var(--ink-2)'}}>≥ 50kg pallet of dead gear? We'll come grab it for free by appointment only — or freight pre-paid anywhere in Aus.</div>
+              <button className="btn btn-sm" onClick={() => go('quote')}>Book pickup</button>
+            </div>
+
+            <div className="notice" style={{marginTop:16, background:'var(--bg-elev)'}}>
+              <span className="tag tag-ink">DATA</span>
+              <div style={{fontSize:13, color:'var(--ink-2)'}}>Every drive is wiped to NIST 800-88 purge, or physically shredded. Certificate emailed within 48h.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
+
+// ============================================================
+// AI
+// ============================================================
+function ModelCardModal({ model, onClose, go }) {
+  return (
+    <div style={{position:'fixed', inset:0, zIndex:500, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(15,13,10,0.7)'}}
+      onClick={onClose}>
+      <div style={{width:'100%', maxWidth:560, background:'var(--bg)', border:'1px solid var(--line)', boxShadow:'0 12px 40px rgba(0,0,0,.35)', padding:32}}
+        onClick={e => e.stopPropagation()}>
+        <div className="row-flex" style={{justifyContent:'space-between', marginBottom:18}}>
+          <div>
+            <span className="tag tag-euc">OPEN WEIGHTS</span>
+            <h2 className="mono" style={{fontSize:24, marginTop:8, color:'var(--rust)'}}>{model.name}</h2>
+          </div>
+          <button style={{background:'none', border:'none', cursor:'pointer', fontSize:22, color:'var(--ink-2)', lineHeight:1}} onClick={onClose}>×</button>
+        </div>
+        <table style={{width:'100%', borderCollapse:'collapse', fontSize:14, marginBottom:20}}>
+          <tbody>
+            {[
+              ['Task', model.task],
+              ['Model size', model.size],
+              ['Accuracy', model.acc],
+              ['Recommended HW', model.hw],
+              ['Licence', 'Apache 2.0'],
+              ['Format', 'ONNX / TFLite'],
+            ].map(([k,v],i) => (
+              <tr key={i} style={{borderBottom:'1px solid var(--line)'}}>
+                <td style={{padding:'10px 0', color:'var(--ink-2)', width:'40%'}} className="mono">{k}</td>
+                <td style={{padding:'10px 0', fontWeight:500}}>{v}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="term" style={{marginBottom:18}}>
+          <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:6}}>// QUICK START</div>
+          <div><span className="prompt">$</span> oe pull {model.name}</div>
+          <div><span className="prompt">$</span> oe deploy {model.name} --camera cam0</div>
+        </div>
+        <div className="row-flex" style={{gap:8}}>
+          <button className="btn btn-rust" onClick={() => { onClose(); go('quote'); }}>Spec a box for this model →</button>
+          <button className="btn btn-ghost" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AIPage({ go }) {
+  const [modelCard, setModelCard] = React.useState(null);
+  const [models, setModels] = useState([]);
+  useEffect(() => {
+    fetch('/api/ai').then(r => r.ok ? r.json() : Promise.reject()).then(d => setModels(d.models || [])).catch(() => {});
+  }, []);
+  return (
+    <>
+      <PageHead crumbs={['Outback','AI']} title="Artificial Intelligence"
+        kicker={<span className="tag tag-rust">NEW 2026 · BETA PRICING</span>}
+        lead="Edge models, ruggedised inference boxes, and a training pipeline for whoever has a problem and a hard drive full of paddock footage." />
+
+      <section className="container" style={{paddingTop: 40}}>
+        <div className="grid-2" style={{gap:32}}>
+          <div>
+            <span className="eyebrow">THE THESIS</span>
+            <h2 className="serif" style={{fontSize: 56, marginTop:8, lineHeight:1}}>Inference belongs<br/>at the edge.</h2>
+            <p style={{marginTop: 16, fontSize: 16, color:'var(--ink-2)', maxWidth:520}}>
+              Cloud AI breaks when you're 700km from the nearest tower. We build inference boxes that run on 20W, survive 50°C, and don't phone home unless you tell them to. Then we train models on your data — fences, paddocks, mine sites, herds, hives — and hand back the weights.
+            </p>
+            <ul className="checks" style={{marginTop: 22, fontSize:14}}>
+              <li>Privacy-first: your footage never leaves the property</li>
+              <li>Offline by default; sync metadata over LoRa or sat</li>
+              <li>Open weights — no lock-in to our hardware</li>
+              <li>We benchmark before you buy. No magic boxes.</li>
+            </ul>
+          </div>
+          <div className="term">
+            <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:8}}>// PILOT — bushfire smoke detection, Mt Isa station</div>
+            <div><span className="prompt">$</span> oe deploy smoke-v2 --camera south-ridge</div>
+            <div className="ok">  ✓ model 8.9 MB · loaded in 412ms</div>
+            <div className="ok">  ✓ camera linked · stream @ 4 fps</div>
+            <div>  09:14:02 · no event</div>
+            <div>  09:14:18 · no event</div>
+            <div className="warn">  09:14:34 · smoke (conf 0.91) · alert sent · sat msg #248</div>
+            <div className="ok">  09:14:36 · ack from station phone</div>
+            <div>  09:14:50 · smoke (conf 0.94)</div>
+            <div className="warn">  09:15:06 · smoke (conf 0.96) · escalating · CFS notified</div>
+            <div><span className="prompt">$</span> <span style={{borderRight:'2px solid #d39a37'}}>_</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section className="container" style={{paddingTop: 56}}>
+        <div className="row-flex" style={{justifyContent:'space-between', marginBottom: 18, alignItems:'baseline'}}>
+          <div>
+            <span className="eyebrow">MODEL CATALOGUE · OPEN WEIGHTS</span>
+            <h2 className="serif" style={{fontSize: 40, marginTop:6}}>Six models on the shelf.</h2>
+          </div>
+          <a className="mono" style={{fontSize:12, color:'var(--rust)', cursor:'pointer'}} onClick={() => go('quote')}>NEED A CUSTOM MODEL? →</a>
+        </div>
+        <div style={{border:'1px solid var(--line)', background:'var(--paper)'}}>
+          <div style={{display:'grid', gridTemplateColumns:'1.5fr 2fr 1fr 1fr 1.5fr 100px', padding:'14px 20px', borderBottom:'2px solid var(--ink)', background:'var(--bg-elev)', fontFamily:'JetBrains Mono, monospace', fontSize:11, letterSpacing:'.08em'}}>
+            <div>MODEL</div><div>TASK</div><div>SIZE</div><div>ACCURACY</div><div>RECOMMENDED HW</div><div></div>
+          </div>
+          {models.length === 0 && <div className="mono" style={{padding:'18px 20px', fontSize:12, color:'var(--ink-2)'}}>No models listed yet.</div>}
+          {models.map((m,i) => (
+            <div key={m.name||i} style={{display:'grid', gridTemplateColumns:'1.5fr 2fr 1fr 1fr 1.5fr 100px', padding:'18px 20px', borderTop: i===0?'none':'1px solid var(--line)', alignItems:'center', fontSize:14}}>
+              <div className="mono" style={{color:'var(--rust)'}}>{m.name}</div>
+              <div>{m.task}</div>
+              <div className="mono" style={{fontSize:12}}>{m.size}</div>
+              <div className="mono" style={{fontSize:12}}>{m.acc}</div>
+              <div style={{fontSize:13, color:'var(--ink-2)'}}>{m.hw}</div>
+              <div><button className="btn btn-ghost btn-sm" onClick={() => setModelCard(m)}>Card →</button></div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="container" style={{paddingTop: 56, paddingBottom: 40}}>
+        <div className="grid-3">
+          {[
+            {t:'Inference Box · S', p:'$2,490', d:'Raspberry Pi 5, Coral TPU, IP66 case, PoE-in. Up to 30fps on small models.', hw:'18W typical'},
+            {t:'Inference Box · M', p:'$5,890', d:'Jetson Orin Nano, NVMe, IP66 + sunshade, 12–48V DC. Our most-shipped unit.', hw:'25W typical', highlight:true},
+            {t:'Inference Box · L', p:'$11,490', d:'Jetson Orin NX 16GB, 4× camera, mesh + sat, ruggedised for ute-roof mount.', hw:'42W typical'},
+          ].map((b,i) => (
+            <div key={i} style={{padding: 32, background: b.highlight ? 'var(--dark)' : 'var(--paper)', color: b.highlight ? 'var(--paper)' : 'var(--ink)', border:'1px solid', borderColor: b.highlight ? 'var(--dark)' : 'var(--line)'}}>
+              {b.highlight && <span className="tag tag-ochre">MOST SHIPPED</span>}
+              <h3 className="serif" style={{fontSize: 32, marginTop: b.highlight?14:0, lineHeight:1.05}}>{b.t}</h3>
+              <div className="price" style={{fontSize: 36, marginTop: 10}}>{b.p}</div>
+              <p style={{marginTop: 14, fontSize:14, color: b.highlight ? 'var(--bg-deep)' : 'var(--ink-2)'}}>{b.d}</p>
+              <div className="mono" style={{fontSize:11, marginTop:14, opacity:.7}}>{b.hw.toUpperCase()}</div>
+              <button className="btn btn-rust" style={{marginTop: 20, width:'100%', justifyContent:'center'}} onClick={() => go('quote')}>Spec it →</button>
+            </div>
+          ))}
+        </div>
+      </section>
+      <section className="container" style={{paddingTop: 56, paddingBottom: 56}}>
+        <span className="eyebrow">AI IN ACTION</span>
+        <h2 className="serif" style={{fontSize: 40, marginTop: 6, marginBottom: 8}}>What it's like to be an AI</h2>
+        <p style={{fontSize: 13, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono, monospace', marginBottom: 24, maxWidth: 620}}>
+          This video was created entirely by Claude AI, using only HTML code, no image or true video generation.
+        </p>
+        <div style={{position: 'relative', width: '100%', paddingBottom: '56.25%', background: '#000', border: '1px solid var(--line)'}}>
+          <iframe
+            src="/assets/ai-video.html"
+            title="What It's Like to Be an AI"
+            style={{position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none'}}
+            allow="autoplay"
+          />
+        </div>
+      </section>
+
+      {modelCard && <ModelCardModal model={modelCard} onClose={() => setModelCard(null)} go={go} />}
+    </>
+  );
+}
+
+// ============================================================
+// PRODUCT DETAIL
+// ============================================================
+function ProductDetailPage({ go, addToCart, pageParams }) {
+  const [product, setProduct] = useState(pageParams || null);
+  const [selectedVariant, setSelectedVariant] = useState(null);
+
+  useEffect(() => {
+    if (pageParams) {
+      setProduct(pageParams);
+      setSelectedVariant(pageParams.variants && pageParams.variants.length > 0 ? pageParams.variants[0] : null);
+    }
+  }, [pageParams]);
+
+  if (!product) {
+    return (
+      <>
+        <PageHead crumbs={['Outback', 'Shop', 'Product']} title="Product not found" lead="This product could not be loaded." />
+        <section className="container" style={{paddingTop:32, paddingBottom:48}}>
+          <button className="btn btn-ghost" onClick={() => go('shop')}>← Back to Shop</button>
+        </section>
+      </>
+    );
+  }
+
+  const hasVariants = product.variants && product.variants.length > 0;
+  const activePrice = selectedVariant ? selectedVariant.price : product.price;
+  const inStock = hasVariants
+    ? (selectedVariant ? (selectedVariant.stock || 0) > 0 : false)
+    : true;
+
+  return (
+    <>
+      <PageHead crumbs={['Outback', 'Shop', product.name]} title={product.name} />
+      <section className="container" style={{paddingTop:32, paddingBottom:56}}>
+        <button className="btn btn-ghost btn-sm" onClick={() => go('shop')} style={{marginBottom:24}}>← Back to Shop</button>
+        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:48, alignItems:'start'}}>
+          <div>
+            {product.images && product.images.length > 0
+              ? <img src={product.images[0]} alt={product.name} style={{aspectRatio:'4/3', width:'100%', objectFit:'cover', display:'block'}} />
+              : <div className="slot" style={{aspectRatio:'4/3', width:'100%'}}>{product.name.toUpperCase()}</div>}
+          </div>
+          <div>
+            <div className="row-flex" style={{gap:8, marginBottom:12, flexWrap:'wrap'}}>
+              {product.brand && <span className="tag tag-outline">{product.brand}</span>}
+              {product.cond && <span className="tag">{product.cond}</span>}
+              {!hasVariants && product.tag && <span className={`tag ${product.tagClass || ''}`}>{product.tag.toUpperCase()}</span>}
+            </div>
+            <h2 className="serif" style={{fontSize:40, lineHeight:1.05, marginBottom:8}}>{product.name}</h2>
+            <div className="mono" style={{fontSize:12, color:'var(--ink-3)', marginBottom:20}}>SKU: {product.sku || (hasVariants && selectedVariant ? selectedVariant.sku : '—')}</div>
+            <div style={{display:'flex', alignItems:'baseline', gap:12, marginBottom:24}}>
+              <span className="price" style={{fontSize:36}}>${activePrice ? activePrice.toLocaleString() : '—'}</span>
+              {!hasVariants && product.was && <span className="price-strike" style={{fontSize:20}}>${product.was.toLocaleString()}</span>}
+            </div>
+
+            {hasVariants && (
+              <div style={{marginBottom:24}}>
+                <div className="eyebrow" style={{marginBottom:10}}>SELECT VARIANT</div>
+                <div style={{display:'grid', gap:8}}>
+                  {product.variants.map((v, i) => {
+                    const isSelected = selectedVariant && selectedVariant.sku === v.sku;
+                    const stockLabel = !v.stock || v.stock === 0 ? 'Out of stock' : v.stock <= 3 ? `${v.stock} left` : 'In stock';
+                    return (
+                      <div key={i} onClick={() => setSelectedVariant(v)}
+                        style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 14px', cursor:'pointer', border:'1px solid var(--line)', borderLeft: isSelected ? '3px solid var(--rust)' : '1px solid var(--line)', background: isSelected ? 'var(--bg-elev)' : 'transparent'}}>
+                        <span style={{fontWeight: isSelected ? 600 : 400}}>{v.name}</span>
+                        <div style={{display:'flex', gap:14, alignItems:'center'}}>
+                          <span className="mono" style={{fontSize:14}}>${v.price.toLocaleString()}</span>
+                          <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{stockLabel}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {product.description && (
+              <p style={{color:'var(--ink-2)', fontSize:15, lineHeight:1.7, marginBottom:24}}>{product.description}</p>
+            )}
+
+            <div style={{display:'flex', gap:12}}>
+              <button className="btn btn-rust" style={{flex:1, justifyContent:'center'}}
+                disabled={!inStock}
+                onClick={() => { addToCart(hasVariants ? { ...product, ...selectedVariant } : product); }}>
+                {inStock ? 'Add to Cart' : 'Out of Stock'}
+              </button>
+              <button className="btn btn-ghost" onClick={() => go('quote')}>Request a Quote</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
+
+// ============================================================
+// SERVICE DETAIL
+// ============================================================
+function ServiceDetailPage({ go, pageParams }) {
+  const [service, setService] = useState(pageParams || null);
+
+  useEffect(() => {
+    if (pageParams) setService(pageParams);
+  }, [pageParams]);
+
+  if (!service) {
+    return (
+      <>
+        <PageHead crumbs={['Outback', 'Services', 'Service']} title="Service not found" lead="This service could not be loaded." />
+        <section className="container" style={{paddingTop:32, paddingBottom:48}}>
+          <button className="btn btn-ghost" onClick={() => go('services')}>← Back to Services</button>
+        </section>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <PageHead crumbs={['Outback', 'Services', service.name]} title={service.name} />
+      <section className="container" style={{paddingTop:32, paddingBottom:56}}>
+        <button className="btn btn-ghost btn-sm" onClick={() => go('services')} style={{marginBottom:24}}>← Back to Services</button>
+        <div style={{maxWidth:640}}>
+          <div style={{display:'flex', gap:8, marginBottom:12, flexWrap:'wrap'}}>
+            {service.category && <span className="tag tag-outline">{service.category}</span>}
+            {service.sku && <span className="mono" style={{fontSize:11, color:'var(--rust)', padding:'4px 8px', border:'1px solid var(--line)'}}>{service.sku}</span>}
+          </div>
+          <h2 className="serif" style={{fontSize:40, lineHeight:1.05, marginBottom:16}}>{service.name}</h2>
+          {service.description && (
+            <p style={{color:'var(--ink-2)', fontSize:15, lineHeight:1.7, marginBottom:24}}>{service.description}</p>
+          )}
+          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginBottom:28}}>
+            <div style={{padding:18, background:'var(--bg-elev)', border:'1px solid var(--line)'}}>
+              <div className="eyebrow" style={{marginBottom:6}}>PRICE</div>
+              <div className="price" style={{fontSize:24}}>{service.priceLine}</div>
+            </div>
+            <div style={{padding:18, background:'var(--bg-elev)', border:'1px solid var(--line)'}}>
+              <div className="eyebrow" style={{marginBottom:6}}>TURNAROUND</div>
+              <div style={{fontWeight:600, fontSize:16}}>{service.tat}</div>
+            </div>
+          </div>
+          <div style={{display:'flex', gap:12}}>
+            <button className="btn btn-rust" style={{flex:1, justifyContent:'center'}} onClick={() => go('quote')}>Book this Service →</button>
+            <button className="btn btn-ghost" onClick={() => go('contact')}>Ask a Question</button>
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
+
+// ============================================================
+// GIFT CARDS
+// ============================================================
+function GiftCardsPage({ go, addToCart }) {
+  const [products, setProducts] = useState([]);
+  const [balanceCode, setBalanceCode] = useState('');
+  const [balanceResult, setBalanceResult] = useState(null);
+  const [balanceError, setBalanceError] = useState(null);
+  const [balanceLoading, setBalanceLoading] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/catalog/products')
+      .then(r => r.json())
+      .then(d => setProducts((d.items || []).filter(p => p.category === 'Gift Cards')))
+      .catch(() => {});
+  }, []);
+
+  const checkBalance = async () => {
+    const code = balanceCode.trim().toUpperCase();
+    if (!code) return;
+    setBalanceLoading(true);
+    setBalanceResult(null);
+    setBalanceError(null);
+    try {
+      const resp = await fetch(`/api/gift-card/balance?code=${encodeURIComponent(code)}`);
+      const data = await resp.json();
+      if (resp.ok) setBalanceResult(data);
+      else setBalanceError(data.error === 'not_found' ? 'Gift card not found.' : 'Could not look up this code.');
+    } catch {
+      setBalanceError('Could not connect. Please try again.');
+    } finally {
+      setBalanceLoading(false);
+    }
+  };
+
+  const denominations = products.length > 0 ? products : [
+    { id: 'gc-025', name: 'Gift Card — $25', price: 25, description: 'Redeemable on anything in the Outback Electronics online store. Delivered by email. Never expires.' },
+    { id: 'gc-050', name: 'Gift Card — $50', price: 50, description: 'Redeemable on anything in the Outback Electronics online store. Delivered by email. Never expires.' },
+    { id: 'gc-100', name: 'Gift Card — $100', price: 100, description: 'Redeemable on anything in the Outback Electronics online store. Delivered by email. Never expires.' },
+    { id: 'gc-200', name: 'Gift Card — $200', price: 200, description: 'Redeemable on anything in the Outback Electronics online store. Delivered by email. Never expires.' },
+  ];
+
+  return (
+    <>
+      <PageHead crumbs={['Outback', 'Gift Cards']} title="Gift Cards"
+        lead="The perfect gift for the remote-area tinkerer in your life. Redeemable on products and services. Sent by email instantly." />
+      <section className="container" style={{paddingTop:40, paddingBottom:56}}>
+        <div className="grid-4" style={{gap:24}}>
+          {denominations.map((gc, i) => (
+            <div key={gc.id || i} className="card-paper" style={{padding:28, display:'flex', flexDirection:'column', gap:16}}>
+              <div style={{padding:'32px 0', textAlign:'center', background:'var(--bg-elev)', border:'1px solid var(--line)'}}>
+                <div className="serif" style={{fontSize:52, color:'var(--rust)', lineHeight:1}}>${gc.price}</div>
+                <div className="eyebrow" style={{marginTop:6}}>GIFT CARD</div>
+              </div>
+              <div>
+                <div className="mono" style={{fontSize:11, color:'var(--ink-3)', marginBottom:6}}>OUTBACK ELECTRONICS</div>
+                <p style={{fontSize:13, color:'var(--ink-2)', lineHeight:1.6}}>{gc.description || 'Redeemable on anything in the Outback Electronics online store. Delivered by email. Never expires.'}</p>
+              </div>
+              <div style={{marginTop:'auto', display:'grid', gap:8}}>
+                <button className="btn btn-rust" style={{justifyContent:'center'}} onClick={() => addToCart(gc)}>
+                  Add to Cart — ${gc.price}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="card-paper" style={{marginTop:40, padding:32, display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:24}}>
+          {[
+            {icon:'✉', t:'Delivered by email', d:'Your gift card code arrives by email within minutes of purchase.'},
+            {icon:'∞', t:'Never expires', d:'No use-by dates. Spend it whenever the right gear comes along.'},
+            {icon:'★', t:'Redeemable on everything', d:'Products, services, repairs — anything we sell online.'},
+          ].map((f,i) => (
+            <div key={i} style={{textAlign:'center'}}>
+              <div style={{fontSize:32, marginBottom:10}}>{f.icon}</div>
+              <div style={{fontWeight:600, marginBottom:6}}>{f.t}</div>
+              <p style={{fontSize:13, color:'var(--ink-2)', lineHeight:1.6}}>{f.d}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="card-paper" style={{marginTop:32, padding:32, maxWidth:480}}>
+          <div className="eyebrow" style={{marginBottom:12}}>CHECK YOUR BALANCE</div>
+          <div style={{display:'flex', gap:8}}>
+            <input
+              className="input"
+              placeholder="OBE-XXXX-XXXX-XXXX"
+              value={balanceCode}
+              onChange={e => { setBalanceCode(e.target.value.toUpperCase()); setBalanceResult(null); setBalanceError(null); }}
+              onKeyDown={e => e.key === 'Enter' && checkBalance()}
+              style={{flex:1, fontFamily:'monospace', letterSpacing:'.05em', fontSize:13}}
+            />
+            <button className="btn btn-ghost btn-sm" onClick={checkBalance} disabled={balanceLoading || !balanceCode.trim()}>
+              {balanceLoading ? '…' : 'Check'}
+            </button>
+          </div>
+          {balanceError && <p style={{marginTop:10, fontSize:13, color:'#b91c1c'}}>{balanceError}</p>}
+          {balanceResult && (
+            <div style={{marginTop:12, padding:'12px 16px', background: balanceResult.isVoid ? '#fff7ed' : '#f0fdf4', border:`1px solid ${balanceResult.isVoid ? '#fed7aa' : '#86efac'}`, fontSize:14}}>
+              {balanceResult.isVoid
+                ? <span style={{color:'#92400e'}}>This gift card has been voided.</span>
+                : <>
+                    <span style={{fontWeight:600, color:'#15803d'}}>
+                      ${Number(balanceResult.balance).toLocaleString('en-AU', {minimumFractionDigits:2})} remaining
+                    </span>
+                    {balanceResult.balance < balanceResult.originalBalance && (
+                      <span style={{marginLeft:8, fontSize:12, color:'var(--ink-3)'}}>
+                        of ${Number(balanceResult.originalBalance).toLocaleString('en-AU', {minimumFractionDigits:2})} original
+                      </span>
+                    )}
+                  </>
+              }
+            </div>
+          )}
+        </div>
+      </section>
+    </>
+  );
+}
+
+// ============================================================
+// MEMBERSHIPS
+// ============================================================
+function MembershipsPage({ go }) {
+  const [tiers, setTiers] = useState([]);
+  useEffect(() => {
+    fetch('/api/memberships').then(r => r.json()).then(d => setTiers(d.items || [])).catch(() => {});
+  }, []);
+
+  const defaultTiers = [
+    {
+      id: 'basic', name: 'Basic Member', price: 9, billingCycle: 'monthly',
+      description: 'Join the community and get access to member-only groups and the monthly newsletter.',
+      features: ['Member-only forum groups', 'Monthly members newsletter', 'Early access to new tutorials', 'Member badge on your forum profile'],
+      color: 'tag-euc',
+    },
+    {
+      id: 'pro', name: 'Pro Member', price: 19, billingCycle: 'monthly',
+      description: 'Everything in Basic plus exclusive deep-dive content, pro groups, and a 10% discount in the shop.',
+      features: ['Everything in Basic', 'Pro-only blog posts & build logs', 'Pro member groups', '10% discount on all shop purchases', 'Priority support queue'],
+      color: 'tag-rust',
+      highlight: true,
+    },
+    {
+      id: 'elite', name: 'Elite Member', price: 39, billingCycle: 'monthly',
+      description: 'Full access — every group, every post, workshop event invites, and the biggest shop discount we offer.',
+      features: ['Everything in Pro', 'Elite-only groups & special content', '20% discount on all shop purchases', 'One free bench diagnostic per month', 'Workshop & field event invites', 'Direct line to the tech team'],
+      color: 'tag-ochre',
+    },
+  ];
+
+  const displayTiers = tiers.length > 0 ? tiers : defaultTiers;
+
+  return (
+    <>
+      <PageHead crumbs={['Outback', 'Memberships']} title="Memberships"
+        lead="Get access to member-only groups, exclusive content, and workshop perks. Cancel any time." />
+      <section className="container" style={{paddingTop:40, paddingBottom:56}}>
+        <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:24}}>
+          {displayTiers.map((tier, i) => (
+            <div key={tier.id || i}
+              style={{padding:32, background: tier.highlight ? 'var(--dark)' : 'var(--paper)', color: tier.highlight ? 'var(--paper)' : 'var(--ink)', border:'1px solid', borderColor: tier.highlight ? 'var(--dark)' : 'var(--line)', display:'flex', flexDirection:'column', gap:16, position:'relative'}}>
+              {tier.highlight && <span className="tag tag-ochre" style={{alignSelf:'flex-start'}}>MOST POPULAR</span>}
+              <div>
+                <span className={`tag ${tier.color}`} style={{marginBottom:12, display:'inline-block'}}>{tier.name.toUpperCase()}</span>
+                <div style={{display:'flex', alignItems:'baseline', gap:6}}>
+                  <span className="serif" style={{fontSize:52, lineHeight:1, color: tier.highlight ? 'var(--paper)' : 'var(--rust)'}}>${tier.price}</span>
+                  <span style={{fontSize:13, color: tier.highlight ? 'var(--bg-deep)' : 'var(--ink-2)'}}>/ {tier.billingCycle || 'month'}</span>
+                </div>
+              </div>
+              <p style={{fontSize:14, color: tier.highlight ? 'var(--bg-deep)' : 'var(--ink-2)', lineHeight:1.6}}>{tier.description}</p>
+              <ul className="checks" style={{fontSize:14, flex:1}}>
+                {(tier.features || []).map((f, j) => (
+                  <li key={j} style={{color: tier.highlight ? 'var(--paper)' : 'var(--ink)'}}>{f}</li>
+                ))}
+              </ul>
+              <button className="btn btn-rust" style={{width:'100%', justifyContent:'center', marginTop:8}}
+                onClick={() => window.location.href = 'https://portal.outbackelectronics.com.au'}>
+                Get {tier.name} →
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <div style={{marginTop:48, padding:32, background:'var(--bg-elev)', border:'1px solid var(--line)'}}>
+          <div className="eyebrow" style={{marginBottom:12}}>MEMBER CONTENT INCLUDES</div>
+          <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:24}}>
+            {[
+              {t:'Member Groups', d:'Private forum groups where members swap configs, ask dumb questions safely, and organise local meetups.'},
+              {t:'Members Blog', d:'Deep-dive build logs, tear-downs, field reports, and "how we fixed it" write-ups from our techs.'},
+              {t:'Special Content', d:'Early firmware drops, beta tutorials, invite-only webinars, and the occasional ridiculous benchmark.'},
+            ].map((item,i) => (
+              <div key={i}>
+                <div style={{fontWeight:600, marginBottom:6}}>{item.t}</div>
+                <p style={{fontSize:13, color:'var(--ink-2)', lineHeight:1.6}}>{item.d}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
+
+// ---------------- Register ----------------
+window.OE_PAGES = Object.assign(window.OE_PAGES || {}, {
+  home: HomePage,
+  shop: ShopPage,
+  services: ServicesPage,
+  software: SoftwarePage,
+  ewaste: EwastePage,
+  ai: AIPage,
+  product: ProductDetailPage,
+  service: ServiceDetailPage,
+  'gift-cards': GiftCardsPage,
+  memberships: MembershipsPage,
+});
+window.ProductCard = ProductCard;

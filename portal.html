@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Outback Electronics — Customer Portal</title>
+<link rel="icon" type="image/png" href="assets/logo.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #f4ede1;
+    --bg-elev: #faf6ec;
+    --bg-deep: #e9dfc9;
+    --ink: #1f1a14;
+    --ink-2: #5a4f40;
+    --ink-3: #8b7e69;
+    --rust: #1f88f5;
+    --rust-deep: #1668c8;
+    --ochre: #d39a37;
+    --eucalyptus: #4f6b3e;
+    --line: #d8cdb6;
+    --line-strong: #b9ac8d;
+    --paper: #fbf7ed;
+    --ink-on-dark: #f4ede1;
+    --dark: #1f1a14;
+    --shadow: 0 1px 0 rgba(31,26,20,0.05), 0 8px 24px -12px rgba(31,26,20,0.18);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); }
+  body { font-family: 'Archivo', system-ui, sans-serif; font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  h1, h2, h3, h4, h5 { margin: 0; font-weight: 600; line-height: 1.1; }
+  p { margin: 0; }
+  a { color: inherit; text-decoration: none; }
+  button { font-family: inherit; }
+  .serif { font-family: 'Instrument Serif', Georgia, serif; font-weight: 400; }
+  .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  .eyebrow { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-2); }
+  .container { width: 100%; max-width: 1100px; margin: 0 auto; padding: 0 32px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 16px;
+    border: 1px solid var(--ink); background: var(--ink); color: var(--bg);
+    font-weight: 600; font-size: 13px; letter-spacing: 0.02em;
+    cursor: pointer; transition: background 120ms ease;
+    font-family: inherit;
+  }
+  .btn:hover { background: var(--rust); border-color: var(--rust); }
+  .btn-ghost { background: transparent; color: var(--ink); }
+  .btn-ghost:hover { background: var(--ink); color: var(--bg); }
+  .btn-rust { background: var(--rust); border-color: var(--rust); color: #fff; }
+  .btn-rust:hover { background: var(--rust-deep); border-color: var(--rust-deep); }
+  .btn-sm { padding: 6px 10px; font-size: 12px; }
+  .btn-danger { background: #c0392b; border-color: #c0392b; color: #fff; }
+  .btn-danger:hover { background: #a93226; border-color: #a93226; }
+  .card { background: var(--bg-elev); border: 1px solid var(--line); }
+  .card-paper { background: var(--paper); border: 1px solid var(--line); }
+  .input, .textarea {
+    width: 100%; padding: 11px 12px;
+    background: var(--paper); border: 1px solid var(--line-strong);
+    color: var(--ink); font-family: inherit; font-size: 14px; outline: none;
+  }
+  .input:focus, .textarea:focus { border-color: var(--ink); }
+  label.field { display: block; margin-bottom: 14px; }
+  label.field > .label { display: block; margin-bottom: 6px; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; font-family: 'JetBrains Mono', monospace; color: var(--ink-2); }
+  .rule { height: 1px; background: var(--line); width: 100%; }
+  .stack { display: grid; gap: 16px; }
+  .row-flex { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+
+  /* Topnav */
+  .topnav { background: var(--ink); border-bottom: 1px solid #2a241c; }
+  .topnav .row { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; gap: 24px; }
+  .logo { display: flex; align-items: center; gap: 12px; cursor: pointer; text-decoration: none; }
+  .logo-mark { background: var(--ochre); padding: 5px 9px; display: grid; place-items: center; height: 44px; }
+  .logo-mark img { height: 32px; display: block; }
+  .logo-text { line-height: 1; color: var(--bg-deep); }
+  .logo-text .name { font-weight: 700; font-size: 15px; }
+  .logo-text .sub { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.18em; color: var(--ink-3); text-transform: uppercase; margin-top: 3px; }
+  .portal-badge { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; background: var(--ochre); color: var(--dark); padding: 3px 8px; }
+  .nav-user { display: flex; align-items: center; gap: 12px; color: var(--bg-deep); font-size: 13px; }
+
+  /* Tabs */
+  .tabs-bar { background: var(--bg-elev); border-bottom: 1px solid var(--line); }
+  .tabs-row { display: flex; gap: 0; }
+  .tab-btn {
+    padding: 13px 18px; font-size: 13px; font-weight: 500;
+    cursor: pointer; border: none; background: none;
+    color: var(--ink-2); border-bottom: 2px solid transparent;
+    margin-bottom: -1px; font-family: inherit;
+    transition: color 100ms;
+  }
+  .tab-btn:hover { color: var(--ink); }
+  .tab-btn.active { color: var(--rust); border-bottom-color: var(--rust); font-weight: 600; }
+
+  /* Page content */
+  .page-section { padding: 36px 0 60px; }
+  .section-head { margin-bottom: 28px; }
+  .section-head h2 { font-family: 'Instrument Serif', serif; font-weight: 400; font-size: 40px; }
+  .section-head p { color: var(--ink-2); margin-top: 8px; font-size: 15px; }
+
+  /* Stat cards */
+  .stat-card { background: var(--paper); border: 1px solid var(--line); padding: 20px 24px; }
+  .stat-card .num { font-family: 'Instrument Serif', serif; font-size: 48px; line-height: 1; margin: 8px 0 4px; }
+  .stat-card .desc { font-size: 13px; color: var(--ink-2); }
+
+  /* Table */
+  .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .data-table th { text-align: left; padding: 10px 12px; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-2); border-bottom: 2px solid var(--line); background: var(--bg-elev); font-weight: 500; }
+  .data-table td { padding: 12px; border-bottom: 1px solid var(--line); color: var(--ink); vertical-align: top; }
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table tr:hover td { background: var(--bg-elev); }
+  .tag { display: inline-flex; align-items: center; padding: 2px 8px; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; background: var(--bg-deep); color: var(--ink-2); border: 1px solid var(--line-strong); }
+  .tag-green { background: #d4edda; color: #1a5c2a; border-color: #a8d5b5; }
+  .tag-ochre { background: #fef3cd; color: #7d5a0a; border-color: #f4d27a; }
+  .tag-blue { background: #d1e7fd; color: #0d4e8a; border-color: #93c5fd; }
+
+  /* Empty state */
+  .empty { padding: 48px 0; text-align: center; color: var(--ink-2); }
+  .empty svg { display: block; margin: 0 auto 16px; opacity: 0.35; }
+  .empty p { font-size: 14px; }
+
+  /* Login */
+  .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--bg); }
+  .login-box { width: 100%; max-width: 400px; padding: 40px; background: var(--paper); border: 1px solid var(--line); box-shadow: var(--shadow); }
+  .login-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }
+  .login-logo-mark { background: var(--ochre); width: 44px; height: 44px; display: grid; place-items: center; }
+  .login-logo-mark img { height: 30px; }
+
+  /* Alert */
+  .alert { padding: 12px 14px; font-size: 13px; margin-bottom: 16px; }
+  .alert-error { background: #fdf0ef; border: 1px solid #f4c1bd; color: #7d1f1a; }
+  .alert-success { background: #d4edda; border: 1px solid #a8d5b5; color: #1a5c2a; }
+
+  /* Footer */
+  .portal-footer { background: var(--ink); color: var(--ink-3); font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.06em; padding: 20px 0; margin-top: 60px; }
+  .portal-footer .row-flex { justify-content: space-between; }
+  .portal-footer a { color: var(--ink-3); }
+  .portal-footer a:hover { color: var(--ochre); }
+
+  @media (max-width: 700px) {
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    .container { padding: 0 16px; }
+    .tab-btn { padding: 12px 12px; font-size: 12px; }
+  }
+</style>
+<link rel="stylesheet" href="/mobile.css">
+</head>
+<body>
+<div id="root"></div>
+<script type="module" src="/src/portal-entry.jsx"></script>
+</body>
+</html>

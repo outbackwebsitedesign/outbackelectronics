@@ -1,0 +1,29 @@
+{
+  "shop": {
+    "tradingName": "Outback Electronics Pty Ltd",
+    "abn": "41 552 008 991",
+    "address": "183 Peericoota Forest Rd, Moama NSW 2731",
+    "phone": "0478 685 674 / 0497 522 768",
+    "tagline": "Built for where the signal ends"
+  },
+  "announcement": {
+    "text": "",
+    "enabled": false,
+    "expiresAt": ""
+  },
+  "staff": [],
+  "integrations": [],
+  "maintenance": {
+    "enabled": false
+  },
+  "flags": {
+    "showBCorpBadge": true,
+    "showRepairOrgBadge": true
+  },
+  "siteContent": {
+    "aiHeading": "Edge AI\nfor the long paddock.",
+    "aiBody": "Run computer vision on a fenceline. Detect cattle, fires, fence breaks — without a single bar of signal. We bench-assemble, weather-seal & train on your data.",
+    "aiEnabled": false,
+    "workshopBlurb": "One desk, one tech, one ute. Free callout in Moama/Echuca; we travel anywhere in Australia. Ship anywhere in the world."
+  }
+}

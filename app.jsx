@@ -1,0 +1,908 @@
+import React, { useState, useEffect, useMemo, useRef, createContext, useContext } from 'react';
+
+function getCsrf() {
+  return document.cookie.split(';').reduce((v, c) => {
+    const [k, val] = c.trim().split('=');
+    return k === '_csrf' ? decodeURIComponent(val || '') : v;
+  }, '');
+}
+let _csrfReady = null;
+function ensureCsrf() {
+  if (!_csrfReady) _csrfReady = fetch('/api/csrf-token', { credentials: 'include' }).catch(() => {});
+  return _csrfReady;
+}
+
+const ShopContext = createContext({});
+const useShop = () => useContext(ShopContext);
+
+// Site-level feature flags — override via window.OE_FLAGS before this script loads.
+const SITE_FLAGS = Object.assign(
+  { showBCorpBadge: true, showRepairOrgBadge: true },
+  window.OE_FLAGS || {}
+);
+
+// ---------------- Search Overlay ----------------
+function SearchOverlay({ go, onClose }) {
+  const [q, setQ] = useState('');
+  const [products, setProducts] = useState([]);
+  const inputRef = useRef(null);
+  useEffect(() => { inputRef.current && inputRef.current.focus(); }, []);
+
+  useEffect(() => {
+    fetch('/api/catalog/products')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setProducts(d.items || []); })
+      .catch(() => {});
+  }, []);
+
+  const allPages = [
+    ...PRIMARY_PAGES.filter(p => p.id !== 'forum-link'),
+    ...UTILITY_PAGES,
+  ];
+
+  const query = q.trim().toLowerCase();
+  const pageResults = query.length < 1 ? allPages : allPages.filter(p =>
+    p.label.toLowerCase().includes(query)
+  );
+  const productResults = query.length >= 2 ? products.filter(p =>
+    (p.name || '').toLowerCase().includes(query) ||
+    (p.brand || '').toLowerCase().includes(query) ||
+    (p.sku || '').toLowerCase().includes(query) ||
+    (p.category || '').toLowerCase().includes(query)
+  ).slice(0, 6) : [];
+
+  const allResults = [...pageResults, ...productResults.map(p => ({ ...p, _isProduct: true }))];
+
+  const pick = (item) => {
+    if (item._isProduct) { go('product', item); onClose(); return; }
+    if (item.id === 'forum-link') { window.location.href = 'https://forum.outbackelectronics.com.au'; return; }
+    go(item.id);
+    onClose();
+  };
+
+  const firstResult = allResults[0];
+
+  return (
+    <div style={{position:'fixed', inset:0, zIndex:500, display:'flex', flexDirection:'column', alignItems:'center', paddingTop:80, background:'rgba(15,13,10,0.75)'}}
+      onClick={onClose}>
+      <div style={{width:'100%', maxWidth:560, background:'var(--bg)', border:'1px solid var(--line)', boxShadow:'0 12px 40px rgba(0,0,0,.35)'}}
+        onClick={e => e.stopPropagation()}>
+        <div style={{display:'flex', alignItems:'center', padding:'12px 16px', borderBottom:'1px solid var(--line)', gap:10}}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{flexShrink:0, color:'var(--ink-2)'}}><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          <input ref={inputRef} value={q} onChange={e => setQ(e.target.value)}
+            placeholder="Search pages and products…" style={{flex:1, border:'none', outline:'none', background:'transparent', fontSize:15, color:'var(--ink)'}}
+            onKeyDown={e => { if (e.key === 'Escape') onClose(); if (e.key === 'Enter' && firstResult) pick(firstResult); }} />
+          <button onClick={onClose} style={{background:'none', border:'none', cursor:'pointer', color:'var(--ink-2)', fontSize:18, lineHeight:1}}>×</button>
+        </div>
+        <div style={{maxHeight:420, overflowY:'auto'}}>
+          {query.length >= 2 && pageResults.length > 0 && (
+            <div style={{padding:'6px 20px 2px', fontSize:11, color:'var(--ink-3)', fontFamily:'monospace', letterSpacing:'0.08em'}}>PAGES</div>
+          )}
+          {pageResults.map(p => (
+            <div key={p.id} onClick={() => pick(p)}
+              style={{padding:'12px 20px', cursor:'pointer', fontSize:14, borderBottom:'1px solid var(--line)', display:'flex', alignItems:'center', gap:10}}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-elev)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{color:'var(--ink-3)'}}><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+              {p.label}
+            </div>
+          ))}
+          {productResults.length > 0 && (
+            <div style={{padding:'6px 20px 2px', fontSize:11, color:'var(--ink-3)', fontFamily:'monospace', letterSpacing:'0.08em', borderTop: pageResults.length > 0 ? '1px solid var(--line)' : 'none'}}>PRODUCTS</div>
+          )}
+          {productResults.map(p => (
+            <div key={p.id || p.sku} onClick={() => pick({...p, _isProduct: true})}
+              style={{padding:'12px 20px', cursor:'pointer', fontSize:14, borderBottom:'1px solid var(--line)', display:'flex', alignItems:'center', gap:10}}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-elev)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{color:'var(--rust)'}}><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M16 3v4M8 3v4M2 11h20"/></svg>
+              <div>
+                <div style={{fontWeight:500}}>{p.name}</div>
+                {(p.brand || p.category) && <div style={{fontSize:12, color:'var(--ink-2)', marginTop:2}}>{[p.brand, p.category].filter(Boolean).join(' · ')}</div>}
+              </div>
+              {p.price && <div style={{marginLeft:'auto', fontWeight:600, color:'var(--rust)', whiteSpace:'nowrap'}}>${Number(p.price).toLocaleString('en-AU')}</div>}
+            </div>
+          ))}
+          {allResults.length === 0 && query.length > 0 && <div style={{padding:'16px 20px', color:'var(--ink-2)', fontSize:14}}>No results for "{q}".</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------- Portal auth state ----------------
+function usePortalUser() {
+  const [user, setUser] = useState(undefined);
+  useEffect(() => {
+    fetch('https://portal.outbackelectronics.com.au/api/portal/auth/me', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setUser(d?.user || null))
+      .catch(() => setUser(null));
+  }, []);
+  return user;
+}
+
+// ---------------- Account Dropdown ----------------
+function AccountDropdown({ go, onClose, user }) {
+  const ref = useRef(null);
+  const portal = (path = '') => { window.location.href = 'https://portal.outbackelectronics.com.au' + path; };
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [onClose]);
+
+  const dropdownStyle = {position:'absolute', top:'calc(100% + 8px)', right:0, width:220, background:'var(--bg)', border:'1px solid var(--line)', boxShadow:'0 8px 24px rgba(0,0,0,.15)', zIndex:300};
+  const btnStyle = (last) => ({width:'100%', textAlign:'left', padding:'12px 16px', cursor:'pointer', fontSize:14, border:'none', borderBottom: last ? 'none' : '1px solid var(--line)', background:'transparent', color:'var(--ink)'});
+  const hoverOn = e => { e.currentTarget.style.background = 'var(--bg-elev)'; };
+  const hoverOff = e => { e.currentTarget.style.background = 'transparent'; };
+
+  if (!user) {
+    return (
+      <div ref={ref} style={dropdownStyle}>
+        <div style={{padding:'16px 16px 12px', borderBottom:'1px solid var(--line)'}}>
+          <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:6}}>ACCOUNT</div>
+          <p style={{fontSize:13, color:'var(--ink-2)', lineHeight:1.5, margin:0}}>
+            Sign in to track orders, book repairs, and access your account.
+          </p>
+        </div>
+        <button style={{...btnStyle(false), fontWeight:600, color:'var(--rust)'}}
+          onMouseEnter={hoverOn} onMouseLeave={hoverOff}
+          onClick={() => { portal('/?tab=login'); onClose(); }}>
+          Sign In →
+        </button>
+        <button style={btnStyle(true)}
+          onMouseEnter={hoverOn} onMouseLeave={hoverOff}
+          onClick={() => { portal('/?tab=register'); onClose(); }}>
+          Create an Account
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={ref} style={dropdownStyle}>
+      {user.displayName && (
+        <div style={{padding:'12px 16px', borderBottom:'1px solid var(--line)'}}>
+          <div className="mono" style={{fontSize:10, color:'var(--ink-3)'}}>SIGNED IN AS</div>
+          <div style={{fontSize:14, marginTop:3, fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{user.displayName}</div>
+        </div>
+      )}
+      {[
+        { label:'Profile',           action: () => portal('/profile') },
+        { label:'My Subscriptions',  action: () => portal('/subscriptions') },
+        { label:'My Rewards',        action: () => portal('/rewards') },
+        { label:'My Wallet',         action: () => portal('/wallet') },
+        { label:'My Groups',         action: () => { go('groups'); onClose(); } },
+        { label:'My Orders',         action: () => portal('/orders') },
+        { label:'My Addresses',      action: () => portal('/addresses') },
+        { label:'My Bookings',       action: () => portal('/bookings') },
+        { label:'My Account',        action: () => portal('/account') },
+        { label:'Log Out',           action: () => { fetch('https://portal.outbackelectronics.com.au/api/portal/auth/logout', { method: 'POST', headers: { 'X-CSRF-Token': getCsrf() }, credentials: 'include' }).then(() => window.location.reload()); onClose(); } },
+      ].map((item, i, arr) => (
+        <button key={item.label} onClick={() => { item.action(); onClose(); }}
+          style={btnStyle(i === arr.length - 1)}
+          onMouseEnter={hoverOn} onMouseLeave={hoverOff}>
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ---------------- Brand Mark ----------------
+function Logo({ onClick }) {
+  return (
+    <div className="logo" onClick={onClick}>
+      <div className="logo-mark">
+        <img src="assets/logo.webp" alt="Outback Electronics" />
+      </div>
+      <div className="logo-text">
+        <div className="sub">Est. 2023 · Appointment only</div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------- Nav ----------------
+const PRIMARY_PAGES = [
+  { id: 'home', label: 'Home' },
+  { id: 'shop', label: 'Shop' },
+  { id: 'services', label: 'Services' },
+  { id: 'memberships', label: 'Memberships' },
+  { id: 'software', label: 'Software' },
+  { id: 'ewaste', label: 'eWaste' },
+  { id: 'ai', label: 'AI' },
+  { id: 'tutorials', label: 'Tutorials' },
+  { id: 'forum-link', label: 'Forum' },
+  { id: 'groups', label: 'Groups' },
+];
+const UTILITY_PAGES = [
+  { id: 'quote', label: 'Request a Quote' },
+  { id: 'gift-cards', label: 'Gift Cards' },
+  { id: 'sellers', label: 'Info for Sellers' },
+  { id: 'contact', label: 'Contact' },
+  { id: 'policies', label: 'Policies' },
+];
+const ACCOUNT_PAGES = [
+  { id: 'account', label: 'Account Dashboard' },
+  { id: 'profile', label: 'Profile' },
+  { id: 'subscriptions', label: 'My Subscriptions' },
+  { id: 'rewards', label: 'My Rewards' },
+  { id: 'wallet', label: 'My Wallet' },
+  { id: 'my-groups', label: 'My Groups' },
+  { id: 'orders', label: 'My Orders' },
+  { id: 'addresses', label: 'My Addresses' },
+  { id: 'bookings', label: 'My Bookings' },
+  { id: 'logout', label: 'Log Out' },
+];
+
+function AccountPlaceholderPage({ title, portalPath }) {
+  React.useEffect(() => {
+    window.location.href = `https://portal.outbackelectronics.com.au${portalPath}`;
+  }, [portalPath]);
+  return (
+    <>
+      <PageHead crumbs={['Outback', 'Account']} title={title}
+        lead={`Redirecting to ${title}…`}
+      />
+      <section className="container" style={{paddingTop:32, paddingBottom:48}}>
+        <div className="card-paper" style={{padding:24}}>
+          <span className="eyebrow">ACCOUNT</span>
+          <p style={{marginTop:10, color:'var(--ink-2)'}}>
+            Taking you to <a href={`https://portal.outbackelectronics.com.au${portalPath}`}>the portal</a>…
+          </p>
+        </div>
+      </section>
+    </>
+  );
+}
+
+function AccountDashboardPage({ go }) {
+  return (
+    <>
+      <PageHead crumbs={['Outback', 'Account']} title="Account Dashboard"
+        lead="Manage your account, view orders, and jump to your support options."
+      />
+      <section className="container" style={{paddingTop:32, paddingBottom:48}}>
+        <div className="grid-2" style={{gap:20}}>
+          <div className="card-paper" style={{padding:24}}>
+            <span className="eyebrow">ORDERS</span>
+            <h3 className="serif" style={{fontSize:30, marginTop:8}}>Track recent purchases</h3>
+            <p style={{marginTop:10, color:'var(--ink-2)'}}>Open your order history to check progress, invoices, and shipment updates.</p>
+            <button className="btn btn-rust" style={{marginTop:16}} onClick={() => go('orders')}>Go to My Orders →</button>
+          </div>
+          <div className="card-paper" style={{padding:24}}>
+            <span className="eyebrow">SUPPORT</span>
+            <h3 className="serif" style={{fontSize:30, marginTop:8}}>Need help with an order?</h3>
+            <p style={{marginTop:10, color:'var(--ink-2)'}}>Our support team can help with tracking issues, returns, or changes.</p>
+            <button className="btn btn-ghost" style={{marginTop:16}} onClick={() => go('contact')}>Contact support</button>
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
+
+
+function UtilityBar({ go }) {
+  const shop = useShop();
+  return (
+    <div className="utility-bar">
+      <div className="container">
+        <div className="links">
+          <span>FREE FREIGHT OVER $200 · OUTBACK NT/SA/WA</span>
+        </div>
+        <div className="links">
+          {UTILITY_PAGES.map(p => (
+            <a key={p.id} href={`/${p.id}`} onClick={(e) => { e.preventDefault(); go(p.id); }}>{p.label}</a>
+          ))}
+          {shop.phone && <span style={{color:'var(--ochre)'}}>{shop.phone}</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function useShopInfo() {
+  const [shop, setShop] = useState({});
+  useEffect(() => {
+    fetch('/api/shop-info')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d && d.shop) setShop(d.shop); })
+      .catch(() => {});
+  }, []);
+  return shop;
+}
+
+function useAnnouncement() {
+  const [text, setText] = useState('');
+  useEffect(() => {
+    fetch('/api/announcement')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d && d.active && d.text) setText(d.text); })
+      .catch(() => {});
+  }, []);
+  return text;
+}
+
+function TopNav({ page, go, cart, onSearchOpen, accountOpen, setAccountOpen, portalUser }) {
+  const announcement = useAnnouncement();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const signedOut = portalUser === null;
+
+  const handleNavClick = (id) => {
+    setMobileMenuOpen(false);
+    if (id === 'forum-link') window.location.href = 'https://forum.outbackelectronics.com.au';
+    else go(id);
+  };
+
+  return (
+    <header>
+      {announcement && <div className="announce">{announcement}</div>}
+      <UtilityBar go={go} />
+      <div className="topnav">
+        <div className="container row">
+          <Logo onClick={() => go('home')} />
+          <nav className="mainlinks">
+            {PRIMARY_PAGES.map(p => (
+              <a
+                key={p.id}
+                href={p.id === 'forum-link' ? 'https://forum.outbackelectronics.com.au' : `/${p.id}`}
+                className={page === p.id ? 'active' : ''}
+                onClick={p.id === 'forum-link' ? undefined : (e) => { e.preventDefault(); go(p.id); }}
+                {...(p.id === 'forum-link' ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+              >
+                {p.label}
+              </a>
+            ))}
+          </nav>
+          <div className="topnav-actions">
+            <button className="icon-btn" title="Search" onClick={onSearchOpen}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+            </button>
+            <div style={{position:'relative'}}>
+              <button
+                className="icon-btn"
+                title={signedOut ? 'Sign In / Create Account' : 'Account'}
+                onClick={() => setAccountOpen(o => !o)}
+                style={signedOut ? {display:'flex', alignItems:'center', gap:6, padding:'6px 10px', border:'1px solid var(--line)', fontSize:13} : {}}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>
+                {signedOut && <span className="sign-in-text" style={{whiteSpace:'nowrap'}}>Sign In</span>}
+              </button>
+              {accountOpen && <AccountDropdown go={go} onClose={() => setAccountOpen(false)} user={portalUser} />}
+            </div>
+            <button className="icon-btn" title="Cart" onClick={() => go('cart')}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 4h2l2.5 12h11l2-9H6"/><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/></svg>
+              {cart > 0 && <span className="cart-count">{cart}</span>}
+            </button>
+            {/* Hamburger — hidden on desktop via CSS, shown on mobile */}
+            <button className="icon-btn hamburger" style={{display:'none'}} title="Menu" onClick={() => setMobileMenuOpen(o => !o)}>
+              {mobileMenuOpen
+                ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+              }
+            </button>
+          </div>
+        </div>
+      </div>
+      {/* Mobile nav drawer — hidden on desktop via CSS */}
+      {mobileMenuOpen && (
+        <div className="mobile-nav">
+          <div className="mobile-nav-header">
+            <Logo onClick={() => { go('home'); setMobileMenuOpen(false); }} />
+            <button className="icon-btn" onClick={() => setMobileMenuOpen(false)}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+          {PRIMARY_PAGES.map(p => (
+            <a key={p.id}
+              href={p.id === 'forum-link' ? 'https://forum.outbackelectronics.com.au' : `/${p.id}`}
+              className={page === p.id ? 'active' : ''}
+              onClick={p.id === 'forum-link' ? undefined : (e) => { e.preventDefault(); handleNavClick(p.id); }}
+              {...(p.id === 'forum-link' ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>
+              {p.label}
+            </a>
+          ))}
+          <div style={{borderTop:'2px solid var(--line)', marginTop:8}}>
+            {UTILITY_PAGES.map(p => (
+              <a key={p.id} href={`/${p.id}`} className={page === p.id ? 'active' : ''}
+                onClick={(e) => { e.preventDefault(); handleNavClick(p.id); }}
+                style={{fontSize:14, color:'var(--ink-2)'}}>
+                {p.label}
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+    </header>
+  );
+}
+
+// ---------------- Footer ----------------
+function Footer({ go }) {
+  const shop = useShop();
+  return (
+    <footer>
+      <div className="container">
+        <div className="grid">
+          <div>
+            <div className="logo">
+              <div className="logo-mark sm" style={{background:'#000'}}>
+                <img src="assets/logo.webp" alt="Outback Electronics" />
+              </div>
+              <div className="logo-text">
+                <div className="sub" style={{color:'var(--ochre)'}}>{shop.tagline || 'Built for where the signal ends'}</div>
+              </div>
+            </div>
+            <p style={{marginTop: 18, fontSize: 13, color: 'var(--ink-3)', maxWidth: 360, lineHeight: 1.6}}>
+              An independent electronics outpost serving remote Australia since 2023. Repairs, refurbished gear, off-grid kits, edge AI &amp; a noisy community workshop.
+            </p>
+            <div className="row-flex" style={{marginTop: 18}}>
+              {SITE_FLAGS.showBCorpBadge && <span className="tag tag-outline" style={{color:'var(--ochre)', borderColor:'#3a3127'}}>B-CORP CERTIFIED</span>}
+              {SITE_FLAGS.showRepairOrgBadge && <span className="tag tag-outline" style={{color:'var(--ochre)', borderColor:'#3a3127'}}>REPAIR.ORG MEMBER</span>}
+            </div>
+          </div>
+          <div>
+            <h5>Shop</h5>
+            <ul>
+              <li><a href="/shop" onClick={(e) => { e.preventDefault(); go('shop'); }}>Rugged Laptops</a></li>
+              <li><a href="/shop" onClick={(e) => { e.preventDefault(); go('shop'); }}>Solar &amp; Power</a></li>
+              <li><a href="/shop" onClick={(e) => { e.preventDefault(); go('shop'); }}>Sat Comms</a></li>
+              <li><a href="/shop" onClick={(e) => { e.preventDefault(); go('shop'); }}>Refurbished</a></li>
+              <li><a href="/gift-cards" onClick={(e) => { e.preventDefault(); go('gift-cards'); }}>Gift Cards</a></li>
+            </ul>
+          </div>
+          <div>
+            <h5>Services</h5>
+            <ul>
+              <li><a href="/services" onClick={(e) => { e.preventDefault(); go('services'); }}>Field Repair</a></li>
+              <li><a href="/software" onClick={(e) => { e.preventDefault(); go('software'); }}>Software</a></li>
+              <li><a href="/ai" onClick={(e) => { e.preventDefault(); go('ai'); }}>Edge AI</a></li>
+              <li><a href="/ewaste" onClick={(e) => { e.preventDefault(); go('ewaste'); }}>eWaste Take-back</a></li>
+              <li><a href="/quote" onClick={(e) => { e.preventDefault(); go('quote'); }}>Get a Quote</a></li>
+            </ul>
+          </div>
+          <div>
+            <h5>Community</h5>
+            <ul>
+              <li><a href="/tutorials" onClick={(e) => { e.preventDefault(); go('tutorials'); }}>Tutorials</a></li>
+              <li><a href="/groups" onClick={(e) => { e.preventDefault(); go('groups'); }}>Groups</a></li>
+              <li><a href="/memberships" onClick={(e) => { e.preventDefault(); go('memberships'); }}>Memberships</a></li>
+              <li><a href="/sellers" onClick={(e) => { e.preventDefault(); go('sellers'); }}>Sell with Us</a></li>
+            </ul>
+          </div>
+          <div>
+            <h5>Visit</h5>
+            <ul style={{color:'var(--ink-3)'}}>
+              <li>{shop.address || '183 Peericoota Forest Rd, Moama NSW 2731'}<br/>No public access, arrive by appointment only.</li>
+              {shop.phone && <li>{shop.phone}</li>}
+              <li><a href="/contact" onClick={(e) => { e.preventDefault(); go('contact'); }} style={{color:'var(--ochre)'}}>Get directions →</a></li>
+            </ul>
+          </div>
+        </div>
+        <div className="baseline">
+          <span>© 2023–2026 {shop.tradingName || 'Outback Electronics Pty Ltd'}{shop.abn ? ` · ABN ${shop.abn}` : ' · ABN 41 552 008 991'}</span>
+          <span>ACKNOWLEDGES THE ARRERNTE PEOPLE AS TRADITIONAL OWNERS OF MPARNTWE</span>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+// ---------------- Page Head helper ----------------
+function PageHead({ crumbs, title, lead, kicker }) {
+  return (
+    <div className="page-head">
+      <div className="container">
+        <div className="crumbs eyebrow">
+          {crumbs.map((c, i) => (
+            <React.Fragment key={i}>
+              <span>{c}</span>
+              {i < crumbs.length - 1 && <span style={{color:'var(--ink-3)'}}>/</span>}
+            </React.Fragment>
+          ))}
+        </div>
+        <h1 data-screen-label={title}>{title}</h1>
+        {lead && <p className="lead">{lead}</p>}
+        {kicker && <div style={{marginTop:18}}>{kicker}</div>}
+      </div>
+    </div>
+  );
+}
+
+// ---------------- Tweaks ----------------
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "palette": ["#1f88f5","#d39a37","#4f6b3e"],
+  "showAnnounce": true,
+  "density": "comfortable"
+}/*EDITMODE-END*/;
+
+function ApplyTweaks({ tweaks }) {
+  useEffect(() => {
+    const root = document.documentElement;
+    if (Array.isArray(tweaks.palette)) {
+      root.style.setProperty('--rust', tweaks.palette[0]);
+      root.style.setProperty('--ochre', tweaks.palette[1]);
+      root.style.setProperty('--eucalyptus', tweaks.palette[2]);
+    }
+    const ann = document.querySelector('.announce');
+    if (ann) ann.style.display = tweaks.showAnnounce ? 'block' : 'none';
+    document.body.style.fontSize = tweaks.density === 'cozy' ? '14px' : '15px';
+  }, [tweaks]);
+  return null;
+}
+
+function TweaksUI() {
+  const { TweaksPanel, TweakSection, TweakColor, TweakToggle, TweakRadio, useTweaks } = window;
+  const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  return (
+    <>
+      <ApplyTweaks tweaks={tweaks} />
+      <TweaksPanel title="Tweaks">
+        <TweakSection title="Palette">
+          <TweakColor
+            label="Accent palette"
+            value={tweaks.palette}
+            onChange={(v) => setTweak('palette', v)}
+            options={[
+              ['#1f88f5','#d39a37','#4f6b3e'],
+              ['#b9531f','#d39a37','#4f6b3e'],
+              ['#2f6986','#d39a37','#b9531f'],
+              ['#1f1a14','#d39a37','#1f88f5'],
+            ]}
+          />
+        </TweakSection>
+        <TweakSection title="Layout">
+          <TweakToggle label="Show top announcement" value={tweaks.showAnnounce} onChange={(v) => setTweak('showAnnounce', v)} />
+          <TweakRadio
+            label="Density"
+            value={tweaks.density}
+            onChange={(v) => setTweak('density', v)}
+            options={[
+              { value: 'comfortable', label: 'Comfortable' },
+              { value: 'cozy', label: 'Cozy' },
+            ]}
+          />
+        </TweakSection>
+      </TweaksPanel>
+    </>
+  );
+}
+
+// ---------------- Order Success / Cancelled ----------------
+
+function OrderSuccessPage({ go }) {
+  const [session, setSession] = useState(null);
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const sid = params.get('session_id');
+    if (!sid) return;
+    fetch(`/api/checkout/session?id=${encodeURIComponent(sid)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setSession(d); })
+      .catch(() => {});
+  }, []);
+
+  return (
+    <div style={{minHeight:'60vh', display:'grid', placeItems:'center', padding:32}}>
+      <div style={{maxWidth:520, textAlign:'center', display:'grid', gap:20}}>
+        <div style={{fontSize:56}}>✓</div>
+        <h1 className="serif" style={{fontSize:40, fontWeight:400}}>Order confirmed</h1>
+        <p style={{color:'var(--ink-2)', lineHeight:1.7}}>
+          {session?.customerEmail
+            ? <>Thanks{session.customerName ? `, ${session.customerName}` : ''}! A confirmation has been sent to <strong>{session.customerEmail}</strong>.</>
+            : 'Thanks for your order! Your payment was received successfully.'}
+        </p>
+        {session?.amountAud && (
+          <div style={{padding:'14px 24px', background:'var(--paper)', border:'1px solid var(--line)', display:'inline-block', margin:'0 auto'}}>
+            <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginBottom:4}}>AMOUNT PAID</div>
+            <div className="serif" style={{fontSize:32}}>${Number(session.amountAud).toLocaleString('en-AU', {minimumFractionDigits:2})}</div>
+          </div>
+        )}
+        <p style={{fontSize:13, color:'var(--ink-3)'}}>
+          Your order has been logged and our team will be in touch. For pickups or repairs, please bring this confirmation.
+        </p>
+        <div style={{display:'flex', gap:12, justifyContent:'center', flexWrap:'wrap'}}>
+          <button className="btn btn-rust" onClick={() => go('shop')}>Continue shopping</button>
+          <button className="btn btn-ghost" onClick={() => go('home')}>Back to home</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OrderCancelledPage({ go }) {
+  return (
+    <div style={{minHeight:'60vh', display:'grid', placeItems:'center', padding:32}}>
+      <div style={{maxWidth:480, textAlign:'center', display:'grid', gap:20}}>
+        <div style={{fontSize:56}}>✕</div>
+        <h1 className="serif" style={{fontSize:40, fontWeight:400}}>Payment cancelled</h1>
+        <p style={{color:'var(--ink-2)', lineHeight:1.7}}>
+          No charge was made. If you had trouble checking out or want to pay another way, get in touch and we'll sort it out.
+        </p>
+        <div style={{display:'flex', gap:12, justifyContent:'center', flexWrap:'wrap'}}>
+          <button className="btn btn-rust" onClick={() => go('shop')}>Back to shop</button>
+          <button className="btn btn-ghost" onClick={() => go('contact')}>Contact us</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------- Cart Page ----------------
+function CartPage({ go, cart, removeFromCart, updateQty, clearCart }) {
+  const [checkingOut, setCheckingOut] = useState(false);
+  const [error, setError] = useState(null);
+  const [gcInput, setGcInput] = useState('');
+  const [gc, setGc] = useState(null); // { code, balance, discount }
+  const [gcError, setGcError] = useState(null);
+  const [gcLoading, setGcLoading] = useState(false);
+
+  const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const discount = gc ? gc.discount : 0;
+  const total = Math.max(0, subtotal - discount);
+
+  const applyGiftCard = async () => {
+    const code = gcInput.trim().toUpperCase();
+    if (!code) return;
+    setGcLoading(true);
+    setGcError(null);
+    try {
+      const resp = await fetch('/api/gift-card/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() },
+        body: JSON.stringify({ code, cartTotal: subtotal }),
+      });
+      const data = await resp.json();
+      if (data.valid) { setGc(data); setGcError(null); }
+      else setGcError(data.message || 'Invalid gift card code.');
+    } catch {
+      setGcError('Could not validate gift card. Please try again.');
+    } finally {
+      setGcLoading(false);
+    }
+  };
+
+  const removeGiftCard = () => { setGc(null); setGcInput(''); setGcError(null); };
+
+  const checkout = async () => {
+    if (cart.length === 0) return;
+    setCheckingOut(true);
+    setError(null);
+    try {
+      const items = cart.map(i => ({ name: i.name, priceAud: i.price, quantity: i.qty, productId: i.id || i.sku || '' }));
+      const body = { items };
+      if (gc) body.giftCardCode = gc.code;
+      const resp = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() },
+        body: JSON.stringify(body),
+      });
+      const data = await resp.json();
+      if (data.url) { clearCart(); window.location.href = data.url; }
+      else setError(data.message || 'Checkout failed. Please try again.');
+    } catch {
+      setError('Could not connect to payment provider. Please try again.');
+    } finally {
+      setCheckingOut(false);
+    }
+  };
+
+  if (cart.length === 0) {
+    return (
+      <>
+        <PageHead crumbs={['Outback', 'Cart']} title="Your Cart" lead="Nothing in your cart yet." />
+        <section className="container" style={{paddingTop:40, paddingBottom:56, textAlign:'center'}}>
+          <p style={{color:'var(--ink-2)', marginBottom:24}}>Browse the shop and add items to get started.</p>
+          <button className="btn btn-rust" onClick={() => go('shop')}>Go to Shop →</button>
+        </section>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <PageHead crumbs={['Outback', 'Cart']} title="Your Cart" lead={`${cart.length} item${cart.length !== 1 ? 's' : ''} ready to checkout.`} />
+      <section className="container" style={{paddingTop:32, paddingBottom:56}}>
+        <div className="cart-layout" style={{display:'grid', gridTemplateColumns:'1fr 320px', gap:40, alignItems:'start'}}>
+          <div>
+            <div style={{borderTop:'2px solid var(--ink)', marginBottom:4}}>
+              <div className="cart-header-row" style={{display:'grid', gridTemplateColumns:'1fr 120px 100px 40px', padding:'10px 0', fontFamily:'JetBrains Mono,monospace', fontSize:11, letterSpacing:'.06em', color:'var(--ink-2)', borderBottom:'1px solid var(--line)'}}>
+                <div>ITEM</div><div style={{textAlign:'center'}}>QTY</div><div style={{textAlign:'right'}}>PRICE</div><div />
+              </div>
+            </div>
+            {cart.map((item) => {
+              const key = item.sku || item.id || item.name;
+              return (
+                <div key={key} className="cart-item-row" style={{display:'grid', gridTemplateColumns:'1fr 120px 100px 40px', padding:'18px 0', borderBottom:'1px solid var(--line)', alignItems:'center', gap:8}}>
+                  <div>
+                    <div style={{fontWeight:600, fontSize:15}}>{item.name}</div>
+                    {item.sku && <div className="mono" style={{fontSize:11, color:'var(--ink-3)', marginTop:3}}>SKU: {item.sku}</div>}
+                    {item.cond && <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:2}}>{item.cond}</div>}
+                  </div>
+                  <div style={{display:'flex', alignItems:'center', justifyContent:'center', gap:6}}>
+                    <button onClick={() => updateQty(key, item.qty - 1)} style={{width:28, height:28, border:'1px solid var(--line)', background:'var(--bg-elev)', cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center'}}>−</button>
+                    <span className="mono" style={{fontSize:14, minWidth:20, textAlign:'center'}}>{item.qty}</span>
+                    <button onClick={() => updateQty(key, item.qty + 1)} style={{width:28, height:28, border:'1px solid var(--line)', background:'var(--bg-elev)', cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center'}}>+</button>
+                  </div>
+                  <div style={{textAlign:'right', fontFamily:'Instrument Serif,serif', fontSize:18, color:'var(--rust)'}}>
+                    ${(item.price * item.qty).toLocaleString()}
+                  </div>
+                  <div style={{textAlign:'center'}}>
+                    <button onClick={() => removeFromCart(key)} title="Remove" style={{background:'none', border:'none', cursor:'pointer', color:'var(--ink-3)', fontSize:18, lineHeight:1}}>×</button>
+                  </div>
+                </div>
+              );
+            })}
+            <button className="btn btn-ghost btn-sm" onClick={() => go('shop')} style={{marginTop:18}}>← Continue Shopping</button>
+          </div>
+
+          <div style={{position:'sticky', top:24}}>
+            <div className="card-paper" style={{padding:28}}>
+              <div className="eyebrow" style={{marginBottom:14}}>ORDER SUMMARY</div>
+              {cart.map(item => {
+                const key = item.sku || item.id || item.name;
+                return (
+                  <div key={key} style={{display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:8, color:'var(--ink-2)'}}>
+                    <span>{item.name} × {item.qty}</span>
+                    <span>${(item.price * item.qty).toLocaleString()}</span>
+                  </div>
+                );
+              })}
+              <hr className="thin" />
+              {discount > 0 && (
+                <>
+                  <div style={{display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:6, color:'var(--ink-2)'}}>
+                    <span>Subtotal</span>
+                    <span>${subtotal.toLocaleString()}</span>
+                  </div>
+                  <div style={{display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:6, color:'#16a34a'}}>
+                    <span>Gift card ({gc.code})</span>
+                    <span>−${discount.toLocaleString('en-AU', {minimumFractionDigits:2})}</span>
+                  </div>
+                  <hr className="thin" />
+                </>
+              )}
+              <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:6}}>
+                <span style={{fontSize:13, color:'var(--ink-2)'}}>Total</span>
+                <span className="serif" style={{fontSize:24, color:'var(--rust)'}}>${total.toLocaleString('en-AU', {minimumFractionDigits:2})}</span>
+              </div>
+              <div className="mono" style={{fontSize:11, color:'var(--ink-3)', marginBottom:16}}>SHIPPING CALCULATED AT CHECKOUT</div>
+
+              {/* Gift card input */}
+              {gc ? (
+                <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', background:'#f0fdf4', border:'1px solid #86efac', padding:'8px 12px', marginBottom:14, fontSize:13}}>
+                  <span style={{color:'#15803d', fontFamily:'monospace'}}>{gc.code} — ${gc.balance.toLocaleString('en-AU', {minimumFractionDigits:2})} balance</span>
+                  <button onClick={removeGiftCard} style={{background:'none', border:'none', cursor:'pointer', color:'var(--ink-3)', fontSize:16, padding:0, lineHeight:1}}>×</button>
+                </div>
+              ) : (
+                <div style={{marginBottom:14}}>
+                  <div style={{display:'flex', gap:6}}>
+                    <input
+                      className="input"
+                      placeholder="Gift card code"
+                      value={gcInput}
+                      onChange={e => setGcInput(e.target.value.toUpperCase())}
+                      onKeyDown={e => e.key === 'Enter' && applyGiftCard()}
+                      style={{flex:1, fontSize:12, fontFamily:'monospace', letterSpacing:'.05em'}}
+                    />
+                    <button className="btn btn-ghost btn-sm" onClick={applyGiftCard} disabled={gcLoading || !gcInput.trim()}>
+                      {gcLoading ? '…' : 'Apply'}
+                    </button>
+                  </div>
+                  {gcError && <div style={{marginTop:6, fontSize:12, color:'#b91c1c'}}>{gcError}</div>}
+                </div>
+              )}
+
+              {error && <div style={{marginBottom:12, padding:'10px 14px', background:'#fff1f0', border:'1px solid #fca5a5', fontSize:13, color:'#b91c1c'}}>{error}</div>}
+              <button className="btn btn-rust" style={{width:'100%', justifyContent:'center'}} onClick={checkout} disabled={checkingOut}>
+                {checkingOut ? 'Redirecting…' : `Checkout — $${total.toLocaleString('en-AU', {minimumFractionDigits:2})}`}
+              </button>
+              <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginTop:10, textAlign:'center'}}>SECURE CHECKOUT VIA STRIPE</div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
+
+// ---------------- Router ----------------
+const KNOWN_PAGES = [...PRIMARY_PAGES, ...UTILITY_PAGES, ...ACCOUNT_PAGES, {id:'cart'}, {id:'order-success'}, {id:'order-cancelled'}].map(p => p.id);
+
+function App() {
+  useEffect(() => { ensureCsrf(); }, []);
+
+  const [page, setPage] = useState(() => {
+    const path = location.pathname.replace(/^\/+/, '');
+    return KNOWN_PAGES.includes(path) ? path : 'home';
+  });
+  const [pageParams, setPageParams] = useState(null);
+  const [cart, setCart] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('oe_cart') || '[]'); } catch { return []; }
+  });
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const shop = useShopInfo();
+  const portalUser = usePortalUser();
+
+  useEffect(() => {
+    const target = `/${page}`;
+    if (location.pathname !== target) window.history.pushState({}, '', target);
+    window.scrollTo({top:0});
+  }, [page]);
+
+  useEffect(() => {
+    const onPop = () => {
+      const path = location.pathname.replace(/^\/+/, '');
+      if (KNOWN_PAGES.includes(path)) setPage(path);
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('oe_cart', JSON.stringify(cart));
+  }, [cart]);
+
+  const go = (id, params = null) => { setPage(id); setPageParams(params); };
+
+  const addToCart = (item) => {
+    const key = item.sku || item.id || item.name;
+    setCart(prev => {
+      const existing = prev.find(i => (i.sku || i.id || i.name) === key);
+      if (existing) return prev.map(i => (i.sku || i.id || i.name) === key ? { ...i, qty: i.qty + 1 } : i);
+      return [...prev, { ...item, qty: 1 }];
+    });
+  };
+  const removeFromCart = (key) => setCart(prev => prev.filter(i => (i.sku || i.id || i.name) !== key));
+  const updateQty = (key, qty) => {
+    if (qty < 1) { removeFromCart(key); return; }
+    setCart(prev => prev.map(i => (i.sku || i.id || i.name) === key ? { ...i, qty } : i));
+  };
+  const clearCart = () => setCart([]);
+  const cartCount = cart.reduce((s, i) => s + i.qty, 0);
+
+  const PAGES = window.OE_PAGES || {};
+  const PageComponent = PAGES[page] || PAGES.home;
+
+  // Admin uses its own full-bleed chrome — no public nav/footer/tweaks
+  if (page === 'admin') {
+    return <ShopContext.Provider value={shop}><PageComponent go={go} /></ShopContext.Provider>;
+  }
+
+  return (
+    <ShopContext.Provider value={shop}>
+      <TopNav page={page} go={go} cart={cartCount} onSearchOpen={() => setSearchOpen(true)} accountOpen={accountOpen} setAccountOpen={setAccountOpen} portalUser={portalUser} />
+      <main>
+        <PageComponent go={go} addToCart={addToCart} pageParams={pageParams} cart={cart} removeFromCart={removeFromCart} updateQty={updateQty} clearCart={clearCart} portalUser={portalUser} />
+      </main>
+      <Footer go={go} />
+      <TweaksUI />
+      {searchOpen && <SearchOverlay go={go} onClose={() => setSearchOpen(false)} />}
+    </ShopContext.Provider>
+  );
+}
+
+// Expose helpers globally
+window.__ShopContext__ = ShopContext;
+Object.assign(window, { PageHead, PRIMARY_PAGES, UTILITY_PAGES });
+window.OE_PAGES = Object.assign(window.OE_PAGES || {}, {
+  account: AccountDashboardPage,
+  orders: () => <AccountPlaceholderPage title="My Orders" portalPath="/orders" />,
+  profile: () => <AccountPlaceholderPage title="Profile" portalPath="/profile" />,
+  subscriptions: () => <AccountPlaceholderPage title="My Subscriptions" portalPath="/subscriptions" />,
+  rewards: () => <AccountPlaceholderPage title="My Rewards" portalPath="/rewards" />,
+  wallet: () => <AccountPlaceholderPage title="My Wallet" portalPath="/wallet" />,
+  'my-groups': () => <AccountPlaceholderPage title="My Groups" portalPath="/my-groups" />,
+  addresses: () => <AccountPlaceholderPage title="My Addresses" portalPath="/addresses" />,
+  bookings: () => <AccountPlaceholderPage title="My Bookings" portalPath="/bookings" />,
+  logout: () => <AccountPlaceholderPage title="Log Out" portalPath="/logout" />,
+  'order-success': OrderSuccessPage,
+  'order-cancelled': OrderCancelledPage,
+  cart: CartPage,
+});
+
+export default App;
