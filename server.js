@@ -2565,9 +2565,9 @@ const adminServer = http.createServer(async (req, res) => {
     delete body.pin;
     const data = readStaff();
     const idx = data.members.findIndex(m => m.id && m.id === body.id);
-    if (idx >= 0) { data.members[idx] = body; } else { body.id = 'staff-' + Date.now(); data.members.push(body); }
+    if (idx >= 0) { data.members[idx] = { ...data.members[idx], ...body }; } else { body.id = 'staff-' + Date.now(); data.members.push(body); }
     writeStaff(data);
-    return json(res, 200, { ok: true, item: body });
+    return json(res, 200, { ok: true, item: data.members[idx >= 0 ? idx : data.members.length - 1] });
   }
   if (req.method === 'POST' && url.pathname === '/api/admin/staff/members/delete') {
     const session = requireAdmin(req, res); if (!session) return;
