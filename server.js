@@ -1342,10 +1342,48 @@ const mainServer = http.createServer(async (req, res) => {
     const { productId, name, priceAud, quantity = 1, customerEmail, items, giftCardCode } = body;
 
     // Normalise to a line-items array (multi-item cart or legacy single-item)
-    const lineItems = Array.isArray(items) && items.length > 0
+    const rawLineItems = Array.isArray(items) && items.length > 0
       ? items
       : (name && priceAud ? [{ name, priceAud, quantity, productId: productId || '' }] : null);
-    if (!lineItems) return json(res, 422, { error: 'missing_fields', message: 'items array or name+priceAud required' });
+    if (!rawLineItems) return json(res, 422, { error: 'missing_fields', message: 'items array or name+priceAud required' });
+
+    // Security: resolve prices server-side from the catalog — never trust client-supplied prices.
+    // Gift cards (gc-*) are variable-denomination so the buyer supplies the amount; validate it is a
+    // positive number but do not look it up in a catalog.
+    const catalogProducts  = readProducts().filter(p => p.status === 'published');
+    const catalogServices  = readServices().filter(s => s.status === 'published');
+    const { tiers: membershipTiers } = readMemberships();
+    const catalogSoftware  = readSoftware().filter(i => i.live);
+    const resolvedLineItems = [];
+    for (const li of rawLineItems) {
+      const pid = String(li.productId || '').trim();
+      if (pid.startsWith('gc-')) {
+        // Gift card — client picks the denomination; ensure it is a real positive number
+        const gcAmount = Number(li.priceAud);
+        if (!Number.isFinite(gcAmount) || gcAmount < 0.50) {
+          return json(res, 422, { error: 'invalid_price', message: 'Gift card amount must be at least $0.50.' });
+        }
+        resolvedLineItems.push({ ...li, priceAud: gcAmount });
+        continue;
+      }
+      if (!pid) {
+        return json(res, 422, { error: 'invalid_item', message: 'Each item must include a productId.' });
+      }
+      const catalogItem =
+        catalogProducts.find(p => p.id === pid) ||
+        catalogServices.find(s => s.id === pid) ||
+        membershipTiers.find(t => t.id === pid && t.status === 'published') ||
+        catalogSoftware.find(s => s.id === pid);
+      if (!catalogItem) {
+        return json(res, 422, { error: 'product_not_found', message: `Item '${pid}' not found in catalog.` });
+      }
+      const serverPrice = Number(catalogItem.price);
+      if (!Number.isFinite(serverPrice) || serverPrice < 0) {
+        return json(res, 422, { error: 'invalid_price', message: `Item '${pid}' has no valid price.` });
+      }
+      resolvedLineItems.push({ ...li, name: li.name || catalogItem.name, priceAud: serverPrice });
+    }
+    const lineItems = resolvedLineItems;
 
     // Validate and apply gift card if provided
     let gcDiscount = 0;
