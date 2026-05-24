@@ -658,6 +658,7 @@ const MAIN_SPA_ROUTES = new Set([
   'orders', 'addresses', 'bookings',
   'product', 'service', 'memberships', 'gift-cards',
   'order-success', 'order-cancelled',
+  'cart',
 ]);
 
 // ── Email ─────────────────────────────────────────────────────────────────────
