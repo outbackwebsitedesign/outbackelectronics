@@ -106,10 +106,10 @@ const ROLE_LEVELS = { owner: 4, manager: 3, technician: 2, staff: 1, seller: 1, 
 
 const ADMIN_SECTIONS = [
   { group:'OPERATIONS', items: [
-    { id:'overview',  label:'Overview',      icon:'⌂', minRole:'staff' },
+    { id:'overview',  label:'Overview',      icon:'⌂', minRole:'staff', excludeRoles:['seller'] },
     { id:'orders',    label:'Orders',        icon:'⊞', minRole:'technician' },
-    { id:'repairs',   label:'Repair Jobs',   icon:'⚒', minRole:'staff' },
-    { id:'quotes',    label:'Quotes Inbox',  icon:'✉', minRole:'staff' },
+    { id:'repairs',   label:'Repair Jobs',   icon:'⚒', minRole:'staff', excludeRoles:['seller'] },
+    { id:'quotes',    label:'Quotes Inbox',  icon:'✉', minRole:'staff', excludeRoles:['seller'] },
     { id:'ewaste',    label:'eWaste Intake', icon:'♻', minRole:'technician' },
   ]},
   { group:'CATALOG', items: [
@@ -126,17 +126,21 @@ const ADMIN_SECTIONS = [
     { id:'sellers',   label:'Sellers',   icon:'$', minRole:'manager' },
   ]},
   { group:'STORE', items: [
-    { id:'gift-cards', label:'Gift Cards', icon:'◈', minRole:'staff' },
+    { id:'gift-cards', label:'Gift Cards', icon:'◈', minRole:'staff', excludeRoles:['seller'] },
     { id:'expenses',  label:'Expenses', icon:'⊟', minRole:'manager' },
     { id:'policies',  label:'Policies', icon:'§', minRole:'manager' },
-    { id:'settings',  label:'Settings', icon:'⚒', minRole:'owner' },
+    { id:'settings',  label:'Settings', icon:'⚒', minRole:'seller' },
   ]},
 ];
 
 function AdminSidebar({ section, setSection, onSignOut, role, username }) {
   const myLevel = ROLE_LEVELS[role] ?? 0;
   const visibleSections = ADMIN_SECTIONS
-    .map(g => ({ ...g, items: g.items.filter(it => (ROLE_LEVELS[it.minRole] ?? 0) <= myLevel) }))
+    .map(g => ({ ...g, items: g.items.filter(it => {
+      if ((ROLE_LEVELS[it.minRole] ?? 0) > myLevel) return false;
+      if (it.excludeRoles && it.excludeRoles.includes(role)) return false;
+      return true;
+    }) }))
     .filter(g => g.items.length > 0);
   const initials = (username || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
   return (
@@ -1001,9 +1005,11 @@ function CatalogList({ title, columns, initial, drawer, addLabel }) {
 // ============================================================
 function AdminProducts({ sessionInfo = {} }) {
   const isSeller = sessionInfo.role === 'seller';
+  const canAssignOwner = (ROLE_LEVELS[sessionInfo.role] ?? 0) >= ROLE_LEVELS.manager;
   const [rows, setRows] = useState([]);
   const [catOptions, setCatOptions] = useState([]);
   const [condOptions, setCondOptions] = useState([]);
+  const [sellerMembers, setSellerMembers] = useState([]);
   useEffect(() => {
     fetch('/api/admin/catalog', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject())
@@ -1015,6 +1021,12 @@ function AdminProducts({ sessionInfo = {} }) {
         setCondOptions([...new Set(products.map(p => p.cond).filter(Boolean))].sort());
       })
       .catch(() => setRows((window.CATALOG_DATA?.getAdminProducts?.() || window.CATALOG_DATA?.getAdminCatalog?.().filter(item => item.price !== undefined) || []).map(p => ({ ...p, cat: p.category, stock: p.stock ?? 0 }))));
+    if (canAssignOwner) {
+      fetch('/api/admin/staff', { credentials:'include' })
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(d => setSellerMembers((d.members || []).filter(m => m.role === 'seller')))
+        .catch(() => {});
+    }
   }, []);
   const [edit, setEdit] = useState(null);
   const [form, setForm] = useState({});
@@ -1173,6 +1185,14 @@ function AdminProducts({ sessionInfo = {} }) {
           <label className="field"><span className="label">Bench check notes (internal)</span>
             <textarea className="textarea" placeholder="Battery cycle count, BIOS rev, replaced components…" value={form.benchNotes||''} onChange={e=>setForm({...form, benchNotes:e.target.value})} />
           </label>
+          {canAssignOwner && (
+            <label className="field"><span className="label">Owner / Seller</span>
+              <select className="select" value={form.createdBy||''} onChange={e=>setForm({...form, createdBy:e.target.value})}>
+                <option value="">— Unassigned —</option>
+                {sellerMembers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </label>
+          )}
           <div className="eyebrow" style={{marginTop:18, marginBottom:10}}>VARIANTS</div>
           {(form.variants || []).map((v, i) => (
             <div key={i} style={{display:'grid', gridTemplateColumns:'1.5fr 1.2fr 80px 70px 28px', gap:8, marginBottom:8}}>
@@ -2858,7 +2878,53 @@ function AdminPolicies() {
 // ============================================================
 // SETTINGS
 // ============================================================
-function AdminSettings() {
+function AdminSettings({ sessionInfo = {} }) {
+  if (sessionInfo.role === 'seller') return <SellerSettings sessionInfo={sessionInfo} />;
+  return <AdminSettingsFull sessionInfo={sessionInfo} />;
+}
+
+function SellerSettings({ sessionInfo = {} }) {
+  const [form, setForm] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  useEffect(() => {
+    fetch('/api/admin/staff', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => {
+        const me = (d.members || []).find(m => m.id === sessionInfo.staffId);
+        if (me) setForm({ ...me, pin: '', newPin: '' });
+      })
+      .catch(() => {});
+  }, []);
+  const save = async () => {
+    if (!form) return;
+    if (form.newPin && !/^\d{4,6}$/.test(form.newPin)) { setMsg('PIN must be 4–6 digits.'); return; }
+    setBusy(true);
+    const payload = { id: form.id, name: form.name, email: form.email, phone: form.phone, color: form.color, status: form.status };
+    if (form.newPin) payload.pin = form.newPin;
+    const r = await fetch('/api/admin/staff/members/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(payload) }).catch(()=>null);
+    setBusy(false);
+    setMsg(r && r.ok ? 'Saved.' : 'Failed to save.');
+    if (r && r.ok) setForm(f => ({ ...f, newPin: '' }));
+  };
+  if (!form) return <div style={{padding:32, fontSize:13, color:'var(--ink-2)'}}>Loading…</div>;
+  return (
+    <div style={{padding:32, maxWidth:480}}>
+      {msg && <div style={{marginBottom:16, fontSize:13, color:msg.includes('Failed')||msg.includes('must')?'var(--rust)':'var(--eucalyptus)'}}>{msg}</div>}
+      <div style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24, display:'grid', gap:10}}>
+        <span className="eyebrow">MY DETAILS</span>
+        <label className="field" style={{marginTop:8}}><span className="label">Name</span><input className="input" value={form.name||''} onChange={e=>setForm({...form,name:e.target.value})}/></label>
+        <label className="field"><span className="label">Email</span><input className="input" type="email" value={form.email||''} onChange={e=>setForm({...form,email:e.target.value})}/></label>
+        <label className="field"><span className="label">Phone</span><input className="input" value={form.phone||''} onChange={e=>setForm({...form,phone:e.target.value})}/></label>
+        <label className="field"><span className="label">Avatar colour</span><input type="color" value={form.color||'#d7c7a6'} onChange={e=>setForm({...form,color:e.target.value})} style={{width:48,height:32,padding:2,border:'1px solid var(--line)',borderRadius:4,cursor:'pointer'}}/></label>
+        <label className="field"><span className="label">New PIN (leave blank to keep current)</span><input className="input" type="password" inputMode="numeric" maxLength={6} value={form.newPin||''} onChange={e=>setForm({...form,newPin:e.target.value.replace(/\D/g,'').slice(0,6)})} placeholder="4–6 digits"/></label>
+        <button className="btn btn-rust btn-sm" style={{marginTop:4,alignSelf:'flex-start'}} disabled={busy} onClick={save}>{busy?'Saving…':'Save'}</button>
+      </div>
+    </div>
+  );
+}
+
+function AdminSettingsFull({ sessionInfo = {} }) {
   const defaultShop = useMemo(() => ({
     tradingName: '',
     abn: '',
@@ -3394,7 +3460,13 @@ function AdminPage({ go }) {
 
   const myLevel = ROLE_LEVELS[sessionInfo.role] ?? 0;
   const allItems = ADMIN_SECTIONS.flatMap(g => g.items);
-  const canAccess = (id) => { const it = allItems.find(x => x.id === id); return it ? (ROLE_LEVELS[it.minRole] ?? 0) <= myLevel : false; };
+  const canAccess = (id) => {
+    const it = allItems.find(x => x.id === id);
+    if (!it) return false;
+    if ((ROLE_LEVELS[it.minRole] ?? 0) > myLevel) return false;
+    if (it.excludeRoles && it.excludeRoles.includes(sessionInfo.role)) return false;
+    return true;
+  };
   const effectiveSection = canAccess(section) ? section : (allItems.find(it => (ROLE_LEVELS[it.minRole] ?? 0) <= myLevel)?.id || 'repairs');
 
   if (checking) return <div style={{minHeight:'100vh', display:'grid', placeItems:'center'}}>Checking session…</div>;
