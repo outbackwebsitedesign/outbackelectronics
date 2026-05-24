@@ -296,8 +296,13 @@ function ShopPage({ go, addToCart }) {
     if (selectedBrands.length > 0) f = f.filter(p => selectedBrands.includes(p.brand));
     const min = parseFloat(priceMin);
     const max = parseFloat(priceMax);
-    if (!isNaN(min)) f = f.filter(p => (p.price ?? (p.variants && Math.min(...p.variants.map(v => v.price)))) >= min);
-    if (!isNaN(max)) f = f.filter(p => (p.price ?? (p.variants && Math.min(...p.variants.map(v => v.price)))) <= max);
+    const effectivePrice = p => {
+      if (p.price != null) return p.price;
+      if (p.variants && p.variants.length > 0) return Math.min(...p.variants.map(v => v.price));
+      return null;
+    };
+    if (!isNaN(min)) f = f.filter(p => { const ep = effectivePrice(p); return ep != null && ep >= min; });
+    if (!isNaN(max)) f = f.filter(p => { const ep = effectivePrice(p); return ep != null && ep <= max; });
     if (sort === 'price-asc') f.sort((a,b) => a.price-b.price);
     if (sort === 'price-desc') f.sort((a,b) => b.price-a.price);
     return f;
@@ -535,7 +540,7 @@ function SoftwarePage({ go }) {
               <div className="row-flex" style={{justifyContent:'space-between', borderTop:'1px solid var(--line)', paddingTop: 14}}>
                 <span className="price" style={{fontSize: 20}}>{p.price}</span>
                 <div className="row-flex" style={{gap:8}}>
-                  <button className="btn btn-sm" onClick={() => p.repo && window.open(p.repo, '_blank')}>{(p.license||'').includes('OSS') ? 'Repo →' : 'Try free →'}</button>
+                  <button className="btn btn-sm" onClick={() => p.repo && window.open(p.repo, '_blank')} disabled={!p.repo} title={!p.repo ? 'No repository available' : undefined}>{(p.license||'').includes('OSS') ? 'Repo →' : 'Try free →'}</button>
                 </div>
               </div>
             </div>
@@ -820,7 +825,7 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
   const activePrice = selectedVariant ? selectedVariant.price : product.price;
   const inStock = hasVariants
     ? (selectedVariant ? (selectedVariant.stock || 0) > 0 : false)
-    : true;
+    : (product.stock == null || product.stock > 0);
 
   return (
     <>

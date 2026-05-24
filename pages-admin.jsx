@@ -2734,6 +2734,8 @@ function AdminSettings() {
     tradingName: '',
     abn: '',
     address: '',
+    mapLat: '',
+    mapLng: '',
     phone: '',
     email: '',
     tagline: '',
@@ -2814,6 +2816,8 @@ function AdminSettings() {
         tradingName: (payload.shop?.tradingName || '').trim(),
         abn: (payload.shop?.abn || '').trim(),
         address: (payload.shop?.address || '').trim(),
+        mapLat: (payload.shop?.mapLat || '').trim(),
+        mapLng: (payload.shop?.mapLng || '').trim(),
         phone: (payload.shop?.phone || '').trim(),
         email: (payload.shop?.email || '').trim(),
         tagline: (payload.shop?.tagline || '').trim(),
@@ -2925,6 +2929,10 @@ function AdminSettings() {
         <label className="field" style={{marginTop:12}}><span className="label">Trading name</span><input className="input" value={shop.tradingName} onChange={(e) => setShop({ ...shop, tradingName: e.target.value })}/></label>
         <label className="field"><span className="label">ABN</span><input className="input" value={shop.abn} onChange={(e) => setShop({ ...shop, abn: e.target.value })}/></label>
         <label className="field"><span className="label">Street address</span><input className="input" value={shop.address} onChange={(e) => setShop({ ...shop, address: e.target.value })}/></label>
+        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:8}}>
+          <label className="field"><span className="label">Map latitude</span><input className="input" value={shop.mapLat||''} onChange={(e) => setShop({ ...shop, mapLat: e.target.value })} placeholder="-35.9833"/></label>
+          <label className="field"><span className="label">Map longitude</span><input className="input" value={shop.mapLng||''} onChange={(e) => setShop({ ...shop, mapLng: e.target.value })} placeholder="144.7500"/></label>
+        </div>
         <label className="field"><span className="label">Phone</span><input className="input" value={shop.phone} onChange={(e) => setShop({ ...shop, phone: e.target.value })}/></label>
         <label className="field"><span className="label">Contact email</span><input className="input" type="email" value={shop.email||''} onChange={(e) => setShop({ ...shop, email: e.target.value })}/></label>
         <label className="field"><span className="label">Tagline</span><input className="input" value={shop.tagline} onChange={(e) => setShop({ ...shop, tagline: e.target.value })}/></label>
