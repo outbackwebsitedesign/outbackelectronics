@@ -238,6 +238,15 @@ function readSettings() {
 }
 function writeSettings(data) { atomicWriteFile(SETTINGS_DB_PATH, JSON.stringify(data, null, 2)); }
 
+// SSE clients listening for maintenance state changes
+const maintenanceSseClients = new Set();
+function pushMaintenanceEvent(enabled) {
+  const msg = `data: ${JSON.stringify({ enabled })}\n\n`;
+  for (const res of maintenanceSseClients) {
+    try { res.write(msg); } catch { maintenanceSseClients.delete(res); }
+  }
+}
+
 function maskIntegrationConfig(name, config) {
   if (!config) return {};
   const sensitiveFields = new Set(['secretKey', 'webhookSecret', 'pass', 'apiKey', 'adminPasswordHash']);
@@ -658,7 +667,22 @@ function sendMaintenance(res) {
 }
 
 function checkMaintenance(req, res, url) {
-  // Always handle the status poll so the maintenance page can detect when to redirect
+  // SSE stream — client connects once and gets pushed updates instantly
+  if (req.method === 'GET' && url.pathname === '/api/maintenance-events') {
+    const { maintenance } = readSettings();
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+    res.write(`data: ${JSON.stringify({ enabled: !!(maintenance && maintenance.enabled) })}\n\n`);
+    maintenanceSseClients.add(res);
+    req.on('close', () => maintenanceSseClients.delete(res));
+    return true;
+  }
+
+  // Legacy poll endpoint kept for backwards compatibility
   if (req.method === 'GET' && url.pathname === '/api/maintenance-status') {
     const { maintenance } = readSettings();
     json(res, 200, { enabled: !!(maintenance && maintenance.enabled) });
@@ -2369,6 +2393,7 @@ const adminServer = http.createServer(async (req, res) => {
     if (newPass && newPass !== '***') security.adminPasswordHash = hashPassword(newPass);
     const payload = { shop: body.shop || {}, announcement: body.announcement || { text: '', enabled: false, expiresAt: '' }, maintenance: body.maintenance || { enabled: false }, staff: body.staff || [], integrations: mergedIntegrations, siteContent: body.siteContent || {}, security };
     writeSettings(payload);
+    pushMaintenanceEvent(!!(payload.maintenance && payload.maintenance.enabled));
     const maskedPayload = {
       ...payload,
       integrations: payload.integrations.map(r => [r[0], r[1], r[2], maskIntegrationConfig(r[0], r[3])]),
@@ -2383,6 +2408,7 @@ const adminServer = http.createServer(async (req, res) => {
     const enabled = body.enabled === true;
     const s = readSettings();
     writeSettings({ ...s, maintenance: { enabled } });
+    pushMaintenanceEvent(enabled);
     return json(res, 200, { ok: true, enabled });
   }
 
