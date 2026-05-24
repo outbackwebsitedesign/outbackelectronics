@@ -13,7 +13,8 @@
 <link rel="icon" type="image/png" href="/favicon.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="preload" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'" />
+<noscript><link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" /></noscript>
 <style>
   :root {
     --bg: #f4ede1;
@@ -326,6 +327,15 @@
     0%, 100% { opacity: 0.6; }
     50% { opacity: 0.3; }
   }
+  @keyframes shimmer {
+    0% { background-position: -400px 0; }
+    100% { background-position: 400px 0; }
+  }
+  .skeleton {
+    background: linear-gradient(90deg, var(--bg-deep) 25%, var(--line) 50%, var(--bg-deep) 75%);
+    background-size: 800px 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+  }
 </style>
 <link rel="stylesheet" href="/mobile.css">
 <script>
@@ -346,7 +356,8 @@ if ('serviceWorker' in navigator) {
       })
       .catch(function () {});
   }
-  setInterval(check, 5000);
+  check();
+  setInterval(check, 60000);
 }());
 </script>
 </head>

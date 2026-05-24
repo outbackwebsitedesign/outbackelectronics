@@ -17,21 +17,53 @@ function HomePage({ go, addToCart, portalUser }) {
   const [aiData, setAiData] = useState(null);
   const [repairServices, setRepairServices] = useState([]);
   const [siteContent, setSiteContent] = useState({});
+  const [loading, setLoading] = useState(true);
   const skuCounts = useMemo(() => {
     const counts = {};
     for (const p of featuredProducts) { counts[p.category] = (counts[p.category] || 0) + 1; }
     return counts;
   }, [featuredProducts]);
   useEffect(() => {
-    fetch('/api/catalog/products').then(r => r.json()).then(d => setFeaturedProducts(d.items || [])).catch(() => setFeaturedProducts(window.CATALOG_DATA?.getPublicProducts?.() || []));
-    fetch('/api/catalog/filters').then(r => r.ok ? r.json() : Promise.reject()).then(d => setCategories(d.categories || [])).catch(() => {});
-    fetch('/api/metrics').then(r => r.json()).then(d => setMetrics(d)).catch(() => {});
-    fetch('/api/testimonial').then(r => r.ok ? r.json() : Promise.reject()).then(d => setTestimonial(d.testimonial)).catch(() => {});
-    fetch('/api/forum/recent').then(r => r.ok ? r.json() : Promise.reject()).then(d => setRecentThreads(d.threads || [])).catch(() => {});
-    fetch('/api/ai').then(r => r.ok ? r.json() : Promise.reject()).then(d => setAiData(d)).catch(() => {});
-    fetch('/api/catalog/services').then(r => r.ok ? r.json() : Promise.reject()).then(d => setRepairServices(d.items || [])).catch(() => {});
-    fetch('/api/settings').then(r => r.ok ? r.json() : Promise.reject()).then(d => setSiteContent(d.siteContent || {})).catch(() => {});
+    Promise.allSettled([
+      fetch('/api/catalog/products').then(r => r.json()).then(d => setFeaturedProducts(d.items || [])).catch(() => setFeaturedProducts(window.CATALOG_DATA?.getPublicProducts?.() || [])),
+      fetch('/api/catalog/filters').then(r => r.ok ? r.json() : Promise.reject()).then(d => setCategories(d.categories || [])).catch(() => {}),
+      fetch('/api/metrics').then(r => r.json()).then(d => setMetrics(d)).catch(() => {}),
+      fetch('/api/testimonial').then(r => r.ok ? r.json() : Promise.reject()).then(d => setTestimonial(d.testimonial)).catch(() => {}),
+      fetch('/api/forum/recent').then(r => r.ok ? r.json() : Promise.reject()).then(d => setRecentThreads(d.threads || [])).catch(() => {}),
+      fetch('/api/ai').then(r => r.ok ? r.json() : Promise.reject()).then(d => setAiData(d)).catch(() => {}),
+      fetch('/api/catalog/services').then(r => r.ok ? r.json() : Promise.reject()).then(d => setRepairServices(d.items || [])).catch(() => {}),
+      fetch('/api/settings').then(r => r.ok ? r.json() : Promise.reject()).then(d => setSiteContent(d.siteContent || {})).catch(() => {}),
+    ]).finally(() => setLoading(false));
   }, []);
+  if (loading) {
+    return (
+      <div style={{padding: '56px 0'}}>
+        <div className="container">
+          <div style={{display:'grid', gridTemplateColumns:'1.2fr 1fr', gap: 48, alignItems:'center', marginBottom: 48}}>
+            <div style={{display:'flex', flexDirection:'column', gap: 16}}>
+              <div className="skeleton" style={{height: 20, width: 280, borderRadius: 4}} />
+              <div className="skeleton" style={{height: 80, width: '90%', borderRadius: 8}} />
+              <div className="skeleton" style={{height: 60, width: '75%', borderRadius: 8}} />
+              <div className="skeleton" style={{height: 20, width: '85%', borderRadius: 4}} />
+              <div className="skeleton" style={{height: 20, width: '70%', borderRadius: 4}} />
+              <div style={{display:'flex', gap: 12, marginTop: 8}}>
+                <div className="skeleton" style={{height: 48, width: 140, borderRadius: 6}} />
+                <div className="skeleton" style={{height: 48, width: 120, borderRadius: 6}} />
+              </div>
+            </div>
+            <div className="skeleton" style={{height: 380, borderRadius: 12}} />
+          </div>
+          <div style={{display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap: 24, marginBottom: 48}}>
+            {[0,1,2].map(i => <div key={i} className="skeleton" style={{height: 100, borderRadius: 8}} />)}
+          </div>
+          <div style={{display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap: 24}}>
+            {[0,1,2,3].map(i => <div key={i} className="skeleton" style={{height: 320, borderRadius: 8}} />)}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       {/* Hero */}
