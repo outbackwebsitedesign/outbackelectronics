@@ -1,212 +1,55 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Outback Electronics — Maintenance</title>
-<link rel="icon" type="image/png" href="/assets/favicon-GWj23NW_.png" />
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Archivo:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23000'/><text x='50%25' y='54%25' dominant-baseline='middle' text-anchor='middle' font-family='Georgia,serif' font-size='14' fill='%23f4ede1' font-style='italic'>OE</text></svg>"/>
 <style>
-  :root {
-    --bg: #f4ede1;
-    --bg-elev: #faf6ec;
-    --bg-deep: #e9dfc9;
-    --ink: #1f1a14;
-    --ink-2: #5a4f40;
-    --ink-3: #8b7e69;
-    --rust: #1f88f5;
-    --ochre: #d39a37;
-    --line: #d8cdb6;
-    --line-strong: #b9ac8d;
-    --paper: #fbf7ed;
-    --dark: #1f1a14;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body {
-    height: 100%;
-    background: var(--bg);
-    color: var(--ink);
-    font-family: 'Archivo', system-ui, sans-serif;
-    font-size: 15px;
-    line-height: 1.5;
-    -webkit-font-smoothing: antialiased;
-  }
-  a { color: inherit; text-decoration: none; }
-
-  .utility-bar {
-    background: var(--ink);
-    color: var(--bg-deep);
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    letter-spacing: 0.06em;
-    padding: 8px 32px;
-    text-align: center;
-  }
-
-  .topnav {
-    background: var(--bg);
-    border-bottom: 1px solid var(--line);
-    padding: 18px 32px;
-    display: flex;
-    align-items: center;
-  }
-
-  .logo { display: flex; align-items: center; gap: 12px; }
-  .logo-mark {
-    background: #000;
-    padding: 6px 10px;
-    display: grid;
-    place-items: center;
-    height: 52px;
-  }
-  .logo-mark img { height: 40px; display: block; }
-  .logo-text { line-height: 1; }
-  .logo-text .name {
-    font-weight: 700;
-    font-size: 15px;
-    letter-spacing: -0.01em;
-  }
-  .logo-text .sub {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 9.5px;
-    letter-spacing: 0.18em;
-    color: var(--ink-2);
-    text-transform: uppercase;
-    margin-top: 4px;
-  }
-
-  .hero {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 100px 32px 80px;
-    min-height: calc(100vh - 120px);
-  }
-
-  .eyebrow {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--ochre);
-    margin-bottom: 20px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-  .eyebrow::before,
-  .eyebrow::after {
-    content: '';
-    display: block;
-    width: 32px;
-    height: 1px;
-    background: var(--ochre);
-  }
-
-  h1 {
-    font-family: 'Instrument Serif', Georgia, serif;
-    font-weight: 400;
-    font-size: clamp(48px, 8vw, 80px);
-    letter-spacing: -0.02em;
-    line-height: 1.05;
-    color: var(--ink);
-    margin-bottom: 24px;
-  }
-
-  .lead {
-    font-size: 16px;
-    color: var(--ink-2);
-    max-width: 480px;
-    line-height: 1.65;
-    margin-bottom: 48px;
-  }
-
-  .rule-double {
-    width: 48px;
-    border-top: 1px solid var(--ink);
-    border-bottom: 1px solid var(--ink);
-    height: 4px;
-    margin: 0 auto 48px;
-  }
-
-  .status-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--ink-3);
-    background: var(--bg-elev);
-    border: 1px solid var(--line);
-    padding: 12px 20px;
-  }
-
-  .pulse {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--ochre);
-    animation: pulse 2s ease-in-out infinite;
-    flex-shrink: 0;
-  }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.4; transform: scale(0.85); }
-  }
-
-  .contact-note {
-    margin-top: 32px;
-    font-size: 13px;
-    color: var(--ink-3);
-    font-family: 'JetBrains Mono', monospace;
-    letter-spacing: 0.04em;
-  }
-  .contact-note a { color: var(--rust); }
-
-  @media (max-width: 640px) {
-    .topnav { padding: 14px 20px; }
-    .hero { padding: 60px 20px; }
-  }
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#f4ede1;color:#1f1a14;font-family:'Archivo',system-ui,-apple-system,sans-serif;font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+.bar{background:#1f1a14;color:#e9dfc9;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.06em;padding:8px 32px;text-align:center}
+.nav{background:#f4ede1;border-bottom:1px solid #d8cdb6;padding:18px 32px;display:flex;align-items:center;gap:12px}
+.logo-mark{background:#000;padding:6px 10px;height:52px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.logo-text{line-height:1}
+.logo-name{font-weight:700;font-size:15px;letter-spacing:-.01em;color:#1f1a14}
+.logo-sub{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:9.5px;letter-spacing:.18em;color:#5a4f40;text-transform:uppercase;margin-top:4px}
+.hero{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:100px 32px 80px;min-height:calc(100vh - 120px)}
+.eyebrow{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#d39a37;margin-bottom:20px;display:flex;align-items:center;gap:10px}
+.eyebrow::before,.eyebrow::after{content:'';display:block;width:32px;height:1px;background:#d39a37}
+h1{font-family:Georgia,'Times New Roman',serif;font-weight:400;font-size:clamp(48px,8vw,80px);letter-spacing:-.02em;line-height:1.05;margin-bottom:24px}
+.lead{font-size:16px;color:#5a4f40;max-width:480px;line-height:1.65;margin-bottom:48px}
+.divider{width:48px;border-top:1px solid #1f1a14;border-bottom:1px solid #1f1a14;height:4px;margin:0 auto 48px}
+.status{display:flex;align-items:center;gap:10px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8b7e69;background:#faf6ec;border:1px solid #d8cdb6;padding:12px 20px}
+.pulse{width:8px;height:8px;border-radius:50%;background:#d39a37;animation:pulse 2s ease-in-out infinite;flex-shrink:0}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.85)}}
+.note{margin-top:32px;font-size:13px;color:#8b7e69;font-family:'JetBrains Mono',ui-monospace,monospace;letter-spacing:.04em}
+.note a{color:#1f88f5}
+@media(max-width:640px){.nav{padding:14px 20px}.hero{padding:60px 20px}}
 </style>
 </head>
 <body>
-
-<div class="utility-bar">Outback Electronics — Taroom, QLD &amp; Fitzroy Crossing, WA</div>
-
-<nav class="topnav">
-  <div class="logo">
-    <div class="logo-mark">
-      <img src="/assets/logo-white-DsLVBCqz.png" alt="Outback Electronics" onerror="this.style.display='none'" />
-    </div>
-    <div class="logo-text">
-      <div class="name">Outback Electronics</div>
-      <div class="sub">Built for where the signal ends</div>
-    </div>
+<div class="bar">Outback Electronics — Taroom, QLD &amp; Fitzroy Crossing, WA</div>
+<nav class="nav">
+  <div class="logo-mark">
+    <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="40" height="40" fill="#000"/>
+      <text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-family="Georgia,serif" font-size="18" fill="#f4ede1" font-style="italic">OE</text>
+    </svg>
+  </div>
+  <div class="logo-text">
+    <div class="logo-name">Outback Electronics</div>
+    <div class="logo-sub">Built for where the signal ends</div>
   </div>
 </nav>
-
 <main class="hero">
   <div class="eyebrow">Scheduled Maintenance</div>
   <h1>Back shortly.</h1>
-  <p class="lead">
-    We're making improvements to the site. Everything will be back online soon — thanks for your patience.
-  </p>
-  <div class="rule-double"></div>
-  <div class="status-row">
-    <span class="pulse"></span>
-    Maintenance in progress
-  </div>
-  <p class="contact-note">
-    Need help urgently? Email us at <a href="mailto:info@outbackelectronics.com.au">info@outbackelectronics.com.au</a>
-  </p>
+  <p class="lead">We're making improvements to the site. Everything will be back online soon — thanks for your patience.</p>
+  <div class="divider"></div>
+  <div class="status"><span class="pulse"></span>Maintenance in progress</div>
+  <p class="note">Need help urgently? Email <a href="mailto:info@outbackelectronics.com.au">info@outbackelectronics.com.au</a></p>
 </main>
-
 </body>
 </html>

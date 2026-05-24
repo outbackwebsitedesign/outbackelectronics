@@ -590,6 +590,32 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null) {
   tryRead(candidates, 0);
 }
 
+// Read once at startup so per-request file I/O can't fail
+const MAINTENANCE_HTML = (() => {
+  try { return fs.readFileSync(path.join(__dirname, 'dist', 'maintenance.html'), 'utf8'); }
+  catch (e) { console.error('[maintenance] could not read dist/maintenance.html:', e.message); return null; }
+})();
+
+function sendMaintenance(res) {
+  if (!MAINTENANCE_HTML) { res.writeHead(503); return res.end('Service temporarily unavailable.'); }
+  res.writeHead(503, {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Cache-Control': 'no-cache, must-revalidate',
+    'X-Frame-Options': 'SAMEORIGIN',
+    'X-Content-Type-Options': 'nosniff',
+  });
+  res.end(MAINTENANCE_HTML);
+}
+
+function checkMaintenance(req, res, url) {
+  const { maintenance } = readSettings();
+  if (!maintenance || !maintenance.enabled) return false;
+  if (url.pathname === '/maintenance') { sendMaintenance(res); return true; }
+  if (req.method === 'GET') { res.writeHead(302, { 'Location': '/maintenance' }); res.end(); return true; }
+  json(res, 503, { error: 'maintenance', message: 'Site is temporarily under maintenance.' });
+  return true;
+}
+
 const MAIN_SPA_ROUTES = new Set([
   'home', 'shop', 'services', 'software', 'ewaste', 'ai', 'tutorials', 'groups',
   'quote', 'sellers', 'contact', 'policies', 'admin',
@@ -927,29 +953,7 @@ function verifyStripeSignature(rawBody, sigHeader, secret) {
 const mainServer = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
-  // Maintenance mode — block all traffic except the maintenance landing page itself
-  const { maintenance } = readSettings();
-  if (maintenance && maintenance.enabled) {
-    if (url.pathname === '/maintenance') {
-      const mFile = path.join(__dirname, 'dist', 'maintenance.html');
-      fs.readFile(mFile, (err, data) => {
-        if (err) { res.writeHead(503); return res.end('Service temporarily unavailable.'); }
-        res.writeHead(503, {
-          'Content-Type': 'text/html; charset=utf-8',
-          'Cache-Control': 'no-cache, must-revalidate',
-          'X-Frame-Options': 'SAMEORIGIN',
-          'X-Content-Type-Options': 'nosniff',
-        });
-        res.end(data);
-      });
-      return;
-    }
-    if (req.method === 'GET') {
-      res.writeHead(302, { 'Location': '/maintenance' });
-      return res.end();
-    }
-    return json(res, 503, { error: 'maintenance', message: 'Site is temporarily under maintenance.' });
-  }
+  if (checkMaintenance(req, res, url)) return;
 
   if (req.method === 'GET' && url.pathname === '/api/csrf-token') {
     const token = ensureCsrfCookie(req, res);
@@ -1310,20 +1314,7 @@ const mainServer = http.createServer(async (req, res) => {
 const forumServer = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
-  const { maintenance: forumMaintenance } = readSettings();
-  if (forumMaintenance && forumMaintenance.enabled) {
-    if (url.pathname === '/maintenance') {
-      const mFile = path.join(__dirname, 'dist', 'maintenance.html');
-      fs.readFile(mFile, (err, data) => {
-        if (err) { res.writeHead(503); return res.end('Service temporarily unavailable.'); }
-        res.writeHead(503, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache, must-revalidate' });
-        res.end(data);
-      });
-      return;
-    }
-    if (req.method === 'GET') { res.writeHead(302, { 'Location': '/maintenance' }); return res.end(); }
-    return json(res, 503, { error: 'maintenance', message: 'Site is temporarily under maintenance.' });
-  }
+  if (checkMaintenance(req, res, url)) return;
 
   if (req.method === 'GET' && url.pathname === '/api/csrf-token') {
     const token = ensureCsrfCookie(req, res);
@@ -2341,20 +2332,7 @@ const PORTAL_CORS_ORIGIN = process.env.SITE_URL || `http://localhost:${MAIN_PORT
 const portalServer = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
-  const { maintenance: portalMaintenance } = readSettings();
-  if (portalMaintenance && portalMaintenance.enabled) {
-    if (url.pathname === '/maintenance') {
-      const mFile = path.join(__dirname, 'dist', 'maintenance.html');
-      fs.readFile(mFile, (err, data) => {
-        if (err) { res.writeHead(503); return res.end('Service temporarily unavailable.'); }
-        res.writeHead(503, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache, must-revalidate' });
-        res.end(data);
-      });
-      return;
-    }
-    if (req.method === 'GET') { res.writeHead(302, { 'Location': '/maintenance' }); return res.end(); }
-    return json(res, 503, { error: 'maintenance', message: 'Site is temporarily under maintenance.' });
-  }
+  if (checkMaintenance(req, res, url)) return;
 
   // CORS for cross-origin endpoints (portal runs on a different port/origin)
   const crossOriginPaths = ['/api/portal/auth/logout', '/api/portal/auth/me', '/api/csrf-token'];
@@ -2656,20 +2634,7 @@ const portalServer = http.createServer(async (req, res) => {
 const gamesServer = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
-  const { maintenance: gamesMaintenance } = readSettings();
-  if (gamesMaintenance && gamesMaintenance.enabled) {
-    if (url.pathname === '/maintenance') {
-      const mFile = path.join(__dirname, 'dist', 'maintenance.html');
-      fs.readFile(mFile, (err, data) => {
-        if (err) { res.writeHead(503); return res.end('Service temporarily unavailable.'); }
-        res.writeHead(503, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache, must-revalidate' });
-        res.end(data);
-      });
-      return;
-    }
-    if (req.method === 'GET') { res.writeHead(302, { 'Location': '/maintenance' }); return res.end(); }
-    return json(res, 503, { error: 'maintenance', message: 'Site is temporarily under maintenance.' });
-  }
+  if (checkMaintenance(req, res, url)) return;
 
   return serveStatic(req, res, url.pathname, '/dist/games.html', null);
 });
