@@ -23,8 +23,9 @@ const PUBLIC_RATE_LIMITS = { checkout: 20, 'quote/request': 5, 'contact/quick-me
 
 fs.mkdirSync(path.join(__dirname, 'assets/uploads'), { recursive: true });
 
-const STRIPE_SECRET_KEY     = process.env.STRIPE_SECRET_KEY     || '';
-const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
+const STRIPE_SECRET_KEY       = process.env.STRIPE_SECRET_KEY       || '';
+const STRIPE_WEBHOOK_SECRET   = process.env.STRIPE_WEBHOOK_SECRET   || '';
+const STRIPE_PUBLISHABLE_KEY  = process.env.STRIPE_PUBLISHABLE_KEY  || '';
 const SITE_URL              = process.env.SITE_URL              || 'http://localhost:8080';
 const ADMIN_URL             = process.env.ADMIN_URL             || SITE_URL.replace(/(:\d+)?(\/|$)/, ':8082$2');
 
@@ -216,8 +217,9 @@ function readSettingsDefaults() {
       staff: d.staff || [],
       integrations: d.integrations || [],
       siteContent: d.siteContent || {},
+      security: d.security || { adminUsername: '', adminPasswordHash: '' },
     };
-  } catch { return { shop: {}, announcement: { text: '', enabled: false, expiresAt: '' }, maintenance: { enabled: false }, staff: [], integrations: [], siteContent: {} }; }
+  } catch { return { shop: {}, announcement: { text: '', enabled: false, expiresAt: '' }, maintenance: { enabled: false }, staff: [], integrations: [], siteContent: {}, security: { adminUsername: '', adminPasswordHash: '' } }; }
 }
 function readSettings() {
   const defaults = readSettingsDefaults();
@@ -230,6 +232,7 @@ function readSettings() {
       staff: Array.isArray(d.staff) ? d.staff : defaults.staff,
       integrations: Array.isArray(d.integrations) ? d.integrations : defaults.integrations,
       siteContent: { ...defaults.siteContent, ...(d.siteContent || {}) },
+      security: { ...defaults.security, ...(d.security || {}) },
     };
   } catch { return defaults; }
 }
@@ -237,8 +240,11 @@ function writeSettings(data) { atomicWriteFile(SETTINGS_DB_PATH, JSON.stringify(
 
 function maskIntegrationConfig(name, config) {
   if (!config) return {};
+  const sensitiveFields = new Set(['secretKey', 'webhookSecret', 'pass', 'apiKey', 'adminPasswordHash']);
   const masked = {};
-  for (const [k, v] of Object.entries(config)) { masked[k] = v ? '***' : ''; }
+  for (const [k, v] of Object.entries(config)) {
+    masked[k] = sensitiveFields.has(k) ? (v ? '***' : '') : v;
+  }
   return masked;
 }
 
@@ -678,26 +684,24 @@ const MAIN_SPA_ROUTES = new Set([
 
 const nodemailer = require('nodemailer');
 
-let _mailer = null;
 function getMailer() {
-  if (!_mailer && SMTP_HOST && SMTP_USER && SMTP_PASS) {
-    _mailer = nodemailer.createTransport({
-      host: SMTP_HOST,
-      port: SMTP_PORT,
-      secure: SMTP_PORT === 465,
-      auth: { user: SMTP_USER, pass: SMTP_PASS },
-    });
-  }
-  return _mailer;
+  const smtp = getSmtpConfig();
+  if (!smtp.host || !smtp.user || !smtp.pass) return null;
+  return nodemailer.createTransport({
+    host: smtp.host, port: smtp.port, secure: smtp.port === 465,
+    auth: { user: smtp.user, pass: smtp.pass },
+  });
 }
 
 async function sendEmail({ to, subject, html }) {
   if (!to) return;
   const transport = getMailer();
   if (!transport) return;
+  const smtp = getSmtpConfig();
+  const fromAddress = `Outback Electronics <${smtp.user || 'noreply@outbackelectronics.com.au'}>`;
   const text = html.replace(/<[^>]+>/g, '').replace(/\n{3,}/g, '\n\n').trim();
   try {
-    await transport.sendMail({ from: FROM_ADDRESS, to, subject, html, text });
+    await transport.sendMail({ from: fromAddress, to, subject, html, text });
   } catch (err) {
     console.error('[email] failed →', to, '|', err.message);
   }
@@ -751,7 +755,7 @@ function emailOrderConfirmation({ orderId, customerName, amountAud, items }) {
         <dt>AMOUNT PAID</dt><dd>$${Number(amountAud).toLocaleString('en-AU', {minimumFractionDigits:2})} AUD</dd>
       </div>
       <p>Our team will be in touch shortly. For pickups or repairs, please bring this confirmation.</p>
-      <a class="btn" href="${SITE_URL}/orders">View your orders →</a>
+      <a class="btn" href="${getSiteUrl()}/orders">View your orders →</a>
     `),
   };
 }
@@ -784,7 +788,7 @@ function emailQuoteReply({ quoteId, customerName, reply, status }) {
         <dt>MESSAGE FROM US</dt><dd>${reply}</dd>
       </div>
       <p>If you have questions or want to go ahead, reply to this email or get in touch via the portal.</p>
-      <a class="btn" href="${SITE_URL}/portal">View in portal →</a>
+      <a class="btn" href="${getSiteUrl()}/portal">View in portal →</a>
     `),
   };
 }
@@ -834,7 +838,7 @@ function emailMembershipWelcome({ customerName, tierName }) {
       <p>Hi${customerName ? ` ${customerName.split(' ')[0]}` : ''},</p>
       <p>You're now a <strong>${tierName}</strong> member of Outback Electronics. Thanks for your support!</p>
       <p>Your membership benefits are active immediately. Log in to the portal to see what's available to you.</p>
-      <a class="btn" href="${SITE_URL}/portal">Go to portal →</a>
+      <a class="btn" href="${getSiteUrl()}/portal">Go to portal →</a>
     `),
   };
 }
@@ -846,7 +850,7 @@ function emailMembershipCancelled({ customerName, tierName }) {
       <p>Hi${customerName ? ` ${customerName.split(' ')[0]}` : ''},</p>
       <p>Your <strong>${tierName}</strong> membership has been cancelled. You'll retain access until the end of your current period.</p>
       <p>If this was a mistake or you'd like to resubscribe, just log back into the portal.</p>
-      <a class="btn" href="${SITE_URL}/portal">Return to portal →</a>
+      <a class="btn" href="${getSiteUrl()}/portal">Return to portal →</a>
     `),
   };
 }
@@ -857,7 +861,7 @@ function emailPortalWelcome({ username, displayName }) {
     html: emailHtml('Welcome!', `
       <p>Hi ${displayName || username},</p>
       <p>Your Outback Electronics account is ready. You can now track repairs, request quotes, and manage your membership from the portal.</p>
-      <a class="btn" href="${SITE_URL}/portal">Go to your portal →</a>
+      <a class="btn" href="${getSiteUrl()}/portal">Go to your portal →</a>
     `),
   };
 }
@@ -885,7 +889,7 @@ function emailStaffNewOrder({ orderId, customerName, amountAud, items }) {
         ${items ? `<dt>ITEMS</dt><dd>${items}</dd>` : ''}
         <dt>AMOUNT</dt><dd>$${Number(amountAud).toLocaleString('en-AU', {minimumFractionDigits:2})} AUD</dd>
       </div>
-      <a class="btn" href="${ADMIN_URL}/admin#orders">View in admin →</a>
+      <a class="btn" href="${getAdminUrl()}/admin#orders">View in admin →</a>
     `),
   };
 }
@@ -899,7 +903,7 @@ function emailStaffNewQuote({ quoteId, name, email, description }) {
         <dt>FROM</dt><dd>${escHtml(name)} &lt;${escHtml(email)}&gt;</dd>
         <dt>REQUEST</dt><dd>${escHtml(description)}</dd>
       </div>
-      <a class="btn" href="${ADMIN_URL}/admin#quotes">View in admin →</a>
+      <a class="btn" href="${getAdminUrl()}/admin#quotes">View in admin →</a>
     `),
   };
 }
@@ -913,7 +917,7 @@ function emailStaffNewEwaste({ intakeId, name, email, description }) {
         <dt>FROM</dt><dd>${name || '—'}${email ? ` &lt;${email}&gt;` : ''}</dd>
         ${description ? `<dt>ITEMS</dt><dd>${description}</dd>` : ''}
       </div>
-      <a class="btn" href="${ADMIN_URL}/admin#ewaste">View in admin →</a>
+      <a class="btn" href="${getAdminUrl()}/admin#ewaste">View in admin →</a>
     `),
   };
 }
@@ -944,8 +948,8 @@ function emailGiftCard({ code, balance, customerName }) {
         <dd>$${Number(balance).toLocaleString('en-AU', { minimumFractionDigits: 2 })} AUD</dd>
       </div>
       <p>Enter this code at checkout to redeem your balance. It never expires and can be used on anything we sell — products, services, repairs, and more.</p>
-      <a class="btn" href="${SITE_URL}/shop">Shop now →</a>
-      <p style="margin-top:16px;font-size:12px;color:#8b7e69">To check your balance at any time, visit <a href="${SITE_URL}/gift-cards" style="color:#1f88f5">${SITE_URL}/gift-cards</a> and enter your code.</p>
+      <a class="btn" href="${getSiteUrl()}/shop">Shop now →</a>
+      <p style="margin-top:16px;font-size:12px;color:#8b7e69">To check your balance at any time, visit <a href="${getSiteUrl()}/gift-cards" style="color:#1f88f5">${getSiteUrl()}/gift-cards</a> and enter your code.</p>
     `),
   };
 }
@@ -966,6 +970,34 @@ function getStripeWebhookSecret() {
     const entry = s.integrations.find(r => r[0] === 'Stripe');
     return entry?.[3]?.webhookSecret || STRIPE_WEBHOOK_SECRET;
   } catch { return STRIPE_WEBHOOK_SECRET; }
+}
+
+function getSmtpConfig() {
+  try {
+    const s = readSettings();
+    const entry = s.integrations.find(r => r[0] === 'Email');
+    const cfg = entry?.[3] || {};
+    return {
+      host: cfg.host || SMTP_HOST,
+      port: Number(cfg.port || SMTP_PORT),
+      user: cfg.user || SMTP_USER,
+      pass: cfg.pass || SMTP_PASS,
+      notifyEmail: cfg.notifyEmail || NOTIFY_EMAIL,
+    };
+  } catch { return { host: SMTP_HOST, port: SMTP_PORT, user: SMTP_USER, pass: SMTP_PASS, notifyEmail: NOTIFY_EMAIL }; }
+}
+function getNotifyEmail() { return getSmtpConfig().notifyEmail; }
+function getSiteUrl() {
+  try { return readSettings().shop?.siteUrl || SITE_URL; } catch { return SITE_URL; }
+}
+function getAdminUrl() { return ADMIN_URL || getSiteUrl().replace(/(:\d+)?(\/|$)/, ':8082$2'); }
+function getForumUrl() { return FORUM_URL || getSiteUrl().replace(/(:\d+)?(\/|$)/, ':8081$2'); }
+function getPortalUrl() { return PORTAL_URL || getSiteUrl().replace(/(:\d+)?(\/|$)/, ':8083$2'); }
+function getAdminUsername() {
+  try { return readSettings().security?.adminUsername || ADMIN_USERNAME; } catch { return ADMIN_USERNAME; }
+}
+function getAdminPasswordHash() {
+  try { return readSettings().security?.adminPasswordHash || ADMIN_PASSWORD_HASH; } catch { return ADMIN_PASSWORD_HASH; }
 }
 
 function stripeRequest(method, path, params) {
@@ -1116,7 +1148,7 @@ const mainServer = http.createServer(async (req, res) => {
 
   // ── Stripe: session lookup (for success page) ───────────────────────────────
   if (req.method === 'GET' && url.pathname === '/api/checkout/session') {
-    if (!STRIPE_SECRET_KEY) return json(res, 503, { error: 'stripe_not_configured' });
+    if (!getStripeKey()) return json(res, 503, { error: 'stripe_not_configured' });
     const sid = url.searchParams.get('id') || '';
     if (!sid.startsWith('cs_')) return json(res, 400, { error: 'invalid_session_id' });
     const resp = await stripeRequest('GET', `/v1/checkout/sessions/${encodeURIComponent(sid)}?expand[]=customer_details`, null).catch(() => null);
@@ -1132,7 +1164,7 @@ const mainServer = http.createServer(async (req, res) => {
   // ── Stripe: create checkout session ─────────────────────────────────────────
   if (req.method === 'POST' && url.pathname === '/api/checkout') {
     if (publicRateLimited(getIp(req), 'checkout')) return json(res, 429, { error: 'too_many_requests' });
-    if (!STRIPE_SECRET_KEY) return json(res, 503, { error: 'stripe_not_configured' });
+    if (!getStripeKey()) return json(res, 503, { error: 'stripe_not_configured' });
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
 
     const { productId, name, priceAud, quantity = 1, customerEmail, items, giftCardCode } = body;
@@ -1157,8 +1189,8 @@ const mainServer = http.createServer(async (req, res) => {
 
     const params = {
       'mode': 'payment',
-      'success_url': `${SITE_URL}/order-success?session_id={CHECKOUT_SESSION_ID}`,
-      'cancel_url': `${SITE_URL}/order-cancelled`,
+      'success_url': `${getSiteUrl()}/order-success?session_id={CHECKOUT_SESSION_ID}`,
+      'cancel_url': `${getSiteUrl()}/order-cancelled`,
       'payment_intent_data[metadata][source]': 'website',
     };
     if (gcCodeNorm) params['payment_intent_data[metadata][giftCardCode]'] = gcCodeNorm;
@@ -1287,7 +1319,7 @@ const mainServer = http.createServer(async (req, res) => {
           sendEmail({ to: customerEmail, ...tmpl });
         }
         const staffTmpl = emailStaffNewOrder({ orderId: order.id, customerName: details.name || details.email, amountAud: order.total, items: order.items });
-        sendEmail({ to: NOTIFY_EMAIL, ...staffTmpl });
+        sendEmail({ to: getNotifyEmail(), ...staffTmpl });
       }
     }
 
@@ -1367,7 +1399,7 @@ const mainServer = http.createServer(async (req, res) => {
     const custTmpl = emailQuoteReceived({ quoteId: quote.id, customerName: quote.name, description: quote.description });
     sendEmail({ to: quote.email, ...custTmpl });
     const staffTmpl = emailStaffNewQuote({ quoteId: quote.id, name: quote.name, email: quote.email, description: `[${quote.kind} · ${quote.budget} · ${quote.urgency}] ${quote.description}` });
-    sendEmail({ to: NOTIFY_EMAIL, ...staffTmpl });
+    sendEmail({ to: getNotifyEmail(), ...staffTmpl });
     return json(res, 201, { ok: true, id: quote.id });
   }
 
@@ -1378,7 +1410,7 @@ const mainServer = http.createServer(async (req, res) => {
     if (!name || !email || !msg) return json(res, 422, { error: 'missing_fields' });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())) return json(res, 422, { error: 'invalid_email', message: 'Email address is invalid.' });
     const tmpl = emailStaffContactMessage({ name, email, msg });
-    sendEmail({ to: NOTIFY_EMAIL, replyTo: email, ...tmpl });
+    sendEmail({ to: getNotifyEmail(), replyTo: email, ...tmpl });
     return json(res, 200, { ok: true });
   }
 
@@ -1642,7 +1674,7 @@ const forumServer = http.createServer(async (req, res) => {
       const token = crypto.randomBytes(32).toString('hex');
       resetTokens.set(token, { userId: user.id, expiresAt: now() + RESET_TOKEN_TTL_MS });
       saveResetTokens();
-      const resetUrl = `${FORUM_URL}?reset=${token}`;
+      const resetUrl = `${getForumUrl()}?reset=${token}`;
       const tmpl = emailPasswordReset({ displayName: user.displayName || user.username, resetUrl });
       sendEmail({ to: user.email, ...tmpl });
     }
@@ -1695,9 +1727,9 @@ const adminServer = http.createServer(async (req, res) => {
     }
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     const suppliedPass = typeof body.password === 'string' ? body.password : '';
-    const adminPassOk = ADMIN_PASSWORD_HASH !== null &&
-      body.username === ADMIN_USERNAME &&
-      verifyPassword(suppliedPass, ADMIN_PASSWORD_HASH);
+    const adminPassOk = getAdminPasswordHash() !== null &&
+      body.username === getAdminUsername() &&
+      verifyPassword(suppliedPass, getAdminPasswordHash());
     if (adminPassOk) {
       clearFailures(ip);
       const sid = randomId();
@@ -1910,10 +1942,11 @@ const adminServer = http.createServer(async (req, res) => {
   if (req.method === 'GET' && url.pathname === '/api/admin/settings') {
     const session = requireRole(req, res, 'staff'); if (!session) return;
     const s = readSettings();
-    if (STRIPE_SECRET_KEY && !s.integrations.find(r => r[0] === 'Stripe')) {
-      s.integrations = [['Stripe', 'api.stripe.com', true, {}], ...s.integrations];
-    }
-    const masked = { ...s, integrations: s.integrations.map(r => [r[0], r[1], r[2], maskIntegrationConfig(r[0], r[3])]) };
+    const masked = {
+      ...s,
+      integrations: s.integrations.map(r => [r[0], r[1], r[2], maskIntegrationConfig(r[0], r[3])]),
+      security: { adminUsername: s.security?.adminUsername || '' },
+    };
     return json(res, 200, masked);
   }
 
@@ -2166,7 +2199,7 @@ const adminServer = http.createServer(async (req, res) => {
         sendEmail({ to: body.email, ...tmpl });
       }
       const staffTmpl = emailStaffNewEwaste({ intakeId: body.id, name: body.name, email: body.email, description: body.description });
-      sendEmail({ to: NOTIFY_EMAIL, ...staffTmpl });
+      sendEmail({ to: getNotifyEmail(), ...staffTmpl });
     }
     return json(res, 200, { ok: true, item: body });
   }
@@ -2287,9 +2320,17 @@ const adminServer = http.createServer(async (req, res) => {
       for (const [k, v] of Object.entries(incomingConfig)) { if (v !== '***') config[k] = v; }
       return [r[0], r[1], !!r[2], config];
     });
-    const payload = { shop: body.shop || {}, announcement: body.announcement || { text: '', enabled: false, expiresAt: '' }, maintenance: body.maintenance || { enabled: false }, staff: body.staff || [], integrations: mergedIntegrations, siteContent: body.siteContent || {} };
+    const security = { ...(existing.security || {}) };
+    if ((body.security?.adminUsername || '').trim()) security.adminUsername = body.security.adminUsername.trim();
+    const newPass = (body.security?.adminPassword || '').trim();
+    if (newPass && newPass !== '***') security.adminPasswordHash = hashPassword(newPass);
+    const payload = { shop: body.shop || {}, announcement: body.announcement || { text: '', enabled: false, expiresAt: '' }, maintenance: body.maintenance || { enabled: false }, staff: body.staff || [], integrations: mergedIntegrations, siteContent: body.siteContent || {}, security };
     writeSettings(payload);
-    const maskedPayload = { ...payload, integrations: payload.integrations.map(r => [r[0], r[1], r[2], maskIntegrationConfig(r[0], r[3])]) };
+    const maskedPayload = {
+      ...payload,
+      integrations: payload.integrations.map(r => [r[0], r[1], r[2], maskIntegrationConfig(r[0], r[3])]),
+      security: { adminUsername: security.adminUsername || '' },
+    };
     return json(res, 200, { ok: true, ...maskedPayload });
   }
 
@@ -2630,7 +2671,7 @@ const portalServer = http.createServer(async (req, res) => {
     const custTmpl = emailQuoteReceived({ quoteId: quote.id, customerName: quote.name, description: quote.description });
     sendEmail({ to: quote.email, ...custTmpl });
     const staffTmpl = emailStaffNewQuote({ quoteId: quote.id, name: quote.name, email: quote.email, description: quote.description });
-    sendEmail({ to: NOTIFY_EMAIL, ...staffTmpl });
+    sendEmail({ to: getNotifyEmail(), ...staffTmpl });
     return json(res, 201, { ok: true, item: quote });
   }
 
@@ -2707,7 +2748,7 @@ const portalServer = http.createServer(async (req, res) => {
       const token = crypto.randomBytes(32).toString('hex');
       resetTokens.set(token, { userId: user.id, expiresAt: now() + RESET_TOKEN_TTL_MS });
       saveResetTokens();
-      const resetUrl = `${PORTAL_URL}?reset=${token}`;
+      const resetUrl = `${getPortalUrl()}?reset=${token}`;
       const tmpl = emailPasswordReset({ displayName: user.displayName || user.username, resetUrl });
       sendEmail({ to: user.email, ...tmpl });
     }
@@ -2759,6 +2800,44 @@ function startServer(server, port, label) {
     console.log(`[${label}] http://localhost:${port}`);
   });
 }
+
+function migrateEnvToSettings() {
+  const s = readSettings();
+  let changed = false;
+
+  if (STRIPE_SECRET_KEY && !s.integrations.find(r => r[0] === 'Stripe')) {
+    s.integrations = [['Stripe', 'api.stripe.com', true, {
+      secretKey: STRIPE_SECRET_KEY, publishableKey: STRIPE_PUBLISHABLE_KEY, webhookSecret: STRIPE_WEBHOOK_SECRET,
+    }], ...s.integrations];
+    changed = true;
+  }
+
+  if ((SMTP_HOST || SMTP_USER) && !s.integrations.find(r => r[0] === 'Email')) {
+    s.integrations.push(['Email', SMTP_HOST || 'smtp.gmail.com', !!(SMTP_HOST && SMTP_USER && SMTP_PASS), {
+      host: SMTP_HOST, port: String(SMTP_PORT), user: SMTP_USER, pass: SMTP_PASS, notifyEmail: NOTIFY_EMAIL,
+    }]);
+    changed = true;
+  }
+
+  if (SITE_URL && !s.shop.siteUrl) {
+    s.shop = { ...s.shop, siteUrl: SITE_URL };
+    changed = true;
+  }
+
+  if (ADMIN_USERNAME && !s.security?.adminUsername) {
+    s.security = { ...(s.security || {}), adminUsername: ADMIN_USERNAME };
+    changed = true;
+  }
+
+  if (ADMIN_PASSWORD_HASH && !s.security?.adminPasswordHash) {
+    s.security = { ...(s.security || {}), adminPasswordHash: ADMIN_PASSWORD_HASH };
+    changed = true;
+  }
+
+  if (changed) writeSettings(s);
+}
+
+migrateEnvToSettings();
 
 startServer(mainServer,   MAIN_PORT,   'main  ');
 startServer(forumServer,  FORUM_PORT,  'forum ');
