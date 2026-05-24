@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Outback Electronics — Maintenance</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23000'/><text x='50%25' y='54%25' dominant-baseline='middle' text-anchor='middle' font-family='Georgia,serif' font-size='14' fill='%23f4ede1' font-style='italic'>OE</text></svg>"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#f4ede1;color:#1f1a14;font-family:'Archivo',system-ui,-apple-system,sans-serif;font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+.bar{background:#1f1a14;color:#e9dfc9;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.06em;padding:8px 32px;text-align:center}
+.nav{background:#f4ede1;border-bottom:1px solid #d8cdb6;padding:18px 32px;display:flex;align-items:center;gap:12px}
+.logo-mark{background:#000;padding:6px 10px;height:52px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.logo-text{line-height:1}
+.logo-name{font-weight:700;font-size:15px;letter-spacing:-.01em;color:#1f1a14}
+.logo-sub{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:9.5px;letter-spacing:.18em;color:#5a4f40;text-transform:uppercase;margin-top:4px}
+.hero{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:100px 32px 80px;min-height:calc(100vh - 120px)}
+.eyebrow{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#d39a37;margin-bottom:20px;display:flex;align-items:center;gap:10px}
+.eyebrow::before,.eyebrow::after{content:'';display:block;width:32px;height:1px;background:#d39a37}
+h1{font-family:Georgia,'Times New Roman',serif;font-weight:400;font-size:clamp(48px,8vw,80px);letter-spacing:-.02em;line-height:1.05;margin-bottom:24px}
+.lead{font-size:16px;color:#5a4f40;max-width:480px;line-height:1.65;margin-bottom:48px}
+.divider{width:48px;border-top:1px solid #1f1a14;border-bottom:1px solid #1f1a14;height:4px;margin:0 auto 48px}
+.status{display:flex;align-items:center;gap:10px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8b7e69;background:#faf6ec;border:1px solid #d8cdb6;padding:12px 20px}
+.pulse{width:8px;height:8px;border-radius:50%;background:#d39a37;animation:pulse 2s ease-in-out infinite;flex-shrink:0}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.85)}}
+.note{margin-top:32px;font-size:13px;color:#8b7e69;font-family:'JetBrains Mono',ui-monospace,monospace;letter-spacing:.04em}
+.note a{color:#1f88f5}
+@media(max-width:640px){.nav{padding:14px 20px}.hero{padding:60px 20px}}
+</style>
+</head>
+<body>
+<div class="bar">Outback Electronics — Taroom, QLD &amp; Fitzroy Crossing, WA</div>
+<nav class="nav">
+  <div class="logo-mark">
+    <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="40" height="40" fill="#000"/>
+      <text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-family="Georgia,serif" font-size="18" fill="#f4ede1" font-style="italic">OE</text>
+    </svg>
+  </div>
+  <div class="logo-text">
+    <div class="logo-name">Outback Electronics</div>
+    <div class="logo-sub">Built for where the signal ends</div>
+  </div>
+</nav>
+<main class="hero">
+  <div class="eyebrow">Scheduled Maintenance</div>
+  <h1>Back shortly.</h1>
+  <p class="lead">We're making improvements to the site. Everything will be back online soon — thanks for your patience.</p>
+  <div class="divider"></div>
+  <div class="status"><span class="pulse"></span>Maintenance in progress</div>
+  <p class="note">Need help urgently? Email <a href="mailto:info@outbackelectronics.com.au">info@outbackelectronics.com.au</a></p>
+</main>
+</body>
+</html>
