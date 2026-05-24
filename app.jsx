@@ -358,13 +358,14 @@ function TopNav({ page, go, cart, onSearchOpen, accountOpen, setAccountOpen, por
             ))}
           </nav>
           <div className="topnav-actions">
-            <button className="icon-btn" title="Search" onClick={onSearchOpen}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+            <button className="icon-btn" title="Search" aria-label="Search" onClick={onSearchOpen}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
             </button>
             <div style={{position:'relative'}}>
               <button
                 className="icon-btn"
                 title={signedOut ? 'Sign In / Create Account' : 'Account'}
+                aria-label={signedOut ? 'Sign In / Create Account' : 'Account'}
                 onClick={() => setAccountOpen(o => !o)}
                 style={signedOut ? {display:'flex', alignItems:'center', gap:6, padding:'6px 10px', border:'1px solid var(--line)', fontSize:13} : {}}
               >
@@ -373,12 +374,12 @@ function TopNav({ page, go, cart, onSearchOpen, accountOpen, setAccountOpen, por
               </button>
               {accountOpen && <AccountDropdown go={go} onClose={() => setAccountOpen(false)} user={portalUser} />}
             </div>
-            <button className="icon-btn" title="Cart" onClick={() => go('cart')}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 4h2l2.5 12h11l2-9H6"/><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/></svg>
-              {cart > 0 && <span className="cart-count">{cart}</span>}
+            <button className="icon-btn" title="Cart" aria-label={cart > 0 ? `Cart, ${cart} item${cart === 1 ? '' : 's'}` : 'Cart'} onClick={() => go('cart')}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M3 4h2l2.5 12h11l2-9H6"/><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/></svg>
+              {cart > 0 && <span className="cart-count" aria-hidden="true">{cart}</span>}
             </button>
             {/* Hamburger — hidden on desktop via CSS, shown on mobile */}
-            <button className="icon-btn hamburger" style={{display:'none'}} title="Menu" onClick={() => setMobileMenuOpen(o => !o)}>
+            <button className="icon-btn hamburger" style={{display:'none'}} title="Menu" aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'} aria-expanded={mobileMenuOpen} aria-controls="mobile-nav" onClick={() => setMobileMenuOpen(o => !o)}>
               {mobileMenuOpen
                 ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
                 : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
@@ -389,10 +390,10 @@ function TopNav({ page, go, cart, onSearchOpen, accountOpen, setAccountOpen, por
       </div>
       {/* Mobile nav drawer — hidden on desktop via CSS */}
       {mobileMenuOpen && (
-        <div className="mobile-nav">
+        <div id="mobile-nav" className="mobile-nav" role="dialog" aria-modal="true" aria-label="Navigation menu">
           <div className="mobile-nav-header">
             <Logo onClick={() => { go('home'); setMobileMenuOpen(false); }} />
-            <button className="icon-btn" onClick={() => setMobileMenuOpen(false)}>
+            <button className="icon-btn" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
             </button>
           </div>
@@ -985,8 +986,9 @@ function App() {
 
   return (
     <ShopContext.Provider value={shop}>
+      <a href="#main-content" className="skip-link">Skip to main content</a>
       <TopNav page={page} go={go} cart={cartCount} onSearchOpen={() => setSearchOpen(true)} accountOpen={accountOpen} setAccountOpen={setAccountOpen} portalUser={portalUser} />
-      <main>
+      <main id="main-content">
         <PageComponent go={go} addToCart={addToCart} pageParams={pageParams} cart={cart} removeFromCart={removeFromCart} updateQty={updateQty} clearCart={clearCart} portalUser={portalUser} />
       </main>
       <Footer go={go} />
