@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Outback Electronics — Built for where the signal ends</title>
-<link rel="icon" type="image/png" href="/assets/favicon-GWj23NW_.png" />
+<link rel="icon" type="image/png" href="/favicon.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -312,6 +312,22 @@
     50% { opacity: 0.3; }
   }
 </style>
+<script>
+(function () {
+  function check() {
+    fetch('/api/maintenance-status')
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d.enabled) {
+          var from = encodeURIComponent(window.location.pathname + window.location.search);
+          window.location.href = '/maintenance?from=' + from;
+        }
+      })
+      .catch(function () {});
+  }
+  setInterval(check, 5000);
+}());
+</script>
   <script type="module" crossorigin src="/assets/main-qQff0afl.js"></script>
   <link rel="modulepreload" crossorigin href="/assets/vendor-C8w-UNLI.js">
   <link rel="modulepreload" crossorigin href="/assets/index-C0octaUy.js">
