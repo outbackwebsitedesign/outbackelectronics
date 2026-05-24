@@ -854,13 +854,22 @@ function AIPage({ go }) {
 function ProductDetailPage({ go, addToCart, pageParams }) {
   const [product, setProduct] = useState(pageParams || null);
   const [selectedVariant, setSelectedVariant] = useState(null);
+  const [activeImage, setActiveImage] = useState(null);
 
   useEffect(() => {
     if (pageParams) {
       setProduct(pageParams);
-      setSelectedVariant(pageParams.variants && pageParams.variants.length > 0 ? pageParams.variants[0] : null);
+      const firstVariant = pageParams.variants && pageParams.variants.length > 0 ? pageParams.variants[0] : null;
+      setSelectedVariant(firstVariant);
+      const firstImg = (firstVariant?.images?.length ? firstVariant.images[0] : null) || (pageParams.images?.[0] ?? null);
+      setActiveImage(firstImg);
     }
   }, [pageParams]);
+
+  const selectVariant = (v) => {
+    setSelectedVariant(v);
+    if (v.images && v.images.length > 0) setActiveImage(v.images[0]);
+  };
 
   if (!product) {
     return (
@@ -888,9 +897,19 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
         <button className="btn btn-ghost btn-sm" onClick={() => go('shop')} style={{marginBottom:24}}>← Back to Shop</button>
         <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:48, alignItems:'start'}}>
           <div>
-            {product.images && product.images.length > 0
-              ? <img src={product.images[0]} alt={product.name} style={{aspectRatio:'4/3', width:'100%', objectFit:'cover', display:'block'}} />
+            {activeImage
+              ? <img src={activeImage} alt={product.name} style={{aspectRatio:'4/3', width:'100%', objectFit:'cover', display:'block'}} />
               : <div className="slot" style={{aspectRatio:'4/3', width:'100%'}}>{product.name.toUpperCase()}</div>}
+            {product.images && product.images.length > 1 && (
+              <div style={{display:'flex', gap:8, marginTop:10, flexWrap:'wrap'}}>
+                {product.images.map((url, i) => (
+                  <div key={i} onClick={() => setActiveImage(url)}
+                    style={{width:64, height:64, cursor:'pointer', border: activeImage===url ? '2px solid var(--rust)' : '2px solid transparent', flexShrink:0}}>
+                    <img src={url} alt="" style={{width:'100%', height:'100%', objectFit:'cover', display:'block'}} />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <div>
             <div className="row-flex" style={{gap:8, marginBottom:12, flexWrap:'wrap'}}>
@@ -913,7 +932,7 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
                     const isSelected = selectedVariant && selectedVariant.sku === v.sku;
                     const stockLabel = !v.stock || v.stock === 0 ? 'Out of stock' : v.stock <= 3 ? `${v.stock} left` : 'In stock';
                     return (
-                      <div key={i} onClick={() => setSelectedVariant(v)}
+                      <div key={i} onClick={() => selectVariant(v)}
                         style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 14px', cursor:'pointer', border:'1px solid var(--line)', borderLeft: isSelected ? '3px solid var(--rust)' : '1px solid var(--line)', background: isSelected ? 'var(--bg-elev)' : 'transparent'}}>
                         <span style={{fontWeight: isSelected ? 600 : 400}}>{v.name}</span>
                         <div style={{display:'flex', gap:14, alignItems:'center'}}>
