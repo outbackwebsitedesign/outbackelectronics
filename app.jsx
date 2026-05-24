@@ -15,11 +15,17 @@ function ensureCsrf() {
 const ShopContext = createContext({});
 const useShop = () => useContext(ShopContext);
 
-// Site-level feature flags — override via window.OE_FLAGS before this script loads.
+// Site-level feature flags — overridden at runtime from /api/shop-info flags.
 const SITE_FLAGS = Object.assign(
-  { showBCorpBadge: true, showRepairOrgBadge: true },
+  { showBCorpBadge: false, showRepairOrgBadge: false },
   window.OE_FLAGS || {}
 );
+
+// Cross-site URLs — populated from /api/shop-info at runtime.
+let _PORTAL_URL = 'https://portal.outbackelectronics.com.au';
+let _FORUM_URL  = 'https://forum.outbackelectronics.com.au';
+function getPortalUrl() { return _PORTAL_URL; }
+function getForumUrl()  { return _FORUM_URL; }
 
 // ---------------- Search Overlay ----------------
 function SearchOverlay({ go, onClose }) {
@@ -114,7 +120,7 @@ function SearchOverlay({ go, onClose }) {
 function usePortalUser() {
   const [user, setUser] = useState(undefined);
   useEffect(() => {
-    fetch('https://portal.outbackelectronics.com.au/api/portal/auth/me', { credentials: 'include' })
+    fetch(getPortalUrl() + '/api/portal/auth/me', { credentials: 'include' })
       .then(r => r.ok ? r.json() : null)
       .then(d => setUser(d?.user || null))
       .catch(() => setUser(null));
@@ -125,7 +131,7 @@ function usePortalUser() {
 // ---------------- Account Dropdown ----------------
 function AccountDropdown({ go, onClose, user }) {
   const ref = useRef(null);
-  const portal = (path = '') => { window.location.href = 'https://portal.outbackelectronics.com.au' + path; };
+  const portal = (path = '') => { window.location.href = getPortalUrl() + path; };
   useEffect(() => {
     const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
     document.addEventListener('mousedown', handler);
@@ -174,11 +180,11 @@ function AccountDropdown({ go, onClose, user }) {
         { label:'My Rewards',        action: () => portal('/#rewards') },
         { label:'My Wallet',         action: () => portal('/#wallet') },
         { label:'My Groups',         action: () => { go('groups'); onClose(); } },
-        { label:'My Orders',         action: () => portal('/#orders') },
-        { label:'My Addresses',      action: () => portal('/#addresses') },
-        { label:'My Bookings',       action: () => portal('/#bookings') },
-        { label:'My Account',        action: () => portal('/#account') },
-        { label:'Log Out',           action: () => { fetch('https://portal.outbackelectronics.com.au/api/portal/auth/logout', { method: 'POST', headers: { 'X-CSRF-Token': getCsrf() }, credentials: 'include' }).then(() => window.location.reload()); onClose(); } },
+        { label:'My Orders',         action: () => portal('/orders') },
+        { label:'My Addresses',      action: () => portal('/addresses') },
+        { label:'My Bookings',       action: () => portal('/bookings') },
+        { label:'My Account',        action: () => portal('/account') },
+        { label:'Log Out',           action: () => { fetch(getPortalUrl() + '/api/portal/auth/logout', { method: 'POST', headers: { 'X-CSRF-Token': getCsrf() }, credentials: 'include' }).then(() => window.location.reload()); onClose(); } },
       ].map((item, i, arr) => (
         <button key={item.label} onClick={() => { item.action(); onClose(); }}
           style={btnStyle(i === arr.length - 1)}
@@ -239,7 +245,7 @@ const ACCOUNT_PAGES = [
 
 function AccountPlaceholderPage({ title, portalPath }) {
   React.useEffect(() => {
-    window.location.href = `https://portal.outbackelectronics.com.au${portalPath}`;
+    window.location.href = getPortalUrl() + portalPath;
   }, [portalPath]);
   return (
     <>
@@ -250,7 +256,7 @@ function AccountPlaceholderPage({ title, portalPath }) {
         <div className="card-paper" style={{padding:24}}>
           <span className="eyebrow">ACCOUNT</span>
           <p style={{marginTop:10, color:'var(--ink-2)'}}>
-            Taking you to <a href={`https://portal.outbackelectronics.com.au${portalPath}`}>the portal</a>…
+            Taking you to <a href={getPortalUrl() + portalPath}>the portal</a>…
           </p>
         </div>
       </section>
@@ -305,14 +311,24 @@ function UtilityBar({ go }) {
 }
 
 function useShopInfo() {
-  const [shop, setShop] = useState({});
+  const [info, setInfo] = useState({ shop: {}, flags: {}, portalUrl: '', forumUrl: '' });
   useEffect(() => {
     fetch('/api/shop-info')
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d && d.shop) setShop(d.shop); })
+      .then(d => {
+        if (!d) return;
+        if (d.portalUrl) _PORTAL_URL = d.portalUrl;
+        if (d.forumUrl)  _FORUM_URL  = d.forumUrl;
+        setInfo({
+          shop: d.shop || {},
+          flags: d.flags || {},
+          portalUrl: d.portalUrl || _PORTAL_URL,
+          forumUrl: d.forumUrl || _FORUM_URL,
+        });
+      })
       .catch(() => {});
   }, []);
-  return shop;
+  return info;
 }
 
 function useAnnouncement() {
@@ -333,7 +349,7 @@ function TopNav({ page, go, cart, onSearchOpen, accountOpen, setAccountOpen, por
 
   const handleNavClick = (id) => {
     setMobileMenuOpen(false);
-    if (id === 'forum-link') window.location.href = 'https://forum.outbackelectronics.com.au';
+    if (id === 'forum-link') window.location.href = getForumUrl();
     else go(id);
   };
 
@@ -348,7 +364,7 @@ function TopNav({ page, go, cart, onSearchOpen, accountOpen, setAccountOpen, por
             {PRIMARY_PAGES.map(p => (
               <a
                 key={p.id}
-                href={p.id === 'forum-link' ? 'https://forum.outbackelectronics.com.au' : `/${p.id}`}
+                href={p.id === 'forum-link' ? getForumUrl() : `/${p.id}`}
                 className={page === p.id ? 'active' : ''}
                 onClick={p.id === 'forum-link' ? undefined : (e) => { e.preventDefault(); go(p.id); }}
                 {...(p.id === 'forum-link' ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
@@ -399,7 +415,7 @@ function TopNav({ page, go, cart, onSearchOpen, accountOpen, setAccountOpen, por
           </div>
           {PRIMARY_PAGES.map(p => (
             <a key={p.id}
-              href={p.id === 'forum-link' ? 'https://forum.outbackelectronics.com.au' : `/${p.id}`}
+              href={p.id === 'forum-link' ? getForumUrl() : `/${p.id}`}
               className={page === p.id ? 'active' : ''}
               onClick={p.id === 'forum-link' ? undefined : (e) => { e.preventDefault(); handleNavClick(p.id); }}
               {...(p.id === 'forum-link' ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>
@@ -438,11 +454,11 @@ function Footer({ go }) {
               </div>
             </div>
             <p style={{marginTop: 18, fontSize: 13, color: 'var(--ink-3)', maxWidth: 360, lineHeight: 1.6}}>
-              An independent electronics outpost serving remote Australia since 2023. Repairs, refurbished gear, off-grid kits, edge AI &amp; a noisy community workshop.
+              {shop.description || 'An independent electronics outpost serving remote Australia. Repairs, refurbished gear, off-grid kits, edge AI & a noisy community workshop.'}
             </p>
             <div className="row-flex" style={{marginTop: 18}}>
-              {SITE_FLAGS.showBCorpBadge && <span className="tag tag-outline" style={{color:'var(--ochre)', borderColor:'#3a3127'}}>B-CORP CERTIFIED</span>}
-              {SITE_FLAGS.showRepairOrgBadge && <span className="tag tag-outline" style={{color:'var(--ochre)', borderColor:'#3a3127'}}>REPAIR.ORG MEMBER</span>}
+              {(shop._flags || SITE_FLAGS).showBCorpBadge && <span className="tag tag-outline" style={{color:'var(--ochre)', borderColor:'#3a3127'}}>B-CORP CERTIFIED</span>}
+              {(shop._flags || SITE_FLAGS).showRepairOrgBadge && <span className="tag tag-outline" style={{color:'var(--ochre)', borderColor:'#3a3127'}}>REPAIR.ORG MEMBER</span>}
             </div>
           </div>
           <div>
@@ -927,8 +943,13 @@ function App() {
   });
   const [searchOpen, setSearchOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
-  const shop = useShopInfo();
+  const { shop, flags, portalUrl, forumUrl } = useShopInfo();
   const portalUser = usePortalUser();
+  const resolvedFlags = useMemo(() => Object.assign({}, SITE_FLAGS, flags), [flags]);
+  const siteUrls = useMemo(() => ({
+    portal: portalUrl || 'https://portal.outbackelectronics.com.au',
+    forum: forumUrl || 'https://forum.outbackelectronics.com.au',
+  }), [portalUrl, forumUrl]);
 
   useEffect(() => {
     let target = `/${page}`;
@@ -979,14 +1000,18 @@ function App() {
   const PAGES = window.OE_PAGES || {};
   const PageComponent = PAGES[page] || PAGES.home;
 
+  const shopCtxValue = useMemo(
+    () => ({ ...shop, _flags: resolvedFlags, _portalUrl: siteUrls.portal, _forumUrl: siteUrls.forum }),
+    [shop, resolvedFlags, siteUrls]
+  );
+
   // Admin uses its own full-bleed chrome — no public nav/footer/tweaks
   if (page === 'admin') {
-    return <ShopContext.Provider value={shop}><PageComponent go={go} /></ShopContext.Provider>;
+    return <ShopContext.Provider value={shopCtxValue}><PageComponent go={go} /></ShopContext.Provider>;
   }
 
   return (
-    <ShopContext.Provider value={shop}>
-      <a href="#main-content" className="skip-link">Skip to main content</a>
+    <ShopContext.Provider value={shopCtxValue}>
       <TopNav page={page} go={go} cart={cartCount} onSearchOpen={() => setSearchOpen(true)} accountOpen={accountOpen} setAccountOpen={setAccountOpen} portalUser={portalUser} />
       <main id="main-content">
         <PageComponent go={go} addToCart={addToCart} pageParams={pageParams} cart={cart} removeFromCart={removeFromCart} updateQty={updateQty} clearCart={clearCart} portalUser={portalUser} />

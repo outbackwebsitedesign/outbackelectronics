@@ -1157,8 +1157,26 @@ const mainServer = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'GET' && url.pathname === '/api/shop-info') {
-    const { shop } = readSettings();
-    return json(res, 200, { shop });
+    const { shop, flags } = readSettings();
+    return json(res, 200, {
+      shop,
+      flags: flags || {},
+      portalUrl: getPortalUrl(),
+      forumUrl: getForumUrl(),
+    });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/public-job-log') {
+    const repairs = readRepairs();
+    const jobs = [];
+    for (const col of (repairs.columns || [])) {
+      for (const card of (col.cards || [])) {
+        if (card.public) {
+          jobs.push({ id: card.id || card.jobId || '—', item: card.title || card.item || '—', status: col.title || card.status || '—' });
+        }
+      }
+    }
+    return json(res, 200, { jobs: jobs.slice(0, 10) });
   }
 
   if (req.method === 'GET' && url.pathname === '/api/announcement') {

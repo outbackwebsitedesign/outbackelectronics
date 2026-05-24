@@ -289,7 +289,7 @@ function AdminOverview({ go }) {
   const revenue = orders === null ? '—' : '$' + orders.reduce((s, o) => s + (Number(o.total) || 0), 0).toLocaleString();
   const openRepairs = repairs === null ? '—' : repairs.filter(c => c.id !== 'done').reduce((s, c) => s + (c.cards ? c.cards.length : 0), 0);
   const quotesAwaiting = quotes === null ? '—' : quotes.length;
-  const lowStock = catalog === null ? [] : catalog.filter(p => p.stock != null && p.stock <= 3);
+  const lowStock = catalog === null ? [] : catalog.filter(p => !p.infiniteStock && p.stock != null && p.stock <= 3);
 
   return (
     <div style={{padding: 32, display:'grid', gap: 28}}>
@@ -1073,6 +1073,7 @@ function AdminProducts({ sessionInfo = {} }) {
             return <span className="mono" style={{fontWeight:600}}>${(r.price ?? 0).toLocaleString()}</span>;
           }},
           { key:'stock', label:'Stock', w:'80px', render:r => {
+            if (r.infiniteStock) return <span className="mono" style={{color:'var(--ink-2)'}}>∞</span>;
             const s = r.variants && r.variants.length ? r.variants.reduce((a,v) => a + (v.stock||0), 0) : (r.stock ?? 0);
             return <span className="mono" style={{color: s<3?'var(--rust)':'var(--ink)'}}>{s}</span>;
           }},
@@ -1138,9 +1139,30 @@ function AdminProducts({ sessionInfo = {} }) {
               </select>
             </label>
           </div>
+          <label className="field" style={{flexDirection:'row', alignItems:'center', gap:10}}>
+            <input type="checkbox" checked={!!form.digital} onChange={e=>setForm({...form, digital:e.target.checked, stock: e.target.checked && form.infiniteStock ? null : (form.stock||0)})} />
+            <span className="label" style={{marginBottom:0}}>Digital product (gift card, software licence, download)</span>
+          </label>
           <div className="grid-2" style={{gap:14}}>
             <label className="field"><span className="label">Price (AUD)</span><input className="input" type="number" value={form.price||0} onChange={e=>setForm({...form, price:Number(e.target.value)})}/></label>
-            <label className="field"><span className="label">Stock on hand</span><input className="input" type="number" value={form.stock||0} onChange={e=>setForm({...form, stock:Number(e.target.value)})}/></label>
+            <div className="field">
+              <span className="label">Stock on hand</span>
+              {form.digital ? (
+                <div style={{display:'flex', flexDirection:'column', gap:6}}>
+                  <label style={{display:'flex', alignItems:'center', gap:8, fontSize:13}}>
+                    <input type="radio" name="stockMode" checked={!!form.infiniteStock} onChange={() => setForm({...form, infiniteStock:true, stock:null})} />
+                    Unlimited (digital / no physical limit)
+                  </label>
+                  <label style={{display:'flex', alignItems:'center', gap:8, fontSize:13}}>
+                    <input type="radio" name="stockMode" checked={!form.infiniteStock} onChange={() => setForm({...form, infiniteStock:false, stock: form.stock ?? 0})} />
+                    Fixed quantity:&nbsp;
+                    {!form.infiniteStock && <input className="input" type="number" style={{width:80}} value={form.stock||0} onChange={e=>setForm({...form, stock:Number(e.target.value)})} />}
+                  </label>
+                </div>
+              ) : (
+                <input className="input" type="number" value={form.stock||0} onChange={e=>setForm({...form, stock:Number(e.target.value)})}/>
+              )}
+            </div>
           </div>
           {(form.variants && form.variants.length > 0) && (
             <div style={{fontSize:12, color:'var(--ink-2)', marginTop:4}}>When variants are set, per-variant price and stock are used on the public site.</div>
