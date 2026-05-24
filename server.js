@@ -598,18 +598,26 @@ const MAINTENANCE_HTML = (() => {
 
 function sendMaintenance(res) {
   if (!MAINTENANCE_HTML) { res.writeHead(503); return res.end('Service temporarily unavailable.'); }
+  const { shop } = readSettings();
+  const email = (shop && shop.email) ? shop.email.trim() : '';
+  const emailHtml = email
+    ? `<p class="note">Need help urgently? Email <a href="mailto:${email}">${email}</a></p>`
+    : '';
+  const html = MAINTENANCE_HTML.replace(/\{\{CONTACT_EMAIL\}\}/g, emailHtml);
   res.writeHead(503, {
     'Content-Type': 'text/html; charset=utf-8',
     'Cache-Control': 'no-cache, must-revalidate',
     'X-Frame-Options': 'SAMEORIGIN',
     'X-Content-Type-Options': 'nosniff',
   });
-  res.end(MAINTENANCE_HTML);
+  res.end(html);
 }
 
 function checkMaintenance(req, res, url) {
   const { maintenance } = readSettings();
   if (!maintenance || !maintenance.enabled) return false;
+  // Let the favicon through so the maintenance page renders it
+  if (url.pathname === '/favicon.png' || url.pathname === '/favicon.ico') return false;
   if (url.pathname === '/maintenance') { sendMaintenance(res); return true; }
   if (req.method === 'GET') { res.writeHead(302, { 'Location': '/maintenance' }); res.end(); return true; }
   json(res, 503, { error: 'maintenance', message: 'Site is temporarily under maintenance.' });

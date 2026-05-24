@@ -2804,6 +2804,7 @@ function AdminSettings() {
         abn: (payload.shop?.abn || '').trim(),
         address: (payload.shop?.address || '').trim(),
         phone: (payload.shop?.phone || '').trim(),
+        email: (payload.shop?.email || '').trim(),
         tagline: (payload.shop?.tagline || '').trim(),
       },
       announcement: {
@@ -2869,6 +2870,7 @@ function AdminSettings() {
         <label className="field"><span className="label">ABN</span><input className="input" value={shop.abn} onChange={(e) => setShop({ ...shop, abn: e.target.value })}/></label>
         <label className="field"><span className="label">Street address</span><input className="input" value={shop.address} onChange={(e) => setShop({ ...shop, address: e.target.value })}/></label>
         <label className="field"><span className="label">Phone</span><input className="input" value={shop.phone} onChange={(e) => setShop({ ...shop, phone: e.target.value })}/></label>
+        <label className="field"><span className="label">Contact email</span><input className="input" type="email" value={shop.email||''} onChange={(e) => setShop({ ...shop, email: e.target.value })}/></label>
         <label className="field"><span className="label">Tagline</span><input className="input" value={shop.tagline} onChange={(e) => setShop({ ...shop, tagline: e.target.value })}/></label>
         <div className="row-flex" style={{gap:8, marginTop:12}}>
           <button className="btn btn-rust btn-sm" disabled={!shopDirty || sectionBusy==='shop'}>{sectionBusy==='shop'?'Saving…':'Save'}</button>
