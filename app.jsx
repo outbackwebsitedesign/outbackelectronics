@@ -175,10 +175,10 @@ function AccountDropdown({ go, onClose, user }) {
         </div>
       )}
       {[
-        { label:'Profile',           action: () => portal('/profile') },
-        { label:'My Subscriptions',  action: () => portal('/subscriptions') },
-        { label:'My Rewards',        action: () => portal('/rewards') },
-        { label:'My Wallet',         action: () => portal('/wallet') },
+        { label:'Profile',           action: () => portal('/#account') },
+        { label:'My Subscriptions',  action: () => portal('/#memberships') },
+        { label:'My Rewards',        action: () => portal('/#rewards') },
+        { label:'My Wallet',         action: () => portal('/#wallet') },
         { label:'My Groups',         action: () => { go('groups'); onClose(); } },
         { label:'My Orders',         action: () => portal('/orders') },
         { label:'My Addresses',      action: () => portal('/addresses') },
@@ -374,13 +374,14 @@ function TopNav({ page, go, cart, onSearchOpen, accountOpen, setAccountOpen, por
             ))}
           </nav>
           <div className="topnav-actions">
-            <button className="icon-btn" title="Search" onClick={onSearchOpen}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+            <button className="icon-btn" title="Search" aria-label="Search" onClick={onSearchOpen}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
             </button>
             <div style={{position:'relative'}}>
               <button
                 className="icon-btn"
                 title={signedOut ? 'Sign In / Create Account' : 'Account'}
+                aria-label={signedOut ? 'Sign In / Create Account' : 'Account'}
                 onClick={() => setAccountOpen(o => !o)}
                 style={signedOut ? {display:'flex', alignItems:'center', gap:6, padding:'6px 10px', border:'1px solid var(--line)', fontSize:13} : {}}
               >
@@ -389,12 +390,12 @@ function TopNav({ page, go, cart, onSearchOpen, accountOpen, setAccountOpen, por
               </button>
               {accountOpen && <AccountDropdown go={go} onClose={() => setAccountOpen(false)} user={portalUser} />}
             </div>
-            <button className="icon-btn" title="Cart" onClick={() => go('cart')}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 4h2l2.5 12h11l2-9H6"/><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/></svg>
-              {cart > 0 && <span className="cart-count">{cart}</span>}
+            <button className="icon-btn" title="Cart" aria-label={cart > 0 ? `Cart, ${cart} item${cart === 1 ? '' : 's'}` : 'Cart'} onClick={() => go('cart')}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M3 4h2l2.5 12h11l2-9H6"/><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/></svg>
+              {cart > 0 && <span className="cart-count" aria-hidden="true">{cart}</span>}
             </button>
             {/* Hamburger — hidden on desktop via CSS, shown on mobile */}
-            <button className="icon-btn hamburger" style={{display:'none'}} title="Menu" onClick={() => setMobileMenuOpen(o => !o)}>
+            <button className="icon-btn hamburger" style={{display:'none'}} title="Menu" aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'} aria-expanded={mobileMenuOpen} aria-controls="mobile-nav" onClick={() => setMobileMenuOpen(o => !o)}>
               {mobileMenuOpen
                 ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
                 : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
@@ -405,10 +406,10 @@ function TopNav({ page, go, cart, onSearchOpen, accountOpen, setAccountOpen, por
       </div>
       {/* Mobile nav drawer — hidden on desktop via CSS */}
       {mobileMenuOpen && (
-        <div className="mobile-nav">
+        <div id="mobile-nav" className="mobile-nav" role="dialog" aria-modal="true" aria-label="Navigation menu">
           <div className="mobile-nav-header">
             <Logo onClick={() => { go('home'); setMobileMenuOpen(false); }} />
-            <button className="icon-btn" onClick={() => setMobileMenuOpen(false)}>
+            <button className="icon-btn" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
             </button>
           </div>
@@ -914,9 +915,29 @@ function App() {
 
   const [page, setPage] = useState(() => {
     const path = location.pathname.replace(/^\/+/, '');
+    if (path.startsWith('product/')) return 'product';
+    if (path.startsWith('service/')) return 'service';
     return KNOWN_PAGES.includes(path) ? path : 'home';
   });
   const [pageParams, setPageParams] = useState(null);
+
+  // Resolve deep-linked product/service on first load
+  useEffect(() => {
+    const path = location.pathname.replace(/^\/+/, '');
+    if (path.startsWith('product/') && !pageParams) {
+      const id = decodeURIComponent(path.slice('product/'.length));
+      fetch('/api/catalog/products').then(r => r.json()).then(d => {
+        const p = (d.items || []).find(x => x.sku === id || String(x.id) === id || x.slug === id);
+        if (p) setPageParams(p);
+      }).catch(() => {});
+    } else if (path.startsWith('service/') && !pageParams) {
+      const id = decodeURIComponent(path.slice('service/'.length));
+      fetch('/api/catalog/services').then(r => r.json()).then(d => {
+        const s = (d.items || []).find(x => String(x.id) === id || x.slug === id);
+        if (s) setPageParams(s);
+      }).catch(() => {});
+    }
+  }, []);
   const [cart, setCart] = useState(() => {
     try { return JSON.parse(localStorage.getItem('oe_cart') || '[]'); } catch { return []; }
   });
@@ -931,14 +952,23 @@ function App() {
   }), [portalUrl, forumUrl]);
 
   useEffect(() => {
-    const target = `/${page}`;
+    let target = `/${page}`;
+    if (page === 'product' && pageParams) {
+      const id = pageParams.sku || pageParams.id || pageParams.slug;
+      if (id) target = `/product/${encodeURIComponent(id)}`;
+    } else if (page === 'service' && pageParams) {
+      const id = pageParams.id || pageParams.slug;
+      if (id) target = `/service/${encodeURIComponent(id)}`;
+    }
     if (location.pathname !== target) window.history.pushState({}, '', target);
     window.scrollTo({top:0});
-  }, [page]);
+  }, [page, pageParams]);
 
   useEffect(() => {
     const onPop = () => {
       const path = location.pathname.replace(/^\/+/, '');
+      if (path.startsWith('product/')) { setPage('product'); setPageParams(null); return; }
+      if (path.startsWith('service/')) { setPage('service'); setPageParams(null); return; }
       if (KNOWN_PAGES.includes(path)) setPage(path);
     };
     window.addEventListener('popstate', onPop);
@@ -983,7 +1013,7 @@ function App() {
   return (
     <ShopContext.Provider value={shopCtxValue}>
       <TopNav page={page} go={go} cart={cartCount} onSearchOpen={() => setSearchOpen(true)} accountOpen={accountOpen} setAccountOpen={setAccountOpen} portalUser={portalUser} />
-      <main>
+      <main id="main-content">
         <PageComponent go={go} addToCart={addToCart} pageParams={pageParams} cart={cart} removeFromCart={removeFromCart} updateQty={updateQty} clearCart={clearCart} portalUser={portalUser} />
       </main>
       <Footer go={go} />
