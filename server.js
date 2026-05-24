@@ -65,6 +65,7 @@ const SESSIONS_DB_PATH        = path.join(__dirname, 'sessions.db');
 const FORUM_SESSIONS_DB_PATH  = path.join(__dirname, 'forum-sessions.db');
 const PORTAL_SESSIONS_DB_PATH = path.join(__dirname, 'portal-sessions.db');
 const RESET_TOKENS_DB_PATH = path.join(__dirname, 'password-reset-tokens.db');
+const CARTS_DB_PATH = path.join(__dirname, 'carts.db');
 const RESET_TOKEN_TTL_MS = 1000 * 60 * 60; // 1 hour
 const FORUM_URL  = process.env.FORUM_URL  || SITE_URL.replace(/(:\d+)?(\/|$)/, ':8081$2');
 const PORTAL_URL = process.env.PORTAL_URL || SITE_URL.replace(/(:\d+)?(\/|$)/, ':8083$2');
@@ -131,6 +132,11 @@ function atomicWriteFile(filePath, data) {
   fs.writeFileSync(tmp, data);
   fs.renameSync(tmp, filePath);
 }
+
+function readCarts() {
+  try { const p = JSON.parse(fs.readFileSync(CARTS_DB_PATH, 'utf8')); return Array.isArray(p.carts) ? p.carts : []; } catch { return []; }
+}
+function writeCarts(carts) { atomicWriteFile(CARTS_DB_PATH, JSON.stringify({ carts }, null, 2)); }
 
 function readProducts() {
   try { const p = JSON.parse(fs.readFileSync(PRODUCTS_DB_PATH, 'utf8')); return Array.isArray(p.products) ? p.products : []; } catch { return []; }
@@ -1284,6 +1290,31 @@ const mainServer = http.createServer(async (req, res) => {
     if (!gc) return json(res, 422, { error: 'invalid_gift_card', message: 'Gift card code is invalid, already used, or has no remaining balance.' });
     const discount = cartTotal > 0 ? Math.min(gc.balance, cartTotal) : gc.balance;
     return json(res, 200, { valid: true, code: gc.code, balance: gc.balance, discount });
+  }
+
+  // ── Shared carts ─────────────────────────────────────────────────────────────
+  if (req.method === 'POST' && url.pathname === '/api/cart/save') {
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    if (!Array.isArray(body.items) || body.items.length === 0) return json(res, 422, { error: 'empty_cart' });
+    const id = crypto.randomBytes(4).toString('hex'); // 8-char hex
+    const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days
+    const items = body.items.map(i => ({
+      id: i.id || '', sku: i.sku || '', name: String(i.name || '').slice(0, 200),
+      price: Number(i.price) || 0, qty: Math.max(1, Math.floor(Number(i.qty) || 1)),
+      cond: i.cond || '',
+    }));
+    const carts = readCarts().filter(c => c.expiresAt > Date.now());
+    carts.push({ id, items, expiresAt });
+    writeCarts(carts);
+    return json(res, 200, { id });
+  }
+
+  if (req.method === 'GET' && url.pathname.startsWith('/api/cart/')) {
+    const id = url.pathname.split('/api/cart/')[1];
+    if (!id || !/^[0-9a-f]{8}$/.test(id)) return json(res, 404, { error: 'not_found' });
+    const cart = readCarts().find(c => c.id === id && c.expiresAt > Date.now());
+    if (!cart) return json(res, 404, { error: 'not_found' });
+    return json(res, 200, { items: cart.items });
   }
 
   // ── Contact quick-message ────────────────────────────────────────────────────

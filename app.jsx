@@ -632,13 +632,63 @@ function OrderCancelledPage({ go }) {
 }
 
 // ---------------- Cart Page ----------------
-function CartPage({ go, cart, removeFromCart, updateQty, clearCart }) {
+function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart }) {
   const [checkingOut, setCheckingOut] = useState(false);
   const [error, setError] = useState(null);
   const [gcInput, setGcInput] = useState('');
   const [gc, setGc] = useState(null); // { code, balance, discount }
   const [gcError, setGcError] = useState(null);
   const [gcLoading, setGcLoading] = useState(false);
+  const [shareLink, setShareLink] = useState(null);
+  const [sharing, setSharing] = useState(false);
+  const [shareError, setShareError] = useState(null);
+  const [loadingShared, setLoadingShared] = useState(false);
+  const [sharedLoaded, setSharedLoaded] = useState(false);
+
+  // Load a shared cart from ?share=<id> on first render
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const shareId = params.get('share');
+    if (!shareId || !/^[0-9a-f]{8}$/.test(shareId)) return;
+    setLoadingShared(true);
+    fetch(`/api/cart/${shareId}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.items) {
+          data.items.forEach(item => addToCart(item));
+          setSharedLoaded(true);
+          // Clean the URL without reloading
+          window.history.replaceState({}, '', '/cart');
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingShared(false));
+  }, []);
+
+  const shareCart = async () => {
+    setSharing(true);
+    setShareError(null);
+    setShareLink(null);
+    try {
+      const resp = await fetch('/api/cart/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() },
+        body: JSON.stringify({ items: cart }),
+      });
+      const data = await resp.json();
+      if (data.id) {
+        const link = `${location.origin}/cart?share=${data.id}`;
+        setShareLink(link);
+        try { await navigator.clipboard.writeText(link); } catch {}
+      } else {
+        setShareError('Could not create share link. Please try again.');
+      }
+    } catch {
+      setShareError('Could not create share link. Please try again.');
+    } finally {
+      setSharing(false);
+    }
+  };
 
   const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const discount = gc ? gc.discount : 0;
@@ -689,6 +739,17 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart }) {
       setCheckingOut(false);
     }
   };
+
+  if (loadingShared) {
+    return (
+      <>
+        <PageHead crumbs={['Outback', 'Cart']} title="Your Cart" lead="Loading shared cart…" />
+        <section className="container" style={{paddingTop:40, paddingBottom:56, textAlign:'center'}}>
+          <p style={{color:'var(--ink-2)'}}>Please wait…</p>
+        </section>
+      </>
+    );
+  }
 
   if (cart.length === 0) {
     return (
@@ -801,6 +862,26 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart }) {
                 {checkingOut ? 'Redirecting…' : `Checkout — $${total.toLocaleString('en-AU', {minimumFractionDigits:2})}`}
               </button>
               <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginTop:10, textAlign:'center'}}>SECURE CHECKOUT VIA STRIPE</div>
+
+              <hr className="thin" style={{marginTop:16, marginBottom:12}} />
+              {sharedLoaded && (
+                <div style={{marginBottom:10, padding:'8px 12px', background:'#f0fdf4', border:'1px solid #86efac', fontSize:12, color:'#15803d'}}>
+                  Shared cart loaded successfully.
+                </div>
+              )}
+              <button className="btn btn-ghost btn-sm" style={{width:'100%', justifyContent:'center'}} onClick={shareCart} disabled={sharing}>
+                {sharing ? 'Generating link…' : 'Share this cart'}
+              </button>
+              {shareLink && (
+                <div style={{marginTop:10}}>
+                  <div style={{fontSize:11, color:'var(--ink-2)', marginBottom:4}}>Link copied to clipboard:</div>
+                  <div style={{display:'flex', gap:6, alignItems:'center'}}>
+                    <input readOnly value={shareLink} onClick={e => e.target.select()} style={{flex:1, fontSize:11, fontFamily:'monospace', padding:'5px 8px', border:'1px solid var(--line)', background:'var(--bg-elev)', color:'var(--ink)'}} />
+                  </div>
+                  <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginTop:4}}>EXPIRES IN 30 DAYS</div>
+                </div>
+              )}
+              {shareError && <div style={{marginTop:8, fontSize:12, color:'#b91c1c'}}>{shareError}</div>}
             </div>
           </div>
         </div>
