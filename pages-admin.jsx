@@ -1195,12 +1195,37 @@ function AdminProducts({ sessionInfo = {} }) {
           )}
           <div className="eyebrow" style={{marginTop:18, marginBottom:10}}>VARIANTS</div>
           {(form.variants || []).map((v, i) => (
-            <div key={i} style={{display:'grid', gridTemplateColumns:'1.5fr 1.2fr 80px 70px 28px', gap:8, marginBottom:8}}>
-              <input className="input" placeholder="e.g. With Certificate" value={v.name||''} onChange={e => { const vs = [...(form.variants||[])]; vs[i] = {...vs[i], name: e.target.value}; setForm({...form, variants: vs}); }} />
-              <input className="input" value={v.sku||''} onChange={e => { const vs = [...(form.variants||[])]; vs[i] = {...vs[i], sku: e.target.value}; setForm({...form, variants: vs}); }} />
-              <input className="input" type="number" value={v.price||0} onChange={e => { const vs = [...(form.variants||[])]; vs[i] = {...vs[i], price: Number(e.target.value)}; setForm({...form, variants: vs}); }} />
-              <input className="input" type="number" value={v.stock||0} onChange={e => { const vs = [...(form.variants||[])]; vs[i] = {...vs[i], stock: Number(e.target.value)}; setForm({...form, variants: vs}); }} />
-              <button className="icon-btn" onClick={() => { const vs = (form.variants||[]).filter((_,j) => j!==i); setForm({...form, variants: vs}); }}>×</button>
+            <div key={i} style={{marginBottom:14, padding:10, border:'1px solid var(--line)', background:'var(--bg-elev)'}}>
+              <div style={{display:'grid', gridTemplateColumns:'1.5fr 1.2fr 80px 70px 28px', gap:8, marginBottom: (form.images||[]).length > 0 ? 8 : 0}}>
+                <input className="input" placeholder="e.g. With Certificate" value={v.name||''} onChange={e => { const vs = [...(form.variants||[])]; vs[i] = {...vs[i], name: e.target.value}; setForm({...form, variants: vs}); }} />
+                <input className="input" value={v.sku||''} onChange={e => { const vs = [...(form.variants||[])]; vs[i] = {...vs[i], sku: e.target.value}; setForm({...form, variants: vs}); }} />
+                <input className="input" type="number" value={v.price||0} onChange={e => { const vs = [...(form.variants||[])]; vs[i] = {...vs[i], price: Number(e.target.value)}; setForm({...form, variants: vs}); }} />
+                <input className="input" type="number" value={v.stock||0} onChange={e => { const vs = [...(form.variants||[])]; vs[i] = {...vs[i], stock: Number(e.target.value)}; setForm({...form, variants: vs}); }} />
+                <button className="icon-btn" onClick={() => { const vs = (form.variants||[]).filter((_,j) => j!==i); setForm({...form, variants: vs}); }}>×</button>
+              </div>
+              {(form.images||[]).length > 0 && (
+                <div>
+                  <div style={{fontSize:11, color:'var(--ink-3)', marginBottom:6}}>Linked images (shown when variant selected)</div>
+                  <div style={{display:'flex', gap:6, flexWrap:'wrap'}}>
+                    {(form.images||[]).map((url, imgIdx) => {
+                      const linked = (v.images||[]).includes(url);
+                      return (
+                        <div key={imgIdx} onClick={() => {
+                          const vs = [...(form.variants||[])];
+                          const cur = vs[i].images || [];
+                          vs[i] = {...vs[i], images: linked ? cur.filter(u => u !== url) : [...cur, url]};
+                          setForm({...form, variants: vs});
+                        }} style={{width:48, height:48, cursor:'pointer', position:'relative', flexShrink:0}}>
+                          <img src={url} alt="" style={{width:'100%', height:'100%', objectFit:'cover', display:'block', opacity: linked ? 1 : 0.35}} />
+                          {linked && <div style={{position:'absolute', bottom:2, right:2, width:14, height:14, background:'var(--rust)', borderRadius:2, display:'grid', placeItems:'center'}}>
+                            <svg width="8" height="8" viewBox="0 0 10 10"><polyline points="1,5 4,8 9,2" fill="none" stroke="#fff" strokeWidth="2"/></svg>
+                          </div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
           <button className="btn btn-ghost btn-sm" style={{marginTop:4}} onClick={() => setForm({...form, variants: [...(form.variants||[]), {sku:'', name:'', price:0, stock:0}]})}>Add variant</button>
