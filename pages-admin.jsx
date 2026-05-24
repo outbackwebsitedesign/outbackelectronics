@@ -2971,7 +2971,7 @@ function AdminSettings() {
         <div style={{marginTop:14, display:'grid', gap:10}}>
           <div style={{padding:'14px', background:'var(--bg-elev)', border:'1px solid var(--line)'}}>
             <div style={{fontWeight:600}}>Rebuild search index</div>
-            <p style={{fontSize:13, color:'var(--ink-2)', margin:'4px 0 8px'}}>Re-indexes products, tutorials, and forum threads. Takes ~3 min.</p>
+            <p style={{fontSize:13, color:'var(--ink-2)', margin:'4px 0 8px'}}>Re-indexes products, tutorials, and forum threads.</p>
             {dangerMsg.rebuild && <div style={{fontSize:12, marginBottom:6, color:dangerMsg.rebuild.includes('✓')?'var(--eucalyptus)':'var(--rust)'}}>{dangerMsg.rebuild}</div>}
             <button className="btn btn-ghost btn-sm" disabled={sectionBusy==='rebuild'} onClick={async () => {
               setSectionBusy('rebuild');
