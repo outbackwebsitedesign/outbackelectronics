@@ -169,15 +169,15 @@ function AccountDropdown({ go, onClose, user }) {
         </div>
       )}
       {[
-        { label:'Profile',           action: () => portal('/profile') },
-        { label:'My Subscriptions',  action: () => portal('/subscriptions') },
-        { label:'My Rewards',        action: () => portal('/rewards') },
-        { label:'My Wallet',         action: () => portal('/wallet') },
+        { label:'Profile',           action: () => portal('/#account') },
+        { label:'My Subscriptions',  action: () => portal('/#memberships') },
+        { label:'My Rewards',        action: () => portal('/#rewards') },
+        { label:'My Wallet',         action: () => portal('/#wallet') },
         { label:'My Groups',         action: () => { go('groups'); onClose(); } },
-        { label:'My Orders',         action: () => portal('/orders') },
-        { label:'My Addresses',      action: () => portal('/addresses') },
-        { label:'My Bookings',       action: () => portal('/bookings') },
-        { label:'My Account',        action: () => portal('/account') },
+        { label:'My Orders',         action: () => portal('/#orders') },
+        { label:'My Addresses',      action: () => portal('/#addresses') },
+        { label:'My Bookings',       action: () => portal('/#bookings') },
+        { label:'My Account',        action: () => portal('/#account') },
         { label:'Log Out',           action: () => { fetch('https://portal.outbackelectronics.com.au/api/portal/auth/logout', { method: 'POST', headers: { 'X-CSRF-Token': getCsrf() }, credentials: 'include' }).then(() => window.location.reload()); onClose(); } },
       ].map((item, i, arr) => (
         <button key={item.label} onClick={() => { item.action(); onClose(); }}
@@ -898,9 +898,29 @@ function App() {
 
   const [page, setPage] = useState(() => {
     const path = location.pathname.replace(/^\/+/, '');
+    if (path.startsWith('product/')) return 'product';
+    if (path.startsWith('service/')) return 'service';
     return KNOWN_PAGES.includes(path) ? path : 'home';
   });
   const [pageParams, setPageParams] = useState(null);
+
+  // Resolve deep-linked product/service on first load
+  useEffect(() => {
+    const path = location.pathname.replace(/^\/+/, '');
+    if (path.startsWith('product/') && !pageParams) {
+      const id = decodeURIComponent(path.slice('product/'.length));
+      fetch('/api/catalog/products').then(r => r.json()).then(d => {
+        const p = (d.items || []).find(x => x.sku === id || String(x.id) === id || x.slug === id);
+        if (p) setPageParams(p);
+      }).catch(() => {});
+    } else if (path.startsWith('service/') && !pageParams) {
+      const id = decodeURIComponent(path.slice('service/'.length));
+      fetch('/api/catalog/services').then(r => r.json()).then(d => {
+        const s = (d.items || []).find(x => String(x.id) === id || x.slug === id);
+        if (s) setPageParams(s);
+      }).catch(() => {});
+    }
+  }, []);
   const [cart, setCart] = useState(() => {
     try { return JSON.parse(localStorage.getItem('oe_cart') || '[]'); } catch { return []; }
   });
@@ -910,14 +930,23 @@ function App() {
   const portalUser = usePortalUser();
 
   useEffect(() => {
-    const target = `/${page}`;
+    let target = `/${page}`;
+    if (page === 'product' && pageParams) {
+      const id = pageParams.sku || pageParams.id || pageParams.slug;
+      if (id) target = `/product/${encodeURIComponent(id)}`;
+    } else if (page === 'service' && pageParams) {
+      const id = pageParams.id || pageParams.slug;
+      if (id) target = `/service/${encodeURIComponent(id)}`;
+    }
     if (location.pathname !== target) window.history.pushState({}, '', target);
     window.scrollTo({top:0});
-  }, [page]);
+  }, [page, pageParams]);
 
   useEffect(() => {
     const onPop = () => {
       const path = location.pathname.replace(/^\/+/, '');
+      if (path.startsWith('product/')) { setPage('product'); setPageParams(null); return; }
+      if (path.startsWith('service/')) { setPage('service'); setPageParams(null); return; }
       if (KNOWN_PAGES.includes(path)) setPage(path);
     };
     window.addEventListener('popstate', onPop);
