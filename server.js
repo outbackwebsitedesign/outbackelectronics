@@ -1310,6 +1310,21 @@ const mainServer = http.createServer(async (req, res) => {
 const forumServer = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
+  const { maintenance: forumMaintenance } = readSettings();
+  if (forumMaintenance && forumMaintenance.enabled) {
+    if (url.pathname === '/maintenance') {
+      const mFile = path.join(__dirname, 'dist', 'maintenance.html');
+      fs.readFile(mFile, (err, data) => {
+        if (err) { res.writeHead(503); return res.end('Service temporarily unavailable.'); }
+        res.writeHead(503, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache, must-revalidate' });
+        res.end(data);
+      });
+      return;
+    }
+    if (req.method === 'GET') { res.writeHead(302, { 'Location': '/maintenance' }); return res.end(); }
+    return json(res, 503, { error: 'maintenance', message: 'Site is temporarily under maintenance.' });
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/csrf-token') {
     const token = ensureCsrfCookie(req, res);
     return json(res, 200, { token });
@@ -2326,6 +2341,21 @@ const PORTAL_CORS_ORIGIN = process.env.SITE_URL || `http://localhost:${MAIN_PORT
 const portalServer = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
+  const { maintenance: portalMaintenance } = readSettings();
+  if (portalMaintenance && portalMaintenance.enabled) {
+    if (url.pathname === '/maintenance') {
+      const mFile = path.join(__dirname, 'dist', 'maintenance.html');
+      fs.readFile(mFile, (err, data) => {
+        if (err) { res.writeHead(503); return res.end('Service temporarily unavailable.'); }
+        res.writeHead(503, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache, must-revalidate' });
+        res.end(data);
+      });
+      return;
+    }
+    if (req.method === 'GET') { res.writeHead(302, { 'Location': '/maintenance' }); return res.end(); }
+    return json(res, 503, { error: 'maintenance', message: 'Site is temporarily under maintenance.' });
+  }
+
   // CORS for cross-origin endpoints (portal runs on a different port/origin)
   const crossOriginPaths = ['/api/portal/auth/logout', '/api/portal/auth/me', '/api/csrf-token'];
   if (crossOriginPaths.includes(url.pathname) || url.pathname.startsWith('/api/portal/')) {
@@ -2625,6 +2655,22 @@ const portalServer = http.createServer(async (req, res) => {
 
 const gamesServer = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
+
+  const { maintenance: gamesMaintenance } = readSettings();
+  if (gamesMaintenance && gamesMaintenance.enabled) {
+    if (url.pathname === '/maintenance') {
+      const mFile = path.join(__dirname, 'dist', 'maintenance.html');
+      fs.readFile(mFile, (err, data) => {
+        if (err) { res.writeHead(503); return res.end('Service temporarily unavailable.'); }
+        res.writeHead(503, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache, must-revalidate' });
+        res.end(data);
+      });
+      return;
+    }
+    if (req.method === 'GET') { res.writeHead(302, { 'Location': '/maintenance' }); return res.end(); }
+    return json(res, 503, { error: 'maintenance', message: 'Site is temporarily under maintenance.' });
+  }
+
   return serveStatic(req, res, url.pathname, '/dist/games.html', null);
 });
 
