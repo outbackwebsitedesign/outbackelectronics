@@ -552,10 +552,10 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null) {
     safePath = rootFile;
   }
 
-  // For the main SPA (served from dist/), check dist/assets/ before falling back to assets/
+  // For dist-rooted servers, check dist/ first for any path, then fall back to the root
   const distRoot = rootFile.startsWith('/dist/');
   const candidates = [];
-  if (distRoot && safePath.startsWith('/assets/')) {
+  if (distRoot) {
     candidates.push(path.join(__dirname, 'dist', safePath));
   }
   candidates.push(path.join(__dirname, safePath));
@@ -635,8 +635,8 @@ function checkMaintenance(req, res, url) {
 
   if (!enabled) return false;
 
-  // Let the favicon through so the maintenance page can render it
-  if (url.pathname === '/favicon.png' || url.pathname === '/favicon.ico') return false;
+  // Let static root assets through so the maintenance page can render them
+  if (['/favicon.png', '/favicon.ico', '/logo.webp'].includes(url.pathname)) return false;
 
   if (url.pathname === '/maintenance') { sendMaintenance(res); return true; }
 
