@@ -2747,6 +2747,8 @@ function AdminSettings() {
   const [savedSiteContent, setSavedSiteContent] = useState(defaultSiteContent);
   const [integrations, setIntegrations] = useState([]);
   const [savedIntegrations, setSavedIntegrations] = useState([]);
+  const [integrationModal, setIntegrationModal] = useState(null);
+  const [integrationForm, setIntegrationForm] = useState({ name: '', endpoint: '', secretKey: '', webhookSecret: '', apiKey: '', notes: '' });
   const [staffMembers, setStaffMembers] = useState([]);
   const [staffForm, setStaffForm] = useState(null);
   const [staffBusy, setStaffBusy] = useState(false);
@@ -2812,7 +2814,7 @@ function AdminSettings() {
         enabled: !!payload.announcement?.enabled,
         expiresAt: (payload.announcement?.expiresAt || '').trim(),
       },
-      integrations: (payload.integrations || []).map(r => [r[0], r[1], !!r[2]]),
+      integrations: (payload.integrations || []).map(r => [r[0], r[1], !!r[2], r[3] || {}]),
       siteContent: {
         aiHeading: (payload.siteContent?.aiHeading || '').trim(),
         aiBody: (payload.siteContent?.aiBody || '').trim(),
@@ -2843,7 +2845,40 @@ function AdminSettings() {
   const onAnnouncementSubmit = (e) => { e.preventDefault(); persistSettings({ shop: savedShop, announcement, integrations: savedIntegrations, siteContent: savedSiteContent }, 'announcement'); };
   const onIntegrationsSubmit = (e) => { e.preventDefault(); persistSettings({ shop: savedShop, announcement: savedAnnouncement, integrations, siteContent: savedSiteContent }, 'integrations'); };
   const onSiteContentSubmit = (e) => { e.preventDefault(); persistSettings({ shop: savedShop, announcement: savedAnnouncement, integrations: savedIntegrations, siteContent }, 'siteContent'); };
-  const handleIntegrationAction = (idx) => setIntegrations(integrations.map((row,i)=>i===idx?[row[0], row[1], !row[2]]:row));
+  const openIntegrationModal = (idx) => {
+    const r = integrations[idx];
+    const cfg = r[3] || {};
+    setIntegrationForm({ name: r[0], endpoint: r[1], secretKey: cfg.secretKey || '', webhookSecret: cfg.webhookSecret || '', apiKey: cfg.apiKey || '', notes: cfg.notes || '' });
+    setIntegrationModal({ mode: 'edit', idx });
+  };
+  const openAddIntegrationModal = () => {
+    setIntegrationForm({ name: '', endpoint: '', secretKey: '', webhookSecret: '', apiKey: '', notes: '' });
+    setIntegrationModal({ mode: 'add', idx: null });
+  };
+  const saveIntegrationModal = () => {
+    const { mode, idx } = integrationModal;
+    const isStripe = integrationForm.name === 'Stripe';
+    const config = isStripe
+      ? { secretKey: integrationForm.secretKey, webhookSecret: integrationForm.webhookSecret }
+      : { apiKey: integrationForm.apiKey, notes: integrationForm.notes };
+    if (mode === 'add') {
+      if (!integrationForm.name.trim()) return;
+      setIntegrations([...integrations, [integrationForm.name.trim(), integrationForm.endpoint.trim(), true, config]]);
+    } else {
+      setIntegrations(integrations.map((r, i) => i === idx ? [r[0], integrationForm.endpoint.trim(), true, config] : r));
+    }
+    setIntegrationModal(null);
+  };
+  const disconnectIntegration = () => {
+    const { idx } = integrationModal;
+    setIntegrations(integrations.map((r, i) => i === idx ? [r[0], r[1], false, {}] : r));
+    setIntegrationModal(null);
+  };
+  const removeIntegration = () => {
+    const { idx } = integrationModal;
+    setIntegrations(integrations.filter((_, i) => i !== idx));
+    setIntegrationModal(null);
+  };
   const openStaffForm = (member) => setStaffForm(member ? { ...member, pin:'' } : { name:'', role:'staff', color:'#d7c7a6', email:'', phone:'', status:'active', pin:'' });
   const saveStaffMember = async () => {
     if (!staffForm.name.trim()) return;
@@ -2949,15 +2984,19 @@ function AdminSettings() {
         )}
       </div>
       <form onSubmit={onIntegrationsSubmit} style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24}}>
-        <span className="eyebrow">INTEGRATIONS</span>
+        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+          <span className="eyebrow">INTEGRATIONS</span>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={openAddIntegrationModal}>+ Add</button>
+        </div>
+        {integrations.length === 0 && <div style={{marginTop:12, fontSize:13, color:'var(--ink-3)'}}>No integrations configured.</div>}
         <div style={{display:'grid', gap:10, marginTop:12, fontSize:14}}>
           {integrations.map((r,i) => (
-            <div key={i} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 0', borderBottom: i<5?'1px solid var(--line)':'none'}}>
+            <div key={i} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 0', borderBottom: i < integrations.length - 1 ? '1px solid var(--line)' : 'none'}}>
               <div>
                 <div style={{fontWeight:600}}>{r[0]}</div>
-                <div className="mono" style={{fontSize:11, color:r[2]?'var(--eucalyptus)':'var(--ink-3)', marginTop:2}}>{r[1].toUpperCase()}</div>
+                <div className="mono" style={{fontSize:11, color:r[2]?'var(--eucalyptus)':'var(--ink-3)', marginTop:2}}>{r[1].toUpperCase()} · {r[2] ? 'CONNECTED' : 'DISCONNECTED'}</div>
               </div>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => handleIntegrationAction(i)}>{r[2]?'Configure':'Connect'}</button>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => openIntegrationModal(i)}>{r[2]?'Configure':'Connect'}</button>
             </div>
           ))}
         </div>
@@ -3044,6 +3083,43 @@ function AdminSettings() {
           </div>
         </div>
       </div>
+      {integrationModal && (
+        <div style={{position:'fixed', inset:0, zIndex:500, background:'rgba(15,13,10,0.75)', display:'flex', flexDirection:'column', alignItems:'center', padding:'40px 16px', overflowY:'auto'}} onClick={() => setIntegrationModal(null)}>
+          <div style={{width:'100%', maxWidth:480, background:'var(--paper)', padding:32, boxShadow:'0 16px 48px rgba(0,0,0,.35)'}} onClick={e => e.stopPropagation()}>
+            <div style={{fontWeight:700, fontSize:16, marginBottom:16}}>
+              {integrationModal.mode === 'add' ? 'Add Integration' : `Configure ${integrationForm.name}`}
+            </div>
+            {integrationModal.mode === 'add' && <>
+              <label className="field"><span className="label">Name</span><input className="input" value={integrationForm.name} onChange={e => setIntegrationForm({...integrationForm, name: e.target.value})} placeholder="e.g. Mailchimp"/></label>
+              <label className="field"><span className="label">Endpoint</span><input className="input" value={integrationForm.endpoint} onChange={e => setIntegrationForm({...integrationForm, endpoint: e.target.value})} placeholder="e.g. api.mailchimp.com"/></label>
+              <label className="field"><span className="label">API Key</span><input className="input" type="password" value={integrationForm.apiKey} onChange={e => setIntegrationForm({...integrationForm, apiKey: e.target.value})}/></label>
+              <label className="field"><span className="label">Notes</span><input className="input" value={integrationForm.notes} onChange={e => setIntegrationForm({...integrationForm, notes: e.target.value})}/></label>
+            </>}
+            {integrationModal.mode === 'edit' && integrationForm.name === 'Stripe' && <>
+              <label className="field"><span className="label">Secret Key</span><input className="input" type="password" value={integrationForm.secretKey} onChange={e => setIntegrationForm({...integrationForm, secretKey: e.target.value})} placeholder="sk_live_… or sk_test_…"/></label>
+              <label className="field"><span className="label">Webhook Secret</span><input className="input" type="password" value={integrationForm.webhookSecret} onChange={e => setIntegrationForm({...integrationForm, webhookSecret: e.target.value})} placeholder="whsec_…"/></label>
+              <p style={{fontSize:11, color:'var(--ink-3)', margin:'-4px 0 8px'}}>Find these in Stripe Dashboard → Developers → API keys / Webhooks</p>
+            </>}
+            {integrationModal.mode === 'edit' && integrationForm.name !== 'Stripe' && <>
+              <label className="field"><span className="label">Endpoint</span><input className="input" value={integrationForm.endpoint} onChange={e => setIntegrationForm({...integrationForm, endpoint: e.target.value})}/></label>
+              <label className="field"><span className="label">API Key</span><input className="input" type="password" value={integrationForm.apiKey} onChange={e => setIntegrationForm({...integrationForm, apiKey: e.target.value})}/></label>
+              <label className="field"><span className="label">Notes</span><input className="input" value={integrationForm.notes} onChange={e => setIntegrationForm({...integrationForm, notes: e.target.value})}/></label>
+            </>}
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:16}}>
+              <div className="row-flex" style={{gap:8}}>
+                <button type="button" className="btn btn-rust btn-sm" onClick={saveIntegrationModal}>{integrationModal.mode === 'add' ? 'Add' : 'Save'}</button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setIntegrationModal(null)}>Cancel</button>
+              </div>
+              {integrationModal.mode === 'edit' && (
+                <div className="row-flex" style={{gap:8}}>
+                  {integrations[integrationModal.idx]?.[2] && <button type="button" className="btn btn-ghost btn-sm" style={{color:'var(--ink-3)'}} onClick={disconnectIntegration}>Disconnect</button>}
+                  <button type="button" className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={removeIntegration}>Remove</button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
