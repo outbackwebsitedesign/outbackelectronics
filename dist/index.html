@@ -312,6 +312,22 @@
     50% { opacity: 0.3; }
   }
 </style>
+<script>
+(function () {
+  function check() {
+    fetch('/api/maintenance-status')
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d.enabled) {
+          var from = encodeURIComponent(window.location.pathname + window.location.search);
+          window.location.href = '/maintenance?from=' + from;
+        }
+      })
+      .catch(function () {});
+  }
+  setInterval(check, 5000);
+}());
+</script>
   <script type="module" crossorigin src="/assets/main-qQff0afl.js"></script>
   <link rel="modulepreload" crossorigin href="/assets/vendor-C8w-UNLI.js">
   <link rel="modulepreload" crossorigin href="/assets/index-C0octaUy.js">

@@ -147,6 +147,22 @@
   }
 </style>
 <link rel="stylesheet" href="/mobile.css">
+<script>
+(function () {
+  function check() {
+    fetch('/api/maintenance-status')
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d.enabled) {
+          var from = encodeURIComponent(window.location.pathname + window.location.search);
+          window.location.href = '/maintenance?from=' + from;
+        }
+      })
+      .catch(function () {});
+  }
+  setInterval(check, 5000);
+}());
+</script>
 </head>
 <body>
 <div id="root"></div>
