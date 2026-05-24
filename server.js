@@ -927,6 +927,30 @@ function verifyStripeSignature(rawBody, sigHeader, secret) {
 const mainServer = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
+  // Maintenance mode — block all traffic except the maintenance landing page itself
+  const { maintenance } = readSettings();
+  if (maintenance && maintenance.enabled) {
+    if (url.pathname === '/maintenance') {
+      const mFile = path.join(__dirname, 'dist', 'maintenance.html');
+      fs.readFile(mFile, (err, data) => {
+        if (err) { res.writeHead(503); return res.end('Service temporarily unavailable.'); }
+        res.writeHead(503, {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'no-cache, must-revalidate',
+          'X-Frame-Options': 'SAMEORIGIN',
+          'X-Content-Type-Options': 'nosniff',
+        });
+        res.end(data);
+      });
+      return;
+    }
+    if (req.method === 'GET') {
+      res.writeHead(302, { 'Location': '/maintenance' });
+      return res.end();
+    }
+    return json(res, 503, { error: 'maintenance', message: 'Site is temporarily under maintenance.' });
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/csrf-token') {
     const token = ensureCsrfCookie(req, res);
     return json(res, 200, { token });
