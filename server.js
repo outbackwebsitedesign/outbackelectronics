@@ -578,11 +578,13 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null) {
     candidates.push(path.join(__dirname, 'dist', safePath));
   }
   candidates.push(path.join(__dirname, safePath));
+  // Also check public/ for static-only files (sw.js, offline.html, etc.)
+  candidates.push(path.join(__dirname, 'public', safePath));
 
   const tryRead = (paths, idx) => {
-    if (idx >= paths.length) { res.writeHead(404); return res.end('Not found'); }
+    if (idx >= paths.length) { return sendErrorPage(res, 404, 'Not found', ERROR_404_HTML); }
     const filePath = paths[idx];
-    if (!filePath.startsWith(__dirname)) { res.writeHead(403); return res.end('Forbidden'); }
+    if (!filePath.startsWith(__dirname)) { return sendErrorPage(res, 403, 'Forbidden', ERROR_403_HTML); }
     fs.readFile(filePath, (err, data) => {
       if (err) return tryRead(paths, idx + 1);
       const ext = path.extname(filePath).toLowerCase();
@@ -614,6 +616,29 @@ const MAINTENANCE_HTML = (() => {
   try { return fs.readFileSync(path.join(__dirname, 'dist', 'maintenance.html'), 'utf8'); }
   catch (e) { console.error('[maintenance] could not read dist/maintenance.html:', e.message); return null; }
 })();
+
+function loadErrorPage(name) {
+  for (const p of [path.join(__dirname, 'dist', name), path.join(__dirname, name)]) {
+    try { return fs.readFileSync(p, 'utf8'); } catch {}
+  }
+  return null;
+}
+const ERROR_404_HTML = loadErrorPage('404.html');
+const ERROR_500_HTML = loadErrorPage('500.html');
+const ERROR_403_HTML = loadErrorPage('403.html');
+const ERROR_401_HTML = loadErrorPage('401.html');
+const OFFLINE_HTML   = loadErrorPage('offline.html');
+
+function sendErrorPage(res, status, fallback, html) {
+  if (!html) { res.writeHead(status); return res.end(fallback); }
+  res.writeHead(status, {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Cache-Control': 'no-cache, must-revalidate',
+    'X-Frame-Options': 'SAMEORIGIN',
+    'X-Content-Type-Options': 'nosniff',
+  });
+  res.end(html);
+}
 
 function sendMaintenance(res) {
   if (!MAINTENANCE_HTML) { res.writeHead(503); return res.end('Service temporarily unavailable.'); }

@@ -314,6 +314,11 @@
 </style>
 <link rel="stylesheet" href="/mobile.css">
 <script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(function () {});
+}
+</script>
+<script>
 (function () {
   function check() {
     fetch('/api/maintenance-status')
