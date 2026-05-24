@@ -204,10 +204,10 @@ function HomePage({ go, addToCart, portalUser }) {
                 : recentThreads.map((t,i)=>(
                 <li key={t.id || i} style={{display:'flex', justifyContent:'space-between', padding:'10px 0', borderBottom:'1px solid var(--line)'}}>
                   <div>
-                    <a onClick={() => go('forum')} style={{fontWeight:500, cursor:'pointer'}}>{t.title}</a>
+                    <a href="https://forum.outbackelectronics.com.au" target="_blank" rel="noopener noreferrer" style={{fontWeight:500, cursor:'pointer'}}>{t.title}</a>
                     <div className="mono" style={{fontSize:10, color:'var(--ink-2)', marginTop:3}}>{t.cat ? t.cat.toUpperCase() + ' · ' : ''}{t.replies} REPLIES</div>
                   </div>
-                  <a className="mono" style={{fontSize:11, color:'var(--rust)', cursor:'pointer'}} onClick={() => go('forum')}>→</a>
+                  <a href="https://forum.outbackelectronics.com.au" target="_blank" rel="noopener noreferrer" className="mono" style={{fontSize:11, color:'var(--rust)', cursor:'pointer'}}>→</a>
                 </li>
               ))}
             </ul>
