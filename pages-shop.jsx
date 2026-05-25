@@ -3,6 +3,13 @@ import React, { useState, useEffect, useMemo, useContext } from 'react';
 const _fallbackShopCtx = React.createContext({});
 const useShop = () => useContext(window.__ShopContext__ || _fallbackShopCtx);
 
+function getCsrf() {
+  return document.cookie.split(';').reduce((v, c) => {
+    const [k, val] = c.trim().split('=');
+    return k === '_csrf' ? decodeURIComponent(val || '') : v;
+  }, '');
+}
+
 // ============================================================
 // HOME
 // ============================================================
@@ -104,7 +111,7 @@ function HomePage({ go, addToCart, portalUser }) {
                 ? <img src={heroProduct.images[0]} alt={heroProduct.name} style={{width:'100%', aspectRatio:'4/5', objectFit:'cover', display:'block'}} />
                 : <div className="slot slot-rust" style={{aspectRatio: '4/5'}}>RUGGED LAPTOP ON RED-DIRT WORKBENCH</div>}
               {heroProduct && (
-                <div className="card-paper" style={{position:'absolute', bottom:-24, left:-24, padding:18, width:240, boxShadow:'var(--shadow)'}}>
+                <div className="card-paper" style={{position:'absolute', bottom:16, left:16, padding:18, width:240, boxShadow:'var(--shadow)'}}>
                   <div className="eyebrow">FIELD-TESTED</div>
                   <div className="serif" style={{fontSize:22, marginTop:6, lineHeight:1.1}}>{heroProduct.name}{heroProduct.cond ? ` // ${heroProduct.cond}` : ''}</div>
                   <div className="row-flex" style={{justifyContent:'space-between', marginTop:10}}>
@@ -236,15 +243,20 @@ function HomePage({ go, addToCart, portalUser }) {
             <ul style={{listStyle:'none', padding:0, margin:'14px 0 0', display:'grid', gap:10}}>
               {recentThreads.length === 0
                 ? <li style={{color:'var(--ink-2)', fontSize:13}}>No recent threads.</li>
-                : recentThreads.map((t,i)=>(
-                <li key={t.id || i} style={{display:'flex', justifyContent:'space-between', padding:'10px 0', borderBottom:'1px solid var(--line)'}}>
-                  <div>
-                    <a href="https://forum.outbackelectronics.com.au" target="_blank" rel="noopener noreferrer" style={{fontWeight:500, cursor:'pointer'}}>{t.title}</a>
-                    <div className="mono" style={{fontSize:10, color:'var(--ink-2)', marginTop:3}}>{t.cat ? t.cat.toUpperCase() + ' · ' : ''}{t.replies} REPLIES</div>
-                  </div>
-                  <a href="https://forum.outbackelectronics.com.au" target="_blank" rel="noopener noreferrer" className="mono" style={{fontSize:11, color:'var(--rust)', cursor:'pointer'}}>→</a>
-                </li>
-              ))}
+                : recentThreads.map((t,i)=>{
+                  const threadUrl = t.id
+                    ? `${shop._forumUrl || 'https://forum.outbackelectronics.com.au'}/thread/${t.id}`
+                    : (shop._forumUrl || 'https://forum.outbackelectronics.com.au');
+                  return (
+                    <li key={t.id || i} style={{display:'flex', justifyContent:'space-between', padding:'10px 0', borderBottom:'1px solid var(--line)'}}>
+                      <div>
+                        <a href={threadUrl} target="_blank" rel="noopener noreferrer" style={{fontWeight:500, cursor:'pointer'}}>{t.title}</a>
+                        <div className="mono" style={{fontSize:10, color:'var(--ink-2)', marginTop:3}}>{t.cat ? t.cat.toUpperCase() + ' · ' : ''}{t.replies} REPLIES</div>
+                      </div>
+                      <a href={threadUrl} target="_blank" rel="noopener noreferrer" className="mono" style={{fontSize:11, color:'var(--rust)', cursor:'pointer'}}>→</a>
+                    </li>
+                  );
+                })}
             </ul>
           </div>
         </div>
@@ -377,7 +389,7 @@ function ShopPage({ go, addToCart, pageParams }) {
           <div className="eyebrow" style={{marginBottom: 10}}>CATEGORY</div>
           <div className="stack" style={{gap:4}}>
             {['All', ...filterMeta.categories].map(c => (
-              <a key={c} onClick={() => setCat(c)} style={{padding:'6px 8px', cursor:'pointer', fontSize:14, borderLeft: cat===c ? '2px solid var(--rust)':'2px solid transparent', color: cat===c ? 'var(--rust)' : 'var(--ink)', fontWeight: cat===c ? 600 : 400}}>{c}</a>
+              <button key={c} onClick={() => setCat(c)} style={{padding:'6px 8px', cursor:'pointer', fontSize:14, borderLeft: cat===c ? '2px solid var(--rust)':'2px solid transparent', color: cat===c ? 'var(--rust)' : 'var(--ink)', fontWeight: cat===c ? 600 : 400, background:'none', border:'none', borderLeft: cat===c ? '2px solid var(--rust)':'2px solid transparent', textAlign:'left', width:'100%'}}>{c}</button>
             ))}
           </div>
           <hr className="thin" />
@@ -533,7 +545,7 @@ function ServicesPage({ go }) {
               <p style={{marginTop: 10, color:'var(--ink-2)', fontSize:14}}>{s.description}</p>
               <div className="row-flex" style={{justifyContent:'space-between', marginTop: 18, borderTop:'1px solid var(--line)', paddingTop:14}}>
                 <span className="price" style={{fontSize:20}}>{s.priceLine}</span>
-                <a className="mono" style={{fontSize:11, color:'var(--rust)', cursor:'pointer'}} onClick={() => go('service', s)}>VIEW →</a>
+                <button className="mono" style={{fontSize:11, color:'var(--rust)', cursor:'pointer', background:'none', border:'none', padding:0}} onClick={() => go('service', s)}>VIEW →</button>
               </div>
             </div>
           ))}
@@ -868,6 +880,7 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
   const [activeImage, setActiveImage] = useState(null);
   const [notifyEmail, setNotifyEmail] = useState('');
   const [notifySent, setNotifySent] = useState(false);
+  const [relatedProducts, setRelatedProducts] = useState([]);
 
   useEffect(() => {
     if (pageParams) {
@@ -877,6 +890,19 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
       const firstImg = (firstVariant?.images?.length ? firstVariant.images[0] : null) || (pageParams.images?.[0] ?? null);
       setActiveImage(firstImg);
     }
+  }, [pageParams]);
+
+  useEffect(() => {
+    if (!pageParams) return;
+    fetch('/api/catalog/products').then(r => r.ok ? r.json() : null).then(d => {
+      if (!d) return;
+      const all = d.items || [];
+      const currentKey = pageParams.sku || pageParams.id;
+      const sameCategory = all.filter(p => p.category === pageParams.category && (p.sku || p.id) !== currentKey);
+      const pool = sameCategory.length >= 4 ? sameCategory : all.filter(p => (p.sku || p.id) !== currentKey);
+      const shuffled = pool.sort(() => 0.5 - Math.random()).slice(0, 4);
+      setRelatedProducts(shuffled);
+    }).catch(() => {});
   }, [pageParams]);
 
   const selectVariant = (v) => {
@@ -1000,6 +1026,20 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
           </div>
         </div>
       </section>
+      {relatedProducts.length > 0 && (
+        <section className="container" style={{paddingTop:40, paddingBottom:56}}>
+          <div className="row-flex" style={{justifyContent:'space-between', marginBottom:20, alignItems:'baseline'}}>
+            <div>
+              <span className="eyebrow">MORE FROM THE SHOP</span>
+              <h3 className="serif" style={{fontSize:28, marginTop:4}}>You might also like</h3>
+            </div>
+            <button className="mono" style={{fontSize:12, color:'var(--rust)', background:'none', border:'none', cursor:'pointer', padding:0}} onClick={() => go('shop')}>ALL LISTINGS →</button>
+          </div>
+          <div className="grid-4">
+            {relatedProducts.map((p, i) => <ProductCard key={p.id || i} p={p} onClick={() => go('product', p)} />)}
+          </div>
+        </section>
+      )}
     </>
   );
 }
@@ -1183,10 +1223,19 @@ function GiftCardsPage({ go, addToCart }) {
 // ============================================================
 // MEMBERSHIPS
 // ============================================================
-function MembershipsPage({ go }) {
+function MembershipsPage({ go, portalUser }) {
+  const shop = useShop();
   const [tiers, setTiers] = useState([]);
+  const [tiersLoading, setTiersLoading] = useState(true);
+  const [checkingOut, setCheckingOut] = useState(null); // tier id currently processing
+  const [checkoutError, setCheckoutError] = useState(null);
+
   useEffect(() => {
-    fetch('/api/memberships').then(r => r.json()).then(d => setTiers(d.items || [])).catch(() => {});
+    fetch('/api/memberships')
+      .then(r => r.json())
+      .then(d => setTiers(d.items || []))
+      .catch(() => {})
+      .finally(() => setTiersLoading(false));
   }, []);
 
   const defaultTiers = [
@@ -1211,8 +1260,33 @@ function MembershipsPage({ go }) {
     },
   ];
 
-  const usingDefaults = tiers.length === 0;
+  const usingDefaults = !tiersLoading && tiers.length === 0;
   const displayTiers = usingDefaults ? defaultTiers : tiers;
+
+  const portalUrl = shop._portalUrl || 'https://portal.outbackelectronics.com.au';
+
+  const startCheckout = async (tier) => {
+    setCheckoutError(null);
+    setCheckingOut(tier.id);
+    try {
+      const priceAud = Number(tier.priceAud || tier.price);
+      const resp = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() },
+        body: JSON.stringify({ items: [{ productId: tier.id, name: tier.name, priceAud, quantity: 1 }] }),
+      });
+      const data = await resp.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setCheckoutError(data.message || 'Could not start checkout. Please try again.');
+      }
+    } catch {
+      setCheckoutError('Could not connect to payment provider. Please try again.');
+    } finally {
+      setCheckingOut(null);
+    }
+  };
 
   return (
     <>
@@ -1220,35 +1294,65 @@ function MembershipsPage({ go }) {
         lead="Get access to member-only groups, exclusive content, and workshop perks. Cancel any time." />
       <section className="container" style={{paddingTop:40, paddingBottom:56}}>
         {usingDefaults && (
-          <div className="notice" style={{marginBottom:24}}>
-            <span className="tag tag-outline">COMING SOON</span>
-            <div style={{fontSize:13, color:'var(--ink-2)'}}>Memberships are not yet active. Prices and tiers shown below are illustrative only — you cannot purchase a membership at this time.</div>
+          <div style={{marginBottom:28, padding:'18px 24px', background:'var(--ochre)', color:'var(--dark)', display:'flex', gap:16, alignItems:'flex-start'}}>
+            <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:11, letterSpacing:'.1em', fontWeight:700, whiteSpace:'nowrap', paddingTop:2}}>COMING SOON</span>
+            <div style={{fontSize:14, lineHeight:1.6}}>Memberships are not yet active. The tiers and prices shown below are illustrative only — <strong>you cannot subscribe at this time.</strong></div>
           </div>
         )}
-        <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:24, opacity: usingDefaults ? 0.5 : 1, pointerEvents: usingDefaults ? 'none' : 'auto'}}>
-          {displayTiers.map((tier, i) => (
-            <div key={tier.id || i}
-              style={{padding:32, background: tier.highlight ? 'var(--dark)' : 'var(--paper)', color: tier.highlight ? 'var(--paper)' : 'var(--ink)', border:'1px solid', borderColor: tier.highlight ? 'var(--dark)' : 'var(--line)', display:'flex', flexDirection:'column', gap:16, position:'relative'}}>
-              {tier.highlight && <span className="tag tag-ochre" style={{alignSelf:'flex-start'}}>MOST POPULAR</span>}
-              <div>
-                <span className={`tag ${tier.color}`} style={{marginBottom:12, display:'inline-block'}}>{tier.name.toUpperCase()}</span>
-                <div style={{display:'flex', alignItems:'baseline', gap:6}}>
-                  <span className="serif" style={{fontSize:52, lineHeight:1, color: tier.highlight ? 'var(--paper)' : 'var(--rust)'}}>${tier.price}</span>
-                  <span style={{fontSize:13, color: tier.highlight ? 'var(--bg-deep)' : 'var(--ink-2)'}}>/ {tier.billingCycle || 'month'}</span>
+
+        {checkoutError && (
+          <div style={{marginBottom:20, padding:'12px 16px', background:'#fff1f0', border:'1px solid #fca5a5', fontSize:13, color:'#b91c1c'}}>
+            {checkoutError}
+          </div>
+        )}
+
+        <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:24, opacity: usingDefaults ? 0.4 : 1, pointerEvents: usingDefaults ? 'none' : 'auto'}}>
+          {displayTiers.map((tier, i) => {
+            const displayPrice = Number(tier.priceAud || tier.price);
+            const isProcessing = checkingOut === tier.id;
+            return (
+              <div key={tier.id || i}
+                style={{padding:32, background: tier.highlight ? 'var(--dark)' : 'var(--paper)', color: tier.highlight ? 'var(--paper)' : 'var(--ink)', border:'1px solid', borderColor: tier.highlight ? 'var(--dark)' : 'var(--line)', display:'flex', flexDirection:'column', gap:16, position:'relative'}}>
+                {tier.highlight && <span className="tag tag-ochre" style={{alignSelf:'flex-start'}}>MOST POPULAR</span>}
+                <div>
+                  <span className={`tag ${tier.color || 'tag-outline'}`} style={{marginBottom:12, display:'inline-block'}}>{tier.name.toUpperCase()}</span>
+                  <div style={{display:'flex', alignItems:'baseline', gap:6}}>
+                    <span className="serif" style={{fontSize:52, lineHeight:1, color: tier.highlight ? 'var(--paper)' : 'var(--rust)'}}>${displayPrice}</span>
+                    <span style={{fontSize:13, color: tier.highlight ? 'var(--bg-deep)' : 'var(--ink-2)'}}>/ {tier.billingCycle || 'month'}</span>
+                  </div>
+                </div>
+                <p style={{fontSize:14, color: tier.highlight ? 'var(--bg-deep)' : 'var(--ink-2)', lineHeight:1.6}}>{tier.description}</p>
+                <ul className="checks" style={{fontSize:14, flex:1}}>
+                  {(tier.features || []).map((f, j) => (
+                    <li key={j} style={{color: tier.highlight ? 'var(--paper)' : 'var(--ink)'}}>{f}</li>
+                  ))}
+                </ul>
+
+                {portalUser === null ? (
+                  <div style={{display:'grid', gap:8, marginTop:8}}>
+                    <a href={`${portalUrl}/?tab=register`}
+                      style={{display:'flex', alignItems:'center', justifyContent:'center', padding:'10px 16px', background:'var(--rust)', border:'1px solid var(--rust)', color:'var(--paper)', fontWeight:600, fontSize:13, textDecoration:'none', letterSpacing:'0.02em'}}>
+                      Create account &amp; subscribe →
+                    </a>
+                    <a href={`${portalUrl}/?tab=login&redirect=memberships`}
+                      style={{display:'flex', alignItems:'center', justifyContent:'center', padding:'8px 16px', background:'transparent', border:'1px solid var(--line)', color: tier.highlight ? 'var(--paper)' : 'var(--ink)', fontSize:12, textDecoration:'none', letterSpacing:'0.02em'}}>
+                      Already a member? Sign in
+                    </a>
+                  </div>
+                ) : (
+                  <button className="btn btn-rust" style={{width:'100%', justifyContent:'center', marginTop:8}}
+                    disabled={isProcessing}
+                    onClick={() => startCheckout(tier)}>
+                    {isProcessing ? 'Redirecting to checkout…' : `Subscribe — $${displayPrice}/mo →`}
+                  </button>
+                )}
+
+                <div className="mono" style={{fontSize:10, color: tier.highlight ? 'rgba(244,237,225,0.5)' : 'var(--ink-3)', textAlign:'center'}}>
+                  CANCEL ANY TIME · SECURE CHECKOUT VIA STRIPE
                 </div>
               </div>
-              <p style={{fontSize:14, color: tier.highlight ? 'var(--bg-deep)' : 'var(--ink-2)', lineHeight:1.6}}>{tier.description}</p>
-              <ul className="checks" style={{fontSize:14, flex:1}}>
-                {(tier.features || []).map((f, j) => (
-                  <li key={j} style={{color: tier.highlight ? 'var(--paper)' : 'var(--ink)'}}>{f}</li>
-                ))}
-              </ul>
-              <button className="btn btn-rust" style={{width:'100%', justifyContent:'center', marginTop:8}}
-                onClick={() => window.location.href = 'https://portal.outbackelectronics.com.au'}>
-                Get {tier.name} →
-              </button>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <div style={{marginTop:48, padding:32, background:'var(--bg-elev)', border:'1px solid var(--line)'}}>

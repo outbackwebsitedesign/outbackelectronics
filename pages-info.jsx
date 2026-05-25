@@ -121,7 +121,12 @@ function QuotePage({ go }) {
             <hr className="thin" />
             <span className="eyebrow">05 · DESCRIBE THE JOB</span>
             <p style={{fontSize:13, color:'var(--ink-2)', marginTop:6, marginBottom: 10}}>Plain English is great. Photos can come later — we'll reply with an upload link.</p>
-            <label className="field"><textarea className="textarea" value={form.desc} onChange={e => update('desc', e.target.value)} placeholder="My 6kW Fronius inverter is throwing 'AC Voltage High' once it gets over 38°C in the shed. Worked fine all winter. House is 80km west of Birdsville." style={{minHeight: 160}} /></label>
+            <label className="field">
+              <textarea className="textarea" value={form.desc} onChange={e => update('desc', e.target.value)} placeholder="My 6kW Fronius inverter is throwing 'AC Voltage High' once it gets over 38°C in the shed. Worked fine all winter. House is 80km west of Birdsville." style={{minHeight: 160}} />
+              <div style={{display:'flex', justifyContent:'flex-end', marginTop:4}}>
+                <span className="mono" style={{fontSize:10, color: form.desc.length > 1800 ? 'var(--rust)' : 'var(--ink-3)'}}>{form.desc.length} / 2000</span>
+              </div>
+            </label>
 
             <hr className="thin" />
             {submitError && <div className="notice" style={{marginBottom: 12, color: 'var(--rust)', fontSize: 13}}>{submitError}</div>}

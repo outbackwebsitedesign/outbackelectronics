@@ -1113,6 +1113,13 @@ function App() {
     return <ShopContext.Provider value={shopCtxValue}><PageComponent go={go} /></ShopContext.Provider>;
   }
 
+  const [showBackTop, setShowBackTop] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setShowBackTop(window.scrollY > 600);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
   return (
     <ShopContext.Provider value={shopCtxValue}>
       <TopNav page={page} go={go} cart={cartCount} onSearchOpen={() => setSearchOpen(true)} accountOpen={accountOpen} setAccountOpen={setAccountOpen} portalUser={portalUser} />
@@ -1124,6 +1131,15 @@ function App() {
       <Footer go={go} />
       <TweaksUI />
       {searchOpen && <SearchOverlay go={go} onClose={() => setSearchOpen(false)} />}
+      {showBackTop && (
+        <button
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          aria-label="Back to top"
+          style={{position:'fixed', bottom:24, right:24, zIndex:400, width:44, height:44, background:'var(--ink)', color:'var(--paper)', border:'none', cursor:'pointer', display:'grid', placeItems:'center', boxShadow:'0 4px 16px rgba(0,0,0,.25)', transition:'opacity 120ms'}}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+        </button>
+      )}
     </ShopContext.Provider>
   );
 }

@@ -109,12 +109,13 @@ function TutorialsPage({ go }) {
       <PageHead crumbs={['Outback','Tutorials']} title="Tutorials"
         lead="The bench notes we used to scribble on bits of paper. Now in writing, with photos, and occasionally video." />
       <section className="container" style={{paddingTop: 32, paddingBottom: 24}}>
-        <div className="tabs" style={{marginBottom: 24}}>
-          {cats.map(c => (
-            <div key={c} className={`tab ${filter===c?'active':''}`} onClick={() => setFilter(c)}>{c}</div>
-          ))}
-          <div style={{flex:1}}></div>
-          <input className="input" placeholder="Search tutorials…" style={{maxWidth:240, padding:'6px 10px', fontSize:13}} value={search} onChange={e => setSearch(e.target.value)} />
+        <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-end', marginBottom:8, gap:16, flexWrap:'wrap'}}>
+          <div className="tabs" style={{flex:1, minWidth:0}}>
+            {cats.map(c => (
+              <div key={c} className={`tab ${filter===c?'active':''}`} onClick={() => setFilter(c)}>{c}</div>
+            ))}
+          </div>
+          <input className="input" placeholder="Search tutorials…" style={{width:220, flexShrink:0, padding:'6px 10px', fontSize:13}} value={search} onChange={e => setSearch(e.target.value)} />
         </div>
 
         {/* Featured — first two published tutorials */}
@@ -205,7 +206,7 @@ function GroupsPage({ go }) {
                 <p style={{marginTop: 6, fontSize:13, color:'var(--ink-2)'}}>{g.focus || g.description}</p>
                 <div className="row-flex" style={{justifyContent:'space-between', marginTop: 14, borderTop:'1px solid var(--line)', paddingTop: 12}}>
                   <div className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{memberCount(g)} MEMBERS{g.meets ? ` · ${g.meets.toUpperCase()}` : ''}</div>
-                  <a className="mono" style={{fontSize:11, color:'var(--rust)', cursor:'pointer'}} onClick={() => go('contact', { subject: `Join ${g.name}`, group: g.slug || g.name })}>JOIN →</a>
+                  <button className="mono" style={{fontSize:11, color:'var(--rust)', cursor:'pointer', background:'none', border:'none', padding:0}} onClick={() => go('contact', { subject: `Join ${g.name}`, group: g.slug || g.name })}>JOIN →</button>
                 </div>
               </div>
             </div>
