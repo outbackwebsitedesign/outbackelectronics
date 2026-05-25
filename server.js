@@ -450,8 +450,21 @@ async function parseForumPayload(res, req, validate) {
   return parsed.body;
 }
 
+// Only trust X-Forwarded-For when the direct connection comes from a known private/loopback proxy.
+// Otherwise use the socket address directly to prevent IP spoofing via crafted headers.
+function isPrivateIp(ip) {
+  if (!ip) return false;
+  return ip === '127.0.0.1' || ip === '::1' ||
+    /^10\./.test(ip) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(ip) ||
+    /^192\.168\./.test(ip) ||
+    /^::ffff:(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)/.test(ip);
+}
 function getIp(req) {
-  return (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
+  const directIp = req.socket.remoteAddress || 'unknown';
+  if (!isPrivateIp(directIp)) return directIp;
+  const forwarded = (req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  return forwarded || directIp;
 }
 
 function isSecureRequest(req) {
@@ -1240,10 +1253,46 @@ const mainServer = http.createServer(async (req, res) => {
     const { productId, name, priceAud, quantity = 1, customerEmail, items, giftCardCode } = body;
 
     // Normalise to a line-items array (multi-item cart or legacy single-item)
-    const lineItems = Array.isArray(items) && items.length > 0
+    const rawLineItems = Array.isArray(items) && items.length > 0
       ? items
       : (name && priceAud ? [{ name, priceAud, quantity, productId: productId || '' }] : null);
-    if (!lineItems) return json(res, 422, { error: 'missing_fields', message: 'items array or name+priceAud required' });
+    if (!rawLineItems) return json(res, 422, { error: 'missing_fields', message: 'items array or name+priceAud required' });
+
+    // Resolve authoritative server-side prices from the catalog.
+    // Client-supplied priceAud is ignored for any item with a recognised productId.
+    const catalogProducts = readProducts();
+    const catalogServices = readServices();
+    const { tiers: membershipTiers } = readMemberships();
+    function lookupCatalogPrice(pid) {
+      if (!pid) return null;
+      const prod = catalogProducts.find(p => p.id === pid && p.status === 'published');
+      if (prod) return { priceAud: Number(prod.priceAud), name: prod.name };
+      const svc = catalogServices.find(s => s.id === pid && s.status === 'published');
+      if (svc) return { priceAud: Number(svc.priceAud), name: svc.name };
+      const tier = membershipTiers.find(t => t.id === pid && t.status === 'published');
+      if (tier) return { priceAud: Number(tier.priceAud), name: tier.name };
+      return null;
+    }
+    const lineItems = [];
+    for (const li of rawLineItems) {
+      const pid = String(li.productId || '');
+      const qty = Math.max(1, Math.floor(Number(li.quantity) || 1));
+      if (pid.startsWith('gc-')) {
+        // Gift card denominations: price is the chosen denomination value.
+        // Look up in catalog; fall back to client value only if not found (admin-created custom GC).
+        const catalogEntry = lookupCatalogPrice(pid);
+        const resolvedPrice = catalogEntry ? catalogEntry.priceAud : Number(li.priceAud);
+        if (!resolvedPrice || resolvedPrice <= 0) return json(res, 422, { error: 'invalid_item', message: `Invalid gift card: ${pid}` });
+        lineItems.push({ ...li, priceAud: resolvedPrice, name: li.name || (catalogEntry ? catalogEntry.name : `Gift Card`), quantity: qty, productId: pid });
+      } else if (pid) {
+        const catalogEntry = lookupCatalogPrice(pid);
+        if (!catalogEntry) return json(res, 422, { error: 'invalid_item', message: `Product not found: ${pid}` });
+        lineItems.push({ ...li, priceAud: catalogEntry.priceAud, name: catalogEntry.name, quantity: qty, productId: pid });
+      } else {
+        // No productId — reject; all purchasable items must be in the catalog.
+        return json(res, 422, { error: 'invalid_item', message: 'All cart items must have a valid productId.' });
+      }
+    }
 
     // Validate and apply gift card if provided
     let gcDiscount = 0;
@@ -1398,6 +1447,7 @@ const mainServer = http.createServer(async (req, res) => {
 
   // ── Gift card: balance lookup ────────────────────────────────────────────────
   if (req.method === 'GET' && url.pathname === '/api/gift-card/balance') {
+    if (publicRateLimited(getIp(req), 'gift-card/balance')) return json(res, 429, { error: 'too_many_requests' });
     const code = (url.searchParams.get('code') || '').trim().toUpperCase();
     if (!code) return json(res, 400, { error: 'missing_code' });
     const gc = readGiftCards().find(c => c.code === code);
@@ -1514,7 +1564,7 @@ const forumServer = http.createServer(async (req, res) => {
     return json(res, 200, { token });
   }
 
-  if (req.method === 'POST') {
+  if (req.method === 'POST' || req.method === 'PATCH') {
     if (!verifyCsrf(req, res)) return;
   }
 
@@ -1601,7 +1651,7 @@ const forumServer = http.createServer(async (req, res) => {
     return json(res, 201, { ok: true, post });
   }
 
-  if (req.method === 'POST' && url.pathname.startsWith('/api/forum/posts/') && url.pathname.split('/').length === 5 && url.pathname.split('/')[4] === 'like') {
+  if (req.method === 'POST' && url.pathname.startsWith('/api/forum/posts/') && url.pathname.split('/').length === 6 && url.pathname.split('/')[5] === 'like') {
     const forumSession = getForumSession(req);
     if (!forumSession) return json(res, 401, { error: 'login_required' });
     const postId = url.pathname.split('/')[4];
@@ -1623,6 +1673,8 @@ const forumServer = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && url.pathname.startsWith('/api/forum/threads/') && url.pathname.split('/').length === 6 && url.pathname.split('/')[5] === 'solve') {
+    const forumSession = getForumSession(req);
+    if (!forumSession) return json(res, 401, { error: 'login_required' });
     const threadId = url.pathname.split('/')[4];
     const body = await parseForumPayload(res, req, (value) => {
       if (!value || typeof value !== 'object') return 'Payload must be a JSON object.';
@@ -1633,6 +1685,7 @@ const forumServer = http.createServer(async (req, res) => {
     const forum = readForum();
     const thread = (forum.threads || []).find(t => t.id === threadId);
     if (!thread) return json(res, 404, { error: 'Thread not found.' });
+    if (thread.author !== forumSession.username) return json(res, 403, { error: 'forbidden' });
     if (thread.solvedPostId === body.postId) { thread.solvedPostId = null; thread.solved = false; }
     else { thread.solvedPostId = body.postId; thread.solved = true; }
     writeForum(forum);
@@ -1675,6 +1728,14 @@ const forumServer = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/forum/auth/login') {
+    const ip = getIp(req);
+    const forumLoginKey = `forum:${ip}`;
+    const lockEntry = loginAttempts.get(forumLoginKey);
+    if (lockEntry && lockEntry.lockedUntil && lockEntry.lockedUntil > now()) {
+      const retryAfterSec = Math.ceil((lockEntry.lockedUntil - now()) / 1000);
+      res.setHeader('Retry-After', retryAfterSec);
+      return json(res, 429, { error: 'locked_out', retryAfterSec });
+    }
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     const username = typeof body?.username === 'string' ? body.username : '';
     const password = typeof body?.password === 'string' ? body.password : '';
@@ -1682,8 +1743,10 @@ const forumServer = http.createServer(async (req, res) => {
     if (!Array.isArray(forum.users)) forum.users = [];
     const user = forum.users.find(u => u.username && u.username.toLowerCase() === username.toLowerCase());
     if (!user || !user.passwordHash || !verifyPassword(password, user.passwordHash)) {
+      trackFailure(forumLoginKey);
       return json(res, 401, { ok: false, message: 'Invalid username or password.' });
     }
+    clearFailures(forumLoginKey);
     const sid = randomId();
     forumSessions.set(sid, { id: user.id, username: user.username, displayName: user.displayName, createdAt: user.createdAt, expiresAt: now() + FORUM_SESSION_TTL_MS });
     saveSessionsToDisk(FORUM_SESSIONS_DB_PATH, forumSessions);
@@ -1782,7 +1845,7 @@ const adminServer = http.createServer(async (req, res) => {
     return json(res, 200, { token });
   }
 
-  if (req.method === 'POST') {
+  if (req.method === 'POST' || req.method === 'PATCH') {
     if (!verifyCsrf(req, res)) return;
   }
 
@@ -2114,11 +2177,13 @@ const adminServer = http.createServer(async (req, res) => {
     const session = requireRole(req, res, 'staff'); if (!session) return;
     let body; try { body = await readJson(req, 15e6); } catch { return json(res, 400, { error: 'invalid_json' }); }
     try {
+      // SVG is excluded: SVGs can contain <script> tags and would be served with
+      // image/svg+xml MIME, enabling stored XSS from the site's own origin.
       const ALLOWED_MIME = new Set([
-        'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
+        'image/jpeg', 'image/png', 'image/gif', 'image/webp',
         'application/pdf',
       ]);
-      const ALLOWED_EXT = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.pdf']);
+      const ALLOWED_EXT = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.pdf']);
       const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 
       const dataUri = body.data || '';
@@ -2156,7 +2221,16 @@ const adminServer = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/admin/upload/delete') {
     const session = requireRole(req, res, 'staff'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
-    try { fs.unlinkSync(path.join(__dirname, 'assets/uploads', body.filename)); } catch {}
+    const filename = body.filename || '';
+    if (path.basename(filename) !== filename || filename.includes('\0')) {
+      return json(res, 400, { error: 'invalid_filename' });
+    }
+    const target = path.join(__dirname, 'assets/uploads', filename);
+    const uploadsDir = path.resolve(path.join(__dirname, 'assets/uploads'));
+    if (!path.resolve(target).startsWith(uploadsDir + path.sep) && path.resolve(target) !== uploadsDir) {
+      return json(res, 400, { error: 'invalid_filename' });
+    }
+    try { fs.unlinkSync(target); } catch {}
     return json(res, 200, { ok: true });
   }
 
@@ -2569,7 +2643,7 @@ const portalServer = http.createServer(async (req, res) => {
     return json(res, 200, { token });
   }
 
-  if (req.method === 'POST') {
+  if (req.method === 'POST' || req.method === 'PATCH') {
     if (!verifyCsrf(req, res)) return;
   }
 
@@ -2678,12 +2752,14 @@ const portalServer = http.createServer(async (req, res) => {
   if (req.method === 'GET' && url.pathname === '/api/portal/orders') {
     const session = getPortalSession(req);
     if (!session) return json(res, 401, { error: 'login_required' });
+    const forumDb = readForum();
+    const portalUser = Array.isArray(forumDb.users) ? forumDb.users.find(u => u.id === session.id) : null;
+    const sessionEmail = portalUser ? String(portalUser.email || '').toLowerCase() : '';
+    if (!sessionEmail) return json(res, 200, { items: [] });
     const orders = readOrders();
-    const uname = session.username.toLowerCase();
     const matched = orders.filter(o => {
-      const customer = String(o.customer || o.name || '').toLowerCase();
       const email = String(o.email || '').toLowerCase();
-      return customer === uname || email === uname;
+      return email && email === sessionEmail;
     });
     return json(res, 200, { items: matched });
   }
@@ -2695,14 +2771,13 @@ const portalServer = http.createServer(async (req, res) => {
     const allCards = (repairs.columns || []).flatMap(col =>
       (col.cards || []).map(card => ({ ...card, column: col.title || col.id }))
     );
-    const uname = session.username.toLowerCase();
-    const forum = readForum();
-    const portalUser = Array.isArray(forum.users) ? forum.users.find(u => u.id === session.id) : null;
+    const forumDb = readForum();
+    const portalUser = Array.isArray(forumDb.users) ? forumDb.users.find(u => u.id === session.id) : null;
     const sessionEmail = portalUser ? String(portalUser.email || '').toLowerCase() : '';
+    if (!sessionEmail) return json(res, 200, { items: [] });
     const matched = allCards.filter(c => {
-      const customer = String(c.customer || c.name || c.title || '').toLowerCase();
       const cardEmail = String(c.email || '').toLowerCase();
-      return customer === uname || (sessionEmail && cardEmail && cardEmail === sessionEmail);
+      return cardEmail && cardEmail === sessionEmail;
     });
     return json(res, 200, { items: matched });
   }
@@ -2710,12 +2785,14 @@ const portalServer = http.createServer(async (req, res) => {
   if (req.method === 'GET' && url.pathname === '/api/portal/quotes') {
     const session = getPortalSession(req);
     if (!session) return json(res, 401, { error: 'login_required' });
+    const forumDb = readForum();
+    const portalUser = Array.isArray(forumDb.users) ? forumDb.users.find(u => u.id === session.id) : null;
+    const sessionEmail = portalUser ? String(portalUser.email || '').toLowerCase() : '';
+    if (!sessionEmail) return json(res, 200, { items: [] });
     const quotes = readQuotes();
-    const uname = session.username.toLowerCase();
     const matched = quotes.filter(q => {
-      const name = String(q.name || q.customer || '').toLowerCase();
       const email = String(q.email || '').toLowerCase();
-      return name === uname || email === uname;
+      return email && email === sessionEmail;
     });
     return json(res, 200, { items: matched });
   }
