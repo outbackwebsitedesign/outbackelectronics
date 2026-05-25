@@ -164,6 +164,17 @@ function ContactPage({ go }) {
   const [qmSent, setQmSent] = useState(false);
   const [qmSending, setQmSending] = useState(false);
   const [qmError, setQmError] = useState(null);
+  const [mapCoords, setMapCoords] = useState(null);
+
+  React.useEffect(() => {
+    if (!shop.address) return;
+    fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(shop.address)}&limit=1`, {
+      headers: { 'Accept-Language': 'en' },
+    })
+      .then(r => r.json())
+      .then(data => { if (data[0]) setMapCoords({ lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) }); })
+      .catch(() => {});
+  }, [shop.address]);
 
   const sendQuickMsg = async (e) => {
     e.preventDefault();
@@ -248,7 +259,11 @@ function ContactPage({ go }) {
                 height="100%"
                 style={{display:'block', border:0}}
                 loading="lazy"
-                src={`https://www.openstreetmap.org/export/embed.html?bbox=${parseFloat(shop.mapLng||'144.7730')-0.02}%2C${parseFloat(shop.mapLat||'-35.9845')-0.02}%2C${parseFloat(shop.mapLng||'144.7730')+0.02}%2C${parseFloat(shop.mapLat||'-35.9845')+0.02}&layer=mapnik&marker=${parseFloat(shop.mapLat||'-35.9845')}%2C${parseFloat(shop.mapLng||'144.7730')}`}
+                src={(() => {
+                  const lat = mapCoords ? mapCoords.lat : parseFloat(shop.mapLat) || -35.9845;
+                  const lng = mapCoords ? mapCoords.lng : parseFloat(shop.mapLng) || 144.7730;
+                  return `https://www.openstreetmap.org/export/embed.html?bbox=${lng-0.02}%2C${lat-0.02}%2C${lng+0.02}%2C${lat+0.02}&layer=mapnik&marker=${lat}%2C${lng}`;
+                })()}
                 allowFullScreen
               />
               <div style={{position:'absolute', bottom:0, left:0, right:0, background:'var(--ink)', color:'var(--paper)', padding:'8px 12px', fontFamily:'JetBrains Mono, monospace', fontSize:10}}>
@@ -265,9 +280,9 @@ function ContactPage({ go }) {
                 </div>
               ) : (
                 <form onSubmit={sendQuickMsg}>
-                  <label className="field" style={{marginTop:10}}><input className="input" placeholder="your name" value={qm.name} onChange={e => setQm(q => ({...q, name: e.target.value}))} required /></label>
-                  <label className="field"><input className="input" placeholder="your email" type="email" value={qm.email} onChange={e => setQm(q => ({...q, email: e.target.value}))} required /></label>
-                  <label className="field"><textarea className="textarea" placeholder="message…" value={qm.msg} onChange={e => setQm(q => ({...q, msg: e.target.value}))} required /></label>
+                  <label className="field" style={{marginTop:10}}><span className="label">Name</span><input className="input" placeholder="Your name" value={qm.name} onChange={e => setQm(q => ({...q, name: e.target.value}))} required /></label>
+                  <label className="field"><span className="label">Email</span><input className="input" placeholder="your@email.com" type="email" value={qm.email} onChange={e => setQm(q => ({...q, email: e.target.value}))} required /></label>
+                  <label className="field"><span className="label">Message</span><textarea className="textarea" placeholder="How can we help?" value={qm.msg} onChange={e => setQm(q => ({...q, msg: e.target.value}))} required /></label>
                   {qmError && <div style={{fontSize:12, color:'var(--rust)', marginBottom:8}}>{qmError}</div>}
                   <button className="btn btn-rust" style={{width:'100%', justifyContent:'center'}} type="submit" disabled={qmSending}>{qmSending ? 'Sending…' : 'Send →'}</button>
                 </form>

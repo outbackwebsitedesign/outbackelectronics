@@ -64,7 +64,9 @@ window.observeReveal = observeReveal;
 function SearchOverlay({ go, onClose }) {
   const [q, setQ] = useState('');
   const [products, setProducts] = useState([]);
+  const [highlightIdx, setHighlightIdx] = useState(0);
   const inputRef = useRef(null);
+  const listRef = useRef(null);
   useEffect(() => { inputRef.current && inputRef.current.focus(); }, []);
 
   useEffect(() => {
@@ -80,9 +82,9 @@ function SearchOverlay({ go, onClose }) {
   ];
 
   const query = q.trim().toLowerCase();
-  const pageResults = query.length < 1 ? allPages : allPages.filter(p =>
-    p.label.toLowerCase().includes(query)
-  );
+  const pageResults = query.length < 1
+    ? allPages.slice(0, 6)
+    : allPages.filter(p => p.label.toLowerCase().includes(query));
   const productResults = query.length >= 2 ? products.filter(p =>
     (p.name || '').toLowerCase().includes(query) ||
     (p.brand || '').toLowerCase().includes(query) ||
@@ -92,6 +94,8 @@ function SearchOverlay({ go, onClose }) {
 
   const allResults = [...pageResults, ...productResults.map(p => ({ ...p, _isProduct: true }))];
 
+  useEffect(() => { setHighlightIdx(0); }, [q]);
+
   const pick = (item) => {
     if (item._isProduct) { go('product', item); onClose(); return; }
     if (item.id === 'forum-link') { window.location.href = 'https://forum.outbackelectronics.com.au'; return; }
@@ -99,7 +103,18 @@ function SearchOverlay({ go, onClose }) {
     onClose();
   };
 
-  const firstResult = allResults[0];
+  const handleKeyDown = (e) => {
+    if (e.key === 'Escape') { onClose(); return; }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightIdx(i => Math.min(i + 1, allResults.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightIdx(i => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter' && allResults[highlightIdx]) {
+      pick(allResults[highlightIdx]);
+    }
+  };
 
   return (
     <div className="search-backdrop" style={{position:'fixed', inset:0, zIndex:500, display:'flex', flexDirection:'column', alignItems:'center', paddingTop:80, background:'rgba(15,13,10,0.72)'}}
@@ -110,39 +125,54 @@ function SearchOverlay({ go, onClose }) {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{flexShrink:0, color:'var(--ink-2)'}}><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
           <input ref={inputRef} value={q} onChange={e => setQ(e.target.value)}
             placeholder="Search pages and products…" style={{flex:1, border:'none', outline:'none', background:'transparent', fontSize:15, color:'var(--ink)'}}
-            onKeyDown={e => { if (e.key === 'Escape') onClose(); if (e.key === 'Enter' && firstResult) pick(firstResult); }} />
-          <button onClick={onClose} style={{background:'none', border:'none', cursor:'pointer', color:'var(--ink-2)', fontSize:18, lineHeight:1}}>×</button>
+            onKeyDown={handleKeyDown} />
+          <button onClick={onClose} style={{background:'none', border:'none', cursor:'pointer', color:'var(--ink-2)', fontSize:18, lineHeight:1}} aria-label="Close search">×</button>
         </div>
-        <div style={{maxHeight:420, overflowY:'auto'}}>
+        <div ref={listRef} style={{maxHeight:420, overflowY:'auto'}}>
+          {query.length === 0 && (
+            <div style={{padding:'6px 20px 2px', fontSize:11, color:'var(--ink-3)', fontFamily:'monospace', letterSpacing:'0.08em'}}>QUICK LINKS</div>
+          )}
           {query.length >= 2 && pageResults.length > 0 && (
             <div style={{padding:'6px 20px 2px', fontSize:11, color:'var(--ink-3)', fontFamily:'monospace', letterSpacing:'0.08em'}}>PAGES</div>
           )}
-          {pageResults.map(p => (
-            <div key={p.id} onClick={() => pick(p)}
-              style={{padding:'12px 20px', cursor:'pointer', fontSize:14, borderBottom:'1px solid var(--line)', display:'flex', alignItems:'center', gap:10}}
-              onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-elev)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{color:'var(--ink-3)'}}><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-              {p.label}
-            </div>
-          ))}
+          {pageResults.map((p, idx) => {
+            const isHighlighted = highlightIdx === idx;
+            return (
+              <div key={p.id} onClick={() => pick(p)}
+                style={{padding:'12px 20px', cursor:'pointer', fontSize:14, borderBottom:'1px solid var(--line)', display:'flex', alignItems:'center', gap:10, background: isHighlighted ? 'var(--bg-elev)' : 'transparent'}}
+                onMouseEnter={() => setHighlightIdx(idx)}
+                onMouseLeave={() => setHighlightIdx(idx)}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{color:'var(--ink-3)'}}><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                {p.label}
+              </div>
+            );
+          })}
           {productResults.length > 0 && (
             <div style={{padding:'6px 20px 2px', fontSize:11, color:'var(--ink-3)', fontFamily:'monospace', letterSpacing:'0.08em', borderTop: pageResults.length > 0 ? '1px solid var(--line)' : 'none'}}>PRODUCTS</div>
           )}
-          {productResults.map(p => (
-            <div key={p.id || p.sku} onClick={() => pick({...p, _isProduct: true})}
-              style={{padding:'12px 20px', cursor:'pointer', fontSize:14, borderBottom:'1px solid var(--line)', display:'flex', alignItems:'center', gap:10}}
-              onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-elev)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{color:'var(--rust)'}}><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M16 3v4M8 3v4M2 11h20"/></svg>
-              <div>
-                <div style={{fontWeight:500}}>{p.name}</div>
-                {(p.brand || p.category) && <div style={{fontSize:12, color:'var(--ink-2)', marginTop:2}}>{[p.brand, p.category].filter(Boolean).join(' · ')}</div>}
+          {productResults.map((p, relIdx) => {
+            const idx = pageResults.length + relIdx;
+            const isHighlighted = highlightIdx === idx;
+            return (
+              <div key={p.id || p.sku} onClick={() => pick({...p, _isProduct: true})}
+                style={{padding:'12px 20px', cursor:'pointer', fontSize:14, borderBottom:'1px solid var(--line)', display:'flex', alignItems:'center', gap:10, background: isHighlighted ? 'var(--bg-elev)' : 'transparent'}}
+                onMouseEnter={() => setHighlightIdx(idx)}
+                onMouseLeave={() => setHighlightIdx(idx)}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{color:'var(--rust)'}}><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M16 3v4M8 3v4M2 11h20"/></svg>
+                <div>
+                  <div style={{fontWeight:500}}>{p.name}</div>
+                  {(p.brand || p.category) && <div style={{fontSize:12, color:'var(--ink-2)', marginTop:2}}>{[p.brand, p.category].filter(Boolean).join(' · ')}</div>}
+                </div>
+                {p.price && <div style={{marginLeft:'auto', fontWeight:600, color:'var(--rust)', whiteSpace:'nowrap'}}>${Number(p.price).toLocaleString('en-AU')}</div>}
               </div>
-              {p.price && <div style={{marginLeft:'auto', fontWeight:600, color:'var(--rust)', whiteSpace:'nowrap'}}>${Number(p.price).toLocaleString('en-AU')}</div>}
-            </div>
-          ))}
+            );
+          })}
           {allResults.length === 0 && query.length > 0 && <div style={{padding:'16px 20px', color:'var(--ink-2)', fontSize:14}}>No results for "{q}".</div>}
+          {query.length === 0 && (
+            <div style={{padding:'10px 20px', fontSize:12, color:'var(--ink-3)', borderTop:'1px solid var(--line)'}}>
+              Type to search products, or use ↑↓ arrows + Enter to navigate
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -515,10 +545,10 @@ function Footer({ go }) {
           <div>
             <h5>Shop</h5>
             <ul>
-              <li><a href="/shop" onClick={(e) => { e.preventDefault(); go('shop'); }}>Rugged Laptops</a></li>
-              <li><a href="/shop" onClick={(e) => { e.preventDefault(); go('shop'); }}>Solar &amp; Power</a></li>
-              <li><a href="/shop" onClick={(e) => { e.preventDefault(); go('shop'); }}>Sat Comms</a></li>
-              <li><a href="/shop" onClick={(e) => { e.preventDefault(); go('shop'); }}>Refurbished</a></li>
+              <li><a href="/shop" onClick={(e) => { e.preventDefault(); go('shop', { initialCat: 'Rugged Laptops' }); }}>Rugged Laptops</a></li>
+              <li><a href="/shop" onClick={(e) => { e.preventDefault(); go('shop', { initialCat: 'Solar & Power' }); }}>Solar &amp; Power</a></li>
+              <li><a href="/shop" onClick={(e) => { e.preventDefault(); go('shop', { initialCat: 'Sat Comms' }); }}>Sat Comms</a></li>
+              <li><a href="/shop" onClick={(e) => { e.preventDefault(); go('shop', { initialCond: 'Refurbished' }); }}>Refurbished</a></li>
               <li><a href="/gift-cards" onClick={(e) => { e.preventDefault(); go('gift-cards'); }}>Gift Cards</a></li>
             </ul>
           </div>
