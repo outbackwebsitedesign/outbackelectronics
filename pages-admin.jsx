@@ -3096,7 +3096,7 @@ function AdminSettingsFull({ sessionInfo = {} }) {
   const openIntegrationModal = (idx) => {
     const r = integrations[idx];
     const cfg = r[3] || {};
-    setIntegrationForm({ name: r[0], endpoint: r[1], secretKey: cfg.secretKey || '', publishableKey: cfg.publishableKey || '', webhookSecret: cfg.webhookSecret || '', host: cfg.host || '', port: cfg.port || '', user: cfg.user || '', pass: cfg.pass || '', notifyEmail: cfg.notifyEmail || '', apiKey: cfg.apiKey || '', notes: cfg.notes || '', phone: cfg.phone || '' });
+    setIntegrationForm({ name: r[0], endpoint: r[1], secretKey: cfg.secretKey || '', publishableKey: cfg.publishableKey || '', webhookSecret: cfg.webhookSecret || '', host: cfg.host || '', port: cfg.port || '', user: cfg.user || '', pass: cfg.pass || '', notifyEmail: cfg.notifyEmail || '', apiKey: cfg.apiKey || '', notes: cfg.notes || '' });
     setIntegrationModal({ mode: 'edit', idx });
   };
   const openAddIntegrationModal = () => {
@@ -3107,13 +3107,10 @@ function AdminSettingsFull({ sessionInfo = {} }) {
     const { mode, idx } = integrationModal;
     const isStripe = integrationForm.name === 'Stripe';
     const isEmail = integrationForm.name === 'Email';
-    const isWhatsApp = integrationForm.name === 'WhatsApp';
     const config = isStripe
       ? { secretKey: integrationForm.secretKey, publishableKey: integrationForm.publishableKey, webhookSecret: integrationForm.webhookSecret }
       : isEmail
       ? { host: integrationForm.host, port: integrationForm.port, user: integrationForm.user, pass: integrationForm.pass, notifyEmail: integrationForm.notifyEmail }
-      : isWhatsApp
-      ? { phone: integrationForm.phone, apiKey: integrationForm.apiKey }
       : { apiKey: integrationForm.apiKey, notes: integrationForm.notes };
     if (mode === 'add') {
       if (!integrationForm.name.trim()) return;
@@ -3379,14 +3376,7 @@ function AdminSettingsFull({ sessionInfo = {} }) {
               <label className="field"><span className="label">Notification address</span><input className="input" value={integrationForm.notifyEmail} onChange={e => setIntegrationForm({...integrationForm, notifyEmail: e.target.value})} placeholder="orders@yourshop.com"/></label>
               <p style={{fontSize:11, color:'var(--ink-3)', margin:'-4px 0 8px'}}>Use a Gmail app password (not your account password)</p>
             </>}
-            {integrationModal.mode === 'edit' && integrationForm.name === 'WhatsApp' && <>
-              <label className="field"><span className="label">Your WhatsApp number</span><input className="input" value={integrationForm.phone||''} onChange={e => setIntegrationForm({...integrationForm, phone: e.target.value})} placeholder="+61412345678"/></label>
-              <label className="field"><span className="label">CallMeBot API Key</span><input className="input" type="password" value={integrationForm.apiKey||''} onChange={e => setIntegrationForm({...integrationForm, apiKey: e.target.value})} placeholder="Your CallMeBot API key"/></label>
-              <p style={{fontSize:11, color:'var(--ink-3)', margin:'-4px 0 8px'}}>
-                One-time setup: save <strong>+34 644 59 59 00</strong> in your phone contacts, then send it <em>"I allow callmebot"</em> on WhatsApp. You'll receive your API key within a minute.
-              </p>
-            </>}
-            {integrationModal.mode === 'edit' && integrationForm.name !== 'Stripe' && integrationForm.name !== 'Email' && integrationForm.name !== 'WhatsApp' && <>
+            {integrationModal.mode === 'edit' && integrationForm.name !== 'Stripe' && integrationForm.name !== 'Email' && <>
               <label className="field"><span className="label">Endpoint</span><input className="input" value={integrationForm.endpoint} onChange={e => setIntegrationForm({...integrationForm, endpoint: e.target.value})}/></label>
               <label className="field"><span className="label">API Key</span><input className="input" type="password" value={integrationForm.apiKey} onChange={e => setIntegrationForm({...integrationForm, apiKey: e.target.value})}/></label>
               <label className="field"><span className="label">Notes</span><input className="input" value={integrationForm.notes} onChange={e => setIntegrationForm({...integrationForm, notes: e.target.value})}/></label>
