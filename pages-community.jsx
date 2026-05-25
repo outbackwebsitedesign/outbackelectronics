@@ -141,15 +141,20 @@ function TutorialsPage({ go }) {
           </div>}
           {!loading && list.length === 0 && <div className="mono" style={{fontSize:13, color:'var(--ink-2)', padding:'18px 0'}}>No tutorials published yet.</div>}
           {list.map((t,i) => (
-            <div key={t.id||i} style={{display:'grid', gridTemplateColumns:'80px 1fr 100px 90px 100px 80px', padding:'18px 8px', borderTop: i===0?'1px solid var(--line)':'none', borderBottom:'1px solid var(--line)', alignItems:'center', gap: 14, cursor:'pointer'}} onClick={() => setActiveTutorial(t)} onMouseEnter={e => e.currentTarget.style.background='var(--bg-elev)'} onMouseLeave={e => e.currentTarget.style.background='transparent'}>
+            <div key={t.id||i} className="tutorial-row" style={{display:'grid', gridTemplateColumns:'80px 1fr 100px 90px 100px 80px', padding:'18px 8px', borderTop: i===0?'1px solid var(--line)':'none', borderBottom:'1px solid var(--line)', alignItems:'center', gap: 14, cursor:'pointer'}} onClick={() => setActiveTutorial(t)} onMouseEnter={e => e.currentTarget.style.background='var(--bg-elev)'} onMouseLeave={e => e.currentTarget.style.background='transparent'}>
               <div className="serif" style={{fontSize:32, color:'var(--rust)'}}>{String(i+1).padStart(2,'0')}</div>
               <div>
                 <div style={{fontWeight:600, fontSize:15}}>{t.title}</div>
                 <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:3}}>{(t.author||'').toUpperCase()}{t.date ? ` · ${t.date.toUpperCase()}` : ''}</div>
+                <div className="tutorial-row-meta" style={{display:'none'}}>
+                  {t.cat && <span className="tag tag-outline" style={{marginTop:6}}>{t.cat}</span>}
+                  {t.diff && <span className="mono" style={{fontSize:11, marginLeft:8, color: t.diff==='Expert'?'var(--rust)':t.diff==='Advanced'?'var(--ochre)':'var(--ink-2)'}}>{t.diff.toUpperCase()}</span>}
+                  {t.dur && <span className="mono" style={{fontSize:11, marginLeft:8, color:'var(--ink-2)'}}>{t.dur}</span>}
+                </div>
               </div>
-              <span className="tag tag-outline">{t.cat}</span>
-              <span className="mono" style={{fontSize:11, color: t.diff==='Expert'?'var(--rust)':t.diff==='Advanced'?'var(--ochre)':'var(--ink-2)'}}>{t.diff ? t.diff.toUpperCase() : '—'}</span>
-              <span className="mono" style={{fontSize:12, color:'var(--ink-2)'}}>{t.dur || '—'}</span>
+              <span className="tutorial-row-col tag tag-outline">{t.cat}</span>
+              <span className="tutorial-row-col mono" style={{fontSize:11, color: t.diff==='Expert'?'var(--rust)':t.diff==='Advanced'?'var(--ochre)':'var(--ink-2)'}}>{t.diff ? t.diff.toUpperCase() : '—'}</span>
+              <span className="tutorial-row-col mono" style={{fontSize:12, color:'var(--ink-2)'}}>{t.dur || '—'}</span>
               <span className="mono" style={{fontSize:12, color:'var(--rust)'}}>READ →</span>
             </div>
           ))}

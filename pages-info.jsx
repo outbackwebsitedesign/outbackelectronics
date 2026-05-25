@@ -280,9 +280,9 @@ function ContactPage({ go }) {
                 </div>
               ) : (
                 <form onSubmit={sendQuickMsg}>
-                  <label className="field" style={{marginTop:10}}><input className="input" placeholder="your name" value={qm.name} onChange={e => setQm(q => ({...q, name: e.target.value}))} required /></label>
-                  <label className="field"><input className="input" placeholder="your email" type="email" value={qm.email} onChange={e => setQm(q => ({...q, email: e.target.value}))} required /></label>
-                  <label className="field"><textarea className="textarea" placeholder="message…" value={qm.msg} onChange={e => setQm(q => ({...q, msg: e.target.value}))} required /></label>
+                  <label className="field" style={{marginTop:10}}><span className="label">Name</span><input className="input" placeholder="Your name" value={qm.name} onChange={e => setQm(q => ({...q, name: e.target.value}))} required /></label>
+                  <label className="field"><span className="label">Email</span><input className="input" placeholder="your@email.com" type="email" value={qm.email} onChange={e => setQm(q => ({...q, email: e.target.value}))} required /></label>
+                  <label className="field"><span className="label">Message</span><textarea className="textarea" placeholder="How can we help?" value={qm.msg} onChange={e => setQm(q => ({...q, msg: e.target.value}))} required /></label>
                   {qmError && <div style={{fontSize:12, color:'var(--rust)', marginBottom:8}}>{qmError}</div>}
                   <button className="btn btn-rust" style={{width:'100%', justifyContent:'center'}} type="submit" disabled={qmSending}>{qmSending ? 'Sending…' : 'Send →'}</button>
                 </form>
