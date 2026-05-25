@@ -126,6 +126,7 @@ const ADMIN_SECTIONS = [
     { id:'sellers',   label:'Sellers',   icon:'$', minRole:'manager' },
   ]},
   { group:'STORE', items: [
+    { id:'memberships', label:'Memberships', icon:'★', minRole:'manager' },
     { id:'gift-cards', label:'Gift Cards', icon:'◈', minRole:'staff', excludeRoles:['seller'] },
     { id:'expenses',  label:'Expenses', icon:'⊟', minRole:'manager' },
     { id:'policies',  label:'Policies', icon:'§', minRole:'manager' },
@@ -3400,6 +3401,249 @@ function AdminSettingsFull({ sessionInfo = {} }) {
 }
 
 // ============================================================
+// MEMBERSHIPS
+// ============================================================
+function AdminMemberships() {
+  const [tiers, setTiers] = useState([]);
+  const [subs, setSubs] = useState([]);
+  const [pendingOrders, setPendingOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState('tiers');
+  const [edit, setEdit] = useState(null);
+  const [form, setForm] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [activating, setActivating] = useState(null);
+
+  const reload = () => {
+    setLoading(true);
+    Promise.all([
+      fetch('/api/admin/memberships', { credentials: 'include' }).then(r => r.ok ? r.json() : Promise.reject()),
+      fetch('/api/admin/orders', { credentials: 'include' }).then(r => r.ok ? r.json() : Promise.reject()),
+    ]).then(([mb, ord]) => {
+      setTiers(mb.tiers || []);
+      setSubs(mb.subscriptions || []);
+      setPendingOrders((ord.items || []).filter(o => o.pendingMembershipActivation));
+    }).catch(() => {}).finally(() => setLoading(false));
+  };
+
+  useEffect(() => { reload(); }, []);
+
+  const openTier = (i) => {
+    setEdit(i);
+    setForm(i === 'new'
+      ? { name: '', price: '', billingCycle: 'month', description: '', features: '', color: '', highlight: false, status: 'draft' }
+      : { ...tiers[i], features: Array.isArray(tiers[i].features) ? tiers[i].features.join('\n') : (tiers[i].features || '') });
+  };
+
+  const saveTier = async (status) => {
+    setSaving(true);
+    setNotice('');
+    const payload = {
+      ...form,
+      status: status || form.status || 'draft',
+      price: Number(form.price) || 0,
+      priceAud: Number(form.price) || 0,
+      features: (form.features || '').split('\n').map(s => s.trim()).filter(Boolean),
+    };
+    if (!payload.name) { setNotice('Name is required.'); setSaving(false); return; }
+    if (!payload.id) payload.id = 'tier-' + Date.now();
+    const r = await fetch('/api/admin/memberships/tiers/save', {
+      method: 'POST', headers: postHeaders(), credentials: 'include', body: JSON.stringify(payload),
+    }).catch(() => null);
+    setSaving(false);
+    if (r && r.ok) {
+      const d = await r.json();
+      if (edit === 'new') setTiers(ts => [...ts, d.item]);
+      else setTiers(ts => ts.map((t, i) => i === edit ? d.item : t));
+      setEdit(null);
+    } else {
+      setNotice('Save failed.');
+    }
+  };
+
+  const deleteTier = async () => {
+    const tier = tiers[edit];
+    await fetch('/api/admin/memberships/tiers/delete', {
+      method: 'POST', headers: postHeaders(), credentials: 'include', body: JSON.stringify({ id: tier.id }),
+    }).catch(() => null);
+    setTiers(ts => ts.filter((_, i) => i !== edit));
+    setEdit(null);
+  };
+
+  const activatePending = async (order) => {
+    setActivating(order.id);
+    const r = await fetch('/api/admin/memberships/activate', {
+      method: 'POST', headers: postHeaders(), credentials: 'include',
+      body: JSON.stringify({ orderId: order.id }),
+    }).catch(() => null);
+    setActivating(null);
+    if (r && r.ok) reload();
+  };
+
+  const cancelSub = async (subId) => {
+    await fetch('/api/admin/memberships/subscriptions/cancel', {
+      method: 'POST', headers: postHeaders(), credentials: 'include', body: JSON.stringify({ subId }),
+    }).catch(() => null);
+    setSubs(ss => ss.map(s => s.id === subId ? { ...s, status: 'cancelled' } : s));
+  };
+
+  const subStatusMap = {
+    active:    { bg: '#d8e7d0', fg: '#345526' },
+    cancelled: { bg: 'var(--bg-deep)', fg: 'var(--ink-2)' },
+    expired:   { bg: '#f3d5c5', fg: '#7a3a18' },
+  };
+
+  if (loading) return <div style={{ padding: 32, color: 'var(--ink-2)', fontSize: 13 }}>Loading…</div>;
+
+  return (
+    <div style={{ padding: 32 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 28 }}>
+        <StatTile label="TIERS PUBLISHED" value={tiers.filter(t => t.status === 'published').length} />
+        <StatTile label="ACTIVE SUBSCRIPTIONS" value={subs.filter(s => s.status === 'active').length} />
+        <StatTile label="PENDING ACTIVATION" value={pendingOrders.length} tone={pendingOrders.length > 0 ? 'rust' : undefined} />
+      </div>
+
+      <div className="tabs" style={{ marginBottom: 20 }}>
+        <div className={`tab ${tab === 'tiers' ? 'active' : ''}`} onClick={() => setTab('tiers')}>
+          Tiers ({tiers.length})
+        </div>
+        <div className={`tab ${tab === 'subs' ? 'active' : ''}`} onClick={() => setTab('subs')}>
+          Subscriptions ({subs.length})
+        </div>
+        {pendingOrders.length > 0 && (
+          <div className={`tab ${tab === 'pending' ? 'active' : ''}`} onClick={() => setTab('pending')}>
+            Pending activation ({pendingOrders.length})
+          </div>
+        )}
+        <div style={{ flex: 1 }} />
+        {tab === 'tiers' && (
+          <button className="btn btn-rust btn-sm" onClick={() => openTier('new')}>+ New tier</button>
+        )}
+      </div>
+
+      {tab === 'tiers' && (
+        <>
+          {tiers.length === 0
+            ? <div className="mono" style={{ fontSize: 13, color: 'var(--ink-2)', padding: '18px 0' }}>No tiers yet. Create one to enable memberships on the public site.</div>
+            : <Table
+                columns={[
+                  { key: 'name', label: 'Name', w: '1.5fr', render: r => <span style={{ fontWeight: 600 }}>{r.name}</span> },
+                  { key: 'price', label: 'Price', w: '100px', render: r => <span className="mono" style={{ fontWeight: 600 }}>${r.price || r.priceAud || 0}<span style={{ fontWeight: 400, fontSize: 11, color: 'var(--ink-2)' }}>/{r.billingCycle || 'mo'}</span></span> },
+                  { key: 'features', label: 'Features', w: '2fr', render: r => <span style={{ fontSize: 12, color: 'var(--ink-2)' }}>{(Array.isArray(r.features) ? r.features : []).slice(0, 3).join(' · ')}</span> },
+                  { key: 'status', label: 'Status', w: '120px', render: r => (
+                    <span className="tag" style={{
+                      background: r.status === 'published' ? '#d8e7d0' : 'var(--bg-deep)',
+                      color: r.status === 'published' ? '#345526' : 'var(--ink-2)',
+                      borderColor: 'transparent',
+                    }}>{(r.status || 'draft').toUpperCase()}</span>
+                  )},
+                  { key: 'highlight', label: 'Featured', w: '90px', render: r => r.highlight ? <span className="tag tag-rust" style={{ fontSize: 10 }}>YES</span> : <span style={{ color: 'var(--ink-3)', fontSize: 12 }}>—</span> },
+                ]}
+                rows={tiers}
+                onRowClick={(_, i) => openTier(i)}
+              />
+          }
+        </>
+      )}
+
+      {tab === 'subs' && (
+        <>
+          {subs.length === 0
+            ? <div className="mono" style={{ fontSize: 13, color: 'var(--ink-2)', padding: '18px 0' }}>No subscriptions yet.</div>
+            : <Table
+                columns={[
+                  { key: 'userId', label: 'User', w: '1.5fr', render: r => <span style={{ fontWeight: 500 }}>{r.username || r.userId}</span> },
+                  { key: 'tierId', label: 'Tier', w: '1fr', render: r => {
+                    const tier = tiers.find(t => t.id === r.tierId);
+                    return <span>{tier ? tier.name : r.tierId}</span>;
+                  }},
+                  { key: 'startDate', label: 'Since', w: '130px', render: r => <span className="mono" style={{ fontSize: 11, color: 'var(--ink-2)' }}>{(r.startDate || '').slice(0, 10)}</span> },
+                  { key: 'orderId', label: 'Order', w: '130px', render: r => <span className="mono" style={{ fontSize: 11, color: 'var(--rust)' }}>{r.orderId || '—'}</span> },
+                  { key: 'status', label: 'Status', w: '110px', render: r => <StatusPill value={r.status || 'active'} map={subStatusMap} /> },
+                  { key: 'actions', label: '', w: '100px', render: r => r.status === 'active'
+                    ? <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, color: 'var(--rust)' }} onClick={e => { e.stopPropagation(); cancelSub(r.id); }}>Cancel</button>
+                    : null,
+                  },
+                ]}
+                rows={subs}
+              />
+          }
+        </>
+      )}
+
+      {tab === 'pending' && (
+        <div style={{ display: 'grid', gap: 12 }}>
+          {pendingOrders.length === 0
+            ? <div className="mono" style={{ fontSize: 13, color: 'var(--ink-2)', padding: '18px 0' }}>None.</div>
+            : pendingOrders.map((o, i) => (
+              <div key={i} style={{ padding: 18, background: 'var(--paper)', border: '1px solid var(--line)', borderLeft: '3px solid var(--ochre)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
+                <div>
+                  <div style={{ fontWeight: 600 }}>{o.cust || 'Unknown customer'}</div>
+                  <div className="mono" style={{ fontSize: 11, color: 'var(--ink-2)', marginTop: 4 }}>
+                    Order {o.id} · {o.pendingMembershipActivation.email} · Tier: {o.pendingMembershipActivation.tierId}
+                  </div>
+                </div>
+                <button className="btn btn-rust btn-sm" disabled={activating === o.id} onClick={() => activatePending(o)}>
+                  {activating === o.id ? 'Activating…' : 'Activate →'}
+                </button>
+              </div>
+            ))
+          }
+        </div>
+      )}
+
+      {edit !== null && (
+        <Drawer
+          open={true}
+          onClose={() => { setEdit(null); setNotice(''); }}
+          title={edit === 'new' ? 'New membership tier' : (tiers[edit]?.name || 'Edit tier')}
+          footer={
+            <div className="row-flex" style={{ justifyContent: 'space-between' }}>
+              {edit !== 'new'
+                ? <button className="btn btn-ghost btn-sm" style={{ color: 'var(--rust)' }} onClick={deleteTier}>Delete</button>
+                : <span />}
+              <div className="row-flex" style={{ gap: 8 }}>
+                <button className="btn btn-ghost btn-sm" onClick={() => { setEdit(null); setNotice(''); }}>Cancel</button>
+                <button className="btn btn-ghost btn-sm" disabled={saving} onClick={() => saveTier('draft')}>Save draft</button>
+                <button className="btn btn-rust btn-sm" disabled={saving} onClick={() => saveTier('published')}>Publish →</button>
+              </div>
+            </div>
+          }
+        >
+          {notice && <div style={{ marginBottom: 12, fontSize: 13, color: 'var(--rust)' }}>{notice}</div>}
+          <label className="field"><span className="label">Name</span>
+            <input className="input" placeholder="e.g. Mate, Cobber, Legend" value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} />
+          </label>
+          <label className="field"><span className="label">Price (AUD / billing cycle)</span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input className="input" type="number" min="0" step="0.01" placeholder="0.00" value={form.price || ''} onChange={e => setForm({ ...form, price: e.target.value })} style={{ flex: 1 }} />
+              <select className="select" value={form.billingCycle || 'month'} onChange={e => setForm({ ...form, billingCycle: e.target.value })} style={{ width: 110 }}>
+                <option value="month">/ month</option>
+                <option value="year">/ year</option>
+              </select>
+            </div>
+          </label>
+          <label className="field"><span className="label">Short description</span>
+            <input className="input" placeholder="One-line tagline" value={form.description || ''} onChange={e => setForm({ ...form, description: e.target.value })} />
+          </label>
+          <label className="field"><span className="label">Features (one per line)</span>
+            <textarea className="textarea" style={{ minHeight: 120 }} placeholder={"10% off all products\nPriority repair queue\nExclusive member events"} value={form.features || ''} onChange={e => setForm({ ...form, features: e.target.value })} />
+          </label>
+          <label className="field"><span className="label">Card accent colour (CSS value, optional)</span>
+            <input className="input" placeholder="e.g. #1f88f5 or var(--rust)" value={form.color || ''} onChange={e => setForm({ ...form, color: e.target.value })} />
+          </label>
+          <label className="field" style={{ flexDirection: 'row', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+            <input type="checkbox" checked={!!form.highlight} onChange={e => setForm({ ...form, highlight: e.target.checked })} />
+            <span className="label" style={{ margin: 0 }}>Featured / highlighted tier</span>
+          </label>
+        </Drawer>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
 // ADMIN PAGE — top-level
 // ============================================================
 const METRIC_SUBTITLE_FALLBACK = {
@@ -3427,6 +3671,7 @@ const ADMIN_VIEWS = {
   groups:     { c: AdminGroups,     t:'Groups' },
   customers:  { c: AdminCustomers,  t:'Customers' },
   sellers:    { c: AdminSellers,    t:'Sellers' },
+  memberships: { c: AdminMemberships, t:'Memberships', staticSubtitle:'tiers · subscriptions · activation' },
   'gift-cards': { c: AdminGiftCards, t:'Gift Cards',        staticSubtitle:'issued codes · balances · manual issuance' },
   expenses:   { c: AdminExpenses,   t:'Expenses',         staticSubtitle:'track costs · receipt uploads' },
   policies:   { c: AdminPolicies,   t:'Policies',         staticSubtitle:'edit public-facing policy docs' },
@@ -3437,7 +3682,7 @@ const ADMIN_ALL_IDS = new Set([
   'overview','orders','repairs','quotes','ewaste',
   'products','services','software','tutorials','ai',
   'forum','groups','customers','sellers',
-  'gift-cards','expenses','policies','settings',
+  'memberships','gift-cards','expenses','policies','settings',
 ]);
 
 function adminSectionFromPath() {
