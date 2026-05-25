@@ -630,7 +630,7 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null) {
         'Referrer-Policy': 'strict-origin-when-cross-origin',
         'Content-Security-Policy': isEmbeddable
           ? "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://nominatim.openstreetmap.org; frame-src https://www.openstreetmap.org; frame-ancestors 'self';"
-          : "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://portal.outbackelectronics.com.au https://forum.outbackelectronics.com.au https://nominatim.openstreetmap.org; frame-src https://www.openstreetmap.org; frame-ancestors 'none';",
+          : "default-src 'self'; script-src 'self' 'unsafe-inline' https://*.tawk.to https://embed.tawk.to; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.tawk.to; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com https://*.tawk.to; connect-src 'self' https://portal.outbackelectronics.com.au https://forum.outbackelectronics.com.au https://nominatim.openstreetmap.org wss://*.tawk.to https://*.tawk.to; frame-src https://www.openstreetmap.org https://*.tawk.to; frame-ancestors 'none';",
       } : { 'X-Content-Type-Options': 'nosniff' };
       res.writeHead(200, {
         'Content-Type': (types[ext] || 'application/octet-stream') + '; charset=utf-8',
