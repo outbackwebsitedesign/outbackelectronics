@@ -629,8 +629,8 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null) {
         'X-Content-Type-Options': 'nosniff',
         'Referrer-Policy': 'strict-origin-when-cross-origin',
         'Content-Security-Policy': isEmbeddable
-          ? "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self'; frame-ancestors 'self';"
-          : "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://portal.outbackelectronics.com.au https://forum.outbackelectronics.com.au; frame-ancestors 'none';",
+          ? "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self'; frame-src https://www.openstreetmap.org; frame-ancestors 'self';"
+          : "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://portal.outbackelectronics.com.au https://forum.outbackelectronics.com.au; frame-src https://www.openstreetmap.org; frame-ancestors 'none';",
       } : { 'X-Content-Type-Options': 'nosniff' };
       res.writeHead(200, {
         'Content-Type': (types[ext] || 'application/octet-stream') + '; charset=utf-8',
@@ -732,7 +732,7 @@ function serveIndexWithOg(res, og) {
       'X-Frame-Options': 'SAMEORIGIN',
       'X-Content-Type-Options': 'nosniff',
       'Referrer-Policy': 'strict-origin-when-cross-origin',
-      'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://portal.outbackelectronics.com.au https://forum.outbackelectronics.com.au; frame-ancestors 'none';",
+      'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://portal.outbackelectronics.com.au https://forum.outbackelectronics.com.au; frame-src https://www.openstreetmap.org; frame-ancestors 'none';",
     });
     res.end(html);
   });
