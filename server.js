@@ -36,11 +36,6 @@ const SMTP_PASS    = process.env.SMTP_PASS    || '';
 const NOTIFY_EMAIL = process.env.NOTIFY_EMAIL || SMTP_USER;
 const FROM_ADDRESS = `Outback Electronics <${SMTP_USER || 'noreply@outbackelectronics.com.au'}>`;
 
-// WhatsApp via CallMeBot — set both vars to enable WA notifications.
-// One-time setup: send "I allow callmebot" to +34 644 59 59 00 on WhatsApp first.
-const CALLMEBOT_PHONE  = process.env.CALLMEBOT_PHONE  || '';
-const CALLMEBOT_APIKEY = process.env.CALLMEBOT_APIKEY || '';
-
 const ROLE_LEVELS = { owner: 4, manager: 3, technician: 2, staff: 1, seller: 1, pending: 0 };
 
 const FORUM_SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
@@ -881,15 +876,6 @@ async function sendEmail({ to, subject, html, replyTo }) {
   }
 }
 
-function sendWhatsApp(text) {
-  const { phone, apiKey } = getCallMeBotConfig();
-  if (!phone || !apiKey) return;
-  const encoded = encodeURIComponent(text);
-  const url = `https://api.callmebot.com/whatsapp.php?phone=${encodeURIComponent(phone)}&text=${encoded}&apikey=${encodeURIComponent(apiKey)}`;
-  https.get(url, (res) => { res.resume(); }).on('error', (err) => {
-    console.error('[whatsapp] callmebot error:', err.message);
-  });
-}
 
 function escHtml(str) {
   return String(str ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -1171,14 +1157,6 @@ function getSmtpConfig() {
   } catch { return { host: SMTP_HOST, port: SMTP_PORT, user: SMTP_USER, pass: SMTP_PASS, notifyEmail: NOTIFY_EMAIL }; }
 }
 function getNotifyEmail() { return getSmtpConfig().notifyEmail; }
-function getCallMeBotConfig() {
-  try {
-    const s = readSettings();
-    const entry = s.integrations.find(r => r[0] === 'WhatsApp');
-    const cfg = entry?.[3] || {};
-    return { phone: cfg.phone || CALLMEBOT_PHONE, apiKey: cfg.apiKey || CALLMEBOT_APIKEY };
-  } catch { return { phone: CALLMEBOT_PHONE, apiKey: CALLMEBOT_APIKEY }; }
-}
 function getSiteUrl() {
   try { return readSettings().shop?.siteUrl || SITE_URL; } catch { return SITE_URL; }
 }
@@ -1698,22 +1676,6 @@ const mainServer = http.createServer(async (req, res) => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())) return json(res, 422, { error: 'invalid_email', message: 'Email address is invalid.' });
     const tmpl = emailStaffContactMessage({ name, email, msg });
     sendEmail({ to: getNotifyEmail(), replyTo: email, ...tmpl });
-    return json(res, 200, { ok: true });
-  }
-
-  if (req.method === 'POST' && url.pathname === '/api/chat/message') {
-    if (publicRateLimited(getIp(req), 'contact/quick-message')) return json(res, 429, { error: 'too_many_requests' });
-    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
-    const { name, email: customerEmail, msg } = body || {};
-    if (!msg || String(msg).trim().length < 2) return json(res, 422, { error: 'missing_fields' });
-    const safeName  = String(name || 'Website visitor').slice(0, 80);
-    const safeEmail = customerEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(customerEmail).trim()) ? String(customerEmail).trim() : null;
-    const safeMsg   = String(msg).slice(0, 1000);
-    const replyNote = safeEmail ? `\nReply to: ${safeEmail}` : '';
-    const waText = `💬 Chat from ${safeName}:${replyNote}\n${safeMsg}\n\n[outbackelectronics.com.au]`;
-    sendWhatsApp(waText);
-    const emailHtml = `<p><strong>Chat message from:</strong> ${escHtml(safeName)}${safeEmail ? ` &lt;${escHtml(safeEmail)}&gt;` : ''}</p><p>${escHtml(safeMsg).replace(/\n/g,'<br>')}</p>${safeEmail ? `<p style="margin-top:12px;font-size:12px;color:#888">Hit Reply to respond directly to this customer.</p>` : ''}`;
-    sendEmail({ to: getNotifyEmail(), replyTo: safeEmail || undefined, subject: `💬 Chat: ${safeName}`, html: emailHtml });
     return json(res, 200, { ok: true });
   }
 
@@ -3212,13 +3174,6 @@ function migrateEnvToSettings() {
   if ((SMTP_HOST || SMTP_USER) && !s.integrations.find(r => r[0] === 'Email')) {
     s.integrations.push(['Email', SMTP_HOST || 'smtp.gmail.com', !!(SMTP_HOST && SMTP_USER && SMTP_PASS), {
       host: SMTP_HOST, port: String(SMTP_PORT), user: SMTP_USER, pass: SMTP_PASS, notifyEmail: NOTIFY_EMAIL,
-    }]);
-    changed = true;
-  }
-
-  if (!s.integrations.find(r => r[0] === 'WhatsApp')) {
-    s.integrations.push(['WhatsApp', 'api.callmebot.com', !!(CALLMEBOT_PHONE && CALLMEBOT_APIKEY), {
-      phone: CALLMEBOT_PHONE, apiKey: CALLMEBOT_APIKEY,
     }]);
     changed = true;
   }
