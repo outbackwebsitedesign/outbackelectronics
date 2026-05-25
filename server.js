@@ -1679,19 +1679,6 @@ const mainServer = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true });
   }
 
-  if (req.method === 'POST' && url.pathname === '/api/chat/message') {
-    if (publicRateLimited(getIp(req), 'contact/quick-message')) return json(res, 429, { error: 'too_many_requests' });
-    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
-    const { name, email: customerEmail, msg } = body || {};
-    if (!msg || String(msg).trim().length < 2) return json(res, 422, { error: 'missing_fields' });
-    const safeName  = String(name || 'Website visitor').slice(0, 80);
-    const safeEmail = customerEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(customerEmail).trim()) ? String(customerEmail).trim() : null;
-    const safeMsg   = String(msg).slice(0, 1000);
-    const emailHtml = `<p><strong>Chat message from:</strong> ${escHtml(safeName)}${safeEmail ? ` &lt;${escHtml(safeEmail)}&gt;` : ''}</p><p>${escHtml(safeMsg).replace(/\n/g,'<br>')}</p>${safeEmail ? `<p style="margin-top:12px;font-size:12px;color:#888">Hit Reply to respond directly to this customer.</p>` : ''}`;
-    sendEmail({ to: getNotifyEmail(), replyTo: safeEmail || undefined, subject: `💬 Chat: ${safeName}`, html: emailHtml });
-    return json(res, 200, { ok: true });
-  }
-
   if (req.method === 'GET' && url.pathname === '/api/settings') {
     const s = readSettings();
     return json(res, 200, { siteContent: s.siteContent });
