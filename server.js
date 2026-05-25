@@ -865,15 +865,17 @@ function getMailer() {
   });
 }
 
-async function sendEmail({ to, subject, html }) {
+async function sendEmail({ to, subject, html, replyTo }) {
   if (!to) return;
   const transport = getMailer();
   if (!transport) return;
   const smtp = getSmtpConfig();
   const fromAddress = `Outback Electronics <${smtp.user || 'noreply@outbackelectronics.com.au'}>`;
   const text = html.replace(/<[^>]+>/g, '').replace(/\n{3,}/g, '\n\n').trim();
+  const msg = { from: fromAddress, to, subject, html, text };
+  if (replyTo) msg.replyTo = replyTo;
   try {
-    await transport.sendMail({ from: fromAddress, to, subject, html, text });
+    await transport.sendMail(msg);
   } catch (err) {
     console.error('[email] failed →', to, '|', err.message);
   }
@@ -1702,14 +1704,16 @@ const mainServer = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/chat/message') {
     if (publicRateLimited(getIp(req), 'contact/quick-message')) return json(res, 429, { error: 'too_many_requests' });
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
-    const { name, msg } = body || {};
+    const { name, email: customerEmail, msg } = body || {};
     if (!msg || String(msg).trim().length < 2) return json(res, 422, { error: 'missing_fields' });
-    const safeName = String(name || 'Website visitor').slice(0, 80);
-    const safeMsg  = String(msg).slice(0, 1000);
-    const waText = `💬 Chat from ${safeName}:\n${safeMsg}\n\n[outbackelectronics.com.au]`;
+    const safeName  = String(name || 'Website visitor').slice(0, 80);
+    const safeEmail = customerEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(customerEmail).trim()) ? String(customerEmail).trim() : null;
+    const safeMsg   = String(msg).slice(0, 1000);
+    const replyNote = safeEmail ? `\nReply to: ${safeEmail}` : '';
+    const waText = `💬 Chat from ${safeName}:${replyNote}\n${safeMsg}\n\n[outbackelectronics.com.au]`;
     sendWhatsApp(waText);
-    const emailHtml = `<p><strong>Chat message from:</strong> ${escHtml(safeName)}</p><p>${escHtml(safeMsg).replace(/\n/g,'<br>')}</p>`;
-    sendEmail({ to: getNotifyEmail(), subject: `💬 Chat: ${safeName}`, html: emailHtml });
+    const emailHtml = `<p><strong>Chat message from:</strong> ${escHtml(safeName)}${safeEmail ? ` &lt;${escHtml(safeEmail)}&gt;` : ''}</p><p>${escHtml(safeMsg).replace(/\n/g,'<br>')}</p>${safeEmail ? `<p style="margin-top:12px;font-size:12px;color:#888">Hit Reply to respond directly to this customer.</p>` : ''}`;
+    sendEmail({ to: getNotifyEmail(), replyTo: safeEmail || undefined, subject: `💬 Chat: ${safeName}`, html: emailHtml });
     return json(res, 200, { ok: true });
   }
 

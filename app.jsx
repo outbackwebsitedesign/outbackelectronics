@@ -1015,6 +1015,7 @@ function ChatWidget({ shop }) {
   const [open, setOpen]       = useState(false);
   const [input, setInput]     = useState('');
   const [name, setName]       = useState('');
+  const [email, setEmail]     = useState('');
   const [step, setStep]       = useState('chat'); // 'chat' | 'name' | 'sending' | 'sent'
   const [messages, setMessages] = useState([
     { from: 'bot', text: 'Hi! 👋 I\'m the Outback Electronics assistant. Ask me about our hours, services, repairs, products, or anything else.' }
@@ -1057,7 +1058,7 @@ function ChatWidget({ shop }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() },
         credentials: 'include',
-        body: JSON.stringify({ name: name.trim() || 'Website visitor', msg: msgText }),
+        body: JSON.stringify({ name: name.trim() || 'Website visitor', email: email.trim(), msg: msgText }),
       });
       setStep('sent');
       addMsg('bot', '✅ Sent! The team will get back to you soon.');
@@ -1136,11 +1137,18 @@ function ChatWidget({ shop }) {
             ))}
             {step === 'name' && (
               <div style={{background:'var(--bg-elev,#f0ece6)', borderRadius:12, padding:'10px 12px', fontSize:13}}>
-                <div style={{marginBottom:8, color:'var(--ink-2)'}}>Your name (optional):</div>
+                <div style={{marginBottom:8, color:'var(--ink-2)', fontSize:13}}>So we can reply to you:</div>
                 <input
                   value={name}
                   onChange={e => setName(e.target.value)}
-                  placeholder="e.g. John"
+                  placeholder="Your name (optional)"
+                  style={{width:'100%', padding:'6px 10px', border:'1px solid var(--line)', background:'var(--bg)', color:'var(--ink)', fontSize:13, outline:'none', borderRadius:4, boxSizing:'border-box', marginBottom:6}}
+                />
+                <input
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="Your email (so we can reply)"
+                  type="email"
                   style={{width:'100%', padding:'6px 10px', border:'1px solid var(--line)', background:'var(--bg)', color:'var(--ink)', fontSize:13, outline:'none', borderRadius:4, boxSizing:'border-box'}}
                   onKeyDown={e => e.key === 'Enter' && sendToOwner()}
                 />
