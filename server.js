@@ -1423,6 +1423,10 @@ const mainServer = http.createServer(async (req, res) => {
       .flatMap(li => Array(li.quantity || 1).fill(`${li.productId}:${li.priceAud}`));
     if (gcProductIds.length > 0) params['payment_intent_data[metadata][gcItems]'] = gcProductIds.join(',').slice(0, 500);
 
+    // Tag membership purchases so the webhook can activate the subscription
+    const membershipLineItem = lineItems.find(li => membershipTiers.some(t => t.id === li.productId));
+    if (membershipLineItem) params['payment_intent_data[metadata][membershipTierId]'] = membershipLineItem.productId;
+
     // Build line items; if a gift card covers the full amount, add a $0.50 minimum line item
     // so Stripe doesn't reject a $0 session — instead we add a discount coupon approach via negative line item
     const adjustedLineItems = [...lineItems];
@@ -1533,6 +1537,42 @@ const mainServer = http.createServer(async (req, res) => {
             }).filter(li => li.productId.startsWith('gc-'))
           : (productId.startsWith('gc-') ? [{ productId, priceAud: amountAud + gcDiscount, quantity: 1 }] : []);
         issueGiftCards(gcLineItems, order.id, details.email, details.name);
+
+        // Activate membership subscription if this was a membership purchase
+        const membershipTierId = meta.membershipTierId || '';
+        if (membershipTierId && details.email) {
+          const mb = readMemberships();
+          const tier = mb.tiers.find(t => t.id === membershipTierId);
+          if (tier) {
+            const forum = readForum();
+            const user = (forum.users || []).find(u => u.email && u.email.toLowerCase() === details.email.toLowerCase());
+            if (user) {
+              // Cancel any existing active subscription first
+              mb.subscriptions = mb.subscriptions.map(s =>
+                s.username === user.username && s.status === 'active'
+                  ? { ...s, status: 'cancelled', cancelledAt: new Date().toISOString(), cancelReason: 'replaced_by_new_purchase' }
+                  : s
+              );
+              mb.subscriptions.push({
+                id: 'sub-' + Date.now(),
+                username: user.username,
+                tierId: membershipTierId,
+                startDate: new Date().toISOString(),
+                status: 'active',
+                orderId: order.id,
+              });
+              writeMemberships(mb);
+              const tmpl = emailMembershipWelcome({ customerName: user.displayName || user.username, tierName: tier.name });
+              sendEmail({ to: user.email, ...tmpl });
+            } else {
+              // No portal account yet — tag the order so admin can activate manually
+              order.pendingMembershipActivation = { tierId: membershipTierId, email: details.email };
+              const updatedOrders = readOrders();
+              const idx = updatedOrders.findIndex(o => o.stripeSessionId === session.id);
+              if (idx >= 0) { updatedOrders[idx] = order; writeOrders(updatedOrders); }
+            }
+          }
+        }
 
         const customerEmail = details.email;
         if (customerEmail) {

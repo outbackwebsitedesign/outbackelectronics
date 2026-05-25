@@ -3,6 +3,13 @@ import React, { useState, useEffect, useMemo, useContext } from 'react';
 const _fallbackShopCtx = React.createContext({});
 const useShop = () => useContext(window.__ShopContext__ || _fallbackShopCtx);
 
+function getCsrf() {
+  return document.cookie.split(';').reduce((v, c) => {
+    const [k, val] = c.trim().split('=');
+    return k === '_csrf' ? decodeURIComponent(val || '') : v;
+  }, '');
+}
+
 // ============================================================
 // HOME
 // ============================================================
@@ -1216,10 +1223,19 @@ function GiftCardsPage({ go, addToCart }) {
 // ============================================================
 // MEMBERSHIPS
 // ============================================================
-function MembershipsPage({ go }) {
+function MembershipsPage({ go, portalUser }) {
+  const shop = useShop();
   const [tiers, setTiers] = useState([]);
+  const [tiersLoading, setTiersLoading] = useState(true);
+  const [checkingOut, setCheckingOut] = useState(null); // tier id currently processing
+  const [checkoutError, setCheckoutError] = useState(null);
+
   useEffect(() => {
-    fetch('/api/memberships').then(r => r.json()).then(d => setTiers(d.items || [])).catch(() => {});
+    fetch('/api/memberships')
+      .then(r => r.json())
+      .then(d => setTiers(d.items || []))
+      .catch(() => {})
+      .finally(() => setTiersLoading(false));
   }, []);
 
   const defaultTiers = [
@@ -1244,8 +1260,33 @@ function MembershipsPage({ go }) {
     },
   ];
 
-  const usingDefaults = tiers.length === 0;
+  const usingDefaults = !tiersLoading && tiers.length === 0;
   const displayTiers = usingDefaults ? defaultTiers : tiers;
+
+  const portalUrl = shop._portalUrl || 'https://portal.outbackelectronics.com.au';
+
+  const startCheckout = async (tier) => {
+    setCheckoutError(null);
+    setCheckingOut(tier.id);
+    try {
+      const priceAud = Number(tier.priceAud || tier.price);
+      const resp = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() },
+        body: JSON.stringify({ items: [{ productId: tier.id, name: tier.name, priceAud, quantity: 1 }] }),
+      });
+      const data = await resp.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setCheckoutError(data.message || 'Could not start checkout. Please try again.');
+      }
+    } catch {
+      setCheckoutError('Could not connect to payment provider. Please try again.');
+    } finally {
+      setCheckingOut(null);
+    }
+  };
 
   return (
     <>
@@ -1255,33 +1296,63 @@ function MembershipsPage({ go }) {
         {usingDefaults && (
           <div style={{marginBottom:28, padding:'18px 24px', background:'var(--ochre)', color:'var(--dark)', display:'flex', gap:16, alignItems:'flex-start'}}>
             <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:11, letterSpacing:'.1em', fontWeight:700, whiteSpace:'nowrap', paddingTop:2}}>COMING SOON</span>
-            <div style={{fontSize:14, lineHeight:1.6}}>Memberships are not yet active. The tiers and prices shown below are illustrative only — <strong>you cannot purchase a membership at this time.</strong> Check back soon or <a onClick={() => {}} style={{textDecoration:'underline', cursor:'pointer'}}>sign up to be notified</a>.</div>
+            <div style={{fontSize:14, lineHeight:1.6}}>Memberships are not yet active. The tiers and prices shown below are illustrative only — <strong>you cannot subscribe at this time.</strong></div>
           </div>
         )}
+
+        {checkoutError && (
+          <div style={{marginBottom:20, padding:'12px 16px', background:'#fff1f0', border:'1px solid #fca5a5', fontSize:13, color:'#b91c1c'}}>
+            {checkoutError}
+          </div>
+        )}
+
         <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:24, opacity: usingDefaults ? 0.4 : 1, pointerEvents: usingDefaults ? 'none' : 'auto'}}>
-          {displayTiers.map((tier, i) => (
-            <div key={tier.id || i}
-              style={{padding:32, background: tier.highlight ? 'var(--dark)' : 'var(--paper)', color: tier.highlight ? 'var(--paper)' : 'var(--ink)', border:'1px solid', borderColor: tier.highlight ? 'var(--dark)' : 'var(--line)', display:'flex', flexDirection:'column', gap:16, position:'relative'}}>
-              {tier.highlight && <span className="tag tag-ochre" style={{alignSelf:'flex-start'}}>MOST POPULAR</span>}
-              <div>
-                <span className={`tag ${tier.color}`} style={{marginBottom:12, display:'inline-block'}}>{tier.name.toUpperCase()}</span>
-                <div style={{display:'flex', alignItems:'baseline', gap:6}}>
-                  <span className="serif" style={{fontSize:52, lineHeight:1, color: tier.highlight ? 'var(--paper)' : 'var(--rust)'}}>${tier.price}</span>
-                  <span style={{fontSize:13, color: tier.highlight ? 'var(--bg-deep)' : 'var(--ink-2)'}}>/ {tier.billingCycle || 'month'}</span>
+          {displayTiers.map((tier, i) => {
+            const displayPrice = Number(tier.priceAud || tier.price);
+            const isProcessing = checkingOut === tier.id;
+            return (
+              <div key={tier.id || i}
+                style={{padding:32, background: tier.highlight ? 'var(--dark)' : 'var(--paper)', color: tier.highlight ? 'var(--paper)' : 'var(--ink)', border:'1px solid', borderColor: tier.highlight ? 'var(--dark)' : 'var(--line)', display:'flex', flexDirection:'column', gap:16, position:'relative'}}>
+                {tier.highlight && <span className="tag tag-ochre" style={{alignSelf:'flex-start'}}>MOST POPULAR</span>}
+                <div>
+                  <span className={`tag ${tier.color || 'tag-outline'}`} style={{marginBottom:12, display:'inline-block'}}>{tier.name.toUpperCase()}</span>
+                  <div style={{display:'flex', alignItems:'baseline', gap:6}}>
+                    <span className="serif" style={{fontSize:52, lineHeight:1, color: tier.highlight ? 'var(--paper)' : 'var(--rust)'}}>${displayPrice}</span>
+                    <span style={{fontSize:13, color: tier.highlight ? 'var(--bg-deep)' : 'var(--ink-2)'}}>/ {tier.billingCycle || 'month'}</span>
+                  </div>
+                </div>
+                <p style={{fontSize:14, color: tier.highlight ? 'var(--bg-deep)' : 'var(--ink-2)', lineHeight:1.6}}>{tier.description}</p>
+                <ul className="checks" style={{fontSize:14, flex:1}}>
+                  {(tier.features || []).map((f, j) => (
+                    <li key={j} style={{color: tier.highlight ? 'var(--paper)' : 'var(--ink)'}}>{f}</li>
+                  ))}
+                </ul>
+
+                {portalUser === null ? (
+                  <div style={{display:'grid', gap:8, marginTop:8}}>
+                    <a href={`${portalUrl}/?tab=register`}
+                      style={{display:'flex', alignItems:'center', justifyContent:'center', padding:'10px 16px', background:'var(--rust)', border:'1px solid var(--rust)', color:'var(--paper)', fontWeight:600, fontSize:13, textDecoration:'none', letterSpacing:'0.02em'}}>
+                      Create account &amp; subscribe →
+                    </a>
+                    <a href={`${portalUrl}/?tab=login&redirect=memberships`}
+                      style={{display:'flex', alignItems:'center', justifyContent:'center', padding:'8px 16px', background:'transparent', border:'1px solid var(--line)', color: tier.highlight ? 'var(--paper)' : 'var(--ink)', fontSize:12, textDecoration:'none', letterSpacing:'0.02em'}}>
+                      Already a member? Sign in
+                    </a>
+                  </div>
+                ) : (
+                  <button className="btn btn-rust" style={{width:'100%', justifyContent:'center', marginTop:8}}
+                    disabled={isProcessing}
+                    onClick={() => startCheckout(tier)}>
+                    {isProcessing ? 'Redirecting to checkout…' : `Subscribe — $${displayPrice}/mo →`}
+                  </button>
+                )}
+
+                <div className="mono" style={{fontSize:10, color: tier.highlight ? 'rgba(244,237,225,0.5)' : 'var(--ink-3)', textAlign:'center'}}>
+                  CANCEL ANY TIME · SECURE CHECKOUT VIA STRIPE
                 </div>
               </div>
-              <p style={{fontSize:14, color: tier.highlight ? 'var(--bg-deep)' : 'var(--ink-2)', lineHeight:1.6}}>{tier.description}</p>
-              <ul className="checks" style={{fontSize:14, flex:1}}>
-                {(tier.features || []).map((f, j) => (
-                  <li key={j} style={{color: tier.highlight ? 'var(--paper)' : 'var(--ink)'}}>{f}</li>
-                ))}
-              </ul>
-              <button className="btn btn-rust" style={{width:'100%', justifyContent:'center', marginTop:8}}
-                onClick={() => window.location.href = 'https://portal.outbackelectronics.com.au'}>
-                Get {tier.name} →
-              </button>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <div style={{marginTop:48, padding:32, background:'var(--bg-elev)', border:'1px solid var(--line)'}}>
