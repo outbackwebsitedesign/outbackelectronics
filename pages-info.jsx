@@ -248,10 +248,12 @@ function ContactPage({ go }) {
                 height="100%"
                 style={{display:'block', border:0}}
                 loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-                src={`https://maps.google.com/maps?q=${encodeURIComponent(shop.address || '-35.9833,144.7500')}&z=15&output=embed`}
+                src={`https://www.openstreetmap.org/export/embed.html?bbox=${parseFloat(shop.mapLng||'144.7730')-0.02}%2C${parseFloat(shop.mapLat||'-35.9845')-0.02}%2C${parseFloat(shop.mapLng||'144.7730')+0.02}%2C${parseFloat(shop.mapLat||'-35.9845')+0.02}&layer=mapnik&marker=${parseFloat(shop.mapLat||'-35.9845')}%2C${parseFloat(shop.mapLng||'144.7730')}`}
                 allowFullScreen
               />
+              <div style={{position:'absolute', bottom:0, left:0, right:0, background:'var(--ink)', color:'var(--paper)', padding:'8px 12px', fontFamily:'JetBrains Mono, monospace', fontSize:10}}>
+                MAP · {(shop.address || 'MOAMA NSW · PEERICOOTA FOREST RD').toUpperCase()}
+              </div>
             </div>
             <div className="card" style={{padding:18, marginTop:16}}>
               <span className="eyebrow">QUICK MESSAGE</span>
