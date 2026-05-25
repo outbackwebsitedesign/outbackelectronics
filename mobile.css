@@ -79,6 +79,11 @@
   .thread { grid-template-columns: 40px 1fr; gap: 10px; }
   .thread .replies, .thread .views { display: none; }
 
+  /* Tutorials list row collapses to 2-col on mobile */
+  .tutorial-row { grid-template-columns: 48px 1fr 60px !important; gap: 10px !important; }
+  .tutorial-row-col { display: none !important; }
+  .tutorial-row-meta { display: flex !important; flex-wrap: wrap; align-items: center; margin-top: 4px; }
+
   /* Policy layout stacks */
   .policy-layout { grid-template-columns: 1fr; gap: 20px; }
   .policy-nav { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--line); padding-bottom: 12px; }

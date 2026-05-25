@@ -137,14 +137,14 @@ function HomePage({ go, addToCart, portalUser }) {
           <a className="mono" style={{fontSize:12, color:'var(--rust)', cursor:'pointer'}} onClick={() => go('shop')}>VIEW ALL CATEGORIES →</a>
         </div>
         <div className="grid-4">
-          {(categories.length > 0 ? categories.slice(0, 4) : []).map((cat, i) => {
+          {(categories.length > 0 ? categories.slice(0, 4) : []).map((catName, i) => {
             const slotColors = ['slot-rust', 'slot', 'slot', 'slot-dark'];
             return (
-              <div key={cat} className="product" onClick={() => go('shop')}>
-                <div className={`slot ${slotColors[i % slotColors.length]}`} style={{aspectRatio:'1/1'}}>{cat.toUpperCase()}</div>
+              <div key={catName} className="product" onClick={() => go('shop', { initialCat: catName })}>
+                <div className={`slot ${slotColors[i % slotColors.length]}`} style={{aspectRatio:'1/1'}}>{catName.toUpperCase()}</div>
                 <div className="body">
-                  <div className="name serif" style={{fontSize:22}}>{cat}</div>
-                  <div className="row-px"><span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>{skuCounts[cat] != null ? `${skuCounts[cat]} SKUs` : ''}</span><span className="mono" style={{fontSize:11, color:'var(--rust)'}}>SHOP →</span></div>
+                  <div className="name serif" style={{fontSize:22}}>{catName}</div>
+                  <div className="row-px"><span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>{skuCounts[catName] != null ? `${skuCounts[catName]} SKUs` : ''}</span><span className="mono" style={{fontSize:11, color:'var(--rust)'}}>SHOP →</span></div>
                 </div>
               </div>
             );
@@ -301,8 +301,8 @@ function ProductCard({ p, onClick }) {
   );
 }
 
-function ShopPage({ go, addToCart }) {
-  const [cat, setCat] = useState('All');
+function ShopPage({ go, addToCart, pageParams }) {
+  const [cat, setCat] = useState(pageParams?.initialCat || 'All');
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterMeta, setFilterMeta] = useState({ categories: [], brands: [], conditions: [] });
@@ -322,7 +322,7 @@ function ShopPage({ go, addToCart }) {
         .catch(() => {}),
     ]).finally(() => setLoading(false));
   }, []);
-  const [cond, setCond] = useState('Any');
+  const [cond, setCond] = useState(pageParams?.initialCond || 'Any');
   const [sort, setSort] = useState('relevance');
   const [visibleCount, setVisibleCount] = useState(12);
   const chunkSize = 12;
@@ -363,6 +363,14 @@ function ShopPage({ go, addToCart }) {
         lead={`${products.length} listings · new, refurbished & field-tested gear. Every refurb passes our 38-point bench check.`} />
       <div className="container" style={{paddingTop: 32, paddingBottom: 32, display:'grid', gridTemplateColumns:'240px 1fr', gap: 36}}>
         <aside>
+          {(cat !== 'All' || cond !== 'Any' || selectedBrands.length > 0 || priceMin !== '' || priceMax !== '') && (
+            <div style={{marginBottom:16, display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+              <span className="mono" style={{fontSize:10, color:'var(--rust)'}}>FILTERS ACTIVE</span>
+              <button className="btn btn-sm btn-ghost" style={{fontSize:10, padding:'4px 8px'}} onClick={() => { setCat('All'); setCond('Any'); setSelectedBrands([]); setPriceMin(''); setPriceMax(''); }}>
+                Clear all ×
+              </button>
+            </div>
+          )}
           <div className="eyebrow" style={{marginBottom: 10}}>CATEGORY</div>
           <div className="stack" style={{gap:4}}>
             {['All', ...filterMeta.categories].map(c => (
@@ -855,6 +863,8 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
   const [product, setProduct] = useState(pageParams || null);
   const [selectedVariant, setSelectedVariant] = useState(null);
   const [activeImage, setActiveImage] = useState(null);
+  const [notifyEmail, setNotifyEmail] = useState('');
+  const [notifySent, setNotifySent] = useState(false);
 
   useEffect(() => {
     if (pageParams) {
@@ -958,6 +968,32 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
               </button>
               <button className="btn btn-ghost" onClick={() => go('quote')}>Request a Quote</button>
             </div>
+            {!inStock && (
+              <div style={{marginTop:16, padding:'16px 18px', background:'var(--bg-elev)', border:'1px solid var(--line)'}}>
+                {notifySent ? (
+                  <div className="mono" style={{fontSize:12, color:'var(--eucalyptus)'}}>✓ We'll email you when this is back in stock.</div>
+                ) : (
+                  <>
+                    <div className="eyebrow" style={{marginBottom:8}}>NOTIFY ME WHEN BACK IN STOCK</div>
+                    <div style={{display:'flex', gap:8}}>
+                      <input
+                        className="input"
+                        type="email"
+                        placeholder="your@email.com"
+                        value={notifyEmail}
+                        onChange={e => setNotifyEmail(e.target.value)}
+                        style={{flex:1, fontSize:13}}
+                      />
+                      <button className="btn btn-ghost btn-sm"
+                        disabled={!notifyEmail.trim()}
+                        onClick={() => { if (notifyEmail.trim()) setNotifySent(true); }}>
+                        Notify me
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </section>
