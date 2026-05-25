@@ -880,9 +880,10 @@ async function sendEmail({ to, subject, html }) {
 }
 
 function sendWhatsApp(text) {
-  if (!CALLMEBOT_PHONE || !CALLMEBOT_APIKEY) return;
+  const { phone, apiKey } = getCallMeBotConfig();
+  if (!phone || !apiKey) return;
   const encoded = encodeURIComponent(text);
-  const url = `https://api.callmebot.com/whatsapp.php?phone=${encodeURIComponent(CALLMEBOT_PHONE)}&text=${encoded}&apikey=${encodeURIComponent(CALLMEBOT_APIKEY)}`;
+  const url = `https://api.callmebot.com/whatsapp.php?phone=${encodeURIComponent(phone)}&text=${encoded}&apikey=${encodeURIComponent(apiKey)}`;
   https.get(url, (res) => { res.resume(); }).on('error', (err) => {
     console.error('[whatsapp] callmebot error:', err.message);
   });
@@ -1168,6 +1169,14 @@ function getSmtpConfig() {
   } catch { return { host: SMTP_HOST, port: SMTP_PORT, user: SMTP_USER, pass: SMTP_PASS, notifyEmail: NOTIFY_EMAIL }; }
 }
 function getNotifyEmail() { return getSmtpConfig().notifyEmail; }
+function getCallMeBotConfig() {
+  try {
+    const s = readSettings();
+    const entry = s.integrations.find(r => r[0] === 'WhatsApp');
+    const cfg = entry?.[3] || {};
+    return { phone: cfg.phone || CALLMEBOT_PHONE, apiKey: cfg.apiKey || CALLMEBOT_APIKEY };
+  } catch { return { phone: CALLMEBOT_PHONE, apiKey: CALLMEBOT_APIKEY }; }
+}
 function getSiteUrl() {
   try { return readSettings().shop?.siteUrl || SITE_URL; } catch { return SITE_URL; }
 }
@@ -3199,6 +3208,13 @@ function migrateEnvToSettings() {
   if ((SMTP_HOST || SMTP_USER) && !s.integrations.find(r => r[0] === 'Email')) {
     s.integrations.push(['Email', SMTP_HOST || 'smtp.gmail.com', !!(SMTP_HOST && SMTP_USER && SMTP_PASS), {
       host: SMTP_HOST, port: String(SMTP_PORT), user: SMTP_USER, pass: SMTP_PASS, notifyEmail: NOTIFY_EMAIL,
+    }]);
+    changed = true;
+  }
+
+  if (!s.integrations.find(r => r[0] === 'WhatsApp')) {
+    s.integrations.push(['WhatsApp', 'api.callmebot.com', !!(CALLMEBOT_PHONE && CALLMEBOT_APIKEY), {
+      phone: CALLMEBOT_PHONE, apiKey: CALLMEBOT_APIKEY,
     }]);
     changed = true;
   }
