@@ -1014,11 +1014,12 @@ function AdminProducts({ sessionInfo = {} }) {
     fetch('/api/admin/catalog', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(data => {
-        let products = data.products || [];
-        if (isSeller) products = products.filter(p => p.createdBy === sessionInfo.staffId);
+        const allProducts = data.products || [];
+        let products = allProducts;
+        if (isSeller) products = allProducts.filter(p => p.createdBy === sessionInfo.staffId);
         setRows(products.map(p => ({ ...p, cat: p.category, stock: p.stock ?? 0 })));
-        setCatOptions([...new Set(products.map(p => p.category).filter(Boolean))].sort());
-        setCondOptions([...new Set(products.map(p => p.cond).filter(Boolean))].sort());
+        setCatOptions([...new Set(allProducts.map(p => p.category).filter(Boolean))].sort());
+        setCondOptions([...new Set(allProducts.map(p => p.cond).filter(Boolean))].sort());
       })
       .catch(() => setRows((window.CATALOG_DATA?.getAdminProducts?.() || window.CATALOG_DATA?.getAdminCatalog?.().filter(item => item.price !== undefined) || []).map(p => ({ ...p, cat: p.category, stock: p.stock ?? 0 }))));
     if (canAssignOwner) {
@@ -1141,9 +1142,13 @@ function AdminProducts({ sessionInfo = {} }) {
           <label className="field"><span className="label">Name</span><input className="input" value={form.name||''} onChange={e=>setForm({...form, name:e.target.value})}/></label>
           <div className="grid-2" style={{gap:14}}>
             <label className="field"><span className="label">Category</span>
-              <select className="select" value={form.cat} onChange={e=>setForm({...form, cat:e.target.value})}>
-                {catOptions.map(c => <option key={c}>{c}</option>)}
+              <select className="select" value={catOptions.includes(form.cat) ? form.cat : '__new__'} onChange={e => { if (e.target.value !== '__new__') setForm({...form, cat: e.target.value}); }}>
+                {catOptions.map(c => <option key={c} value={c}>{c}</option>)}
+                <option value="__new__">+ New category…</option>
               </select>
+              {(!catOptions.includes(form.cat) || form.cat === '') && (
+                <input className="input" style={{marginTop:6}} placeholder="Type new category name" value={form.cat||''} onChange={e=>setForm({...form, cat:e.target.value})} autoFocus />
+              )}
             </label>
             <label className="field"><span className="label">Condition</span>
               <select className="select" value={form.cond} onChange={e=>setForm({...form, cond:e.target.value})}>
