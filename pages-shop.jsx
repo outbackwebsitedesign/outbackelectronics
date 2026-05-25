@@ -389,7 +389,7 @@ function ShopPage({ go, addToCart, pageParams }) {
           <div className="eyebrow" style={{marginBottom: 10}}>CATEGORY</div>
           <div className="stack" style={{gap:4}}>
             {['All', ...filterMeta.categories].map(c => (
-              <button key={c} onClick={() => setCat(c)} style={{padding:'6px 8px', cursor:'pointer', fontSize:14, borderLeft: cat===c ? '2px solid var(--rust)':'2px solid transparent', color: cat===c ? 'var(--rust)' : 'var(--ink)', fontWeight: cat===c ? 600 : 400, background:'none', border:'none', borderLeft: cat===c ? '2px solid var(--rust)':'2px solid transparent', textAlign:'left', width:'100%'}}>{c}</button>
+              <button key={c} onClick={() => setCat(c)} style={{padding:'6px 8px', cursor:'pointer', fontSize:14, color: cat===c ? 'var(--rust)' : 'var(--ink)', fontWeight: cat===c ? 600 : 400, background:'none', border:'none', borderLeft: cat===c ? '2px solid var(--rust)':'2px solid transparent', textAlign:'left', width:'100%'}}>{c}</button>
             ))}
           </div>
           <hr className="thin" />
