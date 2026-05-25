@@ -241,21 +241,17 @@ function ContactPage({ go }) {
           </div>
 
           <div>
-            <div className="slot slot-rust" style={{aspectRatio: '4/5', position:'relative', overflow:'hidden'}}>
-              <div style={{position:'absolute', inset:0}}>
-                {/* fake map grid */}
-                <svg width="100%" height="100%" style={{opacity:0.35}}>
-                  <defs>
-                    <pattern id="g" width="40" height="40" patternUnits="userSpaceOnUse">
-                      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(31,26,20,0.3)" strokeWidth="0.5"/>
-                    </pattern>
-                  </defs>
-                  <rect width="100%" height="100%" fill="url(#g)" />
-                </svg>
-              </div>
-              <div style={{position:'absolute', top:'45%', left:'45%', width:24, height:24, background:'var(--rust)', borderRadius:'50%', border:'3px solid var(--paper)'}}></div>
-              <div style={{position:'absolute', top:'calc(45% + 28px)', left:'calc(45% + 8px)', background:'var(--ink)', color:'var(--paper)', padding:'6px 10px', fontFamily:'JetBrains Mono, monospace', fontSize:11}}>{Math.abs(parseFloat(shop.mapLat) || 35.9833).toFixed(4)}°{parseFloat(shop.mapLat||'-1') < 0 ? 'S' : 'N'}, {Math.abs(parseFloat(shop.mapLng) || 144.7500).toFixed(4)}°{parseFloat(shop.mapLng||'1') >= 0 ? 'E' : 'W'}</div>
-              <div style={{position:'absolute', bottom:16, left:16, background:'var(--paper)', padding:'10px 14px', fontFamily:'JetBrains Mono, monospace', fontSize:10, color:'var(--ink)'}}>MAP · {(shop.address || 'MOAMA NSW · PEERICOOTA FOREST RD').toUpperCase()}</div>
+            <div style={{aspectRatio: '4/5', position:'relative', overflow:'hidden', border:'2px solid var(--rust)'}}>
+              <iframe
+                title="Shop location"
+                width="100%"
+                height="100%"
+                style={{display:'block', border:0}}
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                src={`https://maps.google.com/maps?q=${encodeURIComponent(shop.address || '-35.9833,144.7500')}&z=15&output=embed`}
+                allowFullScreen
+              />
             </div>
             <div className="card" style={{padding:18, marginTop:16}}>
               <span className="eyebrow">QUICK MESSAGE</span>
