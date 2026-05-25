@@ -27,7 +27,7 @@ const STRIPE_SECRET_KEY       = process.env.STRIPE_SECRET_KEY       || '';
 const STRIPE_WEBHOOK_SECRET   = process.env.STRIPE_WEBHOOK_SECRET   || '';
 const STRIPE_PUBLISHABLE_KEY  = process.env.STRIPE_PUBLISHABLE_KEY  || '';
 const SITE_URL              = process.env.SITE_URL              || 'http://localhost:8080';
-const ADMIN_URL             = process.env.ADMIN_URL             || SITE_URL.replace(/(:\d+)?(\/|$)/, ':8082$2');
+const ADMIN_URL             = process.env.ADMIN_URL             || (/^https?:\/\/(localhost|127\.|0\.0\.0\.0)(:\d+)?/.test(SITE_URL) ? SITE_URL.replace(/(:\d+)?(\/|$)/, ':8082$2') : SITE_URL.replace(/^(https?:\/\/)/, '$1admin.'));
 
 const SMTP_HOST    = process.env.SMTP_HOST    || '';
 const SMTP_PORT    = parseInt(process.env.SMTP_PORT || '587', 10);
@@ -68,8 +68,13 @@ const PORTAL_SESSIONS_DB_PATH = path.join(__dirname, 'portal-sessions.db');
 const RESET_TOKENS_DB_PATH = path.join(__dirname, 'password-reset-tokens.db');
 const CARTS_DB_PATH = path.join(__dirname, 'carts.db');
 const RESET_TOKEN_TTL_MS = 1000 * 60 * 60; // 1 hour
-const FORUM_URL  = process.env.FORUM_URL  || SITE_URL.replace(/(:\d+)?(\/|$)/, ':8081$2');
-const PORTAL_URL = process.env.PORTAL_URL || SITE_URL.replace(/(:\d+)?(\/|$)/, ':8083$2');
+function _defaultSubUrl(base, port, sub) {
+  if (/^https?:\/\/(localhost|127\.|0\.0\.0\.0)(:\d+)?/.test(base))
+    return base.replace(/(:\d+)?(\/|$)/, `:${port}$2`);
+  return base.replace(/^(https?:\/\/)/, `$1${sub}.`);
+}
+const FORUM_URL  = process.env.FORUM_URL  || _defaultSubUrl(SITE_URL, 8081, 'forum');
+const PORTAL_URL = process.env.PORTAL_URL || _defaultSubUrl(SITE_URL, 8083, 'portal');
 
 function loadSessionsFromDisk(filePath) {
   try {
@@ -1160,9 +1165,29 @@ function getNotifyEmail() { return getSmtpConfig().notifyEmail; }
 function getSiteUrl() {
   try { return readSettings().shop?.siteUrl || SITE_URL; } catch { return SITE_URL; }
 }
-function getAdminUrl() { return ADMIN_URL || getSiteUrl().replace(/(:\d+)?(\/|$)/, ':8082$2'); }
-function getForumUrl() { return FORUM_URL || getSiteUrl().replace(/(:\d+)?(\/|$)/, ':8081$2'); }
-function getPortalUrl() { return PORTAL_URL || getSiteUrl().replace(/(:\d+)?(\/|$)/, ':8083$2'); }
+function getAdminUrl() {
+  if (ADMIN_URL) return ADMIN_URL;
+  const base = getSiteUrl();
+  if (/^https?:\/\/(localhost|127\.|0\.0\.0\.0)(:\d+)?/.test(base))
+    return base.replace(/(:\d+)?(\/|$)/, ':8082$2');
+  return base.replace(/^(https?:\/\/)/, '$1admin.');
+}
+function getForumUrl() {
+  if (FORUM_URL) return FORUM_URL;
+  const base = getSiteUrl();
+  // Only use port-substitution for localhost/IP dev URLs; for real domains use subdomain
+  if (/^https?:\/\/(localhost|127\.|0\.0\.0\.0)(:\d+)?/.test(base)) {
+    return base.replace(/(:\d+)?(\/|$)/, ':8081$2');
+  }
+  return base.replace(/^(https?:\/\/)/, '$1forum.');
+}
+function getPortalUrl() {
+  if (PORTAL_URL) return PORTAL_URL;
+  const base = getSiteUrl();
+  if (/^https?:\/\/(localhost|127\.|0\.0\.0\.0)(:\d+)?/.test(base))
+    return base.replace(/(:\d+)?(\/|$)/, ':8083$2');
+  return base.replace(/^(https?:\/\/)/, '$1portal.');
+}
 function getAdminUsername() {
   try { return readSettings().security?.adminUsername || ADMIN_USERNAME; } catch { return ADMIN_USERNAME; }
 }
