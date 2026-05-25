@@ -988,6 +988,206 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
   );
 }
 
+// ---------------- Chat Widget ----------------
+const CHAT_FAQS = [
+  { patterns: ['hour','open','close','trading','when'], answer: 'Our trading hours are listed on the Contact page. Generally Mon–Fri 9am–5pm. Give us a call or check the Contact page for up-to-date times.' },
+  { patterns: ['location','address','where','find','directions','map'], answer: 'We\'re located in Queensland, Australia. Head to the Contact page for our full address and a map link.' },
+  { patterns: ['repair','fix','broken','service','diagnose','diagnostic'], answer: 'Yes, we offer electronics repair and diagnostics! Visit the Services page or book a repair via the portal.' },
+  { patterns: ['price','cost','how much','quote','estimate'], answer: 'Pricing varies by job. You can request a free quote on the Services page, or message us and we\'ll get back to you.' },
+  { patterns: ['return','refund','exchange','warranty'], answer: 'We have a fair returns policy. Visit the Policies page for full details, or contact us if you have a specific situation.' },
+  { patterns: ['ship','shipping','delivery','postage','send'], answer: 'We ship Australia-wide. Shipping rates are shown at checkout. For bulky items or special freight, contact us for a quote.' },
+  { patterns: ['ewaste','recycle','dispose','old','scrap','electronic waste'], answer: 'We accept e-waste! Drop off old electronics at our store — check the E-Waste page for accepted items and any fees.' },
+  { patterns: ['solar','battery','offgrid','off-grid','inverter','12v','caravan','4wd','4x4','outback'], answer: 'We specialise in 4WD, caravan, and off-grid electronics — solar, batteries, inverters, and more. Browse the shop or ask us for a recommendation.' },
+  { patterns: ['install','installation','fit','fitting'], answer: 'We offer professional installation for most products we sell. Contact us or book a service appointment via the portal.' },
+  { patterns: ['payment','pay','eftpos','card','cash','afterpay','zip','buy now pay later'], answer: 'We accept card, cash, and various buy-now-pay-later options at checkout. Contact us if you need a custom payment arrangement.' },
+  { patterns: ['wholesale','trade','business','bulk'], answer: 'We work with trade customers and businesses. Contact us directly to discuss wholesale pricing and accounts.' },
+];
+
+function matchFaq(text) {
+  const lower = text.toLowerCase();
+  for (const faq of CHAT_FAQS) {
+    if (faq.patterns.some(p => lower.includes(p))) return faq.answer;
+  }
+  return null;
+}
+
+function ChatWidget({ shop }) {
+  const [open, setOpen]       = useState(false);
+  const [input, setInput]     = useState('');
+  const [name, setName]       = useState('');
+  const [step, setStep]       = useState('chat'); // 'chat' | 'name' | 'sending' | 'sent'
+  const [messages, setMessages] = useState([
+    { from: 'bot', text: 'Hi! 👋 I\'m the Outback Electronics assistant. Ask me about our hours, services, repairs, products, or anything else.' }
+  ]);
+  const bottomRef = useRef(null);
+  const inputRef  = useRef(null);
+
+  useEffect(() => {
+    if (open && bottomRef.current) bottomRef.current.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, open]);
+
+  useEffect(() => {
+    if (open && inputRef.current) inputRef.current.focus();
+  }, [open, step]);
+
+  const addMsg = (from, text) => setMessages(prev => [...prev, { from, text }]);
+
+  const send = () => {
+    const text = input.trim();
+    if (!text) return;
+    setInput('');
+    addMsg('user', text);
+    const answer = matchFaq(text);
+    if (answer) {
+      setTimeout(() => addMsg('bot', answer), 400);
+    } else {
+      setTimeout(() => {
+        addMsg('bot', 'I don\'t have an exact answer for that. Want me to send this message directly to the team? They\'ll get back to you.');
+        setStep('name');
+      }, 400);
+    }
+  };
+
+  const sendToOwner = async () => {
+    const msgText = messages.filter(m => m.from === 'user').map(m => m.text).join('\n');
+    if (!msgText) return;
+    setStep('sending');
+    try {
+      await fetch('/api/chat/message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() },
+        credentials: 'include',
+        body: JSON.stringify({ name: name.trim() || 'Website visitor', msg: msgText }),
+      });
+      setStep('sent');
+      addMsg('bot', '✅ Sent! The team will get back to you soon.');
+    } catch {
+      setStep('name');
+      addMsg('bot', 'Oops, something went wrong. Try again or call us directly.');
+    }
+  };
+
+  const phone = shop?.phone || '';
+  const phoneHref = phone ? `tel:${phone.replace(/\s/g, '')}` : null;
+
+  const bubble = { padding:'10px 14px', borderRadius:16, fontSize:14, lineHeight:1.55, maxWidth:'85%', wordBreak:'break-word' };
+
+  return (
+    <>
+      {/* Floating button */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        aria-label={open ? 'Close chat' : 'Open chat'}
+        style={{
+          position:'fixed', bottom:78, right:24, zIndex:450,
+          width:52, height:52, borderRadius:'50%',
+          background:'var(--rust,#c0392b)', color:'#fff',
+          border:'none', cursor:'pointer', boxShadow:'0 4px 18px rgba(0,0,0,.3)',
+          display:'flex', alignItems:'center', justifyContent:'center',
+          transition:'transform 160ms',
+          transform: open ? 'rotate(45deg)' : 'rotate(0)',
+        }}
+      >
+        {open
+          ? <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          : <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        }
+      </button>
+
+      {/* Panel */}
+      {open && (
+        <div style={{
+          position:'fixed', bottom:142, right:24, zIndex:450,
+          width:340, maxWidth:'calc(100vw - 32px)',
+          background:'var(--bg)', border:'1px solid var(--line)',
+          boxShadow:'0 8px 32px rgba(0,0,0,.22)',
+          display:'flex', flexDirection:'column',
+          maxHeight:'min(520px, calc(100vh - 160px))',
+          borderRadius:4, overflow:'hidden',
+        }}>
+          {/* Header */}
+          <div style={{background:'var(--ink)', color:'var(--paper)', padding:'12px 16px', display:'flex', alignItems:'center', gap:10, flexShrink:0}}>
+            <div style={{width:32, height:32, borderRadius:'50%', background:'var(--rust,#c0392b)', display:'grid', placeItems:'center', flexShrink:0}}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </div>
+            <div>
+              <div style={{fontWeight:700, fontSize:14}}>Outback Electronics</div>
+              <div style={{fontSize:11, opacity:0.75}}>Ask us anything</div>
+            </div>
+            {phoneHref && (
+              <a href={phoneHref} style={{marginLeft:'auto', color:'var(--paper)', opacity:0.8, display:'grid', placeItems:'center'}} title={`Call ${phone}`} aria-label="Call us">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.68 3.4 2 2 0 0 1 3.67 1.22h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 9.37a16 16 0 0 0 6.72 6.72l1.72-1.01a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              </a>
+            )}
+          </div>
+
+          {/* Messages */}
+          <div style={{flex:1, overflowY:'auto', padding:'14px 14px 8px', display:'flex', flexDirection:'column', gap:8}}>
+            {messages.map((m, i) => (
+              <div key={i} style={{display:'flex', justifyContent: m.from === 'user' ? 'flex-end' : 'flex-start'}}>
+                <div style={{
+                  ...bubble,
+                  background: m.from === 'user' ? 'var(--rust,#c0392b)' : 'var(--bg-elev,#f0ece6)',
+                  color: m.from === 'user' ? '#fff' : 'var(--ink)',
+                }}>
+                  {m.text}
+                </div>
+              </div>
+            ))}
+            {step === 'name' && (
+              <div style={{background:'var(--bg-elev,#f0ece6)', borderRadius:12, padding:'10px 12px', fontSize:13}}>
+                <div style={{marginBottom:8, color:'var(--ink-2)'}}>Your name (optional):</div>
+                <input
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  placeholder="e.g. John"
+                  style={{width:'100%', padding:'6px 10px', border:'1px solid var(--line)', background:'var(--bg)', color:'var(--ink)', fontSize:13, outline:'none', borderRadius:4, boxSizing:'border-box'}}
+                  onKeyDown={e => e.key === 'Enter' && sendToOwner()}
+                />
+                <div style={{display:'flex', gap:8, marginTop:8}}>
+                  <button onClick={sendToOwner} className="btn btn-primary" style={{flex:1, fontSize:13, padding:'7px 0'}}>Send to team</button>
+                  <button onClick={() => setStep('chat')} style={{background:'none', border:'1px solid var(--line)', cursor:'pointer', borderRadius:2, padding:'7px 12px', fontSize:13, color:'var(--ink-2)'}}>Cancel</button>
+                </div>
+              </div>
+            )}
+            {step === 'sending' && <div style={{textAlign:'center', fontSize:13, color:'var(--ink-2)', padding:4}}>Sending…</div>}
+            <div ref={bottomRef} />
+          </div>
+
+          {/* Suggestions */}
+          {messages.length <= 2 && step === 'chat' && (
+            <div style={{padding:'0 10px 8px', display:'flex', flexWrap:'wrap', gap:6, flexShrink:0}}>
+              {['Trading hours', 'Book a repair', 'Get a quote', 'Shipping info'].map(s => (
+                <button key={s} onClick={() => { setInput(s); setTimeout(() => { setInput(''); addMsg('user', s); const a = matchFaq(s); setTimeout(() => addMsg('bot', a || 'Not sure about that one — want me to pass it to the team?'), 350); }, 50); }}
+                  style={{fontSize:12, padding:'4px 10px', background:'var(--bg-elev,#f0ece6)', border:'1px solid var(--line)', cursor:'pointer', borderRadius:12, color:'var(--ink)', whiteSpace:'nowrap'}}>
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Input */}
+          {step === 'chat' && (
+            <div style={{borderTop:'1px solid var(--line)', display:'flex', gap:0, flexShrink:0}}>
+              <input
+                ref={inputRef}
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                placeholder="Type a message…"
+                style={{flex:1, padding:'12px 14px', border:'none', outline:'none', background:'transparent', color:'var(--ink)', fontSize:14}}
+                onKeyDown={e => e.key === 'Enter' && send()}
+              />
+              <button onClick={send} aria-label="Send" style={{padding:'0 16px', background:'var(--rust,#c0392b)', border:'none', cursor:'pointer', color:'#fff', display:'grid', placeItems:'center'}}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
 // ---------------- Router ----------------
 const KNOWN_PAGES = [...PRIMARY_PAGES, ...UTILITY_PAGES, ...ACCOUNT_PAGES, {id:'cart'}, {id:'order-success'}, {id:'order-cancelled'}].map(p => p.id);
 
@@ -1130,6 +1330,7 @@ function App() {
       </main>
       <Footer go={go} />
       <TweaksUI />
+      <ChatWidget shop={shop} />
       {searchOpen && <SearchOverlay go={go} onClose={() => setSearchOpen(false)} />}
       {showBackTop && (
         <button

@@ -36,6 +36,11 @@ const SMTP_PASS    = process.env.SMTP_PASS    || '';
 const NOTIFY_EMAIL = process.env.NOTIFY_EMAIL || SMTP_USER;
 const FROM_ADDRESS = `Outback Electronics <${SMTP_USER || 'noreply@outbackelectronics.com.au'}>`;
 
+// WhatsApp via CallMeBot — set both vars to enable WA notifications.
+// One-time setup: send "I allow callmebot" to +34 644 59 59 00 on WhatsApp first.
+const CALLMEBOT_PHONE  = process.env.CALLMEBOT_PHONE  || '';
+const CALLMEBOT_APIKEY = process.env.CALLMEBOT_APIKEY || '';
+
 const ROLE_LEVELS = { owner: 4, manager: 3, technician: 2, staff: 1, seller: 1, pending: 0 };
 
 const FORUM_SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
@@ -874,6 +879,15 @@ async function sendEmail({ to, subject, html }) {
   }
 }
 
+function sendWhatsApp(text) {
+  if (!CALLMEBOT_PHONE || !CALLMEBOT_APIKEY) return;
+  const encoded = encodeURIComponent(text);
+  const url = `https://api.callmebot.com/whatsapp.php?phone=${encodeURIComponent(CALLMEBOT_PHONE)}&text=${encoded}&apikey=${encodeURIComponent(CALLMEBOT_APIKEY)}`;
+  https.get(url, (res) => { res.resume(); }).on('error', (err) => {
+    console.error('[whatsapp] callmebot error:', err.message);
+  });
+}
+
 function escHtml(str) {
   return String(str ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
@@ -1673,6 +1687,20 @@ const mainServer = http.createServer(async (req, res) => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())) return json(res, 422, { error: 'invalid_email', message: 'Email address is invalid.' });
     const tmpl = emailStaffContactMessage({ name, email, msg });
     sendEmail({ to: getNotifyEmail(), replyTo: email, ...tmpl });
+    return json(res, 200, { ok: true });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/chat/message') {
+    if (publicRateLimited(getIp(req), 'contact/quick-message')) return json(res, 429, { error: 'too_many_requests' });
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const { name, msg } = body || {};
+    if (!msg || String(msg).trim().length < 2) return json(res, 422, { error: 'missing_fields' });
+    const safeName = String(name || 'Website visitor').slice(0, 80);
+    const safeMsg  = String(msg).slice(0, 1000);
+    const waText = `💬 Chat from ${safeName}:\n${safeMsg}\n\n[outbackelectronics.com.au]`;
+    sendWhatsApp(waText);
+    const emailHtml = `<p><strong>Chat message from:</strong> ${escHtml(safeName)}</p><p>${escHtml(safeMsg).replace(/\n/g,'<br>')}</p>`;
+    sendEmail({ to: getNotifyEmail(), subject: `💬 Chat: ${safeName}`, html: emailHtml });
     return json(res, 200, { ok: true });
   }
 
