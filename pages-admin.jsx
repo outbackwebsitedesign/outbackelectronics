@@ -106,10 +106,10 @@ const ROLE_LEVELS = { owner: 4, manager: 3, technician: 2, staff: 1, seller: 1, 
 
 const ADMIN_SECTIONS = [
   { group:'OPERATIONS', items: [
-    { id:'overview',  label:'Overview',      icon:'⌂', minRole:'staff' },
+    { id:'overview',  label:'Overview',      icon:'⌂', minRole:'staff', excludeRoles:['seller'] },
     { id:'orders',    label:'Orders',        icon:'⊞', minRole:'technician' },
-    { id:'repairs',   label:'Repair Jobs',   icon:'⚒', minRole:'staff' },
-    { id:'quotes',    label:'Quotes Inbox',  icon:'✉', minRole:'staff' },
+    { id:'repairs',   label:'Repair Jobs',   icon:'⚒', minRole:'staff', excludeRoles:['seller'] },
+    { id:'quotes',    label:'Quotes Inbox',  icon:'✉', minRole:'staff', excludeRoles:['seller'] },
     { id:'ewaste',    label:'eWaste Intake', icon:'♻', minRole:'technician' },
   ]},
   { group:'CATALOG', items: [
@@ -126,17 +126,21 @@ const ADMIN_SECTIONS = [
     { id:'sellers',   label:'Sellers',   icon:'$', minRole:'manager' },
   ]},
   { group:'STORE', items: [
-    { id:'gift-cards', label:'Gift Cards', icon:'◈', minRole:'staff' },
+    { id:'gift-cards', label:'Gift Cards', icon:'◈', minRole:'staff', excludeRoles:['seller'] },
     { id:'expenses',  label:'Expenses', icon:'⊟', minRole:'manager' },
     { id:'policies',  label:'Policies', icon:'§', minRole:'manager' },
-    { id:'settings',  label:'Settings', icon:'⚒', minRole:'owner' },
+    { id:'settings',  label:'Settings', icon:'⚒', minRole:'seller' },
   ]},
 ];
 
 function AdminSidebar({ section, setSection, onSignOut, role, username }) {
   const myLevel = ROLE_LEVELS[role] ?? 0;
   const visibleSections = ADMIN_SECTIONS
-    .map(g => ({ ...g, items: g.items.filter(it => (ROLE_LEVELS[it.minRole] ?? 0) <= myLevel) }))
+    .map(g => ({ ...g, items: g.items.filter(it => {
+      if ((ROLE_LEVELS[it.minRole] ?? 0) > myLevel) return false;
+      if (it.excludeRoles && it.excludeRoles.includes(role)) return false;
+      return true;
+    }) }))
     .filter(g => g.items.length > 0);
   const initials = (username || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
   return (
@@ -1001,20 +1005,29 @@ function CatalogList({ title, columns, initial, drawer, addLabel }) {
 // ============================================================
 function AdminProducts({ sessionInfo = {} }) {
   const isSeller = sessionInfo.role === 'seller';
+  const canAssignOwner = (ROLE_LEVELS[sessionInfo.role] ?? 0) >= ROLE_LEVELS.manager;
   const [rows, setRows] = useState([]);
   const [catOptions, setCatOptions] = useState([]);
   const [condOptions, setCondOptions] = useState([]);
+  const [sellerMembers, setSellerMembers] = useState([]);
   useEffect(() => {
     fetch('/api/admin/catalog', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(data => {
-        let products = data.products || [];
-        if (isSeller) products = products.filter(p => p.createdBy === sessionInfo.staffId);
+        const allProducts = data.products || [];
+        let products = allProducts;
+        if (isSeller) products = allProducts.filter(p => p.createdBy === sessionInfo.staffId);
         setRows(products.map(p => ({ ...p, cat: p.category, stock: p.stock ?? 0 })));
-        setCatOptions([...new Set(products.map(p => p.category).filter(Boolean))].sort());
-        setCondOptions([...new Set(products.map(p => p.cond).filter(Boolean))].sort());
+        setCatOptions([...new Set(allProducts.map(p => p.category).filter(Boolean))].sort());
+        setCondOptions([...new Set(allProducts.map(p => p.cond).filter(Boolean))].sort());
       })
       .catch(() => setRows((window.CATALOG_DATA?.getAdminProducts?.() || window.CATALOG_DATA?.getAdminCatalog?.().filter(item => item.price !== undefined) || []).map(p => ({ ...p, cat: p.category, stock: p.stock ?? 0 }))));
+    if (canAssignOwner) {
+      fetch('/api/admin/staff', { credentials:'include' })
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(d => setSellerMembers((d.members || []).filter(m => m.role === 'seller')))
+        .catch(() => {});
+    }
   }, []);
   const [edit, setEdit] = useState(null);
   const [form, setForm] = useState({});
@@ -1129,9 +1142,13 @@ function AdminProducts({ sessionInfo = {} }) {
           <label className="field"><span className="label">Name</span><input className="input" value={form.name||''} onChange={e=>setForm({...form, name:e.target.value})}/></label>
           <div className="grid-2" style={{gap:14}}>
             <label className="field"><span className="label">Category</span>
-              <select className="select" value={form.cat} onChange={e=>setForm({...form, cat:e.target.value})}>
-                {catOptions.map(c => <option key={c}>{c}</option>)}
+              <select className="select" value={catOptions.includes(form.cat) ? form.cat : '__new__'} onChange={e => { if (e.target.value !== '__new__') setForm({...form, cat: e.target.value}); }}>
+                {catOptions.map(c => <option key={c} value={c}>{c}</option>)}
+                <option value="__new__">+ New category…</option>
               </select>
+              {(!catOptions.includes(form.cat) || form.cat === '') && (
+                <input className="input" style={{marginTop:6}} placeholder="Type new category name" value={form.cat||''} onChange={e=>setForm({...form, cat:e.target.value})} autoFocus />
+              )}
             </label>
             <label className="field"><span className="label">Condition</span>
               <select className="select" value={form.cond} onChange={e=>setForm({...form, cond:e.target.value})}>
@@ -1173,14 +1190,47 @@ function AdminProducts({ sessionInfo = {} }) {
           <label className="field"><span className="label">Bench check notes (internal)</span>
             <textarea className="textarea" placeholder="Battery cycle count, BIOS rev, replaced components…" value={form.benchNotes||''} onChange={e=>setForm({...form, benchNotes:e.target.value})} />
           </label>
+          {canAssignOwner && (
+            <label className="field"><span className="label">Owner / Seller</span>
+              <select className="select" value={form.createdBy||''} onChange={e=>setForm({...form, createdBy:e.target.value})}>
+                <option value="">— Unassigned —</option>
+                {sellerMembers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </label>
+          )}
           <div className="eyebrow" style={{marginTop:18, marginBottom:10}}>VARIANTS</div>
           {(form.variants || []).map((v, i) => (
-            <div key={i} style={{display:'grid', gridTemplateColumns:'1.5fr 1.2fr 80px 70px 28px', gap:8, marginBottom:8}}>
-              <input className="input" placeholder="e.g. With Certificate" value={v.name||''} onChange={e => { const vs = [...(form.variants||[])]; vs[i] = {...vs[i], name: e.target.value}; setForm({...form, variants: vs}); }} />
-              <input className="input" value={v.sku||''} onChange={e => { const vs = [...(form.variants||[])]; vs[i] = {...vs[i], sku: e.target.value}; setForm({...form, variants: vs}); }} />
-              <input className="input" type="number" value={v.price||0} onChange={e => { const vs = [...(form.variants||[])]; vs[i] = {...vs[i], price: Number(e.target.value)}; setForm({...form, variants: vs}); }} />
-              <input className="input" type="number" value={v.stock||0} onChange={e => { const vs = [...(form.variants||[])]; vs[i] = {...vs[i], stock: Number(e.target.value)}; setForm({...form, variants: vs}); }} />
-              <button className="icon-btn" onClick={() => { const vs = (form.variants||[]).filter((_,j) => j!==i); setForm({...form, variants: vs}); }}>×</button>
+            <div key={i} style={{marginBottom:14, padding:10, border:'1px solid var(--line)', background:'var(--bg-elev)'}}>
+              <div style={{display:'grid', gridTemplateColumns:'1.5fr 1.2fr 80px 70px 28px', gap:8, marginBottom: (form.images||[]).length > 0 ? 8 : 0}}>
+                <input className="input" placeholder="e.g. With Certificate" value={v.name||''} onChange={e => { const vs = [...(form.variants||[])]; vs[i] = {...vs[i], name: e.target.value}; setForm({...form, variants: vs}); }} />
+                <input className="input" value={v.sku||''} onChange={e => { const vs = [...(form.variants||[])]; vs[i] = {...vs[i], sku: e.target.value}; setForm({...form, variants: vs}); }} />
+                <input className="input" type="number" value={v.price||0} onChange={e => { const vs = [...(form.variants||[])]; vs[i] = {...vs[i], price: Number(e.target.value)}; setForm({...form, variants: vs}); }} />
+                <input className="input" type="number" value={v.stock||0} onChange={e => { const vs = [...(form.variants||[])]; vs[i] = {...vs[i], stock: Number(e.target.value)}; setForm({...form, variants: vs}); }} />
+                <button className="icon-btn" onClick={() => { const vs = (form.variants||[]).filter((_,j) => j!==i); setForm({...form, variants: vs}); }}>×</button>
+              </div>
+              {(form.images||[]).length > 0 && (
+                <div>
+                  <div style={{fontSize:11, color:'var(--ink-3)', marginBottom:6}}>Linked images (shown when variant selected)</div>
+                  <div style={{display:'flex', gap:6, flexWrap:'wrap'}}>
+                    {(form.images||[]).map((url, imgIdx) => {
+                      const linked = (v.images||[]).includes(url);
+                      return (
+                        <div key={imgIdx} onClick={() => {
+                          const vs = [...(form.variants||[])];
+                          const cur = vs[i].images || [];
+                          vs[i] = {...vs[i], images: linked ? cur.filter(u => u !== url) : [...cur, url]};
+                          setForm({...form, variants: vs});
+                        }} style={{width:48, height:48, cursor:'pointer', position:'relative', flexShrink:0}}>
+                          <img src={url} alt="" style={{width:'100%', height:'100%', objectFit:'cover', display:'block', opacity: linked ? 1 : 0.35}} />
+                          {linked && <div style={{position:'absolute', bottom:2, right:2, width:14, height:14, background:'var(--rust)', borderRadius:2, display:'grid', placeItems:'center'}}>
+                            <svg width="8" height="8" viewBox="0 0 10 10"><polyline points="1,5 4,8 9,2" fill="none" stroke="#fff" strokeWidth="2"/></svg>
+                          </div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
           <button className="btn btn-ghost btn-sm" style={{marginTop:4}} onClick={() => setForm({...form, variants: [...(form.variants||[]), {sku:'', name:'', price:0, stock:0}]})}>Add variant</button>
@@ -1590,24 +1640,79 @@ function AdminTutorials() {
 // ============================================================
 // AI MODELS & BOXES
 // ============================================================
-const modelSeed = [
-  { name:'outback-vision-v2', task:'Part identification', size:'1.4B', acc:'94.2%', deployments:12, status:'Active' },
-  { name:'outback-ocr-v1',    task:'Serial number OCR',  size:'0.3B', acc:'98.7%', deployments:8,  status:'Active' },
-  { name:'fault-classifier',  task:'Fault diagnosis',    size:'0.8B', acc:'87.1%', deployments:3,  status:'Beta'   },
-];
-const boxSeed = [
-  { id:'BOX-001', site:'Warehouse A',    model:'outback-vision-v2', uptime:'14d 3h', sig:'4G',  battery:'82%', status:'OK'        },
-  { id:'BOX-002', site:'Workshop Floor', model:'fault-classifier',  uptime:'6d 11h', sig:'WiFi', battery:'41%', status:'Low batt' },
-  { id:'BOX-003', site:'Loading Dock',   model:'outback-ocr-v1',   uptime:'0h',     sig:'—',   battery:'—',   status:'Offline 4h'},
-];
+
+const AI_STATUS_OPTIONS = ['Active','Beta','Training','Draft','Archived'];
+const BOX_STATUS_OPTIONS = ['OK','Low batt','Offline','Maintenance'];
+
+function AIModelDrawer({ model, onChange }) {
+  const inp = { width:'100%', padding:'8px 10px', border:'1px solid var(--line-strong)', fontFamily:'inherit', fontSize:14, background:'var(--paper)', color:'var(--ink)' };
+  const f = (key, label, placeholder, extra={}) => (
+    <label className="field" key={key}>
+      <span className="label">{label}</span>
+      <input style={{...inp,...(extra.mono?{fontFamily:'monospace'}:{})}} value={model?.[key]||''} onChange={e=>onChange({...model,[key]:e.target.value})} placeholder={placeholder} />
+    </label>
+  );
+  return (
+    <div style={{display:'grid', gap:12}}>
+      {f('name','Model name','e.g. outback-vision-v3',{mono:true})}
+      {f('task','Task','e.g. Part identification')}
+      {f('size','Size','e.g. 1.4B',{mono:true})}
+      {f('acc','Accuracy','e.g. 94.2%',{mono:true})}
+      {f('deployments','Deployments','0')}
+      <label className="field">
+        <span className="label">Status</span>
+        <select style={inp} value={model?.status||'Draft'} onChange={e=>onChange({...model,status:e.target.value})}>
+          {AI_STATUS_OPTIONS.map(s=><option key={s}>{s}</option>)}
+        </select>
+      </label>
+    </div>
+  );
+}
+
+function BoxDrawer({ box, onChange, modelOptions }) {
+  const inp = { width:'100%', padding:'8px 10px', border:'1px solid var(--line-strong)', fontFamily:'inherit', fontSize:14, background:'var(--paper)', color:'var(--ink)' };
+  const f = (key, label, placeholder, extra={}) => (
+    <label className="field" key={key}>
+      <span className="label">{label}</span>
+      <input style={{...inp,...(extra.mono?{fontFamily:'monospace'}:{})}} value={box?.[key]||''} onChange={e=>onChange({...box,[key]:e.target.value})} placeholder={placeholder} />
+    </label>
+  );
+  return (
+    <div style={{display:'grid', gap:12}}>
+      {f('id','Box ID','e.g. BOX-004',{mono:true})}
+      {f('site','Site','e.g. Warehouse B')}
+      <label className="field">
+        <span className="label">Running model</span>
+        <select style={inp} value={box?.model||''} onChange={e=>onChange({...box,model:e.target.value})}>
+          <option value="">— none —</option>
+          {modelOptions.map(m=><option key={m}>{m}</option>)}
+        </select>
+      </label>
+      {f('uptime','Uptime','e.g. 14d 3h',{mono:true})}
+      {f('sig','Link / Signal','e.g. 4G or WiFi',{mono:true})}
+      {f('battery','Battery','e.g. 82%',{mono:true})}
+      <label className="field">
+        <span className="label">Status</span>
+        <select style={inp} value={box?.status||'OK'} onChange={e=>onChange({...box,status:e.target.value})}>
+          {BOX_STATUS_OPTIONS.map(s=><option key={s}>{s}</option>)}
+        </select>
+      </label>
+    </div>
+  );
+}
 
 function AdminAI() {
   const [models, setModels] = useState([]);
   const [boxes, setBoxes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [busyAction, setBusyAction] = useState('');
   const [feedback, setFeedback] = useState('');
+  const [modelDrawer, setModelDrawer] = useState(null); // null | 'new' | index
+  const [modelDraft, setModelDraft] = useState({});
+  const [boxDrawer, setBoxDrawer] = useState(null);
+  const [boxDraft, setBoxDraft] = useState({});
+  const [saving, setSaving] = useState(false);
+
   useEffect(() => {
     fetch('/api/admin/ai', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject())
@@ -1615,54 +1720,83 @@ function AdminAI() {
       .catch(() => setError('Failed to load AI data.'))
       .finally(() => setLoading(false));
   }, []);
-  const map = { OK:{bg:'#d8e7d0', fg:'#345526'}, 'Low batt':{bg:'#fff4d6', fg:'#7a5d10'}, 'Offline 4h':{bg:'var(--rust)', fg:'#fff'} };
+
+  const saveAll = async (nextModels, nextBoxes) => {
+    setSaving(true); setFeedback('');
+    const r = await fetch('/api/admin/ai/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ models:nextModels, boxes:nextBoxes }) }).catch(()=>null);
+    setSaving(false);
+    if (r && r.ok) {
+      const d = await r.json();
+      setModels(d.models || []); setBoxes(d.boxes || []);
+      return true;
+    }
+    setFeedback('Failed to save.'); return false;
+  };
+
+  const openNewModel = () => { setModelDraft({ name:'', task:'', size:'', acc:'', deployments:0, status:'Draft' }); setModelDrawer('new'); };
+  const openEditModel = (i) => { setModelDraft({...models[i]}); setModelDrawer(i); };
+  const saveModel = async () => {
+    const next = modelDrawer === 'new' ? [...models, modelDraft] : models.map((m,i)=>i===modelDrawer?modelDraft:m);
+    if (await saveAll(next, boxes)) { setModelDrawer(null); setFeedback('Model saved.'); }
+  };
+  const deleteModel = async () => {
+    if (!window.confirm('Delete this model?')) return;
+    const next = models.filter((_,i)=>i!==modelDrawer);
+    if (await saveAll(next, boxes)) { setModelDrawer(null); setFeedback('Model deleted.'); }
+  };
+
+  const openNewBox = () => { setBoxDraft({ id:'', site:'', model:'', uptime:'', sig:'', battery:'', status:'OK' }); setBoxDrawer('new'); };
+  const openEditBox = (i) => { setBoxDraft({...boxes[i]}); setBoxDrawer(i); };
+  const saveBox = async () => {
+    const next = boxDrawer === 'new' ? [...boxes, boxDraft] : boxes.map((b,i)=>i===boxDrawer?boxDraft:b);
+    if (await saveAll(models, next)) { setBoxDrawer(null); setFeedback('Box saved.'); }
+  };
+  const deleteBox = async () => {
+    if (!window.confirm('Delete this box?')) return;
+    const next = boxes.filter((_,i)=>i!==boxDrawer);
+    if (await saveAll(models, next)) { setBoxDrawer(null); setFeedback('Box deleted.'); }
+  };
+
+  const map = { OK:{bg:'#d8e7d0', fg:'#345526'}, 'Low batt':{bg:'#fff4d6', fg:'#7a5d10'}, Offline:{bg:'var(--rust)', fg:'#fff'}, Maintenance:{bg:'#e8e0d0', fg:'#555'} };
   const deployedCount = boxes.length;
   const offlineCount = boxes.filter(b => (b.status || '').toLowerCase().includes('offline')).length;
   const lowBattCount = boxes.filter(b => (b.status || '').toLowerCase().includes('low batt')).length;
-  const handleCreateModel = async () => {
-    setBusyAction('newModel');
-    setFeedback('');
-    const payload = { models:[...models, { name:`model-${Date.now()}`, task:'New model setup', size:'0.0B', acc:'—', deployments:0, status:'Draft' }], boxes };
-    const r = await fetch('/api/admin/ai/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(payload) }).catch(()=>null);
-    setBusyAction('');
-    if (r && r.ok) {
-      const d = await r.json();
-      setModels(d.models || []);
-      setBoxes(d.boxes || []);
-      setFeedback('New model created.');
-    } else setFeedback('Failed to create model.');
-  };
+  const modelOptions = models.map(m => m.name).filter(Boolean);
+
   return (
     <div style={{padding:32, display:'grid', gap:28}}>
       {loading && <div className="mono" style={{fontSize:12, color:'var(--ink-2)'}}>Loading…</div>}
       {error && <div style={{fontSize:12, color:'var(--rust)'}}>{error}</div>}
+      {feedback && <div style={{fontSize:12, color:feedback.includes('Failed')?'var(--rust)':'var(--eucalyptus)'}}>{feedback}</div>}
       <div>
         <div className="row-flex" style={{justifyContent:'space-between', marginBottom:14}}>
           <h3 className="serif" style={{fontSize:24}}>Models</h3>
-          <div className="row-flex" style={{gap:8}}>
-            <button className="btn btn-rust btn-sm" onClick={handleCreateModel} disabled={busyAction==='newModel'}>{busyAction==='newModel'?'Creating…':'+ New model'}</button>
-          </div>
+          <button className="btn btn-rust btn-sm" onClick={openNewModel}>+ New model</button>
         </div>
-        {feedback && <div style={{marginBottom:10, fontSize:12, color:feedback.includes('Failed')?'var(--rust)':'var(--eucalyptus)'}}>{feedback}</div>}
-        <Table
+        {!loading && models.length === 0 && <div className="mono" style={{fontSize:12, color:'var(--ink-3)'}}>No models yet. Click "+ New model" to add one.</div>}
+        {models.length > 0 && <Table
           columns={[
             { key:'name', label:'Model', w:'1.5fr', render:r => <span className="mono" style={{color:'var(--rust)'}}>{r.name}</span> },
             { key:'task', label:'Task', w:'2fr' },
             { key:'size', label:'Size', w:'90px', render:r => <span className="mono" style={{fontSize:12}}>{r.size}</span> },
             { key:'acc', label:'Accuracy', w:'100px', render:r => <span className="mono" style={{fontSize:12}}>{r.acc}</span> },
             { key:'deployments', label:'Deployments', w:'120px', render:r => <span className="mono">{r.deployments}</span> },
-            { key:'status', label:'Status', w:'120px', render:r => <span className={`tag ${r.status==='Training'?'tag-ochre':r.status==='Beta'?'tag-rust':'tag-euc'}`}>{r.status.toUpperCase()}</span> },
+            { key:'status', label:'Status', w:'120px', render:r => <span className={`tag ${r.status==='Training'?'tag-ochre':r.status==='Beta'?'tag-rust':'tag-euc'}`}>{(r.status||'').toUpperCase()}</span> },
           ]}
-          rows={models.length ? models : modelSeed}
-          onRowClick={()=>{}}
-        />
+          rows={models}
+          onRowClick={(_,i) => openEditModel(i)}
+        />}
       </div>
       <div>
         <div className="row-flex" style={{justifyContent:'space-between', marginBottom:14}}>
           <h3 className="serif" style={{fontSize:24}}>Field inference boxes</h3>
-          <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{deployedCount} DEPLOYED · {offlineCount} OFFLINE · {lowBattCount} LOW-BATT</span>
+          <div className="row-flex" style={{gap:12}}>
+            <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{deployedCount} DEPLOYED · {offlineCount} OFFLINE · {lowBattCount} LOW-BATT</span>
+            <button className="btn btn-rust btn-sm" onClick={openNewBox}>+ New box</button>
+          </div>
         </div>
-        <Table
+        {!loading && boxes.length === 0 && <div className="mono" style={{fontSize:12, color:'var(--ink-3)'}}>No boxes yet. Click "+ New box" to add one.</div>}
+        {boxes.length > 0 && <Table
           columns={[
             { key:'id', label:'Box', w:'120px', render:r => <span className="mono" style={{fontSize:11, color:'var(--rust)'}}>{r.id}</span> },
             { key:'site', label:'Site', w:'2fr' },
@@ -1672,9 +1806,32 @@ function AdminAI() {
             { key:'battery', label:'Battery', w:'80px', render:r => <span className="mono" style={{fontSize:12, color: r.battery && parseInt(r.battery)<50?'var(--rust)':'var(--ink)'}}>{r.battery}</span> },
             { key:'status', label:'Status', w:'130px', render:r => <StatusPill value={r.status} map={map}/> },
           ]}
-          rows={boxes.length ? boxes : boxSeed}
-        />
+          rows={boxes}
+          onRowClick={(_,i) => openEditBox(i)}
+        />}
       </div>
+
+      <Drawer open={modelDrawer !== null} onClose={()=>setModelDrawer(null)} title={modelDrawer==='new'?'New model':(modelDraft?.name||'Edit model')}
+        footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
+          {modelDrawer !== 'new' ? <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={deleteModel} disabled={saving}>Delete</button> : <span/>}
+          <div className="row-flex" style={{gap:8}}>
+            <button className="btn btn-ghost btn-sm" onClick={()=>setModelDrawer(null)}>Cancel</button>
+            <button className="btn btn-rust btn-sm" onClick={saveModel} disabled={saving}>{saving?'Saving…':'Save'}</button>
+          </div>
+        </div>}>
+        <AIModelDrawer model={modelDraft} onChange={setModelDraft} />
+      </Drawer>
+
+      <Drawer open={boxDrawer !== null} onClose={()=>setBoxDrawer(null)} title={boxDrawer==='new'?'New box':(boxDraft?.id||'Edit box')}
+        footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
+          {boxDrawer !== 'new' ? <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={deleteBox} disabled={saving}>Delete</button> : <span/>}
+          <div className="row-flex" style={{gap:8}}>
+            <button className="btn btn-ghost btn-sm" onClick={()=>setBoxDrawer(null)}>Cancel</button>
+            <button className="btn btn-rust btn-sm" onClick={saveBox} disabled={saving}>{saving?'Saving…':'Save'}</button>
+          </div>
+        </div>}>
+        <BoxDrawer box={boxDraft} onChange={setBoxDraft} modelOptions={modelOptions} />
+      </Drawer>
     </div>
   );
 }
@@ -2751,7 +2908,53 @@ function AdminPolicies() {
 // ============================================================
 // SETTINGS
 // ============================================================
-function AdminSettings() {
+function AdminSettings({ sessionInfo = {} }) {
+  if (sessionInfo.role === 'seller') return <SellerSettings sessionInfo={sessionInfo} />;
+  return <AdminSettingsFull sessionInfo={sessionInfo} />;
+}
+
+function SellerSettings({ sessionInfo = {} }) {
+  const [form, setForm] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  useEffect(() => {
+    fetch('/api/admin/staff', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => {
+        const me = (d.members || []).find(m => m.id === sessionInfo.staffId);
+        if (me) setForm({ ...me, pin: '', newPin: '' });
+      })
+      .catch(() => {});
+  }, []);
+  const save = async () => {
+    if (!form) return;
+    if (form.newPin && !/^\d{4,6}$/.test(form.newPin)) { setMsg('PIN must be 4–6 digits.'); return; }
+    setBusy(true);
+    const payload = { id: form.id, name: form.name, email: form.email, phone: form.phone, color: form.color, status: form.status };
+    if (form.newPin) payload.pin = form.newPin;
+    const r = await fetch('/api/admin/staff/members/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(payload) }).catch(()=>null);
+    setBusy(false);
+    setMsg(r && r.ok ? 'Saved.' : 'Failed to save.');
+    if (r && r.ok) setForm(f => ({ ...f, newPin: '' }));
+  };
+  if (!form) return <div style={{padding:32, fontSize:13, color:'var(--ink-2)'}}>Loading…</div>;
+  return (
+    <div style={{padding:32, maxWidth:480}}>
+      {msg && <div style={{marginBottom:16, fontSize:13, color:msg.includes('Failed')||msg.includes('must')?'var(--rust)':'var(--eucalyptus)'}}>{msg}</div>}
+      <div style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24, display:'grid', gap:10}}>
+        <span className="eyebrow">MY DETAILS</span>
+        <label className="field" style={{marginTop:8}}><span className="label">Name</span><input className="input" value={form.name||''} onChange={e=>setForm({...form,name:e.target.value})}/></label>
+        <label className="field"><span className="label">Email</span><input className="input" type="email" value={form.email||''} onChange={e=>setForm({...form,email:e.target.value})}/></label>
+        <label className="field"><span className="label">Phone</span><input className="input" value={form.phone||''} onChange={e=>setForm({...form,phone:e.target.value})}/></label>
+        <label className="field"><span className="label">Avatar colour</span><input type="color" value={form.color||'#d7c7a6'} onChange={e=>setForm({...form,color:e.target.value})} style={{width:48,height:32,padding:2,border:'1px solid var(--line)',borderRadius:4,cursor:'pointer'}}/></label>
+        <label className="field"><span className="label">New PIN (leave blank to keep current)</span><input className="input" type="password" inputMode="numeric" maxLength={6} value={form.newPin||''} onChange={e=>setForm({...form,newPin:e.target.value.replace(/\D/g,'').slice(0,6)})} placeholder="4–6 digits"/></label>
+        <button className="btn btn-rust btn-sm" style={{marginTop:4,alignSelf:'flex-start'}} disabled={busy} onClick={save}>{busy?'Saving…':'Save'}</button>
+      </div>
+    </div>
+  );
+}
+
+function AdminSettingsFull({ sessionInfo = {} }) {
   const defaultShop = useMemo(() => ({
     tradingName: '',
     abn: '',
@@ -3287,7 +3490,13 @@ function AdminPage({ go }) {
 
   const myLevel = ROLE_LEVELS[sessionInfo.role] ?? 0;
   const allItems = ADMIN_SECTIONS.flatMap(g => g.items);
-  const canAccess = (id) => { const it = allItems.find(x => x.id === id); return it ? (ROLE_LEVELS[it.minRole] ?? 0) <= myLevel : false; };
+  const canAccess = (id) => {
+    const it = allItems.find(x => x.id === id);
+    if (!it) return false;
+    if ((ROLE_LEVELS[it.minRole] ?? 0) > myLevel) return false;
+    if (it.excludeRoles && it.excludeRoles.includes(sessionInfo.role)) return false;
+    return true;
+  };
   const effectiveSection = canAccess(section) ? section : (allItems.find(it => (ROLE_LEVELS[it.minRole] ?? 0) <= myLevel)?.id || 'repairs');
 
   if (checking) return <div style={{minHeight:'100vh', display:'grid', placeItems:'center'}}>Checking session…</div>;
@@ -3299,7 +3508,7 @@ function AdminPage({ go }) {
   return (
     <div style={{display:'flex', minHeight:'100vh', background:'var(--bg)'}}>
       <AdminSidebar section={effectiveSection} setSection={s => { setSection(s); setSearch(''); }} role={sessionInfo.role} username={sessionInfo.username}
-        onSignOut={async () => { await fetch('/api/admin/logout', { method:'POST', headers:postHeaders(), credentials:'include' }); setSessionInfo({ authed: false, role: null, username: null }); go('home'); }} />
+        onSignOut={async () => { await fetch('/api/admin/logout', { method:'POST', headers:postHeaders(), credentials:'include' }); setSessionInfo({ authed: false, role: null, username: null }); }} />
       <div style={{flex:1, minWidth:0}}>
         <AdminTopbar title={view.t} subtitle={subtitle} search={search} onSearch={setSearch}
           actions={

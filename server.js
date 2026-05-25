@@ -157,7 +157,14 @@ function readOrders() {
 function writeOrders(orders) { atomicWriteFile(ORDERS_DB_PATH, JSON.stringify({ orders }, null, 2)); }
 
 function readCustomers() {
-  try { const p = JSON.parse(fs.readFileSync(CUSTOMERS_DB_PATH, 'utf8')); return Array.isArray(p.customers) ? p.customers : []; } catch { return []; }
+  try {
+    const p = JSON.parse(fs.readFileSync(CUSTOMERS_DB_PATH, 'utf8'));
+    const customers = Array.isArray(p.customers) ? p.customers : [];
+    let dirty = false;
+    for (const c of customers) { if (!c.id) { c.id = 'cust-' + Date.now() + '-' + Math.random().toString(36).slice(2); dirty = true; } }
+    if (dirty) writeCustomers(customers);
+    return customers;
+  } catch { return []; }
 }
 function writeCustomers(customers) { atomicWriteFile(CUSTOMERS_DB_PATH, JSON.stringify({ customers }, null, 2)); }
 
@@ -634,6 +641,101 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null) {
     });
   };
   tryRead(candidates, 0);
+}
+
+// ── OG tag injection for social crawlers ─────────────────────────────────────
+
+const OG_BASE_URL = 'https://outbackelectronics.com.au';
+
+const STATIC_OG = {
+  '/shop':        { title: 'Shop — Outback Electronics',           description: 'Browse rugged laptops, solar gear, satellite comms, UHF radios and off-grid tools built for remote Australia.',           image: '/assets/og-image.webp' },
+  '/services':    { title: 'Services — Outback Electronics',       description: 'Expert repairs, field service and bench diagnostics for rugged devices. Book a repair or drop in.',                       image: '/assets/og-image.webp' },
+  '/groups':      { title: 'Community Groups — Outback Electronics', description: 'Connect with community chapters across remote Australia. Find your local Outback Electronics group.',                  image: '/assets/og-image.webp' },
+  '/memberships': { title: 'Memberships — Outback Electronics',    description: 'Join the Outback Electronics community. Member discounts, priority repairs and exclusive access.',                       image: '/assets/og-image.webp' },
+  '/tutorials':   { title: 'Tutorials — Outback Electronics',      description: 'Field guides, how-to videos and repair tutorials for off-grid gear and rugged electronics.',                            image: '/assets/og-image.webp' },
+  '/software':    { title: 'Software Library — Outback Electronics', description: 'Download firmware, drivers and utilities for rugged devices and off-grid hardware.',                                  image: '/assets/og-image.webp' },
+  '/ai':          { title: 'Edge AI — Outback Electronics',        description: 'Offline-capable AI models and inference hardware for remote deployments. No cloud required.',                           image: '/assets/og-image.webp' },
+  '/ewaste':      { title: 'eWaste Take-Back — Outback Electronics', description: 'Responsible eWaste recycling and take-back for old electronics. Drop in or arrange a pickup.',                        image: '/assets/og-image.webp' },
+  '/contact':     { title: 'Contact — Outback Electronics',        description: "Get in touch with the Outback Electronics team. We're based in Moama NSW and serve remote Australia.",                 image: '/assets/og-image.webp' },
+  '/quote':       { title: 'Request a Quote — Outback Electronics', description: 'Need a custom kit or bulk order? Request a quote from Outback Electronics.',                                          image: '/assets/og-image.webp' },
+};
+
+function stripHtml(s) { return String(s || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim(); }
+
+function resolveOgTags(pathname) {
+  // Static routes
+  if (STATIC_OG[pathname]) {
+    const s = STATIC_OG[pathname];
+    return { title: s.title, description: s.description, image: s.image, url: OG_BASE_URL + pathname };
+  }
+  // Product deep link: /product/<sku-or-id>
+  if (pathname.startsWith('/product/')) {
+    const id = decodeURIComponent(pathname.slice('/product/'.length));
+    if (id) {
+      const products = readProducts().filter(p => p.status === 'published');
+      const p = products.find(x => x.sku === id || String(x.id) === id || (x.slug && x.slug === id));
+      if (p) {
+        const price = p.price != null ? ` — $${Number(p.price).toLocaleString('en-AU', { minimumFractionDigits: 2 })}` : '';
+        const desc = p.description ? stripHtml(p.description).slice(0, 160) : `${p.name}. Available at Outback Electronics — rugged gear for remote Australia.`;
+        return {
+          title: `${p.name}${price} — Outback Electronics`,
+          description: desc,
+          image: (p.images && p.images[0]) || '/assets/og-image.webp',
+          url: `${OG_BASE_URL}/product/${encodeURIComponent(id)}`,
+          type: 'product',
+        };
+      }
+    }
+    // Unknown product SKU — still serve index.html so React can handle it
+    return { title: 'Outback Electronics', description: 'Rugged gear, solar kits, comms and tools built for remote Australia.', image: '/assets/og-image.webp', url: OG_BASE_URL + pathname };
+  }
+  // Service deep link: /service/<id>
+  if (pathname.startsWith('/service/')) {
+    const id = decodeURIComponent(pathname.slice('/service/'.length));
+    if (id) {
+      const services = readServices();
+      const s = services.find(x => String(x.id) === id || (x.slug && x.slug === id));
+      if (s) {
+        const desc = s.description ? stripHtml(s.description).slice(0, 160) : `${s.name}. Expert service from Outback Electronics.`;
+        return {
+          title: `${s.name} — Outback Electronics Services`,
+          description: desc,
+          image: (s.images && s.images[0]) || '/assets/og-image.webp',
+          url: `${OG_BASE_URL}/service/${encodeURIComponent(id)}`,
+        };
+      }
+    }
+    return { title: 'Services — Outback Electronics', description: 'Expert repairs and field service for rugged electronics.', image: '/assets/og-image.webp', url: OG_BASE_URL + pathname };
+  }
+  return null;
+}
+
+const ESC_HTML_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
+function escOg(s) { return String(s || '').replace(/[&<>"]/g, c => ESC_HTML_MAP[c]); }
+
+function serveIndexWithOg(res, og) {
+  const distPath = path.join(__dirname, 'dist', 'index.html');
+  fs.readFile(distPath, 'utf8', (err, template) => {
+    if (err) return sendErrorPage(res, 404, 'Not found', ERROR_404_HTML);
+    const ogType = og.type === 'product' ? 'product' : 'website';
+    const html = template
+      .replace(/<title>[^<]*<\/title>/, `<title>${escOg(og.title)}</title>`)
+      .replace(/<meta name="description"[^>]*\/?>/, `<meta name="description" content="${escOg(og.description)}" />`)
+      .replace(/<meta property="og:title"[^>]*\/?>/, `<meta property="og:title" content="${escOg(og.title)}" />`)
+      .replace(/<meta property="og:description"[^>]*\/?>/, `<meta property="og:description" content="${escOg(og.description)}" />`)
+      .replace(/<meta property="og:image"[^>]*\/?>/, `<meta property="og:image" content="${escOg(og.image)}" />`)
+      .replace(/<meta property="og:url"[^>]*\/?>/, `<meta property="og:url" content="${escOg(og.url)}" />`)
+      .replace(/<meta property="og:type"[^>]*\/?>/, `<meta property="og:type" content="${ogType}" />`);
+    res.writeHead(200, {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-cache, must-revalidate',
+      'X-Frame-Options': 'SAMEORIGIN',
+      'X-Content-Type-Options': 'nosniff',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
+      'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://portal.outbackelectronics.com.au https://forum.outbackelectronics.com.au; frame-ancestors 'none';",
+    });
+    res.end(html);
+  });
 }
 
 // Read once at startup so per-request file I/O can't fail
@@ -1547,6 +1649,12 @@ const mainServer = http.createServer(async (req, res) => {
     if (recent.length === 0) recent = threads.slice(0, 4);
     else recent = recent.slice(0, 4);
     return json(res, 200, { threads: recent.map(t => ({ id: t.id, title: t.title, cat: t.cat, replies: t.replies || 0 })) });
+  }
+
+  // Inject per-route OG tags for social crawlers (Facebook, Slack, iMessage, etc.)
+  if (req.method === 'GET') {
+    const og = resolveOgTags(url.pathname);
+    if (og) return serveIndexWithOg(res, og);
   }
 
   return serveStatic(req, res, url.pathname, '/dist/index.html', MAIN_SPA_ROUTES);
@@ -2520,9 +2628,10 @@ const adminServer = http.createServer(async (req, res) => {
     return json(res, 200, { stats });
   }
   if (req.method === 'POST' && url.pathname === '/api/admin/staff/members/save') {
-    const session = requireAdmin(req, res); if (!session) return;
+    const session = requireRole(req, res, 'seller'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     if (!body || typeof body.name !== 'string' || !body.name.trim()) return json(res, 422, { error: 'invalid_payload', message: 'Field "name" is required.' });
+    if (session.role === 'seller' && body.id !== session.staffId) return json(res, 403, { error: 'forbidden' });
     if (typeof body.pin === 'string' && body.pin.length > 0) {
       if (!/^\d{4,6}$/.test(body.pin)) return json(res, 422, { error: 'invalid_payload', message: 'PIN must be 4–6 digits.' });
       body.pinHash = hashPassword(body.pin);
@@ -2530,9 +2639,9 @@ const adminServer = http.createServer(async (req, res) => {
     delete body.pin;
     const data = readStaff();
     const idx = data.members.findIndex(m => m.id && m.id === body.id);
-    if (idx >= 0) { data.members[idx] = body; } else { body.id = 'staff-' + Date.now(); data.members.push(body); }
+    if (idx >= 0) { data.members[idx] = { ...data.members[idx], ...body }; } else { body.id = 'staff-' + Date.now(); data.members.push(body); }
     writeStaff(data);
-    return json(res, 200, { ok: true, item: body });
+    return json(res, 200, { ok: true, item: data.members[idx >= 0 ? idx : data.members.length - 1] });
   }
   if (req.method === 'POST' && url.pathname === '/api/admin/staff/members/delete') {
     const session = requireAdmin(req, res); if (!session) return;
