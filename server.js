@@ -75,6 +75,7 @@ function _defaultSubUrl(base, port, sub) {
 }
 const FORUM_URL  = process.env.FORUM_URL  || _defaultSubUrl(SITE_URL, 8081, 'forum');
 const PORTAL_URL = process.env.PORTAL_URL || _defaultSubUrl(SITE_URL, 8083, 'portal');
+const GAMES_URL  = process.env.GAMES_URL  || _defaultSubUrl(SITE_URL, 8084, 'games');
 
 function loadSessionsFromDisk(filePath) {
   try {
@@ -1188,6 +1189,13 @@ function getPortalUrl() {
     return base.replace(/(:\d+)?(\/|$)/, ':8083$2');
   return base.replace(/^(https?:\/\/)/, '$1portal.');
 }
+function getGamesUrl() {
+  if (GAMES_URL) return GAMES_URL;
+  const base = getSiteUrl();
+  if (/^https?:\/\/(localhost|127\.|0\.0\.0\.0)(:\d+)?/.test(base))
+    return base.replace(/(:\d+)?(\/|$)/, ':8084$2');
+  return base.replace(/^(https?:\/\/)/, '$1games.');
+}
 function getAdminUsername() {
   try { return readSettings().security?.adminUsername || ADMIN_USERNAME; } catch { return ADMIN_USERNAME; }
 }
@@ -1333,6 +1341,7 @@ const mainServer = http.createServer(async (req, res) => {
       flags: flags || {},
       portalUrl: getPortalUrl(),
       forumUrl: getForumUrl(),
+      gamesUrl: getGamesUrl(),
     });
   }
 
