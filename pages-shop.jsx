@@ -33,7 +33,7 @@ function HomePage({ go, addToCart, portalUser }) {
       fetch('/api/ai').then(r => r.ok ? r.json() : Promise.reject()).then(d => setAiData(d)).catch(() => {}),
       fetch('/api/catalog/services').then(r => r.ok ? r.json() : Promise.reject()).then(d => setRepairServices(d.items || [])).catch(() => {}),
       fetch('/api/settings').then(r => r.ok ? r.json() : Promise.reject()).then(d => setSiteContent(d.siteContent || {})).catch(() => {}),
-    ]).finally(() => setLoading(false));
+    ]).finally(() => { setLoading(false); setTimeout(() => window.observeReveal && window.observeReveal(), 80); });
   }, []);
   if (loading) {
     return (
@@ -67,25 +67,25 @@ function HomePage({ go, addToCart, portalUser }) {
   return (
     <>
       {/* Hero */}
-      <section style={{borderBottom: '1px solid var(--line)', background: 'var(--bg-elev)'}}>
+      <section className="hero-section" style={{position:'relative'}}>
         <div className="container" style={{paddingTop: 56, paddingBottom: 56}}>
           <div style={{display:'grid', gridTemplateColumns:'1.2fr 1fr', gap: 48, alignItems:'center'}}>
             <div>
-              <span className="eyebrow">EST. 2023 · APPOINTMENT ONLY · REMOTE ELECTRONICS SUPPORT</span>
-              <h1 className="serif" style={{fontSize: 92, marginTop: 14, lineHeight: 0.95}}>
+              <span className="eyebrow hero-eyebrow">EST. 2023 · APPOINTMENT ONLY · REMOTE ELECTRONICS SUPPORT</span>
+              <h1 className="serif hero-headline" style={{fontSize: 92, marginTop: 14, lineHeight: 0.95}}>
                 Built for where<br/>
                 <span className="italic" style={{color:'var(--rust)'}}>the signal ends.</span>
               </h1>
-              <p style={{marginTop: 22, fontSize: 18, maxWidth: 520, color:'var(--ink-2)'}}>
+              <p className="hero-sub" style={{marginTop: 22, fontSize: 18, maxWidth: 520, color:'var(--ink-2)'}}>
                 Rugged laptops, satellite uplinks, off-grid power, repair benches and an obstinate community of tinkerers — serving remote Australia{shop.address ? ` from ${shop.address}` : ''} by appointment only.
               </p>
-              <div className="row-flex" style={{marginTop: 28}}>
+              <div className="row-flex hero-actions" style={{marginTop: 28}}>
                 <button className="btn btn-rust" onClick={() => go('shop')}>Browse the Shop →</button>
                 <button className="btn btn-ghost" onClick={() => go('services')}>Book a Repair</button>
                 {shop.phone && <span className="mono" style={{fontSize:12, color:'var(--ink-2)'}}>OR · CALL {shop.phone}</span>}
               </div>
               {portalUser === null && (
-                <div style={{marginTop:18, display:'flex', alignItems:'center', gap:10, padding:'12px 16px', border:'1px solid var(--line)', background:'var(--paper)', maxWidth:'fit-content'}}>
+                <div className="hero-actions" style={{marginTop:18, display:'flex', alignItems:'center', gap:10, padding:'12px 16px', border:'1px solid var(--line)', background:'var(--paper)', maxWidth:'fit-content', animationDelay:'380ms'}}>
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{color:'var(--ink-3)', flexShrink:0}}><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>
                   <span style={{fontSize:13, color:'var(--ink-2)'}}>New customer?</span>
                   <a href="https://portal.outbackelectronics.com.au/?tab=register" style={{fontSize:13, color:'var(--rust)', fontWeight:600, textDecoration:'none'}}>Create a free account</a>
@@ -93,13 +93,13 @@ function HomePage({ go, addToCart, portalUser }) {
                   <a href="https://portal.outbackelectronics.com.au/?tab=login" style={{fontSize:13, color:'var(--ink-2)', textDecoration:'none'}}>Sign in</a>
                 </div>
               )}
-              <div className="row-flex" style={{marginTop: 36, gap: 32, borderTop:'1px solid var(--line)', paddingTop: 22}}>
+              <div className="row-flex hero-stats" style={{marginTop: 36, gap: 32, borderTop:'1px solid var(--line)', paddingTop: 22}}>
                 <div><div className="serif" style={{fontSize:32, color:'var(--rust)'}}>{metrics.repairCount !== null ? metrics.repairCount.toLocaleString() : '—'}</div><div className="eyebrow">REPAIRS LOGGED</div></div>
                 <div><div className="serif" style={{fontSize:32, color:'var(--rust)'}}>{metrics.ewasteTonnes !== null ? metrics.ewasteTonnes.toFixed(1) + 't' : '—'}</div><div className="eyebrow">E-WASTE DIVERTED</div></div>
                 <div><div className="serif" style={{fontSize:32, color:'var(--rust)'}}>{metrics.forumMembers !== null ? metrics.forumMembers.toLocaleString() : '—'}</div><div className="eyebrow">FORUM MEMBERS</div></div>
               </div>
             </div>
-            <div style={{position:'relative'}}>
+            <div className="hero-image" style={{position:'relative'}}>
               {heroProduct && heroProduct.images && heroProduct.images.length > 0
                 ? <img src={heroProduct.images[0]} alt={heroProduct.name} style={{width:'100%', aspectRatio:'4/5', objectFit:'cover', display:'block'}} />
                 : <div className="slot slot-rust" style={{aspectRatio: '4/5'}}>RUGGED LAPTOP ON RED-DIRT WORKBENCH</div>}
@@ -125,10 +125,13 @@ function HomePage({ go, addToCart, portalUser }) {
             </div>
           </div>
         </div>
+        <div className="scroll-indicator" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
       </section>
 
       {/* Category strip */}
-      <section className="container" style={{paddingTop: 64, paddingBottom: 24}}>
+      <section className="container reveal" style={{paddingTop: 64, paddingBottom: 24}}>
         <div className="row-flex" style={{justifyContent:'space-between', marginBottom: 24, alignItems:'baseline'}}>
           <div>
             <span className="eyebrow">SECTIONS</span>
@@ -153,7 +156,7 @@ function HomePage({ go, addToCart, portalUser }) {
       </section>
 
       {/* Editorial split: AI + Services */}
-      <section className="container" style={{paddingTop: 64}}>
+      <section className="container reveal" style={{paddingTop: 64}}>
         <div className="grid-2" style={{gap:32}}>
           <div style={{background:'var(--dark)', color:'var(--paper)', padding: 40, position:'relative', overflow:'hidden'}}>
             {siteContent.aiEnabled && <span className="tag tag-ochre">NEW · 2026</span>}
@@ -206,7 +209,7 @@ function HomePage({ go, addToCart, portalUser }) {
       </section>
 
       {/* Featured products */}
-      <section className="container" style={{paddingTop: 64}}>
+      <section className="container reveal" style={{paddingTop: 64}}>
         <div className="row-flex" style={{justifyContent:'space-between', marginBottom: 24, alignItems:'baseline'}}>
           <div>
             <span className="eyebrow">ON THE BENCH THIS WEEK</span>
@@ -220,7 +223,7 @@ function HomePage({ go, addToCart, portalUser }) {
       </section>
 
       {/* Quote + Forum */}
-      <section className="container" style={{paddingTop: 64, paddingBottom: 16}}>
+      <section className="container reveal" style={{paddingTop: 64, paddingBottom: 16}}>
         <div className="grid-2">
           <div className="card-paper" style={{padding: 36}}>
             <span className="tag tag-rust">QUOTES IN 24h</span>

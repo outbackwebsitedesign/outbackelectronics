@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, createContext, useContext } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback, createContext, useContext } from 'react';
 
 function getCsrf() {
   return document.cookie.split(';').reduce((v, c) => {
@@ -26,6 +26,39 @@ let _PORTAL_URL = 'https://portal.outbackelectronics.com.au';
 let _FORUM_URL  = 'https://forum.outbackelectronics.com.au';
 function getPortalUrl() { return _PORTAL_URL; }
 function getForumUrl()  { return _FORUM_URL; }
+
+// ---------------- Scroll Reveal Hook ----------------
+function useReveal(options = {}) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === 'undefined') {
+      if (el) el.setAttribute('data-visible', '');
+      return;
+    }
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) { el.setAttribute('data-visible', ''); observer.disconnect(); }
+    }, { threshold: 0.1, ...options });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  return ref;
+}
+window.useReveal = useReveal;
+
+function observeReveal() {
+  if (typeof IntersectionObserver === 'undefined') {
+    document.querySelectorAll('.reveal').forEach(el => el.setAttribute('data-visible', ''));
+    return;
+  }
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) { e.target.setAttribute('data-visible', ''); observer.unobserve(e.target); }
+    });
+  }, { threshold: 0.08 });
+  document.querySelectorAll('.reveal:not([data-visible])').forEach(el => observer.observe(el));
+}
+window.observeReveal = observeReveal;
 
 // ---------------- Search Overlay ----------------
 function SearchOverlay({ go, onClose }) {
@@ -69,7 +102,7 @@ function SearchOverlay({ go, onClose }) {
   const firstResult = allResults[0];
 
   return (
-    <div style={{position:'fixed', inset:0, zIndex:500, display:'flex', flexDirection:'column', alignItems:'center', paddingTop:80, background:'rgba(15,13,10,0.75)'}}
+    <div className="search-backdrop" style={{position:'fixed', inset:0, zIndex:500, display:'flex', flexDirection:'column', alignItems:'center', paddingTop:80, background:'rgba(15,13,10,0.72)'}}
       onClick={onClose}>
       <div style={{width:'100%', maxWidth:560, background:'var(--bg)', border:'1px solid var(--line)', boxShadow:'0 12px 40px rgba(0,0,0,.35)'}}
         onClick={e => e.stopPropagation()}>
@@ -346,6 +379,24 @@ function TopNav({ page, go, cart, onSearchOpen, accountOpen, setAccountOpen, por
   const announcement = useAnnouncement();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const signedOut = portalUser === null;
+  const [scrolled, setScrolled] = useState(false);
+  const prevCartRef = useRef(cart);
+  const [cartPopped, setCartPopped] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    if (cart > prevCartRef.current) {
+      setCartPopped(true);
+      const t = setTimeout(() => setCartPopped(false), 400);
+      return () => clearTimeout(t);
+    }
+    prevCartRef.current = cart;
+  }, [cart]);
 
   const handleNavClick = (id) => {
     setMobileMenuOpen(false);
@@ -357,7 +408,7 @@ function TopNav({ page, go, cart, onSearchOpen, accountOpen, setAccountOpen, por
     <header>
       {announcement && <div className="announce">{announcement}</div>}
       <UtilityBar go={go} />
-      <div className="topnav">
+      <div className={scrolled ? 'topnav scrolled' : 'topnav'}>
         <div className="container row">
           <Logo onClick={() => go('home')} />
           <nav className="mainlinks">
@@ -392,7 +443,7 @@ function TopNav({ page, go, cart, onSearchOpen, accountOpen, setAccountOpen, por
             </div>
             <button className="icon-btn" title="Cart" aria-label={cart > 0 ? `Cart, ${cart} item${cart === 1 ? '' : 's'}` : 'Cart'} onClick={() => go('cart')}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M3 4h2l2.5 12h11l2-9H6"/><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/></svg>
-              {cart > 0 && <span className="cart-count" aria-hidden="true">{cart}</span>}
+              {cart > 0 && <span className={`cart-count${cartPopped ? ' popped' : ''}`} aria-hidden="true">{cart}</span>}
             </button>
             {/* Hamburger — hidden on desktop via CSS, shown on mobile */}
             <button className="icon-btn hamburger" style={{display:'none'}} title="Menu" aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'} aria-expanded={mobileMenuOpen} aria-controls="mobile-nav" onClick={() => setMobileMenuOpen(o => !o)}>
@@ -913,6 +964,25 @@ const KNOWN_PAGES = [...PRIMARY_PAGES, ...UTILITY_PAGES, ...ACCOUNT_PAGES, {id:'
 function App() {
   useEffect(() => { ensureCsrf(); }, []);
 
+  // Button ripple effect via event delegation
+  useEffect(() => {
+    const handler = (e) => {
+      const btn = e.target.closest('.btn');
+      if (!btn) return;
+      const rect = btn.getBoundingClientRect();
+      const size = Math.max(rect.width, rect.height) * 2;
+      const x = e.clientX - rect.left - size / 2;
+      const y = e.clientY - rect.top - size / 2;
+      const ripple = document.createElement('span');
+      ripple.className = 'btn-ripple';
+      ripple.style.cssText = `width:${size}px;height:${size}px;left:${x}px;top:${y}px`;
+      btn.appendChild(ripple);
+      ripple.addEventListener('animationend', () => ripple.remove(), { once: true });
+    };
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, []);
+
   const [page, setPage] = useState(() => {
     const path = location.pathname.replace(/^\/+/, '');
     if (path.startsWith('product/')) return 'product';
@@ -962,6 +1032,9 @@ function App() {
     }
     if (location.pathname !== target) window.history.pushState({}, '', target);
     window.scrollTo({top:0});
+    // Observe newly mounted reveal elements after a short delay (wait for render)
+    const t = setTimeout(observeReveal, 80);
+    return () => clearTimeout(t);
   }, [page, pageParams]);
 
   useEffect(() => {
@@ -1014,7 +1087,9 @@ function App() {
     <ShopContext.Provider value={shopCtxValue}>
       <TopNav page={page} go={go} cart={cartCount} onSearchOpen={() => setSearchOpen(true)} accountOpen={accountOpen} setAccountOpen={setAccountOpen} portalUser={portalUser} />
       <main id="main-content">
-        <PageComponent go={go} addToCart={addToCart} pageParams={pageParams} cart={cart} removeFromCart={removeFromCart} updateQty={updateQty} clearCart={clearCart} portalUser={portalUser} />
+        <div key={page} className="page-in">
+          <PageComponent go={go} addToCart={addToCart} pageParams={pageParams} cart={cart} removeFromCart={removeFromCart} updateQty={updateQty} clearCart={clearCart} portalUser={portalUser} />
+        </div>
       </main>
       <Footer go={go} />
       <TweaksUI />
