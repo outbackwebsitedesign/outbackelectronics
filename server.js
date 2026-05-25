@@ -2657,6 +2657,64 @@ const adminServer = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true });
   }
 
+  // ── Admin: Memberships ──────────────────────────────────────
+  if (req.method === 'GET' && url.pathname === '/api/admin/memberships') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    return json(res, 200, readMemberships());
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/memberships/tiers/save') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    if (!body || !body.name) return json(res, 422, { error: 'name_required' });
+    const mb = readMemberships();
+    if (!body.id) body.id = 'tier-' + Date.now();
+    const idx = mb.tiers.findIndex(t => t.id === body.id);
+    if (idx >= 0) mb.tiers[idx] = body; else mb.tiers.push(body);
+    writeMemberships(mb);
+    return json(res, 200, { ok: true, item: body });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/memberships/tiers/delete') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const mb = readMemberships();
+    mb.tiers = mb.tiers.filter(t => t.id !== body.id);
+    writeMemberships(mb);
+    return json(res, 200, { ok: true });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/memberships/subscriptions/cancel') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const mb = readMemberships();
+    const sub = mb.subscriptions.find(s => s.id === body.subId);
+    if (sub) { sub.status = 'cancelled'; sub.cancelledAt = new Date().toISOString(); sub.cancelReason = 'admin_cancelled'; }
+    writeMemberships(mb);
+    return json(res, 200, { ok: true });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/memberships/activate') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const orders = readOrders();
+    const order = orders.find(o => o.id === body.orderId);
+    if (!order || !order.pendingMembershipActivation) return json(res, 404, { error: 'not_found' });
+    const { tierId, email } = order.pendingMembershipActivation;
+    const mb = readMemberships();
+    const tier = mb.tiers.find(t => t.id === tierId);
+    if (!tier) return json(res, 404, { error: 'tier_not_found' });
+    const forumData = readForum();
+    const user = (forumData.users || []).find(u => u.email === email);
+    if (!user) return json(res, 404, { error: 'user_not_found', message: 'No portal account found for ' + email });
+    mb.subscriptions = (mb.subscriptions || []).map(s => s.userId === user.id && s.status === 'active'
+      ? { ...s, status: 'cancelled', cancelReason: 'replaced_by_admin_activation', cancelledAt: new Date().toISOString() }
+      : s);
+    mb.subscriptions.push({ id: 'sub-' + Date.now(), userId: user.id, username: user.username, tierId, orderId: order.id, status: 'active', startDate: new Date().toISOString() });
+    writeMemberships(mb);
+    delete order.pendingMembershipActivation;
+    writeOrders(orders);
+    const tmpl = emailMembershipWelcome({ customerName: user.displayName || user.username, tierName: tier.name });
+    sendEmail({ to: email, ...tmpl }).catch(() => {});
+    return json(res, 200, { ok: true });
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/admin/staff') {
     const session = requireRole(req, res, 'staff'); if (!session) return;
     return json(res, 200, readStaff());
