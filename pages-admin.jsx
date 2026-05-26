@@ -654,7 +654,9 @@ function AdminOrders({ search }) {
                                 if (newParts.every(p => p.status === 'installed')) derived = 'testing';
                                 const derivedStage = STAGE_ORDER.indexOf(derived);
                                 const fulfilment = derivedStage > currentStage ? derived : f.fulfilment;
-                                return { ...f, parts: newParts, fulfilment };
+                                const updated = { ...f, parts: newParts, fulfilment };
+                                saveNow({ parts: newParts, fulfilment });
+                                return updated;
                               });
                             }}
                           >{s}</button>
@@ -2970,10 +2972,193 @@ function AdminGroups() {
 // ============================================================
 // CUSTOMERS
 // ============================================================
+function MergeCustomerModal({ customers, onClose, onMerged }) {
+  const [aId, setAId] = useState('');
+  const [bId, setBId] = useState('');
+  const [choices, setChoices] = useState({});
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const a = customers.find(c => c.id === aId);
+  const b = customers.find(c => c.id === bId);
+
+  const FIELDS = [
+    { key: 'name', label: 'Name' },
+    { key: 'email', label: 'Email' },
+    { key: 'phone', label: 'Phone' },
+    { key: 'loc', label: 'Location' },
+    { key: 'tags', label: 'Tags', render: v => (v||[]).join(', ') },
+    { key: 'testimonial', label: 'Testimonial' },
+  ];
+
+  function pick(field, src) {
+    setChoices(c => ({ ...c, [field]: src }));
+  }
+
+  async function doMerge() {
+    if (!a || !b) return setError('Select two different customers.');
+    if (aId === bId) return setError('Select two different customers.');
+    setBusy(true); setError('');
+    const merged = {};
+    for (const f of FIELDS) {
+      const src = choices[f.key] === 'b' ? b : a;
+      merged[f.key] = src[f.key];
+    }
+    const r = await fetch('/api/admin/customers/merge', {
+      method: 'POST', headers: postHeaders(), credentials: 'include',
+      body: JSON.stringify({ keepId: aId, deleteId: bId, merged })
+    }).catch(() => null);
+    setBusy(false);
+    if (r && r.ok) { const d = await r.json(); onMerged(d.item, bId); onClose(); }
+    else setError('Merge failed.');
+  }
+
+  return (
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center'}}>
+      <div style={{background:'var(--paper)',borderRadius:12,padding:32,width:640,maxHeight:'80vh',overflowY:'auto',display:'grid',gap:20}}>
+        <h3 style={{margin:0,fontFamily:'Instrument Serif, serif',fontWeight:400,fontSize:24}}>Merge customers</h3>
+        {error && <div className="alert alert-error">{error}</div>}
+        <div className="grid-2" style={{gap:16}}>
+          <label className="field">
+            <span className="label">Customer A (keep)</span>
+            <select className="input" value={aId} onChange={e=>setAId(e.target.value)}>
+              <option value="">— select —</option>
+              {customers.map(c=><option key={c.id} value={c.id}>{c.name} {c.email ? `(${c.email})` : ''}</option>)}
+            </select>
+          </label>
+          <label className="field">
+            <span className="label">Customer B (merge into A)</span>
+            <select className="input" value={bId} onChange={e=>setBId(e.target.value)}>
+              <option value="">— select —</option>
+              {customers.filter(c=>c.id!==aId).map(c=><option key={c.id} value={c.id}>{c.name} {c.email ? `(${c.email})` : ''}</option>)}
+            </select>
+          </label>
+        </div>
+        {a && b && (
+          <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
+            <thead>
+              <tr>
+                <th style={{textAlign:'left',padding:'6px 8px',color:'var(--ink-2)',fontWeight:600,fontSize:11}}>FIELD</th>
+                <th style={{textAlign:'left',padding:'6px 8px',color:'var(--ink-2)',fontWeight:600,fontSize:11}}>A — {a.name}</th>
+                <th style={{textAlign:'left',padding:'6px 8px',color:'var(--ink-2)',fontWeight:600,fontSize:11}}>B — {b.name}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {FIELDS.map(f => {
+                const av = f.render ? f.render(a[f.key]) : (a[f.key] || '');
+                const bv = f.render ? f.render(b[f.key]) : (b[f.key] || '');
+                const chosen = choices[f.key] || 'a';
+                return (
+                  <tr key={f.key} style={{borderTop:'1px solid var(--rule)'}}>
+                    <td style={{padding:'8px',fontWeight:600,fontSize:12,color:'var(--ink-2)'}}>{f.label}</td>
+                    <td style={{padding:'8px',cursor:'pointer',background:chosen==='a'?'var(--bg-deep)':'transparent',borderRadius:4}} onClick={()=>pick(f.key,'a')}>
+                      <span style={{fontSize:12}}>{av || <em style={{color:'var(--ink-3)'}}>empty</em>}</span>
+                      {chosen==='a' && <span style={{marginLeft:6,fontSize:10,color:'var(--rust)',fontWeight:700}}>✓ KEEP</span>}
+                    </td>
+                    <td style={{padding:'8px',cursor:'pointer',background:chosen==='b'?'var(--bg-deep)':'transparent',borderRadius:4}} onClick={()=>pick(f.key,'b')}>
+                      <span style={{fontSize:12}}>{bv || <em style={{color:'var(--ink-3)'}}>empty</em>}</span>
+                      {chosen==='b' && <span style={{marginLeft:6,fontSize:10,color:'var(--rust)',fontWeight:700}}>✓ KEEP</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+        <div className="row-flex" style={{justifyContent:'flex-end',gap:8,marginTop:4}}>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
+          <button className="btn btn-sm" style={{background:'var(--rust)',color:'#fff'}} disabled={!a||!b||busy} onClick={doMerge}>
+            {busy ? 'Merging…' : 'Merge →'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CustomerLinkedJobs({ customerId, email, manualLinks, onLinksChange }) {
+  const [jobs, setJobs] = useState(null);
+  const [addInput, setAddInput] = useState('');
+  const [addBusy, setAddBusy] = useState(false);
+
+  useEffect(() => {
+    if (!customerId) return;
+    fetch(`/api/admin/customers/linked-jobs?id=${customerId}`, { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject()).then(d => setJobs(d)).catch(() => setJobs({ orders:[], repairs:[], quotes:[] }));
+  }, [customerId]);
+
+  async function addLink() {
+    const val = addInput.trim();
+    if (!val) return;
+    setAddBusy(true);
+    const links = [...(manualLinks||[]), val];
+    onLinksChange(links);
+    setAddInput('');
+    setAddBusy(false);
+  }
+
+  function removeLink(v) {
+    onLinksChange((manualLinks||[]).filter(x => x !== v));
+  }
+
+  if (!customerId) return null;
+
+  const allOrders = jobs ? [...(jobs.orders||[]), ...(jobs.repairs||[])] : [];
+  const allQuotes = jobs ? (jobs.quotes||[]) : [];
+
+  return (
+    <div style={{marginTop:16}}>
+      <div style={{fontWeight:700,fontSize:12,color:'var(--ink-2)',letterSpacing:'0.08em',marginBottom:10}}>LINKED JOBS</div>
+      {!jobs && <div style={{fontSize:13,color:'var(--ink-3)'}}>Loading…</div>}
+      {jobs && allOrders.length === 0 && allQuotes.length === 0 && (manualLinks||[]).length === 0 && (
+        <div style={{fontSize:13,color:'var(--ink-3)'}}>No jobs linked yet.</div>
+      )}
+      {jobs && allOrders.length > 0 && (
+        <div style={{display:'grid',gap:6,marginBottom:10}}>
+          {allOrders.map(o => (
+            <div key={o.id} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 10px',background:'var(--bg-deep)',borderRadius:6,fontSize:13}}>
+              <span style={{fontWeight:600,fontFamily:'monospace'}}>{o.ref || o.id}</span>
+              <span style={{color:'var(--ink-2)',flex:1}}>{o.title || o.service || o.description || ''}</span>
+              <span style={{fontSize:11,color:'var(--ink-3)'}}>{o._type === 'repair' ? 'REPAIR' : 'ORDER'}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {jobs && allQuotes.length > 0 && (
+        <div style={{display:'grid',gap:6,marginBottom:10}}>
+          {allQuotes.map(q => (
+            <div key={q.id} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 10px',background:'var(--bg-deep)',borderRadius:6,fontSize:13}}>
+              <span style={{fontWeight:600,fontFamily:'monospace'}}>{q.ref || q.id}</span>
+              <span style={{color:'var(--ink-2)',flex:1}}>{q.service || q.description || ''}</span>
+              <span style={{fontSize:11,color:'var(--ink-3)'}}>QUOTE</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {(manualLinks||[]).length > 0 && (
+        <div style={{display:'grid',gap:4,marginBottom:10}}>
+          {(manualLinks||[]).map(v => (
+            <div key={v} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 10px',background:'#fff8f0',border:'1px solid var(--rule)',borderRadius:6,fontSize:13}}>
+              <span style={{fontFamily:'monospace',flex:1}}>{v}</span>
+              <span style={{fontSize:11,color:'var(--ink-3)'}}>MANUAL</span>
+              <button onClick={() => removeLink(v)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--rust)',fontSize:16,lineHeight:1,padding:0}}>×</button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="row-flex" style={{gap:8}}>
+        <input className="input" style={{flex:1,fontSize:13}} placeholder="Link order / repair ID manually…" value={addInput} onChange={e=>setAddInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addLink()} />
+        <button className="btn btn-ghost btn-sm" disabled={addBusy||!addInput.trim()} onClick={addLink}>Add</button>
+      </div>
+    </div>
+  );
+}
+
 function AdminCustomers() {
   const [rows, setRows] = useState([]);
   const [edit, setEdit] = useState(null);
   const [form, setForm] = useState({});
+  const [mergeOpen, setMergeOpen] = useState(false);
   useEffect(() => {
     fetch('/api/admin/customers', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject()).then(d => setRows(d.items || [])).catch(() => setRows([]));
@@ -2987,7 +3172,8 @@ function AdminCustomers() {
         <StatTile label="REPEAT RATE" value="—" />
         <StatTile label="AVG ORDER VALUE" value="—" />
       </div>
-      <div className="row-flex" style={{justifyContent:'flex-end', marginBottom:-8}}>
+      <div className="row-flex" style={{justifyContent:'flex-end', gap:8, marginBottom:-8}}>
+        <button className="btn btn-ghost btn-sm" onClick={() => setMergeOpen(true)}>Merge duplicates</button>
         <button className="btn btn-rust btn-sm" onClick={() => { setEdit({}); setForm({ name:'', loc:'', email:'', phone:'', tagsStr:'', orders:0, spent:0, last:'' }); }}>+ New customer</button>
       </div>
       <Table
@@ -3002,6 +3188,15 @@ function AdminCustomers() {
         rows={rows}
         onRowClick={(r) => openCustomer(r)}
       />
+      {mergeOpen && (
+        <MergeCustomerModal
+          customers={rows}
+          onClose={() => setMergeOpen(false)}
+          onMerged={(updated, deletedId) => {
+            setRows(rs => rs.filter(r => r.id !== deletedId).map(r => r.id === updated.id ? updated : r));
+          }}
+        />
+      )}
       {edit !== null && (
         <Drawer open={true} onClose={() => setEdit(null)} title={edit.name || 'New customer'}
           footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
@@ -3046,6 +3241,12 @@ function AdminCustomers() {
             <input type="checkbox" checked={!!form.testimonialFeatured} onChange={e=>setForm({...form,testimonialFeatured:e.target.checked})}/>
             <span className="label" style={{marginBottom:0}}>Feature on shop page</span>
           </label>
+          <CustomerLinkedJobs
+            customerId={edit.id}
+            email={form.email}
+            manualLinks={form.manualLinks}
+            onLinksChange={links => setForm(f => ({ ...f, manualLinks: links }))}
+          />
         </Drawer>
       )}
     </div>
