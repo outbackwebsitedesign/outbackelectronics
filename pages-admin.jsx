@@ -69,7 +69,12 @@ function AdminLogin({ onAuth }) {
     }
   };
   return (
-    <div style={{minHeight:'100vh', background:'#0f0d0a', color:'var(--paper)', display:'grid', placeItems:'center', padding:24}}>
+    <div style={{
+      minHeight:'100vh',
+      background:'radial-gradient(ellipse at 60% 40%, #1c1510 0%, #0f0d0a 70%)',
+      color:'var(--paper)',
+      display:'grid', placeItems:'center', padding:24,
+    }}>
       <div style={{width:'100%', maxWidth: 420}}>
         <div style={{display:'flex', alignItems:'center', gap:12, marginBottom: 28}}>
           <div className="logo-mark sm" style={{background:'#000'}}>
@@ -83,18 +88,28 @@ function AdminLogin({ onAuth }) {
         <form onSubmit={submit} style={{background:'#181410', border:'1px solid #2a241c', padding: 28}}>
           <div className="mono" style={{fontSize:10, color:'rgba(244,237,225,0.5)', marginBottom: 14}}>// AUTH REQUIRED</div>
           <label className="field"><span className="label" style={{color:'var(--paper)'}}>Username</span>
-            <input className="input" style={{background:'#0f0d0a', borderColor:'#2a241c', color:'var(--paper)'}} value={u} onChange={e => setU(e.target.value)} />
+            <input className="input" style={{background:'#0f0d0a', borderColor:'#2a241c', color:'var(--paper)'}} value={u} onChange={e => setU(e.target.value)} autoComplete="username" />
           </label>
           <label className="field"><span className="label" style={{color:'var(--paper)'}}>Password / PIN</span>
-            <input className="input" type="password" style={{background:'#0f0d0a', borderColor:'#2a241c', color:'var(--paper)'}} value={p} onChange={e => setP(e.target.value)} />
+            <input className="input" type="password" style={{background:'#0f0d0a', borderColor:'#2a241c', color:'var(--paper)'}} value={p} onChange={e => setP(e.target.value)} autoComplete="current-password" />
           </label>
-          {err && <div style={{color:'var(--rust)', fontSize:13, marginBottom:10}}>{err}</div>}
-          <button disabled={busy} className="btn btn-rust" style={{width:'100%', justifyContent:'center', marginTop:6, opacity:busy?0.7:1}}>{busy ? 'Signing in…' : 'Enter terminal →'}</button>
+          {err && (
+            <div style={{display:'flex', alignItems:'center', gap:8, color:'#f87060', background:'rgba(181,69,27,0.15)', border:'1px solid rgba(181,69,27,0.35)', padding:'10px 12px', fontSize:13, marginBottom:12}}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{flexShrink:0}}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              {err}
+            </div>
+          )}
+          <button disabled={busy} className="btn btn-rust" style={{width:'100%', justifyContent:'center', marginTop:6, opacity:busy?0.7:1}}>
+            {busy ? (
+              <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{animation:'spin 1s linear infinite'}}><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> Signing in…</>
+            ) : 'Enter terminal →'}
+          </button>
         </form>
         <div style={{marginTop:18, textAlign:'center'}}>
-          <a className="mono" style={{fontSize:11, color:'var(--ochre)', cursor:'pointer'}} onClick={() => { window.location.href = 'https://outbackelectronics.com.au/home'; }}>← Back to public site</a>
+          <a className="mono" style={{fontSize:11, color:'#c4a75d', textDecoration:'underline', textUnderlineOffset:3, cursor:'pointer'}} onClick={() => { window.location.href = 'https://outbackelectronics.com.au/home'; }}>← Back to public site</a>
         </div>
       </div>
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
@@ -104,37 +119,61 @@ function AdminLogin({ onAuth }) {
 // ============================================================
 const ROLE_LEVELS = { owner: 4, manager: 3, technician: 2, staff: 1, seller: 1, pending: 0 };
 
+/* Compact SVG icons for the sidebar — 16×16 viewBox, stroke-based */
+const NAV_ICONS = {
+  overview:     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
+  orders:       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>,
+  repairs:      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>,
+  quotes:       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>,
+  ewaste:       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>,
+  products:     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="2" y="3" width="7" height="7"/><rect x="15" y="3" width="7" height="7"/><rect x="15" y="14" width="7" height="7"/><rect x="2" y="14" width="7" height="7"/></svg>,
+  services:     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.42 1.42M5.35 18.65l-1.42 1.42M22 12h-2M4 12H2M19.07 19.07l-1.42-1.42M5.35 5.35L3.93 3.93M12 22v-2M12 4V2"/></svg>,
+  software:     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>,
+  tutorials:    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>,
+  ai:           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="4" y="8" width="16" height="10" rx="2"/><path d="M8 8V6a2 2 0 012-2h4a2 2 0 012 2v2"/><line x1="12" y1="13" x2="12" y2="15"/><line x1="9" y1="13" x2="9" y2="15"/><line x1="15" y1="13" x2="15" y2="15"/></svg>,
+  forum:        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>,
+  groups:       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>,
+  customers:    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+  sellers:      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
+  memberships:  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
+  'gift-cards': <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z"/></svg>,
+  expenses:     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>,
+  policies:     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>,
+  settings:     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M16.24 16.24l1.41 1.41M4.93 4.93l1.41 1.41M7.76 16.24l-1.41 1.41M22 12h-2M4 12H2M12 22v-2M12 4V2"/></svg>,
+};
+
 const ADMIN_SECTIONS = [
   { group:'OPERATIONS', items: [
-    { id:'overview',  label:'Overview',      icon:'⌂', minRole:'staff', excludeRoles:['seller'] },
-    { id:'orders',    label:'Orders',        icon:'⊞', minRole:'technician' },
-    { id:'repairs',   label:'Repair Jobs',   icon:'⚒', minRole:'staff', excludeRoles:['seller'] },
-    { id:'quotes',    label:'Quotes Inbox',  icon:'✉', minRole:'staff', excludeRoles:['seller'] },
-    { id:'ewaste',    label:'eWaste Intake', icon:'♻', minRole:'technician' },
+    { id:'overview',  label:'Overview',      minRole:'staff', excludeRoles:['seller'] },
+    { id:'orders',    label:'Orders',        minRole:'technician' },
+    { id:'repairs',   label:'Repair Jobs',   minRole:'staff', excludeRoles:['seller'] },
+    { id:'quotes',    label:'Quotes Inbox',  minRole:'staff', excludeRoles:['seller'] },
+    { id:'ewaste',    label:'eWaste Intake', minRole:'technician' },
   ]},
   { group:'CATALOG', items: [
-    { id:'products',  label:'Products',         icon:'▣', minRole:'seller' },
-    { id:'services',  label:'Services',          icon:'⚙', minRole:'manager' },
-    { id:'software',  label:'Software',          icon:'⌘', minRole:'manager' },
-    { id:'tutorials', label:'Tutorials',         icon:'✎', minRole:'manager' },
-    { id:'ai',        label:'AI Models & Boxes', icon:'◉', minRole:'manager' },
+    { id:'products',  label:'Products',         minRole:'seller' },
+    { id:'services',  label:'Services',          minRole:'manager' },
+    { id:'software',  label:'Software',          minRole:'manager' },
+    { id:'tutorials', label:'Tutorials',         minRole:'manager' },
+    { id:'ai',        label:'AI Models & Boxes', minRole:'manager' },
   ]},
   { group:'COMMUNITY', items: [
-    { id:'forum',     label:'Forum',     icon:'⌬', minRole:'manager' },
-    { id:'groups',    label:'Groups',    icon:'◯', minRole:'manager' },
-    { id:'customers', label:'Customers', icon:'☻', minRole:'technician' },
-    { id:'sellers',   label:'Sellers',   icon:'$', minRole:'manager' },
+    { id:'forum',     label:'Forum',     minRole:'manager' },
+    { id:'groups',    label:'Groups',    minRole:'manager' },
+    { id:'customers', label:'Customers', minRole:'technician' },
+    { id:'sellers',   label:'Sellers',   minRole:'manager' },
   ]},
   { group:'STORE', items: [
-    { id:'memberships', label:'Memberships', icon:'★', minRole:'manager' },
-    { id:'gift-cards', label:'Gift Cards', icon:'◈', minRole:'staff', excludeRoles:['seller'] },
-    { id:'expenses',  label:'Expenses', icon:'⊟', minRole:'manager' },
-    { id:'policies',  label:'Policies', icon:'§', minRole:'manager' },
-    { id:'settings',  label:'Settings', icon:'⚒', minRole:'seller' },
+    { id:'memberships', label:'Memberships', minRole:'manager' },
+    { id:'gift-cards', label:'Gift Cards',   minRole:'staff', excludeRoles:['seller'] },
+    { id:'expenses',  label:'Expenses',      minRole:'manager' },
+    { id:'policies',  label:'Policies',      minRole:'manager' },
+    { id:'settings',  label:'Settings',      minRole:'seller' },
   ]},
 ];
 
 function AdminSidebar({ section, setSection, onSignOut, role, username }) {
+  const [mobileOpen, setMobileOpen] = useState(false);
   const myLevel = ROLE_LEVELS[role] ?? 0;
   const visibleSections = ADMIN_SECTIONS
     .map(g => ({ ...g, items: g.items.filter(it => {
@@ -144,57 +183,113 @@ function AdminSidebar({ section, setSection, onSignOut, role, username }) {
     }) }))
     .filter(g => g.items.length > 0);
   const initials = (username || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
-  return (
-    <aside style={{width: 248, background:'#0f0d0a', color:'var(--bg-deep)', height:'100vh', position:'sticky', top:0, display:'flex', flexDirection:'column', borderRight:'1px solid #2a241c'}}>
-      <div style={{padding:'18px 18px 14px', borderBottom:'1px solid #2a241c', display:'flex', gap:10, alignItems:'center'}}>
-        <div className="logo-mark sm" style={{background:'#000', padding:'3px 6px', height:32}}>
-          <img src="assets/logo.webp" alt="" style={{height:24}}/>
-        </div>
-        <div>
-          <div style={{fontFamily:'JetBrains Mono, monospace', fontSize:9.5, letterSpacing:'.18em', color:'var(--ochre)'}}>OUTBACK · OPS</div>
-          <div style={{fontSize:12, color:'var(--bg-deep)'}}>prod</div>
-        </div>
-      </div>
+
+  const NavContent = () => (
+    <>
       <div style={{flex:1, overflowY:'auto', padding:'14px 10px'}}>
         {visibleSections.map((g) => (
           <div key={g.group} style={{marginBottom: 18}}>
             <div className="mono" style={{fontSize:10, letterSpacing:'.12em', color:'rgba(244,237,225,0.4)', padding:'4px 10px 8px'}}>{g.group}</div>
             <div style={{display:'grid', gap: 2}}>
-              {g.items.map(it => (
-                <a key={it.id} onClick={() => setSection(it.id)}
-                  style={{
-                    display:'flex', alignItems:'center', gap:10, padding:'8px 10px',
-                    cursor:'pointer', fontSize:13, lineHeight:1.2,
-                    background: section===it.id ? '#1f88f5' : 'transparent',
-                    color: section===it.id ? '#fff' : 'var(--bg-deep)',
-                    fontWeight: section===it.id ? 600 : 400,
-                  }}>
-                  <span style={{width:18, textAlign:'center', opacity:.8, fontSize:13}}>{it.icon}</span>
-                  <span style={{flex:1}}>{it.label}</span>
-                  {it.count > 0 && (
-                    <span className="mono" style={{
-                      fontSize:10, padding:'2px 6px',
-                      background: it.urgent && section!==it.id ? 'var(--rust)' : section===it.id ? 'rgba(255,255,255,.2)' : '#2a241c',
-                      color: it.urgent && section!==it.id ? '#fff' : section===it.id ? '#fff' : 'var(--ochre)',
-                    }}>{it.count}</span>
-                  )}
-                </a>
-              ))}
+              {g.items.map(it => {
+                const active = section === it.id;
+                return (
+                  <a key={it.id} onClick={() => { setSection(it.id); setMobileOpen(false); }}
+                    style={{
+                      display:'flex', alignItems:'center', gap:10, padding:'8px 10px',
+                      cursor:'pointer', fontSize:13, lineHeight:1.2, borderRadius:2,
+                      background: active ? 'rgba(211,154,55,0.18)' : 'transparent',
+                      color: active ? 'var(--ochre)' : 'rgba(244,237,225,0.7)',
+                      fontWeight: active ? 600 : 400,
+                      borderLeft: active ? '2px solid var(--ochre)' : '2px solid transparent',
+                    }}>
+                    <span style={{width:16, display:'flex', alignItems:'center', justifyContent:'center', opacity: active ? 1 : 0.65, flexShrink:0}}>
+                      {NAV_ICONS[it.id]}
+                    </span>
+                    <span style={{flex:1}}>{it.label}</span>
+                    {it.count > 0 && (
+                      <span className="mono" style={{
+                        fontSize:10, padding:'2px 6px',
+                        background: it.urgent && !active ? 'var(--rust)' : active ? 'rgba(211,154,55,0.3)' : '#2a241c',
+                        color: it.urgent && !active ? '#fff' : active ? 'var(--ochre)' : 'var(--ochre)',
+                      }}>{it.count}</span>
+                    )}
+                  </a>
+                );
+              })}
             </div>
           </div>
         ))}
       </div>
       <div style={{padding:'12px 14px', borderTop:'1px solid #2a241c', display:'flex', alignItems:'center', gap:10}}>
-        <div className="avatar" style={{width:32, height:32, background:'var(--ochre)', color:'var(--dark)', fontSize:14}}>{initials}</div>
-        <div style={{flex:1}}>
-          <div style={{fontSize:13, color:'var(--paper)'}}>{username || 'Staff'}</div>
+        <div style={{width:32, height:32, background:'var(--ochre)', color:'var(--dark)', fontSize:12, fontWeight:700, display:'grid', placeItems:'center', fontFamily:'JetBrains Mono, monospace', flexShrink:0}}>{initials}</div>
+        <div style={{flex:1, minWidth:0}}>
+          <div style={{fontSize:13, color:'var(--paper)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{username || 'Staff'}</div>
           <div className="mono" style={{fontSize:10, color:'rgba(244,237,225,0.5)'}}>{(role||'staff').toUpperCase()}</div>
         </div>
-        <button title="Sign out" className="icon-btn" style={{width:28, height:28, background:'#2a241c', borderColor:'#2a241c', color:'var(--bg-deep)'}} onClick={onSignOut}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+        <button
+          className="btn btn-ghost btn-sm"
+          style={{background:'transparent', borderColor:'#3a3228', color:'rgba(244,237,225,0.6)', flexShrink:0, gap:6, whiteSpace:'nowrap'}}
+          onClick={onSignOut}
+          title="Sign out"
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+          Sign out
         </button>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Mobile hamburger button */}
+      <button
+        onClick={() => setMobileOpen(o => !o)}
+        style={{
+          display:'none', position:'fixed', top:14, left:14, zIndex:300,
+          width:40, height:40, background:'#0f0d0a', border:'1px solid #2a241c',
+          color:'var(--ochre)', cursor:'pointer', alignItems:'center', justifyContent:'center',
+        }}
+        className="admin-hamburger"
+        aria-label="Menu"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div
+          onClick={() => setMobileOpen(false)}
+          style={{position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', zIndex:250}}
+        />
+      )}
+
+      {/* Desktop sidebar / mobile drawer */}
+      <aside style={{
+        width:248, background:'#0f0d0a', color:'rgba(244,237,225,0.75)',
+        height:'100vh', position:'sticky', top:0,
+        display:'flex', flexDirection:'column', borderRight:'1px solid #2a241c',
+        flexShrink:0,
+      }} className={mobileOpen ? 'admin-sidebar admin-sidebar-open' : 'admin-sidebar'}>
+        <div style={{padding:'18px 18px 14px', borderBottom:'1px solid #2a241c', display:'flex', gap:10, alignItems:'center'}}>
+          <div className="logo-mark sm" style={{background:'#000', padding:'3px 6px', height:32}}>
+            <img src="assets/logo.webp" alt="" style={{height:24}}/>
+          </div>
+          <div>
+            <div style={{fontFamily:'JetBrains Mono, monospace', fontSize:9.5, letterSpacing:'.18em', color:'var(--ochre)'}}>OUTBACK · OPS</div>
+            <div style={{fontSize:12, color:'rgba(244,237,225,0.45)'}}>Staff terminal</div>
+          </div>
+        </div>
+        <NavContent />
+      </aside>
+      <style>{`
+        @media (max-width: 768px) {
+          .admin-sidebar { position: fixed !important; top: 0 !important; left: 0 !important; height: 100vh !important; z-index: 260; transform: translateX(-100%); transition: transform 220ms ease; }
+          .admin-sidebar.admin-sidebar-open { transform: translateX(0); }
+          .admin-hamburger { display: flex !important; }
+        }
+      `}</style>
+    </>
   );
 }
 
@@ -218,25 +313,40 @@ function AdminTopbar({ title, subtitle, actions, search, onSearch }) {
 
 // Reusable bits ----------------------------------------------
 function StatTile({ label, value, delta, tone }) {
+  const isUp = delta && (delta.startsWith('+') || delta.startsWith('↑'));
+  const isDown = delta && (delta.startsWith('-') || delta.startsWith('↓'));
   return (
-    <div style={{padding:'18px 20px', background:'var(--paper)', border:'1px solid var(--line)'}}>
+    <div style={{padding:'18px 20px', background:'var(--paper)', border:'1px solid var(--line-strong)', borderLeft: tone==='rust' ? '3px solid var(--rust)' : '1px solid var(--line-strong)'}}>
       <div className="mono" style={{fontSize:10, letterSpacing:'.1em', color:'var(--ink-2)'}}>{label}</div>
-      <div className="serif" style={{fontSize:42, marginTop:6, lineHeight:1, color: tone==='rust'?'var(--rust)':'var(--ink)'}}>{value}</div>
-      {delta && <div className="mono" style={{fontSize:11, marginTop:6, color: delta.startsWith('+')?'var(--eucalyptus)':'var(--rust)'}}>{delta}</div>}
+      <div className="serif" style={{fontSize:40, marginTop:6, lineHeight:1, color: tone==='rust'?'var(--rust)':'var(--ink)'}}>{value}</div>
+      {delta && (
+        <div className="mono" style={{fontSize:11, marginTop:8, display:'flex', alignItems:'center', gap:4, color: isUp ? 'var(--eucalyptus)' : isDown ? 'var(--rust)' : 'var(--ink-2)'}}>
+          {isUp && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="18 15 12 9 6 15"/></svg>}
+          {isDown && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9"/></svg>}
+          {delta}
+        </div>
+      )}
     </div>
   );
 }
 
-function Table({ columns, rows, onRowClick }) {
+function Table({ columns, rows, onRowClick, emptyMessage }) {
+  const tpl = columns.map(c => c.w || '1fr').join(' ');
   return (
-    <div style={{background:'var(--paper)', border:'1px solid var(--line)'}}>
-      <div style={{display:'grid', gridTemplateColumns: columns.map(c => c.w || '1fr').join(' '), padding:'12px 18px', background:'var(--bg-elev)', borderBottom:'2px solid var(--ink)', fontFamily:'JetBrains Mono, monospace', fontSize:10, letterSpacing:'.1em', color:'var(--ink-2)'}}>
+    <div style={{background:'var(--paper)', border:'1px solid var(--line-strong)'}}>
+      <div style={{display:'grid', gridTemplateColumns:tpl, padding:'10px 18px', background:'var(--bg-elev)', borderBottom:'2px solid var(--ink)', fontFamily:'JetBrains Mono, monospace', fontSize:10, letterSpacing:'.1em', color:'var(--ink-2)'}}>
         {columns.map((c,i) => <div key={i}>{c.label.toUpperCase()}</div>)}
       </div>
-      {rows.map((r,i) => (
+      {rows.length === 0 ? (
+        <div style={{padding:'32px 24px', textAlign:'center', color:'var(--ink-2)'}}>
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{margin:'0 auto 12px', display:'block', opacity:.35}}><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+          <div style={{fontSize:13, fontWeight:500}}>{emptyMessage || 'Nothing here yet.'}</div>
+          {onRowClick && <div style={{fontSize:12, color:'var(--ink-3)', marginTop:4}}>Use the button above to add your first record.</div>}
+        </div>
+      ) : rows.map((r,i) => (
         <div key={i}
           onClick={() => onRowClick && onRowClick(r,i)}
-          style={{display:'grid', gridTemplateColumns: columns.map(c => c.w || '1fr').join(' '), padding:'14px 18px', borderTop: i===0?'none':'1px solid var(--line)', fontSize:13, alignItems:'center', cursor: onRowClick?'pointer':'default'}}
+          style={{display:'grid', gridTemplateColumns:tpl, padding:'14px 18px', borderTop:'1px solid var(--line)', fontSize:13, alignItems:'center', cursor: onRowClick?'pointer':'default'}}
           onMouseEnter={e => { if (onRowClick) e.currentTarget.style.background='var(--bg-elev)'; }}
           onMouseLeave={e => { e.currentTarget.style.background='transparent'; }}>
           {columns.map((c,j) => <div key={j}>{c.render ? c.render(r) : r[c.key]}</div>)}
@@ -257,12 +367,11 @@ function Drawer({ open, onClose, title, children, footer }) {
     <div style={{position:'fixed', inset:0, zIndex:200}}>
       <div onClick={onClose} style={{position:'absolute', inset:0, background:'rgba(15,13,10,0.5)'}}></div>
       <div style={{position:'absolute', top:0, right:0, bottom:0, width:540, background:'var(--bg)', borderLeft:'1px solid var(--line)', boxShadow:'-8px 0 24px rgba(0,0,0,.15)', display:'flex', flexDirection:'column'}}>
-        <div style={{padding:'18px 24px', borderBottom:'1px solid var(--line)', display:'flex', alignItems:'center', justifyContent:'space-between'}}>
-          <div>
-            <div className="mono" style={{fontSize:10, color:'var(--ink-2)', letterSpacing:'.1em'}}>EDIT RECORD</div>
-            <h3 className="serif" style={{fontSize:24, marginTop:4}}>{title}</h3>
-          </div>
-          <button className="icon-btn" onClick={onClose}>×</button>
+        <div style={{padding:'16px 24px', borderBottom:'1px solid var(--line)', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12}}>
+          <h3 style={{fontSize:16, fontWeight:600, margin:0}}>{title}</h3>
+          <button className="icon-btn" onClick={onClose} aria-label="Close" style={{flexShrink:0}}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
         </div>
         <div style={{flex:1, overflowY:'auto', padding:24}}>{children}</div>
         {footer && <div style={{padding:'14px 24px', borderTop:'1px solid var(--line)', background:'var(--bg-elev)'}}>{footer}</div>}
@@ -316,7 +425,13 @@ function AdminOverview({ go }) {
                 ...(orders || []).map(o => ({ type:'order', label: `Order ${o.id}`, sub: o.cust || o.items || '', date: o.date || '' })),
                 ...(quotes || []).filter(q => q.status === 'new').map(q => ({ type:'quote', label: `Quote request · ${q.name}`, sub: q.loc || '', date: '' })),
               ].slice(-10).reverse();
-              if (events.length === 0) return <div style={{padding:18, color:'var(--ink-2)', fontSize:13}}>No recent activity.</div>;
+              if (events.length === 0) return (
+                <div style={{padding:'28px 18px', textAlign:'center', color:'var(--ink-2)'}}>
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{margin:'0 auto 10px', display:'block', opacity:.3}}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  <div style={{fontSize:13, fontWeight:500}}>No activity yet</div>
+                  <div style={{fontSize:12, marginTop:4, color:'var(--ink-3)'}}>Orders and new quote requests will appear here.</div>
+                </div>
+              );
               return events.map((ev, i) => (
                 <div key={i} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 16px', borderBottom: i < events.length - 1 ? '1px solid var(--line)' : 'none'}}>
                   <div>
@@ -362,14 +477,15 @@ function AdminOverview({ go }) {
                 ))
               }
             </ul>
-            <button className="btn btn-ghost btn-sm" style={{marginTop:12, width:'100%', justifyContent:'center'}} onClick={() => {
-              if (lowStock.length === 0) return;
-              const csv = ['Name,Stock\n', ...lowStock.map(p => `${p.name},${p.stock}\n`)].join('');
-              const a = document.createElement('a');
-              a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
-              a.download = 'purchase-order.csv';
-              a.click();
-            }}>Generate PO →</button>
+            {lowStock.length > 0 && (
+              <button className="btn btn-rust btn-sm" style={{marginTop:14, width:'100%', justifyContent:'center'}} onClick={() => {
+                const csv = ['Name,Stock\n', ...lowStock.map(p => `${p.name},${p.stock}\n`)].join('');
+                const a = document.createElement('a');
+                a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+                a.download = 'purchase-order.csv';
+                a.click();
+              }}>Generate PO →</button>
+            )}
           </div>
         </div>
       </div>
@@ -851,13 +967,27 @@ function AdminOrders({ search }) {
 // ============================================================
 // REPAIRS — Kanban
 // ============================================================
+const DEFAULT_REPAIR_COLS = [
+  { id:'intake',     label:'Intake',     cards:[] },
+  { id:'diagnosis',  label:'Diagnosis',  cards:[] },
+  { id:'in-progress',label:'In Progress',cards:[] },
+  { id:'waiting',    label:'Waiting',    cards:[] },
+  { id:'done',       label:'Done',       cards:[] },
+];
+
 function AdminRepairs() {
-  const [cols, setCols] = useState([]);
+  const [cols, setCols] = useState(DEFAULT_REPAIR_COLS);
   const [newJob, setNewJob] = useState(null);
   const [newJobForm, setNewJobForm] = useState({ t:'', who:'', tag:'' });
   useEffect(() => {
     fetch('/api/admin/repairs', { credentials:'include' })
-      .then(r => r.ok ? r.json() : Promise.reject()).then(d => setCols(d.columns || [])).catch(() => setCols([]));
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => {
+        const fetched = d.columns || [];
+        if (fetched.length > 0) setCols(fetched);
+        else setCols(DEFAULT_REPAIR_COLS);
+      })
+      .catch(() => setCols(DEFAULT_REPAIR_COLS));
   }, []);
   const openCount = cols.filter(c => c.id !== 'done').reduce((s, c) => s + (c.cards ? c.cards.length : 0), 0);
   const addCard = async (colId) => {
@@ -1361,10 +1491,6 @@ function AdminQuotes() {
               ))
             }
           </ul>
-          <hr className="thin"/>
-          <button className="btn btn-rust btn-sm" style={{ width: '100%', justifyContent: 'center', marginTop: 4 }} onClick={() => openQuoteCreator(null)}>
-            + Create new quote
-          </button>
         </div>
       </aside>
 
@@ -1437,10 +1563,10 @@ function AdminEwaste() {
   return (
     <div style={{padding:32, display:'grid', gap:24}}>
       <div className="grid-4">
-        <StatTile label="INTAKE · THIS WEEK" value="—" />
-        <StatTile label="DIVERTED · YTD" value="—" />
-        <StatTile label="PAID OUT · MO" value="—" />
-        <StatTile label="PALLETS AWAITING SORT" value="—" tone="rust" />
+        <StatTile label="INTAKE · THIS WEEK" value={intakes.filter(r => { const d = new Date(r.date); const now = new Date(); return !isNaN(d) && (now - d) < 7*24*3600*1000; }).length || 0} />
+        <StatTile label="DIVERTED · YTD" value={intakes.reduce((s,r) => s + (Number(r.kg)||0), 0) + ' kg'} />
+        <StatTile label="PAID OUT · MO" value={'$' + intakes.filter(r => { const d = new Date(r.date); const now = new Date(); return !isNaN(d) && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); }).reduce((s,r) => s + (parseFloat(r.payout?.replace(/[^0-9.]/g,''))||0), 0).toFixed(0)} />
+        <StatTile label="PALLETS AWAITING SORT" value={0} tone={0 > 0 ? 'rust' : undefined} />
       </div>
 
       <div style={{display:'grid', gridTemplateColumns:'2fr 1fr', gap:24}}>
@@ -1664,7 +1790,7 @@ function AdminProducts({ sessionInfo = {} }) {
           <div key={i} className={`tab ${i===0?'active':''}`}>{t}</div>
         ))}
         <div style={{flex:1}}></div>
-        <button className="btn btn-ghost btn-sm" onClick={moveAllToDraft}>Move all to draft</button>
+        <button className="btn btn-ghost btn-sm" style={{color:'var(--ink-2)'}} onClick={moveAllToDraft}>Move all to draft</button>
         <button className="btn btn-rust btn-sm" onClick={() => open('new')}>+ New product</button>
       </div>
       <Table
@@ -3795,7 +3921,7 @@ function AdminPolicies() {
           <label className="field"><span className="label">Title</span><input className="input" value={form.title} onChange={e=>setForm({...form, title:e.target.value})}/></label>
           <label className="field"><span className="label">Slug</span><input className="input" value={form.slug} onChange={e=>setForm({...form, slug:e.target.value.toLowerCase().replace(/[^a-z0-9-]/g,'-')})}/></label>
         </div>
-        <textarea className="textarea" style={{minHeight:440, fontSize:14, lineHeight:1.6}} value={form.body} onChange={e=>setForm({...form, body:e.target.value})}/>
+        <textarea className="textarea" style={{minHeight:'calc(100vh - 360px)', height:'auto', fontSize:14, lineHeight:1.6}} value={form.body} onChange={e=>setForm({...form, body:e.target.value})}/>
         <div style={{marginTop:12}}>
           <button className="btn btn-ghost btn-sm" onClick={() => onSave(false)} disabled={saving}>Save draft</button>
         </div>
@@ -4043,211 +4169,235 @@ function AdminSettingsFull({ sessionInfo = {} }) {
     await fetch('/api/admin/staff/members/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id }) }).catch(()=>null);
     loadStaff();
   };
+  const [settingsTab, setSettingsTab] = useState('general');
   return (
-    <div style={{padding:32, display:'grid', gridTemplateColumns:'1fr 1fr', gap:24, maxWidth: 1200}}>
-      {loading && <div className="mono" style={{fontSize:12, color:'var(--ink-2)'}}>Loading…</div>}
-      {error && <div style={{fontSize:12, color:'var(--rust)'}}>{error}</div>}
-      {statusMsg && <div style={{gridColumn:'1 / -1', fontSize:12, color:statusMsg.includes('Failed') || statusMsg.includes('must') ? 'var(--rust)' : 'var(--eucalyptus)'}}>{statusMsg}</div>}
-      <form onSubmit={onShopSubmit} style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24}}>
-        <span className="eyebrow">SHOP DETAILS</span>
-        <label className="field" style={{marginTop:12}}><span className="label">Trading name</span><input className="input" value={shop.tradingName} onChange={(e) => setShop({ ...shop, tradingName: e.target.value })}/></label>
-        <label className="field"><span className="label">ABN</span><input className="input" value={shop.abn} onChange={(e) => setShop({ ...shop, abn: e.target.value })}/></label>
-        <label className="field"><span className="label">Street address</span><input className="input" value={shop.address} onChange={(e) => setShop({ ...shop, address: e.target.value })}/></label>
-        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:8}}>
-          <label className="field"><span className="label">Map latitude</span><input className="input" value={shop.mapLat||''} onChange={(e) => setShop({ ...shop, mapLat: e.target.value })} placeholder="-35.9833"/></label>
-          <label className="field"><span className="label">Map longitude</span><input className="input" value={shop.mapLng||''} onChange={(e) => setShop({ ...shop, mapLng: e.target.value })} placeholder="144.7500"/></label>
-        </div>
-        <label className="field"><span className="label">Phone</span><input className="input" value={shop.phone} onChange={(e) => setShop({ ...shop, phone: e.target.value })}/></label>
-        <label className="field"><span className="label">Contact email</span><input className="input" type="email" value={shop.email||''} onChange={(e) => setShop({ ...shop, email: e.target.value })}/></label>
-        <label className="field"><span className="label">Tagline</span><input className="input" value={shop.tagline} onChange={(e) => setShop({ ...shop, tagline: e.target.value })}/></label>
-        <label className="field"><span className="label">Site URL</span><input className="input" value={shop.siteUrl||''} onChange={(e) => setShop({ ...shop, siteUrl: e.target.value })} placeholder="https://outbackelectronics.com.au"/></label>
-        <div className="row-flex" style={{gap:8, marginTop:12}}>
-          <button className="btn btn-rust btn-sm" disabled={!shopDirty || sectionBusy==='shop'}>{sectionBusy==='shop'?'Saving…':'Save'}</button>
-          <button type="button" className="btn btn-ghost btn-sm" disabled={!shopDirty || sectionBusy==='shop'} onClick={() => setShop(savedShop)}>Cancel</button>
-        </div>
-      </form>
-      <form onSubmit={onAnnouncementSubmit} style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24}}>
-        <span className="eyebrow">ANNOUNCEMENT BAR</span>
-        <label className="field" style={{marginTop:12}}><span className="label">Message</span><input className="input" value={announcement.text} onChange={e => setAnnouncement({...announcement, text: e.target.value})} placeholder="e.g. SUMMER SALE — 15% OFF · ENDS 30 JUN"/></label>
-        <label className="field" style={{flexDirection:'row', alignItems:'center', gap:8}}><input type="checkbox" checked={!!announcement.enabled} onChange={e => setAnnouncement({...announcement, enabled: e.target.checked})}/><span className="label" style={{margin:0}}>Show announcement bar</span></label>
-        <label className="field"><span className="label">Expires on (optional)</span><input className="input" type="date" value={announcement.expiresAt || ''} onChange={e => setAnnouncement({...announcement, expiresAt: e.target.value})}/></label>
-        <div className="row-flex" style={{gap:8, marginTop:12}}>
-          <button className="btn btn-rust btn-sm" disabled={!announcementDirty || sectionBusy==='announcement'}>{sectionBusy==='announcement'?'Saving…':'Save'}</button>
-          <button type="button" className="btn btn-ghost btn-sm" disabled={!announcementDirty || sectionBusy==='announcement'} onClick={() => setAnnouncement(savedAnnouncement)}>Cancel</button>
-        </div>
-      </form>
-      <form onSubmit={onSiteContentSubmit} style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24, gridColumn:'1 / -1'}}>
-        <span className="eyebrow">SITE CONTENT</span>
-        <div className="grid-2" style={{gap:16, marginTop:12}}>
-          <div>
-            <label className="field"><span className="label">Workshop blurb (home page &amp; services)</span><textarea className="input" style={{minHeight:64}} value={siteContent.workshopBlurb} onChange={e => setSiteContent({...siteContent, workshopBlurb: e.target.value})} placeholder="e.g. One desk, one tech, one ute…"/></label>
-          </div>
-          <div>
-            <label className="field"><span className="label">AI section heading (use newline to split lines)</span><input className="input" value={siteContent.aiHeading} onChange={e => setSiteContent({...siteContent, aiHeading: e.target.value})} placeholder="e.g. Edge AI\nfor the long paddock."/></label>
-            <label className="field"><span className="label">AI section body</span><textarea className="input" style={{minHeight:64}} value={siteContent.aiBody} onChange={e => setSiteContent({...siteContent, aiBody: e.target.value})}/></label>
-            <label className="field" style={{flexDirection:'row', alignItems:'center', gap:8}}><input type="checkbox" checked={!!siteContent.aiEnabled} onChange={e => setSiteContent({...siteContent, aiEnabled: e.target.checked})}/><span className="label" style={{margin:0}}>Show "NEW · 2026" badge on AI section</span></label>
-          </div>
-        </div>
-        <div className="row-flex" style={{gap:8, marginTop:12}}>
-          <button className="btn btn-rust btn-sm" disabled={!siteContentDirty || sectionBusy==='siteContent'}>{sectionBusy==='siteContent'?'Saving…':'Save'}</button>
-          <button type="button" className="btn btn-ghost btn-sm" disabled={!siteContentDirty || sectionBusy==='siteContent'} onClick={() => setSiteContent(savedSiteContent)}>Cancel</button>
-        </div>
-      </form>
-      <div style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24}}>
-        <span className="eyebrow">STAFF & ROLES</span>
-        <div style={{display:'grid', gap:8, marginTop:12}}>
-          {staffMembers.map(s => (
-            <div key={s.id} style={{display:'flex', alignItems:'center', gap:10, padding:'8px 10px', background:'var(--bg-elev)'}}>
-              <div className="avatar" style={{width:32, height:32, background:s.color||'#d7c7a6', fontSize:14}}>{(s.name||'?').split(' ').map(w=>w[0]).join('')}</div>
-              <div style={{flex:1}}>
-                <div style={{fontSize:13, fontWeight:600}}>{s.name}</div>
-                <div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>{(s.role||'staff').toUpperCase()}{s.email ? ` · ${s.email}` : ''}</div>
-              </div>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => openStaffForm(s)}>Edit</button>
-              <button type="button" className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={() => deleteStaffMember(s.id)}>Remove</button>
-            </div>
-          ))}
-          {staffMembers.length === 0 && <div className="mono" style={{fontSize:12, color:'var(--ink-3)'}}>No staff members yet.</div>}
-        </div>
-        <div className="row-flex" style={{gap:8, marginTop:12}}>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => openStaffForm(null)}>+ Add staff member</button>
-        </div>
-        {staffForm !== null && (
-          <div style={{marginTop:16, padding:16, background:'var(--bg-elev)', display:'grid', gap:8}}>
-            <span className="eyebrow" style={{fontSize:10}}>{staffForm.id ? 'EDIT MEMBER' : 'NEW MEMBER'}</span>
-            <label className="field"><span className="label">Name</span><input className="input" value={staffForm.name} onChange={e=>setStaffForm({...staffForm,name:e.target.value})}/></label>
-            <label className="field"><span className="label">Role</span>
-              <select className="select" value={staffForm.role||'staff'} onChange={e=>setStaffForm({...staffForm,role:e.target.value})}>
-                {['owner','manager','technician','staff','seller','pending'].map(r=><option key={r}>{r}</option>)}
-              </select>
-            </label>
-            <label className="field"><span className="label">Email</span><input className="input" type="email" value={staffForm.email||''} onChange={e=>setStaffForm({...staffForm,email:e.target.value})}/></label>
-            <label className="field"><span className="label">Phone</span><input className="input" value={staffForm.phone||''} onChange={e=>setStaffForm({...staffForm,phone:e.target.value})}/></label>
-            <label className="field"><span className="label">Status</span>
-              <select className="select" value={staffForm.status||'active'} onChange={e=>setStaffForm({...staffForm,status:e.target.value})}>
-                {['active','inactive'].map(s=><option key={s}>{s}</option>)}
-              </select>
-            </label>
-            <label className="field"><span className="label">PIN{staffForm.id ? ' (leave blank to keep current)' : ''}</span><input className="input" type="password" inputMode="numeric" maxLength={6} value={staffForm.pin||''} onChange={e=>setStaffForm({...staffForm,pin:e.target.value.replace(/\D/g,'').slice(0,6)})} placeholder={staffForm.id ? '4–6 digits' : '4–6 digits (required)'}/></label>
-            <label className="field"><span className="label">Avatar colour</span><input type="color" value={staffForm.color||'#d7c7a6'} onChange={e=>setStaffForm({...staffForm,color:e.target.value})} style={{width:48,height:32,padding:2,border:'1px solid var(--line)',borderRadius:4,cursor:'pointer'}}/></label>
-            <div className="row-flex" style={{gap:8, marginTop:4}}>
-              <button className="btn btn-rust btn-sm" disabled={!staffForm.name.trim()||staffBusy} onClick={saveStaffMember}>{staffBusy?'Saving…':'Save'}</button>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={()=>setStaffForm(null)}>Cancel</button>
-            </div>
-          </div>
-        )}
+    <div style={{padding:32, maxWidth:960}}>
+      {loading && <div className="mono" style={{fontSize:12, color:'var(--ink-2)', marginBottom:16}}>Loading…</div>}
+      {error && <div style={{fontSize:12, color:'var(--rust)', marginBottom:12}}>{error}</div>}
+      {statusMsg && <div style={{fontSize:12, color:statusMsg.includes('Failed') || statusMsg.includes('must') ? 'var(--rust)' : 'var(--eucalyptus)', marginBottom:12}}>{statusMsg}</div>}
+
+      <div className="tabs" style={{marginBottom:28}}>
+        {[['general','General'],['staff','Staff'],['integrations','Integrations'],['security','Security'],['advanced','Advanced']].map(([k,l]) => (
+          <div key={k} className={`tab ${settingsTab===k?'active':''}`} style={{cursor:'pointer'}} onClick={() => setSettingsTab(k)}>{l}</div>
+        ))}
       </div>
-      <form onSubmit={onIntegrationsSubmit} style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24}}>
-        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-          <span className="eyebrow">INTEGRATIONS</span>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={openAddIntegrationModal}>+ Add</button>
-        </div>
-        {integrations.length === 0 && <div style={{marginTop:12, fontSize:13, color:'var(--ink-3)'}}>No integrations configured.</div>}
-        <div style={{display:'grid', gap:10, marginTop:12, fontSize:14}}>
-          {integrations.map((r,i) => (
-            <div key={i} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 0', borderBottom: i < integrations.length - 1 ? '1px solid var(--line)' : 'none'}}>
-              <div>
-                <div style={{fontWeight:600}}>{r[0]}</div>
-                <div className="mono" style={{fontSize:11, color:r[2]?'var(--eucalyptus)':'var(--ink-3)', marginTop:2}}>{r[1].toUpperCase()} · {r[2] ? 'CONNECTED' : 'DISCONNECTED'}</div>
-              </div>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => openIntegrationModal(i)}>{r[2]?'Configure':'Connect'}</button>
-            </div>
-          ))}
-        </div>
-        <div className="row-flex" style={{gap:8, marginTop:12}}>
-          <button className="btn btn-rust btn-sm" disabled={!integrationsDirty || sectionBusy==='integrations'}>{sectionBusy==='integrations'?'Saving…':'Save'}</button>
-          <button type="button" className="btn btn-ghost btn-sm" disabled={!integrationsDirty || sectionBusy==='integrations'} onClick={() => setIntegrations(savedIntegrations)}>Cancel</button>
-        </div>
-      </form>
-      <form onSubmit={onSecuritySubmit} style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24}}>
-        <span className="eyebrow">SECURITY</span>
-        <label className="field" style={{marginTop:12}}><span className="label">Admin username</span><input className="input" value={security.adminUsername} onChange={e => setSecurity({...security, adminUsername: e.target.value})}/></label>
-        <label className="field"><span className="label">New password <span style={{fontWeight:400, color:'var(--ink-3)'}}>(leave blank to keep current)</span></span><input className="input" type="password" value={security.adminPassword} onChange={e => setSecurity({...security, adminPassword: e.target.value})}/></label>
-        <label className="field"><span className="label">Confirm password</span><input className="input" type="password" value={security.confirmPassword} onChange={e => setSecurity({...security, confirmPassword: e.target.value})}/></label>
-        {security.adminPassword && security.adminPassword !== security.confirmPassword && <div style={{fontSize:11, color:'var(--rust)', marginBottom:4}}>Passwords do not match</div>}
-        <div className="row-flex" style={{gap:8, marginTop:12}}>
-          <button className="btn btn-rust btn-sm" disabled={!securityDirty || sectionBusy==='security' || !!(security.adminPassword && security.adminPassword !== security.confirmPassword)}>{sectionBusy==='security'?'Saving…':'Save'}</button>
-          <button type="button" className="btn btn-ghost btn-sm" disabled={!securityDirty || sectionBusy==='security'} onClick={() => setSecurity(savedSecurity)}>Cancel</button>
-        </div>
-      </form>
-      <div style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24}}>
-        <span className="eyebrow">DANGER ZONE</span>
-        <div style={{marginTop:14, display:'grid', gap:10}}>
-          <div style={{padding:'14px', background:'var(--bg-elev)', border:'1px solid var(--line)'}}>
-            <div style={{fontWeight:600}}>Rebuild search index</div>
-            <p style={{fontSize:13, color:'var(--ink-2)', margin:'4px 0 8px'}}>Re-indexes products, tutorials, and forum threads.</p>
-            {dangerMsg.rebuild && <div style={{fontSize:12, marginBottom:6, color:dangerMsg.rebuild.includes('✓')?'var(--eucalyptus)':'var(--rust)'}}>{dangerMsg.rebuild}</div>}
-            <button className="btn btn-ghost btn-sm" disabled={sectionBusy==='rebuild'} onClick={async () => {
-              setSectionBusy('rebuild');
-              setDangerMsg(m => ({...m, rebuild:'Rebuilding…'}));
-              await fetch('/api/admin/rebuild', { method:'POST', headers:postHeaders(), credentials:'include' }).catch(()=>null);
-              setSectionBusy('');
-              setDangerMsg(m => ({...m, rebuild:'✓ Index rebuilt.'}));
-              setTimeout(() => setDangerMsg(m => ({...m, rebuild:''})), 4000);
-            }}>{sectionBusy==='rebuild' ? 'Rebuilding…' : 'Run rebuild'}</button>
+
+      {settingsTab === 'general' && <div style={{display:'grid', gap:24}}>
+        <form onSubmit={onShopSubmit} style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24}}>
+          <span className="eyebrow">Shop Details</span>
+          <label className="field" style={{marginTop:12}}><span className="label">Trading name</span><input className="input" value={shop.tradingName} onChange={(e) => setShop({ ...shop, tradingName: e.target.value })}/></label>
+          <label className="field"><span className="label">ABN</span><input className="input" value={shop.abn} onChange={(e) => setShop({ ...shop, abn: e.target.value })}/></label>
+          <label className="field"><span className="label">Street address</span><input className="input" value={shop.address} onChange={(e) => setShop({ ...shop, address: e.target.value })}/></label>
+          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:8}}>
+            <label className="field"><span className="label">Map latitude</span><input className="input" value={shop.mapLat||''} onChange={(e) => setShop({ ...shop, mapLat: e.target.value })} placeholder="-35.9833"/></label>
+            <label className="field"><span className="label">Map longitude</span><input className="input" value={shop.mapLng||''} onChange={(e) => setShop({ ...shop, mapLng: e.target.value })} placeholder="144.7500"/></label>
           </div>
-          <div style={{padding:'14px', background:'var(--bg-elev)', border:'1px solid var(--line)'}}>
-            <div style={{fontWeight:600}}>Export all data</div>
-            <p style={{fontSize:13, color:'var(--ink-2)', margin:'4px 0 8px'}}>JSON dump of everything — products, orders, customers, content.</p>
-            {dangerMsg.export && <div style={{fontSize:12, marginBottom:6, color:dangerMsg.export.includes('✓')?'var(--eucalyptus)':'var(--rust)'}}>{dangerMsg.export}</div>}
-            <button className="btn btn-ghost btn-sm" disabled={sectionBusy==='export'} onClick={async () => {
-              setSectionBusy('export');
-              setDangerMsg(m => ({...m, export:'Generating…'}));
-              const r = await fetch('/api/admin/export', { credentials:'include' }).catch(()=>null);
-              setSectionBusy('');
-              if (r && r.ok) {
-                const blob = await r.blob();
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = `outback-export-${new Date().toISOString().slice(0,10)}.json`;
-                a.click();
-                setDangerMsg(m => ({...m, export:'✓ Export downloaded.'}));
-              } else {
-                setDangerMsg(m => ({...m, export:'Export failed — check server logs.'}));
-              }
-              setTimeout(() => setDangerMsg(m => ({...m, export:''})), 5000);
-            }}>{sectionBusy==='export' ? 'Generating…' : 'Generate export'}</button>
-          </div>
-          <div style={{padding:'14px', background:'#3a1a14', color:'var(--paper)', border:'1px solid var(--rust)'}}>
-            <div style={{fontWeight:600, color:'#ffb59c'}}>Maintenance mode</div>
-            <p style={{fontSize:13, margin:'4px 0 8px', color:'var(--bg-deep)'}}>Shows a holding page to non-staff visitors.</p>
-            {maintenanceEnabled && <div style={{fontSize:12, marginBottom:6, color:'#ffb59c', fontWeight:600}}>⚠ Maintenance mode is currently ON</div>}
-            {dangerMsg.maint && <div style={{fontSize:12, marginBottom:6, color:'#ffb59c'}}>{dangerMsg.maint}</div>}
-            {maintenanceEnabled ? (
-              <button className="btn btn-ghost btn-sm" disabled={sectionBusy==='maint'} onClick={async () => {
-                setSectionBusy('maint');
-                const r = await fetch('/api/admin/maintenance', { method:'POST', credentials:'include', headers:postHeaders(), body: JSON.stringify({ enabled: false }) }).catch(()=>null);
-                setSectionBusy('');
-                if (r && r.ok) {
-                  setMaintenanceEnabled(false);
-                  setDangerMsg(m => ({...m, maint:'✓ Maintenance mode disabled.'}));
-                } else {
-                  setDangerMsg(m => ({...m, maint:'Error disabling maintenance mode.'}));
-                }
-              }}>{sectionBusy==='maint' ? 'Disabling…' : 'Disable maintenance'}</button>
-            ) : !maintConfirm ? (
-              <button className="btn btn-rust btn-sm" onClick={() => setMaintConfirm(true)}>Enable maintenance</button>
-            ) : (
-              <div className="row-flex" style={{gap:8, alignItems:'center'}}>
-                <span style={{fontSize:12, color:'#ffb59c'}}>Are you sure? This will hide the site from visitors.</span>
-                <button className="btn btn-ghost btn-sm" onClick={() => setMaintConfirm(false)}>Cancel</button>
-                <button className="btn btn-rust btn-sm" disabled={sectionBusy==='maint'} onClick={async () => {
-                  setSectionBusy('maint');
-                  const r = await fetch('/api/admin/maintenance', { method:'POST', credentials:'include', headers:postHeaders(), body: JSON.stringify({ enabled: true }) }).catch(()=>null);
-                  setSectionBusy('');
-                  setMaintConfirm(false);
-                  if (r && r.ok) {
-                    setMaintenanceEnabled(true);
-                    setDangerMsg(m => ({...m, maint:'✓ Maintenance mode enabled.'}));
-                  } else {
-                    setDangerMsg(m => ({...m, maint:'Error enabling maintenance mode.'}));
-                  }
-                }}>{sectionBusy==='maint' ? 'Enabling…' : 'Yes, enable'}</button>
+          <label className="field"><span className="label">Phone</span><input className="input" value={shop.phone} onChange={(e) => setShop({ ...shop, phone: e.target.value })}/></label>
+          <label className="field"><span className="label">Contact email</span><input className="input" type="email" value={shop.email||''} onChange={(e) => setShop({ ...shop, email: e.target.value })}/></label>
+          <label className="field"><span className="label">Tagline</span><input className="input" value={shop.tagline} onChange={(e) => setShop({ ...shop, tagline: e.target.value })}/></label>
+          <label className="field">
+            <span className="label">Site URL</span>
+            <input className="input" value={shop.siteUrl||''} onChange={(e) => setShop({ ...shop, siteUrl: e.target.value })} placeholder="https://outbackelectronics.com.au"/>
+            {(shop.siteUrl||'').startsWith('http://localhost') && (
+              <div style={{fontSize:11, color:'var(--ochre)', marginTop:4, display:'flex', alignItems:'center', gap:6}}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                This is a local development URL — update it to your live domain before publishing.
               </div>
             )}
+          </label>
+          <div className="row-flex" style={{gap:8, marginTop:12}}>
+            <button className="btn btn-rust btn-sm" disabled={!shopDirty || sectionBusy==='shop'}>{sectionBusy==='shop'?'Saving…':'Save'}</button>
+            <button type="button" className="btn btn-ghost btn-sm" disabled={!shopDirty || sectionBusy==='shop'} onClick={() => setShop(savedShop)}>Cancel</button>
+          </div>
+        </form>
+        <form onSubmit={onAnnouncementSubmit} style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24}}>
+          <span className="eyebrow">Announcement Bar</span>
+          <label className="field" style={{marginTop:12}}><span className="label">Message</span><input className="input" value={announcement.text} onChange={e => setAnnouncement({...announcement, text: e.target.value})} placeholder="e.g. SUMMER SALE — 15% OFF · ENDS 30 JUN"/></label>
+          <label className="field" style={{flexDirection:'row', alignItems:'center', gap:8}}><input type="checkbox" checked={!!announcement.enabled} onChange={e => setAnnouncement({...announcement, enabled: e.target.checked})}/><span className="label" style={{margin:0}}>Show announcement bar</span></label>
+          <label className="field"><span className="label">Expires on (optional)</span><input className="input" type="date" value={announcement.expiresAt || ''} onChange={e => setAnnouncement({...announcement, expiresAt: e.target.value})}/></label>
+          <div className="row-flex" style={{gap:8, marginTop:12}}>
+            <button className="btn btn-rust btn-sm" disabled={!announcementDirty || sectionBusy==='announcement'}>{sectionBusy==='announcement'?'Saving…':'Save'}</button>
+            <button type="button" className="btn btn-ghost btn-sm" disabled={!announcementDirty || sectionBusy==='announcement'} onClick={() => setAnnouncement(savedAnnouncement)}>Cancel</button>
+          </div>
+        </form>
+        <form onSubmit={onSiteContentSubmit} style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24}}>
+          <span className="eyebrow">Site Content</span>
+          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginTop:12}}>
+            <div>
+              <label className="field"><span className="label">Workshop blurb (home page &amp; services)</span><textarea className="input" style={{minHeight:64}} value={siteContent.workshopBlurb} onChange={e => setSiteContent({...siteContent, workshopBlurb: e.target.value})} placeholder="e.g. One desk, one tech, one ute…"/></label>
+            </div>
+            <div>
+              <label className="field"><span className="label">AI section heading (use newline to split lines)</span><input className="input" value={siteContent.aiHeading} onChange={e => setSiteContent({...siteContent, aiHeading: e.target.value})} placeholder="e.g. Edge AI\nfor the long paddock."/></label>
+              <label className="field"><span className="label">AI section body</span><textarea className="input" style={{minHeight:64}} value={siteContent.aiBody} onChange={e => setSiteContent({...siteContent, aiBody: e.target.value})}/></label>
+              <label className="field" style={{flexDirection:'row', alignItems:'center', gap:8}}><input type="checkbox" checked={!!siteContent.aiEnabled} onChange={e => setSiteContent({...siteContent, aiEnabled: e.target.checked})}/><span className="label" style={{margin:0}}>Show "NEW · 2026" badge on AI section</span></label>
+            </div>
+          </div>
+          <div className="row-flex" style={{gap:8, marginTop:12}}>
+            <button className="btn btn-rust btn-sm" disabled={!siteContentDirty || sectionBusy==='siteContent'}>{sectionBusy==='siteContent'?'Saving…':'Save'}</button>
+            <button type="button" className="btn btn-ghost btn-sm" disabled={!siteContentDirty || sectionBusy==='siteContent'} onClick={() => setSiteContent(savedSiteContent)}>Cancel</button>
+          </div>
+        </form>
+      </div>}
+
+      {settingsTab === 'staff' && <div style={{display:'grid', gap:24}}>
+        <div style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24}}>
+          <span className="eyebrow">Staff &amp; Roles</span>
+          <div style={{display:'grid', gap:8, marginTop:12}}>
+            {staffMembers.map(s => (
+              <div key={s.id} style={{display:'flex', alignItems:'center', gap:10, padding:'8px 10px', background:'var(--bg-elev)'}}>
+                <div className="avatar" style={{width:32, height:32, background:s.color||'#d7c7a6', fontSize:14}}>{(s.name||'?').split(' ').map(w=>w[0]).join('')}</div>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:13, fontWeight:600}}>{s.name}</div>
+                  <div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>{(s.role||'staff').toUpperCase()}{s.email ? ` · ${s.email}` : ''}</div>
+                </div>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => openStaffForm(s)}>Edit</button>
+                <button type="button" className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={() => deleteStaffMember(s.id)}>Remove</button>
+              </div>
+            ))}
+            {staffMembers.length === 0 && <div className="mono" style={{fontSize:12, color:'var(--ink-3)'}}>No staff members yet.</div>}
+          </div>
+          <div className="row-flex" style={{gap:8, marginTop:12}}>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => openStaffForm(null)}>+ Add staff member</button>
+          </div>
+          {staffForm !== null && (
+            <div style={{marginTop:16, padding:16, background:'var(--bg-elev)', display:'grid', gap:8}}>
+              <div style={{fontSize:13, fontWeight:600, marginBottom:4}}>{staffForm.id ? 'Edit member' : 'New member'}</div>
+              <label className="field"><span className="label">Name</span><input className="input" value={staffForm.name} onChange={e=>setStaffForm({...staffForm,name:e.target.value})}/></label>
+              <label className="field"><span className="label">Role</span>
+                <select className="select" value={staffForm.role||'staff'} onChange={e=>setStaffForm({...staffForm,role:e.target.value})}>
+                  {['owner','manager','technician','staff','seller','pending'].map(r=><option key={r}>{r}</option>)}
+                </select>
+              </label>
+              <label className="field"><span className="label">Email</span><input className="input" type="email" value={staffForm.email||''} onChange={e=>setStaffForm({...staffForm,email:e.target.value})}/></label>
+              <label className="field"><span className="label">Phone</span><input className="input" value={staffForm.phone||''} onChange={e=>setStaffForm({...staffForm,phone:e.target.value})}/></label>
+              <label className="field"><span className="label">Status</span>
+                <select className="select" value={staffForm.status||'active'} onChange={e=>setStaffForm({...staffForm,status:e.target.value})}>
+                  {['active','inactive'].map(s=><option key={s}>{s}</option>)}
+                </select>
+              </label>
+              <label className="field"><span className="label">PIN{staffForm.id ? ' (leave blank to keep current)' : ''}</span><input className="input" type="password" inputMode="numeric" maxLength={6} value={staffForm.pin||''} onChange={e=>setStaffForm({...staffForm,pin:e.target.value.replace(/\D/g,'').slice(0,6)})} placeholder={staffForm.id ? '4–6 digits' : '4–6 digits (required)'}/></label>
+              <label className="field"><span className="label">Avatar colour</span><input type="color" value={staffForm.color||'#d7c7a6'} onChange={e=>setStaffForm({...staffForm,color:e.target.value})} style={{width:48,height:32,padding:2,border:'1px solid var(--line)',borderRadius:4,cursor:'pointer'}}/></label>
+              <div className="row-flex" style={{gap:8, marginTop:4}}>
+                <button className="btn btn-rust btn-sm" disabled={!staffForm.name.trim()||staffBusy} onClick={saveStaffMember}>{staffBusy?'Saving…':'Save'}</button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={()=>setStaffForm(null)}>Cancel</button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>}
+
+      {settingsTab === 'integrations' && <div style={{display:'grid', gap:24}}>
+        <form onSubmit={onIntegrationsSubmit} style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24}}>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+            <span className="eyebrow">Integrations</span>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={openAddIntegrationModal}>+ Add</button>
+          </div>
+          {integrations.length === 0 && <div style={{marginTop:12, fontSize:13, color:'var(--ink-3)'}}>No integrations configured.</div>}
+          <div style={{display:'grid', gap:10, marginTop:12, fontSize:14}}>
+            {integrations.map((r,i) => (
+              <div key={i} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 0', borderBottom: i < integrations.length - 1 ? '1px solid var(--line)' : 'none'}}>
+                <div>
+                  <div style={{fontWeight:600}}>{r[0]}</div>
+                  <div className="mono" style={{fontSize:11, color:r[2]?'var(--eucalyptus)':'var(--ink-3)', marginTop:2}}>{r[1] ? r[1].toUpperCase() : '—'} · {r[2] ? 'CONNECTED' : 'DISCONNECTED'}</div>
+                </div>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => openIntegrationModal(i)}>{r[2]?'Configure':'Connect'}</button>
+              </div>
+            ))}
+          </div>
+          <div className="row-flex" style={{gap:8, marginTop:12}}>
+            <button className="btn btn-rust btn-sm" disabled={!integrationsDirty || sectionBusy==='integrations'}>{sectionBusy==='integrations'?'Saving…':'Save'}</button>
+            <button type="button" className="btn btn-ghost btn-sm" disabled={!integrationsDirty || sectionBusy==='integrations'} onClick={() => setIntegrations(savedIntegrations)}>Cancel</button>
+          </div>
+        </form>
+      </div>}
+
+      {settingsTab === 'security' && <div style={{display:'grid', gap:24}}>
+        <form onSubmit={onSecuritySubmit} style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24, maxWidth:480}}>
+          <span className="eyebrow">Admin credentials</span>
+          <label className="field" style={{marginTop:12}}><span className="label">Admin username</span><input className="input" value={security.adminUsername} onChange={e => setSecurity({...security, adminUsername: e.target.value})}/></label>
+          <label className="field"><span className="label">New password <span style={{fontWeight:400, color:'var(--ink-3)'}}>(leave blank to keep current)</span></span><input className="input" type="password" value={security.adminPassword} onChange={e => setSecurity({...security, adminPassword: e.target.value})}/></label>
+          <label className="field"><span className="label">Confirm password</span><input className="input" type="password" value={security.confirmPassword} onChange={e => setSecurity({...security, confirmPassword: e.target.value})}/></label>
+          {security.adminPassword && security.adminPassword !== security.confirmPassword && <div style={{fontSize:11, color:'var(--rust)', marginBottom:4}}>Passwords do not match</div>}
+          <div className="row-flex" style={{gap:8, marginTop:12}}>
+            <button className="btn btn-rust btn-sm" disabled={!securityDirty || sectionBusy==='security' || !!(security.adminPassword && security.adminPassword !== security.confirmPassword)}>{sectionBusy==='security'?'Saving…':'Save'}</button>
+            <button type="button" className="btn btn-ghost btn-sm" disabled={!securityDirty || sectionBusy==='security'} onClick={() => setSecurity(savedSecurity)}>Cancel</button>
+          </div>
+        </form>
+      </div>}
+
+      {settingsTab === 'advanced' && <div style={{display:'grid', gap:24}}>
+        <div style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24}}>
+          <span className="eyebrow">Maintenance &amp; Data</span>
+          <div style={{marginTop:14, display:'grid', gap:10}}>
+            <div style={{padding:'14px', background:'var(--bg-elev)', border:'1px solid var(--line)'}}>
+              <div style={{fontWeight:600}}>Rebuild search index</div>
+              <p style={{fontSize:13, color:'var(--ink-2)', margin:'4px 0 8px'}}>Re-indexes products, tutorials, and forum threads.</p>
+              {dangerMsg.rebuild && <div style={{fontSize:12, marginBottom:6, color:dangerMsg.rebuild.includes('✓')?'var(--eucalyptus)':'var(--rust)'}}>{dangerMsg.rebuild}</div>}
+              <button className="btn btn-ghost btn-sm" disabled={sectionBusy==='rebuild'} onClick={async () => {
+                setSectionBusy('rebuild');
+                setDangerMsg(m => ({...m, rebuild:'Rebuilding…'}));
+                await fetch('/api/admin/rebuild', { method:'POST', headers:postHeaders(), credentials:'include' }).catch(()=>null);
+                setSectionBusy('');
+                setDangerMsg(m => ({...m, rebuild:'✓ Index rebuilt.'}));
+                setTimeout(() => setDangerMsg(m => ({...m, rebuild:''})), 4000);
+              }}>{sectionBusy==='rebuild' ? 'Rebuilding…' : 'Run rebuild'}</button>
+            </div>
+            <div style={{padding:'14px', background:'var(--bg-elev)', border:'1px solid var(--line)'}}>
+              <div style={{fontWeight:600}}>Export all data</div>
+              <p style={{fontSize:13, color:'var(--ink-2)', margin:'4px 0 8px'}}>JSON dump of everything — products, orders, customers, content.</p>
+              {dangerMsg.export && <div style={{fontSize:12, marginBottom:6, color:dangerMsg.export.includes('✓')?'var(--eucalyptus)':'var(--rust)'}}>{dangerMsg.export}</div>}
+              <button className="btn btn-ghost btn-sm" disabled={sectionBusy==='export'} onClick={async () => {
+                setSectionBusy('export');
+                setDangerMsg(m => ({...m, export:'Generating…'}));
+                const r = await fetch('/api/admin/export', { credentials:'include' }).catch(()=>null);
+                setSectionBusy('');
+                if (r && r.ok) {
+                  const blob = await r.blob();
+                  const a = document.createElement('a');
+                  a.href = URL.createObjectURL(blob);
+                  a.download = `outback-export-${new Date().toISOString().slice(0,10)}.json`;
+                  a.click();
+                  setDangerMsg(m => ({...m, export:'✓ Export downloaded.'}));
+                } else {
+                  setDangerMsg(m => ({...m, export:'Export failed — check server logs.'}));
+                }
+                setTimeout(() => setDangerMsg(m => ({...m, export:''})), 5000);
+              }}>{sectionBusy==='export' ? 'Generating…' : 'Generate export'}</button>
+            </div>
+            <div style={{padding:'14px', background:'#3a1a14', color:'var(--paper)', border:'1px solid #7a3a18'}}>
+              <div style={{fontWeight:600, color:'#ffb59c'}}>Maintenance mode</div>
+              <p style={{fontSize:13, margin:'4px 0 8px', color:'var(--bg-deep)'}}>Shows a holding page to non-staff visitors.</p>
+              {maintenanceEnabled && <div style={{fontSize:12, marginBottom:6, color:'#ffb59c', fontWeight:600}}>⚠ Maintenance mode is currently ON</div>}
+              {dangerMsg.maint && <div style={{fontSize:12, marginBottom:6, color:'#ffb59c'}}>{dangerMsg.maint}</div>}
+              {maintenanceEnabled ? (
+                <button className="btn btn-ghost btn-sm" disabled={sectionBusy==='maint'} onClick={async () => {
+                  setSectionBusy('maint');
+                  const r = await fetch('/api/admin/maintenance', { method:'POST', credentials:'include', headers:postHeaders(), body: JSON.stringify({ enabled: false }) }).catch(()=>null);
+                  setSectionBusy('');
+                  if (r && r.ok) { setMaintenanceEnabled(false); setDangerMsg(m => ({...m, maint:'✓ Maintenance mode disabled.'})); }
+                  else { setDangerMsg(m => ({...m, maint:'Error disabling maintenance mode.'})); }
+                }}>{sectionBusy==='maint' ? 'Disabling…' : 'Disable maintenance'}</button>
+              ) : !maintConfirm ? (
+                <button className="btn btn-rust btn-sm" onClick={() => setMaintConfirm(true)}>Enable maintenance</button>
+              ) : (
+                <div className="row-flex" style={{gap:8, alignItems:'center'}}>
+                  <span style={{fontSize:12, color:'#ffb59c'}}>Are you sure? This will hide the site from visitors.</span>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setMaintConfirm(false)}>Cancel</button>
+                  <button className="btn btn-rust btn-sm" disabled={sectionBusy==='maint'} onClick={async () => {
+                    setSectionBusy('maint');
+                    const r = await fetch('/api/admin/maintenance', { method:'POST', credentials:'include', headers:postHeaders(), body: JSON.stringify({ enabled: true }) }).catch(()=>null);
+                    setSectionBusy('');
+                    setMaintConfirm(false);
+                    if (r && r.ok) { setMaintenanceEnabled(true); setDangerMsg(m => ({...m, maint:'✓ Maintenance mode enabled.'})); }
+                    else { setDangerMsg(m => ({...m, maint:'Error enabling maintenance mode.'})); }
+                  }}>{sectionBusy==='maint' ? 'Enabling…' : 'Yes, enable'}</button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      </div>}
+
       {integrationModal && (
         <div style={{position:'fixed', inset:0, zIndex:500, background:'rgba(15,13,10,0.75)', display:'flex', flexDirection:'column', alignItems:'center', padding:'40px 16px', overflowY:'auto'}} onClick={() => setIntegrationModal(null)}>
           <div style={{width:'100%', maxWidth:480, background:'var(--paper)', padding:32, boxShadow:'0 16px 48px rgba(0,0,0,.35)'}} onClick={e => e.stopPropagation()}>
