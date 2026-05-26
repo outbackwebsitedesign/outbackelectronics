@@ -442,7 +442,7 @@ function PoliciesPage() {
 // WARRANTY REGISTRATION
 // ============================================================
 function WarrantyRegisterPage({ go }) {
-  const [form, setForm] = useState({ name: '', email: '', orderId: '', notes: '' });
+  const [form, setForm] = useState({ name: '', email: '', orderId: '', receivedDate: '', notes: '' });
   const update = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const [looking, setLooking] = useState(false);
@@ -474,7 +474,7 @@ function WarrantyRegisterPage({ go }) {
   };
 
   const resetForm = () => {
-    setForm({ name: '', email: '', orderId: '', notes: '' });
+    setForm({ name: '', email: '', orderId: '', receivedDate: '', notes: '' });
     setOrderData(null);
     setLookupError(null);
     setSubmitted(false);
@@ -498,6 +498,7 @@ function WarrantyRegisterPage({ go }) {
             <div className="term" style={{ marginTop: 24 }}>
               <div className="mono" style={{ fontSize: 10, color: 'var(--ink-3)', marginBottom: 6 }}>// REGISTERED BUILD</div>
               <div>order    : {form.orderId || '—'}</div>
+              <div>received : {form.receivedDate || '—'}</div>
               {newParts.length > 0 && newParts.map((e, i) => (
                 <div key={i}>new      : {e.description}</div>
               ))}
@@ -608,6 +609,10 @@ function WarrantyRegisterPage({ go }) {
                 <input required type="email" className="input" value={form.email} onChange={e => update('email', e.target.value)} placeholder="your@email.com" />
               </label>
             </div>
+            <label className="field">
+              <span className="label">Date received</span>
+              <input required type="date" className="input" value={form.receivedDate} onChange={e => update('receivedDate', e.target.value)} />
+            </label>
 
             <label className="field">
               <span className="label">Additional notes (optional)</span>

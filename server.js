@@ -1161,7 +1161,7 @@ function emailStaffContactMessage({ name, email, msg }) {
   };
 }
 
-function emailWarrantyConfirmation({ regId, customerName, orderId, expenses }) {
+function emailWarrantyConfirmation({ regId, customerName, orderId, receivedDate, submittedAt, expenses }) {
   const firstName = customerName ? customerName.split(' ')[0] : 'there';
   const newParts = expenses.filter(e => !e.isSecondHand);
   const usedParts = expenses.filter(e => e.isSecondHand);
@@ -1182,6 +1182,8 @@ function emailWarrantyConfirmation({ regId, customerName, orderId, expenses }) {
       <div class="detail">
         <dt>REGISTRATION ID</dt><dd>${escHtml(regId)}</dd>
         <dt>ORDER ID</dt><dd>${escHtml(orderId)}</dd>
+        <dt>DATE RECEIVED</dt><dd>${escHtml(receivedDate)}</dd>
+        <dt>REGISTERED ON</dt><dd>${new Date(submittedAt).toLocaleDateString('en-AU', { day:'numeric', month:'long', year:'numeric' })}</dd>
         ${partsHtml}
       </div>
       <p>${escHtml(warrantyNote)}</p>
@@ -1191,7 +1193,7 @@ function emailWarrantyConfirmation({ regId, customerName, orderId, expenses }) {
   };
 }
 
-function emailStaffWarrantyRegistration({ regId, name, email, orderId, expenses, notes }) {
+function emailStaffWarrantyRegistration({ regId, name, email, orderId, receivedDate, submittedAt, expenses, notes }) {
   const newParts = expenses.filter(e => !e.isSecondHand);
   const usedParts = expenses.filter(e => e.isSecondHand);
   const partsHtml = expenses.length === 0 ? '<dt>PARTS</dt><dd>None logged</dd>' : `
@@ -1206,6 +1208,8 @@ function emailStaffWarrantyRegistration({ regId, name, email, orderId, expenses,
         <dt>REGISTRATION ID</dt><dd>${escHtml(regId)}</dd>
         <dt>CUSTOMER</dt><dd>${escHtml(name)} &lt;${escHtml(email)}&gt;</dd>
         <dt>ORDER ID</dt><dd>${escHtml(orderId)}</dd>
+        <dt>DATE RECEIVED</dt><dd>${escHtml(receivedDate)}</dd>
+        <dt>SUBMITTED</dt><dd>${new Date(submittedAt).toLocaleDateString('en-AU', { day:'numeric', month:'long', year:'numeric' })}</dd>
         ${partsHtml}
         ${notes ? `<dt>NOTES</dt><dd>${escHtml(notes)}</dd>` : ''}
       </div>
@@ -1953,14 +1957,15 @@ const mainServer = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/warranty/register') {
     if (publicRateLimited(getIp(req), 'warranty/register')) return json(res, 429, { error: 'too_many_requests' });
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
-    const { name, email, orderId, expenses, notes } = body || {};
-    if (!name || !email || !orderId) return json(res, 422, { error: 'missing_fields', message: 'Name, email, and order ID are required.' });
+    const { name, email, orderId, receivedDate, expenses, notes } = body || {};
+    if (!name || !email || !orderId || !receivedDate) return json(res, 422, { error: 'missing_fields', message: 'Name, email, order ID, and date received are required.' });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())) return json(res, 422, { error: 'invalid_email', message: 'Email address is invalid.' });
     const safeExpenses = Array.isArray(expenses) ? expenses.slice(0, 100).map(e => ({ description: String(e.description || '').trim().slice(0, 200), isSecondHand: !!e.isSecondHand })) : [];
+    const submittedAt = new Date().toISOString();
     const regId = 'wrnt-' + Date.now();
-    const custTmpl = emailWarrantyConfirmation({ regId, customerName: String(name).trim(), orderId: String(orderId).trim(), expenses: safeExpenses });
+    const custTmpl = emailWarrantyConfirmation({ regId, customerName: String(name).trim(), orderId: String(orderId).trim(), receivedDate: String(receivedDate).trim(), submittedAt, expenses: safeExpenses });
     sendEmail({ to: String(email).trim(), ...custTmpl });
-    const staffTmpl = emailStaffWarrantyRegistration({ regId, name: String(name).trim(), email: String(email).trim(), orderId: String(orderId).trim(), expenses: safeExpenses, notes: String(notes || '').trim() });
+    const staffTmpl = emailStaffWarrantyRegistration({ regId, name: String(name).trim(), email: String(email).trim(), orderId: String(orderId).trim(), receivedDate: String(receivedDate).trim(), submittedAt, expenses: safeExpenses, notes: String(notes || '').trim() });
     sendEmail({ to: getNotifyEmail(), ...staffTmpl });
     return json(res, 201, { ok: true, id: regId });
   }
