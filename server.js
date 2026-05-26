@@ -2622,7 +2622,32 @@ const adminServer = http.createServer(async (req, res) => {
   }
   if (req.method === 'GET' && url.pathname === '/api/admin/customers') {
     const session = requireRole(req, res, 'staff'); if (!session) return;
-    return json(res, 200, { items: readCustomers() });
+    const customers = readCustomers();
+    const allOrders  = readOrders();
+    const allRepairs = flatRepairs();
+    const allQuotes  = readQuotes();
+    function custMatches(cust, j) {
+      const ce = (cust.email||'').toLowerCase().trim();
+      const cp = normalisePhone(cust.phone||'');
+      const cn = (cust.name||'').toLowerCase().trim();
+      if (ce && ce === (j.email||'').toLowerCase().trim()) return true;
+      if (cp && cp === normalisePhone(j.phone||j.mobile||'')) return true;
+      if (cn && cn === (j.name||j.customer||j.customerName||'').toLowerCase().trim()) return true;
+      return (cust.manualLinks||[]).some(l => l === j.id || l === j.ref);
+    }
+    const items = customers.map(c => {
+      const orders  = allOrders.filter(o => custMatches(c, o));
+      const repairs = allRepairs.filter(r => custMatches(c, r));
+      const spent   = orders.reduce((s, o) => s + (parseFloat(o.total)||0), 0)
+                    + repairs.reduce((s, r) => s + (parseFloat(r.total||r.cost||0)||0), 0);
+      const lastDates = [
+        ...orders.map(o => o.createdAt||o.date||''),
+        ...repairs.map(r => r.createdAt||r.date||''),
+      ].filter(Boolean).sort();
+      const last = lastDates.length ? lastDates[lastDates.length - 1].slice(0, 10) : (c.last||'');
+      return { ...c, orders: orders.length + repairs.length, spent: Math.round(spent * 100) / 100, last };
+    });
+    return json(res, 200, { items });
   }
   if (req.method === 'GET' && url.pathname === '/api/admin/repairs') {
     const session = requireRole(req, res, 'staff'); if (!session) return;
@@ -2965,12 +2990,42 @@ const adminServer = http.createServer(async (req, res) => {
     const idx = customers.findIndex(c => c.id && c.id === body.id);
     if (idx >= 0) { customers[idx] = body; } else { body.id = 'cust-' + Date.now(); customers.push(body); }
     writeCustomers(customers);
+    // Auto-stamp jobs that match by name (but lack email/phone) with this customer's email,
+    // so they will be found by email-based lookups going forward.
+    const custEmail = (body.email||'').trim();
+    const custPhone = normalisePhone(body.phone||'');
+    const custName  = (body.name||'').toLowerCase().trim();
+    if (custName && custEmail) {
+      function needsStamp(j) {
+        if ((j.email||'').trim()) return false; // already has email — don't overwrite
+        const jName = (j.name||j.customer||j.customerName||'').toLowerCase().trim();
+        return jName && jName === custName;
+      }
+      const orders = readOrders();
+      const stamped = orders.map(o => needsStamp(o) ? { ...o, email: custEmail } : o);
+      if (stamped.some((o, i) => o !== orders[i])) writeOrders(stamped);
+      const repairsBoard = readRepairs();
+      let repairsDirty = false;
+      repairsBoard.columns = (repairsBoard.columns||[]).map(col => ({
+        ...col,
+        cards: (col.cards||[]).map(c => { if (needsStamp(c)) { repairsDirty = true; return { ...c, email: custEmail }; } return c; })
+      }));
+      if (repairsDirty) writeRepairs(repairsBoard);
+      const quotes = readQuotes();
+      const stampedQ = quotes.map(q => needsStamp(q) ? { ...q, email: custEmail } : q);
+      if (stampedQ.some((q, i) => q !== quotes[i])) writeQuotes(stampedQ);
+    }
     return json(res, 200, { ok: true, item: body });
   }
   if (req.method === 'POST' && url.pathname === '/api/admin/customers/delete') {
     const session = requireRole(req, res, 'manager'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     writeCustomers(readCustomers().filter(c => c.id !== body.id));
+    return json(res, 200, { ok: true });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/customers/backfill') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    backfillJobEmails();
     return json(res, 200, { ok: true });
   }
   if (req.method === 'GET' && url.pathname === '/api/admin/customers/linked-jobs') {
@@ -3988,6 +4043,64 @@ function migrateEnvToSettings() {
 }
 
 migrateEnvToSettings();
+
+function backfillJobEmails() {
+  // For every customer that has a name + email, find any jobs matched by name
+  // (or phone) that are missing an email, and stamp the customer's email onto them.
+  // This makes old records discoverable by email-based lookups going forward.
+  const customers = readCustomers().filter(c => c.name && c.email);
+  if (!customers.length) return;
+
+  const orders      = readOrders();
+  const repairBoard = readRepairs();
+  const quotes      = readQuotes();
+  let ordersDirty = false, repairsDirty = false, quotesDirty = false;
+
+  function stampIfMatch(j, custEmail, custPhone, custName) {
+    if ((j.email||'').trim()) return j; // already has email
+    const jName  = (j.name||j.customer||j.customerName||'').toLowerCase().trim();
+    const jPhone = normalisePhone(j.phone||j.mobile||'');
+    const nameHit  = custName  && jName  && custName  === jName;
+    const phoneHit = custPhone && jPhone && custPhone === jPhone;
+    if (nameHit || phoneHit) return { ...j, email: custEmail };
+    return j;
+  }
+
+  for (const c of customers) {
+    const ce = c.email.trim();
+    const cp = normalisePhone(c.phone||'');
+    const cn = (c.name||'').toLowerCase().trim();
+
+    const newOrders = orders.map((o, i) => {
+      const stamped = stampIfMatch(o, ce, cp, cn);
+      if (stamped !== o) { orders[i] = stamped; ordersDirty = true; }
+      return orders[i];
+    });
+    void newOrders;
+
+    repairBoard.columns = (repairBoard.columns||[]).map(col => ({
+      ...col,
+      cards: (col.cards||[]).map(card => {
+        const stamped = stampIfMatch(card, ce, cp, cn);
+        if (stamped !== card) repairsDirty = true;
+        return stamped;
+      }),
+    }));
+
+    quotes.forEach((q, i) => {
+      const stamped = stampIfMatch(q, ce, cp, cn);
+      if (stamped !== q) { quotes[i] = stamped; quotesDirty = true; }
+    });
+  }
+
+  if (ordersDirty)  writeOrders(orders);
+  if (repairsDirty) writeRepairs(repairBoard);
+  if (quotesDirty)  writeQuotes(quotes);
+  if (ordersDirty || repairsDirty || quotesDirty)
+    console.log('[backfill] Stamped emails onto name/phone-matched jobs');
+}
+
+backfillJobEmails();
 
 startServer(mainServer,   MAIN_PORT,   'main  ');
 startServer(forumServer,  FORUM_PORT,  'forum ');

@@ -3229,8 +3229,14 @@ function AdminCustomers() {
         <StatTile label="AVG ORDER VALUE" value="—" />
       </div>
       <div className="row-flex" style={{justifyContent:'flex-end', gap:8, marginBottom:-8}}>
+        <button className="btn btn-ghost btn-sm" onClick={async () => {
+          await fetch('/api/admin/customers/backfill', { method:'POST', headers:postHeaders(), credentials:'include' });
+          // Reload rows with fresh computed stats
+          const d = await fetch('/api/admin/customers', { credentials:'include' }).then(r=>r.ok?r.json():{items:[]});
+          setRows(d.items||[]);
+        }}>Re-link all jobs</button>
         <button className="btn btn-ghost btn-sm" onClick={() => setMergeOpen(true)}>Merge duplicates</button>
-        <button className="btn btn-rust btn-sm" onClick={() => { setEdit({}); setForm({ name:'', loc:'', email:'', phone:'', tagsStr:'', orders:0, spent:0, last:'' }); }}>+ New customer</button>
+        <button className="btn btn-rust btn-sm" onClick={() => { setEdit({}); setForm({ name:'', loc:'', email:'', phone:'', tagsStr:'' }); }}>+ New customer</button>
       </div>
       <Table
         columns={[
@@ -3287,11 +3293,7 @@ function AdminCustomers() {
           <label className="field"><span className="label">Email</span><input className="input" type="email" value={form.email||''} onChange={e=>setForm({...form,email:e.target.value})}/></label>
           <label className="field"><span className="label">Phone</span><input className="input" value={form.phone||''} onChange={e=>setForm({...form,phone:e.target.value})}/></label>
           <label className="field"><span className="label">Tags (comma-separated)</span><input className="input" value={form.tagsStr||''} onChange={e=>setForm({...form,tagsStr:e.target.value})}/></label>
-          <div className="grid-2" style={{gap:14}}>
-            <label className="field"><span className="label">Orders</span><input className="input" type="number" value={form.orders||0} onChange={e=>setForm({...form,orders:Number(e.target.value)})}/></label>
-            <label className="field"><span className="label">Lifetime spend (AUD)</span><input className="input" type="number" value={form.spent||0} onChange={e=>setForm({...form,spent:Number(e.target.value)})}/></label>
-          </div>
-          <label className="field"><span className="label">Last order</span><input className="input" value={form.last||''} onChange={e=>setForm({...form,last:e.target.value})}/></label>
+
           <label className="field"><span className="label">Testimonial quote</span><textarea className="input" rows={3} style={{resize:'vertical'}} value={form.testimonial||''} onChange={e=>setForm({...form,testimonial:e.target.value})} placeholder="In their own words…"/></label>
           <label className="field" style={{flexDirection:'row', alignItems:'center', gap:10, cursor:'pointer'}}>
             <input type="checkbox" checked={!!form.testimonialFeatured} onChange={e=>setForm({...form,testimonialFeatured:e.target.checked})}/>
