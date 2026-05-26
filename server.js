@@ -1364,8 +1364,8 @@ function getForumUrl() {
   return base.replace(/^(https?:\/\/)/, '$1forum.');
 }
 function getPortalUrl() {
-  if (PORTAL_URL) return PORTAL_URL;
   const base = getSiteUrl();
+  if (process.env.PORTAL_URL) return process.env.PORTAL_URL;
   if (/^https?:\/\/(localhost|127\.|0\.0\.0\.0)(:\d+)?/.test(base))
     return base.replace(/(:\d+)?(\/|$)/, ':8083$2');
   return base.replace(/^(https?:\/\/)/, '$1portal.');
