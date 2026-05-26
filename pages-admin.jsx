@@ -3079,6 +3079,7 @@ function MergeCustomerModal({ customers, onClose, onMerged }) {
 function CustomerLinkedJobs({ customerId, email, manualLinks, onLinksChange }) {
   const [jobs, setJobs] = useState(null);
   const [allJobs, setAllJobs] = useState([]);
+  const [claimedByOther, setClaimedByOther] = useState(new Set());
   const [selected, setSelected] = useState('');
 
   useEffect(() => {
@@ -3088,18 +3089,29 @@ function CustomerLinkedJobs({ customerId, email, manualLinks, onLinksChange }) {
   }, [customerId]);
 
   useEffect(() => {
-    // Load all orders, repairs, quotes for the dropdown
+    // Load all orders, repairs, quotes + all customers to detect jobs claimed by others
     Promise.all([
       fetch('/api/admin/orders', { credentials:'include' }).then(r => r.ok ? r.json() : { items:[] }),
       fetch('/api/admin/repairs', { credentials:'include' }).then(r => r.ok ? r.json() : []),
       fetch('/api/admin/quotes', { credentials:'include' }).then(r => r.ok ? r.json() : { items:[] }),
-    ]).then(([od, rd, qd]) => {
-      const orders = (od.items || od.orders || []).map(o => ({ id: o.id, ref: o.ref || o.id, label: o.title || o.description || o.ref || o.id, _type: 'order' }));
-      const repairs = (Array.isArray(rd) ? rd : (rd.items || rd.repairs || [])).map(r => ({ id: r.id, ref: r.id, label: r.service || r.description || r.id, _type: 'repair' }));
-      const quotes = (qd.items || qd.quotes || []).map(q => ({ id: q.id, ref: q.ref || q.id, label: q.service || q.description || q.ref || q.id, _type: 'quote' }));
+      fetch('/api/admin/customers', { credentials:'include' }).then(r => r.ok ? r.json() : { items:[] }),
+    ]).then(([od, rd, qd, cd]) => {
+      const orders = (od.items || od.orders || []).map(o => ({ id: o.id, ref: o.ref || o.id, label: o.title || o.description || o.ref || o.id, _type: 'order', email: (o.email||'').toLowerCase().trim() }));
+      const repairs = (Array.isArray(rd) ? rd : (rd.items || rd.repairs || [])).map(r => ({ id: r.id, ref: r.id, label: r.service || r.description || r.id, _type: 'repair', email: (r.email||'').toLowerCase().trim() }));
+      const quotes = (qd.items || qd.quotes || []).map(q => ({ id: q.id, ref: q.ref || q.id, label: q.service || q.description || q.ref || q.id, _type: 'quote', email: (q.email||'').toLowerCase().trim() }));
       setAllJobs([...orders, ...repairs, ...quotes]);
+
+      // Build set of job IDs owned by other customers (by email or manualLinks)
+      const otherCustomers = (cd.items || []).filter(c => c.id !== customerId);
+      const otherEmails = new Set(otherCustomers.map(c => (c.email||'').toLowerCase().trim()).filter(Boolean));
+      const otherManual = new Set(otherCustomers.flatMap(c => c.manualLinks||[]));
+      const claimed = new Set();
+      for (const j of [...orders, ...repairs, ...quotes]) {
+        if ((j.email && otherEmails.has(j.email)) || otherManual.has(j.id)) claimed.add(j.id);
+      }
+      setClaimedByOther(claimed);
     }).catch(() => {});
-  }, []);
+  }, [customerId]);
 
   function addLink() {
     if (!selected) return;
@@ -3122,9 +3134,9 @@ function CustomerLinkedJobs({ customerId, email, manualLinks, onLinksChange }) {
   const autoLinked = jobs ? [...(jobs.orders||[]), ...(jobs.repairs||[]), ...(jobs.quotes||[])] : [];
   const typeLabel = { order:'ORDER', repair:'REPAIR', quote:'QUOTE' };
 
-  // Jobs available to manually link (not already auto-matched by email)
+  // Jobs available to manually link (not already auto-matched by email, not claimed by another customer)
   const autoIds = new Set(autoLinked.map(j => j.id));
-  const available = allJobs.filter(j => !autoIds.has(j.id) && !(manualLinks||[]).includes(j.id));
+  const available = allJobs.filter(j => !autoIds.has(j.id) && !(manualLinks||[]).includes(j.id) && !claimedByOther.has(j.id));
 
   return (
     <div style={{marginTop:16}}>
