@@ -1363,6 +1363,23 @@ function getForumUrl() {
   }
   return base.replace(/^(https?:\/\/)/, '$1forum.');
 }
+function buildPartsFromDraftQuote(dq) {
+  if (!dq) return [];
+  const parts = [];
+  for (const item of (dq.hardwareItems || [])) {
+    if (!item.name) continue;
+    parts.push({ id: item.id || ('p-' + Date.now() + '-' + Math.random().toString(36).slice(2,6)), name: item.name, qty: parseInt(item.qty) || 1, status: 'pending', orderedAt: null, deliveredAt: null, installedAt: null });
+  }
+  if (dq.pcBuild && dq.pcBuildFee > 0) {
+    parts.push({ id: 'p-build', name: 'Custom PC Build (labour)', qty: 1, status: 'pending', orderedAt: null, deliveredAt: null, installedAt: null });
+  }
+  for (const item of (dq.otherItems || [])) {
+    if (!item.description) continue;
+    parts.push({ id: item.id || ('p-' + Date.now() + '-' + Math.random().toString(36).slice(2,6)), name: item.description, qty: 1, status: 'pending', orderedAt: null, deliveredAt: null, installedAt: null });
+  }
+  return parts;
+}
+
 function getPortalUrl() {
   const base = getSiteUrl();
   if (process.env.PORTAL_URL) return process.env.PORTAL_URL;
@@ -3538,6 +3555,7 @@ const portalServer = http.createServer(async (req, res) => {
       payments: [],
       sourceQuoteId: quote.id,
       quoteRef: quote.quoteRef || '',
+      parts: buildPartsFromDraftQuote(dq),
     };
     const orders = readOrders();
     orders.push(order);
@@ -3610,6 +3628,7 @@ const portalServer = http.createServer(async (req, res) => {
       payments: [],
       sourceQuoteId: quote.id,
       quoteRef: quote.quoteRef || '',
+      parts: buildPartsFromDraftQuote(dq),
     };
     const orders = readOrders();
     orders.push(order);

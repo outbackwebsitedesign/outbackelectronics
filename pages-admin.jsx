@@ -402,7 +402,10 @@ function AdminOrders({ search }) {
   };
   const fulfilmentMap = {
     pending:   { bg:'var(--bg-deep)', fg:'var(--ink-2)' },
-    packed:    { bg:'#dceaf5', fg:'#1668c8' },
+    ordering:  { bg:'#f0e6d3', fg:'#7a5010' },
+    building:  { bg:'#fff4d6', fg:'#7a5d10' },
+    testing:   { bg:'#dceaf5', fg:'#1668c8' },
+    packed:    { bg:'#c8dff5', fg:'#0e4a8c' },
     shipped:   { bg:'var(--ink)', fg:'var(--paper)' },
     fulfilled: { bg:'#d8e7d0', fg:'#345526' },
     refunded:  { bg:'#f3d5c5', fg:'#7a3a18' },
@@ -515,7 +518,7 @@ function AdminOrders({ search }) {
           {/* Fulfilment — only manual status */}
           <label className="field"><span className="label">Fulfilment</span>
             <select className="select" value={form.fulfilment||'pending'} onChange={e=>setForm({...form,fulfilment:e.target.value})}>
-              {['pending','packed','shipped','fulfilled','refunded'].map(s => <option key={s}>{s}</option>)}
+              {['pending','ordering','building','testing','packed','shipped','fulfilled','refunded'].map(s => <option key={s}>{s}</option>)}
             </select>
           </label>
           <label className="field">
@@ -527,6 +530,44 @@ function AdminOrders({ search }) {
               <a href={`https://auspost.com.au/mypost/track/#/details/${form.trackingNumber}`} target="_blank" rel="noreferrer" style={{fontSize:13, color:'var(--rust)'}}>Preview tracking link ↗</a>
             </div>
           )}
+
+          {/* Parts tracking */}
+          {(form.parts || []).length > 0 && <>
+            <div style={{borderTop:'1px solid var(--line)', margin:'12px 0 16px'}}/>
+            <div className="mono" style={{fontSize:10, letterSpacing:'.1em', color:'var(--ink-2)', marginBottom:10}}>PARTS TRACKING</div>
+            {(form.parts || []).map((part, i) => {
+              const PART_STATUSES = ['pending','ordered','delivered','installed'];
+              const statusColors = { pending:'var(--ink-3)', ordered:'#1668c8', delivered:'#7a5d10', installed:'#345526' };
+              return (
+                <div key={part.id || i} style={{padding:'10px 14px', background:'var(--bg-elev)', border:'1px solid var(--line)', marginBottom:6}}>
+                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, flexWrap:'wrap'}}>
+                    <div style={{flex:1, minWidth:0}}>
+                      <div style={{fontWeight:500, fontSize:13}}>{part.name}{part.qty > 1 ? <span style={{color:'var(--ink-3)', fontWeight:400}}> × {part.qty}</span> : ''}</div>
+                      {part.orderedAt && <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginTop:2}}>Ordered {part.orderedAt}{part.deliveredAt ? ` · Delivered ${part.deliveredAt}` : ''}{part.installedAt ? ` · Installed ${part.installedAt}` : ''}</div>}
+                    </div>
+                    <div style={{display:'flex', gap:4, flexWrap:'wrap'}}>
+                      {PART_STATUSES.map(s => {
+                        const active = part.status === s;
+                        return (
+                          <button key={s} className="btn btn-sm" style={{fontSize:10, padding:'2px 8px', background: active ? statusColors[s] : 'transparent', color: active ? '#fff' : statusColors[s], border:`1px solid ${statusColors[s]}`, cursor: active ? 'default' : 'pointer'}}
+                            onClick={() => {
+                              if (active) return;
+                              const dateStr = new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
+                              const patch = { status: s };
+                              if (s === 'ordered' && !part.orderedAt) patch.orderedAt = dateStr;
+                              if (s === 'delivered' && !part.deliveredAt) patch.deliveredAt = dateStr;
+                              if (s === 'installed' && !part.installedAt) patch.installedAt = dateStr;
+                              setForm(f => ({ ...f, parts: f.parts.map((p, pi) => pi === i ? { ...p, ...patch } : p) }));
+                            }}
+                          >{s}</button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </>}
 
           {/* Financials */}
           <div style={{borderTop:'1px solid var(--line)', margin:'12px 0 16px'}}/>

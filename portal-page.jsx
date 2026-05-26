@@ -426,8 +426,16 @@ function OrderDetail({ o, onPay, paying }) {
   const needsPayment = outstanding != null && outstanding > 0;
   const trackingUrl = o.trackingNumber ? `https://auspost.com.au/mypost/track/#/details/${encodeURIComponent(o.trackingNumber)}` : null;
 
-  const FULFILMENT_STEPS = ['pending','packed','shipped','fulfilled'];
-  const currentStep = FULFILMENT_STEPS.indexOf(o.fulfilment || 'pending');
+  const FULFILMENT_STEPS = [
+    { key:'pending',  label:'Order placed' },
+    { key:'ordering', label:'Ordering parts' },
+    { key:'building', label:'Building' },
+    { key:'testing',  label:'Testing' },
+    { key:'packed',   label:'Packed' },
+    { key:'shipped',  label:'Shipped' },
+    { key:'fulfilled',label:'Delivered' },
+  ];
+  const currentStep = Math.max(0, FULFILMENT_STEPS.findIndex(s => s.key === (o.fulfilment || 'pending')));
 
   return (
     <div style={{marginTop:16, borderTop:'1px solid var(--line)', paddingTop:16, display:'grid', gap:20}}>
@@ -435,19 +443,19 @@ function OrderDetail({ o, onPay, paying }) {
       {/* Progress bar */}
       {o.fulfilment !== 'refunded' && (
         <div>
-          <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:10, letterSpacing:'.08em'}}>FULFILMENT PROGRESS</div>
-          <div style={{display:'flex', gap:0}}>
-            {['Order placed','Packed','Shipped','Delivered'].map((label, i) => {
+          <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:12, letterSpacing:'.08em'}}>FULFILMENT PROGRESS</div>
+          <div style={{display:'flex', gap:0, overflowX:'auto', paddingBottom:4}}>
+            {FULFILMENT_STEPS.map(({ label }, i) => {
               const done = i <= currentStep;
               const active = i === currentStep;
               return (
-                <div key={i} style={{flex:1, textAlign:'center'}}>
+                <div key={i} style={{flex:'1 0 auto', textAlign:'center', minWidth:60}}>
                   <div style={{display:'flex', alignItems:'center'}}>
                     <div style={{flex: i === 0 ? '0 0 0' : 1, height:2, background: i <= currentStep ? 'var(--rust)' : 'var(--line)'}} />
-                    <div style={{width:12, height:12, borderRadius:'50%', flexShrink:0, background: done ? 'var(--rust)' : 'var(--line)', border: active ? '3px solid var(--rust)' : 'none', boxSizing:'border-box'}} />
-                    <div style={{flex: i === 3 ? '0 0 0' : 1, height:2, background: i < currentStep ? 'var(--rust)' : 'var(--line)'}} />
+                    <div style={{width:12, height:12, borderRadius:'50%', flexShrink:0, background: done ? 'var(--rust)' : 'var(--line)', outline: active ? '3px solid var(--rust)' : 'none', outlineOffset:2}} />
+                    <div style={{flex: i === FULFILMENT_STEPS.length - 1 ? '0 0 0' : 1, height:2, background: i < currentStep ? 'var(--rust)' : 'var(--line)'}} />
                   </div>
-                  <div style={{fontSize:11, marginTop:5, color: done ? 'var(--ink)' : 'var(--ink-3)', fontWeight: active ? 600 : 400}}>{label}</div>
+                  <div style={{fontSize:10, marginTop:5, color: done ? 'var(--ink)' : 'var(--ink-3)', fontWeight: active ? 700 : 400, whiteSpace:'nowrap'}}>{label}</div>
                 </div>
               );
             })}
@@ -459,6 +467,38 @@ function OrderDetail({ o, onPay, paying }) {
               </a>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Parts tracking */}
+      {(o.parts || []).length > 0 && (
+        <div>
+          <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:8, letterSpacing:'.08em'}}>PARTS STATUS</div>
+          <div style={{border:'1px solid var(--line)'}}>
+            {(o.parts || []).map((part, i) => {
+              const PART_STEP = { pending:0, ordered:1, delivered:2, installed:3 };
+              const step = PART_STEP[part.status] ?? 0;
+              const dotColor = ['var(--ink-3)','#1668c8','#7a5d10','#345526'][step];
+              const statusLabel = ['Pending','Ordered','Delivered','Installed'][step];
+              return (
+                <div key={part.id || i} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 14px', borderBottom: i < o.parts.length - 1 ? '1px solid var(--line)' : 'none', gap:12, flexWrap:'wrap'}}>
+                  <div style={{flex:1, minWidth:0}}>
+                    <span style={{fontSize:14}}>{part.name}</span>
+                    {part.qty > 1 && <span style={{fontSize:12, color:'var(--ink-3)', marginLeft:6}}>× {part.qty}</span>}
+                    <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginTop:2}}>
+                      {part.orderedAt && `Ordered ${part.orderedAt}`}
+                      {part.deliveredAt && ` · Delivered ${part.deliveredAt}`}
+                      {part.installedAt && ` · Installed ${part.installedAt}`}
+                    </div>
+                  </div>
+                  <div style={{display:'flex', alignItems:'center', gap:6, flexShrink:0}}>
+                    <div style={{width:8, height:8, borderRadius:'50%', background:dotColor}} />
+                    <span style={{fontSize:12, fontWeight:600, color:dotColor}}>{statusLabel}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -571,7 +611,7 @@ function OrdersTab({ highlightId }) {
 
   if (!items) return <LoadingSection />;
 
-  const FULFILMENT_LABEL = { pending:'In progress', packed:'Packed', shipped:'Shipped', fulfilled:'Delivered', refunded:'Refunded' };
+  const FULFILMENT_LABEL = { pending:'Pending', ordering:'Ordering parts', building:'Building', testing:'Testing', packed:'Packed', shipped:'Shipped', fulfilled:'Delivered', refunded:'Refunded' };
 
   return (
     <div className="page-section">
