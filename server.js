@@ -1363,6 +1363,13 @@ function getForumUrl() {
   }
   return base.replace(/^(https?:\/\/)/, '$1forum.');
 }
+function hydrateOrder(o, quotes) {
+  const srcQuote = o.sourceQuoteId ? quotes.find(q => q.id === o.sourceQuoteId) : null;
+  const dq = srcQuote?.draftQuote || null;
+  const parts = (o.parts && o.parts.length > 0) ? o.parts : (dq ? buildPartsFromDraftQuote(dq) : []);
+  return { ...o, draftQuote: dq, parts };
+}
+
 function buildPartsFromDraftQuote(dq) {
   if (!dq) return [];
   const parts = [];
@@ -2519,7 +2526,9 @@ const adminServer = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && url.pathname === '/api/admin/orders') {
     const session = requireRole(req, res, 'staff'); if (!session) return;
-    return json(res, 200, { items: readOrders() });
+    const quotes = readQuotes();
+    const items = readOrders().map(o => hydrateOrder(o, quotes));
+    return json(res, 200, { items });
   }
   if (req.method === 'GET' && url.pathname === '/api/admin/metrics') {
     const session = requireRole(req, res, 'staff'); if (!session) return;
@@ -2822,7 +2831,8 @@ const adminServer = http.createServer(async (req, res) => {
     const orders = readOrders();
     const idx = orders.findIndex(o => o.id && o.id === body.id);
     const existing = idx >= 0 ? orders[idx] : null;
-    if (idx >= 0) { orders[idx] = body; } else { body.id = 'ord-' + Date.now(); orders.push(body); }
+    const { draftQuote: _dq, ...bodyToStore } = body;
+    if (idx >= 0) { orders[idx] = bodyToStore; } else { bodyToStore.id = 'ord-' + Date.now(); orders.push(bodyToStore); }
     writeOrders(orders);
     const justShipped = body.fulfilment === 'shipped' && existing && existing.fulfilment !== 'shipped';
     if (justShipped && body.trackingNumber && body.email) {
@@ -3409,15 +3419,8 @@ const portalServer = http.createServer(async (req, res) => {
     const orders = readOrders();
     const quotes = readQuotes();
     const matched = orders
-      .filter(o => {
-        const email = String(o.email || '').toLowerCase();
-        return email && email === sessionEmail;
-      })
-      .map(o => {
-        const srcQuote = o.sourceQuoteId ? quotes.find(q => q.id === o.sourceQuoteId) : null;
-        const dq = srcQuote?.draftQuote || null;
-        return { ...o, draftQuote: dq };
-      });
+      .filter(o => String(o.email || '').toLowerCase() === sessionEmail)
+      .map(o => hydrateOrder(o, quotes));
     return json(res, 200, { items: matched });
   }
 
