@@ -2632,7 +2632,7 @@ const adminServer = http.createServer(async (req, res) => {
       const cn = (cust.name||'').toLowerCase().trim();
       if (ce && ce === (j.email||'').toLowerCase().trim()) return true;
       if (cp && cp === normalisePhone(j.phone||j.mobile||'')) return true;
-      if (cn && cn === (j.name||j.customer||j.customerName||'').toLowerCase().trim()) return true;
+      if (cn && cn === (j.cust||j.name||j.customer||j.customerName||'').toLowerCase().trim()) return true;
       return (cust.manualLinks||[]).some(l => l === j.id || l === j.ref);
     }
     const items = customers.map(c => {
@@ -2998,7 +2998,7 @@ const adminServer = http.createServer(async (req, res) => {
     if (custName && custEmail) {
       function needsStamp(j) {
         if ((j.email||'').trim()) return false; // already has email — don't overwrite
-        const jName = (j.name||j.customer||j.customerName||'').toLowerCase().trim();
+        const jName = (j.cust||j.name||j.customer||j.customerName||'').toLowerCase().trim();
         return jName && jName === custName;
       }
       const orders = readOrders();
@@ -3041,7 +3041,7 @@ const adminServer = http.createServer(async (req, res) => {
       if (manualLinks.includes(j.id) || manualLinks.includes(j.ref)) return true;
       const jEmail = (j.email||'').toLowerCase().trim();
       const jPhone = normalisePhone(j.phone || j.mobile || '');
-      const jName  = (j.name || j.customer || j.customerName || '').toLowerCase().trim();
+      const jName  = (j.cust || j.name || j.customer || j.customerName || '').toLowerCase().trim();
       if (custEmail && jEmail && custEmail === jEmail) return true;
       if (custPhone && jPhone && custPhone === jPhone) return true;
       if (custName  && jName  && custName  === jName)  return true;
@@ -3072,7 +3072,7 @@ const adminServer = http.createServer(async (req, res) => {
     function matchesDeleted(j) {
       const jEmail = (j.email||'').toLowerCase().trim();
       const jPhone = normalisePhone(j.phone || j.mobile || '');
-      const jName  = (j.name || j.customer || j.customerName || '').toLowerCase().trim();
+      const jName  = (j.cust || j.name || j.customer || j.customerName || '').toLowerCase().trim();
       if (oldEmail && jEmail && oldEmail === jEmail) return true;
       if (oldPhone && jPhone && oldPhone === jPhone) return true;
       if (oldName  && jName  && oldName  === jName)  return true;
@@ -4058,7 +4058,7 @@ function backfillJobEmails() {
 
   function stampIfMatch(j, custEmail, custPhone, custName) {
     if ((j.email||'').trim()) return j; // already has email
-    const jName  = (j.name||j.customer||j.customerName||'').toLowerCase().trim();
+    const jName  = (j.cust||j.name||j.customer||j.customerName||'').toLowerCase().trim();
     const jPhone = normalisePhone(j.phone||j.mobile||'');
     const nameHit  = custName  && jName  && custName  === jName;
     const phoneHit = custPhone && jPhone && custPhone === jPhone;

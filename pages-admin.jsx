@@ -3100,7 +3100,7 @@ function CustomerLinkedJobs({ customerId, email, manualLinks, onLinksChange }) {
       const orders = (od.items || od.orders || []).map(o => ({ id: o.id, ref: o.ref || o.id, label: o.title || o.description || o.ref || o.id, _type: 'order', email: (o.email||'').toLowerCase().trim(), phone: np(o.phone||o.mobile||''), jobName: (o.name||o.customer||o.customerName||'').toLowerCase().trim() }));
       // Repairs are a Kanban board — flatten all cards from all columns
       const repairCards = (rd.columns || []).flatMap(col => (col.cards || []).map(c => ({ ...c, _colLabel: col.label || col.id })));
-      const repairs = repairCards.map(r => ({ id: r.id, ref: r.id, label: r.service || r.customer || r.description || r.id, _type: 'repair', email: (r.email||'').toLowerCase().trim(), phone: np(r.phone||r.mobile||''), jobName: (r.name||r.customer||r.customerName||'').toLowerCase().trim() }));
+      const repairs = repairCards.map(r => ({ id: r.id, ref: r.id, label: r.service || r.customer || r.description || r.id, _type: 'repair', email: (r.email||'').toLowerCase().trim(), phone: np(r.phone||r.mobile||''), jobName: (r.cust||r.name||r.customer||r.customerName||'').toLowerCase().trim() }));
       const quotes = (qd.items || qd.quotes || []).map(q => ({ id: q.id, ref: q.ref || q.id, label: q.service || q.description || q.ref || q.id, _type: 'quote', email: (q.email||'').toLowerCase().trim(), phone: np(q.phone||q.mobile||''), jobName: (q.name||q.customer||q.customerName||'').toLowerCase().trim() }));
       setAllJobs([...orders, ...repairs, ...quotes]);
 
