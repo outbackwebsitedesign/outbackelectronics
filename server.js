@@ -1845,7 +1845,22 @@ const mainServer = http.createServer(async (req, res) => {
       }
 
       const orders = readOrders();
-      if (!orders.find(o => o.stripeSessionId === session.id)) {
+      const existingOrderId = meta.existingOrderId || '';
+      const existingIdx = existingOrderId ? orders.findIndex(o => o.id === existingOrderId) : orders.findIndex(o => o.stripeSessionId === session.id);
+      if (existingIdx >= 0 && existingOrderId) {
+        // Payment for a pre-existing order (e.g. from accepted quote)
+        const existing = orders[existingIdx];
+        const payment = { amount: amountAud, method: 'Stripe', note: `Session ${session.id}`, date: new Date().toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' }) };
+        orders[existingIdx] = { ...existing, stripeSessionId: session.id, payments: [...(existing.payments || []), payment] };
+        writeOrders(orders);
+        const customerEmail = existing.email || details.email;
+        if (customerEmail) {
+          const tmpl = emailOrderConfirmation({ orderId: existing.id, customerName: existing.cust || details.name, amountAud, items: existing.items });
+          sendEmail({ to: customerEmail, ...tmpl });
+        }
+        const staffTmpl = emailStaffNewOrder({ orderId: existing.id, customerName: existing.cust || details.name || details.email, amountAud, items: existing.items });
+        sendEmail({ to: getNotifyEmail(), ...staffTmpl });
+      } else if (!orders.find(o => o.stripeSessionId === session.id)) {
         orders.push(order);
         writeOrders(orders);
 
@@ -1914,6 +1929,7 @@ const mainServer = http.createServer(async (req, res) => {
         }
         const staffTmpl = emailStaffNewOrder({ orderId: order.id, customerName: details.name || details.email, amountAud: order.total, items: order.items });
         sendEmail({ to: getNotifyEmail(), ...staffTmpl });
+      }
       }
     }
 
@@ -3380,6 +3396,42 @@ const portalServer = http.createServer(async (req, res) => {
       return email && email === sessionEmail;
     });
     return json(res, 200, { items: matched });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/portal/orders/pay') {
+    const session = getPortalSession(req);
+    if (!session) return json(res, 401, { error: 'login_required' });
+    if (!getStripeKey()) return json(res, 503, { error: 'stripe_not_configured', message: 'Online payment is not configured. Please contact us to arrange payment.' });
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    if (!body.orderId) return json(res, 400, { error: 'order_id_required' });
+    const forumDb = readForum();
+    const portalUser = Array.isArray(forumDb.users) ? forumDb.users.find(u => u.id === session.id) : null;
+    const sessionEmail = portalUser ? String(portalUser.email || '').toLowerCase() : '';
+    const orders = readOrders();
+    const oIdx = orders.findIndex(o => o.id === body.orderId && String(o.email || '').toLowerCase() === sessionEmail);
+    if (oIdx < 0) return json(res, 404, { error: 'order_not_found' });
+    const order = orders[oIdx];
+    const paid = (order.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
+    const outstanding = Math.round((Number(order.total || 0) - paid) * 100);
+    if (outstanding <= 0) return json(res, 409, { error: 'already_paid', message: 'This order has already been paid.' });
+    const params = {
+      'mode': 'payment',
+      'success_url': `${getPortalUrl()}/orders?paid=${encodeURIComponent(order.id)}`,
+      'cancel_url': `${getPortalUrl()}/orders`,
+      'customer_email': order.email,
+      'payment_intent_data[metadata][source]': 'portal',
+      'payment_intent_data[metadata][existingOrderId]': order.id,
+      'line_items[0][price_data][currency]': 'aud',
+      'line_items[0][price_data][unit_amount]': String(outstanding),
+      'line_items[0][price_data][product_data][name]': order.quoteRef ? `Quote ${order.quoteRef}` : (order.items || 'Order'),
+      'line_items[0][quantity]': '1',
+    };
+    const resp = await stripeRequest('POST', '/v1/checkout/sessions', params).catch(() => null);
+    if (!resp || resp.status !== 200) return json(res, 502, { error: 'stripe_error', message: 'Could not create payment session. Please try again.' });
+    const stripeSession = resp.data;
+    orders[oIdx] = { ...order, stripeSessionId: stripeSession.id };
+    writeOrders(orders);
+    return json(res, 200, { ok: true, url: stripeSession.url });
   }
 
   if (req.method === 'GET' && url.pathname === '/api/portal/repairs') {

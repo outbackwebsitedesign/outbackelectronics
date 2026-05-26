@@ -396,10 +396,22 @@ function OverviewTab({ user, setTab }) {
 
 function OrdersTab({ highlightId }) {
   const [items, setItems] = useState(null);
+  const [paying, setPaying] = useState(null);
+  const [payErr, setPayErr] = useState('');
+  const paidOrderId = new URLSearchParams(window.location.search).get('paid');
 
   useEffect(() => {
     api('/api/portal/orders').then(r => setItems(r.items || []));
+    if (paidOrderId) window.history.replaceState({}, '', '/orders');
   }, []);
+
+  async function handlePay(orderId) {
+    setPaying(orderId); setPayErr('');
+    const r = await api('/api/portal/orders/pay', { method: 'POST', body: JSON.stringify({ orderId }) });
+    setPaying(null);
+    if (r.ok && r.url) { window.location.href = r.url; }
+    else setPayErr(r.message || 'Could not start payment. Please try again or contact us.');
+  }
 
   if (!items) return <LoadingSection />;
 
@@ -412,13 +424,18 @@ function OrdersTab({ highlightId }) {
           <h2>Orders</h2>
           <p>Your order history with Outback Electronics.</p>
         </div>
+        {paidOrderId && <div className="alert alert-success" style={{marginBottom:20}}>Payment received — thank you! Your order is being processed.</div>}
+        {payErr && <div className="alert alert-error" style={{marginBottom:20}}>{payErr}</div>}
         {items.length === 0
           ? <EmptyState icon="cart" message="No orders found for your account." />
           : items.map(o => {
             const trackingUrl = o.trackingNumber ? `https://auspost.com.au/mypost/track/#/details/${encodeURIComponent(o.trackingNumber)}` : null;
             const isNew = o.id === highlightId;
+            const paid = (o.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
+            const outstanding = o.total != null ? Math.max(0, Number(o.total) - paid) : null;
+            const needsPayment = outstanding != null && outstanding > 0;
             return (
-              <div key={o.id} className="card-paper" style={{padding:20, marginBottom:12, borderLeft: isNew ? '3px solid var(--eucalyptus)' : '3px solid transparent'}}>
+              <div key={o.id} className="card-paper" style={{padding:20, marginBottom:12, borderLeft: isNew ? '3px solid var(--eucalyptus)' : needsPayment ? '3px solid var(--rust)' : '3px solid transparent'}}>
                 <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:8}}>
                   <div>
                     <span className="mono" style={{fontSize:12, color:'var(--ink-2)'}}>{o.id}</span>
@@ -436,6 +453,14 @@ function OrdersTab({ highlightId }) {
                     )}
                   </div>
                 </div>
+                {needsPayment && (
+                  <div style={{marginTop:14, paddingTop:14, borderTop:'1px solid var(--line)', display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:10}}>
+                    <span style={{fontSize:13, color:'var(--ink-2)'}}>Amount due: <strong style={{color:'var(--ink)'}}>${outstanding.toFixed(2)} AUD</strong></span>
+                    <button className="btn btn-rust btn-sm" onClick={() => handlePay(o.id)} disabled={paying === o.id}>
+                      {paying === o.id ? 'Redirecting…' : 'Pay Now →'}
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })
