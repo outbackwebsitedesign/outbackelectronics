@@ -57,9 +57,10 @@
   /* Grids collapse to single column */
   .grid-2,
   .grid-3,
-  .grid-4 {
+  .grid-4,
+  .quote-layout {
     grid-template-columns: 1fr !important;
-    gap: 12px !important;
+    gap: 24px !important;
   }
 
   /* Row flex stacks vertically on very small screens */
@@ -117,4 +118,17 @@
 @media (max-width: 480px) {
   footer .grid { grid-template-columns: 1fr !important; }
   .topnav-actions .sign-in-text { display: none; }
+}
+
+/* Landscape mobile: skip hero intro animations (short viewport, content must be visible immediately) */
+@media (orientation: landscape) and (max-height: 540px) {
+  .hero-eyebrow, .hero-headline, .hero-sub, .hero-actions, .hero-stats, .hero-image {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .hero-section {
+    padding-top: 16px !important;
+    padding-bottom: 16px !important;
+  }
 }

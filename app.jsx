@@ -1217,7 +1217,7 @@ function RegisterPage({ go }) {
 }
 
 // ---------------- Router ----------------
-const KNOWN_PAGES = [...PRIMARY_PAGES, ...UTILITY_PAGES, ...ACCOUNT_PAGES, {id:'cart'}, {id:'order-success'}, {id:'order-cancelled'}, {id:'register'}].map(p => p.id);
+const KNOWN_PAGES = [...PRIMARY_PAGES, ...UTILITY_PAGES, ...ACCOUNT_PAGES, {id:'cart'}, {id:'order-success'}, {id:'order-cancelled'}, {id:'register'}, {id:'about'}, {id:'repairs'}].map(p => p.id);
 
 function App() {
   useEffect(() => { ensureCsrf(); }, []);
@@ -1241,11 +1241,13 @@ function App() {
     return () => document.removeEventListener('click', handler);
   }, []);
 
+  const PAGE_ALIASES_INIT = { repairs: 'services' };
   const [page, setPage] = useState(() => {
     const path = location.pathname.replace(/^\/+/, '');
     if (path.startsWith('product/')) return 'product';
     if (path.startsWith('service/')) return 'service';
-    return KNOWN_PAGES.includes(path) ? path : 'home';
+    const resolved = PAGE_ALIASES_INIT[path] || path;
+    return KNOWN_PAGES.includes(resolved) ? resolved : 'home';
   });
   const [pageParams, setPageParams] = useState(null);
 
@@ -1310,7 +1312,8 @@ function App() {
     localStorage.setItem('oe_cart', JSON.stringify(cart));
   }, [cart]);
 
-  const go = (id, params = null) => { setPage(id); setPageParams(params); };
+  const PAGE_ALIASES = { repairs: 'services' };
+  const go = (id, params = null) => { setPage(PAGE_ALIASES[id] || id); setPageParams(params); };
 
   const addToCart = (item) => {
     const key = item.sku || item.id || item.name;
