@@ -1103,7 +1103,7 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
 }
 
 // ---------------- Router ----------------
-const KNOWN_PAGES = [...PRIMARY_PAGES, ...UTILITY_PAGES, ...ACCOUNT_PAGES, {id:'cart'}, {id:'order-success'}, {id:'order-cancelled'}].map(p => p.id);
+const KNOWN_PAGES = [...PRIMARY_PAGES, ...UTILITY_PAGES, ...ACCOUNT_PAGES, {id:'cart'}, {id:'order-success'}, {id:'order-cancelled'}, {id:'register'}].map(p => p.id);
 
 function App() {
   useEffect(() => { ensureCsrf(); }, []);

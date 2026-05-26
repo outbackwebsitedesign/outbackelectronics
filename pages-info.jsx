@@ -438,9 +438,242 @@ function PoliciesPage() {
   );
 }
 
+// ============================================================
+// WARRANTY REGISTRATION
+// ============================================================
+function WarrantyRegisterPage({ go }) {
+  const [form, setForm] = useState({ name: '', email: '', orderId: '', receivedDate: '', notes: '' });
+  const update = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const [looking, setLooking] = useState(false);
+  const [lookupError, setLookupError] = useState(null);
+  const [orderData, setOrderData] = useState(null); // { date, expenses: [{description, isSecondHand}] }
+
+  const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
+  const [regId, setRegId] = useState(null);
+
+  const lookupOrder = async () => {
+    const id = form.orderId.trim();
+    if (!id) return;
+    setLooking(true);
+    setLookupError(null);
+    setOrderData(null);
+    try {
+      const res = await fetch(`/api/warranty/order-lookup?id=${encodeURIComponent(id)}`);
+      if (res.status === 404) { setLookupError('Order not found. Check the ID on your confirmation email.'); return; }
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setOrderData(data);
+    } catch {
+      setLookupError('Could not look up order — check your ID or contact us.');
+    } finally {
+      setLooking(false);
+    }
+  };
+
+  const resetForm = () => {
+    setForm({ name: '', email: '', orderId: '', receivedDate: '', notes: '' });
+    setOrderData(null);
+    setLookupError(null);
+    setSubmitted(false);
+    setSubmitError(null);
+  };
+
+  if (submitted) {
+    const newParts = (orderData?.expenses || []).filter(e => !e.isSecondHand);
+    const usedParts = (orderData?.expenses || []).filter(e => e.isSecondHand);
+    return (
+      <>
+        <PageHead crumbs={['Outback', 'Warranty Registration']} title="Registration received."
+          lead="We've logged your build. Keep this confirmation for your records." />
+        <section className="container" style={{ paddingTop: 32, paddingBottom: 60 }}>
+          <div className="card-paper" style={{ padding: 40, maxWidth: 640 }}>
+            <div className="row-flex"><span className="tag tag-euc">WARRANTY · {regId ? `#${regId}` : 'REGISTERED'}</span></div>
+            <h3 className="serif" style={{ fontSize: 36, marginTop: 14 }}>Thanks, {form.name.split(' ')[0] || 'mate'}.</h3>
+            <p style={{ marginTop: 12, color: 'var(--ink-2)' }}>
+              Your build is registered. A confirmation has been sent to <strong>{form.email}</strong>.
+            </p>
+            <div className="term" style={{ marginTop: 24 }}>
+              <div className="mono" style={{ fontSize: 10, color: 'var(--ink-3)', marginBottom: 6 }}>// REGISTERED BUILD</div>
+              <div>order    : {form.orderId || '—'}</div>
+              <div>received : {form.receivedDate || '—'}</div>
+              {newParts.length > 0 && newParts.map((e, i) => (
+                <div key={i}>new      : {e.description}</div>
+              ))}
+              {usedParts.length > 0 && usedParts.map((e, i) => (
+                <div key={i}>2nd-hand : {e.description}</div>
+              ))}
+              {!orderData?.expenses?.length && <div>parts    : see confirmation email</div>}
+            </div>
+            <div className="row-flex" style={{ marginTop: 24 }}>
+              <button className="btn" onClick={resetForm}>Register another</button>
+              <button className="btn btn-ghost" onClick={() => go('home')}>Back to home</button>
+            </div>
+          </div>
+        </section>
+      </>
+    );
+  }
+
+  const expenses = orderData?.expenses || [];
+  const hasExpenses = expenses.length > 0;
+
+  return (
+    <>
+      <PageHead crumbs={['Outback', 'Warranty Registration']} title="Register Your Build"
+        lead="Enter your order ID and we'll pull up your build details automatically." />
+      <section className="container" style={{ paddingTop: 32, paddingBottom: 60, display: 'grid', gridTemplateColumns: '1fr 300px', gap: 48 }}>
+        <form onSubmit={async (e) => {
+          e.preventDefault();
+          setSubmitError(null);
+          setSubmitting(true);
+          try {
+            const payload = { ...form, expenses: orderData?.expenses || [] };
+            const res = await fetch('/api/warranty/register', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() },
+              body: JSON.stringify(payload),
+            });
+            if (!res.ok) {
+              const data = await res.json().catch(() => ({}));
+              throw new Error(data.message || 'server_error');
+            }
+            const data = await res.json().catch(() => ({}));
+            setRegId(data.id || null);
+            setSubmitted(true);
+          } catch (err) {
+            setSubmitError(err.message && err.message !== 'server_error'
+              ? err.message
+              : 'Something went wrong — please try again or contact us directly.');
+          } finally {
+            setSubmitting(false);
+          }
+        }}>
+          <div className="card-paper" style={{ padding: 32 }}>
+            <span className="eyebrow">01 · ORDER ID</span>
+            <p style={{ fontSize: 13, color: 'var(--ink-2)', marginTop: 6, marginBottom: 12 }}>
+              Find this on your order confirmation email from us.
+            </p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                required
+                className="input"
+                style={{ flex: 1 }}
+                value={form.orderId}
+                onChange={e => { update('orderId', e.target.value); setOrderData(null); setLookupError(null); }}
+                placeholder="ord-1234567890"
+              />
+              <button type="button" className="btn" onClick={lookupOrder} disabled={!form.orderId.trim() || looking}
+                style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
+                {looking ? 'Looking up…' : 'Look up →'}
+              </button>
+            </div>
+            {lookupError && (
+              <div className="notice" style={{ marginTop: 10, fontSize: 13, color: 'var(--rust)' }}>{lookupError}</div>
+            )}
+
+            {orderData && (
+              <div style={{ marginTop: 16 }}>
+                {hasExpenses ? (
+                  <>
+                    <div className="eyebrow" style={{ color: 'var(--eucalyptus)', marginBottom: 10 }}>Build found — {expenses.length} part{expenses.length !== 1 ? 's' : ''}</div>
+                    <div style={{ display: 'grid', gap: 8 }}>
+                      {expenses.map((e, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--bg)', border: '1px solid var(--line)', fontSize: 13 }}>
+                          <span style={{ fontWeight: 500 }}>{e.description}</span>
+                          {e.isSecondHand
+                            ? <span className="tag tag-ochre">2ND HAND · TESTED</span>
+                            : <span className="tag tag-euc">NEW · MFR WARRANTY</span>
+                          }
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="notice" style={{ marginTop: 0, fontSize: 13 }}>Order found, but no parts are logged against it yet. Add any notes below.</div>
+                )}
+              </div>
+            )}
+
+            <hr className="thin" />
+            <span className="eyebrow">02 · YOUR DETAILS</span>
+            <div className="grid-2" style={{ gap: 16, marginTop: 12 }}>
+              <label className="field">
+                <span className="label">Full name</span>
+                <input required className="input" value={form.name} onChange={e => update('name', e.target.value)} placeholder="Your name" />
+              </label>
+              <label className="field">
+                <span className="label">Email</span>
+                <input required type="email" className="input" value={form.email} onChange={e => update('email', e.target.value)} placeholder="your@email.com" />
+              </label>
+            </div>
+            <label className="field">
+              <span className="label">Date received</span>
+              <input required type="date" className="input" value={form.receivedDate} onChange={e => update('receivedDate', e.target.value)} />
+            </label>
+
+            <label className="field">
+              <span className="label">Additional notes (optional)</span>
+              <textarea className="textarea" value={form.notes} onChange={e => update('notes', e.target.value)}
+                placeholder="Anything else we should know" style={{ minHeight: 80 }} />
+            </label>
+
+            <hr className="thin" />
+            {submitError && <div className="notice" style={{ marginBottom: 12, color: 'var(--rust)', fontSize: 13 }}>{submitError}</div>}
+            <div className="row-flex" style={{ justifyContent: 'space-between' }}>
+              <span className="mono" style={{ fontSize: 11, color: 'var(--ink-2)' }}>KEEP YOUR RECEIPT — IT'S YOUR PROOF OF PURCHASE</span>
+              <button className="btn btn-rust" type="submit" disabled={submitting}>{submitting ? 'Registering…' : 'Register build →'}</button>
+            </div>
+          </div>
+        </form>
+
+        <aside>
+          <div className="card" style={{ padding: 22 }}>
+            <span className="tag tag-ochre">WARRANTY INFO</span>
+            <h3 className="serif" style={{ fontSize: 22, marginTop: 12, lineHeight: 1.1 }}>What's covered?</h3>
+            <div style={{ marginTop: 16, display: 'grid', gap: 16 }}>
+              <div>
+                <div className="eyebrow" style={{ color: 'var(--eucalyptus)', marginBottom: 6 }}>New parts</div>
+                <p style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
+                  Manufacturer warranty applies. Contact the part manufacturer directly for warranty claims.
+                </p>
+              </div>
+              <div className="rule" />
+              <div>
+                <div className="eyebrow" style={{ color: 'var(--ink-2)', marginBottom: 6 }}>Second-hand parts</div>
+                <p style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
+                  No manufacturer warranty. Every second-hand part is tested by us before it leaves the shop.
+                </p>
+              </div>
+              <div className="rule" />
+              <div>
+                <div className="eyebrow" style={{ color: 'var(--ink-2)', marginBottom: 6 }}>Shipping</div>
+                <p style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
+                  We guarantee your build is working when it leaves our shop. Issues during shipping must be raised with <strong>Australia Post</strong>.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="card" style={{ padding: 22, marginTop: 16, background: 'var(--dark)', color: 'var(--paper)', borderColor: 'var(--dark)' }}>
+            <span className="eyebrow" style={{ color: 'var(--ochre)' }}>QUESTIONS?</span>
+            <p style={{ fontSize: 13, color: 'var(--bg-deep)', marginTop: 10, lineHeight: 1.6 }}>
+              Not sure what applies to your build? Get in touch.
+            </p>
+            <button className="btn btn-ghost" style={{ marginTop: 12, color: 'var(--paper)', borderColor: 'var(--paper)' }}
+              onClick={() => go('contact')}>Contact us →</button>
+          </div>
+        </aside>
+      </section>
+    </>
+  );
+}
+
 window.OE_PAGES = Object.assign(window.OE_PAGES || {}, {
   quote: QuotePage,
   contact: ContactPage,
   sellers: SellersPage,
   policies: PoliciesPage,
+  register: WarrantyRegisterPage,
 });

@@ -3003,7 +3003,7 @@ function AdminExpenses() {
   }, []);
 
   const openRow = (r) => { setEdit(r); setForm({...r}); };
-  const openNew = () => { setEdit({}); setForm({ description:'', category:'tools', amount:0, date:'', receipt:null, jobId:'', notes:'' }); };
+  const openNew = () => { setEdit({}); setForm({ description:'', category:'tools', amount:0, date:'', receipt:null, jobId:'', notes:'', isSecondHand:false }); };
 
   const save = async () => {
     const r = await fetch('/api/admin/expenses/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(form) }).catch(()=>null);
@@ -3060,6 +3060,7 @@ function AdminExpenses() {
         columns={[
           { key:'description', label:'Description', w:'2fr', render:r => <span style={{fontWeight:500}}>{r.description}</span> },
           { key:'category', label:'Category', w:'110px', render:r => { const c = catMap[r.category]||catMap.other; return <span className="tag" style={{background:c.bg,color:c.fg,borderColor:c.bg}}>{(r.category||'other').toUpperCase()}</span>; } },
+          { key:'isSecondHand', label:'Condition', w:'100px', render:r => r.isSecondHand ? <span className="tag tag-ochre">2ND HAND</span> : <span className="tag tag-euc">NEW</span> },
           { key:'amount', label:'Amount', w:'110px', render:r => <span className="mono" style={{fontWeight:600,color:'var(--rust)'}}>-${(r.amount||0).toLocaleString('en-AU',{minimumFractionDigits:2})}</span> },
           { key:'date', label:'Date', w:'120px', render:r => <span className="mono" style={{fontSize:11,color:'var(--ink-2)'}}>{r.date||'—'}</span> },
           { key:'jobId', label:'Linked job', w:'140px', render:r => r.jobId ? <span className="mono" style={{fontSize:11,color:'var(--rust)'}}>{r.jobId}</span> : <span style={{color:'var(--ink-3)'}}>—</span> },
@@ -3097,6 +3098,10 @@ function AdminExpenses() {
             </select>
           </label>
           <label className="field"><span className="label">Notes</span><input className="input" value={form.notes||''} onChange={e=>setForm({...form,notes:e.target.value})}/></label>
+          <label style={{display:'flex',alignItems:'center',gap:10,cursor:'pointer',marginBottom:14}}>
+            <input type="checkbox" checked={!!form.isSecondHand} onChange={e=>setForm({...form,isSecondHand:e.target.checked})} style={{width:16,height:16,cursor:'pointer'}}/>
+            <span style={{fontSize:13,fontWeight:500}}>Second-hand part / item</span>
+          </label>
           <div className="field">
             <span className="label">Receipt</span>
             {form.receipt && (

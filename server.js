@@ -19,7 +19,7 @@ const RATE_MAX_ATTEMPTS = 5;
 const LOCKOUT_MS = 1000 * 60 * 15;
 const ADMIN_IP_ALLOWLIST = (process.env.ADMIN_IP_ALLOWLIST || '').split(',').map(v => v.trim()).filter(Boolean);
 const PUBLIC_RATE_WINDOW_MS = 1000 * 60 * 10;
-const PUBLIC_RATE_LIMITS = { checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30 };
+const PUBLIC_RATE_LIMITS = { checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10 };
 
 fs.mkdirSync(path.join(__dirname, 'assets/uploads'), { recursive: true });
 
@@ -852,6 +852,7 @@ const MAIN_SPA_ROUTES = new Set([
   'product', 'service', 'memberships', 'gift-cards',
   'order-success', 'order-cancelled',
   'cart',
+  'register',
 ]);
 
 // ── Email ─────────────────────────────────────────────────────────────────────
@@ -1156,6 +1157,62 @@ function emailStaffContactMessage({ name, email, msg }) {
         <dt>MESSAGE</dt><dd>${escHtml(msg)}</dd>
       </div>
       <p>Reply directly to this email to respond to the customer.</p>
+    `),
+  };
+}
+
+function emailWarrantyConfirmation({ regId, customerName, orderId, receivedDate, submittedAt, expenses }) {
+  const firstName = customerName ? customerName.split(' ')[0] : 'there';
+  const newParts = expenses.filter(e => !e.isSecondHand);
+  const usedParts = expenses.filter(e => e.isSecondHand);
+  const partsHtml = expenses.length === 0 ? '' : `
+    <dt>PARTS</dt>
+    ${newParts.map(e => `<dd>✓ ${escHtml(e.description)} <span style="font-size:10px;color:#4f6b3e">(NEW · MFR WARRANTY)</span></dd>`).join('')}
+    ${usedParts.map(e => `<dd>✓ ${escHtml(e.description)} <span style="font-size:10px;color:#7a5d10">(2ND HAND · TESTED)</span></dd>`).join('')}
+  `;
+  const warrantyNote = usedParts.length > 0 && newParts.length === 0
+    ? 'All parts in your build are second-hand. These have no manufacturer warranty, however every part was tested by us before leaving the shop.'
+    : usedParts.length > 0
+    ? 'Your build contains a mix of new and second-hand parts. New parts carry manufacturer warranty; second-hand parts were tested by us before leaving the shop and carry no manufacturer warranty.'
+    : 'Your build uses all new parts — manufacturer warranty applies to each component. Contact the relevant manufacturer directly for warranty claims.';
+  return {
+    subject: `[WARRANTY] Custom PC registration confirmed — ${regId}`,
+    html: emailHtml('Your build is registered.', `
+      <p>Hi ${escHtml(firstName)}, thanks for registering your custom PC build with Outback Electronics.</p>
+      <div class="detail">
+        <dt>REGISTRATION ID</dt><dd>${escHtml(regId)}</dd>
+        <dt>ORDER ID</dt><dd>${escHtml(orderId)}</dd>
+        <dt>DATE RECEIVED</dt><dd>${escHtml(receivedDate)}</dd>
+        <dt>REGISTERED ON</dt><dd>${new Date(submittedAt).toLocaleDateString('en-AU', { day:'numeric', month:'long', year:'numeric' })}</dd>
+        ${partsHtml}
+      </div>
+      <p>${escHtml(warrantyNote)}</p>
+      <p>We guarantee your build was working when it left our shop. If any issues arose during shipping, please raise a claim directly with <strong>Australia Post</strong>.</p>
+      <p>Keep this email as your warranty record. If you have any questions, reply here or visit our contact page.</p>
+    `),
+  };
+}
+
+function emailStaffWarrantyRegistration({ regId, name, email, orderId, receivedDate, submittedAt, expenses, notes }) {
+  const newParts = expenses.filter(e => !e.isSecondHand);
+  const usedParts = expenses.filter(e => e.isSecondHand);
+  const partsHtml = expenses.length === 0 ? '<dt>PARTS</dt><dd>None logged</dd>' : `
+    <dt>PARTS</dt>
+    ${newParts.map(e => `<dd>NEW: ${escHtml(e.description)}</dd>`).join('')}
+    ${usedParts.map(e => `<dd>2ND HAND: ${escHtml(e.description)}</dd>`).join('')}
+  `;
+  return {
+    subject: `[WARRANTY] New registration — ${name} (${regId})`,
+    html: emailHtml('New warranty registration', `
+      <div class="detail">
+        <dt>REGISTRATION ID</dt><dd>${escHtml(regId)}</dd>
+        <dt>CUSTOMER</dt><dd>${escHtml(name)} &lt;${escHtml(email)}&gt;</dd>
+        <dt>ORDER ID</dt><dd>${escHtml(orderId)}</dd>
+        <dt>DATE RECEIVED</dt><dd>${escHtml(receivedDate)}</dd>
+        <dt>SUBMITTED</dt><dd>${new Date(submittedAt).toLocaleDateString('en-AU', { day:'numeric', month:'long', year:'numeric' })}</dd>
+        ${partsHtml}
+        ${notes ? `<dt>NOTES</dt><dd>${escHtml(notes)}</dd>` : ''}
+      </div>
     `),
   };
 }
@@ -1881,6 +1938,36 @@ const mainServer = http.createServer(async (req, res) => {
     const staffTmpl = emailStaffNewQuote({ quoteId: quote.id, name: quote.name, email: quote.email, description: `[${quote.kind} · ${quote.budget} · ${quote.urgency}] ${quote.description}` });
     sendEmail({ to: getNotifyEmail(), ...staffTmpl });
     return json(res, 201, { ok: true, id: quote.id });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/warranty/order-lookup') {
+    const orderId = (url.searchParams.get('id') || '').trim();
+    if (!orderId) return json(res, 400, { error: 'missing_id' });
+    const orders = readOrders();
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return json(res, 404, { found: false });
+    const expenses = readExpenses().filter(e => e.jobId === order.id);
+    return json(res, 200, {
+      found: true,
+      order: { id: order.id, date: order.date },
+      expenses: expenses.map(e => ({ description: e.description, isSecondHand: !!e.isSecondHand, category: e.category || 'parts' })),
+    });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/warranty/register') {
+    if (publicRateLimited(getIp(req), 'warranty/register')) return json(res, 429, { error: 'too_many_requests' });
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const { name, email, orderId, receivedDate, expenses, notes } = body || {};
+    if (!name || !email || !orderId || !receivedDate) return json(res, 422, { error: 'missing_fields', message: 'Name, email, order ID, and date received are required.' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())) return json(res, 422, { error: 'invalid_email', message: 'Email address is invalid.' });
+    const safeExpenses = Array.isArray(expenses) ? expenses.slice(0, 100).map(e => ({ description: String(e.description || '').trim().slice(0, 200), isSecondHand: !!e.isSecondHand })) : [];
+    const submittedAt = new Date().toISOString();
+    const regId = 'wrnt-' + Date.now();
+    const custTmpl = emailWarrantyConfirmation({ regId, customerName: String(name).trim(), orderId: String(orderId).trim(), receivedDate: String(receivedDate).trim(), submittedAt, expenses: safeExpenses });
+    sendEmail({ to: String(email).trim(), ...custTmpl });
+    const staffTmpl = emailStaffWarrantyRegistration({ regId, name: String(name).trim(), email: String(email).trim(), orderId: String(orderId).trim(), receivedDate: String(receivedDate).trim(), submittedAt, expenses: safeExpenses, notes: String(notes || '').trim() });
+    sendEmail({ to: getNotifyEmail(), ...staffTmpl });
+    return json(res, 201, { ok: true, id: regId });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/contact/quick-message') {
