@@ -182,6 +182,24 @@ function SearchOverlay({ go, onClose }) {
   );
 }
 
+// ---------------- Cross-origin portal API helpers ----------------
+let _portalCsrfPromise = null;
+async function getPortalCsrf() {
+  if (!_portalCsrfPromise) {
+    _portalCsrfPromise = fetch(getPortalUrl() + '/api/csrf-token', { credentials: 'include' })
+      .then(r => r.json()).then(d => d.token || '').catch(() => { _portalCsrfPromise = null; return ''; });
+  }
+  return _portalCsrfPromise;
+}
+
+async function portalApi(path, opts = {}) {
+  const isPost = opts.method && opts.method.toUpperCase() !== 'GET';
+  const csrfToken = isPost ? await getPortalCsrf() : '';
+  const headers = { 'Content-Type': 'application/json', ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}) };
+  return fetch(getPortalUrl() + path, { headers, credentials: 'include', ...opts })
+    .then(async r => { const body = await r.json().catch(() => ({})); return { ok: r.ok, status: r.status, ...body }; });
+}
+
 // ---------------- Portal auth state ----------------
 function usePortalUser() {
   const [user, setUser] = useState(undefined);
@@ -198,6 +216,7 @@ function usePortalUser() {
 function AccountDropdown({ go, onClose, user }) {
   const ref = useRef(null);
   const portal = (path = '') => { window.location.href = getPortalUrl() + path; };
+  const goPage = (id) => { go(id); onClose(); };
   useEffect(() => {
     const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
     document.addEventListener('mousedown', handler);
@@ -220,12 +239,12 @@ function AccountDropdown({ go, onClose, user }) {
         </div>
         <button style={{...btnStyle(false), fontWeight:600, color:'var(--rust)'}}
           onMouseEnter={hoverOn} onMouseLeave={hoverOff}
-          onClick={() => { portal('/?tab=login'); onClose(); }}>
+          onClick={() => { portal('/'); onClose(); }}>
           Sign In →
         </button>
         <button style={btnStyle(true)}
           onMouseEnter={hoverOn} onMouseLeave={hoverOff}
-          onClick={() => { portal('/?tab=register'); onClose(); }}>
+          onClick={() => goPage('register')}>
           Create an Account
         </button>
       </div>
@@ -250,7 +269,7 @@ function AccountDropdown({ go, onClose, user }) {
         { label:'My Addresses',      action: () => portal('/addresses') },
         { label:'My Bookings',       action: () => portal('/bookings') },
         { label:'My Account',        action: () => portal('/account') },
-        { label:'Log Out',           action: () => { fetch(getPortalUrl() + '/api/portal/auth/logout', { method: 'POST', headers: { 'X-CSRF-Token': getCsrf() }, credentials: 'include' }).then(() => window.location.reload()); onClose(); } },
+        { label:'Log Out',           action: () => { portalApi('/api/portal/auth/logout', { method: 'POST' }).then(() => window.location.reload()); onClose(); } },
       ].map((item, i, arr) => (
         <button key={item.label} onClick={() => { item.action(); onClose(); }}
           style={btnStyle(i === arr.length - 1)}
@@ -1102,6 +1121,101 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
   );
 }
 
+// ---------------- Register Page ----------------
+function RegisterPage({ go }) {
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError(''); setBusy(true);
+    const r = await portalApi('/api/portal/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ firstName, lastName, email, phone, address, username, password }),
+    });
+    setBusy(false);
+    if (r.ok) {
+      window.location.href = getPortalUrl();
+    } else {
+      setError(r.message || 'Registration failed. Please try again.');
+    }
+  }
+
+  const fieldStyle = { display:'flex', flexDirection:'column', gap:4, marginBottom:16 };
+  const labelStyle = { fontSize:11, fontWeight:700, letterSpacing:'0.06em', color:'var(--ink-2)', textTransform:'uppercase' };
+  const inputStyle = { padding:'10px 12px', border:'1px solid var(--line)', borderRadius:6, fontSize:14, fontFamily:'inherit', color:'var(--ink)', background:'var(--bg)', outline:'none', width:'100%', boxSizing:'border-box' };
+
+  return (
+    <>
+      <PageHead crumbs={['Outback', 'Create Account']} title="Create an Account"
+        lead="Sign up once and use the same account across the portal, forum, and more."
+      />
+      <section className="container" style={{paddingTop:32, paddingBottom:64}}>
+        <div style={{maxWidth:560, margin:'0 auto'}}>
+          <div className="card-paper" style={{padding:32}}>
+            {error && (
+              <div style={{background:'#fee2e2', border:'1px solid #fca5a5', color:'#991b1b', borderRadius:6, padding:'10px 14px', marginBottom:20, fontSize:13}}>
+                {error}
+              </div>
+            )}
+            <form onSubmit={handleSubmit}>
+              <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginBottom:16}}>
+                <label style={fieldStyle}>
+                  <span style={labelStyle}>First name</span>
+                  <input style={inputStyle} type="text" value={firstName} autoComplete="given-name" onChange={e => setFirstName(e.target.value)} required />
+                </label>
+                <label style={fieldStyle}>
+                  <span style={labelStyle}>Last name</span>
+                  <input style={inputStyle} type="text" value={lastName} autoComplete="family-name" onChange={e => setLastName(e.target.value)} required />
+                </label>
+              </div>
+              <label style={fieldStyle}>
+                <span style={labelStyle}>Email address</span>
+                <input style={inputStyle} type="email" value={email} autoComplete="email" onChange={e => setEmail(e.target.value)} required />
+              </label>
+              <label style={fieldStyle}>
+                <span style={labelStyle}>Phone number</span>
+                <input style={inputStyle} type="tel" value={phone} autoComplete="tel" onChange={e => setPhone(e.target.value)} />
+              </label>
+              <label style={fieldStyle}>
+                <span style={labelStyle}>Address</span>
+                <input style={inputStyle} type="text" value={address} autoComplete="street-address" onChange={e => setAddress(e.target.value)} />
+              </label>
+              <label style={fieldStyle}>
+                <span style={labelStyle}>Username</span>
+                <input style={inputStyle} type="text" value={username} autoComplete="username" onChange={e => setUsername(e.target.value)} required />
+                <span style={{fontSize:11, color:'var(--ink-3)'}}>3–30 characters · letters, numbers and underscores</span>
+              </label>
+              <label style={fieldStyle}>
+                <span style={labelStyle}>Password</span>
+                <input style={inputStyle} type="password" value={password} autoComplete="new-password" onChange={e => setPassword(e.target.value)} required />
+                <span style={{fontSize:11, color:'var(--ink-3)'}}>Minimum 8 characters</span>
+              </label>
+              <button className="btn btn-rust" type="submit" disabled={busy} style={{width:'100%', justifyContent:'center', marginTop:8}}>
+                {busy ? 'Creating account…' : 'Create account →'}
+              </button>
+            </form>
+            <div style={{marginTop:20, textAlign:'center', fontSize:13, color:'var(--ink-2)'}}>
+              Already have an account?{' '}
+              <button onClick={() => { window.location.href = getPortalUrl(); }}
+                style={{background:'none', border:'none', color:'var(--rust)', cursor:'pointer', fontWeight:600, fontSize:13, fontFamily:'inherit', padding:0}}>
+                Sign in →
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
+
 // ---------------- Router ----------------
 const KNOWN_PAGES = [...PRIMARY_PAGES, ...UTILITY_PAGES, ...ACCOUNT_PAGES, {id:'cart'}, {id:'order-success'}, {id:'order-cancelled'}, {id:'register'}].map(p => p.id);
 
@@ -1262,6 +1376,7 @@ function App() {
 window.__ShopContext__ = ShopContext;
 Object.assign(window, { PageHead, PRIMARY_PAGES, UTILITY_PAGES });
 window.OE_PAGES = Object.assign(window.OE_PAGES || {}, {
+  register: RegisterPage,
   account: AccountDashboardPage,
   orders: () => <AccountPlaceholderPage title="My Orders" portalPath="/orders" />,
   profile: () => <AccountPlaceholderPage title="Profile" portalPath="/profile" />,
