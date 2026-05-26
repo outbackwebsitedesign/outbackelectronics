@@ -2086,13 +2086,83 @@ function AdminServices() {
 // ============================================================
 // SOFTWARE
 // ============================================================
+const SW_PLATFORM_ICONS = { windows:'🪟', macos:'🍎', linux:'🐧', android:'🤖', cross:'🌐', other:'📦' };
+
+function SoftwareFileRow({ file, onDelete, onUpdate }) {
+  const [editing, setEditing] = React.useState(false);
+  const [label, setLabel] = React.useState(file.label || '');
+  const [version, setVersion] = React.useState(file.version || '');
+  const [platform, setPlatform] = React.useState(file.platform || 'other');
+  const saveEdit = () => { onUpdate({ ...file, label, version, platform }); setEditing(false); };
+  const fmtSize = b => b >= 1048576 ? (b/1048576).toFixed(1)+' MB' : b >= 1024 ? (b/1024).toFixed(0)+' KB' : b+' B';
+  return (
+    <div style={{background:'var(--bg-mid)', border:'1px solid var(--border)', borderRadius:6, padding:'10px 12px', marginBottom:8}}>
+      {editing ? (
+        <div style={{display:'flex', flexDirection:'column', gap:8}}>
+          <div className="grid-2" style={{gap:8}}>
+            <label className="field" style={{margin:0}}>
+              <span className="label" style={{fontSize:11}}>Label</span>
+              <input className="input" style={{fontSize:13}} placeholder="e.g. Windows Installer" value={label} onChange={e=>setLabel(e.target.value)}/>
+            </label>
+            <label className="field" style={{margin:0}}>
+              <span className="label" style={{fontSize:11}}>Version</span>
+              <input className="input" style={{fontSize:13}} placeholder="v1.0.0" value={version} onChange={e=>setVersion(e.target.value)}/>
+            </label>
+          </div>
+          <label className="field" style={{margin:0}}>
+            <span className="label" style={{fontSize:11}}>Platform</span>
+            <select className="select" style={{fontSize:13}} value={platform} onChange={e=>setPlatform(e.target.value)}>
+              <option value="windows">Windows</option>
+              <option value="macos">macOS</option>
+              <option value="linux">Linux</option>
+              <option value="android">Android</option>
+              <option value="cross">Cross-platform</option>
+              <option value="other">Other / All</option>
+            </select>
+          </label>
+          <div className="row-flex" style={{gap:6, justifyContent:'flex-end'}}>
+            <button className="btn btn-ghost btn-sm" style={{fontSize:12}} onClick={()=>setEditing(false)}>Cancel</button>
+            <button className="btn btn-sm" style={{fontSize:12}} onClick={saveEdit}>Save</button>
+          </div>
+        </div>
+      ) : (
+        <div className="row-flex" style={{justifyContent:'space-between', alignItems:'center', gap:8}}>
+          <div style={{minWidth:0}}>
+            <div className="row-flex" style={{gap:6, alignItems:'center', flexWrap:'wrap'}}>
+              <span style={{fontSize:14}}>{SW_PLATFORM_ICONS[file.platform]||'📦'}</span>
+              <span style={{fontWeight:600, fontSize:13}}>{file.label || file.originalName}</span>
+              {file.version && <span className="tag tag-outline" style={{fontSize:11}}>{file.version}</span>}
+              {file.size > 0 && <span style={{fontSize:11, color:'var(--ink-2)'}}>{fmtSize(file.size)}</span>}
+            </div>
+            <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:3, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{file.originalName}</div>
+          </div>
+          <div className="row-flex" style={{gap:6, flexShrink:0}}>
+            <a href={file.url} target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-sm" style={{fontSize:12, textDecoration:'none'}}>&#8595; Test</a>
+            <button className="btn btn-ghost btn-sm" style={{fontSize:12}} onClick={()=>{ setLabel(file.label||''); setVersion(file.version||''); setPlatform(file.platform||'other'); setEditing(true); }}>Edit</button>
+            <button className="btn btn-ghost btn-sm" style={{fontSize:12, color:'var(--rust)'}} onClick={()=>onDelete(file)}>&#10005;</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminSoftware() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [edit, setEdit] = useState(null);
   const [form, setForm] = useState({});
-  const open = (i) => { setEdit(i); setForm(i==='new'?{ license:'OSS', live:true }:rows[i]); };
+  const [uploading, setUploading] = useState(false);
+  const [uploadErr, setUploadErr] = useState('');
+  const fileInputRef = React.useRef(null);
+
+  const open = (i) => {
+    setEdit(i);
+    setForm(i==='new' ? { license:'OSS · MIT', live:true, files:[] } : { ...rows[i], files: rows[i].files||[] });
+    setUploadErr('');
+  };
+
   useEffect(() => {
     fetch('/api/admin/software', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject())
@@ -2100,6 +2170,7 @@ function AdminSoftware() {
       .catch(() => setError('Failed to load software.'))
       .finally(() => setLoading(false));
   }, []);
+
   const save = async () => {
     const payload = edit === 'new' ? form : { ...rows[edit], ...form };
     const r = await fetch('/api/admin/software/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(payload) }).catch(()=>null);
@@ -2109,6 +2180,64 @@ function AdminSoftware() {
     }
     setEdit(null);
   };
+
+  const handleFileSelect = async (e) => {
+    const file = e.target.files[0];
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (!file) return;
+    setUploadErr('');
+    setUploading(true);
+    try {
+      const MAX_MB = 160;
+      if (file.size > MAX_MB * 1024 * 1024) {
+        setUploadErr(`File too large — maximum ${MAX_MB} MB.`);
+        setUploading(false);
+        return;
+      }
+      const dataUri = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const r = await fetch('/api/admin/software/upload', {
+        method:'POST', headers:postHeaders(), credentials:'include',
+        body: JSON.stringify({ data: dataUri, filename: file.name }),
+      });
+      if (!r.ok) {
+        const d = await r.json().catch(()=>({}));
+        setUploadErr(
+          d.error === 'file_too_large' ? `File too large (max ${d.maxMB||160} MB).` :
+          d.error === 'unsupported_file_type' ? 'Unsupported file type.' : 'Upload failed.'
+        );
+        setUploading(false);
+        return;
+      }
+      const d = await r.json();
+      const newFile = {
+        id: 'f-' + Date.now(),
+        label: '', version: '', platform: 'other',
+        url: d.url, filename: d.filename,
+        originalName: d.originalName, size: d.size,
+      };
+      setForm(f => ({ ...f, files: [...(f.files||[]), newFile] }));
+    } catch { setUploadErr('Upload failed. Please try again.'); }
+    setUploading(false);
+  };
+
+  const deleteFile = async (file) => {
+    if (!window.confirm(`Delete "${file.originalName || file.filename}"?`)) return;
+    await fetch('/api/admin/software/upload/delete', {
+      method:'POST', headers:postHeaders(), credentials:'include',
+      body: JSON.stringify({ filename: file.filename }),
+    }).catch(()=>null);
+    setForm(f => ({ ...f, files: (f.files||[]).filter(x => x.id !== file.id) }));
+  };
+
+  const updateFile = (updated) => {
+    setForm(f => ({ ...f, files: (f.files||[]).map(x => x.id === updated.id ? updated : x) }));
+  };
+
   return (
     <div style={{padding:32}}>
       {loading && <div className="mono" style={{fontSize:12, color:'var(--ink-2)', marginBottom:10}}>Loading…</div>}
@@ -2120,10 +2249,13 @@ function AdminSoftware() {
       <Table
         columns={[
           { key:'name', label:'Product', w:'1.5fr', render:r => <span style={{fontWeight:600}}>{r.name}</span> },
-          { key:'license', label:'License', w:'1.2fr', render:r => <span className={`tag ${r.license.includes('OSS')?'tag-euc':'tag-rust'}`}>{r.license}</span> },
+          { key:'license', label:'License', w:'1.2fr', render:r => <span className={`tag ${r.license&&r.license.includes('OSS')?'tag-euc':'tag-rust'}`}>{r.license}</span> },
           { key:'price', label:'Pricing', w:'1fr' },
-          { key:'stars', label:'GitHub', w:'100px', render:r => <span className="mono" style={{fontSize:12}}>{r.stars}</span> },
-          { key:'repo', label:'Repo', w:'2fr', render:r => <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{r.repo}</span> },
+          { key:'files', label:'Files', w:'80px', render:r => {
+            const n = (r.files||[]).length;
+            return <span className="mono" style={{fontSize:12, color: n>0?'var(--ink)':'var(--ink-2)'}}>{n > 0 ? `${n} file${n!==1?'s':''}` : r.stars||'—'}</span>;
+          }},
+          { key:'repo', label:'Repo / GitHub', w:'2fr', render:r => r.repo ? <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{r.repo}</span> : <span style={{color:'var(--ink-2)', fontSize:11}}>—</span> },
           { key:'live', label:'Live', w:'70px', render:r => <span className={`tag ${r.live?'tag-euc':'tag-outline'}`}>{r.live?'YES':'NO'}</span> },
         ]}
         rows={rows}
@@ -2139,16 +2271,52 @@ function AdminSoftware() {
           <label className="field"><span className="label">Product name</span><input className="input" value={form.name||''} onChange={e=>setForm({...form, name:e.target.value})}/></label>
           <div className="grid-2" style={{gap:14}}>
             <label className="field"><span className="label">License</span>
-              <select className="select" value={form.license||'OSS'} onChange={e=>setForm({...form, license:e.target.value})}>
+              <select className="select" value={form.license||'OSS · MIT'} onChange={e=>setForm({...form, license:e.target.value})}>
                 <option>OSS · MIT</option><option>OSS · GPLv3</option><option>OSS · Apache-2.0</option><option>COMMERCIAL</option>
               </select>
             </label>
             <label className="field"><span className="label">Pricing</span><input className="input" placeholder="free / $12/mo" value={form.price||''} onChange={e=>setForm({...form, price:e.target.value})}/></label>
           </div>
           <label className="field"><span className="label">Public tagline</span><textarea className="textarea" placeholder="One paragraph for the Software page card." value={form.tagline||''} onChange={e=>setForm({...form, tagline:e.target.value})}/></label>
-          <label className="field"><span className="label">Repository / docs URL</span><input className="input" placeholder="github.com/outback/…" value={form.repo||''} onChange={e=>setForm({...form, repo:e.target.value})}/></label>
+          <label className="field"><span className="label">Repository / GitHub URL</span><input className="input" placeholder="github.com/outback/…" value={form.repo||''} onChange={e=>setForm({...form, repo:e.target.value})}/></label>
           <label className="field"><span className="label">Quickstart snippet</span><textarea className="textarea mono" style={{fontFamily:'JetBrains Mono, monospace', fontSize:12}} placeholder="curl -sSL get.outbackelec.au/your-tool | sh" value={form.quickstart||''} onChange={e=>setForm({...form, quickstart:e.target.value})}/></label>
-          <label className="field" style={{display:'flex', alignItems:'center', gap:8}}>
+
+          {/* ---- Installation / Download Files ---- */}
+          <div style={{marginTop:4}}>
+            <div className="row-flex" style={{justifyContent:'space-between', alignItems:'center', marginBottom:10}}>
+              <span className="label" style={{margin:0}}>Installation Files</span>
+              <div className="row-flex" style={{gap:8, alignItems:'center'}}>
+                {uploading && <span style={{fontSize:12, color:'var(--ink-2)'}}>Uploading…</span>}
+                <button
+                  className="btn btn-ghost btn-sm"
+                  style={{fontSize:12}}
+                  disabled={uploading}
+                  onClick={()=>fileInputRef.current&&fileInputRef.current.click()}
+                >+ Upload file</button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  style={{display:'none'}}
+                  accept=".zip,.gz,.tgz,.bz2,.xz,.7z,.iso,.img,.apk,.aab,.exe,.msi,.deb,.rpm,.dmg,.pkg,.appimage,.run,.sh,.tar"
+                  onChange={handleFileSelect}
+                />
+              </div>
+            </div>
+            {uploadErr && <div style={{fontSize:12, color:'var(--rust)', marginBottom:8}}>{uploadErr}</div>}
+            {(form.files||[]).length === 0 && !uploading && (
+              <div style={{fontSize:12, color:'var(--ink-2)', padding:'12px 0', textAlign:'center', border:'1px dashed var(--border)', borderRadius:6}}>
+                No files yet — upload an installer, binary, or archive above.
+              </div>
+            )}
+            {(form.files||[]).map(f => (
+              <SoftwareFileRow key={f.id} file={f} onDelete={deleteFile} onUpdate={updateFile} />
+            ))}
+            <div style={{fontSize:11, color:'var(--ink-2)', marginTop:6}}>
+              Supported: .zip .tar.gz .iso .apk .exe .msi .deb .rpm .dmg .appimage &mdash; max 160 MB per file
+            </div>
+          </div>
+
+          <label className="field" style={{display:'flex', alignItems:'center', gap:8, marginTop:4}}>
             <input type="checkbox" checked={!!form.live} onChange={e=>setForm({...form, live:e.target.checked})}/>
             <span style={{fontSize:14}}>Listed on public Software page</span>
           </label>

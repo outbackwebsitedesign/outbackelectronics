@@ -22,6 +22,7 @@ const PUBLIC_RATE_WINDOW_MS = 1000 * 60 * 10;
 const PUBLIC_RATE_LIMITS = { checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10 };
 
 fs.mkdirSync(path.join(__dirname, 'assets/uploads'), { recursive: true });
+fs.mkdirSync(path.join(__dirname, 'assets/uploads/software'), { recursive: true });
 
 const STRIPE_SECRET_KEY       = process.env.STRIPE_SECRET_KEY       || '';
 const STRIPE_WEBHOOK_SECRET   = process.env.STRIPE_WEBHOOK_SECRET   || '';
@@ -642,7 +643,8 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null) {
       if (err) return tryRead(paths, idx + 1);
       const ext = path.extname(filePath).toLowerCase();
       const types = { '.html': 'text/html', '.jsx': 'text/javascript', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.woff': 'font/woff', '.woff2': 'font/woff2' };
-      const isImmutable = /\.(js|css|png|jpg|jpeg|webp|gif|svg|ico|woff2?)$/.test(ext);
+      const isSoftwareDownload = filePath.includes('/assets/uploads/software/');
+      const isImmutable = /\.(js|css|png|jpg|jpeg|webp|gif|svg|ico|woff2?)$/.test(ext) && !isSoftwareDownload;
       const cacheHeader = isImmutable
         ? 'public, max-age=31536000, immutable'
         : 'no-cache, must-revalidate';
@@ -656,10 +658,14 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null) {
           ? "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://nominatim.openstreetmap.org; frame-src https://www.openstreetmap.org; frame-ancestors 'self';"
           : "default-src 'self'; script-src 'self' 'unsafe-inline' https://*.tawk.to https://embed.tawk.to https://static.cloudflareinsights.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.tawk.to https://cdn.jsdelivr.net; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com https://*.tawk.to; connect-src 'self' https://portal.outbackelectronics.com.au https://forum.outbackelectronics.com.au https://nominatim.openstreetmap.org wss://*.tawk.to https://*.tawk.to https://va.tawk.to https://cloudflareinsights.com; frame-src https://www.openstreetmap.org https://*.tawk.to; frame-ancestors 'none';",
       } : { 'X-Content-Type-Options': 'nosniff' };
+      const extraHeaders = isSoftwareDownload
+        ? { 'Content-Disposition': `attachment; filename="${path.basename(filePath)}"` }
+        : {};
       res.writeHead(200, {
-        'Content-Type': (types[ext] || 'application/octet-stream') + '; charset=utf-8',
+        'Content-Type': (types[ext] || 'application/octet-stream'),
         'Cache-Control': cacheHeader,
         ...securityHeaders,
+        ...extraHeaders,
       });
       res.end(data);
     });
@@ -2915,6 +2921,82 @@ const adminServer = http.createServer(async (req, res) => {
     const target = path.join(__dirname, 'assets/uploads', filename);
     const uploadsDir = path.resolve(path.join(__dirname, 'assets/uploads'));
     if (!path.resolve(target).startsWith(uploadsDir + path.sep) && path.resolve(target) !== uploadsDir) {
+      return json(res, 400, { error: 'invalid_filename' });
+    }
+    try { fs.unlinkSync(target); } catch {}
+    return json(res, 200, { ok: true });
+  }
+
+  // ---- Software binary file upload ----------------------------------------
+  if (req.method === 'POST' && url.pathname === '/api/admin/software/upload') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    // 220 MB raw body cap (covers ~160 MB file as base64 + JSON wrapper)
+    let body; try { body = await readJson(req, 220e6); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    try {
+      const ALLOWED_MIME = new Set([
+        'application/zip', 'application/x-zip-compressed', 'application/x-zip',
+        'application/x-iso9660-image',
+        'application/vnd.android.package-archive',
+        'application/x-msdownload', 'application/x-msdos-program', 'application/x-dosexec',
+        'application/x-debian-package',
+        'application/x-rpm',
+        'application/x-tar', 'application/gzip', 'application/x-gzip',
+        'application/x-bzip2', 'application/x-xz', 'application/x-7z-compressed',
+        'application/x-apple-diskimage',
+        'application/octet-stream',
+      ]);
+      const ALLOWED_EXT = new Set([
+        '.zip', '.gz', '.tgz', '.bz2', '.xz', '.7z',
+        '.iso', '.img',
+        '.apk', '.aab',
+        '.exe', '.msi',
+        '.deb', '.rpm',
+        '.dmg', '.pkg',
+        '.appimage', '.run', '.sh',
+        '.tar',
+      ]);
+      const MAX_BYTES = 160 * 1024 * 1024; // 160 MB file limit
+
+      const dataUri = body.data || '';
+      const mimeMatch = dataUri.match(/^data:([^;]+);base64,/);
+      if (!mimeMatch) return json(res, 400, { error: 'invalid_data_uri' });
+      const mime = mimeMatch[1].toLowerCase();
+
+      const origName = (body.filename || 'file').replace(/[^a-zA-Z0-9._-]/g, '_');
+      const extFull = origName.includes('.tar.')
+        ? '.' + origName.split('.').slice(-2).join('.')  // .tar.gz etc.
+        : path.extname(origName).toLowerCase();
+      if (!ALLOWED_EXT.has(extFull) && !ALLOWED_MIME.has(mime)) {
+        return json(res, 400, { error: 'unsupported_file_type' });
+      }
+
+      const raw = dataUri.slice(mimeMatch[0].length);
+      const buf = Buffer.from(raw, 'base64');
+      if (buf.length > MAX_BYTES) return json(res, 400, { error: 'file_too_large', maxMB: 160 });
+
+      const safeFilename = Date.now() + '-' + origName;
+      fs.mkdirSync(path.join(__dirname, 'assets/uploads/software'), { recursive: true });
+      fs.writeFileSync(path.join(__dirname, 'assets/uploads/software', safeFilename), buf);
+      return json(res, 200, {
+        ok: true,
+        url: '/assets/uploads/software/' + safeFilename,
+        filename: safeFilename,
+        originalName: origName,
+        size: buf.length,
+      });
+    } catch { return json(res, 500, { error: 'upload_failed' }); }
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/software/upload/delete') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const filename = path.basename(body.filename || '');
+    if (!filename || filename.includes('\0') || filename.includes('/')) {
+      return json(res, 400, { error: 'invalid_filename' });
+    }
+    const swUploadsDir = path.resolve(path.join(__dirname, 'assets/uploads/software'));
+    const target = path.resolve(path.join(__dirname, 'assets/uploads/software', filename));
+    if (!target.startsWith(swUploadsDir + path.sep) && target !== swUploadsDir) {
       return json(res, 400, { error: 'invalid_filename' });
     }
     try { fs.unlinkSync(target); } catch {}
