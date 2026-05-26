@@ -579,7 +579,18 @@ function AdminOrders({ search }) {
                               if (s === 'ordered' && !part.orderedAt) patch.orderedAt = dateStr;
                               if (s === 'delivered' && !part.deliveredAt) patch.deliveredAt = dateStr;
                               if (s === 'installed' && !part.installedAt) patch.installedAt = dateStr;
-                              setForm(f => ({ ...f, parts: f.parts.map((p, pi) => pi === i ? { ...p, ...patch } : p) }));
+                              setForm(f => {
+                                const newParts = f.parts.map((p, pi) => pi === i ? { ...p, ...patch } : p);
+                                const STAGE_ORDER = ['pending','ordering','building','testing','packed','shipped','fulfilled','refunded'];
+                                const currentStage = STAGE_ORDER.indexOf(f.fulfilment || 'pending');
+                                let derived = f.fulfilment || 'pending';
+                                if (newParts.some(p => ['ordered','delivered','installed'].includes(p.status))) derived = 'ordering';
+                                if (newParts.every(p => ['delivered','installed'].includes(p.status))) derived = 'building';
+                                if (newParts.every(p => p.status === 'installed')) derived = 'testing';
+                                const derivedStage = STAGE_ORDER.indexOf(derived);
+                                const fulfilment = derivedStage > currentStage ? derived : f.fulfilment;
+                                return { ...f, parts: newParts, fulfilment };
+                              });
                             }}
                           >{s}</button>
                         );
