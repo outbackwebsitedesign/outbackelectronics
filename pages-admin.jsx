@@ -673,16 +673,17 @@ function QuoteCreator({ context, onBack, onQuoteSent }) {
   const PC_BUILD_RATE = 40;
   const genRef = () => 'QT-' + Date.now().toString().slice(-6);
 
+  const dq = context?.draftQuote || {};
   const [form, setForm] = useState({
-    quoteRef: genRef(),
-    customerName: context?.name || '',
-    customerEmail: context?.email || '',
-    validDays: 30,
-    hardwareItems: [{ id: 'h' + Date.now(), name: '', qty: 1, basePrice: '' }],
-    pcBuild: false,
-    pcHours: '',
-    otherItems: [],
-    notes: '',
+    quoteRef: dq.quoteRef || context?.quoteRef || genRef(),
+    customerName: dq.customerName || context?.name || '',
+    customerEmail: dq.customerEmail || context?.email || '',
+    validDays: dq.validDays || 30,
+    hardwareItems: dq.hardwareItems?.length ? dq.hardwareItems : [{ id: 'h' + Date.now(), name: '', qty: 1, basePrice: '' }],
+    pcBuild: dq.pcBuild || false,
+    pcHours: dq.pcHours || '',
+    otherItems: dq.otherItems || [],
+    notes: dq.notes || '',
     sourceQuoteId: context?.id || null,
   });
   const [sending, setSending] = useState(false);
@@ -749,7 +750,7 @@ function QuoteCreator({ context, onBack, onQuoteSent }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 28 }}>
         <div>
           <a style={{ cursor: 'pointer', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--rust)', letterSpacing: '.08em' }} onClick={onBack}>← BACK TO INBOX</a>
-          <h2 className="serif" style={{ fontSize: 30, marginTop: 6, fontWeight: 400 }}>Quote Builder</h2>
+          <h2 className="serif" style={{ fontSize: 30, marginTop: 6, fontWeight: 400 }}>{context?.draftQuote ? 'Edit Quote' : 'Quote Builder'}</h2>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {msg.text && <span style={{ fontSize: 13, color: msg.ok ? 'var(--eucalyptus)' : 'var(--rust)' }}>{msg.text}</span>}
@@ -987,6 +988,7 @@ function AdminQuotes() {
   const [form, setForm] = useState({});
   const [assignTarget, setAssignTarget] = useState(null);
   const [assignee, setAssignee] = useState('');
+  const [activeTab, setActiveTab] = useState('new');
 
   useEffect(() => {
     fetch('/api/admin/quotes', { credentials:'include' })
@@ -1030,15 +1032,21 @@ function AdminQuotes() {
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
           <div className="tabs" style={{marginBottom:0}}>
-            {[`Inbox (${quotes.filter(q=>q.status==='new').length})`,`In review (${quotes.filter(q=>q.status==='in-review').length})`,`Quoted (${quotes.filter(q=>q.status==='quoted').length})`,`Won (${quotes.filter(q=>q.status==='won').length})`,'Closed'].map((t,i) => (
-              <div key={i} className={`tab ${i===0?'active':''}`}>{t}</div>
+            {[
+              { key:'new',       label:`Inbox (${quotes.filter(q=>q.status==='new').length})` },
+              { key:'in-review', label:`In review (${quotes.filter(q=>q.status==='in-review').length})` },
+              { key:'quoted',    label:`Quoted (${quotes.filter(q=>q.status==='quoted').length})` },
+              { key:'won',       label:`Won (${quotes.filter(q=>q.status==='won').length})` },
+              { key:'closed',    label:'Closed' },
+            ].map(t => (
+              <div key={t.key} className={`tab ${activeTab===t.key?'active':''}`} onClick={() => setActiveTab(t.key)} style={{cursor:'pointer'}}>{t.label}</div>
             ))}
           </div>
           <button className="btn btn-rust btn-sm" onClick={() => openQuoteCreator(null)}>+ New quote</button>
         </div>
         <div style={{display:'grid', gap:12}}>
-          {quotes.length === 0 && <div style={{ padding: 24, background: 'var(--paper)', border: '1px solid var(--line)', fontSize: 13, color: 'var(--ink-2)', textAlign: 'center' }}>No quote requests yet.</div>}
-          {quotes.map((q,i) => (
+          {quotes.filter(q => (q.status||'new') === activeTab).length === 0 && <div style={{ padding: 24, background: 'var(--paper)', border: '1px solid var(--line)', fontSize: 13, color: 'var(--ink-2)', textAlign: 'center' }}>No quotes in this category.</div>}
+          {quotes.filter(q => (q.status||'new') === activeTab).map((q,i) => (
             <div key={i} style={{padding:18, background:'var(--paper)', border:'1px solid var(--line)', borderLeft: q.status==='new'?'3px solid var(--rust)':'1px solid var(--line)'}}>
               <div className="row-flex" style={{justifyContent:'space-between'}}>
                 <div className="row-flex" style={{gap:10}}>
@@ -1064,7 +1072,7 @@ function AdminQuotes() {
               </div>
               <div className="row-flex" style={{marginTop:14, gap:8, justifyContent:'flex-end'}}>
                 <button className="btn btn-ghost btn-sm" onClick={() => { setAssignee(''); setAssignTarget(q); }}>Assign</button>
-                <button className="btn btn-rust btn-sm" onClick={() => openQuoteCreator(q)}>Build quote →</button>
+                <button className="btn btn-rust btn-sm" onClick={() => openQuoteCreator(q)}>{q.status === 'quoted' ? 'Edit & Resend →' : 'Build quote →'}</button>
               </div>
             </div>
           ))}
