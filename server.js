@@ -1051,6 +1051,23 @@ function emailStaffQuoteAccepted({ orderId, quoteRef, name, email, grandTotal })
   };
 }
 
+function emailOrderDelivered({ orderId, customerName, trackingNumber }) {
+  const name = customerName ? customerName.split(' ')[0] : '';
+  return {
+    subject: `Your order has been delivered — ${orderId}`,
+    html: emailHtml("Your order has arrived!", `
+      <p>Hi${name ? ` ${escHtml(name)}` : ''},</p>
+      <p>Australia Post has confirmed your order has been delivered. We hope everything looks great!</p>
+      <div class="detail">
+        <dt>ORDER ID</dt><dd>${escHtml(orderId)}</dd>
+        ${trackingNumber ? `<dt>TRACKING</dt><dd>${escHtml(trackingNumber)}</dd>` : ''}
+      </div>
+      <p>If you have any questions about your order or anything isn't right, please don't hesitate to get in touch.</p>
+      <a class="btn" href="${getPortalUrl()}/orders">View your order →</a>
+    `),
+  };
+}
+
 function emailOrderShipped({ orderId, customerName, trackingNumber }) {
   const name = customerName ? customerName.split(' ')[0] : '';
   const trackingUrl = `https://auspost.com.au/mypost/track/#/details/${encodeURIComponent(trackingNumber)}`;
@@ -1319,6 +1336,69 @@ function getAuspostKey() {
     return entry?.[3]?.apiKey || AUSPOST_API_KEY;
   } catch { return AUSPOST_API_KEY; }
 }
+
+function auspostTrackingRequest(trackingNumber) {
+  const apiKey = getAuspostKey();
+  if (!apiKey) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const options = {
+      hostname: 'digitalapi.auspost.com.au',
+      path: `/shipmentsv2/shipments?q=${encodeURIComponent(trackingNumber)}`,
+      method: 'GET',
+      headers: { 'AUTH-KEY': apiKey },
+    };
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', d => { data += d; });
+      res.on('end', () => {
+        try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
+        catch { resolve(null); }
+      });
+    });
+    req.on('error', () => resolve(null));
+    req.setTimeout(8000, () => { req.destroy(); resolve(null); });
+    req.end();
+  });
+}
+
+async function checkOrderTracking(order) {
+  if (!order.trackingNumber) return null;
+  const resp = await auspostTrackingRequest(order.trackingNumber);
+  if (!resp || resp.status !== 200 || !resp.body) return null;
+  const shipments = resp.body.shipments || [];
+  const shipment = shipments[0];
+  if (!shipment) return null;
+  const status = (shipment.status || '').toLowerCase();
+  const events = (shipment.events || []).map(e => ({ description: e.description, date: e.date, location: e.location }));
+  return { status, events, raw: shipment.status };
+}
+
+async function pollShippedOrders() {
+  const orders = readOrders();
+  const shipped = orders.filter(o => o.fulfilment === 'shipped' && o.trackingNumber);
+  if (!shipped.length) return;
+  let changed = false;
+  const nowStr = new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
+  for (const order of shipped) {
+    const tracking = await checkOrderTracking(order);
+    if (!tracking) continue;
+    const idx = orders.findIndex(o => o.id === order.id);
+    if (idx < 0) continue;
+    orders[idx] = { ...orders[idx], lastTrackingStatus: tracking.raw, lastTrackingCheck: new Date().toISOString(), trackingEvents: tracking.events };
+    if (tracking.status.includes('delivered') || tracking.status.includes('complete')) {
+      orders[idx].fulfilment = 'fulfilled';
+      changed = true;
+      if (order.email) {
+        const tmpl = emailOrderDelivered({ orderId: order.id, customerName: order.cust, trackingNumber: order.trackingNumber });
+        sendEmail({ to: order.email, ...tmpl }).catch(() => {});
+      }
+    }
+    changed = true;
+  }
+  if (changed) writeOrders(orders);
+}
+
+setInterval(() => { pollShippedOrders().catch(() => {}); }, 2 * 60 * 60 * 1000);
 
 function getShopPostcode() {
   try {
@@ -2841,6 +2921,30 @@ const adminServer = http.createServer(async (req, res) => {
     }
     return json(res, 200, { ok: true, item: body });
   }
+  if (req.method === 'POST' && url.pathname === '/api/admin/orders/check-tracking') {
+    const session = requireRole(req, res, 'staff'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const orders = readOrders();
+    const idx = orders.findIndex(o => o.id === body.id);
+    if (idx < 0) return json(res, 404, { error: 'not_found' });
+    const order = orders[idx];
+    if (!order.trackingNumber) return json(res, 400, { error: 'no_tracking_number' });
+    const tracking = await checkOrderTracking(order);
+    if (!tracking) return json(res, 502, { error: 'tracking_unavailable', message: 'Could not reach Australia Post tracking. Check your AusPost API key in Settings → Integrations.' });
+    const nowStr = new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
+    const update = { lastTrackingStatus: tracking.raw, lastTrackingCheck: new Date().toISOString(), trackingEvents: tracking.events };
+    if (tracking.status.includes('delivered') || tracking.status.includes('complete')) {
+      update.fulfilment = 'fulfilled';
+      if (order.email && order.fulfilment !== 'fulfilled') {
+        const tmpl = emailOrderDelivered({ orderId: order.id, customerName: order.cust, trackingNumber: order.trackingNumber });
+        sendEmail({ to: order.email, ...tmpl }).catch(() => {});
+      }
+    }
+    orders[idx] = { ...order, ...update };
+    writeOrders(orders);
+    return json(res, 200, { ok: true, tracking, fulfilment: orders[idx].fulfilment });
+  }
+
   if (req.method === 'POST' && url.pathname === '/api/admin/orders/delete') {
     const session = requireRole(req, res, 'manager'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
