@@ -3078,8 +3078,8 @@ function MergeCustomerModal({ customers, onClose, onMerged }) {
 
 function CustomerLinkedJobs({ customerId, email, manualLinks, onLinksChange }) {
   const [jobs, setJobs] = useState(null);
-  const [addInput, setAddInput] = useState('');
-  const [addBusy, setAddBusy] = useState(false);
+  const [allJobs, setAllJobs] = useState([]);
+  const [selected, setSelected] = useState('');
 
   useEffect(() => {
     if (!customerId) return;
@@ -3087,14 +3087,25 @@ function CustomerLinkedJobs({ customerId, email, manualLinks, onLinksChange }) {
       .then(r => r.ok ? r.json() : Promise.reject()).then(d => setJobs(d)).catch(() => setJobs({ orders:[], repairs:[], quotes:[] }));
   }, [customerId]);
 
-  async function addLink() {
-    const val = addInput.trim();
-    if (!val) return;
-    setAddBusy(true);
-    const links = [...(manualLinks||[]), val];
-    onLinksChange(links);
-    setAddInput('');
-    setAddBusy(false);
+  useEffect(() => {
+    // Load all orders, repairs, quotes for the dropdown
+    Promise.all([
+      fetch('/api/admin/orders', { credentials:'include' }).then(r => r.ok ? r.json() : { items:[] }),
+      fetch('/api/admin/repairs', { credentials:'include' }).then(r => r.ok ? r.json() : []),
+      fetch('/api/admin/quotes', { credentials:'include' }).then(r => r.ok ? r.json() : { items:[] }),
+    ]).then(([od, rd, qd]) => {
+      const orders = (od.items || od.orders || []).map(o => ({ id: o.id, ref: o.ref || o.id, label: o.title || o.description || o.ref || o.id, _type: 'order' }));
+      const repairs = (Array.isArray(rd) ? rd : (rd.items || rd.repairs || [])).map(r => ({ id: r.id, ref: r.id, label: r.service || r.description || r.id, _type: 'repair' }));
+      const quotes = (qd.items || qd.quotes || []).map(q => ({ id: q.id, ref: q.ref || q.id, label: q.service || q.description || q.ref || q.id, _type: 'quote' }));
+      setAllJobs([...orders, ...repairs, ...quotes]);
+    }).catch(() => {});
+  }, []);
+
+  function addLink() {
+    if (!selected) return;
+    if ((manualLinks||[]).includes(selected)) return;
+    onLinksChange([...(manualLinks||[]), selected]);
+    setSelected('');
   }
 
   function removeLink(v) {
@@ -3103,52 +3114,71 @@ function CustomerLinkedJobs({ customerId, email, manualLinks, onLinksChange }) {
 
   if (!customerId) return null;
 
-  const allOrders = jobs ? [...(jobs.orders||[]), ...(jobs.repairs||[])] : [];
-  const allQuotes = jobs ? (jobs.quotes||[]) : [];
+  const linkedIds = new Set([
+    ...(jobs ? [...(jobs.orders||[]), ...(jobs.repairs||[]), ...(jobs.quotes||[])].map(j => j.id) : []),
+    ...(manualLinks||[]),
+  ]);
+
+  const autoLinked = jobs ? [...(jobs.orders||[]), ...(jobs.repairs||[]), ...(jobs.quotes||[])] : [];
+  const typeLabel = { order:'ORDER', repair:'REPAIR', quote:'QUOTE' };
+
+  // Jobs available to manually link (not already auto-matched by email)
+  const autoIds = new Set(autoLinked.map(j => j.id));
+  const available = allJobs.filter(j => !autoIds.has(j.id) && !(manualLinks||[]).includes(j.id));
 
   return (
     <div style={{marginTop:16}}>
       <div style={{fontWeight:700,fontSize:12,color:'var(--ink-2)',letterSpacing:'0.08em',marginBottom:10}}>LINKED JOBS</div>
       {!jobs && <div style={{fontSize:13,color:'var(--ink-3)'}}>Loading…</div>}
-      {jobs && allOrders.length === 0 && allQuotes.length === 0 && (manualLinks||[]).length === 0 && (
-        <div style={{fontSize:13,color:'var(--ink-3)'}}>No jobs linked yet.</div>
+      {jobs && autoLinked.length === 0 && (manualLinks||[]).length === 0 && (
+        <div style={{fontSize:13,color:'var(--ink-3)',marginBottom:10}}>No jobs linked yet.</div>
       )}
-      {jobs && allOrders.length > 0 && (
-        <div style={{display:'grid',gap:6,marginBottom:10}}>
-          {allOrders.map(o => (
-            <div key={o.id} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 10px',background:'var(--bg-deep)',borderRadius:6,fontSize:13}}>
-              <span style={{fontWeight:600,fontFamily:'monospace'}}>{o.ref || o.id}</span>
-              <span style={{color:'var(--ink-2)',flex:1}}>{o.title || o.service || o.description || ''}</span>
-              <span style={{fontSize:11,color:'var(--ink-3)'}}>{o._type === 'repair' ? 'REPAIR' : 'ORDER'}</span>
-            </div>
-          ))}
-        </div>
-      )}
-      {jobs && allQuotes.length > 0 && (
-        <div style={{display:'grid',gap:6,marginBottom:10}}>
-          {allQuotes.map(q => (
-            <div key={q.id} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 10px',background:'var(--bg-deep)',borderRadius:6,fontSize:13}}>
-              <span style={{fontWeight:600,fontFamily:'monospace'}}>{q.ref || q.id}</span>
-              <span style={{color:'var(--ink-2)',flex:1}}>{q.service || q.description || ''}</span>
-              <span style={{fontSize:11,color:'var(--ink-3)'}}>QUOTE</span>
+      {autoLinked.length > 0 && (
+        <div style={{display:'grid',gap:5,marginBottom:10}}>
+          {autoLinked.map(j => (
+            <div key={j.id} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 10px',background:'var(--bg-deep)',borderRadius:6,fontSize:13}}>
+              <span style={{fontWeight:600,fontFamily:'monospace',fontSize:12}}>{j.ref || j.id}</span>
+              <span style={{color:'var(--ink-2)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{j.title || j.service || j.label || ''}</span>
+              <span style={{fontSize:10,color:'var(--ink-3)',fontWeight:600,letterSpacing:'0.05em'}}>{typeLabel[j._type] || j._type?.toUpperCase()}</span>
             </div>
           ))}
         </div>
       )}
       {(manualLinks||[]).length > 0 && (
-        <div style={{display:'grid',gap:4,marginBottom:10}}>
-          {(manualLinks||[]).map(v => (
-            <div key={v} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 10px',background:'#fff8f0',border:'1px solid var(--rule)',borderRadius:6,fontSize:13}}>
-              <span style={{fontFamily:'monospace',flex:1}}>{v}</span>
-              <span style={{fontSize:11,color:'var(--ink-3)'}}>MANUAL</span>
-              <button onClick={() => removeLink(v)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--rust)',fontSize:16,lineHeight:1,padding:0}}>×</button>
-            </div>
-          ))}
+        <div style={{display:'grid',gap:5,marginBottom:10}}>
+          {(manualLinks||[]).map(v => {
+            const job = allJobs.find(j => j.id === v);
+            return (
+              <div key={v} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 10px',background:'#fff8f0',border:'1px solid var(--rule)',borderRadius:6,fontSize:13}}>
+                <span style={{fontWeight:600,fontFamily:'monospace',fontSize:12}}>{job ? (job.ref || job.id) : v}</span>
+                <span style={{color:'var(--ink-2)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{job ? job.label : ''}</span>
+                <span style={{fontSize:10,color:'var(--rust)',fontWeight:600,letterSpacing:'0.05em'}}>MANUAL</span>
+                <button onClick={() => removeLink(v)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--ink-3)',fontSize:16,lineHeight:1,padding:0}}>×</button>
+              </div>
+            );
+          })}
         </div>
       )}
       <div className="row-flex" style={{gap:8}}>
-        <input className="input" style={{flex:1,fontSize:13}} placeholder="Link order / repair ID manually…" value={addInput} onChange={e=>setAddInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addLink()} />
-        <button className="btn btn-ghost btn-sm" disabled={addBusy||!addInput.trim()} onClick={addLink}>Add</button>
+        <select className="input" style={{flex:1,fontSize:13}} value={selected} onChange={e=>setSelected(e.target.value)}>
+          <option value="">— link a job —</option>
+          {available.filter(j=>j._type==='order').length > 0 && (
+            <optgroup label="Orders">
+              {available.filter(j=>j._type==='order').map(j=><option key={j.id} value={j.id}>{j.ref || j.id}{j.label && j.label !== j.ref ? ` — ${j.label}` : ''}</option>)}
+            </optgroup>
+          )}
+          {available.filter(j=>j._type==='repair').length > 0 && (
+            <optgroup label="Repairs">
+              {available.filter(j=>j._type==='repair').map(j=><option key={j.id} value={j.id}>{j.ref || j.id}{j.label && j.label !== j.ref ? ` — ${j.label}` : ''}</option>)}
+            </optgroup>
+          )}
+          {available.filter(j=>j._type==='quote').length > 0 && (
+            <optgroup label="Quotes">
+              {available.filter(j=>j._type==='quote').map(j=><option key={j.id} value={j.id}>{j.ref || j.id}{j.label && j.label !== j.ref ? ` — ${j.label}` : ''}</option>)}
+            </optgroup>
+          )}
+        </select>
+        <button className="btn btn-ghost btn-sm" disabled={!selected} onClick={addLink}>Add</button>
       </div>
     </div>
   );
