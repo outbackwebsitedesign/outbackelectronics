@@ -2991,6 +2991,17 @@ const adminServer = http.createServer(async (req, res) => {
     const keepIdx = customers.findIndex(c => c.id === keepId);
     if (keepIdx < 0) return json(res, 404, { error: 'not_found' });
     const deleteCustomer = customers.find(c => c.id === deleteId);
+    const oldEmail = (deleteCustomer && deleteCustomer.email || '').toLowerCase().trim();
+    const newEmail = (merged.email || customers[keepIdx].email || '').toLowerCase().trim();
+    // Re-link orders, repairs, quotes that belonged to the deleted customer
+    if (oldEmail && oldEmail !== newEmail) {
+      const orders = readOrders().map(o => (o.email||'').toLowerCase().trim() === oldEmail ? { ...o, email: newEmail } : o);
+      writeOrders(orders);
+      const repairs = readRepairs().map(r => (r.email||'').toLowerCase().trim() === oldEmail ? { ...r, email: newEmail } : r);
+      writeRepairs(repairs);
+      const quotes = readQuotes().map(q => (q.email||'').toLowerCase().trim() === oldEmail ? { ...q, email: newEmail } : q);
+      writeQuotes(quotes);
+    }
     // Combine manual links from both
     const combinedManualLinks = [...new Set([
       ...((customers[keepIdx].manualLinks)||[]),
