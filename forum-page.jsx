@@ -143,7 +143,11 @@ function LoginModal({ onClose, onLogin }) {
   const [tab, setTab] = useState('login'); // 'login' | 'signup' | 'forgot'
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [displayName, setDisplayName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotMsg, setForgotMsg] = useState(null);
@@ -162,7 +166,11 @@ function LoginModal({ onClose, onLogin }) {
     setForgotMsg(null);
     setUsername('');
     setPassword('');
-    setDisplayName('');
+    setFirstName('');
+    setLastName('');
+    setEmail('');
+    setPhone('');
+    setAddress('');
     setConfirmPassword('');
     setForgotEmail('');
   }
@@ -173,7 +181,9 @@ function LoginModal({ onClose, onLogin }) {
     if (!username.trim()) { setError('Please enter a username.'); return; }
     if (!password) { setError('Please enter a password.'); return; }
     if (tab === 'signup') {
-      if (!displayName.trim()) { setError('Please enter a display name.'); return; }
+      if (!firstName.trim()) { setError('Please enter your first name.'); return; }
+      if (!lastName.trim()) { setError('Please enter your last name.'); return; }
+      if (!email.trim()) { setError('Please enter your email address.'); return; }
       if (password !== confirmPassword) { setError('Passwords do not match.'); return; }
     }
     setSaving(true);
@@ -181,7 +191,7 @@ function LoginModal({ onClose, onLogin }) {
       const endpoint = tab === 'login' ? '/api/forum/auth/login' : '/api/forum/auth/register';
       const body = tab === 'login'
         ? { username: username.trim(), password }
-        : { username: username.trim(), password, displayName: displayName.trim() };
+        : { username: username.trim(), password, firstName: firstName.trim(), lastName: lastName.trim(), email: email.trim(), phone: phone.trim(), address: address.trim() };
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: csrfHeaders(),
@@ -313,19 +323,40 @@ function LoginModal({ onClose, onLogin }) {
                 />
               </label>
               {tab === 'signup' && (
-                <label style={labelStyle}>
-                  <span style={labelSpanStyle}>Display Name</span>
-                  <input
-                    type="text"
-                    value={displayName}
-                    onChange={e => setDisplayName(e.target.value)}
-                    maxLength={60}
-                    placeholder="How you appear in the forum"
-                    style={inputStyle}
-                    onFocus={e => e.target.style.borderColor = '#0088cc'}
-                    onBlur={e => e.target.style.borderColor = '#d6d9dc'}
-                  />
-                </label>
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+                    <label style={{ ...labelStyle, marginBottom: 0 }}>
+                      <span style={labelSpanStyle}>First name *</span>
+                      <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} required maxLength={50}
+                        placeholder="Jane" style={inputStyle}
+                        onFocus={e => e.target.style.borderColor = '#0088cc'} onBlur={e => e.target.style.borderColor = '#d6d9dc'} />
+                    </label>
+                    <label style={{ ...labelStyle, marginBottom: 0 }}>
+                      <span style={labelSpanStyle}>Last name *</span>
+                      <input type="text" value={lastName} onChange={e => setLastName(e.target.value)} required maxLength={50}
+                        placeholder="Smith" style={inputStyle}
+                        onFocus={e => e.target.style.borderColor = '#0088cc'} onBlur={e => e.target.style.borderColor = '#d6d9dc'} />
+                    </label>
+                  </div>
+                  <label style={labelStyle}>
+                    <span style={labelSpanStyle}>Email address *</span>
+                    <input type="email" value={email} onChange={e => setEmail(e.target.value)} required maxLength={200}
+                      placeholder="jane@example.com" style={inputStyle}
+                      onFocus={e => e.target.style.borderColor = '#0088cc'} onBlur={e => e.target.style.borderColor = '#d6d9dc'} />
+                  </label>
+                  <label style={labelStyle}>
+                    <span style={labelSpanStyle}>Phone number</span>
+                    <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} maxLength={30}
+                      placeholder="0400 000 000" style={inputStyle}
+                      onFocus={e => e.target.style.borderColor = '#0088cc'} onBlur={e => e.target.style.borderColor = '#d6d9dc'} />
+                  </label>
+                  <label style={labelStyle}>
+                    <span style={labelSpanStyle}>Address</span>
+                    <input type="text" value={address} onChange={e => setAddress(e.target.value)} maxLength={200}
+                      placeholder="123 Station Rd, Broken Hill NSW 2880" style={inputStyle}
+                      onFocus={e => e.target.style.borderColor = '#0088cc'} onBlur={e => e.target.style.borderColor = '#d6d9dc'} />
+                  </label>
+                </>
               )}
               <label style={labelStyle}>
                 <span style={labelSpanStyle}>Password</span>

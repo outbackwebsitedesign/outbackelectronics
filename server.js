@@ -2342,24 +2342,37 @@ const forumServer = http.createServer(async (req, res) => {
     if (!body || typeof body !== 'object') return json(res, 422, { error: 'invalid_payload', message: 'Payload must be a JSON object.' });
     const username = typeof body.username === 'string' ? body.username : '';
     const password = typeof body.password === 'string' ? body.password : '';
-    const displayName = typeof body.displayName === 'string' ? body.displayName.trim() : '';
+    const firstName = typeof body.firstName === 'string' ? body.firstName.trim() : '';
+    const lastName = typeof body.lastName === 'string' ? body.lastName.trim() : '';
     const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+    const phone = typeof body.phone === 'string' ? body.phone.trim() : '';
+    const address = typeof body.address === 'string' ? body.address.trim() : '';
+    if (!firstName) return json(res, 422, { error: 'invalid_payload', message: 'First name is required.' });
+    if (!lastName) return json(res, 422, { error: 'invalid_payload', message: 'Last name is required.' });
+    if (!email) return json(res, 422, { error: 'invalid_payload', message: 'Email address is required.' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json(res, 422, { error: 'invalid_payload', message: 'Email address is invalid.' });
     if (!/^[a-zA-Z0-9_]{3,30}$/.test(username)) return json(res, 422, { error: 'invalid_payload', message: 'Username must be 3–30 characters, letters, numbers and underscores only.' });
     if (password.length < 8) return json(res, 422, { error: 'invalid_payload', message: 'Password must be at least 8 characters.' });
-    const resolvedDisplayName = displayName || username;
-    if (resolvedDisplayName.length > 50) return json(res, 422, { error: 'invalid_payload', message: 'Display name must be 50 characters or fewer.' });
+    const resolvedDisplayName = `${firstName} ${lastName}`.trim();
     const forum = readForum();
     if (!Array.isArray(forum.users)) forum.users = [];
     if (forum.users.find(u => u.username && u.username.toLowerCase() === username.toLowerCase())) {
       return json(res, 409, { error: 'username_taken', message: 'That username is already taken.' });
     }
-    const user = { id: 'U-' + Date.now(), username, displayName: resolvedDisplayName, email, passwordHash: hashPassword(password), createdAt: new Date().toISOString() };
+    if (forum.users.find(u => u.email && u.email === email)) {
+      return json(res, 409, { error: 'email_taken', message: 'An account with that email address already exists.' });
+    }
+    const user = { id: 'U-' + Date.now(), username, firstName, lastName, displayName: resolvedDisplayName, email, phone, address, passwordHash: hashPassword(password), createdAt: new Date().toISOString() };
     forum.users.push(user);
     writeForum(forum);
     const sid = randomId();
     forumSessions.set(sid, { id: user.id, username: user.username, displayName: user.displayName, createdAt: user.createdAt, expiresAt: now() + FORUM_SESSION_TTL_MS });
     saveSessionsToDisk(FORUM_SESSIONS_DB_PATH, forumSessions);
     res.setHeader('Set-Cookie', sessionCookie('oe_forum_session', sid, Math.floor(FORUM_SESSION_TTL_MS / 1000), req));
+    if (email) {
+      const tmpl = emailPortalWelcome({ username: user.username, displayName: user.displayName });
+      sendEmail({ to: email, ...tmpl });
+    }
     return json(res, 201, { ok: true, user: { id: user.id, username: user.username, displayName: user.displayName, createdAt: user.createdAt } });
   }
 
