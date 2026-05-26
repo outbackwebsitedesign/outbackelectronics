@@ -3680,6 +3680,43 @@ const portalServer = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true, user: { id: user.id, username: user.username, displayName: user.displayName, createdAt: user.createdAt } });
   }
 
+  if (req.method === 'GET' && url.pathname === '/api/portal/addresses') {
+    const session = getPortalSession(req);
+    if (!session) return json(res, 401, { error: 'login_required' });
+    const forum = readForum();
+    const user = Array.isArray(forum.users) ? forum.users.find(u => u.id === session.id) : null;
+    return json(res, 200, { addresses: user?.addresses || [] });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/portal/addresses/save') {
+    const session = getPortalSession(req);
+    if (!session) return json(res, 401, { error: 'login_required' });
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const { name, line1, line2, city, state, postcode, country } = body || {};
+    if (!name || !line1 || !city || !state || !postcode) return json(res, 422, { error: 'missing_fields', message: 'Name, street, city, state and postcode are required.' });
+    const forum = readForum();
+    if (!Array.isArray(forum.users)) forum.users = [];
+    const idx = forum.users.findIndex(u => u.id === session.id);
+    if (idx < 0) return json(res, 404, { error: 'user_not_found' });
+    const addr = { id: 'addr-' + Date.now(), name: String(name).trim(), line1: String(line1).trim(), line2: String(line2||'').trim(), city: String(city).trim(), state: String(state).trim(), postcode: String(postcode).trim(), country: String(country||'AU').trim() };
+    forum.users[idx].addresses = [...(forum.users[idx].addresses || []), addr];
+    writeForum(forum);
+    return json(res, 201, { ok: true, address: addr });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/portal/addresses/delete') {
+    const session = getPortalSession(req);
+    if (!session) return json(res, 401, { error: 'login_required' });
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const forum = readForum();
+    if (!Array.isArray(forum.users)) forum.users = [];
+    const idx = forum.users.findIndex(u => u.id === session.id);
+    if (idx < 0) return json(res, 404, { error: 'user_not_found' });
+    forum.users[idx].addresses = (forum.users[idx].addresses || []).filter(a => a.id !== body.id);
+    writeForum(forum);
+    return json(res, 200, { ok: true });
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/portal/orders') {
     const session = getPortalSession(req);
     if (!session) return json(res, 401, { error: 'login_required' });
