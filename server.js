@@ -971,7 +971,7 @@ function emailQuoteReply({ quoteId, customerName, reply, status }) {
   };
 }
 
-function emailQuoteFormal({ quoteRef, customerName, validDays, hardwareItems, pcBuild, pcBuildFee, otherItems, grandTotal, notes }) {
+function emailQuoteFormal({ quoteRef, quoteId, customerName, validDays, hardwareItems, pcBuild, pcBuildFee, otherItems, grandTotal, notes }) {
   const validUntil = new Date(Date.now() + (validDays || 30) * 24 * 60 * 60 * 1000)
     .toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
 
@@ -1013,8 +1013,8 @@ function emailQuoteFormal({ quoteRef, customerName, validDays, hardwareItems, pc
         </tbody>
       </table>
       ${notes ? `<div class="detail"><dt>NOTES</dt><dd>${escHtml(notes).replace(/\n/g,'<br>')}</dd></div>` : ''}
-      <p>To accept this quote or ask any questions, simply reply to this email or contact us via the portal.</p>
-      <a class="btn" href="${getSiteUrl()}/portal">Get in touch →</a>
+      <p>To accept this quote or ask any questions, simply reply to this email or visit your portal.</p>
+      <a class="btn" href="${getPortalUrl()}/quotes${quoteId ? `?ref=${encodeURIComponent(quoteRef || quoteId)}` : ''}">View quote in portal →</a>
     `),
   };
 }
@@ -2870,6 +2870,7 @@ const adminServer = http.createServer(async (req, res) => {
     writeQuotes(quotes);
     const tmpl = emailQuoteFormal({
       quoteRef,
+      quoteId: savedQuote.id,
       customerName: body.customerName,
       validDays: body.validDays || 30,
       hardwareItems: body.hardwareItems || [],

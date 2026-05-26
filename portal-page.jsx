@@ -499,7 +499,7 @@ function RepairsTab() {
 
 // ── Quotes ────────────────────────────────────────────────────────────────────
 
-function QuotesTab({ user, onOrderCreated }) {
+function QuotesTab({ user, onOrderCreated, highlightRef }) {
   const [items, setItems] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({ name: user.displayName || user.username, email: '', description: '' });
@@ -597,8 +597,9 @@ function QuotesTab({ user, onOrderCreated }) {
             ...(dq.otherItems || []).filter(i => i.description).map(i => ({ label: i.description, amount: parseFloat(i.amount) || 0 })),
           ];
           const validUntil = dq.validDays ? new Date(Date.now() + dq.validDays * 86400000).toLocaleDateString('en-AU', { day:'numeric', month:'long', year:'numeric' }) : null;
+          const isHighlighted = highlightRef && (q.quoteRef === highlightRef || q.id === highlightRef);
           return (
-            <div key={q.id} className="card-paper" style={{padding:28, marginBottom:20, borderLeft:'3px solid var(--ochre)'}}>
+            <div key={q.id} id={`quote-${q.quoteRef || q.id}`} className="card-paper" ref={isHighlighted ? el => el && el.scrollIntoView({ behavior: 'smooth', block: 'start' }) : null} style={{padding:28, marginBottom:20, borderLeft:`3px solid ${isHighlighted ? 'var(--rust)' : 'var(--ochre)'}`}}>
               <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:12, marginBottom:16}}>
                 <div>
                   <span className="eyebrow">Quote ready for acceptance</span>
@@ -992,6 +993,7 @@ function Dashboard({ user, setUser, onLogout }) {
     return PORTAL_TABS.includes(seg) ? seg : 'overview';
   });
   const [newOrderId, setNewOrderId] = useState(null);
+  const [quoteRef] = useState(() => new URLSearchParams(window.location.search).get('ref'));
 
   const switchTab = (id) => {
     setTab(id);
@@ -1020,7 +1022,7 @@ function Dashboard({ user, setUser, onLogout }) {
       {tab === 'overview'    && <OverviewTab user={user} setTab={switchTab} />}
       {tab === 'orders'      && <OrdersTab highlightId={newOrderId} />}
       {tab === 'repairs'     && <RepairsTab />}
-      {tab === 'quotes'      && <QuotesTab user={user} onOrderCreated={handleOrderCreated} />}
+      {tab === 'quotes'      && <QuotesTab user={user} onOrderCreated={handleOrderCreated} highlightRef={quoteRef} />}
       {tab === 'memberships' && <MembershipsTab />}
       {tab === 'rewards'     && <RewardsTab />}
       {tab === 'wallet'      && <WalletTab />}
