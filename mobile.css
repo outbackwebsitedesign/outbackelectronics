@@ -71,10 +71,16 @@
   .page-head h1 { font-size: 36px; margin-top: 8px; }
   .page-head .lead { font-size: 14px; }
 
-  /* Footer */
-  footer { padding: 40px 0 20px; margin-top: 48px; }
-  footer .grid { grid-template-columns: 1fr 1fr !important; gap: 20px !important; }
+  /* Footer — collapse to 2 cols, hide redundant logo col on very small */
+  footer { padding: 32px 0 16px; margin-top: 40px; }
+  footer .grid { grid-template-columns: 1fr 1fr !important; gap: 16px !important; }
+  footer .grid > div:first-child { grid-column: 1 / -1; } /* logo/desc spans full width */
   footer .baseline { flex-direction: column; gap: 8px; font-size: 10px; }
+
+  /* Portal tab bar scrolls horizontally — no wrapping */
+  .tabs-row { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; flex-wrap: nowrap !important; }
+  .tabs-row::-webkit-scrollbar { display: none; }
+  .tab-btn { white-space: nowrap; flex-shrink: 0; }
 
   /* Thread list in community page */
   .thread { grid-template-columns: 40px 1fr; gap: 10px; }

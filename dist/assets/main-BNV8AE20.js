@@ -1,4 +1,4 @@
-import{j as e,R as L,r,c as Ae}from"./index-Cj7wWPIU.js";import"./vendor-C8w-UNLI.js";const Re=`
+import{j as e,R as L,r,c as Ae}from"./index-D9boqeLW.js";import"./vendor-C8w-UNLI.js";const Re=`
   .twk-panel{position:fixed;right:16px;bottom:16px;z-index:2147483646;width:280px;
     max-height:calc(100vh - 32px);display:flex;flex-direction:column;
     transform:scale(var(--dc-inv-zoom,1));transform-origin:bottom right;
