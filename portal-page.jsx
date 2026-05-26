@@ -394,15 +394,171 @@ function OverviewTab({ user, setTab }) {
 
 // ── Orders ────────────────────────────────────────────────────────────────────
 
+const UPDATE_TYPE_LABEL = {
+  note: 'Note',
+  parts_ordered: 'Parts ordered',
+  parts_arrived: 'Parts arrived',
+  build_started: 'Build started',
+  ready_for_pickup: 'Ready for pickup',
+  dispatched: 'Dispatched',
+};
+const UPDATE_TYPE_COLOR = {
+  note: 'var(--ink-2)',
+  parts_ordered: '#1668c8',
+  parts_arrived: '#345526',
+  build_started: '#7a5d10',
+  ready_for_pickup: '#345526',
+  dispatched: 'var(--ink)',
+};
+
+function OrderDetail({ o, onPay, paying }) {
+  const dq = o.draftQuote || {};
+  const lineItems = [
+    ...(dq.hardwareItems || []).filter(i => i.name).map(i => {
+      const qty = parseInt(i.qty) || 1;
+      return { label: i.name + (qty > 1 ? ` × ${qty}` : ''), amount: (parseFloat(i.basePrice) || 0) * qty * 1.02 };
+    }),
+    ...(dq.pcBuild && dq.pcBuildFee > 0 ? [{ label: 'Custom PC Build', amount: dq.pcBuildFee }] : []),
+    ...(dq.otherItems || []).filter(i => i.description).map(i => ({ label: i.description, amount: parseFloat(i.amount) || 0 })),
+  ];
+  const paid = (o.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  const outstanding = o.total != null ? Math.max(0, Number(o.total) - paid) : null;
+  const needsPayment = outstanding != null && outstanding > 0;
+  const trackingUrl = o.trackingNumber ? `https://auspost.com.au/mypost/track/#/details/${encodeURIComponent(o.trackingNumber)}` : null;
+
+  const FULFILMENT_STEPS = ['pending','packed','shipped','fulfilled'];
+  const currentStep = FULFILMENT_STEPS.indexOf(o.fulfilment || 'pending');
+
+  return (
+    <div style={{marginTop:16, borderTop:'1px solid var(--line)', paddingTop:16, display:'grid', gap:20}}>
+
+      {/* Progress bar */}
+      {o.fulfilment !== 'refunded' && (
+        <div>
+          <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:10, letterSpacing:'.08em'}}>FULFILMENT PROGRESS</div>
+          <div style={{display:'flex', gap:0}}>
+            {['Order placed','Packed','Shipped','Delivered'].map((label, i) => {
+              const done = i <= currentStep;
+              const active = i === currentStep;
+              return (
+                <div key={i} style={{flex:1, textAlign:'center'}}>
+                  <div style={{display:'flex', alignItems:'center'}}>
+                    <div style={{flex: i === 0 ? '0 0 0' : 1, height:2, background: i <= currentStep ? 'var(--rust)' : 'var(--line)'}} />
+                    <div style={{width:12, height:12, borderRadius:'50%', flexShrink:0, background: done ? 'var(--rust)' : 'var(--line)', border: active ? '3px solid var(--rust)' : 'none', boxSizing:'border-box'}} />
+                    <div style={{flex: i === 3 ? '0 0 0' : 1, height:2, background: i < currentStep ? 'var(--rust)' : 'var(--line)'}} />
+                  </div>
+                  <div style={{fontSize:11, marginTop:5, color: done ? 'var(--ink)' : 'var(--ink-3)', fontWeight: active ? 600 : 400}}>{label}</div>
+                </div>
+              );
+            })}
+          </div>
+          {trackingUrl && (
+            <div style={{marginTop:12, textAlign:'center'}}>
+              <a href={trackingUrl} target="_blank" rel="noreferrer" style={{fontSize:13, color:'var(--rust)', fontWeight:600}}>
+                Track with Australia Post ↗
+              </a>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Line items */}
+      {lineItems.length > 0 && (
+        <div>
+          <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:8, letterSpacing:'.08em'}}>ORDER ITEMS</div>
+          <div style={{border:'1px solid var(--line)'}}>
+            {lineItems.map((item, i) => (
+              <div key={i} style={{display:'flex', justifyContent:'space-between', padding:'9px 14px', borderBottom: i < lineItems.length - 1 ? '1px solid var(--line)' : 'none', fontSize:14}}>
+                <span>{item.label}</span>
+                <span className="mono" style={{fontWeight:600}}>${item.amount.toLocaleString('en-AU',{minimumFractionDigits:2})}</span>
+              </div>
+            ))}
+            <div style={{display:'flex', justifyContent:'space-between', padding:'10px 14px', background:'var(--ink)', color:'var(--paper)'}}>
+              <span style={{fontWeight:600, fontSize:13}}>Total (AUD)</span>
+              <span className="mono" style={{fontWeight:700, color:'var(--ochre)'}}>
+                ${Number(o.total||0).toLocaleString('en-AU',{minimumFractionDigits:2})}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment history */}
+      <div>
+        <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:8, letterSpacing:'.08em'}}>PAYMENTS</div>
+        {(o.payments || []).length === 0 ? (
+          <p style={{fontSize:13, color:'var(--ink-2)'}}>No payments recorded yet.</p>
+        ) : (
+          <div style={{border:'1px solid var(--line)'}}>
+            {(o.payments || []).map((p, i) => (
+              <div key={i} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'9px 14px', borderBottom: i < o.payments.length - 1 ? '1px solid var(--line)' : 'none', fontSize:13}}>
+                <div>
+                  <span style={{fontWeight:600}}>${Number(p.amount).toLocaleString('en-AU',{minimumFractionDigits:2})} AUD</span>
+                  <span style={{color:'var(--ink-2)', marginLeft:10}}>{p.method}</span>
+                  {p.note && !/^Session /i.test(p.note) && <span style={{color:'var(--ink-3)', marginLeft:8}}>— {p.note}</span>}
+                </div>
+                <span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>{p.date}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {needsPayment && (
+          <div style={{marginTop:12, display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:10}}>
+            <span style={{fontSize:13, color:'var(--ink-2)'}}>Outstanding: <strong style={{color:'var(--ink)'}}>${outstanding.toFixed(2)} AUD</strong></span>
+            <button className="btn btn-rust btn-sm" onClick={() => onPay(o.id)} disabled={paying === o.id}>
+              {paying === o.id ? 'Redirecting…' : 'Pay Now →'}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Admin updates timeline */}
+      {(o.updates || []).length > 0 && (
+        <div>
+          <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:10, letterSpacing:'.08em'}}>ORDER UPDATES</div>
+          <div style={{display:'grid', gap:0, borderLeft:'2px solid var(--line)', paddingLeft:16}}>
+            {[...(o.updates || [])].reverse().map((u, i) => (
+              <div key={i} style={{paddingBottom:14, position:'relative'}}>
+                <div style={{position:'absolute', left:-21, top:4, width:8, height:8, borderRadius:'50%', background: UPDATE_TYPE_COLOR[u.type] || 'var(--ink-2)', border:'2px solid var(--paper)'}} />
+                <div style={{fontSize:11, fontWeight:600, color: UPDATE_TYPE_COLOR[u.type] || 'var(--ink-2)', marginBottom:2, textTransform:'uppercase', letterSpacing:'.06em'}}>
+                  {UPDATE_TYPE_LABEL[u.type] || u.type}
+                </div>
+                <div style={{fontSize:14, color:'var(--ink)'}}>{u.text}</div>
+                <div className="mono" style={{fontSize:11, color:'var(--ink-3)', marginTop:3}}>{u.date}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {dq.notes && (
+        <div>
+          <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:6, letterSpacing:'.08em'}}>NOTES FROM US</div>
+          <p style={{fontSize:13, color:'var(--ink-2)'}}>{dq.notes}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function OrdersTab({ highlightId }) {
   const [items, setItems] = useState(null);
+  const [expanded, setExpanded] = useState(null);
   const [paying, setPaying] = useState(null);
   const [payErr, setPayErr] = useState('');
   const paidOrderId = new URLSearchParams(window.location.search).get('paid');
 
   useEffect(() => {
-    api('/api/portal/orders').then(r => setItems(r.items || []));
-    if (paidOrderId) window.history.replaceState({}, '', '/orders');
+    api('/api/portal/orders').then(r => {
+      const orders = r.items || [];
+      setItems(orders);
+      if (paidOrderId) {
+        setExpanded(paidOrderId);
+        window.history.replaceState({}, '', '/orders');
+      } else if (highlightId) {
+        setExpanded(highlightId);
+      }
+    });
   }, []);
 
   async function handlePay(orderId) {
@@ -415,7 +571,7 @@ function OrdersTab({ highlightId }) {
 
   if (!items) return <LoadingSection />;
 
-  const FULFILMENT_LABEL = { pending:'Pending', packed:'Packed', shipped:'Shipped', fulfilled:'Delivered', refunded:'Refunded' };
+  const FULFILMENT_LABEL = { pending:'In progress', packed:'Packed', shipped:'Shipped', fulfilled:'Delivered', refunded:'Refunded' };
 
   return (
     <div className="page-section">
@@ -429,38 +585,30 @@ function OrdersTab({ highlightId }) {
         {items.length === 0
           ? <EmptyState icon="cart" message="No orders found for your account." />
           : items.map(o => {
-            const trackingUrl = o.trackingNumber ? `https://auspost.com.au/mypost/track/#/details/${encodeURIComponent(o.trackingNumber)}` : null;
-            const isNew = o.id === highlightId;
             const paid = (o.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
             const outstanding = o.total != null ? Math.max(0, Number(o.total) - paid) : null;
             const needsPayment = outstanding != null && outstanding > 0;
+            const isExpanded = expanded === o.id;
+            const isNew = o.id === highlightId || o.id === paidOrderId;
+            const hasUpdates = (o.updates || []).length > 0;
             return (
               <div key={o.id} className="card-paper" style={{padding:20, marginBottom:12, borderLeft: isNew ? '3px solid var(--eucalyptus)' : needsPayment ? '3px solid var(--rust)' : '3px solid transparent'}}>
-                <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:8}}>
-                  <div>
-                    <span className="mono" style={{fontSize:12, color:'var(--ink-2)'}}>{o.id}</span>
-                    {o.quoteRef && <span className="mono" style={{fontSize:11, color:'var(--ink-3)', marginLeft:10}}>from {o.quoteRef}</span>}
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:8, cursor:'pointer'}} onClick={() => setExpanded(isExpanded ? null : o.id)}>
+                  <div style={{flex:1, minWidth:0}}>
+                    <div style={{display:'flex', gap:10, alignItems:'center', flexWrap:'wrap'}}>
+                      <span className="mono" style={{fontSize:12, color:'var(--ink-2)'}}>{o.id}</span>
+                      {o.quoteRef && <span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>from {o.quoteRef}</span>}
+                      {hasUpdates && <span style={{fontSize:11, background:'var(--rust)', color:'#fff', padding:'1px 6px', borderRadius:10}}>{o.updates.length} update{o.updates.length !== 1 ? 's' : ''}</span>}
+                    </div>
                     <div style={{fontWeight:500, marginTop:4}}>{o.items || '—'}</div>
-                    <div style={{fontSize:13, color:'var(--ink-2)', marginTop:2}}>{fmtDate(o.date || o.createdAt)}{o.total != null ? ` · $${Number(o.total).toFixed(2)} AUD` : ''}</div>
+                    <div style={{fontSize:13, color:'var(--ink-2)', marginTop:2}}>{fmtDate(o.date || o.createdAt)}{o.total != null ? ` · $${Number(o.total).toLocaleString('en-AU',{minimumFractionDigits:2})} AUD` : ''}</div>
                   </div>
-                  <div style={{display:'flex', flexDirection:'column', alignItems:'flex-end', gap:6}}>
+                  <div style={{display:'flex', alignItems:'center', gap:10}}>
                     <StatusTag status={o.fulfilment || o.status || 'pending'} label={FULFILMENT_LABEL[o.fulfilment] || o.fulfilment} />
-                    {trackingUrl && (
-                      <a href={trackingUrl} target="_blank" rel="noreferrer"
-                        style={{fontSize:13, color:'var(--rust)', fontWeight:600, display:'flex', alignItems:'center', gap:4}}>
-                        Track with Australia Post ↗
-                      </a>
-                    )}
+                    <span style={{fontSize:16, color:'var(--ink-3)', userSelect:'none'}}>{isExpanded ? '▲' : '▼'}</span>
                   </div>
                 </div>
-                {needsPayment && (
-                  <div style={{marginTop:14, paddingTop:14, borderTop:'1px solid var(--line)', display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:10}}>
-                    <span style={{fontSize:13, color:'var(--ink-2)'}}>Amount due: <strong style={{color:'var(--ink)'}}>${outstanding.toFixed(2)} AUD</strong></span>
-                    <button className="btn btn-rust btn-sm" onClick={() => handlePay(o.id)} disabled={paying === o.id}>
-                      {paying === o.id ? 'Redirecting…' : 'Pay Now →'}
-                    </button>
-                  </div>
-                )}
+                {isExpanded && <OrderDetail o={o} onPay={handlePay} paying={paying} />}
               </div>
             );
           })

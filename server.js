@@ -3391,10 +3391,17 @@ const portalServer = http.createServer(async (req, res) => {
     const sessionEmail = portalUser ? String(portalUser.email || '').toLowerCase() : '';
     if (!sessionEmail) return json(res, 200, { items: [] });
     const orders = readOrders();
-    const matched = orders.filter(o => {
-      const email = String(o.email || '').toLowerCase();
-      return email && email === sessionEmail;
-    });
+    const quotes = readQuotes();
+    const matched = orders
+      .filter(o => {
+        const email = String(o.email || '').toLowerCase();
+        return email && email === sessionEmail;
+      })
+      .map(o => {
+        const srcQuote = o.sourceQuoteId ? quotes.find(q => q.id === o.sourceQuoteId) : null;
+        const dq = srcQuote?.draftQuote || null;
+        return { ...o, draftQuote: dq };
+      });
     return json(res, 200, { items: matched });
   }
 
