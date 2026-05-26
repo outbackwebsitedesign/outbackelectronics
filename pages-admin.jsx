@@ -2147,13 +2147,58 @@ function SoftwareFileRow({ file, onDelete, onUpdate }) {
   );
 }
 
+// Chunked upload helper — splits file into 20 MB slices, uploads one at a time.
+// Calls onProgress(0..1) after each chunk. Returns the finalize response.
+async function uploadSoftwareFile(file, onProgress) {
+  const CHUNK_SIZE = 20 * 1024 * 1024; // 20 MB raw per chunk
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE) || 1;
+  // Generate a random upload ID safe for use as a directory name
+  const uploadId = 'up' + Date.now() + Math.random().toString(36).slice(2, 10);
+
+  const abort = () => fetch('/api/admin/software/upload/abort', {
+    method:'POST', headers:postHeaders(), credentials:'include',
+    body: JSON.stringify({ uploadId }),
+  }).catch(()=>null);
+
+  for (let i = 0; i < totalChunks; i++) {
+    const slice = file.slice(i * CHUNK_SIZE, Math.min((i + 1) * CHUNK_SIZE, file.size));
+    const dataUri = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(slice);
+    });
+    const r = await fetch('/api/admin/software/upload/chunk', {
+      method:'POST', headers:postHeaders(), credentials:'include',
+      body: JSON.stringify({ uploadId, chunkIndex: i, totalChunks, filename: file.name, data: dataUri }),
+    });
+    if (!r.ok) {
+      const d = await r.json().catch(()=>({}));
+      await abort();
+      throw Object.assign(new Error('chunk_failed'), { apiError: d.error });
+    }
+    onProgress((i + 1) / totalChunks);
+  }
+
+  const r = await fetch('/api/admin/software/upload/finalize', {
+    method:'POST', headers:postHeaders(), credentials:'include',
+    body: JSON.stringify({ uploadId, filename: file.name, totalChunks }),
+  });
+  if (!r.ok) {
+    const d = await r.json().catch(()=>({}));
+    await abort();
+    throw Object.assign(new Error('finalize_failed'), { apiError: d.error, apiData: d });
+  }
+  return r.json();
+}
+
 function AdminSoftware() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [edit, setEdit] = useState(null);
   const [form, setForm] = useState({});
-  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(null); // null = idle, 0-100 = uploading
   const [uploadErr, setUploadErr] = useState('');
   const fileInputRef = React.useRef(null);
 
@@ -2161,6 +2206,7 @@ function AdminSoftware() {
     setEdit(i);
     setForm(i==='new' ? { license:'OSS · MIT', live:true, files:[] } : { ...rows[i], files: rows[i].files||[] });
     setUploadErr('');
+    setUploadProgress(null);
   };
 
   useEffect(() => {
@@ -2186,34 +2232,15 @@ function AdminSoftware() {
     if (fileInputRef.current) fileInputRef.current.value = '';
     if (!file) return;
     setUploadErr('');
-    setUploading(true);
+    setUploadProgress(0);
     try {
-      const MAX_MB = 160;
-      if (file.size > MAX_MB * 1024 * 1024) {
-        setUploadErr(`File too large — maximum ${MAX_MB} MB.`);
-        setUploading(false);
+      const MAX_GB = 10;
+      if (file.size > MAX_GB * 1024 * 1024 * 1024) {
+        setUploadErr(`File too large — maximum ${MAX_GB} GB.`);
+        setUploadProgress(null);
         return;
       }
-      const dataUri = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      const r = await fetch('/api/admin/software/upload', {
-        method:'POST', headers:postHeaders(), credentials:'include',
-        body: JSON.stringify({ data: dataUri, filename: file.name }),
-      });
-      if (!r.ok) {
-        const d = await r.json().catch(()=>({}));
-        setUploadErr(
-          d.error === 'file_too_large' ? `File too large (max ${d.maxMB||160} MB).` :
-          d.error === 'unsupported_file_type' ? 'Unsupported file type.' : 'Upload failed.'
-        );
-        setUploading(false);
-        return;
-      }
-      const d = await r.json();
+      const d = await uploadSoftwareFile(file, p => setUploadProgress(Math.round(p * 100)));
       const newFile = {
         id: 'f-' + Date.now(),
         label: '', version: '', platform: 'other',
@@ -2221,8 +2248,16 @@ function AdminSoftware() {
         originalName: d.originalName, size: d.size,
       };
       setForm(f => ({ ...f, files: [...(f.files||[]), newFile] }));
-    } catch { setUploadErr('Upload failed. Please try again.'); }
-    setUploading(false);
+    } catch (err) {
+      const ae = err.apiError;
+      setUploadErr(
+        ae === 'file_too_large' ? `File too large (max ${err.apiData?.maxGB||10} GB).` :
+        ae === 'unsupported_file_type' ? 'Unsupported file type.' :
+        ae === 'missing_chunk' ? 'Upload incomplete — please try again.' :
+        'Upload failed. Please try again.'
+      );
+    }
+    setUploadProgress(null);
   };
 
   const deleteFile = async (file) => {
@@ -2286,11 +2321,10 @@ function AdminSoftware() {
             <div className="row-flex" style={{justifyContent:'space-between', alignItems:'center', marginBottom:10}}>
               <span className="label" style={{margin:0}}>Installation Files</span>
               <div className="row-flex" style={{gap:8, alignItems:'center'}}>
-                {uploading && <span style={{fontSize:12, color:'var(--ink-2)'}}>Uploading…</span>}
                 <button
                   className="btn btn-ghost btn-sm"
                   style={{fontSize:12}}
-                  disabled={uploading}
+                  disabled={uploadProgress !== null}
                   onClick={()=>fileInputRef.current&&fileInputRef.current.click()}
                 >+ Upload file</button>
                 <input
@@ -2302,8 +2336,19 @@ function AdminSoftware() {
                 />
               </div>
             </div>
+            {uploadProgress !== null && (
+              <div style={{marginBottom:10}}>
+                <div className="row-flex" style={{justifyContent:'space-between', fontSize:12, color:'var(--ink-2)', marginBottom:4}}>
+                  <span>Uploading…</span>
+                  <span>{uploadProgress}%</span>
+                </div>
+                <div style={{background:'var(--border)', borderRadius:4, height:6, overflow:'hidden'}}>
+                  <div style={{background:'var(--rust)', height:'100%', width:`${uploadProgress}%`, transition:'width 0.2s ease'}}/>
+                </div>
+              </div>
+            )}
             {uploadErr && <div style={{fontSize:12, color:'var(--rust)', marginBottom:8}}>{uploadErr}</div>}
-            {(form.files||[]).length === 0 && !uploading && (
+            {(form.files||[]).length === 0 && uploadProgress === null && (
               <div style={{fontSize:12, color:'var(--ink-2)', padding:'12px 0', textAlign:'center', border:'1px dashed var(--border)', borderRadius:6}}>
                 No files yet — upload an installer, binary, or archive above.
               </div>
@@ -2312,7 +2357,7 @@ function AdminSoftware() {
               <SoftwareFileRow key={f.id} file={f} onDelete={deleteFile} onUpdate={updateFile} />
             ))}
             <div style={{fontSize:11, color:'var(--ink-2)', marginTop:6}}>
-              Supported: .zip .tar.gz .iso .apk .exe .msi .deb .rpm .dmg .appimage &mdash; max 160 MB per file
+              Supported: .zip .tar.gz .iso .apk .exe .msi .deb .rpm .dmg .appimage &mdash; max 10 GB per file
             </div>
           </div>
 

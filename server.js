@@ -23,6 +23,7 @@ const PUBLIC_RATE_LIMITS = { checkout: 20, 'quote/request': 5, 'contact/quick-me
 
 fs.mkdirSync(path.join(__dirname, 'assets/uploads'), { recursive: true });
 fs.mkdirSync(path.join(__dirname, 'assets/uploads/software'), { recursive: true });
+fs.mkdirSync(path.join(__dirname, 'assets/uploads/software/.chunks'), { recursive: true });
 
 const STRIPE_SECRET_KEY       = process.env.STRIPE_SECRET_KEY       || '';
 const STRIPE_WEBHOOK_SECRET   = process.env.STRIPE_WEBHOOK_SECRET   || '';
@@ -2927,64 +2928,112 @@ const adminServer = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true });
   }
 
-  // ---- Software binary file upload ----------------------------------------
-  if (req.method === 'POST' && url.pathname === '/api/admin/software/upload') {
-    const session = requireRole(req, res, 'manager'); if (!session) return;
-    // 220 MB raw body cap (covers ~160 MB file as base64 + JSON wrapper)
-    let body; try { body = await readJson(req, 220e6); } catch { return json(res, 400, { error: 'invalid_json' }); }
-    try {
-      const ALLOWED_MIME = new Set([
-        'application/zip', 'application/x-zip-compressed', 'application/x-zip',
-        'application/x-iso9660-image',
-        'application/vnd.android.package-archive',
-        'application/x-msdownload', 'application/x-msdos-program', 'application/x-dosexec',
-        'application/x-debian-package',
-        'application/x-rpm',
-        'application/x-tar', 'application/gzip', 'application/x-gzip',
-        'application/x-bzip2', 'application/x-xz', 'application/x-7z-compressed',
-        'application/x-apple-diskimage',
-        'application/octet-stream',
-      ]);
-      const ALLOWED_EXT = new Set([
-        '.zip', '.gz', '.tgz', '.bz2', '.xz', '.7z',
-        '.iso', '.img',
-        '.apk', '.aab',
-        '.exe', '.msi',
-        '.deb', '.rpm',
-        '.dmg', '.pkg',
-        '.appimage', '.run', '.sh',
-        '.tar',
-      ]);
-      const MAX_BYTES = 160 * 1024 * 1024; // 160 MB file limit
+  // ---- Software binary file upload (chunked, supports up to 10 GB) ----------
+  // Allowed extensions/MIME for software files (shared by chunk + finalize)
+  const SW_ALLOWED_EXT = new Set([
+    '.zip', '.gz', '.tgz', '.bz2', '.xz', '.7z',
+    '.iso', '.img',
+    '.apk', '.aab',
+    '.exe', '.msi',
+    '.deb', '.rpm',
+    '.dmg', '.pkg',
+    '.appimage', '.run', '.sh',
+    '.tar',
+  ]);
+  // uploadId must be safe to use as a directory name
+  const validUploadId = id => typeof id === 'string' && /^[a-zA-Z0-9_-]{8,64}$/.test(id);
+  const swChunksRoot = path.join(__dirname, 'assets/uploads/software/.chunks');
 
-      const dataUri = body.data || '';
+  // POST /api/admin/software/upload/chunk
+  // Body: { uploadId, chunkIndex, totalChunks, filename, data (base64 data-URI of slice) }
+  // Each chunk is up to 20 MB raw → ~27 MB base64. readJson cap: 30 MB.
+  if (req.method === 'POST' && url.pathname === '/api/admin/software/upload/chunk') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req, 30e6); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    try {
+      const { uploadId, chunkIndex, totalChunks, filename, data } = body;
+      if (!validUploadId(uploadId)) return json(res, 400, { error: 'invalid_upload_id' });
+      if (!Number.isInteger(chunkIndex) || chunkIndex < 0) return json(res, 400, { error: 'invalid_chunk_index' });
+      if (!Number.isInteger(totalChunks) || totalChunks < 1 || totalChunks > 550) return json(res, 400, { error: 'invalid_total_chunks' }); // 550 × 20 MB ≈ 11 GB max
+      const origName = (filename || 'file').replace(/[^a-zA-Z0-9._-]/g, '_');
+      const ext = origName.includes('.tar.') ? '.' + origName.split('.').slice(-2).join('.') : path.extname(origName).toLowerCase();
+      if (!SW_ALLOWED_EXT.has(ext)) return json(res, 400, { error: 'unsupported_file_type' });
+
+      const dataUri = data || '';
       const mimeMatch = dataUri.match(/^data:([^;]+);base64,/);
       if (!mimeMatch) return json(res, 400, { error: 'invalid_data_uri' });
-      const mime = mimeMatch[1].toLowerCase();
-
-      const origName = (body.filename || 'file').replace(/[^a-zA-Z0-9._-]/g, '_');
-      const extFull = origName.includes('.tar.')
-        ? '.' + origName.split('.').slice(-2).join('.')  // .tar.gz etc.
-        : path.extname(origName).toLowerCase();
-      if (!ALLOWED_EXT.has(extFull) && !ALLOWED_MIME.has(mime)) {
-        return json(res, 400, { error: 'unsupported_file_type' });
-      }
-
       const raw = dataUri.slice(mimeMatch[0].length);
       const buf = Buffer.from(raw, 'base64');
-      if (buf.length > MAX_BYTES) return json(res, 400, { error: 'file_too_large', maxMB: 160 });
+      if (buf.length > 21 * 1024 * 1024) return json(res, 400, { error: 'chunk_too_large' });
 
-      const safeFilename = Date.now() + '-' + origName;
+      const chunkDir = path.join(swChunksRoot, uploadId);
+      fs.mkdirSync(chunkDir, { recursive: true });
+      fs.writeFileSync(path.join(chunkDir, String(chunkIndex).padStart(6, '0')), buf);
+      return json(res, 200, { ok: true, chunk: chunkIndex });
+    } catch { return json(res, 500, { error: 'chunk_failed' }); }
+  }
+
+  // POST /api/admin/software/upload/finalize
+  // Body: { uploadId, filename, totalChunks }
+  // Assembles chunks → assets/uploads/software/{timestamp}-{filename}
+  if (req.method === 'POST' && url.pathname === '/api/admin/software/upload/finalize') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    try {
+      const { uploadId, filename, totalChunks } = body;
+      if (!validUploadId(uploadId)) return json(res, 400, { error: 'invalid_upload_id' });
+      if (!Number.isInteger(totalChunks) || totalChunks < 1 || totalChunks > 550) return json(res, 400, { error: 'invalid_total_chunks' });
+      const origName = (filename || 'file').replace(/[^a-zA-Z0-9._-]/g, '_');
+      const ext = origName.includes('.tar.') ? '.' + origName.split('.').slice(-2).join('.') : path.extname(origName).toLowerCase();
+      if (!SW_ALLOWED_EXT.has(ext)) return json(res, 400, { error: 'unsupported_file_type' });
+
+      const chunkDir = path.join(swChunksRoot, uploadId);
+      // Verify all chunks are present and measure total size
+      let totalSize = 0;
+      for (let i = 0; i < totalChunks; i++) {
+        const cf = path.join(chunkDir, String(i).padStart(6, '0'));
+        let stat; try { stat = fs.statSync(cf); } catch { return json(res, 400, { error: 'missing_chunk', chunk: i }); }
+        totalSize += stat.size;
+      }
+      const MAX_BYTES = 10 * 1024 * 1024 * 1024; // 10 GB
+      if (totalSize > MAX_BYTES) {
+        try { fs.rmSync(chunkDir, { recursive: true, force: true }); } catch {}
+        return json(res, 400, { error: 'file_too_large', maxGB: 10 });
+      }
+
       fs.mkdirSync(path.join(__dirname, 'assets/uploads/software'), { recursive: true });
-      fs.writeFileSync(path.join(__dirname, 'assets/uploads/software', safeFilename), buf);
-      return json(res, 200, {
-        ok: true,
-        url: '/assets/uploads/software/' + safeFilename,
-        filename: safeFilename,
-        originalName: origName,
-        size: buf.length,
+      const safeFilename = Date.now() + '-' + origName;
+      const outPath = path.join(__dirname, 'assets/uploads/software', safeFilename);
+      // Stream chunks to final file without loading everything into memory at once
+      const outStream = fs.createWriteStream(outPath);
+      await new Promise((resolve, reject) => {
+        let i = 0;
+        const writeNext = () => {
+          if (i >= totalChunks) { outStream.end(); return; }
+          const cf = path.join(chunkDir, String(i++).padStart(6, '0'));
+          const chunk = fs.readFileSync(cf);
+          if (!outStream.write(chunk)) { outStream.once('drain', writeNext); } else { writeNext(); }
+        };
+        outStream.on('finish', resolve);
+        outStream.on('error', reject);
+        writeNext();
       });
-    } catch { return json(res, 500, { error: 'upload_failed' }); }
+      // Remove temp chunks
+      try { fs.rmSync(chunkDir, { recursive: true, force: true }); } catch {}
+      return json(res, 200, { ok: true, url: '/assets/uploads/software/' + safeFilename, filename: safeFilename, originalName: origName, size: totalSize });
+    } catch { return json(res, 500, { error: 'finalize_failed' }); }
+  }
+
+  // POST /api/admin/software/upload/abort
+  // Body: { uploadId } — cleans up temp chunks for a failed/cancelled upload
+  if (req.method === 'POST' && url.pathname === '/api/admin/software/upload/abort') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const { uploadId } = body;
+    if (!validUploadId(uploadId)) return json(res, 400, { error: 'invalid_upload_id' });
+    const chunkDir = path.join(swChunksRoot, uploadId);
+    try { fs.rmSync(chunkDir, { recursive: true, force: true }); } catch {}
+    return json(res, 200, { ok: true });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/admin/software/upload/delete') {
