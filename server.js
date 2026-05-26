@@ -1930,7 +1930,6 @@ const mainServer = http.createServer(async (req, res) => {
         const staffTmpl = emailStaffNewOrder({ orderId: order.id, customerName: details.name || details.email, amountAud: order.total, items: order.items });
         sendEmail({ to: getNotifyEmail(), ...staffTmpl });
       }
-      }
     }
 
     return json(res, 200, { received: true });
