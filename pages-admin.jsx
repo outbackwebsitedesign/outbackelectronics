@@ -2086,7 +2086,58 @@ function AdminServices() {
 // ============================================================
 // SOFTWARE
 // ============================================================
-const SW_PLATFORM_ICONS = { windows:'🪟', macos:'🍎', linux:'🐧', android:'🤖', cross:'🌐', other:'📦' };
+function PlatformIcon({ platform, size = 14 }) {
+  const s = { width: size, height: size, fill: 'none', stroke: 'currentColor', strokeWidth: 2, verticalAlign: 'middle', flexShrink: 0 };
+  const vb = '0 0 24 24';
+  switch (platform) {
+    case 'windows': return (
+      // Four-pane Windows flag
+      <svg style={s} viewBox={vb}>
+        <rect x="2" y="2" width="9" height="9"/><rect x="13" y="2" width="9" height="9"/>
+        <rect x="2" y="13" width="9" height="9"/><rect x="13" y="13" width="9" height="9"/>
+      </svg>
+    );
+    case 'macos': return (
+      // macOS command ⌘ key
+      <svg style={s} viewBox={vb}>
+        <path d="M18 3a3 3 0 00-3 3v12a3 3 0 003 3 3 3 0 003-3 3 3 0 00-3-3H6a3 3 0 00-3 3 3 3 0 003 3 3 3 0 003-3V6a3 3 0 00-3-3 3 3 0 00-3 3 3 3 0 003 3h12a3 3 0 003-3 3 3 0 00-3-3z"/>
+      </svg>
+    );
+    case 'linux': return (
+      // Terminal prompt  >_
+      <svg style={s} viewBox={vb}>
+        <rect x="2" y="3" width="20" height="18" rx="2"/>
+        <polyline points="8 10 12 14 8 18"/>
+        <line x1="14" y1="18" x2="20" y2="18"/>
+      </svg>
+    );
+    case 'android': return (
+      // Simple Android robot head + antennas
+      <svg style={s} viewBox={vb}>
+        <path d="M7 8C7 5.8 9.2 4 12 4s5 1.8 5 4"/>
+        <rect x="5" y="8" width="14" height="11" rx="2"/>
+        <line x1="9" y1="4" x2="7" y2="2"/><line x1="15" y1="4" x2="17" y2="2"/>
+        <line x1="9" y1="14" x2="9" y2="16"/><line x1="15" y1="14" x2="15" y2="16"/>
+      </svg>
+    );
+    case 'cross': return (
+      // Globe — cross-platform
+      <svg style={s} viewBox={vb}>
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="2" y1="12" x2="22" y2="12"/>
+        <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/>
+      </svg>
+    );
+    default: return (
+      // Package box — other / all
+      <svg style={s} viewBox={vb}>
+        <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+        <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+        <line x1="12" y1="22.08" x2="12" y2="12"/>
+      </svg>
+    );
+  }
+}
 
 function SoftwareFileRow({ file, onDelete, onUpdate }) {
   const [editing, setEditing] = React.useState(false);
@@ -2129,7 +2180,7 @@ function SoftwareFileRow({ file, onDelete, onUpdate }) {
         <div className="row-flex" style={{justifyContent:'space-between', alignItems:'center', gap:8}}>
           <div style={{minWidth:0}}>
             <div className="row-flex" style={{gap:6, alignItems:'center', flexWrap:'wrap'}}>
-              <span style={{fontSize:14}}>{SW_PLATFORM_ICONS[file.platform]||'📦'}</span>
+              <PlatformIcon platform={file.platform} size={15}/>
               <span style={{fontWeight:600, fontSize:13}}>{file.label || file.originalName}</span>
               {file.version && <span className="tag tag-outline" style={{fontSize:11}}>{file.version}</span>}
               {file.size > 0 && <span style={{fontSize:11, color:'var(--ink-2)'}}>{fmtSize(file.size)}</span>}
