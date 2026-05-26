@@ -118,9 +118,12 @@ function LoginPage({ onLogin }) {
 }
 
 function RegisterForm({ onLogin, onBack }) {
-  const [username, setUsername] = useState('');
-  const [displayName, setDisplayName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -128,7 +131,7 @@ function RegisterForm({ onLogin, onBack }) {
   async function handleRegister(e) {
     e.preventDefault();
     setError(''); setBusy(true);
-    const r = await api('/api/portal/auth/register', { method: 'POST', body: JSON.stringify({ username, displayName, email, password }) });
+    const r = await api('/api/portal/auth/register', { method: 'POST', body: JSON.stringify({ firstName, lastName, email, phone, address, username, password }) });
     setBusy(false);
     if (r.ok) { onLogin(r.user); }
     else { setError(r.message || 'Registration failed.'); }
@@ -139,21 +142,37 @@ function RegisterForm({ onLogin, onBack }) {
       <h2 style={{fontFamily:'Instrument Serif, serif', fontWeight:400, fontSize:28, marginBottom:20}}>Create account</h2>
       {error && <div className="alert alert-error">{error}</div>}
       <form onSubmit={handleRegister}>
-        <label className="field">
-          <span className="label">Username</span>
-          <input className="input" type="text" value={username} onChange={e => setUsername(e.target.value)} required />
-        </label>
-        <label className="field">
-          <span className="label">Display name (optional)</span>
-          <input className="input" type="text" value={displayName} onChange={e => setDisplayName(e.target.value)} />
-        </label>
+        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12}}>
+          <label className="field">
+            <span className="label">First name</span>
+            <input className="input" type="text" value={firstName} autoComplete="given-name" onChange={e => setFirstName(e.target.value)} required />
+          </label>
+          <label className="field">
+            <span className="label">Last name</span>
+            <input className="input" type="text" value={lastName} autoComplete="family-name" onChange={e => setLastName(e.target.value)} required />
+          </label>
+        </div>
         <label className="field">
           <span className="label">Email address</span>
-          <input className="input" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
+          <input className="input" type="email" value={email} autoComplete="email" onChange={e => setEmail(e.target.value)} required />
+        </label>
+        <label className="field">
+          <span className="label">Phone number</span>
+          <input className="input" type="tel" value={phone} autoComplete="tel" onChange={e => setPhone(e.target.value)} />
+        </label>
+        <label className="field">
+          <span className="label">Address</span>
+          <input className="input" type="text" value={address} autoComplete="street-address" onChange={e => setAddress(e.target.value)} />
+        </label>
+        <label className="field">
+          <span className="label">Username</span>
+          <input className="input" type="text" value={username} autoComplete="username" onChange={e => setUsername(e.target.value)} required />
+          <span style={{fontSize:11, color:'var(--ink-3)', marginTop:3, display:'block'}}>3–30 characters, letters, numbers and underscores</span>
         </label>
         <label className="field">
           <span className="label">Password</span>
-          <input className="input" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+          <input className="input" type="password" value={password} autoComplete="new-password" onChange={e => setPassword(e.target.value)} required />
+          <span style={{fontSize:11, color:'var(--ink-3)', marginTop:3, display:'block'}}>Minimum 8 characters</span>
         </label>
         <button className="btn btn-rust" type="submit" disabled={busy} style={{width:'100%', justifyContent:'center', marginTop:4}}>
           {busy ? 'Creating account…' : 'Create account →'}

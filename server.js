@@ -3515,7 +3515,11 @@ const adminServer = http.createServer(async (req, res) => {
 
 // ── Portal server (8083) ──────────────────────────────────────────────────────
 
-const PORTAL_CORS_ORIGIN = process.env.SITE_URL || `http://localhost:${MAIN_PORT}`;
+const PORTAL_CORS_ORIGINS = new Set([
+  process.env.SITE_URL || `http://localhost:${MAIN_PORT}`,
+  FORUM_URL,
+  GAMES_URL,
+].filter(Boolean));
 
 const portalServer = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
@@ -3525,7 +3529,10 @@ const portalServer = http.createServer(async (req, res) => {
   // CORS for cross-origin endpoints (portal runs on a different port/origin)
   const crossOriginPaths = ['/api/portal/auth/logout', '/api/portal/auth/me', '/api/csrf-token'];
   if (crossOriginPaths.includes(url.pathname) || url.pathname.startsWith('/api/portal/')) {
-    res.setHeader('Access-Control-Allow-Origin', PORTAL_CORS_ORIGIN);
+    const reqOrigin = req.headers['origin'] || '';
+    const allowedOrigin = PORTAL_CORS_ORIGINS.has(reqOrigin) ? reqOrigin : [...PORTAL_CORS_ORIGINS][0];
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+    res.setHeader('Vary', 'Origin');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-CSRF-Token');
@@ -3581,18 +3588,23 @@ const portalServer = http.createServer(async (req, res) => {
     if (!body || typeof body !== 'object') return json(res, 422, { error: 'invalid_payload', message: 'Payload must be a JSON object.' });
     const username = typeof body.username === 'string' ? body.username : '';
     const password = typeof body.password === 'string' ? body.password : '';
-    const displayName = typeof body.displayName === 'string' ? body.displayName.trim() : '';
+    const firstName = typeof body.firstName === 'string' ? body.firstName.trim() : '';
+    const lastName = typeof body.lastName === 'string' ? body.lastName.trim() : '';
+    const phone = typeof body.phone === 'string' ? body.phone.trim() : '';
+    const address = typeof body.address === 'string' ? body.address.trim() : '';
+    if (!firstName) return json(res, 422, { error: 'invalid_payload', message: 'First name is required.' });
+    if (!lastName) return json(res, 422, { error: 'invalid_payload', message: 'Last name is required.' });
     if (!/^[a-zA-Z0-9_]{3,30}$/.test(username)) return json(res, 422, { error: 'invalid_payload', message: 'Username must be 3–30 characters, letters, numbers and underscores only.' });
     if (password.length < 8) return json(res, 422, { error: 'invalid_payload', message: 'Password must be at least 8 characters.' });
-    const resolvedDisplayName = displayName || username;
-    if (resolvedDisplayName.length > 50) return json(res, 422, { error: 'invalid_payload', message: 'Display name must be 50 characters or fewer.' });
+    const resolvedDisplayName = `${firstName} ${lastName}`.trim();
     const forum = readForum();
     if (!Array.isArray(forum.users)) forum.users = [];
     if (forum.users.find(u => u.username && u.username.toLowerCase() === username.toLowerCase())) {
       return json(res, 409, { error: 'username_taken', message: 'That username is already taken.' });
     }
     const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
-    const user = { id: 'U-' + Date.now(), username, displayName: resolvedDisplayName, email, passwordHash: hashPassword(password), createdAt: new Date().toISOString() };
+    if (!email) return json(res, 422, { error: 'invalid_payload', message: 'Email address is required.' });
+    const user = { id: 'U-' + Date.now(), username, firstName, lastName, displayName: resolvedDisplayName, email, phone, address, passwordHash: hashPassword(password), createdAt: new Date().toISOString() };
     forum.users.push(user);
     writeForum(forum);
     const sid = randomId();
@@ -3987,6 +3999,10 @@ const gamesServer = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
   if (checkMaintenance(req, res, url)) return;
+
+  if (req.method === 'GET' && url.pathname === '/api/config') {
+    return json(res, 200, { portalUrl: PORTAL_URL });
+  }
 
   return serveStatic(req, res, url.pathname, '/dist/games.html', null);
 });
