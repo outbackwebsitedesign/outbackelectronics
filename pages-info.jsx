@@ -442,7 +442,10 @@ function PoliciesPage() {
 // WARRANTY REGISTRATION
 // ============================================================
 function WarrantyRegisterPage({ go }) {
-  const [form, setForm] = useState({ name: '', email: '', orderId: '', receivedDate: '', notes: '' });
+  const [form, setForm] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return { name: '', email: '', orderId: params.get('orderId') || '', receivedDate: '', notes: '' };
+  });
   const update = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const [looking, setLooking] = useState(false);
@@ -472,6 +475,12 @@ function WarrantyRegisterPage({ go }) {
       setLooking(false);
     }
   };
+
+  // Auto-lookup if orderId was pre-filled from QR code / email link
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('orderId')) lookupOrder();
+  }, []);
 
   const resetForm = () => {
     setForm({ name: '', email: '', orderId: '', receivedDate: '', notes: '' });

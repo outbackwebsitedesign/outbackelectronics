@@ -1019,6 +1019,64 @@ function emailQuoteFormal({ quoteRef, customerName, validDays, hardwareItems, pc
   };
 }
 
+function emailQuoteAccepted({ orderId, quoteRef, customerName, grandTotal }) {
+  const name = customerName ? customerName.split(' ')[0] : '';
+  return {
+    subject: `Order confirmed — ${orderId}`,
+    html: emailHtml('Your order is confirmed.', `
+      <p>Hi${name ? ` ${escHtml(name)}` : ''},</p>
+      <p>Thanks for accepting your quote — your order is now confirmed and we're getting started.</p>
+      <div class="detail">
+        <dt>ORDER ID</dt><dd>${escHtml(orderId)}</dd>
+        <dt>QUOTE REFERENCE</dt><dd>${escHtml(quoteRef)}</dd>
+        <dt>TOTAL</dt><dd>$${Number(grandTotal||0).toLocaleString('en-AU',{minimumFractionDigits:2})} AUD</dd>
+      </div>
+      <p>We'll keep you updated as your build progresses. You can track your order in the customer portal at any time.</p>
+      <a class="btn" href="${getSiteUrl()}/portal">View in portal →</a>
+    `),
+  };
+}
+
+function emailStaffQuoteAccepted({ orderId, quoteRef, name, email, grandTotal }) {
+  return {
+    subject: `[ORDER] Quote accepted — ${quoteRef} → ${orderId}`,
+    html: emailHtml('Quote accepted — new order created', `
+      <div class="detail">
+        <dt>ORDER ID</dt><dd>${escHtml(orderId)}</dd>
+        <dt>QUOTE REFERENCE</dt><dd>${escHtml(quoteRef)}</dd>
+        <dt>CUSTOMER</dt><dd>${escHtml(name)} &lt;${escHtml(email)}&gt;</dd>
+        <dt>TOTAL</dt><dd>$${Number(grandTotal||0).toLocaleString('en-AU',{minimumFractionDigits:2})} AUD</dd>
+      </div>
+    `),
+  };
+}
+
+function emailOrderShipped({ orderId, customerName, trackingNumber }) {
+  const name = customerName ? customerName.split(' ')[0] : '';
+  const trackingUrl = `https://auspost.com.au/mypost/track/#/details/${encodeURIComponent(trackingNumber)}`;
+  const registerUrl = `${getSiteUrl()}/register?orderId=${encodeURIComponent(orderId)}`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(registerUrl)}`;
+  return {
+    subject: `Your order has shipped — ${orderId}`,
+    html: emailHtml("Your order is on its way!", `
+      <p>Hi${name ? ` ${escHtml(name)}` : ''},</p>
+      <p>Great news — your order has been shipped via Australia Post.</p>
+      <div class="detail">
+        <dt>ORDER ID</dt><dd>${escHtml(orderId)}</dd>
+        <dt>TRACKING NUMBER</dt><dd>${escHtml(trackingNumber)}</dd>
+      </div>
+      <a class="btn" href="${escHtml(trackingUrl)}">Track your parcel →</a>
+      <p style="margin-top:24px;font-size:13px;font-weight:600;">Register your build for warranty</p>
+      <p style="font-size:13px;color:#5a4f40;margin-bottom:12px;">Once your order arrives, scan the QR code below or click the link to register your custom PC for warranty.</p>
+      <div style="text-align:center;margin:16px 0;">
+        <img src="${qrUrl}" alt="Warranty registration QR code" width="160" height="160" style="display:block;margin:0 auto 12px;" />
+        <a href="${escHtml(registerUrl)}" style="font-family:monospace;font-size:12px;color:#1f88f5;word-break:break-all;">${escHtml(registerUrl)}</a>
+      </div>
+      <p style="margin-top:16px;font-size:12px;color:#8b7e69">For delivery issues contact Australia Post with your tracking number. For any issues with the build itself, reply to this email.</p>
+    `),
+  };
+}
+
 function emailRepairUpdate({ repairId, customerName, status, notes }) {
   const messages = {
     'In Progress': 'Your repair is now being worked on by our technicians.',
@@ -2731,8 +2789,14 @@ const adminServer = http.createServer(async (req, res) => {
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     const orders = readOrders();
     const idx = orders.findIndex(o => o.id && o.id === body.id);
+    const existing = idx >= 0 ? orders[idx] : null;
     if (idx >= 0) { orders[idx] = body; } else { body.id = 'ord-' + Date.now(); orders.push(body); }
     writeOrders(orders);
+    const justShipped = body.fulfilment === 'shipped' && existing && existing.fulfilment !== 'shipped';
+    if (justShipped && body.trackingNumber && body.email) {
+      const tmpl = emailOrderShipped({ orderId: body.id, customerName: body.cust, trackingNumber: body.trackingNumber });
+      sendEmail({ to: body.email, ...tmpl });
+    }
     return json(res, 200, { ok: true, item: body });
   }
   if (req.method === 'POST' && url.pathname === '/api/admin/orders/delete') {
@@ -3371,6 +3435,45 @@ const portalServer = http.createServer(async (req, res) => {
     const staffTmpl = emailStaffNewQuote({ quoteId: quote.id, name: quote.name, email: quote.email, description: quote.description });
     sendEmail({ to: getNotifyEmail(), ...staffTmpl });
     return json(res, 201, { ok: true, item: quote });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/portal/quotes/accept') {
+    const session = getPortalSession(req);
+    if (!session) return json(res, 401, { error: 'login_required' });
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    if (!body.quoteId) return json(res, 400, { error: 'quote_id_required' });
+    const forumDb = readForum();
+    const portalUser = Array.isArray(forumDb.users) ? forumDb.users.find(u => u.id === session.id) : null;
+    const sessionEmail = portalUser ? String(portalUser.email || '').toLowerCase() : '';
+    const quotes = readQuotes();
+    const qIdx = quotes.findIndex(q => q.id === body.quoteId && String(q.email || '').toLowerCase() === sessionEmail);
+    if (qIdx < 0) return json(res, 404, { error: 'quote_not_found' });
+    const quote = quotes[qIdx];
+    if (quote.status !== 'quoted') return json(res, 409, { error: 'quote_not_actionable', message: 'This quote has already been accepted or is not ready for acceptance.' });
+    const dq = quote.draftQuote || {};
+    const now = new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
+    const order = {
+      id: 'ord-' + Date.now(),
+      cust: quote.name,
+      email: quote.email,
+      items: quote.summary || quote.quoteRef || quote.description || 'Custom build',
+      date: now,
+      total: dq.grandTotal || 0,
+      fulfilment: 'pending',
+      payments: [],
+      sourceQuoteId: quote.id,
+      quoteRef: quote.quoteRef || '',
+    };
+    const orders = readOrders();
+    orders.push(order);
+    writeOrders(orders);
+    quotes[qIdx] = { ...quote, status: 'accepted', orderId: order.id };
+    writeQuotes(quotes);
+    const custTmpl = emailQuoteAccepted({ orderId: order.id, quoteRef: quote.quoteRef || quote.id, customerName: quote.name, grandTotal: order.total });
+    sendEmail({ to: quote.email, ...custTmpl });
+    const staffTmpl = emailStaffQuoteAccepted({ orderId: order.id, quoteRef: quote.quoteRef || quote.id, name: quote.name, email: quote.email, grandTotal: order.total });
+    sendEmail({ to: getNotifyEmail(), ...staffTmpl });
+    return json(res, 200, { ok: true, orderId: order.id });
   }
 
   if (req.method === 'GET' && url.pathname === '/api/portal/membership') {
