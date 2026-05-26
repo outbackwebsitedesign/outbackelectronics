@@ -3229,6 +3229,12 @@ function AdminCustomers() {
         <StatTile label="AVG ORDER VALUE" value="—" />
       </div>
       <div className="row-flex" style={{justifyContent:'flex-end', gap:8, marginBottom:-8}}>
+        <button className="btn btn-ghost btn-sm" onClick={async () => {
+          await fetch('/api/admin/customers/backfill', { method:'POST', headers:postHeaders(), credentials:'include' });
+          // Reload rows with fresh computed stats
+          const d = await fetch('/api/admin/customers', { credentials:'include' }).then(r=>r.ok?r.json():{items:[]});
+          setRows(d.items||[]);
+        }}>Re-link all jobs</button>
         <button className="btn btn-ghost btn-sm" onClick={() => setMergeOpen(true)}>Merge duplicates</button>
         <button className="btn btn-rust btn-sm" onClick={() => { setEdit({}); setForm({ name:'', loc:'', email:'', phone:'', tagsStr:'' }); }}>+ New customer</button>
       </div>

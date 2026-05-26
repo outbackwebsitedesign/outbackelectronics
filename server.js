@@ -3023,6 +3023,11 @@ const adminServer = http.createServer(async (req, res) => {
     writeCustomers(readCustomers().filter(c => c.id !== body.id));
     return json(res, 200, { ok: true });
   }
+  if (req.method === 'POST' && url.pathname === '/api/admin/customers/backfill') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    backfillJobEmails();
+    return json(res, 200, { ok: true });
+  }
   if (req.method === 'GET' && url.pathname === '/api/admin/customers/linked-jobs') {
     const session = requireRole(req, res, 'staff'); if (!session) return;
     const custId = url.searchParams.get('id');
@@ -4038,6 +4043,64 @@ function migrateEnvToSettings() {
 }
 
 migrateEnvToSettings();
+
+function backfillJobEmails() {
+  // For every customer that has a name + email, find any jobs matched by name
+  // (or phone) that are missing an email, and stamp the customer's email onto them.
+  // This makes old records discoverable by email-based lookups going forward.
+  const customers = readCustomers().filter(c => c.name && c.email);
+  if (!customers.length) return;
+
+  const orders      = readOrders();
+  const repairBoard = readRepairs();
+  const quotes      = readQuotes();
+  let ordersDirty = false, repairsDirty = false, quotesDirty = false;
+
+  function stampIfMatch(j, custEmail, custPhone, custName) {
+    if ((j.email||'').trim()) return j; // already has email
+    const jName  = (j.name||j.customer||j.customerName||'').toLowerCase().trim();
+    const jPhone = normalisePhone(j.phone||j.mobile||'');
+    const nameHit  = custName  && jName  && custName  === jName;
+    const phoneHit = custPhone && jPhone && custPhone === jPhone;
+    if (nameHit || phoneHit) return { ...j, email: custEmail };
+    return j;
+  }
+
+  for (const c of customers) {
+    const ce = c.email.trim();
+    const cp = normalisePhone(c.phone||'');
+    const cn = (c.name||'').toLowerCase().trim();
+
+    const newOrders = orders.map((o, i) => {
+      const stamped = stampIfMatch(o, ce, cp, cn);
+      if (stamped !== o) { orders[i] = stamped; ordersDirty = true; }
+      return orders[i];
+    });
+    void newOrders;
+
+    repairBoard.columns = (repairBoard.columns||[]).map(col => ({
+      ...col,
+      cards: (col.cards||[]).map(card => {
+        const stamped = stampIfMatch(card, ce, cp, cn);
+        if (stamped !== card) repairsDirty = true;
+        return stamped;
+      }),
+    }));
+
+    quotes.forEach((q, i) => {
+      const stamped = stampIfMatch(q, ce, cp, cn);
+      if (stamped !== q) { quotes[i] = stamped; quotesDirty = true; }
+    });
+  }
+
+  if (ordersDirty)  writeOrders(orders);
+  if (repairsDirty) writeRepairs(repairBoard);
+  if (quotesDirty)  writeQuotes(quotes);
+  if (ordersDirty || repairsDirty || quotesDirty)
+    console.log('[backfill] Stamped emails onto name/phone-matched jobs');
+}
+
+backfillJobEmails();
 
 startServer(mainServer,   MAIN_PORT,   'main  ');
 startServer(forumServer,  FORUM_PORT,  'forum ');
