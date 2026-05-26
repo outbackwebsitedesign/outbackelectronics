@@ -395,7 +395,31 @@ function AdminOrders({ search }) {
     fetch('/api/admin/expenses', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject()).then(d => setExpenses(d.items || [])).catch(() => {});
   }, []);
-  const openRow = (r) => { setEdit(r); setForm({...r}); setPayEntry({ amount:'', method:'Cash', note:'' }); setExpenseEdit(null); setExpenseForm({}); };
+  const [trackingBusy, setTrackingBusy] = useState(false);
+  const [trackingResult, setTrackingResult] = useState(null);
+
+  const openRow = (r) => { setEdit(r); setForm({...r}); setPayEntry({ amount:'', method:'Cash', note:'' }); setExpenseEdit(null); setExpenseForm({}); setTrackingResult(null); };
+
+  const saveNow = async (patch) => {
+    const updated = { ...form, ...patch };
+    setForm(updated);
+    await fetch('/api/admin/orders/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(updated) }).catch(()=>null);
+    setRows(rs => rs.map(r => r.id === updated.id ? updated : r));
+  };
+
+  const checkTracking = async () => {
+    setTrackingBusy(true); setTrackingResult(null);
+    const r = await fetch('/api/admin/orders/check-tracking', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: form.id }) }).catch(()=>null);
+    setTrackingBusy(false);
+    if (!r) { setTrackingResult({ error: 'Network error.' }); return; }
+    const d = await r.json().catch(()=>({}));
+    if (!r.ok) { setTrackingResult({ error: d.message || 'Could not fetch tracking.' }); return; }
+    setTrackingResult(d.tracking);
+    if (d.fulfilment && d.fulfilment !== form.fulfilment) {
+      setForm(f => ({ ...f, fulfilment: d.fulfilment }));
+      setRows(rs => rs.map(r => r.id === form.id ? { ...r, fulfilment: d.fulfilment } : r));
+    }
+  };
 
   const blankExpense = (jobId) => ({ description:'', category:'parts', amount:'', date: new Date().toLocaleDateString('en-AU', {day:'2-digit',month:'2-digit',year:'numeric'}), receipt:null, jobId: jobId||'', notes:'', isSecondHand:false, partStatus:'' });
 
@@ -553,6 +577,47 @@ function AdminOrders({ search }) {
             </div>
           )}
 
+          {/* Stage-advance actions */}
+          {(() => {
+            const f = form.fulfilment || 'pending';
+            if (f === 'testing') return (
+              <div style={{padding:'14px', background:'#fff4d6', border:'1px solid #e6cc88', marginBottom:14}}>
+                <div className="mono" style={{fontSize:10, color:'#7a5d10', marginBottom:8}}>TESTING COMPLETE?</div>
+                <button className="btn btn-sm" style={{background:'#0e4a8c', color:'#fff', border:'none'}} onClick={() => saveNow({ fulfilment:'packed' })}>Mark as Packed →</button>
+              </div>
+            );
+            if (f === 'packed') return (
+              <div style={{padding:'14px', background:'#dceaf5', border:'1px solid #9ec4e8', marginBottom:14}}>
+                <div className="mono" style={{fontSize:10, color:'#1668c8', marginBottom:8}}>READY TO SHIP?</div>
+                {!form.trackingNumber && <div style={{fontSize:12, color:'var(--rust)', marginBottom:8}}>⚠ Add a tracking number above before marking as shipped.</div>}
+                <button className="btn btn-sm" style={{background:'var(--ink)', color:'var(--paper)', border:'none', opacity: form.trackingNumber ? 1 : 0.5}} disabled={!form.trackingNumber} onClick={() => saveNow({ fulfilment:'shipped' })}>Mark as Shipped →</button>
+              </div>
+            );
+            if (f === 'shipped') return (
+              <div style={{padding:'14px', background:'var(--bg-elev)', border:'1px solid var(--line)', marginBottom:14}}>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8}}>
+                  <div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>AUSPOST TRACKING</div>
+                  <button className="btn btn-ghost btn-sm" style={{fontSize:11}} onClick={checkTracking} disabled={trackingBusy}>{trackingBusy ? 'Checking…' : 'Check now'}</button>
+                </div>
+                {trackingResult && !trackingResult.error && (
+                  <div style={{marginBottom:8}}>
+                    <div style={{fontSize:13, fontWeight:600, marginBottom:4}}>{trackingResult.raw}</div>
+                    {(trackingResult.events || []).slice(0,3).map((e,i) => (
+                      <div key={i} style={{fontSize:11, color:'var(--ink-2)', padding:'3px 0', borderTop: i > 0 ? '1px solid var(--line)' : 'none'}}>
+                        {e.date && <span className="mono" style={{color:'var(--ink-3)', marginRight:8}}>{e.date}</span>}
+                        {e.description}{e.location ? ` — ${e.location}` : ''}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {trackingResult?.error && <div style={{fontSize:12, color:'var(--rust)', marginBottom:8}}>{trackingResult.error}</div>}
+                {form.lastTrackingStatus && !trackingResult && <div style={{fontSize:12, color:'var(--ink-2)', marginBottom:8}}>Last known: <strong>{form.lastTrackingStatus}</strong></div>}
+                <button className="btn btn-sm" style={{background:'#345526', color:'#fff', border:'none'}} onClick={() => saveNow({ fulfilment:'fulfilled' })}>Mark as Delivered manually →</button>
+              </div>
+            );
+            return null;
+          })()}
+
           {/* Parts tracking */}
           {(form.parts || []).length > 0 && <>
             <div style={{borderTop:'1px solid var(--line)', margin:'12px 0 16px'}}/>
@@ -579,7 +644,18 @@ function AdminOrders({ search }) {
                               if (s === 'ordered' && !part.orderedAt) patch.orderedAt = dateStr;
                               if (s === 'delivered' && !part.deliveredAt) patch.deliveredAt = dateStr;
                               if (s === 'installed' && !part.installedAt) patch.installedAt = dateStr;
-                              setForm(f => ({ ...f, parts: f.parts.map((p, pi) => pi === i ? { ...p, ...patch } : p) }));
+                              setForm(f => {
+                                const newParts = f.parts.map((p, pi) => pi === i ? { ...p, ...patch } : p);
+                                const STAGE_ORDER = ['pending','ordering','building','testing','packed','shipped','fulfilled','refunded'];
+                                const currentStage = STAGE_ORDER.indexOf(f.fulfilment || 'pending');
+                                let derived = f.fulfilment || 'pending';
+                                if (newParts.some(p => ['ordered','delivered','installed'].includes(p.status))) derived = 'ordering';
+                                if (newParts.every(p => ['delivered','installed'].includes(p.status))) derived = 'building';
+                                if (newParts.every(p => p.status === 'installed')) derived = 'testing';
+                                const derivedStage = STAGE_ORDER.indexOf(derived);
+                                const fulfilment = derivedStage > currentStage ? derived : f.fulfilment;
+                                return { ...f, parts: newParts, fulfilment };
+                              });
                             }}
                           >{s}</button>
                         );
