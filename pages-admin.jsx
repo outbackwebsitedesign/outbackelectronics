@@ -3096,29 +3096,32 @@ function CustomerLinkedJobs({ customerId, email, manualLinks, onLinksChange }) {
       fetch('/api/admin/quotes', { credentials:'include' }).then(r => r.ok ? r.json() : { items:[] }),
       fetch('/api/admin/customers', { credentials:'include' }).then(r => r.ok ? r.json() : { items:[] }),
     ]).then(([od, rd, qd, cd]) => {
-      const orders = (od.items || od.orders || []).map(o => ({ id: o.id, ref: o.ref || o.id, label: o.title || o.description || o.ref || o.id, _type: 'order', email: (o.email||'').toLowerCase().trim() }));
+      function np(p) { return (p||'').replace(/[\s\-().+]/g, '').toLowerCase(); }
+      const orders = (od.items || od.orders || []).map(o => ({ id: o.id, ref: o.ref || o.id, label: o.title || o.description || o.ref || o.id, _type: 'order', email: (o.email||'').toLowerCase().trim(), phone: np(o.phone||o.mobile||''), jobName: (o.name||o.customer||o.customerName||'').toLowerCase().trim() }));
       // Repairs are a Kanban board — flatten all cards from all columns
       const repairCards = (rd.columns || []).flatMap(col => (col.cards || []).map(c => ({ ...c, _colLabel: col.label || col.id })));
-      const repairs = repairCards.map(r => ({ id: r.id, ref: r.id, label: r.service || r.customer || r.description || r.id, _type: 'repair', email: (r.email||'').toLowerCase().trim() }));
-      const quotes = (qd.items || qd.quotes || []).map(q => ({ id: q.id, ref: q.ref || q.id, label: q.service || q.description || q.ref || q.id, _type: 'quote', email: (q.email||'').toLowerCase().trim() }));
+      const repairs = repairCards.map(r => ({ id: r.id, ref: r.id, label: r.service || r.customer || r.description || r.id, _type: 'repair', email: (r.email||'').toLowerCase().trim(), phone: np(r.phone||r.mobile||''), jobName: (r.name||r.customer||r.customerName||'').toLowerCase().trim() }));
+      const quotes = (qd.items || qd.quotes || []).map(q => ({ id: q.id, ref: q.ref || q.id, label: q.service || q.description || q.ref || q.id, _type: 'quote', email: (q.email||'').toLowerCase().trim(), phone: np(q.phone||q.mobile||''), jobName: (q.name||q.customer||q.customerName||'').toLowerCase().trim() }));
       setAllJobs([...orders, ...repairs, ...quotes]);
 
-      // Build set of job IDs claimed by a DIFFERENT customer (by email or manualLinks).
-      // Never exclude jobs whose email matches THIS customer — those belong here.
+      // Build set of job IDs claimed by a DIFFERENT customer (email, phone, or name match).
+      // Never exclude jobs that match THIS customer's own identifiers.
       const thisCustomer = (cd.items || []).find(c => c.id === customerId);
       const thisEmail = ((thisCustomer && thisCustomer.email) || email || '').toLowerCase().trim();
+      const thisPhone = np((thisCustomer && thisCustomer.phone) || '');
+      const thisName  = ((thisCustomer && thisCustomer.name) || '').toLowerCase().trim();
       const otherCustomers = (cd.items || []).filter(c => c.id !== customerId);
       const otherManual = new Set(otherCustomers.flatMap(c => c.manualLinks||[]));
-      // Only consider another customer's email as "claiming" if it's different from ours
-      const otherEmails = new Set(
-        otherCustomers.map(c => (c.email||'').toLowerCase().trim()).filter(e => e && e !== thisEmail)
-      );
+      // Collect per-field sets for other customers, excluding values shared with this customer
+      const otherEmails = new Set(otherCustomers.map(c => (c.email||'').toLowerCase().trim()).filter(e => e && e !== thisEmail));
+      const otherPhones = new Set(otherCustomers.map(c => np(c.phone||'')).filter(p => p && p !== thisPhone));
+      const otherNames  = new Set(otherCustomers.map(c => (c.name||'').toLowerCase().trim()).filter(n => n && n !== thisName));
       const claimed = new Set();
       for (const j of [...orders, ...repairs, ...quotes]) {
-        const jobEmail = j.email;
-        const emailClaimedByOther = jobEmail && jobEmail !== thisEmail && otherEmails.has(jobEmail);
-        const manualClaimedByOther = otherManual.has(j.id);
-        if (emailClaimedByOther || manualClaimedByOther) claimed.add(j.id);
+        if (otherManual.has(j.id)) { claimed.add(j.id); continue; }
+        if (j.email && otherEmails.has(j.email)) { claimed.add(j.id); continue; }
+        if (j.phone && otherPhones.has(j.phone))  { claimed.add(j.id); continue; }
+        if (j.jobName && otherNames.has(j.jobName)) { claimed.add(j.id); continue; }
       }
       setClaimedByOther(claimed);
     }).catch(() => {});

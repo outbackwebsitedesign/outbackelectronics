@@ -158,6 +158,8 @@ function writeServices(services) { atomicWriteFile(SERVICES_DB_PATH, JSON.string
 
 function readCatalog() { return { products: readProducts(), services: readServices() }; }
 
+function normalisePhone(p) { return (p||'').replace(/[\s\-().+]/g, '').toLowerCase(); }
+
 function readOrders() {
   try { const p = JSON.parse(fs.readFileSync(ORDERS_DB_PATH, 'utf8')); return Array.isArray(p.orders) ? p.orders : []; } catch { return []; }
 }
@@ -2976,13 +2978,25 @@ const adminServer = http.createServer(async (req, res) => {
     const custId = url.searchParams.get('id');
     const customers = readCustomers();
     const cust = customers.find(c => c.id === custId);
-    const email = (cust && cust.email || '').toLowerCase().trim();
+    const custEmail = (cust && cust.email || '').toLowerCase().trim();
+    const custPhone = normalisePhone(cust && cust.phone || '');
+    const custName  = (cust && cust.name  || '').toLowerCase().trim();
     const manualLinks = (cust && cust.manualLinks) || [];
-    const orders = readOrders().filter(o => (email && (o.email||'').toLowerCase().trim() === email) || manualLinks.includes(o.id) || manualLinks.includes(o.ref))
+    function matchesCust(j) {
+      if (manualLinks.includes(j.id) || manualLinks.includes(j.ref)) return true;
+      const jEmail = (j.email||'').toLowerCase().trim();
+      const jPhone = normalisePhone(j.phone || j.mobile || '');
+      const jName  = (j.name || j.customer || j.customerName || '').toLowerCase().trim();
+      if (custEmail && jEmail && custEmail === jEmail) return true;
+      if (custPhone && jPhone && custPhone === jPhone) return true;
+      if (custName  && jName  && custName  === jName)  return true;
+      return false;
+    }
+    const orders = readOrders().filter(matchesCust)
       .map(o => ({ id: o.id, ref: o.ref || o.id, title: o.title || o.description, _type: 'order' }));
-    const repairs = flatRepairs().filter(r => (email && (r.email||'').toLowerCase().trim() === email) || manualLinks.includes(r.id))
+    const repairs = flatRepairs().filter(matchesCust)
       .map(r => ({ id: r.id, ref: r.id, service: r.service || r.customer || r.description, status: r._colLabel, _type: 'repair' }));
-    const quotes = readQuotes().filter(q => (email && (q.email||'').toLowerCase().trim() === email) || manualLinks.includes(q.id) || manualLinks.includes(q.ref))
+    const quotes = readQuotes().filter(matchesCust)
       .map(q => ({ id: q.id, ref: q.ref || q.id, service: q.service || q.description, _type: 'quote' }));
     return json(res, 200, { orders, repairs, quotes });
   }
@@ -2996,20 +3010,29 @@ const adminServer = http.createServer(async (req, res) => {
     if (keepIdx < 0) return json(res, 404, { error: 'not_found' });
     const deleteCustomer = customers.find(c => c.id === deleteId);
     const oldEmail = (deleteCustomer && deleteCustomer.email || '').toLowerCase().trim();
+    const oldPhone = normalisePhone(deleteCustomer && deleteCustomer.phone || '');
+    const oldName  = (deleteCustomer && deleteCustomer.name  || '').toLowerCase().trim();
     const newEmail = (merged.email || customers[keepIdx].email || '').toLowerCase().trim();
-    // Re-link orders, repairs, quotes that belonged to the deleted customer
-    if (oldEmail && oldEmail !== newEmail) {
-      const orders = readOrders().map(o => (o.email||'').toLowerCase().trim() === oldEmail ? { ...o, email: newEmail } : o);
-      writeOrders(orders);
-      const repairsBoard = readRepairs();
-      repairsBoard.columns = (repairsBoard.columns || []).map(col => ({
-        ...col,
-        cards: (col.cards || []).map(c => (c.email||'').toLowerCase().trim() === oldEmail ? { ...c, email: newEmail } : c)
-      }));
-      writeRepairs(repairsBoard);
-      const quotes = readQuotes().map(q => (q.email||'').toLowerCase().trim() === oldEmail ? { ...q, email: newEmail } : q);
-      writeQuotes(quotes);
+    // Re-link orders, repairs, quotes by email, phone, or name
+    function matchesDeleted(j) {
+      const jEmail = (j.email||'').toLowerCase().trim();
+      const jPhone = normalisePhone(j.phone || j.mobile || '');
+      const jName  = (j.name || j.customer || j.customerName || '').toLowerCase().trim();
+      if (oldEmail && jEmail && oldEmail === jEmail) return true;
+      if (oldPhone && jPhone && oldPhone === jPhone) return true;
+      if (oldName  && jName  && oldName  === jName)  return true;
+      return false;
     }
+    const orders = readOrders().map(o => matchesDeleted(o) ? { ...o, email: newEmail } : o);
+    writeOrders(orders);
+    const repairsBoard = readRepairs();
+    repairsBoard.columns = (repairsBoard.columns || []).map(col => ({
+      ...col,
+      cards: (col.cards || []).map(c => matchesDeleted(c) ? { ...c, email: newEmail } : c)
+    }));
+    writeRepairs(repairsBoard);
+    const quotes = readQuotes().map(q => matchesDeleted(q) ? { ...q, email: newEmail } : q);
+    writeQuotes(quotes);
     // Combine manual links from both
     const combinedManualLinks = [...new Set([
       ...((customers[keepIdx].manualLinks)||[]),
