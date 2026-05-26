@@ -104,7 +104,7 @@ function LoginPage({ onLogin }) {
                 No account?{' '}
                 <button onClick={() => setShowRegister(true)}
                   style={{background:'none', border:'none', color:'var(--rust)', cursor:'pointer', fontWeight:600, fontSize:13, fontFamily:'inherit', padding:0}}>
-                  Register with your forum account
+                  Register
                 </button>
               </div>
               <div style={{marginTop:12, textAlign:'center', fontSize:12, color:'var(--ink-3)'}}>
@@ -148,8 +148,8 @@ function RegisterForm({ onLogin, onBack }) {
           <input className="input" type="text" value={displayName} onChange={e => setDisplayName(e.target.value)} />
         </label>
         <label className="field">
-          <span className="label">Email address (optional)</span>
-          <input className="input" type="email" value={email} onChange={e => setEmail(e.target.value)} />
+          <span className="label">Email address</span>
+          <input className="input" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
         </label>
         <label className="field">
           <span className="label">Password</span>

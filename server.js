@@ -2967,6 +2967,40 @@ const adminServer = http.createServer(async (req, res) => {
     writeCustomers(readCustomers().filter(c => c.id !== body.id));
     return json(res, 200, { ok: true });
   }
+  if (req.method === 'GET' && url.pathname === '/api/admin/customers/linked-jobs') {
+    const session = requireRole(req, res, 'staff'); if (!session) return;
+    const custId = url.searchParams.get('id');
+    const customers = readCustomers();
+    const cust = customers.find(c => c.id === custId);
+    const email = (cust && cust.email || '').toLowerCase().trim();
+    const manualLinks = (cust && cust.manualLinks) || [];
+    const orders = readOrders().filter(o => (o.email||'').toLowerCase().trim() === email || manualLinks.includes(o.id) || manualLinks.includes(o.ref))
+      .map(o => ({ id: o.id, ref: o.ref, title: o.title || o.description, _type: 'order' }));
+    const repairs = readRepairs().filter(r => (r.email||'').toLowerCase().trim() === email || manualLinks.includes(r.id) || manualLinks.includes(r.ref))
+      .map(r => ({ id: r.id, ref: r.id, service: r.service || r.description, _type: 'repair' }));
+    const quotes = readQuotes().filter(q => (q.email||'').toLowerCase().trim() === email || manualLinks.includes(q.id) || manualLinks.includes(q.ref))
+      .map(q => ({ id: q.id, ref: q.ref, service: q.service || q.description, _type: 'quote' }));
+    return json(res, 200, { orders, repairs, quotes });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/customers/merge') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const { keepId, deleteId, merged } = body;
+    if (!keepId || !deleteId || keepId === deleteId) return json(res, 400, { error: 'invalid_ids' });
+    let customers = readCustomers();
+    const keepIdx = customers.findIndex(c => c.id === keepId);
+    if (keepIdx < 0) return json(res, 404, { error: 'not_found' });
+    const deleteCustomer = customers.find(c => c.id === deleteId);
+    // Combine manual links from both
+    const combinedManualLinks = [...new Set([
+      ...((customers[keepIdx].manualLinks)||[]),
+      ...((deleteCustomer && deleteCustomer.manualLinks)||[])
+    ])];
+    customers[keepIdx] = { ...customers[keepIdx], ...merged, id: keepId, manualLinks: combinedManualLinks };
+    customers = customers.filter(c => c.id !== deleteId);
+    writeCustomers(customers);
+    return json(res, 200, { ok: true, item: customers[customers.findIndex(c => c.id === keepId)] });
+  }
 
   if (req.method === 'POST' && url.pathname === '/api/admin/quotes/save') {
     const session = requireRole(req, res, 'technician'); if (!session) return;
