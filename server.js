@@ -1998,90 +1998,6 @@ const mainServer = http.createServer(async (req, res) => {
     return json(res, 201, { ok: true, id: quote.id });
   }
 
-  if (req.method === 'GET' && url.pathname === '/api/quote/token') {
-    const token = url.searchParams.get('token');
-    if (!token) return json(res, 400, { error: 'token_required' });
-    const quotes = readQuotes();
-    const quote = quotes.find(q => q.quoteToken === token);
-    if (!quote) return json(res, 404, { error: 'not_found' });
-    const dq = quote.draftQuote || {};
-    return json(res, 200, {
-      ok: true,
-      quote: {
-        id: quote.id,
-        quoteRef: quote.quoteRef || quote.id,
-        name: quote.name,
-        email: quote.email,
-        status: quote.status,
-        validDays: dq.validDays,
-        hardwareItems: dq.hardwareItems || [],
-        pcBuild: dq.pcBuild || false,
-        pcBuildFee: dq.pcBuildFee || 0,
-        otherItems: dq.otherItems || [],
-        grandTotal: dq.grandTotal || 0,
-        notes: dq.notes || '',
-      },
-    });
-  }
-
-  if (req.method === 'POST' && url.pathname === '/api/quote/accept-token') {
-    if (publicRateLimited(getIp(req), 'register')) return json(res, 429, { error: 'too_many_requests' });
-    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
-    const { token, username, password, displayName } = body || {};
-    if (!token) return json(res, 400, { error: 'token_required' });
-    const quotes = readQuotes();
-    const qIdx = quotes.findIndex(q => q.quoteToken === token);
-    if (qIdx < 0) return json(res, 404, { error: 'not_found' });
-    const quote = quotes[qIdx];
-    if (quote.status !== 'quoted') return json(res, 409, { error: 'quote_not_actionable', message: 'This quote has already been accepted or is not ready for acceptance.' });
-    const forum = readForum();
-    if (!Array.isArray(forum.users)) forum.users = [];
-    const quoteEmail = String(quote.email || '').toLowerCase();
-    const existingUser = forum.users.find(u => String(u.email || '').toLowerCase() === quoteEmail);
-    if (existingUser) {
-      return json(res, 409, { error: 'email_exists', message: 'An account already exists for this email. Please log in to accept the quote.' });
-    }
-    if (!username || !/^[a-zA-Z0-9_]{3,30}$/.test(username)) return json(res, 422, { error: 'invalid_payload', message: 'Username must be 3–30 characters, letters, numbers and underscores only.' });
-    if (!password || password.length < 8) return json(res, 422, { error: 'invalid_payload', message: 'Password must be at least 8 characters.' });
-    if (forum.users.find(u => u.username && u.username.toLowerCase() === username.toLowerCase())) {
-      return json(res, 409, { error: 'username_taken', message: 'That username is already taken.' });
-    }
-    const resolvedDisplayName = (typeof displayName === 'string' ? displayName.trim() : '') || username;
-    const user = { id: 'U-' + Date.now(), username, displayName: resolvedDisplayName, email: quoteEmail, passwordHash: hashPassword(password), createdAt: new Date().toISOString() };
-    forum.users.push(user);
-    writeForum(forum);
-    const dq = quote.draftQuote || {};
-    const now = new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
-    const order = {
-      id: 'ord-' + Date.now(),
-      cust: quote.name,
-      email: quote.email,
-      items: quote.summary || quote.quoteRef || quote.description || 'Custom build',
-      date: now,
-      total: dq.grandTotal || 0,
-      fulfilment: 'pending',
-      payments: [],
-      sourceQuoteId: quote.id,
-      quoteRef: quote.quoteRef || '',
-    };
-    const orders = readOrders();
-    orders.push(order);
-    writeOrders(orders);
-    quotes[qIdx] = { ...quote, status: 'accepted', orderId: order.id };
-    writeQuotes(quotes);
-    const sid = randomId();
-    portalSessions.set(sid, { id: user.id, username: user.username, displayName: user.displayName, createdAt: user.createdAt, expiresAt: now() + PORTAL_SESSION_TTL_MS });
-    saveSessionsToDisk(PORTAL_SESSIONS_DB_PATH, portalSessions);
-    res.setHeader('Set-Cookie', sessionCookie('oe_portal_session', sid, Math.floor(PORTAL_SESSION_TTL_MS / 1000), req));
-    const custTmpl = emailQuoteAccepted({ orderId: order.id, quoteRef: quote.quoteRef || quote.id, customerName: quote.name, grandTotal: order.total });
-    sendEmail({ to: quote.email, ...custTmpl });
-    const staffTmpl = emailStaffQuoteAccepted({ orderId: order.id, quoteRef: quote.quoteRef || quote.id, name: quote.name, email: quote.email, grandTotal: order.total });
-    sendEmail({ to: getNotifyEmail(), ...staffTmpl });
-    const welcomeTmpl = emailPortalWelcome({ username: user.username, displayName: user.displayName });
-    sendEmail({ to: quoteEmail, ...welcomeTmpl });
-    return json(res, 201, { ok: true, orderId: order.id, user: { id: user.id, username: user.username, displayName: user.displayName, createdAt: user.createdAt } });
-  }
-
   if (req.method === 'GET' && url.pathname === '/api/warranty/order-lookup') {
     const orderId = (url.searchParams.get('id') || '').trim();
     if (!orderId) return json(res, 400, { error: 'missing_id' });
@@ -3497,6 +3413,90 @@ const portalServer = http.createServer(async (req, res) => {
       return email && email === sessionEmail;
     });
     return json(res, 200, { items: matched });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/quote/token') {
+    const token = url.searchParams.get('token');
+    if (!token) return json(res, 400, { error: 'token_required' });
+    const quotes = readQuotes();
+    const quote = quotes.find(q => q.quoteToken === token);
+    if (!quote) return json(res, 404, { error: 'not_found' });
+    const dq = quote.draftQuote || {};
+    return json(res, 200, {
+      ok: true,
+      quote: {
+        id: quote.id,
+        quoteRef: quote.quoteRef || quote.id,
+        name: quote.name,
+        email: quote.email,
+        status: quote.status,
+        validDays: dq.validDays,
+        hardwareItems: dq.hardwareItems || [],
+        pcBuild: dq.pcBuild || false,
+        pcBuildFee: dq.pcBuildFee || 0,
+        otherItems: dq.otherItems || [],
+        grandTotal: dq.grandTotal || 0,
+        notes: dq.notes || '',
+      },
+    });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/quote/accept-token') {
+    if (publicRateLimited(getIp(req), 'register')) return json(res, 429, { error: 'too_many_requests' });
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const { token, username, password, displayName } = body || {};
+    if (!token) return json(res, 400, { error: 'token_required' });
+    const quotes = readQuotes();
+    const qIdx = quotes.findIndex(q => q.quoteToken === token);
+    if (qIdx < 0) return json(res, 404, { error: 'not_found' });
+    const quote = quotes[qIdx];
+    if (quote.status !== 'quoted') return json(res, 409, { error: 'quote_not_actionable', message: 'This quote has already been accepted or is not ready for acceptance.' });
+    const forum = readForum();
+    if (!Array.isArray(forum.users)) forum.users = [];
+    const quoteEmail = String(quote.email || '').toLowerCase();
+    const existingUser = forum.users.find(u => String(u.email || '').toLowerCase() === quoteEmail);
+    if (existingUser) {
+      return json(res, 409, { error: 'email_exists', message: 'An account already exists for this email. Please log in to accept the quote.' });
+    }
+    if (!username || !/^[a-zA-Z0-9_]{3,30}$/.test(username)) return json(res, 422, { error: 'invalid_payload', message: 'Username must be 3–30 characters, letters, numbers and underscores only.' });
+    if (!password || password.length < 8) return json(res, 422, { error: 'invalid_payload', message: 'Password must be at least 8 characters.' });
+    if (forum.users.find(u => u.username && u.username.toLowerCase() === username.toLowerCase())) {
+      return json(res, 409, { error: 'username_taken', message: 'That username is already taken.' });
+    }
+    const resolvedDisplayName = (typeof displayName === 'string' ? displayName.trim() : '') || username;
+    const newUser = { id: 'U-' + Date.now(), username, displayName: resolvedDisplayName, email: quoteEmail, passwordHash: hashPassword(password), createdAt: new Date().toISOString() };
+    forum.users.push(newUser);
+    writeForum(forum);
+    const dq = quote.draftQuote || {};
+    const nowStr = new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
+    const order = {
+      id: 'ord-' + Date.now(),
+      cust: quote.name,
+      email: quote.email,
+      items: quote.summary || quote.quoteRef || quote.description || 'Custom build',
+      date: nowStr,
+      total: dq.grandTotal || 0,
+      fulfilment: 'pending',
+      payments: [],
+      sourceQuoteId: quote.id,
+      quoteRef: quote.quoteRef || '',
+    };
+    const orders = readOrders();
+    orders.push(order);
+    writeOrders(orders);
+    quotes[qIdx] = { ...quote, status: 'accepted', orderId: order.id };
+    writeQuotes(quotes);
+    const sid = randomId();
+    portalSessions.set(sid, { id: newUser.id, username: newUser.username, displayName: newUser.displayName, createdAt: newUser.createdAt, expiresAt: now() + PORTAL_SESSION_TTL_MS });
+    saveSessionsToDisk(PORTAL_SESSIONS_DB_PATH, portalSessions);
+    res.setHeader('Set-Cookie', sessionCookie('oe_portal_session', sid, Math.floor(PORTAL_SESSION_TTL_MS / 1000), req));
+    const custTmpl = emailQuoteAccepted({ orderId: order.id, quoteRef: quote.quoteRef || quote.id, customerName: quote.name, grandTotal: order.total });
+    sendEmail({ to: quote.email, ...custTmpl });
+    const staffTmpl = emailStaffQuoteAccepted({ orderId: order.id, quoteRef: quote.quoteRef || quote.id, name: quote.name, email: quote.email, grandTotal: order.total });
+    sendEmail({ to: getNotifyEmail(), ...staffTmpl });
+    const welcomeTmpl = emailPortalWelcome({ username: newUser.username, displayName: newUser.displayName });
+    sendEmail({ to: quoteEmail, ...welcomeTmpl });
+    return json(res, 201, { ok: true, orderId: order.id, user: { id: newUser.id, username: newUser.username, displayName: newUser.displayName, createdAt: newUser.createdAt } });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/portal/quotes/request') {
