@@ -1046,12 +1046,164 @@ function Dashboard({ user, setUser, onLogout }) {
   );
 }
 
+// ── Quote token view (no login required) ─────────────────────────────────────
+
+function QuoteTokenView({ token, onAccepted }) {
+  const [quote, setQuote] = useState(null);
+  const [err, setErr] = useState('');
+  const [step, setStep] = useState('view'); // 'view' | 'create-account' | 'login-required' | 'done'
+  const [form, setForm] = useState({ username: '', password: '', displayName: '' });
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  useEffect(() => {
+    api(`/api/quote/token?token=${encodeURIComponent(token)}`)
+      .then(d => { if (d.ok) setQuote(d.quote); else setErr('This quote link is invalid or has expired.'); })
+      .catch(() => setErr('Could not load quote. Please try again.'));
+  }, [token]);
+
+  const lineItems = quote ? [
+    ...(quote.hardwareItems || []).filter(i => i.name).map(i => {
+      const qty = parseInt(i.qty) || 1;
+      return { label: i.name + (qty > 1 ? ` × ${qty}` : ''), amount: (parseFloat(i.basePrice) || 0) * qty * 1.02 };
+    }),
+    ...(quote.pcBuild && quote.pcBuildFee > 0 ? [{ label: 'Custom PC Build', amount: quote.pcBuildFee }] : []),
+    ...(quote.otherItems || []).filter(i => i.description).map(i => ({ label: i.description, amount: parseFloat(i.amount) || 0 })),
+  ] : [];
+
+  const validUntil = quote?.validDays
+    ? new Date(Date.now() + quote.validDays * 86400000).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
+    : null;
+
+  async function handleAccept(e) {
+    e.preventDefault();
+    setBusy(true); setMsg('');
+    const r = await api('/api/quote/accept-token', { method: 'POST', body: JSON.stringify({ token, ...form }) });
+    setBusy(false);
+    if (r.ok) {
+      setStep('done');
+      if (onAccepted) onAccepted(r.user, r.orderId);
+    } else if (r.error === 'email_exists') {
+      setStep('login-required');
+    } else {
+      setMsg(r.message || 'Something went wrong. Please try again.');
+    }
+  }
+
+  if (err) return (
+    <div style={{minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', padding:24}}>
+      <div style={{maxWidth:480, textAlign:'center'}}>
+        <p style={{color:'var(--rust)', marginBottom:16}}>{err}</p>
+        <a href="/" style={{color:'var(--rust)', fontSize:13}}>Go to portal →</a>
+      </div>
+    </div>
+  );
+
+  if (!quote) return (
+    <div style={{minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', color:'var(--ink-2)', fontSize:14}}>
+      Loading quote…
+    </div>
+  );
+
+  if (step === 'done') return (
+    <div style={{minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', padding:24}}>
+      <div className="card-paper" style={{maxWidth:480, padding:36, textAlign:'center'}}>
+        <div style={{fontSize:32, marginBottom:12}}>✓</div>
+        <h2 style={{marginBottom:8}}>Quote accepted!</h2>
+        <p style={{color:'var(--ink-2)', marginBottom:20}}>Your order has been created and a confirmation is on its way to your email.</p>
+        <a href="/orders" className="btn btn-rust">View your order →</a>
+      </div>
+    </div>
+  );
+
+  if (step === 'login-required') return (
+    <div style={{minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', padding:24}}>
+      <div className="card-paper" style={{maxWidth:480, padding:36, textAlign:'center'}}>
+        <h2 style={{marginBottom:8}}>Account already exists</h2>
+        <p style={{color:'var(--ink-2)', marginBottom:20}}>An account is already registered to <strong>{quote.email}</strong>. Please log in to accept this quote.</p>
+        <a href={`/quotes?token=${encodeURIComponent(token)}`} className="btn btn-rust" onClick={e => { e.preventDefault(); window.location.replace('/quotes?ref=' + encodeURIComponent(quote.quoteRef)); }}>Log in to portal →</a>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{minHeight:'100vh', background:'var(--bg-deep)', padding:'40px 16px'}}>
+      <div style={{maxWidth:640, margin:'0 auto'}}>
+        <div style={{marginBottom:24, textAlign:'center'}}>
+          <div className="eyebrow" style={{marginBottom:8}}>OUTBACK ELECTRONICS</div>
+          <h1 className="serif" style={{fontSize:28, fontWeight:400}}>Your Quote — {quote.quoteRef}</h1>
+          {validUntil && <p style={{color:'var(--ink-2)', fontSize:13, marginTop:6}}>Valid until {validUntil}</p>}
+        </div>
+
+        <div className="card-paper" style={{padding:28, marginBottom:20}}>
+          {lineItems.length > 0 && (
+            <div style={{border:'1px solid var(--line)', marginBottom:quote.notes ? 16 : 0}}>
+              {lineItems.map((item, i) => (
+                <div key={i} style={{display:'flex', justifyContent:'space-between', padding:'10px 14px', borderBottom: i < lineItems.length - 1 ? '1px solid var(--line)' : 'none', fontSize:14}}>
+                  <span>{item.label}</span>
+                  <span className="mono" style={{fontWeight:600}}>${item.amount.toLocaleString('en-AU',{minimumFractionDigits:2})}</span>
+                </div>
+              ))}
+              <div style={{display:'flex', justifyContent:'space-between', padding:'12px 14px', background:'var(--ink)', color:'var(--paper)'}}>
+                <span style={{fontWeight:600}}>Total (AUD)</span>
+                <span className="mono" style={{fontWeight:700, fontSize:16, color:'var(--ochre)'}}>
+                  ${Number(quote.grandTotal||0).toLocaleString('en-AU',{minimumFractionDigits:2})}
+                </span>
+              </div>
+            </div>
+          )}
+          {quote.notes && <p style={{fontSize:13, color:'var(--ink-2)', marginTop:lineItems.length ? 16 : 0}}>{quote.notes}</p>}
+        </div>
+
+        {quote.status !== 'quoted' ? (
+          <div className="card-paper" style={{padding:24, textAlign:'center', color:'var(--ink-2)'}}>
+            This quote has already been accepted.
+          </div>
+        ) : step === 'view' ? (
+          <div className="card-paper" style={{padding:28, textAlign:'center'}}>
+            <p style={{marginBottom:20, color:'var(--ink-2)'}}>Ready to go ahead? Create your account below to accept this quote and track your order.</p>
+            <button className="btn btn-rust" onClick={() => setStep('create-account')}>Accept Quote →</button>
+            <p style={{marginTop:12, fontSize:12, color:'var(--ink-3)'}}>Already have an account? <a href="/" style={{color:'var(--rust)'}}>Log in here</a>.</p>
+          </div>
+        ) : (
+          <div className="card-paper" style={{padding:28}}>
+            <h3 style={{marginBottom:4}}>Create your account</h3>
+            <p style={{color:'var(--ink-2)', fontSize:13, marginBottom:20}}>Your account email will be <strong>{quote.email}</strong> — the address we sent this quote to.</p>
+            <form onSubmit={handleAccept}>
+              <div className="grid-2" style={{marginBottom:14}}>
+                <label className="field" style={{margin:0}}>
+                  <span className="label">Display name</span>
+                  <input className="input" placeholder={quote.name || 'Your name'} value={form.displayName} onChange={e => setForm(f => ({...f, displayName: e.target.value}))} />
+                </label>
+                <label className="field" style={{margin:0}}>
+                  <span className="label">Username</span>
+                  <input className="input" placeholder="e.g. jsmith91" value={form.username} onChange={e => setForm(f => ({...f, username: e.target.value}))} required pattern="[a-zA-Z0-9_]{3,30}" title="3–30 characters, letters, numbers and underscores" />
+                </label>
+              </div>
+              <label className="field" style={{marginBottom:20}}>
+                <span className="label">Password</span>
+                <input className="input" type="password" placeholder="At least 8 characters" value={form.password} onChange={e => setForm(f => ({...f, password: e.target.value}))} required minLength={8} />
+              </label>
+              {msg && <div className="alert alert-error" style={{marginBottom:14}}>{msg}</div>}
+              <div style={{display:'flex', gap:12, alignItems:'center'}}>
+                <button className="btn btn-rust" type="submit" disabled={busy}>{busy ? 'Accepting…' : 'Confirm & Accept Quote →'}</button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setStep('view')}>Back</button>
+              </div>
+            </form>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Root ──────────────────────────────────────────────────────────────────────
 
 function PortalApp() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const resetToken = new URLSearchParams(window.location.search).get('reset');
+  const quoteToken = new URLSearchParams(window.location.search).get('token');
 
   useEffect(() => {
     ensureCsrf().then(() =>
@@ -1070,6 +1222,18 @@ function PortalApp() {
       <div style={{minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', color:'var(--ink-2)', fontSize:14}}>
         Loading…
       </div>
+    );
+  }
+
+  if (quoteToken && !user) {
+    return (
+      <QuoteTokenView
+        token={quoteToken}
+        onAccepted={(newUser) => {
+          setUser(newUser);
+          window.history.replaceState({}, '', '/orders');
+        }}
+      />
     );
   }
 

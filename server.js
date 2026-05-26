@@ -971,7 +971,7 @@ function emailQuoteReply({ quoteId, customerName, reply, status }) {
   };
 }
 
-function emailQuoteFormal({ quoteRef, quoteId, customerName, validDays, hardwareItems, pcBuild, pcBuildFee, otherItems, grandTotal, notes }) {
+function emailQuoteFormal({ quoteRef, quoteId, quoteToken, customerName, validDays, hardwareItems, pcBuild, pcBuildFee, otherItems, grandTotal, notes }) {
   const validUntil = new Date(Date.now() + (validDays || 30) * 24 * 60 * 60 * 1000)
     .toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
 
@@ -1014,7 +1014,7 @@ function emailQuoteFormal({ quoteRef, quoteId, customerName, validDays, hardware
       </table>
       ${notes ? `<div class="detail"><dt>NOTES</dt><dd>${escHtml(notes).replace(/\n/g,'<br>')}</dd></div>` : ''}
       <p>To accept this quote or ask any questions, simply reply to this email or visit your portal.</p>
-      <a class="btn" href="${getPortalUrl()}/quotes${quoteId ? `?ref=${encodeURIComponent(quoteRef || quoteId)}` : ''}">View quote in portal →</a>
+      <a class="btn" href="${getPortalUrl()}/quotes?token=${encodeURIComponent(quoteToken)}${quoteRef ? `&ref=${encodeURIComponent(quoteRef)}` : ''}">View Quote →</a>
     `),
   };
 }
@@ -1998,6 +1998,90 @@ const mainServer = http.createServer(async (req, res) => {
     return json(res, 201, { ok: true, id: quote.id });
   }
 
+  if (req.method === 'GET' && url.pathname === '/api/quote/token') {
+    const token = url.searchParams.get('token');
+    if (!token) return json(res, 400, { error: 'token_required' });
+    const quotes = readQuotes();
+    const quote = quotes.find(q => q.quoteToken === token);
+    if (!quote) return json(res, 404, { error: 'not_found' });
+    const dq = quote.draftQuote || {};
+    return json(res, 200, {
+      ok: true,
+      quote: {
+        id: quote.id,
+        quoteRef: quote.quoteRef || quote.id,
+        name: quote.name,
+        email: quote.email,
+        status: quote.status,
+        validDays: dq.validDays,
+        hardwareItems: dq.hardwareItems || [],
+        pcBuild: dq.pcBuild || false,
+        pcBuildFee: dq.pcBuildFee || 0,
+        otherItems: dq.otherItems || [],
+        grandTotal: dq.grandTotal || 0,
+        notes: dq.notes || '',
+      },
+    });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/quote/accept-token') {
+    if (publicRateLimited(getIp(req), 'register')) return json(res, 429, { error: 'too_many_requests' });
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const { token, username, password, displayName } = body || {};
+    if (!token) return json(res, 400, { error: 'token_required' });
+    const quotes = readQuotes();
+    const qIdx = quotes.findIndex(q => q.quoteToken === token);
+    if (qIdx < 0) return json(res, 404, { error: 'not_found' });
+    const quote = quotes[qIdx];
+    if (quote.status !== 'quoted') return json(res, 409, { error: 'quote_not_actionable', message: 'This quote has already been accepted or is not ready for acceptance.' });
+    const forum = readForum();
+    if (!Array.isArray(forum.users)) forum.users = [];
+    const quoteEmail = String(quote.email || '').toLowerCase();
+    const existingUser = forum.users.find(u => String(u.email || '').toLowerCase() === quoteEmail);
+    if (existingUser) {
+      return json(res, 409, { error: 'email_exists', message: 'An account already exists for this email. Please log in to accept the quote.' });
+    }
+    if (!username || !/^[a-zA-Z0-9_]{3,30}$/.test(username)) return json(res, 422, { error: 'invalid_payload', message: 'Username must be 3–30 characters, letters, numbers and underscores only.' });
+    if (!password || password.length < 8) return json(res, 422, { error: 'invalid_payload', message: 'Password must be at least 8 characters.' });
+    if (forum.users.find(u => u.username && u.username.toLowerCase() === username.toLowerCase())) {
+      return json(res, 409, { error: 'username_taken', message: 'That username is already taken.' });
+    }
+    const resolvedDisplayName = (typeof displayName === 'string' ? displayName.trim() : '') || username;
+    const user = { id: 'U-' + Date.now(), username, displayName: resolvedDisplayName, email: quoteEmail, passwordHash: hashPassword(password), createdAt: new Date().toISOString() };
+    forum.users.push(user);
+    writeForum(forum);
+    const dq = quote.draftQuote || {};
+    const now = new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
+    const order = {
+      id: 'ord-' + Date.now(),
+      cust: quote.name,
+      email: quote.email,
+      items: quote.summary || quote.quoteRef || quote.description || 'Custom build',
+      date: now,
+      total: dq.grandTotal || 0,
+      fulfilment: 'pending',
+      payments: [],
+      sourceQuoteId: quote.id,
+      quoteRef: quote.quoteRef || '',
+    };
+    const orders = readOrders();
+    orders.push(order);
+    writeOrders(orders);
+    quotes[qIdx] = { ...quote, status: 'accepted', orderId: order.id };
+    writeQuotes(quotes);
+    const sid = randomId();
+    portalSessions.set(sid, { id: user.id, username: user.username, displayName: user.displayName, createdAt: user.createdAt, expiresAt: now() + PORTAL_SESSION_TTL_MS });
+    saveSessionsToDisk(PORTAL_SESSIONS_DB_PATH, portalSessions);
+    res.setHeader('Set-Cookie', sessionCookie('oe_portal_session', sid, Math.floor(PORTAL_SESSION_TTL_MS / 1000), req));
+    const custTmpl = emailQuoteAccepted({ orderId: order.id, quoteRef: quote.quoteRef || quote.id, customerName: quote.name, grandTotal: order.total });
+    sendEmail({ to: quote.email, ...custTmpl });
+    const staffTmpl = emailStaffQuoteAccepted({ orderId: order.id, quoteRef: quote.quoteRef || quote.id, name: quote.name, email: quote.email, grandTotal: order.total });
+    sendEmail({ to: getNotifyEmail(), ...staffTmpl });
+    const welcomeTmpl = emailPortalWelcome({ username: user.username, displayName: user.displayName });
+    sendEmail({ to: quoteEmail, ...welcomeTmpl });
+    return json(res, 201, { ok: true, orderId: order.id, user: { id: user.id, username: user.username, displayName: user.displayName, createdAt: user.createdAt } });
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/warranty/order-lookup') {
     const orderId = (url.searchParams.get('id') || '').trim();
     if (!orderId) return json(res, 400, { error: 'missing_id' });
@@ -2853,6 +2937,8 @@ const adminServer = http.createServer(async (req, res) => {
     const quotes = readQuotes();
     const quoteRef = body.quoteRef || ('QT-' + Date.now());
     const now = new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
+    const existingQuote = body.sourceQuoteId ? quotes.find(q => q.id === body.sourceQuoteId) : null;
+    const quoteToken = existingQuote?.quoteToken || randomId();
     const savedQuote = {
       id: body.sourceQuoteId || ('quot-' + Date.now()),
       name: body.customerName || '',
@@ -2860,6 +2946,7 @@ const adminServer = http.createServer(async (req, res) => {
       status: 'quoted',
       kind: 'custom-pc-build',
       quoteRef,
+      quoteToken,
       draftQuote: body,
       age: '0m',
       date: now,
@@ -2871,6 +2958,7 @@ const adminServer = http.createServer(async (req, res) => {
     const tmpl = emailQuoteFormal({
       quoteRef,
       quoteId: savedQuote.id,
+      quoteToken,
       customerName: body.customerName,
       validDays: body.validDays || 30,
       hardwareItems: body.hardwareItems || [],
