@@ -438,9 +438,185 @@ function PoliciesPage() {
   );
 }
 
+// ============================================================
+// WARRANTY REGISTRATION
+// ============================================================
+function WarrantyRegisterPage({ go }) {
+  const [form, setForm] = useState({
+    name: '', email: '', orderNumber: '', purchaseDate: '', buildType: 'new', specs: '', notes: '',
+  });
+  const update = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
+  const [regId, setRegId] = useState(null);
+
+  if (submitted) {
+    return (
+      <>
+        <PageHead crumbs={['Outback', 'Warranty Registration']} title="Registration received."
+          lead="We've logged your build. Keep this confirmation for your records." />
+        <section className="container" style={{ paddingTop: 32, paddingBottom: 60 }}>
+          <div className="card-paper" style={{ padding: 40, maxWidth: 640 }}>
+            <div className="row-flex"><span className="tag tag-euc">WARRANTY · {regId ? `#${regId}` : 'REGISTERED'}</span></div>
+            <h3 className="serif" style={{ fontSize: 36, marginTop: 14 }}>Thanks, {form.name.split(' ')[0] || 'mate'}.</h3>
+            <p style={{ marginTop: 12, color: 'var(--ink-2)' }}>
+              Your custom PC build is now registered. A confirmation has been sent to <strong>{form.email}</strong>.
+            </p>
+            <div className="term" style={{ marginTop: 24 }}>
+              <div className="mono" style={{ fontSize: 10, color: 'var(--ink-3)', marginBottom: 6 }}>// REGISTERED BUILD</div>
+              <div>order    : {form.orderNumber || '—'}</div>
+              <div>type     : {form.buildType === 'new' ? 'New parts' : 'Second-hand parts'}</div>
+              <div>date     : {form.purchaseDate || '—'}</div>
+              <div>specs    : {form.specs.slice(0, 80) || '—'}{form.specs.length > 80 ? '…' : ''}</div>
+            </div>
+            <div className="row-flex" style={{ marginTop: 24 }}>
+              <button className="btn" onClick={() => { setSubmitted(false); setForm({ name: '', email: '', orderNumber: '', purchaseDate: '', buildType: 'new', specs: '', notes: '' }); }}>Register another</button>
+              <button className="btn btn-ghost" onClick={() => go('home')}>Back to home</button>
+            </div>
+          </div>
+        </section>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <PageHead crumbs={['Outback', 'Warranty Registration']} title="Register Your Build"
+        lead="Register your custom PC for warranty — takes about a minute." />
+      <section className="container" style={{ paddingTop: 32, paddingBottom: 60, display: 'grid', gridTemplateColumns: '1fr 300px', gap: 48 }}>
+        <form onSubmit={async (e) => {
+          e.preventDefault();
+          setSubmitError(null);
+          setSubmitting(true);
+          try {
+            const res = await fetch('/api/warranty/register', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() },
+              body: JSON.stringify(form),
+            });
+            if (!res.ok) {
+              const data = await res.json().catch(() => ({}));
+              throw new Error(data.message || 'server_error');
+            }
+            const data = await res.json().catch(() => ({}));
+            setRegId(data.id || null);
+            setSubmitted(true);
+          } catch (err) {
+            setSubmitError(err.message && err.message !== 'server_error'
+              ? err.message
+              : 'Something went wrong — please try again or contact us directly.');
+          } finally {
+            setSubmitting(false);
+          }
+        }}>
+          <div className="card-paper" style={{ padding: 32 }}>
+            <span className="eyebrow">01 · BUILD TYPE</span>
+            <div className="row-flex" style={{ marginTop: 12, gap: 8 }}>
+              {[
+                { v: 'new', l: 'New parts' },
+                { v: 'secondhand', l: 'Second-hand parts' },
+              ].map(({ v, l }) => (
+                <button type="button" key={v}
+                  className={`btn btn-sm ${form.buildType === v ? 'btn-rust' : 'btn-ghost'}`}
+                  onClick={() => update('buildType', v)}>{l}</button>
+              ))}
+            </div>
+
+            <hr className="thin" />
+            <span className="eyebrow">02 · YOUR DETAILS</span>
+            <div className="grid-2" style={{ gap: 16, marginTop: 12 }}>
+              <label className="field">
+                <span className="label">Full name</span>
+                <input required className="input" value={form.name} onChange={e => update('name', e.target.value)} placeholder="Your name" />
+              </label>
+              <label className="field">
+                <span className="label">Email</span>
+                <input required type="email" className="input" value={form.email} onChange={e => update('email', e.target.value)} placeholder="your@email.com" />
+              </label>
+            </div>
+            <div className="grid-2" style={{ gap: 16 }}>
+              <label className="field">
+                <span className="label">Order / Invoice number</span>
+                <input className="input" value={form.orderNumber} onChange={e => update('orderNumber', e.target.value)} placeholder="OE-12345" />
+              </label>
+              <label className="field">
+                <span className="label">Purchase date</span>
+                <input required type="date" className="input" value={form.purchaseDate} onChange={e => update('purchaseDate', e.target.value)} />
+              </label>
+            </div>
+
+            <hr className="thin" />
+            <span className="eyebrow">03 · BUILD SPECS</span>
+            <p style={{ fontSize: 13, color: 'var(--ink-2)', marginTop: 6, marginBottom: 10 }}>
+              List the key components — CPU, GPU, RAM, storage, motherboard, etc.
+            </p>
+            <label className="field">
+              <textarea required className="textarea" value={form.specs} onChange={e => update('specs', e.target.value)}
+                placeholder="e.g. AMD Ryzen 7 7700X, RTX 4070 Super, 32GB DDR5, 1TB NVMe, MSI B650 Gaming Plus WiFi"
+                style={{ minHeight: 120 }} />
+            </label>
+
+            <label className="field">
+              <span className="label">Additional notes (optional)</span>
+              <textarea className="textarea" value={form.notes} onChange={e => update('notes', e.target.value)}
+                placeholder="Anything else we should know about your build" style={{ minHeight: 80 }} />
+            </label>
+
+            <hr className="thin" />
+            {submitError && <div className="notice" style={{ marginBottom: 12, color: 'var(--rust)', fontSize: 13 }}>{submitError}</div>}
+            <div className="row-flex" style={{ justifyContent: 'space-between' }}>
+              <span className="mono" style={{ fontSize: 11, color: 'var(--ink-2)' }}>KEEP YOUR RECEIPT — IT'S YOUR PROOF OF PURCHASE</span>
+              <button className="btn btn-rust" type="submit" disabled={submitting}>{submitting ? 'Registering…' : 'Register build →'}</button>
+            </div>
+          </div>
+        </form>
+
+        <aside>
+          <div className="card" style={{ padding: 22 }}>
+            <span className="tag tag-ochre">WARRANTY INFO</span>
+            <h3 className="serif" style={{ fontSize: 22, marginTop: 12, lineHeight: 1.1 }}>What's covered?</h3>
+            <div style={{ marginTop: 16, display: 'grid', gap: 16 }}>
+              <div>
+                <div className="eyebrow" style={{ color: 'var(--eucalyptus)', marginBottom: 6 }}>New builds</div>
+                <p style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
+                  Manufacturer warranty applies to all new parts. Contact the part manufacturer directly for warranty claims.
+                </p>
+              </div>
+              <div className="rule" />
+              <div>
+                <div className="eyebrow" style={{ color: 'var(--ink-2)', marginBottom: 6 }}>Second-hand parts</div>
+                <p style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
+                  No warranty on second-hand components, however every part is tested by us before it leaves the shop.
+                </p>
+              </div>
+              <div className="rule" />
+              <div>
+                <div className="eyebrow" style={{ color: 'var(--ink-2)', marginBottom: 6 }}>Shipping</div>
+                <p style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
+                  We guarantee your build is working when it leaves our shop. Any issues arising during shipping need to be raised with <strong>Australia Post</strong>.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="card" style={{ padding: 22, marginTop: 16, background: 'var(--dark)', color: 'var(--paper)', borderColor: 'var(--dark)' }}>
+            <span className="eyebrow" style={{ color: 'var(--ochre)' }}>QUESTIONS?</span>
+            <p style={{ fontSize: 13, color: 'var(--bg-deep)', marginTop: 10, lineHeight: 1.6 }}>
+              Not sure what applies to your build? Get in touch and we'll sort it out.
+            </p>
+            <button className="btn btn-ghost" style={{ marginTop: 12, color: 'var(--paper)', borderColor: 'var(--paper)' }}
+              onClick={() => go('contact')}>Contact us →</button>
+          </div>
+        </aside>
+      </section>
+    </>
+  );
+}
+
 window.OE_PAGES = Object.assign(window.OE_PAGES || {}, {
   quote: QuotePage,
   contact: ContactPage,
   sellers: SellersPage,
   policies: PoliciesPage,
+  register: WarrantyRegisterPage,
 });

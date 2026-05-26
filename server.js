@@ -19,7 +19,7 @@ const RATE_MAX_ATTEMPTS = 5;
 const LOCKOUT_MS = 1000 * 60 * 15;
 const ADMIN_IP_ALLOWLIST = (process.env.ADMIN_IP_ALLOWLIST || '').split(',').map(v => v.trim()).filter(Boolean);
 const PUBLIC_RATE_WINDOW_MS = 1000 * 60 * 10;
-const PUBLIC_RATE_LIMITS = { checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30 };
+const PUBLIC_RATE_LIMITS = { checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10 };
 
 fs.mkdirSync(path.join(__dirname, 'assets/uploads'), { recursive: true });
 
@@ -852,6 +852,7 @@ const MAIN_SPA_ROUTES = new Set([
   'product', 'service', 'memberships', 'gift-cards',
   'order-success', 'order-cancelled',
   'cart',
+  'register',
 ]);
 
 // ── Email ─────────────────────────────────────────────────────────────────────
@@ -1156,6 +1157,48 @@ function emailStaffContactMessage({ name, email, msg }) {
         <dt>MESSAGE</dt><dd>${escHtml(msg)}</dd>
       </div>
       <p>Reply directly to this email to respond to the customer.</p>
+    `),
+  };
+}
+
+function emailWarrantyConfirmation({ regId, customerName, buildType, orderNumber, purchaseDate, specs }) {
+  const firstName = customerName ? customerName.split(' ')[0] : 'there';
+  const typeLabel = buildType === 'new' ? 'New parts' : 'Second-hand parts';
+  const warrantyNote = buildType === 'new'
+    ? 'Your build uses new parts, so manufacturer warranty applies to each component. Contact the relevant manufacturer directly for warranty claims.'
+    : 'Your build uses second-hand parts. These have no manufacturer warranty, however every part was tested by us before leaving the shop.';
+  return {
+    subject: `[WARRANTY] Custom PC registration confirmed — ${regId}`,
+    html: emailHtml('Your build is registered.', `
+      <p>Hi ${escHtml(firstName)}, thanks for registering your custom PC build with Outback Electronics.</p>
+      <div class="detail">
+        <dt>REGISTRATION ID</dt><dd>${escHtml(regId)}</dd>
+        <dt>BUILD TYPE</dt><dd>${escHtml(typeLabel)}</dd>
+        ${orderNumber ? `<dt>ORDER / INVOICE</dt><dd>${escHtml(orderNumber)}</dd>` : ''}
+        ${purchaseDate ? `<dt>PURCHASE DATE</dt><dd>${escHtml(purchaseDate)}</dd>` : ''}
+        <dt>SPECS</dt><dd>${escHtml(specs.slice(0, 300))}${specs.length > 300 ? '…' : ''}</dd>
+      </div>
+      <p>${escHtml(warrantyNote)}</p>
+      <p>We guarantee your build was working when it left our shop. If any issues arose during shipping, please raise a claim directly with <strong>Australia Post</strong>.</p>
+      <p>Keep this email as your warranty record. If you have any questions, reply here or visit our contact page.</p>
+    `),
+  };
+}
+
+function emailStaffWarrantyRegistration({ regId, name, email, buildType, orderNumber, purchaseDate, specs, notes }) {
+  const typeLabel = buildType === 'new' ? 'New parts' : 'Second-hand parts';
+  return {
+    subject: `[WARRANTY] New registration — ${name} (${regId})`,
+    html: emailHtml('New warranty registration', `
+      <div class="detail">
+        <dt>REGISTRATION ID</dt><dd>${escHtml(regId)}</dd>
+        <dt>CUSTOMER</dt><dd>${escHtml(name)} &lt;${escHtml(email)}&gt;</dd>
+        <dt>BUILD TYPE</dt><dd>${escHtml(typeLabel)}</dd>
+        ${orderNumber ? `<dt>ORDER / INVOICE</dt><dd>${escHtml(orderNumber)}</dd>` : ''}
+        ${purchaseDate ? `<dt>PURCHASE DATE</dt><dd>${escHtml(purchaseDate)}</dd>` : ''}
+        <dt>SPECS</dt><dd>${escHtml(specs)}</dd>
+        ${notes ? `<dt>NOTES</dt><dd>${escHtml(notes)}</dd>` : ''}
+      </div>
     `),
   };
 }
@@ -1881,6 +1924,23 @@ const mainServer = http.createServer(async (req, res) => {
     const staffTmpl = emailStaffNewQuote({ quoteId: quote.id, name: quote.name, email: quote.email, description: `[${quote.kind} · ${quote.budget} · ${quote.urgency}] ${quote.description}` });
     sendEmail({ to: getNotifyEmail(), ...staffTmpl });
     return json(res, 201, { ok: true, id: quote.id });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/warranty/register') {
+    if (publicRateLimited(getIp(req), 'warranty/register')) return json(res, 429, { error: 'too_many_requests' });
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const { name, email, orderNumber, purchaseDate, buildType, specs, notes } = body || {};
+    if (!name || !email || !specs || !purchaseDate) return json(res, 422, { error: 'missing_fields', message: 'Name, email, purchase date, and specs are required.' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())) return json(res, 422, { error: 'invalid_email', message: 'Email address is invalid.' });
+    if (String(specs).trim().length > 2000) return json(res, 422, { error: 'specs_too_long', message: 'Specs must be 2000 characters or fewer.' });
+    const validBuildTypes = ['new', 'secondhand'];
+    const resolvedBuildType = validBuildTypes.includes(buildType) ? buildType : 'new';
+    const regId = 'wrnt-' + Date.now();
+    const custTmpl = emailWarrantyConfirmation({ regId, customerName: String(name).trim(), buildType: resolvedBuildType, orderNumber: String(orderNumber || '').trim(), purchaseDate: String(purchaseDate).trim(), specs: String(specs).trim() });
+    sendEmail({ to: String(email).trim(), ...custTmpl });
+    const staffTmpl = emailStaffWarrantyRegistration({ regId, name: String(name).trim(), email: String(email).trim(), buildType: resolvedBuildType, orderNumber: String(orderNumber || '').trim(), purchaseDate: String(purchaseDate).trim(), specs: String(specs).trim(), notes: String(notes || '').trim() });
+    sendEmail({ to: getNotifyEmail(), ...staffTmpl });
+    return json(res, 201, { ok: true, id: regId });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/contact/quick-message') {
