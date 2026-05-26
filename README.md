@@ -42,7 +42,7 @@ All data is stored as JSON files in the project root. No external database.
 
 | File | Contents |
 |------|----------|
-| `settings.db` | Shop config, staff, integrations, site content |
+| `settings.db` | Shop config, staff, integrations, site content (merged over `settings.defaults.json` on every read) |
 | `forum.db` | Users, threads, replies, categories |
 | `forum-sessions.db` | Active forum sessions |
 | `portal-sessions.db` | Active portal sessions |
@@ -53,6 +53,8 @@ All data is stored as JSON files in the project root. No external database.
 | `password-reset-tokens.db` | Active password reset tokens |
 
 Writes use atomic file replacement (write to `.tmp`, then rename) to prevent corruption.
+
+`settings.defaults.json` is a **live merge base**, not a one-time seed. Every `readSettings()` call deep-merges the defaults file with `settings.db`, so fields not explicitly saved in the db always fall back to the defaults. This means changing `settings.defaults.json` affects all running instances, and empty fields in it (like `shop.email`) remain empty until an admin sets them via admin → Settings.
 
 ---
 

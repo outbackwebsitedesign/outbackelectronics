@@ -8,11 +8,13 @@
 
 ## CRITICAL — Breaks or silently degrades real user flows
 
-### 1. shop.email is empty (settings.defaults.json:7)
-`"email": ""` — Every staff notification email falls back to `NOTIFY_EMAIL`, which itself falls back to `SMTP_USER`. If SMTP is not configured, all inbound contact forms, quote requests, warranty registrations and order emails silently fail or go nowhere. Must be set.
+### 1. shop.email not set in admin Settings
+`readSettings()` merges `settings.defaults.json` (where email is `""`) with `settings.db` on every read — the defaults file is a live merge base, not a one-time seed. Until an admin sets the contact email via admin → Settings → Shop, every staff notification (contact forms, quote requests, warranty registrations, order confirmations) falls back to `NOTIFY_EMAIL` → `SMTP_USER`, which may also be empty.  
+**Fix:** Set shop email in admin → Settings.
 
-### 2. shop.description is empty (settings.defaults.json:9)
-`"description": ""` — Used in footer copy, About page blurb and the admin overview. Falls back to a hardcoded default string in the JSX. Should be set in admin Settings.
+### 2. shop.description not set in admin Settings
+Same merge behaviour — `description` is `""` in defaults. Shows as hardcoded fallback string in footer and About page until set.  
+**Fix:** Set shop description in admin → Settings.
 
 ### 3. SMTP not configured (server.js:33–36)
 `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS` all default to empty string. No email is ever delivered (quote confirmations, order shipped, warranty, password reset, contact form). Must be set via env vars or admin Settings → Integrations.
