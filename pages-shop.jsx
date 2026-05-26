@@ -79,7 +79,7 @@ function HomePage({ go, addToCart, portalUser }) {
           <div className="hero-grid" style={{display:'grid', gridTemplateColumns:'1.2fr 1fr', gap: 48, alignItems:'center'}}>
             <div>
               <span className="eyebrow hero-eyebrow">EST. 2023 · APPOINTMENT ONLY · REMOTE ELECTRONICS SUPPORT</span>
-              <h1 className="serif hero-headline" style={{marginTop: 14, lineHeight: 0.95}}>
+              <h1 className="serif hero-headline" style={{fontSize: 92, marginTop: 14, lineHeight: 0.95}}>
                 Built for where<br/>
                 <span className="italic" style={{color:'var(--rust)'}}>the signal ends.</span>
               </h1>
