@@ -52,7 +52,7 @@ function QuotePage({ go }) {
     <>
       <PageHead crumbs={['Outback','Request a Quote']} title="Request a Quote"
         lead="Tell us what you're trying to do, in plain English. We'll scope it, price it, and either say yes, no, or 'here's who can.'" />
-      <section className="container" style={{paddingTop: 32, paddingBottom: 60, display:'grid', gridTemplateColumns:'1fr 320px', gap: 48}}>
+      <section className="container quote-layout" style={{paddingTop: 32, paddingBottom: 60, display:'grid', gridTemplateColumns:'1fr 320px', gap: 48}}>
         <form onSubmit={async (e) => {
           e.preventDefault();
           setSubmitError(null);
@@ -533,7 +533,7 @@ function WarrantyRegisterPage({ go }) {
     <>
       <PageHead crumbs={['Outback', 'Warranty Registration']} title="Register Your Build"
         lead="Enter your order ID and we'll pull up your build details automatically." />
-      <section className="container" style={{ paddingTop: 32, paddingBottom: 60, display: 'grid', gridTemplateColumns: '1fr 300px', gap: 48 }}>
+      <section className="container quote-layout" style={{ paddingTop: 32, paddingBottom: 60, display: 'grid', gridTemplateColumns: '1fr 300px', gap: 48 }}>
         <form onSubmit={async (e) => {
           e.preventDefault();
           setSubmitError(null);
@@ -679,10 +679,47 @@ function WarrantyRegisterPage({ go }) {
   );
 }
 
+function AboutPage({ go }) {
+  const shop = window.__ShopContext__ ? React.useContext(window.__ShopContext__) : {};
+  return (
+    <>
+      <PageHead crumbs={['Outback', 'About']} title="About Outback Electronics"
+        lead={shop?.workshopBlurb || 'One desk, one tech, one ute. Free callout in Moama/Echuca; we travel anywhere in Australia. Ship anywhere in the world.'} />
+      <section className="container" style={{ paddingTop: 32, paddingBottom: 64 }}>
+        <div style={{ maxWidth: 720 }}>
+          <h2 className="serif" style={{ fontSize: 28, marginBottom: 16 }}>The workshop</h2>
+          <p style={{ color: 'var(--ink-2)', lineHeight: 1.8, marginBottom: 24 }}>
+            Outback Electronics is an independent electronics outpost based at 183 Peericoota Forest Rd, Moama NSW 2731.
+            We repair rugged laptops, satellite uplinks and off-grid power systems — and we build custom rigs for people who live and work where the signal ends.
+          </p>
+          <p style={{ color: 'var(--ink-2)', lineHeight: 1.8, marginBottom: 24 }}>
+            No public walk-in. Every visit is by appointment — call, email, or book online. We travel the full length of the Stuart Highway and ship worldwide.
+          </p>
+          <div className="row-flex" style={{ gap: 12, flexWrap: 'wrap', marginBottom: 32 }}>
+            <button className="btn btn-rust" onClick={() => go('quote')}>Get a Quote</button>
+            <button className="btn btn-ghost" onClick={() => go('contact')}>Contact us</button>
+            <button className="btn btn-ghost" onClick={() => go('services')}>Our Services</button>
+          </div>
+          <div className="card-paper" style={{ padding: 28, background: 'var(--dark)', color: 'var(--paper)' }}>
+            <div className="eyebrow" style={{ color: 'var(--ochre)', marginBottom: 12 }}>FIND US</div>
+            <div style={{ fontSize: 15, lineHeight: 1.8 }}>
+              <div>{shop?.address || '183 Peericoota Forest Rd, Moama NSW 2731'}</div>
+              {shop?.phone && <div style={{ marginTop: 6 }}>{shop.phone}</div>}
+              <div style={{ marginTop: 6, color: 'var(--ink-3)', fontSize: 13 }}>No public access — appointment only.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
+
 window.OE_PAGES = Object.assign(window.OE_PAGES || {}, {
   quote: QuotePage,
   contact: ContactPage,
   sellers: SellersPage,
   policies: PoliciesPage,
   register: WarrantyRegisterPage,
+  about: AboutPage,
+  repairs: null, // resolved dynamically — alias to services
 });
