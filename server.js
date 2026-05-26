@@ -1161,22 +1161,28 @@ function emailStaffContactMessage({ name, email, msg }) {
   };
 }
 
-function emailWarrantyConfirmation({ regId, customerName, buildType, orderNumber, purchaseDate, specs }) {
+function emailWarrantyConfirmation({ regId, customerName, orderId, expenses }) {
   const firstName = customerName ? customerName.split(' ')[0] : 'there';
-  const typeLabel = buildType === 'new' ? 'New parts' : 'Second-hand parts';
-  const warrantyNote = buildType === 'new'
-    ? 'Your build uses new parts, so manufacturer warranty applies to each component. Contact the relevant manufacturer directly for warranty claims.'
-    : 'Your build uses second-hand parts. These have no manufacturer warranty, however every part was tested by us before leaving the shop.';
+  const newParts = expenses.filter(e => !e.isSecondHand);
+  const usedParts = expenses.filter(e => e.isSecondHand);
+  const partsHtml = expenses.length === 0 ? '' : `
+    <dt>PARTS</dt>
+    ${newParts.map(e => `<dd>✓ ${escHtml(e.description)} <span style="font-size:10px;color:#4f6b3e">(NEW · MFR WARRANTY)</span></dd>`).join('')}
+    ${usedParts.map(e => `<dd>✓ ${escHtml(e.description)} <span style="font-size:10px;color:#7a5d10">(2ND HAND · TESTED)</span></dd>`).join('')}
+  `;
+  const warrantyNote = usedParts.length > 0 && newParts.length === 0
+    ? 'All parts in your build are second-hand. These have no manufacturer warranty, however every part was tested by us before leaving the shop.'
+    : usedParts.length > 0
+    ? 'Your build contains a mix of new and second-hand parts. New parts carry manufacturer warranty; second-hand parts were tested by us before leaving the shop and carry no manufacturer warranty.'
+    : 'Your build uses all new parts — manufacturer warranty applies to each component. Contact the relevant manufacturer directly for warranty claims.';
   return {
     subject: `[WARRANTY] Custom PC registration confirmed — ${regId}`,
     html: emailHtml('Your build is registered.', `
       <p>Hi ${escHtml(firstName)}, thanks for registering your custom PC build with Outback Electronics.</p>
       <div class="detail">
         <dt>REGISTRATION ID</dt><dd>${escHtml(regId)}</dd>
-        <dt>BUILD TYPE</dt><dd>${escHtml(typeLabel)}</dd>
-        ${orderNumber ? `<dt>ORDER / INVOICE</dt><dd>${escHtml(orderNumber)}</dd>` : ''}
-        ${purchaseDate ? `<dt>PURCHASE DATE</dt><dd>${escHtml(purchaseDate)}</dd>` : ''}
-        <dt>SPECS</dt><dd>${escHtml(specs.slice(0, 300))}${specs.length > 300 ? '…' : ''}</dd>
+        <dt>ORDER ID</dt><dd>${escHtml(orderId)}</dd>
+        ${partsHtml}
       </div>
       <p>${escHtml(warrantyNote)}</p>
       <p>We guarantee your build was working when it left our shop. If any issues arose during shipping, please raise a claim directly with <strong>Australia Post</strong>.</p>
@@ -1185,18 +1191,22 @@ function emailWarrantyConfirmation({ regId, customerName, buildType, orderNumber
   };
 }
 
-function emailStaffWarrantyRegistration({ regId, name, email, buildType, orderNumber, purchaseDate, specs, notes }) {
-  const typeLabel = buildType === 'new' ? 'New parts' : 'Second-hand parts';
+function emailStaffWarrantyRegistration({ regId, name, email, orderId, expenses, notes }) {
+  const newParts = expenses.filter(e => !e.isSecondHand);
+  const usedParts = expenses.filter(e => e.isSecondHand);
+  const partsHtml = expenses.length === 0 ? '<dt>PARTS</dt><dd>None logged</dd>' : `
+    <dt>PARTS</dt>
+    ${newParts.map(e => `<dd>NEW: ${escHtml(e.description)}</dd>`).join('')}
+    ${usedParts.map(e => `<dd>2ND HAND: ${escHtml(e.description)}</dd>`).join('')}
+  `;
   return {
     subject: `[WARRANTY] New registration — ${name} (${regId})`,
     html: emailHtml('New warranty registration', `
       <div class="detail">
         <dt>REGISTRATION ID</dt><dd>${escHtml(regId)}</dd>
         <dt>CUSTOMER</dt><dd>${escHtml(name)} &lt;${escHtml(email)}&gt;</dd>
-        <dt>BUILD TYPE</dt><dd>${escHtml(typeLabel)}</dd>
-        ${orderNumber ? `<dt>ORDER / INVOICE</dt><dd>${escHtml(orderNumber)}</dd>` : ''}
-        ${purchaseDate ? `<dt>PURCHASE DATE</dt><dd>${escHtml(purchaseDate)}</dd>` : ''}
-        <dt>SPECS</dt><dd>${escHtml(specs)}</dd>
+        <dt>ORDER ID</dt><dd>${escHtml(orderId)}</dd>
+        ${partsHtml}
         ${notes ? `<dt>NOTES</dt><dd>${escHtml(notes)}</dd>` : ''}
       </div>
     `),
@@ -1926,19 +1936,31 @@ const mainServer = http.createServer(async (req, res) => {
     return json(res, 201, { ok: true, id: quote.id });
   }
 
+  if (req.method === 'GET' && url.pathname === '/api/warranty/order-lookup') {
+    const orderId = (url.searchParams.get('id') || '').trim();
+    if (!orderId) return json(res, 400, { error: 'missing_id' });
+    const orders = readOrders();
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return json(res, 404, { found: false });
+    const expenses = readExpenses().filter(e => e.jobId === order.id);
+    return json(res, 200, {
+      found: true,
+      order: { id: order.id, date: order.date },
+      expenses: expenses.map(e => ({ description: e.description, isSecondHand: !!e.isSecondHand, category: e.category || 'parts' })),
+    });
+  }
+
   if (req.method === 'POST' && url.pathname === '/api/warranty/register') {
     if (publicRateLimited(getIp(req), 'warranty/register')) return json(res, 429, { error: 'too_many_requests' });
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
-    const { name, email, orderNumber, purchaseDate, buildType, specs, notes } = body || {};
-    if (!name || !email || !specs || !purchaseDate) return json(res, 422, { error: 'missing_fields', message: 'Name, email, purchase date, and specs are required.' });
+    const { name, email, orderId, expenses, notes } = body || {};
+    if (!name || !email || !orderId) return json(res, 422, { error: 'missing_fields', message: 'Name, email, and order ID are required.' });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())) return json(res, 422, { error: 'invalid_email', message: 'Email address is invalid.' });
-    if (String(specs).trim().length > 2000) return json(res, 422, { error: 'specs_too_long', message: 'Specs must be 2000 characters or fewer.' });
-    const validBuildTypes = ['new', 'secondhand'];
-    const resolvedBuildType = validBuildTypes.includes(buildType) ? buildType : 'new';
+    const safeExpenses = Array.isArray(expenses) ? expenses.slice(0, 100).map(e => ({ description: String(e.description || '').trim().slice(0, 200), isSecondHand: !!e.isSecondHand })) : [];
     const regId = 'wrnt-' + Date.now();
-    const custTmpl = emailWarrantyConfirmation({ regId, customerName: String(name).trim(), buildType: resolvedBuildType, orderNumber: String(orderNumber || '').trim(), purchaseDate: String(purchaseDate).trim(), specs: String(specs).trim() });
+    const custTmpl = emailWarrantyConfirmation({ regId, customerName: String(name).trim(), orderId: String(orderId).trim(), expenses: safeExpenses });
     sendEmail({ to: String(email).trim(), ...custTmpl });
-    const staffTmpl = emailStaffWarrantyRegistration({ regId, name: String(name).trim(), email: String(email).trim(), buildType: resolvedBuildType, orderNumber: String(orderNumber || '').trim(), purchaseDate: String(purchaseDate).trim(), specs: String(specs).trim(), notes: String(notes || '').trim() });
+    const staffTmpl = emailStaffWarrantyRegistration({ regId, name: String(name).trim(), email: String(email).trim(), orderId: String(orderId).trim(), expenses: safeExpenses, notes: String(notes || '').trim() });
     sendEmail({ to: getNotifyEmail(), ...staffTmpl });
     return json(res, 201, { ok: true, id: regId });
   }
