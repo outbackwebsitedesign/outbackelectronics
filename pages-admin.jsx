@@ -386,6 +386,7 @@ function AdminOrders({ search }) {
   const [edit, setEdit] = useState(null);
   const [form, setForm] = useState({});
   const [payEntry, setPayEntry] = useState({ amount:'', method:'Cash', note:'' });
+  const [updateEntry, setUpdateEntry] = useState({ text:'', type:'note' });
   useEffect(() => {
     fetch('/api/admin/orders', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject()).then(d => setRows(d.items || [])).catch(() => setRows([]));
@@ -431,6 +432,15 @@ function AdminOrders({ search }) {
   };
   const removePayment = (i) => {
     setForm(f => ({ ...f, payments: (f.payments || []).filter((_,idx) => idx !== i) }));
+  };
+  const addUpdate = () => {
+    if (!updateEntry.text.trim()) return;
+    const u = { text: updateEntry.text.trim(), type: updateEntry.type, date: new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' }), ts: new Date().toISOString() };
+    setForm(f => ({ ...f, updates: [...(f.updates || []), u] }));
+    setUpdateEntry({ text:'', type:'note' });
+  };
+  const removeUpdate = (i) => {
+    setForm(f => ({ ...f, updates: (f.updates || []).filter((_,idx) => idx !== i) }));
   };
 
   const linkedExpenses = (f) => expenses.filter(e => e.jobId && e.jobId === f.id);
@@ -577,6 +587,30 @@ function AdminOrders({ search }) {
             </label>
             <label className="field" style={{margin:0}}><span className="label">Note (optional)</span><input className="input" placeholder="e.g. deposit, part payment" value={payEntry.note} onChange={e=>setPayEntry(v=>({...v,note:e.target.value}))}/></label>
             <button className="btn btn-sm" style={{marginBottom:1}} onClick={addPayment}>Log</button>
+          </div>
+
+          {/* Customer-visible updates */}
+          <div style={{borderTop:'1px solid var(--line)', margin:'16px 0 16px'}}/>
+          <div className="mono" style={{fontSize:10, letterSpacing:'.1em', color:'var(--ink-2)', marginBottom:10}}>ORDER UPDATES (VISIBLE TO CUSTOMER)</div>
+          {(form.updates || []).length === 0 && <div className="mono" style={{fontSize:11, color:'var(--ink-3)', marginBottom:12}}>No updates posted.</div>}
+          {(form.updates || []).map((u, i) => (
+            <div key={i} style={{display:'flex', alignItems:'flex-start', gap:10, padding:'8px 12px', background:'var(--bg-elev)', border:'1px solid var(--line)', marginBottom:6}}>
+              <div style={{flex:1}}>
+                <span className="tag tag-outline" style={{fontSize:10, marginRight:8}}>{u.type}</span>
+                <span style={{fontSize:13}}>{u.text}</span>
+              </div>
+              <span className="mono" style={{fontSize:10, color:'var(--ink-3)', whiteSpace:'nowrap'}}>{u.date}</span>
+              <button className="icon-btn" style={{width:22, height:22, fontSize:14, color:'var(--ink-3)'}} onClick={() => removeUpdate(i)}>×</button>
+            </div>
+          ))}
+          <div style={{display:'grid', gridTemplateColumns:'130px 1fr auto', gap:8, alignItems:'end', marginTop:8}}>
+            <label className="field" style={{margin:0}}><span className="label">Type</span>
+              <select className="select" value={updateEntry.type} onChange={e=>setUpdateEntry(v=>({...v,type:e.target.value}))}>
+                {['note','parts_arrived','parts_ordered','build_started','ready_for_pickup','dispatched'].map(t => <option key={t} value={t}>{t.replace(/_/g,' ')}</option>)}
+              </select>
+            </label>
+            <label className="field" style={{margin:0}}><span className="label">Message</span><input className="input" placeholder="e.g. RAM and SSD have arrived, waiting on GPU" value={updateEntry.text} onChange={e=>setUpdateEntry(v=>({...v,text:e.target.value}))} onKeyDown={e=>e.key==='Enter'&&addUpdate()}/></label>
+            <button className="btn btn-sm" style={{marginBottom:1}} onClick={addUpdate}>Post</button>
           </div>
         </Drawer>
       )}
