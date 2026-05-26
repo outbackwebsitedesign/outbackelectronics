@@ -40,6 +40,123 @@ const css = {
   },
 };
 
+// ── Portal auth helpers ───────────────────────────────────────────────────────
+let PORTAL_URL = 'http://localhost:8083';
+fetch('/api/config').then(r => r.ok ? r.json() : null).then(d => { if (d?.portalUrl) PORTAL_URL = d.portalUrl; }).catch(() => {});
+
+let _portalCsrfPromise = null;
+async function getPortalCsrf() {
+  if (!_portalCsrfPromise) {
+    _portalCsrfPromise = fetch(PORTAL_URL + '/api/csrf-token', { credentials: 'include' })
+      .then(r => r.json()).then(d => d.token || '').catch(() => { _portalCsrfPromise = null; return ''; });
+  }
+  return _portalCsrfPromise;
+}
+
+async function portalApi(path, opts = {}) {
+  const isPost = opts.method && opts.method.toUpperCase() !== 'GET';
+  const csrfToken = isPost ? await getPortalCsrf() : '';
+  const headers = { 'Content-Type': 'application/json', ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}) };
+  return fetch(PORTAL_URL + path, { headers, credentials: 'include', ...opts })
+    .then(async r => { const body = await r.json().catch(() => ({})); return { ok: r.ok, status: r.status, ...body }; });
+}
+
+function usePortalUser() {
+  const [user, setUser] = useState(undefined);
+  useEffect(() => {
+    fetch(PORTAL_URL + '/api/portal/auth/me', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null).then(d => setUser(d?.user || null)).catch(() => setUser(null));
+  }, []);
+  return [user, setUser];
+}
+
+// ── Auth Modal ────────────────────────────────────────────────────────────────
+function AuthModal({ onClose, onLogin }) {
+  const [tab, setTab] = useState('login');
+  const overlay = { position:'fixed', inset:0, background:'rgba(31,26,20,0.55)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 };
+  const box = { background:T.paper, borderRadius:10, padding:32, width:'100%', maxWidth:440, maxHeight:'90vh', overflowY:'auto', position:'relative' };
+  const fieldStyle = { display:'flex', flexDirection:'column', gap:4, marginBottom:14 };
+  const labelStyle = { fontSize:11, fontWeight:700, letterSpacing:'0.06em', color:T.ink2, textTransform:'uppercase' };
+  const inputStyle = { padding:'9px 12px', border:`1px solid ${T.line}`, borderRadius:6, fontSize:14, fontFamily:'inherit', color:T.ink, background:T.bg, outline:'none', width:'100%', boxSizing:'border-box' };
+
+  const [loginUser, setLoginUser] = useState('');
+  const [loginPass, setLoginPass] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [loginBusy, setLoginBusy] = useState(false);
+
+  const [regFirst, setRegFirst] = useState('');
+  const [regLast, setRegLast] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regPhone, setRegPhone] = useState('');
+  const [regAddress, setRegAddress] = useState('');
+  const [regUser, setRegUser] = useState('');
+  const [regPass, setRegPass] = useState('');
+  const [regError, setRegError] = useState('');
+  const [regBusy, setRegBusy] = useState(false);
+
+  async function handleLogin(e) {
+    e.preventDefault();
+    setLoginError(''); setLoginBusy(true);
+    const r = await portalApi('/api/portal/auth/login', { method: 'POST', body: JSON.stringify({ username: loginUser, password: loginPass }) });
+    setLoginBusy(false);
+    if (r.ok) { onLogin(r.user); onClose(); }
+    else { setLoginError(r.message || 'Invalid username or password.'); }
+  }
+
+  async function handleRegister(e) {
+    e.preventDefault();
+    setRegError(''); setRegBusy(true);
+    const r = await portalApi('/api/portal/auth/register', { method: 'POST', body: JSON.stringify({ firstName: regFirst, lastName: regLast, email: regEmail, phone: regPhone, address: regAddress, username: regUser, password: regPass }) });
+    setRegBusy(false);
+    if (r.ok) { onLogin(r.user); onClose(); }
+    else { setRegError(r.message || 'Registration failed.'); }
+  }
+
+  return (
+    <div style={overlay} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={box}>
+        <button onClick={onClose} style={{ position:'absolute', top:12, right:12, background:'none', border:'none', cursor:'pointer', fontSize:20, color:T.ink3, lineHeight:1 }} aria-label="Close">×</button>
+        <div style={{ display:'flex', gap:0, marginBottom:24, borderBottom:`1px solid ${T.line}` }}>
+          {['login','register'].map(t => (
+            <button key={t} onClick={() => setTab(t)} style={{ flex:1, padding:'8px 0', background:'none', border:'none', borderBottom: tab===t ? `2px solid ${T.ochre}` : '2px solid transparent', marginBottom:-1, cursor:'pointer', fontFamily:'inherit', fontWeight:600, fontSize:13, color: tab===t ? T.ink : T.ink3, textTransform:'capitalize' }}>
+              {t === 'login' ? 'Sign In' : 'Create Account'}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'login' && (
+          <form onSubmit={handleLogin}>
+            {loginError && <div style={{background:'#fee2e2', border:'1px solid #fca5a5', color:'#991b1b', borderRadius:6, padding:'8px 12px', marginBottom:14, fontSize:13}}>{loginError}</div>}
+            <label style={fieldStyle}><span style={labelStyle}>Username</span><input style={inputStyle} type="text" value={loginUser} autoComplete="username" onChange={e => setLoginUser(e.target.value)} required /></label>
+            <label style={fieldStyle}><span style={labelStyle}>Password</span><input style={inputStyle} type="password" value={loginPass} autoComplete="current-password" onChange={e => setLoginPass(e.target.value)} required /></label>
+            <button type="submit" disabled={loginBusy} style={{ ...css.btn, ...css.btnPrimary, width:'100%', marginTop:8 }}>{loginBusy ? 'Signing in…' : 'Sign in →'}</button>
+          </form>
+        )}
+
+        {tab === 'register' && (
+          <form onSubmit={handleRegister}>
+            {regError && <div style={{background:'#fee2e2', border:'1px solid #fca5a5', color:'#991b1b', borderRadius:6, padding:'8px 12px', marginBottom:14, fontSize:13}}>{regError}</div>}
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:14 }}>
+              <label style={{...fieldStyle, marginBottom:0}}><span style={labelStyle}>First name</span><input style={inputStyle} type="text" value={regFirst} autoComplete="given-name" onChange={e => setRegFirst(e.target.value)} required /></label>
+              <label style={{...fieldStyle, marginBottom:0}}><span style={labelStyle}>Last name</span><input style={inputStyle} type="text" value={regLast} autoComplete="family-name" onChange={e => setRegLast(e.target.value)} required /></label>
+            </div>
+            <label style={fieldStyle}><span style={labelStyle}>Email address</span><input style={inputStyle} type="email" value={regEmail} autoComplete="email" onChange={e => setRegEmail(e.target.value)} required /></label>
+            <label style={fieldStyle}><span style={labelStyle}>Phone number</span><input style={inputStyle} type="tel" value={regPhone} autoComplete="tel" onChange={e => setRegPhone(e.target.value)} /></label>
+            <label style={fieldStyle}><span style={labelStyle}>Address</span><input style={inputStyle} type="text" value={regAddress} autoComplete="street-address" onChange={e => setRegAddress(e.target.value)} /></label>
+            <label style={fieldStyle}><span style={labelStyle}>Username</span><input style={inputStyle} type="text" value={regUser} autoComplete="username" onChange={e => setRegUser(e.target.value)} required /><span style={{fontSize:11, color:T.ink3}}>3–30 chars · letters, numbers, underscores</span></label>
+            <label style={fieldStyle}><span style={labelStyle}>Password</span><input style={inputStyle} type="password" value={regPass} autoComplete="new-password" onChange={e => setRegPass(e.target.value)} required /><span style={{fontSize:11, color:T.ink3}}>Minimum 8 characters</span></label>
+            <button type="submit" disabled={regBusy} style={{ ...css.btn, ...css.btnPrimary, width:'100%', marginTop:8 }}>{regBusy ? 'Creating account…' : 'Create account →'}</button>
+          </form>
+        )}
+
+        <p style={{ marginTop:16, fontSize:12, color:T.ink3, textAlign:'center' }}>
+          Your account works across the portal, forum, and main site.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ── localStorage helpers ──────────────────────────────────────────────────────
 function getHS(key) {
   try { return parseInt(localStorage.getItem(key) || '0', 10) || 0; } catch { return 0; }
@@ -1872,6 +1989,8 @@ function gameIdFromPath() {
 
 function App() {
   const [activeId, setActiveId] = useState(gameIdFromPath);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [portalUser, setPortalUser] = usePortalUser();
   const active = activeId ? GAME_REGISTRY.find(g=>g.id===activeId) : null;
   const GameComponent = active ? active.component : null;
 
@@ -1886,12 +2005,16 @@ function App() {
   };
 
   useEffect(() => {
-    const onPop = () => {
-      setActiveId(gameIdFromPath());
-    };
+    const onPop = () => { setActiveId(gameIdFromPath()); };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
+
+  async function handleSignOut() {
+    await portalApi('/api/portal/auth/logout', { method: 'POST' });
+    setPortalUser(null);
+    _portalCsrfPromise = null;
+  }
 
   return (
     <div style={{ display:'flex', flexDirection:'column', minHeight:'100vh' }}>
@@ -1904,10 +2027,19 @@ function App() {
         <span style={{ fontFamily:"'Instrument Serif', serif", fontSize:20, color:T.ink }}>
           {active ? active.name : 'Games'}
         </span>
+        {portalUser === undefined ? null : portalUser ? (
+          <div style={{ display:'flex', alignItems:'center', gap:10, fontSize:13, color:T.ink2 }}>
+            <span style={{ maxWidth:140, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{portalUser.displayName || portalUser.username}</span>
+            <button onClick={handleSignOut} style={{ ...css.btn, ...css.btnSecondary, padding:'5px 12px', fontSize:12 }}>Sign out</button>
+          </div>
+        ) : (
+          <button onClick={() => setAuthOpen(true)} style={{ ...css.btn, ...css.btnSecondary, padding:'5px 14px', fontSize:13 }}>Sign In</button>
+        )}
       </header>
       {GameComponent
         ? <GameComponent key={activeId} onBack={backToLobby} />
         : <Lobby onPlay={playGame} />}
+      {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onLogin={u => { setPortalUser(u); }} />}
     </div>
   );
 }
