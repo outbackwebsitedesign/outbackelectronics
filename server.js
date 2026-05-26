@@ -179,6 +179,10 @@ function readRepairs() {
   try { const p = JSON.parse(fs.readFileSync(REPAIRS_DB_PATH, 'utf8')); return p && Array.isArray(p.columns) ? p : { columns: [] }; } catch { return { columns: [] }; }
 }
 function writeRepairs(repairs) { atomicWriteFile(REPAIRS_DB_PATH, JSON.stringify(repairs, null, 2)); }
+function flatRepairs() {
+  const board = readRepairs();
+  return (board.columns || []).flatMap(col => (col.cards || []).map(c => ({ ...c, _colId: col.id, _colLabel: col.label || col.id })));
+}
 
 function readQuotes() {
   try { const p = JSON.parse(fs.readFileSync(QUOTES_DB_PATH, 'utf8')); return Array.isArray(p.quotes) ? p.quotes : []; } catch { return []; }
@@ -2974,12 +2978,12 @@ const adminServer = http.createServer(async (req, res) => {
     const cust = customers.find(c => c.id === custId);
     const email = (cust && cust.email || '').toLowerCase().trim();
     const manualLinks = (cust && cust.manualLinks) || [];
-    const orders = readOrders().filter(o => (o.email||'').toLowerCase().trim() === email || manualLinks.includes(o.id) || manualLinks.includes(o.ref))
-      .map(o => ({ id: o.id, ref: o.ref, title: o.title || o.description, _type: 'order' }));
-    const repairs = readRepairs().filter(r => (r.email||'').toLowerCase().trim() === email || manualLinks.includes(r.id) || manualLinks.includes(r.ref))
-      .map(r => ({ id: r.id, ref: r.id, service: r.service || r.description, _type: 'repair' }));
-    const quotes = readQuotes().filter(q => (q.email||'').toLowerCase().trim() === email || manualLinks.includes(q.id) || manualLinks.includes(q.ref))
-      .map(q => ({ id: q.id, ref: q.ref, service: q.service || q.description, _type: 'quote' }));
+    const orders = readOrders().filter(o => (email && (o.email||'').toLowerCase().trim() === email) || manualLinks.includes(o.id) || manualLinks.includes(o.ref))
+      .map(o => ({ id: o.id, ref: o.ref || o.id, title: o.title || o.description, _type: 'order' }));
+    const repairs = flatRepairs().filter(r => (email && (r.email||'').toLowerCase().trim() === email) || manualLinks.includes(r.id))
+      .map(r => ({ id: r.id, ref: r.id, service: r.service || r.customer || r.description, status: r._colLabel, _type: 'repair' }));
+    const quotes = readQuotes().filter(q => (email && (q.email||'').toLowerCase().trim() === email) || manualLinks.includes(q.id) || manualLinks.includes(q.ref))
+      .map(q => ({ id: q.id, ref: q.ref || q.id, service: q.service || q.description, _type: 'quote' }));
     return json(res, 200, { orders, repairs, quotes });
   }
   if (req.method === 'POST' && url.pathname === '/api/admin/customers/merge') {
@@ -2997,8 +3001,12 @@ const adminServer = http.createServer(async (req, res) => {
     if (oldEmail && oldEmail !== newEmail) {
       const orders = readOrders().map(o => (o.email||'').toLowerCase().trim() === oldEmail ? { ...o, email: newEmail } : o);
       writeOrders(orders);
-      const repairs = readRepairs().map(r => (r.email||'').toLowerCase().trim() === oldEmail ? { ...r, email: newEmail } : r);
-      writeRepairs(repairs);
+      const repairsBoard = readRepairs();
+      repairsBoard.columns = (repairsBoard.columns || []).map(col => ({
+        ...col,
+        cards: (col.cards || []).map(c => (c.email||'').toLowerCase().trim() === oldEmail ? { ...c, email: newEmail } : c)
+      }));
+      writeRepairs(repairsBoard);
       const quotes = readQuotes().map(q => (q.email||'').toLowerCase().trim() === oldEmail ? { ...q, email: newEmail } : q);
       writeQuotes(quotes);
     }

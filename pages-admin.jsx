@@ -3089,25 +3089,36 @@ function CustomerLinkedJobs({ customerId, email, manualLinks, onLinksChange }) {
   }, [customerId]);
 
   useEffect(() => {
-    // Load all orders, repairs, quotes + all customers to detect jobs claimed by others
+    // Load all orders, repairs (Kanban), quotes + customers to detect jobs claimed by others
     Promise.all([
       fetch('/api/admin/orders', { credentials:'include' }).then(r => r.ok ? r.json() : { items:[] }),
-      fetch('/api/admin/repairs', { credentials:'include' }).then(r => r.ok ? r.json() : []),
+      fetch('/api/admin/repairs', { credentials:'include' }).then(r => r.ok ? r.json() : { columns:[] }),
       fetch('/api/admin/quotes', { credentials:'include' }).then(r => r.ok ? r.json() : { items:[] }),
       fetch('/api/admin/customers', { credentials:'include' }).then(r => r.ok ? r.json() : { items:[] }),
     ]).then(([od, rd, qd, cd]) => {
       const orders = (od.items || od.orders || []).map(o => ({ id: o.id, ref: o.ref || o.id, label: o.title || o.description || o.ref || o.id, _type: 'order', email: (o.email||'').toLowerCase().trim() }));
-      const repairs = (Array.isArray(rd) ? rd : (rd.items || rd.repairs || [])).map(r => ({ id: r.id, ref: r.id, label: r.service || r.description || r.id, _type: 'repair', email: (r.email||'').toLowerCase().trim() }));
+      // Repairs are a Kanban board — flatten all cards from all columns
+      const repairCards = (rd.columns || []).flatMap(col => (col.cards || []).map(c => ({ ...c, _colLabel: col.label || col.id })));
+      const repairs = repairCards.map(r => ({ id: r.id, ref: r.id, label: r.service || r.customer || r.description || r.id, _type: 'repair', email: (r.email||'').toLowerCase().trim() }));
       const quotes = (qd.items || qd.quotes || []).map(q => ({ id: q.id, ref: q.ref || q.id, label: q.service || q.description || q.ref || q.id, _type: 'quote', email: (q.email||'').toLowerCase().trim() }));
       setAllJobs([...orders, ...repairs, ...quotes]);
 
-      // Build set of job IDs owned by other customers (by email or manualLinks)
+      // Build set of job IDs claimed by a DIFFERENT customer (by email or manualLinks).
+      // Never exclude jobs whose email matches THIS customer — those belong here.
+      const thisCustomer = (cd.items || []).find(c => c.id === customerId);
+      const thisEmail = ((thisCustomer && thisCustomer.email) || email || '').toLowerCase().trim();
       const otherCustomers = (cd.items || []).filter(c => c.id !== customerId);
-      const otherEmails = new Set(otherCustomers.map(c => (c.email||'').toLowerCase().trim()).filter(Boolean));
       const otherManual = new Set(otherCustomers.flatMap(c => c.manualLinks||[]));
+      // Only consider another customer's email as "claiming" if it's different from ours
+      const otherEmails = new Set(
+        otherCustomers.map(c => (c.email||'').toLowerCase().trim()).filter(e => e && e !== thisEmail)
+      );
       const claimed = new Set();
       for (const j of [...orders, ...repairs, ...quotes]) {
-        if ((j.email && otherEmails.has(j.email)) || otherManual.has(j.id)) claimed.add(j.id);
+        const jobEmail = j.email;
+        const emailClaimedByOther = jobEmail && jobEmail !== thisEmail && otherEmails.has(jobEmail);
+        const manualClaimedByOther = otherManual.has(j.id);
+        if (emailClaimedByOther || manualClaimedByOther) claimed.add(j.id);
       }
       setClaimedByOther(claimed);
     }).catch(() => {});
