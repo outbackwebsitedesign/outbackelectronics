@@ -1024,7 +1024,16 @@ function RewardsTab() {
     <div className="tab-content">
       <div className="section-block">
         <h2>My Rewards</h2>
-        <p style={{color:'var(--ink-2)', marginTop:8}}>Rewards and loyalty points are coming soon. Check back after your next repair or purchase.</p>
+        <div className="card-paper" style={{padding:28, marginTop:16}}>
+          <div className="eyebrow" style={{marginBottom:8}}>COMING SOON</div>
+          <p style={{color:'var(--ink-2)', lineHeight:1.7}}>
+            Loyalty rewards are being built. Every repair, purchase and referral will earn points
+            redeemable for discounts, priority booking and free gear.
+          </p>
+          <p style={{color:'var(--ink-3)', fontSize:13, marginTop:12}}>
+            You'll be notified when the programme launches — no opt-in needed.
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -1037,7 +1046,16 @@ function WalletTab() {
     <div className="tab-content">
       <div className="section-block">
         <h2>My Wallet</h2>
-        <p style={{color:'var(--ink-2)', marginTop:8}}>Store credit and gift card balance will appear here once the wallet feature launches.</p>
+        <div className="card-paper" style={{padding:28, marginTop:16}}>
+          <div className="eyebrow" style={{marginBottom:8}}>COMING SOON</div>
+          <p style={{color:'var(--ink-2)', lineHeight:1.7}}>
+            Store credit and gift card balances will appear here.
+            If you've been issued store credit, contact us and we'll apply it to your next order manually in the meantime.
+          </p>
+          <p style={{color:'var(--ink-3)', fontSize:13, marginTop:12}}>
+            Got a gift card? <a href="https://outbackelectronics.com.au/contact" style={{color:'var(--rust)'}}>Get in touch →</a>
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -1048,6 +1066,10 @@ function WalletTab() {
 function AddressesTab() {
   const [addresses, setAddresses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ name: '', line1: '', line2: '', city: '', state: '', postcode: '', country: 'AU' });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
 
   useEffect(() => {
     api('/api/portal/addresses')
@@ -1056,24 +1078,70 @@ function AddressesTab() {
       .finally(() => setLoading(false));
   }, []);
 
+  async function saveAddress(e) {
+    e.preventDefault();
+    setErr(''); setBusy(true);
+    const r = await api('/api/portal/addresses/save', { method: 'POST', body: JSON.stringify(form) });
+    setBusy(false);
+    if (r.ok) { setAddresses(a => [...a, r.address]); setShowForm(false); setForm({ name: '', line1: '', line2: '', city: '', state: '', postcode: '', country: 'AU' }); }
+    else setErr(r.message || 'Failed to save address.');
+  }
+
+  async function deleteAddress(id) {
+    await api('/api/portal/addresses/delete', { method: 'POST', body: JSON.stringify({ id }) });
+    setAddresses(a => a.filter(x => x.id !== id));
+  }
+
+  const f = (k) => ({ value: form[k], onChange: e => setForm(p => ({...p, [k]: e.target.value})) });
+
   return (
     <div className="tab-content">
       <div className="section-block">
-        <h2>Saved Addresses</h2>
-        {loading ? <LoadingSection /> : addresses.length === 0
-          ? <p style={{color:'var(--ink-2)', marginTop:8}}>No saved addresses yet. Your delivery addresses will appear here after your first order.</p>
-          : (
-            <div style={{display:'grid', gap:16, marginTop:16}}>
-              {addresses.map((a, i) => (
-                <div key={i} className="card-paper" style={{padding:20}}>
-                  <div style={{fontWeight:600}}>{a.name}</div>
-                  <div style={{color:'var(--ink-2)', fontSize:14, marginTop:4}}>{a.line1}{a.line2 ? `, ${a.line2}` : ''}</div>
-                  <div style={{color:'var(--ink-2)', fontSize:14}}>{a.city} {a.state} {a.postcode}</div>
+        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16}}>
+          <h2>Saved Addresses</h2>
+          {!showForm && <button className="btn btn-rust btn-sm" onClick={() => setShowForm(true)}>+ Add Address</button>}
+        </div>
+        {loading ? <LoadingSection /> : (
+          <>
+            {showForm && (
+              <div className="card-paper" style={{padding:24, marginBottom:20}}>
+                <h3 style={{fontSize:15, marginBottom:16}}>New Address</h3>
+                {err && <div className="alert alert-error" style={{marginBottom:12}}>{err}</div>}
+                <form onSubmit={saveAddress}>
+                  <label className="field"><span className="label">Full name / label *</span><input className="input" required {...f('name')} placeholder="Home, Jane Smith, etc." /></label>
+                  <label className="field"><span className="label">Street address *</span><input className="input" required {...f('line1')} placeholder="123 Station Rd" /></label>
+                  <label className="field"><span className="label">Apartment / suite</span><input className="input" {...f('line2')} placeholder="Unit 4" /></label>
+                  <div style={{display:'grid', gridTemplateColumns:'1fr 80px 100px', gap:12}}>
+                    <label className="field"><span className="label">City / suburb *</span><input className="input" required {...f('city')} placeholder="Broken Hill" /></label>
+                    <label className="field"><span className="label">State *</span><input className="input" required {...f('state')} placeholder="NSW" maxLength={3} /></label>
+                    <label className="field"><span className="label">Postcode *</span><input className="input" required {...f('postcode')} placeholder="2880" maxLength={4} /></label>
+                  </div>
+                  <div style={{display:'flex', gap:8, marginTop:8}}>
+                    <button className="btn btn-rust" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save Address'}</button>
+                    <button className="btn btn-ghost" type="button" onClick={() => setShowForm(false)}>Cancel</button>
+                  </div>
+                </form>
+              </div>
+            )}
+            {addresses.length === 0 && !showForm
+              ? <p style={{color:'var(--ink-2)', marginTop:8}}>No saved addresses yet. Add one to speed up checkout.</p>
+              : (
+                <div style={{display:'grid', gap:12}}>
+                  {addresses.map(a => (
+                    <div key={a.id} className="card-paper" style={{padding:20, display:'flex', justifyContent:'space-between', alignItems:'flex-start'}}>
+                      <div>
+                        <div style={{fontWeight:600}}>{a.name}</div>
+                        <div style={{color:'var(--ink-2)', fontSize:14, marginTop:4}}>{a.line1}{a.line2 ? `, ${a.line2}` : ''}</div>
+                        <div style={{color:'var(--ink-2)', fontSize:14}}>{a.city} {a.state} {a.postcode}</div>
+                      </div>
+                      <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)', borderColor:'var(--rust)'}} onClick={() => deleteAddress(a.id)}>Remove</button>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          )
-        }
+              )
+            }
+          </>
+        )}
       </div>
     </div>
   );
@@ -1097,7 +1165,15 @@ function BookingsTab() {
       <div className="section-block">
         <h2>My Bookings</h2>
         {loading ? <LoadingSection /> : bookings.length === 0
-          ? <EmptyState icon="tool" message="No bookings yet. Book a repair or service appointment to see it here." />
+          ? (
+            <div className="card-paper" style={{padding:28, marginTop:16}}>
+              <p style={{color:'var(--ink-2)', marginBottom:16}}>No bookings yet. To arrange a repair drop-off, field visit or consultation, get in touch and we'll schedule it for you.</p>
+              <div style={{display:'flex', gap:12, flexWrap:'wrap'}}>
+                <a className="btn btn-rust" href="https://outbackelectronics.com.au/quote">Request a Quote →</a>
+                <a className="btn btn-ghost" href="https://outbackelectronics.com.au/contact">Contact us</a>
+              </div>
+            </div>
+          )
           : (
             <table className="data-table" style={{marginTop:16}}>
               <thead><tr><th>Date</th><th>Service</th><th>Status</th></tr></thead>
