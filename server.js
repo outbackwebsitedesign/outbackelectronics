@@ -970,6 +970,54 @@ function emailQuoteReply({ quoteId, customerName, reply, status }) {
   };
 }
 
+function emailQuoteFormal({ quoteRef, customerName, validDays, hardwareItems, pcBuild, pcBuildFee, otherItems, grandTotal, notes }) {
+  const validUntil = new Date(Date.now() + (validDays || 30) * 24 * 60 * 60 * 1000)
+    .toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
+
+  const lineItems = [
+    ...(hardwareItems || []).filter(i => i.name).map(i => {
+      const base = parseFloat(i.basePrice) || 0;
+      const qty = parseInt(i.qty) || 1;
+      return { label: i.name + (qty > 1 ? ` × ${qty}` : ''), amount: base * qty * 1.02 };
+    }),
+    ...(pcBuild && pcBuildFee > 0 ? [{ label: 'Custom PC Build', amount: pcBuildFee }] : []),
+    ...(otherItems || []).filter(i => i.description).map(i => ({ label: i.description, amount: parseFloat(i.amount) || 0 })),
+  ];
+
+  const rows = lineItems.map(item =>
+    `<tr><td style="padding:8px 12px;border-bottom:1px solid #d8cdb6;font-size:13px;">${escHtml(item.label)}</td>` +
+    `<td style="padding:8px 12px;border-bottom:1px solid #d8cdb6;font-size:13px;text-align:right;font-family:monospace;font-weight:600;">$${item.amount.toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr>`
+  ).join('');
+
+  return {
+    subject: `Your quote — ${quoteRef}`,
+    html: emailHtml(`Quote — ${quoteRef}`, `
+      <p>Hi${customerName ? ` ${escHtml(customerName.split(' ')[0])}` : ''},</p>
+      <p>Thank you for your enquiry. Please find your quote from Outback Electronics below.</p>
+      <div class="detail">
+        <dt>REFERENCE</dt><dd>${escHtml(quoteRef)}</dd>
+        <dt>VALID UNTIL</dt><dd>${validUntil}</dd>
+      </div>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;border:1px solid #d8cdb6;">
+        <thead><tr style="background:#1f1a14;">
+          <th style="padding:10px 12px;text-align:left;font-family:monospace;font-size:10px;letter-spacing:.1em;color:#d39a37;font-weight:400;">ITEM</th>
+          <th style="padding:10px 12px;text-align:right;font-family:monospace;font-size:10px;letter-spacing:.1em;color:#d39a37;font-weight:400;">AMOUNT (AUD)</th>
+        </tr></thead>
+        <tbody>
+          ${rows}
+          <tr style="background:#1f1a14;">
+            <td style="padding:12px;font-weight:700;color:#fbf7ed;font-size:14px;">Total (AUD)</td>
+            <td style="padding:12px;text-align:right;font-weight:700;color:#d39a37;font-family:monospace;font-size:16px;">$${(grandTotal||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+          </tr>
+        </tbody>
+      </table>
+      ${notes ? `<div class="detail"><dt>NOTES</dt><dd>${escHtml(notes).replace(/\n/g,'<br>')}</dd></div>` : ''}
+      <p>To accept this quote or ask any questions, simply reply to this email or contact us via the portal.</p>
+      <a class="btn" href="${getSiteUrl()}/portal">Get in touch →</a>
+    `),
+  };
+}
+
 function emailRepairUpdate({ repairId, customerName, status, notes }) {
   const messages = {
     'In Progress': 'Your repair is now being worked on by our technicians.',
@@ -2645,6 +2693,43 @@ const adminServer = http.createServer(async (req, res) => {
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     writeQuotes(readQuotes().filter(q => q.id !== body.id));
     return json(res, 200, { ok: true });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/quotes/send') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    if (!body.customerEmail) return json(res, 400, { error: 'customer_email_required' });
+    const quotes = readQuotes();
+    const quoteRef = body.quoteRef || ('QT-' + Date.now());
+    const now = new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
+    const savedQuote = {
+      id: body.sourceQuoteId || ('quot-' + Date.now()),
+      name: body.customerName || '',
+      email: body.customerEmail,
+      status: 'quoted',
+      kind: 'custom-pc-build',
+      quoteRef,
+      draftQuote: body,
+      age: '0m',
+      date: now,
+      summary: `Quote ${quoteRef} — $${(body.grandTotal||0).toLocaleString('en-AU',{minimumFractionDigits:2})} AUD`,
+    };
+    const idx = quotes.findIndex(q => q.id === savedQuote.id);
+    if (idx >= 0) { quotes[idx] = { ...quotes[idx], ...savedQuote }; } else { quotes.push(savedQuote); }
+    writeQuotes(quotes);
+    const tmpl = emailQuoteFormal({
+      quoteRef,
+      customerName: body.customerName,
+      validDays: body.validDays || 30,
+      hardwareItems: body.hardwareItems || [],
+      pcBuild: body.pcBuild,
+      pcBuildFee: body.pcBuildFee || 0,
+      otherItems: body.otherItems || [],
+      grandTotal: body.grandTotal || 0,
+      notes: body.notes || '',
+    });
+    const sent = await sendEmail({ to: body.customerEmail, ...tmpl });
+    return json(res, 200, { ok: true, quoteRef, sent });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/admin/ewaste/save') {

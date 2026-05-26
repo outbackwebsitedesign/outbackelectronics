@@ -657,25 +657,337 @@ function AdminRepairs() {
 }
 
 // ============================================================
+// QUOTE CREATOR
+// ============================================================
+function QuoteCreator({ context, onBack, onQuoteSent }) {
+  const HARDWARE_MARGIN = 0.02;
+  const PC_BUILD_RATE = 40;
+  const genRef = () => 'QT-' + Date.now().toString().slice(-6);
+
+  const [form, setForm] = useState({
+    quoteRef: genRef(),
+    customerName: context?.name || '',
+    customerEmail: context?.email || '',
+    validDays: 30,
+    hardwareItems: [{ id: 'h' + Date.now(), name: '', qty: 1, basePrice: '' }],
+    pcBuild: false,
+    pcHours: '',
+    otherItems: [],
+    notes: '',
+    sourceQuoteId: context?.id || null,
+  });
+  const [sending, setSending] = useState(false);
+  const [msg, setMsg] = useState({ text: '', ok: true });
+
+  const hw = form.hardwareItems;
+  const hardwareTotal = hw.reduce((s, i) => s + (parseFloat(i.basePrice) || 0) * (parseInt(i.qty) || 1) * (1 + HARDWARE_MARGIN), 0);
+  const pcBuildFee = form.pcBuild ? (parseFloat(form.pcHours) || 0) * PC_BUILD_RATE : 0;
+  const otherTotal = form.otherItems.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+  const grandTotal = hardwareTotal + pcBuildFee + otherTotal;
+
+  const addHw = () => setForm(f => ({ ...f, hardwareItems: [...f.hardwareItems, { id: 'h' + Date.now(), name: '', qty: 1, basePrice: '' }] }));
+  const updHw = (id, patch) => setForm(f => ({ ...f, hardwareItems: f.hardwareItems.map(i => i.id === id ? { ...i, ...patch } : i) }));
+  const remHw = (id) => setForm(f => ({ ...f, hardwareItems: f.hardwareItems.filter(i => i.id !== id) }));
+
+  const addOther = () => setForm(f => ({ ...f, otherItems: [...f.otherItems, { id: 'o' + Date.now(), description: '', amount: '' }] }));
+  const updOther = (id, patch) => setForm(f => ({ ...f, otherItems: f.otherItems.map(i => i.id === id ? { ...i, ...patch } : i) }));
+  const remOther = (id) => setForm(f => ({ ...f, otherItems: f.otherItems.filter(i => i.id !== id) }));
+
+  const buildPayload = () => ({ ...form, hardwareTotal, pcBuildFee, otherTotal, grandTotal });
+
+  const doSend = async () => {
+    if (!form.customerEmail) { setMsg({ text: 'Customer email is required.', ok: false }); return; }
+    setSending(true); setMsg({ text: '', ok: true });
+    try {
+      const r = await fetch('/api/admin/quotes/send', { method: 'POST', headers: postHeaders(), credentials: 'include', body: JSON.stringify(buildPayload()) });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok) {
+        setMsg({ text: `Quote sent to ${form.customerEmail}`, ok: true });
+        if (onQuoteSent) onQuoteSent(d);
+        setTimeout(() => onBack(), 2200);
+      } else {
+        setMsg({ text: d.error || 'Failed to send. Check SMTP settings in Settings → Integrations.', ok: false });
+      }
+    } catch { setMsg({ text: 'Network error.', ok: false }); }
+    finally { setSending(false); }
+  };
+
+  const doSaveDraft = async () => {
+    setSending(true); setMsg({ text: '', ok: true });
+    try {
+      const payload = {
+        id: form.sourceQuoteId || ('quot-' + Date.now()),
+        name: form.customerName,
+        email: form.customerEmail,
+        status: 'in-review',
+        kind: 'custom-pc-build',
+        quoteRef: form.quoteRef,
+        summary: `Draft quote — $${grandTotal.toLocaleString('en-AU', { minimumFractionDigits: 2 })} AUD`,
+        age: '0m',
+        draftQuote: buildPayload(),
+      };
+      const r = await fetch('/api/admin/quotes/save', { method: 'POST', headers: postHeaders(), credentials: 'include', body: JSON.stringify(payload) });
+      setMsg(r.ok ? { text: 'Draft saved.', ok: true } : { text: 'Failed to save.', ok: false });
+    } catch { setMsg({ text: 'Network error.', ok: false }); }
+    finally { setSending(false); }
+  };
+
+  const fmtAUD = (n) => n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  return (
+    <div style={{ padding: 32, maxWidth: 980, overflowY: 'auto' }}>
+      {/* Page header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 28 }}>
+        <div>
+          <a style={{ cursor: 'pointer', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--rust)', letterSpacing: '.08em' }} onClick={onBack}>← BACK TO INBOX</a>
+          <h2 className="serif" style={{ fontSize: 30, marginTop: 6, fontWeight: 400 }}>Quote Builder</h2>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {msg.text && <span style={{ fontSize: 13, color: msg.ok ? 'var(--eucalyptus)' : 'var(--rust)' }}>{msg.text}</span>}
+          <button className="btn btn-ghost btn-sm" disabled={sending} onClick={doSaveDraft}>Save draft</button>
+          <button className="btn btn-rust btn-sm" disabled={sending} onClick={doSend} style={{ minWidth: 130 }}>{sending ? 'Sending…' : 'Send quote →'}</button>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 24, alignItems: 'start' }}>
+        {/* ── Left column ── */}
+        <div style={{ display: 'grid', gap: 20 }}>
+
+          {/* Customer details */}
+          <section style={{ background: 'var(--paper)', border: '1px solid var(--line)', padding: 24 }}>
+            <div className="eyebrow" style={{ marginBottom: 16 }}>CUSTOMER DETAILS</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <label className="field" style={{ margin: 0 }}><span className="label">Customer name</span>
+                <input className="input" placeholder="Jane Smith" value={form.customerName} onChange={e => setForm({ ...form, customerName: e.target.value })} />
+              </label>
+              <label className="field" style={{ margin: 0 }}><span className="label">Customer email</span>
+                <input className="input" type="email" placeholder="jane@example.com" value={form.customerEmail} onChange={e => setForm({ ...form, customerEmail: e.target.value })} />
+              </label>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px', gap: 14, marginTop: 14 }}>
+              <label className="field" style={{ margin: 0 }}><span className="label">Quote reference</span>
+                <input className="input" value={form.quoteRef} onChange={e => setForm({ ...form, quoteRef: e.target.value })} />
+              </label>
+              <label className="field" style={{ margin: 0 }}><span className="label">Valid (days)</span>
+                <input className="input" type="number" min="1" value={form.validDays} onChange={e => setForm({ ...form, validDays: Number(e.target.value) })} />
+              </label>
+            </div>
+          </section>
+
+          {/* Hardware items */}
+          <section style={{ background: 'var(--paper)', border: '1px solid var(--line)', padding: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+              <div>
+                <div className="eyebrow" style={{ margin: 0 }}>HARDWARE ITEMS</div>
+                <div className="mono" style={{ fontSize: 10, color: 'var(--ink-2)', marginTop: 4, letterSpacing: '.06em' }}>2% MARGIN AUTO-APPLIED · NOT ITEMISED FOR CUSTOMER</div>
+              </div>
+              <button className="btn btn-ghost btn-sm" onClick={addHw}>+ Add item</button>
+            </div>
+
+            {hw.length > 0 && (
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 70px 130px 120px 28px', gap: 8, marginBottom: 6 }}>
+                {['ITEM', 'QTY', 'YOUR COST', 'CUSTOMER PRICE', ''].map((h, i) => (
+                  <div key={i} className="mono" style={{ fontSize: 10, color: 'var(--ink-2)', letterSpacing: '.06em' }}>{h}</div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ display: 'grid', gap: 8 }}>
+              {hw.map(item => {
+                const base = parseFloat(item.basePrice) || 0;
+                const qty = parseInt(item.qty) || 1;
+                const customerPrice = base * qty * (1 + HARDWARE_MARGIN);
+                return (
+                  <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '2fr 70px 130px 120px 28px', gap: 8, alignItems: 'center' }}>
+                    <input className="input" placeholder="e.g. Ryzen 7 5800X CPU" value={item.name} onChange={e => updHw(item.id, { name: e.target.value })} />
+                    <input className="input" type="number" min="1" placeholder="1" value={item.qty} onChange={e => updHw(item.id, { qty: e.target.value })} />
+                    <div style={{ position: 'relative' }}>
+                      <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--ink-2)', pointerEvents: 'none' }}>$</span>
+                      <input className="input" type="number" min="0" step="0.01" placeholder="0.00" value={item.basePrice} onChange={e => updHw(item.id, { basePrice: e.target.value })} style={{ paddingLeft: 22 }} />
+                    </div>
+                    <div className="mono" style={{ fontSize: 13, fontWeight: 600, textAlign: 'right', color: 'var(--ink)' }}>
+                      ${fmtAUD(customerPrice)}
+                    </div>
+                    <button className="icon-btn" style={{ width: 24, height: 24, fontSize: 16, color: 'var(--ink-3)' }} onClick={() => remHw(item.id)}>×</button>
+                  </div>
+                );
+              })}
+            </div>
+
+            {hw.length === 0 && (
+              <div style={{ fontSize: 13, color: 'var(--ink-2)', padding: '12px 0', textAlign: 'center' }}>No hardware items — click + Add item.</div>
+            )}
+
+            {hw.length > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--line)' }}>
+                <span className="mono" style={{ fontSize: 12, color: 'var(--ink-2)' }}>Hardware subtotal: <strong style={{ color: 'var(--ink)' }}>${fmtAUD(hardwareTotal)}</strong></span>
+              </div>
+            )}
+          </section>
+
+          {/* PC Build */}
+          <section style={{ background: 'var(--paper)', border: '1px solid var(--line)', padding: 24 }}>
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', marginBottom: form.pcBuild ? 20 : 0 }}>
+              <input type="checkbox" checked={form.pcBuild} onChange={e => setForm({ ...form, pcBuild: e.target.checked })} style={{ marginTop: 3 }} />
+              <div style={{ flex: 1 }}>
+                <div className="eyebrow" style={{ margin: 0 }}>CUSTOM PC BUILD</div>
+                <div className="mono" style={{ fontSize: 10, color: 'var(--ink-2)', marginTop: 4, letterSpacing: '.06em' }}>$40/HR · SHOWN AS FLAT FEE TO CUSTOMER · HOURS NOT DISCLOSED</div>
+              </div>
+              {form.pcBuild && pcBuildFee > 0 && (
+                <span className="mono" style={{ fontWeight: 700, fontSize: 14, color: 'var(--ink)' }}>${fmtAUD(pcBuildFee)}</span>
+              )}
+            </label>
+
+            {form.pcBuild && (
+              <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: 14, alignItems: 'end' }}>
+                <label className="field" style={{ margin: 0 }}>
+                  <span className="label">Build hours</span>
+                  <input className="input" type="number" min="0" step="0.25" placeholder="0" value={form.pcHours} onChange={e => setForm({ ...form, pcHours: e.target.value })} />
+                </label>
+                <div style={{ paddingBottom: 4 }}>
+                  {form.pcHours ? (
+                    <div>
+                      <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>{parseFloat(form.pcHours)} hr{parseFloat(form.pcHours) !== 1 ? 's' : ''} × $40 = </span>
+                      <strong style={{ fontSize: 14, color: 'var(--ink)' }}>${fmtAUD(pcBuildFee)} flat fee</strong>
+                      <div className="mono" style={{ fontSize: 10, color: 'var(--ink-3)', marginTop: 6, letterSpacing: '.06em' }}>CUSTOMER SEES: "Custom PC Build — ${fmtAUD(pcBuildFee)}"</div>
+                    </div>
+                  ) : (
+                    <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>Enter hours above</span>
+                  )}
+                </div>
+              </div>
+            )}
+          </section>
+
+          {/* Other items */}
+          <section style={{ background: 'var(--paper)', border: '1px solid var(--line)', padding: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div className="eyebrow" style={{ margin: 0 }}>OTHER ITEMS / SERVICES</div>
+              <button className="btn btn-ghost btn-sm" onClick={addOther}>+ Add</button>
+            </div>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {form.otherItems.map(item => (
+                <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '1fr 150px 28px', gap: 8, alignItems: 'center' }}>
+                  <input className="input" placeholder="e.g. Cable management, OS installation" value={item.description} onChange={e => updOther(item.id, { description: e.target.value })} />
+                  <div style={{ position: 'relative' }}>
+                    <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--ink-2)', pointerEvents: 'none' }}>$</span>
+                    <input className="input" type="number" min="0" step="0.01" placeholder="0.00" value={item.amount} onChange={e => updOther(item.id, { amount: e.target.value })} style={{ paddingLeft: 22 }} />
+                  </div>
+                  <button className="icon-btn" style={{ width: 24, height: 24, fontSize: 16, color: 'var(--ink-3)' }} onClick={() => remOther(item.id)}>×</button>
+                </div>
+              ))}
+            </div>
+            {form.otherItems.length === 0 && (
+              <div style={{ fontSize: 13, color: 'var(--ink-2)', textAlign: 'center', padding: '10px 0' }}>No additional items.</div>
+            )}
+          </section>
+
+          {/* Notes */}
+          <section style={{ background: 'var(--paper)', border: '1px solid var(--line)', padding: 24 }}>
+            <div className="eyebrow" style={{ marginBottom: 12 }}>NOTES TO CUSTOMER</div>
+            <textarea className="textarea" style={{ minHeight: 90 }}
+              placeholder="Turnaround time, warranty, pickup/delivery, any conditions…"
+              value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
+          </section>
+        </div>
+
+        {/* ── Right column: live preview ── */}
+        <aside style={{ display: 'grid', gap: 16, position: 'sticky', top: 24 }}>
+          {/* Total summary */}
+          <div style={{ background: 'var(--dark)', color: 'var(--paper)', padding: 22 }}>
+            <div className="eyebrow" style={{ color: 'var(--ochre)', marginBottom: 16 }}>QUOTE TOTAL</div>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {hardwareTotal > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                  <span style={{ color: 'rgba(244,237,225,.65)' }}>Hardware</span>
+                  <span className="mono">${fmtAUD(hardwareTotal)}</span>
+                </div>
+              )}
+              {form.pcBuild && pcBuildFee > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                  <span style={{ color: 'rgba(244,237,225,.65)' }}>PC Build</span>
+                  <span className="mono">${fmtAUD(pcBuildFee)}</span>
+                </div>
+              )}
+              {form.otherItems.filter(i => parseFloat(i.amount) > 0).map((item, idx) => (
+                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                  <span style={{ color: 'rgba(244,237,225,.65)', flex: 1, marginRight: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.description || 'Other'}</span>
+                  <span className="mono">${fmtAUD(parseFloat(item.amount) || 0)}</span>
+                </div>
+              ))}
+              <div style={{ borderTop: '1px solid rgba(255,255,255,.15)', paddingTop: 12, marginTop: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>Total (AUD)</span>
+                <span className="mono" style={{ fontSize: 20, fontWeight: 700, color: 'var(--ochre)' }}>${fmtAUD(grandTotal)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Customer-facing preview */}
+          <div style={{ background: 'var(--paper)', border: '1px solid var(--line)', padding: 20 }}>
+            <div className="eyebrow" style={{ marginBottom: 12 }}>CUSTOMER SEES</div>
+            <div style={{ fontSize: 12, color: 'var(--ink-2)' }}>
+              {[
+                ...hw.filter(i => i.name || i.basePrice).map(i => {
+                  const base = parseFloat(i.basePrice) || 0;
+                  const qty = parseInt(i.qty) || 1;
+                  return { label: (i.name || '(item)') + (qty > 1 ? ` × ${qty}` : ''), amount: base * qty * (1 + HARDWARE_MARGIN) };
+                }),
+                ...(form.pcBuild && pcBuildFee > 0 ? [{ label: 'Custom PC Build', amount: pcBuildFee }] : []),
+                ...form.otherItems.filter(i => i.description || i.amount).map(i => ({ label: i.description || '(item)', amount: parseFloat(i.amount) || 0 })),
+              ].map((row, idx, arr) => (
+                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: idx < arr.length - 1 ? '1px dashed var(--line)' : 'none' }}>
+                  <span style={{ flex: 1, marginRight: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.label}</span>
+                  <span className="mono" style={{ fontWeight: 600 }}>${fmtAUD(row.amount)}</span>
+                </div>
+              ))}
+              {grandTotal > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 10, marginTop: 4, borderTop: '1px solid var(--line)', fontWeight: 700 }}>
+                  <span>Total</span>
+                  <span className="mono" style={{ color: 'var(--rust)' }}>${fmtAUD(grandTotal)}</span>
+                </div>
+              )}
+              {grandTotal === 0 && <div style={{ textAlign: 'center', color: 'var(--ink-3)', padding: '8px 0' }}>Add items to see preview.</div>}
+            </div>
+          </div>
+
+          {/* Quote meta */}
+          <div style={{ background: 'var(--paper)', border: '1px solid var(--line)', padding: 18 }}>
+            <div className="eyebrow" style={{ marginBottom: 10 }}>QUOTE META</div>
+            <div style={{ fontSize: 12, color: 'var(--ink-2)', lineHeight: 1.8 }}>
+              <div><span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--ink-3)' }}>REF</span><br />{form.quoteRef}</div>
+              <div><span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--ink-3)' }}>VALID</span><br />{form.validDays} days</div>
+              {form.customerName && <div><span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--ink-3)' }}>TO</span><br />{form.customerName}</div>}
+              {form.customerEmail && <div><span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--ink-3)' }}>EMAIL</span><br />{form.customerEmail}</div>}
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
 // QUOTES INBOX
 // ============================================================
 function AdminQuotes() {
+  const [view, setView] = useState('inbox'); // 'inbox' | 'create'
+  const [quoteContext, setQuoteContext] = useState(null);
   const [quotes, setQuotes] = useState([]);
   const [staffMembers, setStaffMembers] = useState([]);
   const [edit, setEdit] = useState(null);
   const [form, setForm] = useState({});
   const [assignTarget, setAssignTarget] = useState(null);
   const [assignee, setAssignee] = useState('');
-  const [replyTarget, setReplyTarget] = useState(null);
-  const [replyText, setReplyText] = useState('');
-  const [replySending, setReplySending] = useState(false);
+
   useEffect(() => {
     fetch('/api/admin/quotes', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject()).then(d => setQuotes(d.items || [])).catch(() => setQuotes([]));
     fetch('/api/admin/staff', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject()).then(d => setStaffMembers(d.members || [])).catch(() => setStaffMembers([]));
   }, []);
-  const openQuote = (q) => { setEdit(q); setForm({...q}); };
+
+  const openQuoteCreator = (q) => { setQuoteContext(q || null); setView('create'); };
+
   const doAssign = async () => {
     if (!assignee) return;
     const updated = quotes.map(q => q.id === assignTarget.id ? {...q, assignee, status: q.status === 'new' ? 'in-review' : q.status} : q);
@@ -683,60 +995,73 @@ function AdminQuotes() {
     setAssignTarget(null);
     await fetch('/api/admin/quotes/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({...assignTarget, assignee, status: assignTarget.status === 'new' ? 'in-review' : assignTarget.status}) }).catch(()=>null);
   };
-  const doReply = async () => {
-    if (!replyText.trim()) return;
-    setReplySending(true);
-    await fetch('/api/admin/quotes/reply', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: replyTarget.id, message: replyText }) }).catch(()=>null);
-    setReplySending(false);
-    setReplyTarget(null);
-    setReplyText('');
-  };
-  const map = {
-    'new': { bg:'var(--rust)', fg:'#fff' },
+
+  const statusMap = {
+    'new':       { bg:'var(--rust)', fg:'#fff' },
     'in-review': { bg:'var(--ochre)', fg:'var(--dark)' },
-    'quoted': { bg:'#d8e7d0', fg:'#345526' },
-    'closed': { bg:'var(--bg-deep)', fg:'var(--ink-2)' },
+    'quoted':    { bg:'#d8e7d0', fg:'#345526' },
+    'closed':    { bg:'var(--bg-deep)', fg:'var(--ink-2)' },
   };
+
+  if (view === 'create') {
+    return (
+      <QuoteCreator
+        context={quoteContext}
+        onBack={() => setView('inbox')}
+        onQuoteSent={() => {
+          fetch('/api/admin/quotes', { credentials:'include' })
+            .then(r => r.ok ? r.json() : Promise.reject()).then(d => setQuotes(d.items || [])).catch(() => {});
+        }}
+      />
+    );
+  }
+
   return (
     <div style={{padding:32, display:'grid', gridTemplateColumns:'1fr 360px', gap:24}}>
       <div>
-        <div className="tabs" style={{marginBottom:18}}>
-          {[`Inbox (${quotes.filter(q=>q.status==='new').length})`,`In review (${quotes.filter(q=>q.status==='in-review').length})`,`Quoted (${quotes.filter(q=>q.status==='quoted').length})`,`Won (${quotes.filter(q=>q.status==='won').length})`,'Closed'].map((t,i) => (
-            <div key={i} className={`tab ${i===0?'active':''}`}>{t}</div>
-          ))}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+          <div className="tabs" style={{marginBottom:0}}>
+            {[`Inbox (${quotes.filter(q=>q.status==='new').length})`,`In review (${quotes.filter(q=>q.status==='in-review').length})`,`Quoted (${quotes.filter(q=>q.status==='quoted').length})`,`Won (${quotes.filter(q=>q.status==='won').length})`,'Closed'].map((t,i) => (
+              <div key={i} className={`tab ${i===0?'active':''}`}>{t}</div>
+            ))}
+          </div>
+          <button className="btn btn-rust btn-sm" onClick={() => openQuoteCreator(null)}>+ New quote</button>
         </div>
         <div style={{display:'grid', gap:12}}>
+          {quotes.length === 0 && <div style={{ padding: 24, background: 'var(--paper)', border: '1px solid var(--line)', fontSize: 13, color: 'var(--ink-2)', textAlign: 'center' }}>No quote requests yet.</div>}
           {quotes.map((q,i) => (
             <div key={i} style={{padding:18, background:'var(--paper)', border:'1px solid var(--line)', borderLeft: q.status==='new'?'3px solid var(--rust)':'1px solid var(--line)'}}>
               <div className="row-flex" style={{justifyContent:'space-between'}}>
                 <div className="row-flex" style={{gap:10}}>
                   <span className="mono" style={{fontSize:11, color:'var(--rust)'}}>{q.id}</span>
-                  <span className="tag tag-outline">{q.kind.toUpperCase()}</span>
-                  <StatusPill value={q.status} map={map} />
+                  {q.kind && <span className="tag tag-outline">{q.kind.toUpperCase()}</span>}
+                  <StatusPill value={q.status || 'new'} map={statusMap} />
                 </div>
-                <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{q.age.toUpperCase()} AGO</span>
+                {q.age && <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{q.age.toUpperCase()} AGO</span>}
               </div>
               <div style={{marginTop:10, display:'grid', gridTemplateColumns:'1fr auto', gap:14}}>
                 <div>
-                  <div style={{fontWeight:600}}>{q.name} <span style={{color:'var(--ink-2)', fontWeight:400}}>· {q.loc}</span></div>
-                  <p style={{marginTop:6, fontSize:13, color:'var(--ink-2)'}}>{q.summary}</p>
+                  <div style={{fontWeight:600}}>{q.name} {q.loc && <span style={{color:'var(--ink-2)', fontWeight:400}}>· {q.loc}</span>}</div>
+                  {q.summary && <p style={{marginTop:6, fontSize:13, color:'var(--ink-2)'}}>{q.summary}</p>}
                 </div>
-                <div style={{textAlign:'right'}}>
-                  <div className="mono" style={{fontSize:10, color:'var(--ink-3)'}}>URGENCY</div>
-                  <div style={{fontWeight:600, fontSize:14, color: q.urgency==='Yesterday'?'var(--rust)':'var(--ink)'}}>{q.urgency}</div>
-                  <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginTop:6}}>BUDGET</div>
-                  <div style={{fontWeight:600, fontSize:13}}>{q.budget}</div>
-                </div>
+                {(q.urgency || q.budget) && (
+                  <div style={{textAlign:'right'}}>
+                    {q.urgency && <><div className="mono" style={{fontSize:10, color:'var(--ink-3)'}}>URGENCY</div>
+                    <div style={{fontWeight:600, fontSize:14, color: q.urgency==='Yesterday'?'var(--rust)':'var(--ink)'}}>{q.urgency}</div></>}
+                    {q.budget && <><div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginTop:6}}>BUDGET</div>
+                    <div style={{fontWeight:600, fontSize:13}}>{q.budget}</div></>}
+                  </div>
+                )}
               </div>
               <div className="row-flex" style={{marginTop:14, gap:8, justifyContent:'flex-end'}}>
                 <button className="btn btn-ghost btn-sm" onClick={() => { setAssignee(''); setAssignTarget(q); }}>Assign</button>
-                <button className="btn btn-ghost btn-sm" onClick={() => { setReplyText(''); setReplyTarget(q); }}>Reply</button>
-                <button className="btn btn-sm" onClick={() => openQuote(q)}>Draft quote →</button>
+                <button className="btn btn-rust btn-sm" onClick={() => openQuoteCreator(q)}>Build quote →</button>
               </div>
             </div>
           ))}
         </div>
       </div>
+
       <aside>
         <div style={{padding:20, background:'var(--paper)', border:'1px solid var(--line)'}}>
           <span className="eyebrow">SLA — RESPONSE TIME</span>
@@ -746,17 +1071,22 @@ function AdminQuotes() {
           <span className="eyebrow">UNASSIGNED</span>
           <ul style={{listStyle:'none', padding:0, margin:'10px 0 0', display:'grid', gap:6, fontSize:13}}>
             {quotes.filter(q => q.status === 'new').length === 0
-              ? <li style={{fontSize:13, color:'var(--ink-2)'}}>None.</li>
+              ? <li style={{fontSize:13, color:'var(--ink-2)'}}>None — all assigned.</li>
               : quotes.filter(q => q.status === 'new').map((q,i) => (
                 <li key={i} style={{display:'flex', justifyContent:'space-between'}}>
                   <span className="mono" style={{fontSize:12}}>{q.id}</span>
-                  <a className="mono" style={{fontSize:11, color:'var(--rust)', cursor:'pointer'}} onClick={() => openQuote(q)}>TAKE →</a>
+                  <a className="mono" style={{fontSize:11, color:'var(--rust)', cursor:'pointer'}} onClick={() => openQuoteCreator(q)}>BUILD →</a>
                 </li>
               ))
             }
           </ul>
+          <hr className="thin"/>
+          <button className="btn btn-rust btn-sm" style={{ width: '100%', justifyContent: 'center', marginTop: 4 }} onClick={() => openQuoteCreator(null)}>
+            + Create new quote
+          </button>
         </div>
       </aside>
+
       {edit !== null && (
         <Drawer open={true} onClose={() => setEdit(null)} title={`Quote ${edit.id}`}
           footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
@@ -784,9 +1114,6 @@ function AdminQuotes() {
           <label className="field"><span className="label">Name</span><input className="input" value={form.name||''} onChange={e=>setForm({...form,name:e.target.value})}/></label>
           <label className="field"><span className="label">Location</span><input className="input" value={form.loc||''} onChange={e=>setForm({...form,loc:e.target.value})}/></label>
           <label className="field"><span className="label">Kind</span><input className="input" value={form.kind||''} onChange={e=>setForm({...form,kind:e.target.value})}/></label>
-          <label className="field"><span className="label">Urgency</span><input className="input" value={form.urgency||''} onChange={e=>setForm({...form,urgency:e.target.value})}/></label>
-          <label className="field"><span className="label">Budget</span><input className="input" value={form.budget||''} onChange={e=>setForm({...form,budget:e.target.value})}/></label>
-          <label className="field"><span className="label">Summary</span><textarea className="textarea" value={form.summary||''} onChange={e=>setForm({...form,summary:e.target.value})}/></label>
           <label className="field"><span className="label">Status</span>
             <select className="select" value={form.status||'new'} onChange={e=>setForm({...form,status:e.target.value})}>
               {['new','in-review','quoted','closed'].map(s => <option key={s}>{s}</option>)}
@@ -794,6 +1121,7 @@ function AdminQuotes() {
           </label>
         </Drawer>
       )}
+
       {assignTarget && (
         <Drawer open={true} onClose={() => setAssignTarget(null)} title={`Assign ${assignTarget.id}`}
           footer={<div className="row-flex" style={{gap:8, justifyContent:'flex-end'}}>
@@ -806,21 +1134,6 @@ function AdminQuotes() {
               <option value="">— select staff —</option>
               {staffMembers.map(s => <option key={s.id} value={s.name}>{s.name}{s.role ? ` · ${s.role}` : ''}</option>)}
             </select>
-          </label>
-        </Drawer>
-      )}
-      {replyTarget && (
-        <Drawer open={true} onClose={() => setReplyTarget(null)} title={`Reply to ${replyTarget.id}`}
-          footer={<div className="row-flex" style={{gap:8, justifyContent:'flex-end'}}>
-            <button className="btn btn-ghost btn-sm" onClick={() => setReplyTarget(null)}>Cancel</button>
-            <button className="btn btn-rust btn-sm" onClick={doReply} disabled={replySending || !replyText.trim()}>{replySending ? 'Sending…' : 'Send reply'}</button>
-          </div>}>
-          <div style={{marginBottom:12}}>
-            <div className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>TO: {replyTarget.email || replyTarget.name}</div>
-            <div className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>RE: {replyTarget.id} · {replyTarget.kind}</div>
-          </div>
-          <label className="field"><span className="label">Message</span>
-            <textarea className="textarea" style={{minHeight:160}} placeholder="Hi [name], thanks for getting in touch…" value={replyText} onChange={e => setReplyText(e.target.value)} />
           </label>
         </Drawer>
       )}
