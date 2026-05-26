@@ -3434,7 +3434,7 @@ const portalServer = http.createServer(async (req, res) => {
     };
     const resp = await stripeRequest('POST', '/v1/checkout/sessions', params).catch(() => null);
     if (!resp || resp.status !== 200) return json(res, 502, { error: 'stripe_error', message: 'Could not create payment session. Please try again.' });
-    const stripeSession = resp.data;
+    const stripeSession = resp.body;
     orders[oIdx] = { ...order, stripeSessionId: stripeSession.id };
     writeOrders(orders);
     return json(res, 200, { ok: true, url: stripeSession.url });
