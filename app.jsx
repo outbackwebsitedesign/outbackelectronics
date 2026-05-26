@@ -749,6 +749,18 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
   const [shareError, setShareError] = useState(null);
   const [loadingShared, setLoadingShared] = useState(false);
   const [sharedLoaded, setSharedLoaded] = useState(false);
+  const [postcodeInput, setPostcodeInput] = useState('');
+  const [shippingQuote, setShippingQuote] = useState(null); // { services, fromPostcode, toPostcode, totalWeightKg }
+  const [shippingLoading, setShippingLoading] = useState(false);
+  const [shippingError, setShippingError] = useState(null);
+  const [selectedShipping, setSelectedShipping] = useState(null); // { code, name, price }
+
+  // Reset shipping quote when cart contents change
+  useEffect(() => {
+    setShippingQuote(null);
+    setSelectedShipping(null);
+    setShippingError(null);
+  }, [cart.map(i => `${i.id||i.sku}:${i.qty}`).join(',')]);
 
   // Load a shared cart from ?share=<id> on first render
   useEffect(() => {
@@ -797,7 +809,35 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
 
   const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const discount = gc ? gc.discount : 0;
-  const total = Math.max(0, subtotal - discount);
+  const shippingCost = selectedShipping ? selectedShipping.price : 0;
+  const total = Math.max(0, subtotal + shippingCost - discount);
+
+  const getShippingQuote = async () => {
+    const pc = postcodeInput.trim();
+    if (!/^\d{4}$/.test(pc)) { setShippingError('Enter a valid 4-digit Australian postcode.'); return; }
+    setShippingLoading(true);
+    setShippingError(null);
+    setShippingQuote(null);
+    setSelectedShipping(null);
+    try {
+      const items = cart.map(i => ({ productId: i.id || i.sku || '', quantity: i.qty }));
+      const resp = await fetch('/api/shipping/quote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() },
+        body: JSON.stringify({ toPostcode: pc, items }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) { setShippingError(data.message || 'Could not get shipping quote.'); return; }
+      if (data.digital) { setShippingQuote({ services: [], digital: true, toPostcode: pc }); return; }
+      if (!data.services || data.services.length === 0) { setShippingError('No shipping services available for that postcode.'); return; }
+      setShippingQuote(data);
+      setSelectedShipping(data.services[0]);
+    } catch {
+      setShippingError('Could not connect to shipping service. Please try again.');
+    } finally {
+      setShippingLoading(false);
+    }
+  };
 
   const applyGiftCard = async () => {
     const code = gcInput.trim().toUpperCase();
@@ -824,12 +864,21 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
 
   const checkout = async () => {
     if (cart.length === 0) return;
+    const hasPhysical = cart.some(i => !i.digital);
+    if (hasPhysical && !selectedShipping) {
+      setError('Please get a shipping quote and select a shipping method before checkout.');
+      return;
+    }
     setCheckingOut(true);
     setError(null);
     try {
       const items = cart.map(i => ({ name: i.name, priceAud: i.price, quantity: i.qty, productId: i.id || i.sku || '' }));
       const body = { items };
       if (gc) body.giftCardCode = gc.code;
+      if (selectedShipping) {
+        body.shippingAmount = selectedShipping.price;
+        body.shippingService = selectedShipping.name;
+      }
       const resp = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() },
@@ -918,16 +967,72 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
                 );
               })}
               <hr className="thin" />
-              {discount > 0 && (
+
+              {/* Shipping estimator */}
+              {cart.some(i => !i.digital) && (
+                <div style={{marginBottom:14}}>
+                  <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginBottom:8}}>SHIPPING ESTIMATE</div>
+                  {!shippingQuote ? (
+                    <>
+                      <div style={{display:'flex', gap:6}}>
+                        <input
+                          className="input"
+                          placeholder="Your postcode"
+                          value={postcodeInput}
+                          maxLength={4}
+                          onChange={e => { setPostcodeInput(e.target.value.replace(/\D/,'')); setShippingError(null); }}
+                          onKeyDown={e => e.key === 'Enter' && getShippingQuote()}
+                          style={{flex:1, fontSize:13, fontFamily:'monospace', letterSpacing:'.05em'}}
+                        />
+                        <button className="btn btn-ghost btn-sm" onClick={getShippingQuote} disabled={shippingLoading || postcodeInput.length !== 4}>
+                          {shippingLoading ? '…' : 'Quote'}
+                        </button>
+                      </div>
+                      {shippingError && <div style={{marginTop:6, fontSize:12, color:'#b91c1c'}}>{shippingError}</div>}
+                    </>
+                  ) : shippingQuote.digital ? (
+                    <div style={{fontSize:12, color:'#16a34a'}}>All items are digital — no shipping required.</div>
+                  ) : (
+                    <div>
+                      <div style={{fontSize:11, color:'var(--ink-3)', marginBottom:6}}>
+                        Shipping to {shippingQuote.toPostcode} · {shippingQuote.totalWeightKg}kg
+                        <button onClick={() => { setShippingQuote(null); setSelectedShipping(null); setPostcodeInput(''); }} style={{marginLeft:8, background:'none', border:'none', cursor:'pointer', color:'var(--ink-3)', fontSize:11, textDecoration:'underline', padding:0}}>Change</button>
+                      </div>
+                      {shippingQuote.services.map(s => (
+                        <label key={s.code} style={{display:'flex', alignItems:'center', gap:8, fontSize:13, marginBottom:6, cursor:'pointer'}}>
+                          <input
+                            type="radio"
+                            name="shippingService"
+                            checked={selectedShipping?.code === s.code}
+                            onChange={() => setSelectedShipping(s)}
+                          />
+                          <span style={{flex:1}}>{s.name}</span>
+                          <span style={{fontFamily:'monospace', color:'var(--rust)'}}>${s.price.toFixed(2)}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {(discount > 0 || shippingCost > 0) && (
                 <>
                   <div style={{display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:6, color:'var(--ink-2)'}}>
                     <span>Subtotal</span>
-                    <span>${subtotal.toLocaleString()}</span>
+                    <span>${subtotal.toLocaleString('en-AU', {minimumFractionDigits:2})}</span>
                   </div>
-                  <div style={{display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:6, color:'#16a34a'}}>
-                    <span>Gift card ({gc.code})</span>
-                    <span>−${discount.toLocaleString('en-AU', {minimumFractionDigits:2})}</span>
-                  </div>
+                  {shippingCost > 0 && (
+                    <div style={{display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:6, color:'var(--ink-2)'}}>
+                      <span>Shipping</span>
+                      <span>${shippingCost.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {discount > 0 && (
+                    <div style={{display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:6, color:'#16a34a'}}>
+                      <span>Gift card ({gc.code})</span>
+                      <span>−${discount.toLocaleString('en-AU', {minimumFractionDigits:2})}</span>
+                    </div>
+                  )}
                   <hr className="thin" />
                 </>
               )}
@@ -935,7 +1040,9 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
                 <span style={{fontSize:13, color:'var(--ink-2)'}}>Total</span>
                 <span className="serif" style={{fontSize:24, color:'var(--rust)'}}>${total.toLocaleString('en-AU', {minimumFractionDigits:2})}</span>
               </div>
-              <div className="mono" style={{fontSize:11, color:'var(--ink-3)', marginBottom:16}}>SHIPPING CALCULATED AT CHECKOUT</div>
+              {!selectedShipping && cart.some(i => !i.digital) && (
+                <div className="mono" style={{fontSize:11, color:'var(--ink-3)', marginBottom:6}}>+ SHIPPING (QUOTE ABOVE)</div>
+              )}
 
               {/* Gift card input */}
               {gc ? (
@@ -964,7 +1071,7 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
 
               {error && <div style={{marginBottom:12, padding:'10px 14px', background:'#fff1f0', border:'1px solid #fca5a5', fontSize:13, color:'#b91c1c'}}>{error}</div>}
               <button className="btn btn-rust" style={{width:'100%', justifyContent:'center'}} onClick={checkout} disabled={checkingOut}>
-                {checkingOut ? 'Redirecting…' : `Checkout — $${total.toLocaleString('en-AU', {minimumFractionDigits:2})}`}
+                {checkingOut ? 'Redirecting…' : `Checkout — $${total.toLocaleString('en-AU', {minimumFractionDigits:2})}${selectedShipping ? '' : cart.some(i=>!i.digital) ? ' + shipping' : ''}`}
               </button>
               <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginTop:10, textAlign:'center'}}>SECURE CHECKOUT VIA STRIPE</div>
 

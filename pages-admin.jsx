@@ -1185,6 +1185,33 @@ function AdminProducts({ sessionInfo = {} }) {
           {(form.variants && form.variants.length > 0) && (
             <div style={{fontSize:12, color:'var(--ink-2)', marginTop:4}}>When variants are set, per-variant price and stock are used on the public site.</div>
           )}
+          {!form.digital && (
+            <>
+              <div className="eyebrow" style={{marginTop:18, marginBottom:10}}>SHIPPING</div>
+              <div className="grid-2" style={{gap:14}}>
+                <label className="field">
+                  <span className="label">Weight (kg)</span>
+                  <input className="input" type="number" step="0.01" min="0" placeholder="0.50" value={form.weightKg||''} onChange={e=>setForm({...form, weightKg:e.target.value})} />
+                </label>
+                <div />
+              </div>
+              <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:14}}>
+                <label className="field">
+                  <span className="label">Length (cm)</span>
+                  <input className="input" type="number" step="1" min="0" placeholder="20" value={form.lengthCm||''} onChange={e=>setForm({...form, lengthCm:e.target.value})} />
+                </label>
+                <label className="field">
+                  <span className="label">Width (cm)</span>
+                  <input className="input" type="number" step="1" min="0" placeholder="15" value={form.widthCm||''} onChange={e=>setForm({...form, widthCm:e.target.value})} />
+                </label>
+                <label className="field">
+                  <span className="label">Height (cm)</span>
+                  <input className="input" type="number" step="1" min="0" placeholder="10" value={form.heightCm||''} onChange={e=>setForm({...form, heightCm:e.target.value})} />
+                </label>
+              </div>
+              <div style={{fontSize:11, color:'var(--ink-3)', marginTop:-6, marginBottom:8}}>Used for AusPost shipping quotes. Defaults applied if left blank.</div>
+            </>
+          )}
           <label className="field"><span className="label">Description</span>
             <textarea className="textarea" placeholder="Bench-tested, 38-point check, ships with charger…" value={form.desc||''} onChange={e=>setForm({...form, desc:e.target.value})} />
           </label>

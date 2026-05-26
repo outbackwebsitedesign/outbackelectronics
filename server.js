@@ -19,13 +19,14 @@ const RATE_MAX_ATTEMPTS = 5;
 const LOCKOUT_MS = 1000 * 60 * 15;
 const ADMIN_IP_ALLOWLIST = (process.env.ADMIN_IP_ALLOWLIST || '').split(',').map(v => v.trim()).filter(Boolean);
 const PUBLIC_RATE_WINDOW_MS = 1000 * 60 * 10;
-const PUBLIC_RATE_LIMITS = { checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5 };
+const PUBLIC_RATE_LIMITS = { checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30 };
 
 fs.mkdirSync(path.join(__dirname, 'assets/uploads'), { recursive: true });
 
 const STRIPE_SECRET_KEY       = process.env.STRIPE_SECRET_KEY       || '';
 const STRIPE_WEBHOOK_SECRET   = process.env.STRIPE_WEBHOOK_SECRET   || '';
 const STRIPE_PUBLISHABLE_KEY  = process.env.STRIPE_PUBLISHABLE_KEY  || '';
+const AUSPOST_API_KEY         = process.env.AUSPOST_API_KEY         || '';
 const SITE_URL              = process.env.SITE_URL              || 'http://localhost:8080';
 const ADMIN_URL             = process.env.ADMIN_URL             || (/^https?:\/\/(localhost|127\.|0\.0\.0\.0)(:\d+)?/.test(SITE_URL) ? SITE_URL.replace(/(:\d+)?(\/|$)/, ':8082$2') : SITE_URL.replace(/^(https?:\/\/)/, '$1admin.'));
 
@@ -1148,6 +1149,23 @@ function getStripeWebhookSecret() {
   } catch { return STRIPE_WEBHOOK_SECRET; }
 }
 
+function getAuspostKey() {
+  try {
+    const s = readSettings();
+    const entry = s.integrations.find(r => r[0] === 'AusPost');
+    return entry?.[3]?.apiKey || AUSPOST_API_KEY;
+  } catch { return AUSPOST_API_KEY; }
+}
+
+function getShopPostcode() {
+  try {
+    const s = readSettings();
+    const addr = s.shop?.address || '';
+    const m = addr.match(/\b(\d{4})\b/);
+    return m ? m[1] : '2731';
+  } catch { return '2731'; }
+}
+
 function getSmtpConfig() {
   try {
     const s = readSettings();
@@ -1368,6 +1386,106 @@ const mainServer = http.createServer(async (req, res) => {
     return json(res, 200, { active: true, text: announcement.text });
   }
 
+  // ── AusPost: shipping quote ──────────────────────────────────────────────────
+  if (req.method === 'POST' && url.pathname === '/api/shipping/quote') {
+    if (publicRateLimited(getIp(req), 'shipping/quote')) return json(res, 429, { error: 'too_many_requests' });
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+
+    const { toPostcode, items } = body;
+    if (!toPostcode || !/^\d{4}$/.test(String(toPostcode).trim())) {
+      return json(res, 422, { error: 'invalid_postcode', message: 'Please enter a valid 4-digit Australian postcode.' });
+    }
+    if (!Array.isArray(items) || items.length === 0) {
+      return json(res, 422, { error: 'missing_items' });
+    }
+
+    const auspostKey = getAuspostKey();
+    if (!auspostKey) return json(res, 503, { error: 'auspost_not_configured', message: 'Shipping quotes are not available at this time.' });
+
+    const catalog = readProducts();
+    let totalWeightKg = 0;
+    let maxLengthCm = 0;
+    let maxWidthCm = 0;
+    let totalHeightCm = 0;
+    let hasPhysical = false;
+
+    for (const li of items) {
+      const pid = String(li.productId || '');
+      const qty = Math.max(1, Math.floor(Number(li.quantity) || 1));
+      const prod = catalog.find(p => p.id === pid);
+      if (!prod || prod.digital) continue;
+      hasPhysical = true;
+      const w = Number(prod.weightKg) || 0.5;
+      const l = Number(prod.lengthCm) || 20;
+      const ww = Number(prod.widthCm) || 15;
+      const h = Number(prod.heightCm) || 10;
+      totalWeightKg += w * qty;
+      maxLengthCm = Math.max(maxLengthCm, l);
+      maxWidthCm = Math.max(maxWidthCm, ww);
+      totalHeightCm += h * qty;
+    }
+
+    if (!hasPhysical) return json(res, 200, { services: [], digital: true });
+
+    totalWeightKg = Math.max(0.1, totalWeightKg);
+    maxLengthCm = Math.max(5, maxLengthCm);
+    maxWidthCm = Math.max(5, maxWidthCm);
+    totalHeightCm = Math.max(1, totalHeightCm);
+
+    const fromPostcode = getShopPostcode();
+    const params = new URLSearchParams({
+      from_postcode: fromPostcode,
+      to_postcode: String(toPostcode).trim(),
+      length: String(Math.ceil(maxLengthCm)),
+      width: String(Math.ceil(maxWidthCm)),
+      height: String(Math.ceil(totalHeightCm)),
+      weight: String(Math.min(22, totalWeightKg).toFixed(3)),
+    });
+
+    const auspostResp = await new Promise((resolve) => {
+      const options = {
+        hostname: 'digitalapi.auspost.com.au',
+        path: `/postage/parcel/domestic/service.json?${params}`,
+        method: 'GET',
+        headers: { 'AUTH-KEY': auspostKey },
+      };
+      const req2 = https.request(options, (res2) => {
+        let data = '';
+        res2.on('data', d => { data += d; });
+        res2.on('end', () => {
+          try { resolve({ status: res2.statusCode, body: JSON.parse(data) }); }
+          catch { resolve({ status: res2.statusCode, body: null }); }
+        });
+      });
+      req2.on('error', () => resolve(null));
+      req2.setTimeout(8000, () => { req2.destroy(); resolve(null); });
+      req2.end();
+    });
+
+    if (!auspostResp || auspostResp.status !== 200 || !auspostResp.body) {
+      return json(res, 502, { error: 'auspost_error', message: 'Could not retrieve shipping quotes. Please try again.' });
+    }
+
+    const rawServices = auspostResp.body?.services?.service || [];
+    const services = (Array.isArray(rawServices) ? rawServices : [rawServices])
+      .filter(s => s && s.code && s.price)
+      .map(s => ({
+        code: s.code,
+        name: s.name,
+        price: parseFloat(s.price),
+        maxDays: s.max_extra_cover != null ? undefined : undefined,
+        options: undefined,
+      }))
+      .sort((a, b) => a.price - b.price);
+
+    return json(res, 200, {
+      services,
+      fromPostcode,
+      toPostcode: String(toPostcode).trim(),
+      totalWeightKg: parseFloat(totalWeightKg.toFixed(3)),
+    });
+  }
+
   // ── Stripe: session lookup (for success page) ───────────────────────────────
   if (req.method === 'GET' && url.pathname === '/api/checkout/session') {
     if (!getStripeKey()) return json(res, 503, { error: 'stripe_not_configured' });
@@ -1389,7 +1507,7 @@ const mainServer = http.createServer(async (req, res) => {
     if (!getStripeKey()) return json(res, 503, { error: 'stripe_not_configured' });
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
 
-    const { productId, name, priceAud, quantity = 1, customerEmail, items, giftCardCode } = body;
+    const { productId, name, priceAud, quantity = 1, customerEmail, items, giftCardCode, shippingAmount, shippingService } = body;
 
     // Normalise to a line-items array (multi-item cart or legacy single-item)
     const rawLineItems = Array.isArray(items) && items.length > 0
@@ -1464,9 +1582,21 @@ const mainServer = http.createServer(async (req, res) => {
     const membershipLineItem = lineItems.find(li => membershipTiers.some(t => t.id === li.productId));
     if (membershipLineItem) params['payment_intent_data[metadata][membershipTierId]'] = membershipLineItem.productId;
 
+    // Validate shipping amount (server-side cap to prevent manipulation: max $200)
+    const validatedShipping = shippingAmount && Number(shippingAmount) > 0 ? Math.min(200, Number(shippingAmount)) : 0;
+    const shippingServiceName = shippingService ? String(shippingService).slice(0, 80) : '';
+
     // Build line items; if a gift card covers the full amount, add a $0.50 minimum line item
     // so Stripe doesn't reject a $0 session — instead we add a discount coupon approach via negative line item
     const adjustedLineItems = [...lineItems];
+    if (validatedShipping > 0) {
+      adjustedLineItems.push({
+        name: shippingServiceName || 'Shipping',
+        priceAud: validatedShipping,
+        quantity: 1,
+        productId: '',
+      });
+    }
     if (gcDiscount > 0) {
       adjustedLineItems.push({
         name: `Gift Card (${gcCodeNorm})`,
@@ -1480,7 +1610,8 @@ const mainServer = http.createServer(async (req, res) => {
     let finalLineItems = adjustedLineItems;
     if (gcDiscount > 0) {
       const grossCents = lineItems.reduce((s, li) => s + Math.round(Number(li.priceAud) * 100) * (li.quantity || 1), 0);
-      const netCents = Math.max(50, grossCents - Math.round(gcDiscount * 100)); // Stripe min 50c
+      const shippingCents = Math.round(validatedShipping * 100);
+      const netCents = Math.max(50, grossCents + shippingCents - Math.round(gcDiscount * 100)); // Stripe min 50c
       finalLineItems = [{ name: 'Outback Electronics Order', priceAud: netCents / 100, quantity: 1, productId: lineItems.length === 1 ? (lineItems[0].productId || '') : '' }];
     }
 
@@ -1491,6 +1622,8 @@ const mainServer = http.createServer(async (req, res) => {
       params[`line_items[${idx}][quantity]`] = String(li.quantity || 1);
     });
     if (lineItems.length === 1) params['payment_intent_data[metadata][productId]'] = lineItems[0].productId || '';
+    if (validatedShipping > 0) params['payment_intent_data[metadata][shippingAmount]'] = String(validatedShipping);
+    if (shippingServiceName) params['payment_intent_data[metadata][shippingService]'] = shippingServiceName;
     if (customerEmail) params['customer_email'] = customerEmail;
 
     const resp = await stripeRequest('POST', '/v1/checkout/sessions', params).catch(() => null);
