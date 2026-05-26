@@ -82,6 +82,11 @@
   .tabs-row::-webkit-scrollbar { display: none; }
   .tab-btn { white-space: nowrap; flex-shrink: 0; }
 
+  /* Hero — stack to single column, shrink headline */
+  .hero-grid { grid-template-columns: 1fr !important; gap: 24px !important; }
+  .hero-image { display: none; }
+  h1.hero-headline { font-size: 56px !important; line-height: 0.95 !important; }
+
   /* Thread list in community page */
   .thread { grid-template-columns: 40px 1fr; gap: 10px; }
   .thread .replies, .thread .views { display: none; }
