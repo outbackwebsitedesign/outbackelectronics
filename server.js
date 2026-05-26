@@ -177,8 +177,19 @@ function readCustomers() {
 }
 function writeCustomers(customers) { atomicWriteFile(CUSTOMERS_DB_PATH, JSON.stringify({ customers }, null, 2)); }
 
+const DEFAULT_REPAIR_COLUMNS = [
+  { id: 'intake',    label: 'Intake',        cards: [] },
+  { id: 'diagnosis', label: 'Diagnosis',     cards: [] },
+  { id: 'repair',    label: 'Build / Repair',cards: [] },
+  { id: 'qa',        label: 'Quality Check', cards: [] },
+  { id: 'done',      label: 'Done',          cards: [] },
+];
 function readRepairs() {
-  try { const p = JSON.parse(fs.readFileSync(REPAIRS_DB_PATH, 'utf8')); return p && Array.isArray(p.columns) ? p : { columns: [] }; } catch { return { columns: [] }; }
+  try {
+    const p = JSON.parse(fs.readFileSync(REPAIRS_DB_PATH, 'utf8'));
+    if (p && Array.isArray(p.columns) && p.columns.length) return p;
+  } catch { /* fall through */ }
+  return { columns: DEFAULT_REPAIR_COLUMNS.map(c => ({ ...c, cards: [] })) };
 }
 function writeRepairs(repairs) { atomicWriteFile(REPAIRS_DB_PATH, JSON.stringify(repairs, null, 2)); }
 function flatRepairs() {
@@ -1077,7 +1088,7 @@ function emailOrderDelivered({ orderId, customerName, trackingNumber }) {
 function emailOrderShipped({ orderId, customerName, trackingNumber }) {
   const name = customerName ? customerName.split(' ')[0] : '';
   const trackingUrl = `https://auspost.com.au/mypost/track/#/details/${encodeURIComponent(trackingNumber)}`;
-  const registerUrl = `${getSiteUrl()}/register?orderId=${encodeURIComponent(orderId)}`;
+  const registerUrl = `${getPortalUrl()}/?warranty=${encodeURIComponent(orderId)}`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(registerUrl)}`;
   return {
     subject: `Your order has shipped — ${orderId}`,

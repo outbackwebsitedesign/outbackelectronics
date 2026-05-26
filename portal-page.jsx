@@ -860,6 +860,13 @@ function QuotesTab({ user, onOrderCreated, highlightRef }) {
                 </div>
               )}
 
+              {q.reply && (
+                <div style={{background:'var(--bg-elev)', border:'1px solid var(--line)', padding:'16px 20px', marginBottom:16, borderRadius:2}}>
+                  <div className="eyebrow" style={{marginBottom:8, fontSize:10}}>MESSAGE FROM OUTBACK ELECTRONICS</div>
+                  <p style={{fontSize:14, color:'var(--ink)', lineHeight:1.7, whiteSpace:'pre-wrap', margin:0}}>{q.reply}</p>
+                </div>
+              )}
+
               {dq.notes && <p style={{fontSize:13, color:'var(--ink-2)', marginBottom:16}}>{dq.notes}</p>}
 
               {accepted ? (
@@ -1215,6 +1222,101 @@ function EmptyState({ icon, message }) {
   );
 }
 
+// ── Warranty Registration (portal route, no tab in nav) ───────────────────────
+
+function WarrantyPage({ orderId: initialOrderId }) {
+  const [orderId, setOrderId] = useState(initialOrderId || '');
+  const [lookup, setLookup] = useState(null);
+  const [lookupErr, setLookupErr] = useState('');
+  const [form, setForm] = useState({ name: '', email: '', receivedDate: '', notes: '' });
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(null);
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    if (initialOrderId) doLookup(initialOrderId);
+  }, []);
+
+  async function doLookup(id) {
+    setLookupErr('');
+    const d = await api(`/api/warranty/order-lookup?id=${encodeURIComponent(id)}`).catch(() => null);
+    if (!d || !d.found) { setLookupErr('Order not found. Check the ID in your email and try again.'); return; }
+    setLookup(d);
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setErr(''); setBusy(true);
+    const r = await api('/api/warranty/register', { method: 'POST', body: JSON.stringify({ ...form, orderId, expenses: lookup?.expenses || [] }) });
+    setBusy(false);
+    if (r.ok) setDone(r.id);
+    else setErr(r.message || 'Something went wrong. Please try again.');
+  }
+
+  if (done) return (
+    <div className="tab-content">
+      <div className="section-block" style={{ maxWidth: 600 }}>
+        <div className="eyebrow" style={{ color: 'var(--rust)', marginBottom: 12 }}>WARRANTY REGISTERED</div>
+        <h2 style={{ marginBottom: 12 }}>You're covered.</h2>
+        <p style={{ color: 'var(--ink-2)', lineHeight: 1.7 }}>
+          Registration ID: <strong className="mono">{done}</strong><br />
+          We've sent a confirmation to {form.email}. Keep it as your warranty record.
+        </p>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="tab-content">
+      <div className="section-block" style={{ maxWidth: 640 }}>
+        <h2 style={{ marginBottom: 8 }}>Register Your Build</h2>
+        <p style={{ color: 'var(--ink-2)', marginBottom: 24 }}>Enter your order ID and we'll pull up your build details automatically.</p>
+
+        {!lookup ? (
+          <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
+            <input className="input" style={{ flex: 1 }} placeholder="e.g. ord-1234567890" value={orderId}
+              onChange={e => setOrderId(e.target.value)} />
+            <button className="btn btn-rust" onClick={() => doLookup(orderId)} disabled={!orderId.trim()}>Look up →</button>
+          </div>
+        ) : (
+          <div className="card-paper" style={{ padding: 16, marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div className="eyebrow" style={{ marginBottom: 4 }}>ORDER FOUND</div>
+              <div className="mono" style={{ fontSize: 13 }}>{orderId} · {lookup.order?.date}</div>
+            </div>
+            <button className="btn btn-ghost btn-sm" onClick={() => { setLookup(null); setLookupErr(''); }}>Change</button>
+          </div>
+        )}
+
+        {lookupErr && <div className="alert alert-error" style={{ marginBottom: 16 }}>{lookupErr}</div>}
+
+        {lookup && (
+          <form onSubmit={handleSubmit}>
+            <label className="field">
+              <span className="label">Full name *</span>
+              <input className="input" required value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} placeholder="Your name" />
+            </label>
+            <label className="field">
+              <span className="label">Email address *</span>
+              <input className="input" type="email" required value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))} placeholder="your@email.com" />
+            </label>
+            <label className="field">
+              <span className="label">Date received *</span>
+              <input className="input" type="date" required value={form.receivedDate} onChange={e => setForm(f => ({...f, receivedDate: e.target.value}))} />
+            </label>
+            <label className="field">
+              <span className="label">Notes (optional)</span>
+              <textarea className="input textarea" rows={3} value={form.notes} onChange={e => setForm(f => ({...f, notes: e.target.value}))} placeholder="Anything we should know — e.g. arrived with minor transit damage" />
+            </label>
+            {err && <div className="alert alert-error" style={{ marginBottom: 12 }}>{err}</div>}
+            <button className="btn btn-rust" type="submit" disabled={busy}>{busy ? 'Registering…' : 'Register Warranty →'}</button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
 const PORTAL_TABS = ['overview','orders','repairs','quotes','memberships','rewards','wallet','addresses','bookings','account'];
@@ -1436,6 +1538,7 @@ function PortalApp() {
   const [loading, setLoading] = useState(true);
   const resetToken = new URLSearchParams(window.location.search).get('reset');
   const quoteToken = new URLSearchParams(window.location.search).get('token');
+  const warrantyOrderId = new URLSearchParams(window.location.search).get('warranty');
 
   useEffect(() => {
     ensureCsrf().then(() =>
@@ -1470,6 +1573,7 @@ function PortalApp() {
   }
 
   if (!user) return <LoginPage onLogin={setUser} />;
+  if (warrantyOrderId) return <WarrantyPage orderId={warrantyOrderId} />;
   return <Dashboard user={user} setUser={setUser} onLogout={() => setUser(null)} />;
 }
 
