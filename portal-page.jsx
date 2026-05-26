@@ -394,7 +394,7 @@ function OverviewTab({ user, setTab }) {
 
 // ── Orders ────────────────────────────────────────────────────────────────────
 
-function OrdersTab() {
+function OrdersTab({ highlightId }) {
   const [items, setItems] = useState(null);
 
   useEffect(() => {
@@ -402,6 +402,8 @@ function OrdersTab() {
   }, []);
 
   if (!items) return <LoadingSection />;
+
+  const FULFILMENT_LABEL = { pending:'Pending', packed:'Packed', shipped:'Shipped', fulfilled:'Delivered', refunded:'Refunded' };
 
   return (
     <div className="page-section">
@@ -412,34 +414,31 @@ function OrdersTab() {
         </div>
         {items.length === 0
           ? <EmptyState icon="cart" message="No orders found for your account." />
-          : (
-            <div className="card-paper" style={{overflow:'auto'}}>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Order ID</th>
-                    <th>Date</th>
-                    <th>Customer</th>
-                    <th>Items</th>
-                    <th>Total</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map(o => (
-                    <tr key={o.id}>
-                      <td><span className="mono" style={{fontSize:12}}>{o.id}</span></td>
-                      <td>{fmtDate(o.date || o.createdAt)}</td>
-                      <td>{o.customer || o.name || '—'}</td>
-                      <td>{Array.isArray(o.items) ? o.items.length : (o.itemCount || '—')}</td>
-                      <td>{o.total != null ? `$${Number(o.total).toFixed(2)}` : '—'}</td>
-                      <td><StatusTag status={o.status} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )
+          : items.map(o => {
+            const trackingUrl = o.trackingNumber ? `https://auspost.com.au/mypost/track/#/details/${encodeURIComponent(o.trackingNumber)}` : null;
+            const isNew = o.id === highlightId;
+            return (
+              <div key={o.id} className="card-paper" style={{padding:20, marginBottom:12, borderLeft: isNew ? '3px solid var(--eucalyptus)' : '3px solid transparent'}}>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:8}}>
+                  <div>
+                    <span className="mono" style={{fontSize:12, color:'var(--ink-2)'}}>{o.id}</span>
+                    {o.quoteRef && <span className="mono" style={{fontSize:11, color:'var(--ink-3)', marginLeft:10}}>from {o.quoteRef}</span>}
+                    <div style={{fontWeight:500, marginTop:4}}>{o.items || '—'}</div>
+                    <div style={{fontSize:13, color:'var(--ink-2)', marginTop:2}}>{fmtDate(o.date || o.createdAt)}{o.total != null ? ` · $${Number(o.total).toFixed(2)} AUD` : ''}</div>
+                  </div>
+                  <div style={{display:'flex', flexDirection:'column', alignItems:'flex-end', gap:6}}>
+                    <StatusTag status={o.fulfilment || o.status || 'pending'} label={FULFILMENT_LABEL[o.fulfilment] || o.fulfilment} />
+                    {trackingUrl && (
+                      <a href={trackingUrl} target="_blank" rel="noreferrer"
+                        style={{fontSize:13, color:'var(--rust)', fontWeight:600, display:'flex', alignItems:'center', gap:4}}>
+                        Track with Australia Post ↗
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })
         }
       </div>
     </div>
@@ -500,12 +499,14 @@ function RepairsTab() {
 
 // ── Quotes ────────────────────────────────────────────────────────────────────
 
-function QuotesTab({ user }) {
+function QuotesTab({ user, onOrderCreated }) {
   const [items, setItems] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({ name: user.displayName || user.username, email: '', description: '' });
   const [submitMsg, setSubmitMsg] = useState('');
   const [busy, setBusy] = useState(false);
+  const [accepting, setAccepting] = useState(null);
+  const [acceptedOrders, setAcceptedOrders] = useState({});
 
   useEffect(() => {
     api('/api/portal/quotes').then(r => setItems(r.items || []));
@@ -514,10 +515,7 @@ function QuotesTab({ user }) {
   async function handleSubmit(e) {
     e.preventDefault();
     setBusy(true); setSubmitMsg('');
-    const r = await api('/api/portal/quotes/request', {
-      method: 'POST',
-      body: JSON.stringify(formData),
-    });
+    const r = await api('/api/portal/quotes/request', { method: 'POST', body: JSON.stringify(formData) });
     setBusy(false);
     if (r.ok) {
       setSubmitMsg('Quote request sent. We\'ll be in touch within 24 hours.');
@@ -528,7 +526,23 @@ function QuotesTab({ user }) {
     }
   }
 
+  async function acceptQuote(quoteId) {
+    setAccepting(quoteId);
+    const r = await api('/api/portal/quotes/accept', { method: 'POST', body: JSON.stringify({ quoteId }) });
+    setAccepting(null);
+    if (r.ok) {
+      setAcceptedOrders(prev => ({ ...prev, [quoteId]: r.orderId }));
+      api('/api/portal/quotes').then(r2 => setItems(r2.items || []));
+      if (onOrderCreated) onOrderCreated(r.orderId);
+    } else {
+      alert(r.message || 'Could not accept quote. Please try again or contact us.');
+    }
+  }
+
   if (!items) return <LoadingSection />;
+
+  const actionable = items.filter(q => q.status === 'quoted');
+  const history = items.filter(q => q.status !== 'quoted');
 
   return (
     <div className="page-section">
@@ -570,9 +584,69 @@ function QuotesTab({ user }) {
 
         {submitMsg && <div className={'alert ' + (submitMsg.includes('sent') ? 'alert-success' : 'alert-error')} style={{marginBottom:20}}>{submitMsg}</div>}
 
-        {items.length === 0
+        {/* Quotes awaiting acceptance */}
+        {actionable.map(q => {
+          const dq = q.draftQuote || {};
+          const accepted = acceptedOrders[q.id];
+          const lineItems = [
+            ...(dq.hardwareItems || []).filter(i => i.name).map(i => {
+              const qty = parseInt(i.qty) || 1;
+              return { label: i.name + (qty > 1 ? ` × ${qty}` : ''), amount: (parseFloat(i.basePrice) || 0) * qty * 1.02 };
+            }),
+            ...(dq.pcBuild && dq.pcBuildFee > 0 ? [{ label: 'Custom PC Build', amount: dq.pcBuildFee }] : []),
+            ...(dq.otherItems || []).filter(i => i.description).map(i => ({ label: i.description, amount: parseFloat(i.amount) || 0 })),
+          ];
+          const validUntil = dq.validDays ? new Date(Date.now() + dq.validDays * 86400000).toLocaleDateString('en-AU', { day:'numeric', month:'long', year:'numeric' }) : null;
+          return (
+            <div key={q.id} className="card-paper" style={{padding:28, marginBottom:20, borderLeft:'3px solid var(--ochre)'}}>
+              <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:12, marginBottom:16}}>
+                <div>
+                  <span className="eyebrow">Quote ready for acceptance</span>
+                  <div style={{display:'flex', gap:12, alignItems:'center', marginTop:6}}>
+                    <span className="mono" style={{fontSize:12, color:'var(--ink-2)'}}>{q.quoteRef || q.id}</span>
+                    {validUntil && <span style={{fontSize:12, color:'var(--ink-3)'}}>Valid until {validUntil}</span>}
+                  </div>
+                </div>
+                <StatusTag status={q.status} />
+              </div>
+
+              {lineItems.length > 0 && (
+                <div style={{border:'1px solid var(--line)', marginBottom:16}}>
+                  {lineItems.map((item, i) => (
+                    <div key={i} style={{display:'flex', justifyContent:'space-between', padding:'10px 14px', borderBottom: i < lineItems.length - 1 ? '1px solid var(--line)' : 'none', fontSize:14}}>
+                      <span>{item.label}</span>
+                      <span className="mono" style={{fontWeight:600}}>${item.amount.toLocaleString('en-AU',{minimumFractionDigits:2})}</span>
+                    </div>
+                  ))}
+                  <div style={{display:'flex', justifyContent:'space-between', padding:'12px 14px', background:'var(--ink)', color:'var(--paper)'}}>
+                    <span style={{fontWeight:600}}>Total (AUD)</span>
+                    <span className="mono" style={{fontWeight:700, fontSize:16, color:'var(--ochre)'}}>
+                      ${Number(dq.grandTotal||0).toLocaleString('en-AU',{minimumFractionDigits:2})}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {dq.notes && <p style={{fontSize:13, color:'var(--ink-2)', marginBottom:16}}>{dq.notes}</p>}
+
+              {accepted ? (
+                <div className="alert alert-success">Order created — <strong>{accepted}</strong>. Check your Orders tab and your email for confirmation.</div>
+              ) : (
+                <div style={{display:'flex', gap:12, alignItems:'center'}}>
+                  <button className="btn btn-rust" onClick={() => acceptQuote(q.id)} disabled={accepting === q.id}>
+                    {accepting === q.id ? 'Accepting…' : 'Accept Quote →'}
+                  </button>
+                  <span style={{fontSize:13, color:'var(--ink-3)'}}>Or reply to your quote email to ask questions first.</span>
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Quote history */}
+        {history.length === 0 && actionable.length === 0
           ? <EmptyState icon="file" message="No quote requests found for your account." />
-          : (
+          : history.length > 0 && (
             <div className="card-paper" style={{overflow:'auto'}}>
               <table className="data-table">
                 <thead>
@@ -584,11 +658,11 @@ function QuotesTab({ user }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map(q => (
+                  {history.map(q => (
                     <tr key={q.id}>
-                      <td><span className="mono" style={{fontSize:12}}>{q.id}</span></td>
+                      <td><span className="mono" style={{fontSize:12}}>{q.quoteRef || q.id}</span></td>
                       <td>{fmtDate(q.date || q.createdAt)}</td>
-                      <td style={{maxWidth:360}}>{q.description || q.notes || q.body || '—'}</td>
+                      <td style={{maxWidth:360}}>{q.summary || q.description || q.notes || '—'}</td>
                       <td><StatusTag status={q.status} /></td>
                     </tr>
                   ))}
@@ -917,11 +991,17 @@ function Dashboard({ user, setUser, onLogout }) {
     const seg = window.location.pathname.replace(/^\/+/, '').split('/')[0];
     return PORTAL_TABS.includes(seg) ? seg : 'overview';
   });
+  const [newOrderId, setNewOrderId] = useState(null);
 
   const switchTab = (id) => {
     setTab(id);
     const target = id === 'overview' ? '/' : '/' + id;
     if (window.location.pathname !== target) window.history.pushState({}, '', target);
+  };
+
+  const handleOrderCreated = (orderId) => {
+    setNewOrderId(orderId);
+    switchTab('orders');
   };
 
   useEffect(() => {
@@ -938,9 +1018,9 @@ function Dashboard({ user, setUser, onLogout }) {
     <>
       <PortalNav user={user} tab={tab} setTab={switchTab} onLogout={onLogout} />
       {tab === 'overview'    && <OverviewTab user={user} setTab={switchTab} />}
-      {tab === 'orders'      && <OrdersTab />}
+      {tab === 'orders'      && <OrdersTab highlightId={newOrderId} />}
       {tab === 'repairs'     && <RepairsTab />}
-      {tab === 'quotes'      && <QuotesTab user={user} />}
+      {tab === 'quotes'      && <QuotesTab user={user} onOrderCreated={handleOrderCreated} />}
       {tab === 'memberships' && <MembershipsTab />}
       {tab === 'rewards'     && <RewardsTab />}
       {tab === 'wallet'      && <WalletTab />}

@@ -508,6 +508,15 @@ function AdminOrders({ search }) {
               {['pending','packed','shipped','fulfilled','refunded'].map(s => <option key={s}>{s}</option>)}
             </select>
           </label>
+          <label className="field">
+            <span className="label">Australia Post Tracking Number</span>
+            <input className="input" value={form.trackingNumber||''} onChange={e=>setForm({...form,trackingNumber:e.target.value})} placeholder="e.g. 7ABC1234567890" />
+          </label>
+          {form.trackingNumber && (
+            <div style={{marginBottom:14}}>
+              <a href={`https://auspost.com.au/mypost/track/#/details/${form.trackingNumber}`} target="_blank" rel="noreferrer" style={{fontSize:13, color:'var(--rust)'}}>Preview tracking link ↗</a>
+            </div>
+          )}
 
           {/* Financials */}
           <div style={{borderTop:'1px solid var(--line)', margin:'12px 0 16px'}}/>
