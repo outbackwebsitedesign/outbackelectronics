@@ -387,13 +387,35 @@ function AdminOrders({ search }) {
   const [form, setForm] = useState({});
   const [payEntry, setPayEntry] = useState({ amount:'', method:'Cash', note:'' });
   const [updateEntry, setUpdateEntry] = useState({ text:'', type:'note' });
+  const [expenseEdit, setExpenseEdit] = useState(null); // id of expense being edited inline, or 'new'
+  const [expenseForm, setExpenseForm] = useState({});
   useEffect(() => {
     fetch('/api/admin/orders', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject()).then(d => setRows(d.items || [])).catch(() => setRows([]));
     fetch('/api/admin/expenses', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject()).then(d => setExpenses(d.items || [])).catch(() => {});
   }, []);
-  const openRow = (r) => { setEdit(r); setForm({...r}); setPayEntry({ amount:'', method:'Cash', note:'' }); };
+  const openRow = (r) => { setEdit(r); setForm({...r}); setPayEntry({ amount:'', method:'Cash', note:'' }); setExpenseEdit(null); setExpenseForm({}); };
+
+  const blankExpense = (jobId) => ({ description:'', category:'parts', amount:'', date: new Date().toLocaleDateString('en-AU', {day:'2-digit',month:'2-digit',year:'numeric'}), receipt:null, jobId: jobId||'', notes:'', isSecondHand:false, partStatus:'' });
+
+  const saveExpense = async (exp) => {
+    const payload = { ...exp, amount: Number(exp.amount) || 0 };
+    if (!payload.id) payload.id = 'exp-' + Date.now();
+    const r = await fetch('/api/admin/expenses/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(payload) }).catch(()=>null);
+    if (r && r.ok) {
+      const d = await r.json();
+      setExpenses(es => es.find(e => e.id === payload.id) ? es.map(e => e.id === payload.id ? d.item : e) : [...es, d.item]);
+    }
+    setExpenseEdit(null); setExpenseForm({});
+  };
+
+  const deleteExpense = async (id) => {
+    if (!confirm('Delete this expense?')) return;
+    await fetch('/api/admin/expenses/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id }) }).catch(()=>null);
+    setExpenses(es => es.filter(e => e.id !== id));
+    setExpenseEdit(null); setExpenseForm({});
+  };
 
   const paymentMap = {
     paid:       { bg:'#d8e7d0', fg:'#345526' },
@@ -576,21 +598,110 @@ function AdminOrders({ search }) {
             const linked = linkedExpenses(form);
             const cost = partsCost(form);
             const p = profit(form);
-            if (!linked.length) return null;
+            const partStatusColors = { ordered:{bg:'#dceaf5',fg:'#1668c8'}, arrived:{bg:'#fff4d6',fg:'#7a5d10'}, installed:{bg:'#d8e7d0',fg:'#345526'}, returned:{bg:'#f3d5c5',fg:'#7a3a18'} };
+            const ExpenseRow = ({ e }) => {
+              const isEditing = expenseEdit === e.id;
+              const ef = isEditing ? expenseForm : e;
+              if (isEditing) return (
+                <div style={{padding:'12px', background:'var(--paper)', border:'1px solid var(--ochre)', marginBottom:6}}>
+                  <div className="grid-2" style={{gap:10, marginBottom:10}}>
+                    <label className="field" style={{margin:0}}><span className="label">Description</span><input className="input" value={ef.description||''} onChange={ev=>setExpenseForm(f=>({...f,description:ev.target.value}))}/></label>
+                    <label className="field" style={{margin:0}}><span className="label">Amount (AUD)</span><input className="input" type="number" step="0.01" value={ef.amount||''} onChange={ev=>setExpenseForm(f=>({...f,amount:ev.target.value}))}/></label>
+                  </div>
+                  <div className="grid-2" style={{gap:10, marginBottom:10}}>
+                    <label className="field" style={{margin:0}}><span className="label">Category</span>
+                      <select className="select" value={ef.category||'parts'} onChange={ev=>setExpenseForm(f=>({...f,category:ev.target.value}))}>
+                        {['tools','equipment','parts','software','other'].map(c=><option key={c}>{c}</option>)}
+                      </select>
+                    </label>
+                    <label className="field" style={{margin:0}}><span className="label">Part status</span>
+                      <select className="select" value={ef.partStatus||''} onChange={ev=>setExpenseForm(f=>({...f,partStatus:ev.target.value}))}>
+                        <option value="">— N/A —</option>
+                        {['ordered','arrived','installed','returned'].map(s=><option key={s}>{s}</option>)}
+                      </select>
+                    </label>
+                  </div>
+                  <div className="grid-2" style={{gap:10, marginBottom:10}}>
+                    <label className="field" style={{margin:0}}><span className="label">Date</span><input className="input" value={ef.date||''} onChange={ev=>setExpenseForm(f=>({...f,date:ev.target.value}))}/></label>
+                    <label className="field" style={{margin:0}}><span className="label">Notes</span><input className="input" value={ef.notes||''} onChange={ev=>setExpenseForm(f=>({...f,notes:ev.target.value}))}/></label>
+                  </div>
+                  <label style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',marginBottom:12,fontSize:13}}>
+                    <input type="checkbox" checked={!!ef.isSecondHand} onChange={ev=>setExpenseForm(f=>({...f,isSecondHand:ev.target.checked}))} style={{width:15,height:15}}/>
+                    Second-hand
+                  </label>
+                  <div style={{display:'flex', gap:8}}>
+                    <button className="btn btn-sm" onClick={() => saveExpense(ef)}>Save</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => { setExpenseEdit(null); setExpenseForm({}); }}>Cancel</button>
+                    <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)', marginLeft:'auto'}} onClick={() => deleteExpense(e.id)}>Delete</button>
+                  </div>
+                </div>
+              );
+              return (
+                <div key={e.id} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 12px', background:'var(--bg-elev)', border:'1px solid var(--line)', marginBottom:6, cursor:'pointer', gap:10}}
+                  onClick={() => { setExpenseEdit(e.id); setExpenseForm({...e}); }}>
+                  <div style={{flex:1, minWidth:0}}>
+                    <span style={{fontSize:13, fontWeight:500}}>{e.description}</span>
+                    {e.category && <span className="mono" style={{fontSize:10, color:'var(--ink-3)', marginLeft:8}}>{e.category.toUpperCase()}</span>}
+                    {e.partStatus && (() => { const s = partStatusColors[e.partStatus]; return <span className="tag" style={{background:s?.bg,color:s?.fg,borderColor:s?.bg,marginLeft:8,fontSize:10}}>{e.partStatus.toUpperCase()}</span>; })()}
+                    {e.notes && <div style={{fontSize:11, color:'var(--ink-3)', marginTop:2}}>{e.notes}</div>}
+                  </div>
+                  <div style={{display:'flex', gap:12, alignItems:'center', flexShrink:0}}>
+                    <span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>{e.date}</span>
+                    <span className="mono" style={{fontWeight:600, color:'var(--rust)'}}>-${(Number(e.amount)||0).toLocaleString('en-AU',{minimumFractionDigits:2})}</span>
+                    <span style={{fontSize:12, color:'var(--ink-3)'}}>✎</span>
+                  </div>
+                </div>
+              );
+            };
+            const showNewExpense = expenseEdit === 'new';
             return (
               <div style={{marginBottom:12}}>
-                <div className="mono" style={{fontSize:10, color:'var(--ink-2)', marginBottom:6}}>LINKED EXPENSES ({linked.length})</div>
-                {linked.map((e,i) => (
-                  <div key={i} style={{display:'flex', justifyContent:'space-between', padding:'5px 10px', background:'var(--bg-elev)', borderBottom:'1px solid var(--line)', fontSize:12}}>
-                    <span>{e.description}{e.category ? <span className="mono" style={{fontSize:10, color:'var(--ink-3)', marginLeft:8}}>{e.category.toUpperCase()}</span> : null}</span>
-                    <span className="mono" style={{color:'var(--rust)'}}>-${(Number(e.amount)||0).toLocaleString('en-AU',{minimumFractionDigits:2})}</span>
-                  </div>
-                ))}
-                <div style={{display:'flex', gap:24, padding:'10px 14px', background: p >= 0 ? '#d8e7d0' : '#f3d5c5', marginTop:1}}>
-                  <div><div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>PARTS COST</div><div className="mono" style={{fontSize:14, fontWeight:600, color:'var(--rust)'}}>-${cost.toLocaleString('en-AU',{minimumFractionDigits:2})}</div></div>
-                  <div><div className="mono" style={{fontSize:10, color: p >= 0 ? '#345526' : '#7a3a18'}}>PROFIT</div><div className="mono" style={{fontSize:14, fontWeight:600, color: p >= 0 ? '#345526' : '#7a3a18'}}>${p.toLocaleString('en-AU',{minimumFractionDigits:2})}</div></div>
-                  <div><div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>MARGIN</div><div className="mono" style={{fontSize:14, fontWeight:600, color:'var(--ink-2)'}}>{form.total ? Math.round(p / Number(form.total) * 100) : 0}%</div></div>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8}}>
+                  <div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>LINKED EXPENSES ({linked.length})</div>
+                  {!showNewExpense && <button className="btn btn-ghost btn-sm" style={{fontSize:11}} onClick={() => { setExpenseEdit('new'); setExpenseForm(blankExpense(form.id)); }}>+ Add expense</button>}
                 </div>
+                {linked.length === 0 && !showNewExpense && <div className="mono" style={{fontSize:11, color:'var(--ink-3)', marginBottom:8}}>No expenses linked.</div>}
+                {linked.map(e => <ExpenseRow key={e.id} e={e} />)}
+                {showNewExpense && (
+                  <div style={{padding:'12px', background:'var(--paper)', border:'1px solid var(--ochre)', marginBottom:6}}>
+                    <div className="grid-2" style={{gap:10, marginBottom:10}}>
+                      <label className="field" style={{margin:0}}><span className="label">Description</span><input className="input" value={expenseForm.description||''} onChange={e=>setExpenseForm(f=>({...f,description:e.target.value}))} autoFocus/></label>
+                      <label className="field" style={{margin:0}}><span className="label">Amount (AUD)</span><input className="input" type="number" step="0.01" value={expenseForm.amount||''} onChange={e=>setExpenseForm(f=>({...f,amount:e.target.value}))}/></label>
+                    </div>
+                    <div className="grid-2" style={{gap:10, marginBottom:10}}>
+                      <label className="field" style={{margin:0}}><span className="label">Category</span>
+                        <select className="select" value={expenseForm.category||'parts'} onChange={e=>setExpenseForm(f=>({...f,category:e.target.value}))}>
+                          {['tools','equipment','parts','software','other'].map(c=><option key={c}>{c}</option>)}
+                        </select>
+                      </label>
+                      <label className="field" style={{margin:0}}><span className="label">Part status</span>
+                        <select className="select" value={expenseForm.partStatus||''} onChange={e=>setExpenseForm(f=>({...f,partStatus:e.target.value}))}>
+                          <option value="">— N/A —</option>
+                          {['ordered','arrived','installed','returned'].map(s=><option key={s}>{s}</option>)}
+                        </select>
+                      </label>
+                    </div>
+                    <div className="grid-2" style={{gap:10, marginBottom:10}}>
+                      <label className="field" style={{margin:0}}><span className="label">Date</span><input className="input" value={expenseForm.date||''} onChange={e=>setExpenseForm(f=>({...f,date:e.target.value}))}/></label>
+                      <label className="field" style={{margin:0}}><span className="label">Notes</span><input className="input" value={expenseForm.notes||''} onChange={e=>setExpenseForm(f=>({...f,notes:e.target.value}))}/></label>
+                    </div>
+                    <label style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',marginBottom:12,fontSize:13}}>
+                      <input type="checkbox" checked={!!expenseForm.isSecondHand} onChange={e=>setExpenseForm(f=>({...f,isSecondHand:e.target.checked}))} style={{width:15,height:15}}/>
+                      Second-hand
+                    </label>
+                    <div style={{display:'flex', gap:8}}>
+                      <button className="btn btn-sm" onClick={() => saveExpense(expenseForm)}>Save expense</button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => { setExpenseEdit(null); setExpenseForm({}); }}>Cancel</button>
+                    </div>
+                  </div>
+                )}
+                {linked.length > 0 && (
+                  <div style={{display:'flex', gap:24, padding:'10px 14px', background: p >= 0 ? '#d8e7d0' : '#f3d5c5', marginTop:4}}>
+                    <div><div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>PARTS COST</div><div className="mono" style={{fontSize:14, fontWeight:600, color:'var(--rust)'}}>-${cost.toLocaleString('en-AU',{minimumFractionDigits:2})}</div></div>
+                    <div><div className="mono" style={{fontSize:10, color: p >= 0 ? '#345526' : '#7a3a18'}}>PROFIT</div><div className="mono" style={{fontSize:14, fontWeight:600, color: p >= 0 ? '#345526' : '#7a3a18'}}>${p.toLocaleString('en-AU',{minimumFractionDigits:2})}</div></div>
+                    <div><div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>MARGIN</div><div className="mono" style={{fontSize:14, fontWeight:600, color:'var(--ink-2)'}}>{form.total ? Math.round(p / Number(form.total) * 100) : 0}%</div></div>
+                  </div>
+                )}
               </div>
             );
           })()}
