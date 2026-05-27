@@ -1194,6 +1194,27 @@ function emailPortalWelcome({ username, displayName }) {
   };
 }
 
+function emailOrderTracking({ customerName, orderId, items, total, fulfilment, username, tempPassword, isNewAccount }) {
+  const name = customerName ? customerName.split(' ')[0] : '';
+  const statusLabel = { pending:'Received', ordering:'Ordering parts', building:'Building', testing:'Testing', packed:'Packed', shipped:'Shipped', fulfilled:'Delivered', refunded:'Refunded' }[fulfilment] || fulfilment || 'Received';
+  return {
+    subject: `Track your order — ${orderId}`,
+    html: emailHtml('Your order is in progress.', `
+      <p>Hi${name ? ` ${escHtml(name)}` : ''},</p>
+      <p>${isNewAccount ? "We've created a customer portal account for you so you can track your order at any time." : "You can track your order at any time in the customer portal."}</p>
+      <div class="detail">
+        <dt>ORDER ID</dt><dd>${escHtml(orderId)}</dd>
+        ${items ? `<dt>ITEMS</dt><dd>${escHtml(items)}</dd>` : ''}
+        <dt>TOTAL</dt><dd>$${Number(total||0).toLocaleString('en-AU',{minimumFractionDigits:2})} AUD</dd>
+        <dt>STATUS</dt><dd>${escHtml(statusLabel)}</dd>
+        ${isNewAccount ? `<dt>PORTAL USERNAME</dt><dd>${escHtml(username)}</dd><dt>TEMPORARY PASSWORD</dt><dd>${escHtml(tempPassword)}</dd>` : `<dt>PORTAL USERNAME</dt><dd>${escHtml(username)}</dd>`}
+      </div>
+      ${isNewAccount ? '<p>Please log in and change your password after your first sign-in.</p>' : ''}
+      <a class="btn" href="${getPortalUrl()}/orders">View your order →</a>
+    `),
+  };
+}
+
 function emailPasswordReset({ displayName, resetUrl }) {
   return {
     subject: 'Reset your password — Outback Electronics',
@@ -3197,6 +3218,63 @@ const adminServer = http.createServer(async (req, res) => {
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     writeOrders(readOrders().filter(o => o.id !== body.id));
     return json(res, 200, { ok: true });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/orders/send-tracking-email') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const orders = readOrders();
+    const order = orders.find(o => o.id === body.id);
+    if (!order) return json(res, 404, { error: 'not_found' });
+    if (!order.email) return json(res, 422, { error: 'no_email', message: 'Order has no customer email address.' });
+
+    // Check / create portal account for this customer
+    const forum = readForum();
+    if (!Array.isArray(forum.users)) forum.users = [];
+    let portalUser = forum.users.find(u => u.email && u.email.toLowerCase() === order.email.toLowerCase());
+    let isNewAccount = false;
+    let tempPassword = null;
+
+    if (!portalUser) {
+      // Auto-generate username from customer name
+      isNewAccount = true;
+      const namePart = (order.cust || 'customer').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 14) || 'customer';
+      const suffix = crypto.randomBytes(3).toString('hex');
+      let username = `${namePart}${suffix}`;
+      // Ensure uniqueness
+      while (forum.users.find(u => u.username && u.username.toLowerCase() === username.toLowerCase())) {
+        username = `${namePart}${crypto.randomBytes(3).toString('hex')}`;
+      }
+      tempPassword = crypto.randomBytes(6).toString('base64').replace(/[^a-zA-Z0-9]/g, '').slice(0, 10);
+      const [firstName, ...rest] = (order.cust || 'Customer').split(' ');
+      const lastName = rest.join(' ') || '-';
+      const displayName = order.cust || username;
+      portalUser = {
+        id: 'U-' + Date.now(),
+        username,
+        firstName,
+        lastName,
+        displayName,
+        email: order.email.toLowerCase(),
+        passwordHash: hashPassword(tempPassword),
+        createdAt: new Date().toISOString(),
+      };
+      forum.users.push(portalUser);
+      writeForum(forum);
+    }
+
+    const tmpl = emailOrderTracking({
+      customerName: order.cust,
+      orderId: order.id,
+      items: order.items,
+      total: order.total,
+      fulfilment: order.fulfilment,
+      username: portalUser.username,
+      tempPassword,
+      isNewAccount,
+    });
+    await sendEmail({ to: order.email, ...tmpl });
+    return json(res, 200, { ok: true, isNewAccount, username: portalUser.username });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/admin/customers/save') {
