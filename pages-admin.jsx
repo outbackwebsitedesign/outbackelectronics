@@ -505,6 +505,7 @@ function AdminOrders({ search }) {
   const [updateEntry, setUpdateEntry] = useState({ text:'', type:'note' });
   const [expenseEdit, setExpenseEdit] = useState(null); // id of expense being edited inline, or 'new'
   const [expenseForm, setExpenseForm] = useState({});
+  const [trackingEmailStatus, setTrackingEmailStatus] = useState(null); // null | 'sending' | 'sent' | 'error'
   useEffect(() => {
     fetch('/api/admin/orders', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject()).then(d => setRows(d.items || [])).catch(() => setRows([]));
@@ -514,7 +515,7 @@ function AdminOrders({ search }) {
   const [trackingBusy, setTrackingBusy] = useState(false);
   const [trackingResult, setTrackingResult] = useState(null);
 
-  const openRow = (r) => { setEdit(r); setForm({...r}); setPayEntry({ amount:'', method:'Cash', note:'' }); setExpenseEdit(null); setExpenseForm({}); setTrackingResult(null); };
+  const openRow = (r) => { setEdit(r); setForm({...r}); setPayEntry({ amount:'', method:'Cash', note:'' }); setExpenseEdit(null); setExpenseForm({}); setTrackingResult(null); setTrackingEmailStatus(null); };
 
   const saveNow = async (patch) => {
     const updated = { ...form, ...patch };
@@ -665,13 +666,28 @@ function AdminOrders({ search }) {
       />
       {edit !== null && (
         <Drawer open={true} onClose={() => setEdit(null)} title={`Order ${edit.id}`}
-          footer={<div className="row-flex" style={{gap:8, justifyContent:'flex-end'}}>
-            <button className="btn btn-ghost btn-sm" onClick={() => setEdit(null)}>Cancel</button>
-            <button className="btn btn-sm" onClick={async () => {
-              await fetch('/api/admin/orders/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(form) }).catch(()=>null);
-              setRows(rs => rs.map(r => r.id === form.id ? form : r));
-              setEdit(null);
-            }}>Save</button>
+          footer={<div className="row-flex" style={{gap:8, justifyContent:'space-between'}}>
+            <button className="btn btn-ghost btn-sm" style={{fontSize:12}}
+              disabled={trackingEmailStatus === 'sending' || !form.email}
+              title={!form.email ? 'Order has no customer email' : 'Send order tracking email to customer'}
+              onClick={async () => {
+                setTrackingEmailStatus('sending');
+                try {
+                  const r = await fetch('/api/admin/orders/send-tracking-email', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: form.id }) });
+                  setTrackingEmailStatus(r.ok ? 'sent' : 'error');
+                } catch { setTrackingEmailStatus('error'); }
+                setTimeout(() => setTrackingEmailStatus(null), 4000);
+              }}>
+              {trackingEmailStatus === 'sending' ? '⏳ Sending…' : trackingEmailStatus === 'sent' ? '✓ Email sent' : trackingEmailStatus === 'error' ? '✗ Failed' : '✉ Send tracking email'}
+            </button>
+            <div className="row-flex" style={{gap:8}}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setEdit(null)}>Cancel</button>
+              <button className="btn btn-sm" onClick={async () => {
+                await fetch('/api/admin/orders/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(form) }).catch(()=>null);
+                setRows(rs => rs.map(r => r.id === form.id ? form : r));
+                setEdit(null);
+              }}>Save</button>
+            </div>
           </div>}
         >
           <label className="field"><span className="label">Customer</span><input className="input" value={form.cust||''} onChange={e=>setForm({...form,cust:e.target.value})}/></label>
