@@ -518,10 +518,12 @@ function isPrivateIp(ip) {
     /^::ffff:(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)/.test(ip);
 }
 function getIp(req) {
-  const directIp = req.socket.remoteAddress || 'unknown';
-  if (!isPrivateIp(directIp)) return directIp;
+  // Cloudflare sets CF-Connecting-IP to the real visitor IP — prefer it.
+  const cf = (req.headers['cf-connecting-ip'] || '').trim();
+  if (cf) return cf;
   const forwarded = (req.headers['x-forwarded-for'] || '').split(',')[0].trim();
-  return forwarded || directIp;
+  if (forwarded) return forwarded;
+  return req.socket.remoteAddress || 'unknown';
 }
 
 function isSecureRequest(req) {
@@ -1834,8 +1836,8 @@ const mainServer = http.createServer(async (req, res) => {
 
   // ── Stripe: create checkout session ─────────────────────────────────────────
   if (req.method === 'POST' && url.pathname === '/api/checkout') {
-    if (publicRateLimited(getIp(req), 'checkout')) return json(res, 429, { error: 'too_many_requests' });
-    if (!getStripeKey()) return json(res, 503, { error: 'stripe_not_configured' });
+    if (publicRateLimited(getIp(req), 'checkout')) return json(res, 429, { error: 'too_many_requests', message: 'Too many requests. Please wait a moment and try again.' });
+    if (!getStripeKey()) return json(res, 503, { error: 'stripe_not_configured', message: 'Payment is not configured. Please contact us.' });
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
 
     const { productId, name, priceAud, quantity = 1, customerEmail, items, giftCardCode, shippingAmount, shippingService } = body;
