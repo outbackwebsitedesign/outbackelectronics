@@ -900,15 +900,17 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
         body.shippingAmount = selectedShipping.price;
         body.shippingService = selectedShipping.name;
       }
+      await ensureCsrf();
       const resp = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() },
         body: JSON.stringify(body),
       });
-      const data = await resp.json();
+      let data;
+      try { data = await resp.json(); } catch { data = {}; }
       if (data.url) { clearCart(); window.location.href = data.url; }
       else setError(data.message || 'Checkout failed. Please try again.');
-    } catch {
+    } catch (err) {
       setError('Could not connect to payment provider. Please try again.');
     } finally {
       setCheckingOut(false);

@@ -1274,12 +1274,14 @@ function MembershipsPage({ go, portalUser }) {
     setCheckingOut(tier.id);
     try {
       const priceAud = Number(tier.priceAud || tier.price);
+      await fetch('/api/csrf-token', { credentials: 'include' }).catch(() => {});
       const resp = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() },
         body: JSON.stringify({ items: [{ productId: tier.id, name: tier.name, priceAud, quantity: 1 }] }),
       });
-      const data = await resp.json();
+      let data;
+      try { data = await resp.json(); } catch { data = {}; }
       if (data.url) {
         window.location.href = data.url;
       } else {

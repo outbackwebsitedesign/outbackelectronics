@@ -1599,6 +1599,7 @@ function verifyStripeSignature(rawBody, sigHeader, secret) {
 // ── Main server (8080) ────────────────────────────────────────────────────────
 
 const mainServer = http.createServer(async (req, res) => {
+  try {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
   if (checkMaintenance(req, res, url)) return;
@@ -1956,8 +1957,17 @@ const mainServer = http.createServer(async (req, res) => {
     if (shippingServiceName) params['payment_intent_data[metadata][shippingService]'] = shippingServiceName;
     if (customerEmail) params['customer_email'] = customerEmail;
 
-    const resp = await stripeRequest('POST', '/v1/checkout/sessions', params).catch(() => null);
-    if (!resp || resp.status !== 200) return json(res, 502, { error: 'stripe_error' });
+    let resp;
+    try { resp = await stripeRequest('POST', '/v1/checkout/sessions', params); }
+    catch (err) {
+      console.error('[checkout] stripeRequest threw:', err);
+      return json(res, 502, { error: 'stripe_error', message: 'Payment provider unreachable. Please try again.' });
+    }
+    if (!resp || resp.status !== 200) {
+      const stripeMsg = resp?.body?.error?.message || '';
+      console.error('[checkout] Stripe error response:', resp?.status, stripeMsg);
+      return json(res, 502, { error: 'stripe_error', message: stripeMsg || 'Payment provider error. Please try again.' });
+    }
     return json(res, 200, { url: resp.body.url, sessionId: resp.body.id });
   }
 
@@ -2284,6 +2294,10 @@ const mainServer = http.createServer(async (req, res) => {
   }
 
   return serveStatic(req, res, url.pathname, '/dist/index.html', MAIN_SPA_ROUTES);
+  } catch (err) {
+    console.error('[mainServer] unhandled error:', err);
+    if (!res.headersSent) json(res, 500, { error: 'server_error', message: 'An unexpected error occurred.' });
+  }
 });
 
 // ── Forum server (8081) ───────────────────────────────────────────────────────
