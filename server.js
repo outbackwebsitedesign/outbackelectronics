@@ -290,12 +290,13 @@ function pushMaintenanceEvent(enabled) {
 
 function maskIntegrationConfig(name, config) {
   if (!config) return {};
-  const sensitiveFields = new Set(['secretKey', 'webhookSecret', 'pass', 'apiKey', 'adminPasswordHash']);
-  const masked = {};
+  // Return config as-is; admin dashboard shows full values
+  const result = {};
   for (const [k, v] of Object.entries(config)) {
-    masked[k] = sensitiveFields.has(k) ? (v ? '***' : '') : v;
+    if (k === 'adminPasswordHash') continue; // never send password hash
+    result[k] = v;
   }
-  return masked;
+  return result;
 }
 
 function readExpenses() { try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'expenses.db'), 'utf8')).expenses || []; } catch { return []; } }
@@ -3725,7 +3726,7 @@ const adminServer = http.createServer(async (req, res) => {
       const existingConfig = existingByName[r[0]] || {};
       const incomingConfig = r[3] || {};
       const config = { ...existingConfig };
-      for (const [k, v] of Object.entries(incomingConfig)) { if (v !== '***') config[k] = v; }
+      for (const [k, v] of Object.entries(incomingConfig)) { config[k] = v; }
       return [r[0], r[1], !!r[2], config];
     });
     const security = { ...(existing.security || {}) };
