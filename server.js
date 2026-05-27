@@ -1215,6 +1215,19 @@ function emailPortalWelcome({ username, displayName }) {
   };
 }
 
+function emailOrderTracking({ customerName, orderId, trackingToken }) {
+  const name = customerName ? customerName.split(' ')[0] : '';
+  const link = `${getPortalUrl()}/?order_token=${encodeURIComponent(trackingToken)}`;
+  return {
+    subject: `Track your order — ${orderId}`,
+    html: emailHtml('Your order is underway.', `
+      <p>Hi${name ? ` ${escHtml(name)}` : ''},</p>
+      <p>We've got your order and we're working on it. Click below to set up your account and track progress at any time.</p>
+      <a class="btn" href="${link}">View your order →</a>
+    `),
+  };
+}
+
 function emailPasswordReset({ displayName, resetUrl }) {
   return {
     subject: 'Reset your password — Outback Electronics',
@@ -3260,6 +3273,36 @@ const adminServer = http.createServer(async (req, res) => {
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     writeOrders(readOrders().filter(o => o.id !== body.id));
     return json(res, 200, { ok: true });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/orders/send-tracking-email') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const orders = readOrders();
+    const idx = orders.findIndex(o => o.id === body.id);
+    if (idx < 0) return json(res, 404, { error: 'not_found' });
+    const order = orders[idx];
+    if (!order.email) return json(res, 422, { error: 'no_email', message: 'Order has no customer email address.' });
+    // Generate a token valid for 7 days and store it on the order
+    const trackingToken = randomId();
+    const trackingTokenExpiry = Date.now() + 7 * 24 * 60 * 60 * 1000;
+    orders[idx] = { ...order, trackingToken, trackingTokenExpiry };
+    writeOrders(orders);
+    const tmpl = emailOrderTracking({ customerName: order.cust, orderId: order.id, trackingToken });
+    await sendEmail({ to: order.email, ...tmpl });
+    return json(res, 200, { ok: true });
+  }
+
+  // Public: validate an order tracking token (used by portal registration flow)
+  if (req.method === 'GET' && url.pathname === '/api/order-token') {
+    const token = url.searchParams.get('token');
+    if (!token) return json(res, 400, { error: 'missing_token' });
+    const orders = readOrders();
+    const order = orders.find(o => o.trackingToken === token && o.trackingTokenExpiry > Date.now());
+    if (!order) return json(res, 404, { error: 'invalid_or_expired', message: 'This link is invalid or has expired.' });
+    const forum = readForum();
+    const hasAccount = !!(forum.users || []).find(u => u.email && u.email.toLowerCase() === order.email.toLowerCase());
+    return json(res, 200, { ok: true, orderId: order.id, customerName: order.cust, email: order.email, hasAccount });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/admin/customers/save') {

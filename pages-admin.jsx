@@ -507,6 +507,7 @@ function AdminOrders({ search }) {
   const [updateEntry, setUpdateEntry] = useState({ text:'', type:'note' });
   const [expenseEdit, setExpenseEdit] = useState(null); // id of expense being edited inline, or 'new'
   const [expenseForm, setExpenseForm] = useState({});
+  const [trackingEmailStatus, setTrackingEmailStatus] = useState(null); // null | 'sending' | 'sent' | 'error'
   useEffect(() => {
     fetch('/api/admin/orders', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject()).then(d => setRows(d.items || [])).catch(() => setRows([]));
@@ -516,7 +517,7 @@ function AdminOrders({ search }) {
   const [trackingBusy, setTrackingBusy] = useState(false);
   const [trackingResult, setTrackingResult] = useState(null);
 
-  const openRow = (r) => { setEdit(r); setForm({...r}); setPayEntry({ amount:'', method:'Cash', note:'' }); setExpenseEdit(null); setExpenseForm({}); setTrackingResult(null); };
+  const openRow = (r) => { setEdit(r); setForm({...r}); setPayEntry({ amount:'', method:'Cash', note:'' }); setExpenseEdit(null); setExpenseForm({}); setTrackingResult(null); setTrackingEmailStatus(null); };
 
   const saveNow = async (patch) => {
     const updated = { ...form, ...patch };
@@ -611,10 +612,12 @@ function AdminOrders({ search }) {
   };
 
   const linkedExpenses = (f) => expenses.filter(e => e.jobId && e.jobId === f.id);
-  const partsCost = (f) => linkedExpenses(f).reduce((s, e) => s + (Number(e.amount) || 0), 0);
+  const partsCost = (f) => linkedExpenses(f).reduce((s, e) => s + (e.partStatus === 'returned' ? 0 : (Number(e.amount) || 0)), 0);
+  const returnedCost = (f) => linkedExpenses(f).reduce((s, e) => s + (e.partStatus === 'returned' ? (Number(e.amount) || 0) : 0), 0);
   const profit = (f) => {
     const cost = partsCost(f);
-    if (!cost) return null;
+    const returned = returnedCost(f);
+    if (!cost && !returned) return null;
     return (Number(f.total) || 0) - cost;
   };
 
@@ -665,13 +668,28 @@ function AdminOrders({ search }) {
       />
       {edit !== null && (
         <Drawer open={true} onClose={() => setEdit(null)} title={`Order ${edit.id}`}
-          footer={<div className="row-flex" style={{gap:8, justifyContent:'flex-end'}}>
-            <button className="btn btn-ghost btn-sm" onClick={() => setEdit(null)}>Cancel</button>
-            <button className="btn btn-sm" onClick={async () => {
-              await fetch('/api/admin/orders/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(form) }).catch(()=>null);
-              setRows(rs => rs.map(r => r.id === form.id ? form : r));
-              setEdit(null);
-            }}>Save</button>
+          footer={<div className="row-flex" style={{gap:8, justifyContent:'space-between'}}>
+            <button className="btn btn-ghost btn-sm" style={{fontSize:12}}
+              disabled={trackingEmailStatus === 'sending' || !form.email}
+              title={!form.email ? 'Order has no customer email' : 'Send order tracking email to customer'}
+              onClick={async () => {
+                setTrackingEmailStatus('sending');
+                try {
+                  const r = await fetch('/api/admin/orders/send-tracking-email', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: form.id }) });
+                  setTrackingEmailStatus(r.ok ? 'sent' : 'error');
+                } catch { setTrackingEmailStatus('error'); }
+                setTimeout(() => setTrackingEmailStatus(null), 4000);
+              }}>
+              {trackingEmailStatus === 'sending' ? '⏳ Sending…' : trackingEmailStatus === 'sent' ? '✓ Email sent' : trackingEmailStatus === 'error' ? '✗ Failed' : '✉ Send tracking email'}
+            </button>
+            <div className="row-flex" style={{gap:8}}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setEdit(null)}>Cancel</button>
+              <button className="btn btn-sm" onClick={async () => {
+                await fetch('/api/admin/orders/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(form) }).catch(()=>null);
+                setRows(rs => rs.map(r => r.id === form.id ? form : r));
+                setEdit(null);
+              }}>Save</button>
+            </div>
           </div>}
         >
           <label className="field"><span className="label">Customer</span><input className="input" value={form.cust||''} onChange={e=>setForm({...form,cust:e.target.value})}/></label>
@@ -843,7 +861,13 @@ function AdminOrders({ search }) {
                   </div>
                   <div style={{display:'flex', gap:12, alignItems:'center', flexShrink:0}}>
                     <span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>{e.date}</span>
-                    <span className="mono" style={{fontWeight:600, color:'var(--rust)'}}>-${(Number(e.amount)||0).toLocaleString('en-AU',{minimumFractionDigits:2})}</span>
+                    {e.partStatus === 'returned'
+                      ? <span className="mono" style={{fontWeight:600}}>
+                          <span style={{textDecoration:'line-through', color:'var(--ink-3)', marginRight:6}}>-${(Number(e.amount)||0).toLocaleString('en-AU',{minimumFractionDigits:2})}</span>
+                          <span style={{color:'#345526'}}>$0.00</span>
+                        </span>
+                      : <span className="mono" style={{fontWeight:600, color:'var(--rust)'}}>-${(Number(e.amount)||0).toLocaleString('en-AU',{minimumFractionDigits:2})}</span>
+                    }
                     <span style={{fontSize:12, color:'var(--ink-3)'}}>✎</span>
                   </div>
                 </div>
@@ -892,8 +916,9 @@ function AdminOrders({ search }) {
                   </div>
                 )}
                 {linked.length > 0 && (
-                  <div style={{display:'flex', gap:24, padding:'10px 14px', background: p >= 0 ? '#d8e7d0' : '#f3d5c5', marginTop:4}}>
+                  <div style={{display:'flex', gap:24, padding:'10px 14px', background: p >= 0 ? '#d8e7d0' : '#f3d5c5', marginTop:4, flexWrap:'wrap'}}>
                     <div><div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>PARTS COST</div><div className="mono" style={{fontSize:14, fontWeight:600, color:'var(--rust)'}}>-${cost.toLocaleString('en-AU',{minimumFractionDigits:2})}</div></div>
+                    {returnedCost(form) > 0 && <div><div className="mono" style={{fontSize:10, color:'#345526'}}>RETURNED</div><div className="mono" style={{fontSize:14, fontWeight:600, color:'#345526'}}>+${returnedCost(form).toLocaleString('en-AU',{minimumFractionDigits:2})}</div></div>}
                     <div><div className="mono" style={{fontSize:10, color: p >= 0 ? '#345526' : '#7a3a18'}}>PROFIT</div><div className="mono" style={{fontSize:14, fontWeight:600, color: p >= 0 ? '#345526' : '#7a3a18'}}>${p.toLocaleString('en-AU',{minimumFractionDigits:2})}</div></div>
                     <div><div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>MARGIN</div><div className="mono" style={{fontSize:14, fontWeight:600, color:'var(--ink-2)'}}>{form.total ? Math.round(p / Number(form.total) * 100) : 0}%</div></div>
                   </div>
