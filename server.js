@@ -63,7 +63,6 @@ const POLICIES_DB_PATH  = path.join(__dirname, 'policies.db');
 const SETTINGS_DB_PATH  = path.join(__dirname, 'settings.db');
 const MEMBERSHIPS_DB_PATH = path.join(__dirname, 'memberships.db');
 const STAFF_DB_PATH       = path.join(__dirname, 'staff.db');
-const SETTINGS_DEFAULTS_PATH = path.join(__dirname, 'settings.defaults.json');
 const ADMIN_AUDIT_LOG_PATH   = path.join(__dirname, 'admin-audit.log');
 const SESSIONS_DB_PATH        = path.join(__dirname, 'sessions.db');
 const FORUM_SESSIONS_DB_PATH  = path.join(__dirname, 'forum-sessions.db');
@@ -240,34 +239,19 @@ function readMemberships() {
 }
 function writeMemberships(data) { atomicWriteFile(MEMBERSHIPS_DB_PATH, JSON.stringify(data, null, 2)); }
 
-function readSettingsDefaults() {
+function readSettings() {
   try {
-    const d = JSON.parse(fs.readFileSync(SETTINGS_DEFAULTS_PATH, 'utf8'));
+    const d = JSON.parse(fs.readFileSync(SETTINGS_DB_PATH, 'utf8'));
     return {
       shop: d.shop || {},
       announcement: d.announcement || { text: '', enabled: false, expiresAt: '' },
       maintenance: d.maintenance || { enabled: false },
-      staff: d.staff || [],
-      integrations: d.integrations || [],
+      staff: Array.isArray(d.staff) ? d.staff : [],
+      integrations: Array.isArray(d.integrations) ? d.integrations : [],
       siteContent: d.siteContent || {},
       security: d.security || { adminUsername: '', adminPasswordHash: '' },
     };
   } catch { return { shop: {}, announcement: { text: '', enabled: false, expiresAt: '' }, maintenance: { enabled: false }, staff: [], integrations: [], siteContent: {}, security: { adminUsername: '', adminPasswordHash: '' } }; }
-}
-function readSettings() {
-  const defaults = readSettingsDefaults();
-  try {
-    const d = JSON.parse(fs.readFileSync(SETTINGS_DB_PATH, 'utf8'));
-    return {
-      shop: { ...defaults.shop, ...(d.shop || {}) },
-      announcement: { ...defaults.announcement, ...(d.announcement || {}) },
-      maintenance: { ...defaults.maintenance, ...(d.maintenance || {}) },
-      staff: Array.isArray(d.staff) ? d.staff : defaults.staff,
-      integrations: Array.isArray(d.integrations) ? d.integrations : defaults.integrations,
-      siteContent: { ...defaults.siteContent, ...(d.siteContent || {}) },
-      security: { ...defaults.security, ...(d.security || {}) },
-    };
-  } catch { return defaults; }
 }
 function writeSettings(data) { atomicWriteFile(SETTINGS_DB_PATH, JSON.stringify(data, null, 2)); }
 
