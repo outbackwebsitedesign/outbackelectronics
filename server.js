@@ -2010,8 +2010,13 @@ const mainServer = http.createServer(async (req, res) => {
       const gcCode = meta.giftCardCode || '';
       const gcDiscount = Number(meta.giftCardDiscount || 0);
 
+      const existingOrders = readOrders();
+      const maxNum = existingOrders.reduce((max, o) => {
+        const m = String(o.id || '').match(/^OE-(\d+)$/);
+        return m ? Math.max(max, parseInt(m[1])) : max;
+      }, 1000);
       const order = {
-        id: `stripe-${session.id}`,
+        id: `OE-${maxNum + 1}`,
         stripeSessionId: session.id,
         cust: details.name || details.email || 'Online customer',
         loc: [details.address?.city, details.address?.country].filter(Boolean).join(', ') || '',
@@ -3265,7 +3270,11 @@ const adminServer = http.createServer(async (req, res) => {
     const idx = orders.findIndex(o => o.id && o.id === body.id);
     const existing = idx >= 0 ? orders[idx] : null;
     const { draftQuote: _dq, ...bodyToStore } = body;
-    if (idx >= 0) { orders[idx] = bodyToStore; } else { bodyToStore.id = 'ord-' + Date.now(); orders.push(bodyToStore); }
+    if (idx >= 0) { orders[idx] = bodyToStore; } else {
+      const maxN = orders.reduce((max, o) => { const m = String(o.id||'').match(/^OE-(\d+)$/); return m ? Math.max(max, parseInt(m[1])) : max; }, 1000);
+      bodyToStore.id = `OE-${maxN + 1}`;
+      orders.push(bodyToStore);
+    }
     writeOrders(orders);
     const justShipped = body.fulfilment === 'shipped' && existing && existing.fulfilment !== 'shipped';
     if (justShipped && body.trackingNumber && body.email) {
