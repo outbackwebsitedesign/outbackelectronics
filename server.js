@@ -19,7 +19,7 @@ const RATE_MAX_ATTEMPTS = 5;
 const LOCKOUT_MS = 1000 * 60 * 15;
 const ADMIN_IP_ALLOWLIST = (process.env.ADMIN_IP_ALLOWLIST || '').split(',').map(v => v.trim()).filter(Boolean);
 const PUBLIC_RATE_WINDOW_MS = 1000 * 60 * 10;
-const PUBLIC_RATE_LIMITS = { checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10 };
+const PUBLIC_RATE_LIMITS = { checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10, 'forgot-password': 5, 'reset-password': 10, 'gift-card/apply': 10 };
 
 fs.mkdirSync(path.join(__dirname, 'assets/uploads'), { recursive: true });
 fs.mkdirSync(path.join(__dirname, 'assets/uploads/software'), { recursive: true });
@@ -636,14 +636,15 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null) {
       const isHtml = ext === '.html';
       const isEmbeddable = isHtml && filePath.endsWith('ai-video.html');
       const securityHeaders = isHtml ? {
-        'X-Frame-Options': isEmbeddable ? 'SAMEORIGIN' : 'SAMEORIGIN',
+        'X-Frame-Options': isEmbeddable ? 'SAMEORIGIN' : 'DENY',
         'X-Content-Type-Options': 'nosniff',
         'Referrer-Policy': 'strict-origin-when-cross-origin',
         'Content-Security-Policy': isEmbeddable
-          ? "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://nominatim.openstreetmap.org; frame-src https://www.openstreetmap.org; frame-ancestors 'self';"
-          : "default-src 'self'; script-src 'self' 'unsafe-inline' https://*.tawk.to https://embed.tawk.to https://static.cloudflareinsights.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.tawk.to https://cdn.jsdelivr.net; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com https://*.tawk.to; connect-src 'self' https://portal.outbackelectronics.com.au https://forum.outbackelectronics.com.au https://nominatim.openstreetmap.org wss://*.tawk.to https://*.tawk.to https://va.tawk.to https://cloudflareinsights.com; frame-src https://www.openstreetmap.org https://*.tawk.to; frame-ancestors 'none';",
+          ? "default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://nominatim.openstreetmap.org; frame-src https://www.openstreetmap.org; frame-ancestors 'self';"
+          : "default-src 'self'; script-src 'self' https://*.tawk.to https://embed.tawk.to https://static.cloudflareinsights.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.tawk.to https://cdn.jsdelivr.net; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com https://*.tawk.to; connect-src 'self' https://portal.outbackelectronics.com.au https://forum.outbackelectronics.com.au https://nominatim.openstreetmap.org wss://*.tawk.to https://*.tawk.to https://va.tawk.to https://cloudflareinsights.com; frame-src https://www.openstreetmap.org https://*.tawk.to; frame-ancestors 'none';",
       } : { 'X-Content-Type-Options': 'nosniff' };
-      const extraHeaders = isSoftwareDownload
+      const isPdf = ext === '.pdf';
+      const extraHeaders = (isSoftwareDownload || isPdf)
         ? { 'Content-Disposition': `attachment; filename="${path.basename(filePath)}"` }
         : {};
       res.writeHead(200, {
@@ -744,10 +745,10 @@ function serveIndexWithOg(res, og) {
     res.writeHead(200, {
       'Content-Type': 'text/html; charset=utf-8',
       'Cache-Control': 'no-cache, must-revalidate',
-      'X-Frame-Options': 'SAMEORIGIN',
+      'X-Frame-Options': 'DENY',
       'X-Content-Type-Options': 'nosniff',
       'Referrer-Policy': 'strict-origin-when-cross-origin',
-      'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://*.tawk.to https://embed.tawk.to https://static.cloudflareinsights.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.tawk.to https://cdn.jsdelivr.net; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com https://*.tawk.to; connect-src 'self' https://portal.outbackelectronics.com.au https://forum.outbackelectronics.com.au https://nominatim.openstreetmap.org wss://*.tawk.to https://*.tawk.to https://va.tawk.to https://cloudflareinsights.com; frame-src 'self' https://www.openstreetmap.org https://*.tawk.to; frame-ancestors 'none';",
+      'Content-Security-Policy': "default-src 'self'; script-src 'self' https://*.tawk.to https://embed.tawk.to https://static.cloudflareinsights.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.tawk.to https://cdn.jsdelivr.net; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com https://*.tawk.to; connect-src 'self' https://portal.outbackelectronics.com.au https://forum.outbackelectronics.com.au https://nominatim.openstreetmap.org wss://*.tawk.to https://*.tawk.to https://va.tawk.to https://cloudflareinsights.com; frame-src 'self' https://www.openstreetmap.org https://*.tawk.to; frame-ancestors 'none';",
     });
     res.end(html);
   });
@@ -930,14 +931,14 @@ function emailHtml(title, bodyHtml) {
 // ── Email templates ───────────────────────────────────────────────────────────
 
 function emailOrderConfirmation({ orderId, customerName, amountAud, items }) {
-  const name = customerName ? `, ${customerName.split(' ')[0]}` : '';
+  const name = customerName ? `, ${escHtml(customerName.split(' ')[0])}` : '';
   return {
     subject: `Order confirmed — ${orderId}`,
     html: emailHtml('Order confirmed', `
       <p>Thanks${name}! Your payment was received and your order has been logged.</p>
       <div class="detail">
-        <dt>ORDER</dt><dd>${orderId}</dd>
-        ${items ? `<dt>ITEMS</dt><dd>${items}</dd>` : ''}
+        <dt>ORDER</dt><dd>${escHtml(orderId)}</dd>
+        ${items ? `<dt>ITEMS</dt><dd>${escHtml(items)}</dd>` : ''}
         <dt>AMOUNT PAID</dt><dd>$${Number(amountAud).toLocaleString('en-AU', {minimumFractionDigits:2})} AUD</dd>
       </div>
       <p>Our team will be in touch shortly. For pickups or repairs, please bring this confirmation.</p>
@@ -950,11 +951,11 @@ function emailQuoteReceived({ quoteId, customerName, description }) {
   return {
     subject: `Quote request received — ${quoteId}`,
     html: emailHtml('We\'ve got your quote request', `
-      <p>Hi${customerName ? ` ${customerName.split(' ')[0]}` : ''},</p>
+      <p>Hi${customerName ? ` ${escHtml(customerName.split(' ')[0])}` : ''},</p>
       <p>Thanks for reaching out. We've received your quote request and will get back to you as soon as possible.</p>
       <div class="detail">
-        <dt>REFERENCE</dt><dd>${quoteId}</dd>
-        <dt>YOUR REQUEST</dt><dd>${description}</dd>
+        <dt>REFERENCE</dt><dd>${escHtml(quoteId)}</dd>
+        <dt>YOUR REQUEST</dt><dd>${escHtml(description)}</dd>
       </div>
       <p>We'll reply to this email when your quote is ready. Typical turnaround is 1–2 business days.</p>
     `),
@@ -966,12 +967,12 @@ function emailQuoteReply({ quoteId, customerName, reply, status }) {
   return {
     subject: `Your quote is ready — ${quoteId}`,
     html: emailHtml('Your quote is ready', `
-      <p>Hi${customerName ? ` ${customerName.split(' ')[0]}` : ''},</p>
+      <p>Hi${customerName ? ` ${escHtml(customerName.split(' ')[0])}` : ''},</p>
       <p>We've reviewed your request and have an update for you.</p>
       <div class="detail">
-        <dt>REFERENCE</dt><dd>${quoteId}</dd>
-        <dt>STATUS</dt><dd>${statusLabel}</dd>
-        <dt>MESSAGE FROM US</dt><dd>${reply}</dd>
+        <dt>REFERENCE</dt><dd>${escHtml(quoteId)}</dd>
+        <dt>STATUS</dt><dd>${escHtml(statusLabel)}</dd>
+        <dt>MESSAGE FROM US</dt><dd>${escHtml(reply)}</dd>
       </div>
       <p>If you have questions or want to go ahead, reply to this email or get in touch via the portal.</p>
       <a class="btn" href="${getSiteUrl()}/portal">View in portal →</a>
@@ -1129,11 +1130,11 @@ function emailEwasteConfirmation({ intakeId, customerName, description }) {
   return {
     subject: `eWaste intake confirmed — ${intakeId}`,
     html: emailHtml('eWaste intake confirmed', `
-      <p>Hi${customerName ? ` ${customerName.split(' ')[0]}` : ''},</p>
+      <p>Hi${customerName ? ` ${escHtml(customerName.split(' ')[0])}` : ''},</p>
       <p>Your eWaste intake request has been received. We'll arrange collection or drop-off and handle everything responsibly.</p>
       <div class="detail">
-        <dt>REFERENCE</dt><dd>${intakeId}</dd>
-        ${description ? `<dt>ITEMS</dt><dd>${description}</dd>` : ''}
+        <dt>REFERENCE</dt><dd>${escHtml(intakeId)}</dd>
+        ${description ? `<dt>ITEMS</dt><dd>${escHtml(description)}</dd>` : ''}
       </div>
       <p>We'll be in touch to confirm next steps.</p>
     `),
@@ -1143,9 +1144,9 @@ function emailEwasteConfirmation({ intakeId, customerName, description }) {
 function emailMembershipWelcome({ customerName, tierName }) {
   return {
     subject: `Welcome to ${tierName} membership`,
-    html: emailHtml(`Welcome to ${tierName}!`, `
-      <p>Hi${customerName ? ` ${customerName.split(' ')[0]}` : ''},</p>
-      <p>You're now a <strong>${tierName}</strong> member of Outback Electronics. Thanks for your support!</p>
+    html: emailHtml(`Welcome to ${escHtml(tierName)}!`, `
+      <p>Hi${customerName ? ` ${escHtml(customerName.split(' ')[0])}` : ''},</p>
+      <p>You're now a <strong>${escHtml(tierName)}</strong> member of Outback Electronics. Thanks for your support!</p>
       <p>Your membership benefits are active immediately. Log in to the portal to see what's available to you.</p>
       <a class="btn" href="${getSiteUrl()}/portal">Go to portal →</a>
     `),
@@ -1156,8 +1157,8 @@ function emailMembershipCancelled({ customerName, tierName }) {
   return {
     subject: 'Membership cancelled',
     html: emailHtml('Membership cancelled', `
-      <p>Hi${customerName ? ` ${customerName.split(' ')[0]}` : ''},</p>
-      <p>Your <strong>${tierName}</strong> membership has been cancelled. You'll retain access until the end of your current period.</p>
+      <p>Hi${customerName ? ` ${escHtml(customerName.split(' ')[0])}` : ''},</p>
+      <p>Your <strong>${escHtml(tierName)}</strong> membership has been cancelled. You'll retain access until the end of your current period.</p>
       <p>If this was a mistake or you'd like to resubscribe, just log back into the portal.</p>
       <a class="btn" href="${getSiteUrl()}/portal">Return to portal →</a>
     `),
@@ -1168,7 +1169,7 @@ function emailPortalWelcome({ username, displayName }) {
   return {
     subject: 'Welcome to Outback Electronics',
     html: emailHtml('Welcome!', `
-      <p>Hi ${displayName || username},</p>
+      <p>Hi ${escHtml(displayName || username)},</p>
       <p>Your Outback Electronics account is ready. You can now track repairs, request quotes, and manage your membership from the portal.</p>
       <a class="btn" href="${getSiteUrl()}/portal">Go to your portal →</a>
     `),
@@ -1179,7 +1180,7 @@ function emailPasswordReset({ displayName, resetUrl }) {
   return {
     subject: 'Reset your password — Outback Electronics',
     html: emailHtml('Reset your password', `
-      <p>Hi ${displayName},</p>
+      <p>Hi ${escHtml(displayName)},</p>
       <p>We received a request to reset your Outback Electronics password. Click the button below to choose a new one. This link expires in 1 hour.</p>
       <a class="btn" href="${resetUrl}">Reset password →</a>
       <p style="margin-top:20px;font-size:12px;color:#8b7e69;">If you didn't request a password reset, you can safely ignore this email.</p>
@@ -1193,9 +1194,9 @@ function emailStaffNewOrder({ orderId, customerName, amountAud, items }) {
     subject: `[ORDER] New Stripe order — ${orderId}`,
     html: emailHtml('New online order received', `
       <div class="detail">
-        <dt>ORDER</dt><dd>${orderId}</dd>
-        <dt>CUSTOMER</dt><dd>${customerName || '—'}</dd>
-        ${items ? `<dt>ITEMS</dt><dd>${items}</dd>` : ''}
+        <dt>ORDER</dt><dd>${escHtml(orderId)}</dd>
+        <dt>CUSTOMER</dt><dd>${escHtml(customerName || '—')}</dd>
+        ${items ? `<dt>ITEMS</dt><dd>${escHtml(items)}</dd>` : ''}
         <dt>AMOUNT</dt><dd>$${Number(amountAud).toLocaleString('en-AU', {minimumFractionDigits:2})} AUD</dd>
       </div>
       <a class="btn" href="${getAdminUrl()}/admin#orders">View in admin →</a>
@@ -1222,9 +1223,9 @@ function emailStaffNewEwaste({ intakeId, name, email, description }) {
     subject: `[EWASTE] New intake — ${intakeId}`,
     html: emailHtml('New eWaste intake', `
       <div class="detail">
-        <dt>REFERENCE</dt><dd>${intakeId}</dd>
-        <dt>FROM</dt><dd>${name || '—'}${email ? ` &lt;${email}&gt;` : ''}</dd>
-        ${description ? `<dt>ITEMS</dt><dd>${description}</dd>` : ''}
+        <dt>REFERENCE</dt><dd>${escHtml(intakeId)}</dd>
+        <dt>FROM</dt><dd>${escHtml(name || '—')}${email ? ` &lt;${escHtml(email)}&gt;` : ''}</dd>
+        ${description ? `<dt>ITEMS</dt><dd>${escHtml(description)}</dd>` : ''}
       </div>
       <a class="btn" href="${getAdminUrl()}/admin#ewaste">View in admin →</a>
     `),
@@ -1232,8 +1233,9 @@ function emailStaffNewEwaste({ intakeId, name, email, description }) {
 }
 
 function emailStaffContactMessage({ name, email, msg }) {
+  const safeName = String(name ?? '').replace(/[\r\n]+/g, ' ');
   return {
-    subject: `[CONTACT] Message from ${name}`,
+    subject: `[CONTACT] Message from ${safeName}`,
     html: emailHtml('New contact message', `
       <div class="detail">
         <dt>FROM</dt><dd>${escHtml(name)} &lt;${escHtml(email)}&gt;</dd>
@@ -1553,7 +1555,7 @@ const mainServer = http.createServer(async (req, res) => {
     return json(res, 200, { token });
   }
 
-  if (req.method === 'POST' && url.pathname !== '/api/stripe/webhook') {
+  if (['POST', 'PATCH', 'DELETE'].includes(req.method) && url.pathname !== '/api/stripe/webhook') {
     if (!verifyCsrf(req, res)) return;
   }
 
@@ -2060,6 +2062,7 @@ const mainServer = http.createServer(async (req, res) => {
 
   // ── Gift card: apply (validate + preview discount) ───────────────────────────
   if (req.method === 'POST' && url.pathname === '/api/gift-card/apply') {
+    if (publicRateLimited(getIp(req), 'gift-card/apply')) return json(res, 429, { error: 'too_many_requests' });
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     const code = (body.code || '').trim().toUpperCase();
     const cartTotal = Number(body.cartTotal) || 0;
@@ -2444,6 +2447,7 @@ const forumServer = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/forum/auth/forgot-password') {
+    if (publicRateLimited(getIp(req), 'forgot-password')) return json(res, 429, { error: 'too_many_requests' });
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     const username = typeof body?.username === 'string' ? body.username.trim() : '';
     const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
@@ -2466,6 +2470,7 @@ const forumServer = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/forum/auth/reset-password') {
+    if (publicRateLimited(getIp(req), 'reset-password')) return json(res, 429, { error: 'too_many_requests' });
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     const token = typeof body?.token === 'string' ? body.token : '';
     const password = typeof body?.password === 'string' ? body.password : '';
@@ -2687,7 +2692,9 @@ const adminServer = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && url.pathname === '/api/admin/forum') {
     const session = requireRole(req, res, 'staff'); if (!session) return;
-    return json(res, 200, readForum());
+    const forumData = readForum();
+    const sanitised = { ...forumData, users: (forumData.users || []).map(({ passwordHash: _p, ...u }) => u) };
+    return json(res, 200, sanitised);
   }
   if (req.method === 'GET' && url.pathname === '/api/admin/forum/categories') {
     const session = requireRole(req, res, 'staff'); if (!session) return;
@@ -3544,7 +3551,9 @@ const adminServer = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && url.pathname === '/api/admin/staff') {
     const session = requireRole(req, res, 'staff'); if (!session) return;
-    return json(res, 200, readStaff());
+    const staffData = readStaff();
+    const sanitised = { ...staffData, members: staffData.members.map(({ pinHash: _p, ...m }) => m) };
+    return json(res, 200, sanitised);
   }
   if (req.method === 'GET' && url.pathname === '/api/admin/staff/stats') {
     const session = requireRole(req, res, 'staff'); if (!session) return;
@@ -4127,6 +4136,7 @@ const portalServer = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/portal/auth/forgot-password') {
+    if (publicRateLimited(getIp(req), 'forgot-password')) return json(res, 429, { error: 'too_many_requests' });
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     const username = typeof body?.username === 'string' ? body.username.trim() : '';
     const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
@@ -4149,6 +4159,7 @@ const portalServer = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/portal/auth/reset-password') {
+    if (publicRateLimited(getIp(req), 'reset-password')) return json(res, 429, { error: 'too_many_requests' });
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     const token = typeof body?.token === 'string' ? body.token : '';
     const password = typeof body?.password === 'string' ? body.password : '';
