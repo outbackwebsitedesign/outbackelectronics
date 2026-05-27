@@ -66,6 +66,7 @@ const POLICIES_DB_PATH  = path.join(__dirname, 'policies.db');
 const SETTINGS_DB_PATH  = path.join(__dirname, 'settings.db');
 const MEMBERSHIPS_DB_PATH = path.join(__dirname, 'memberships.db');
 const STAFF_DB_PATH       = path.join(__dirname, 'staff.db');
+const SELLER_LEDGER_DB_PATH = path.join(__dirname, 'seller-ledger.db');
 const ADMIN_AUDIT_LOG_PATH   = path.join(__dirname, 'admin-audit.log');
 const SESSIONS_DB_PATH        = path.join(__dirname, 'sessions.db');
 const FORUM_SESSIONS_DB_PATH  = path.join(__dirname, 'forum-sessions.db');
@@ -215,6 +216,26 @@ function readSellers() {
   try { const p = JSON.parse(fs.readFileSync(SELLERS_DB_PATH, 'utf8')); return Array.isArray(p.consignments) ? p.consignments : []; } catch { return []; }
 }
 function writeSellers(consignments) { atomicWriteFile(SELLERS_DB_PATH, JSON.stringify({ consignments }, null, 2)); }
+
+function readSellerLedger() {
+  try { const d = JSON.parse(fs.readFileSync(SELLER_LEDGER_DB_PATH, 'utf8')); return d.transactions || []; } catch { return []; }
+}
+function writeSellerLedger(txns) { atomicWriteFile(SELLER_LEDGER_DB_PATH, JSON.stringify({ transactions: txns }, null, 2)); }
+
+function calculateListingFee(count) {
+  if (count <= 0) return 0;
+  if (count <= 10) return Math.round(count * 0.75 * 100) / 100;
+  if (count <= 50) return Math.round(count * 0.50 * 100) / 100;
+  if (count <= 100) return Math.round(count * 0.30 * 100) / 100;
+  return null; // custom — skip automatic charge
+}
+
+function getSellerBalance(sellerId) {
+  const txns = readSellerLedger().filter(t => t.sellerId === sellerId && t.status === 'ok');
+  const credits = txns.filter(t => t.type === 'sale_credit').reduce((s, t) => s + t.amount, 0);
+  const debits = txns.filter(t => t.type === 'listing_fee' || t.type === 'payout').reduce((s, t) => s + t.amount, 0);
+  return Math.round((credits - debits) * 100) / 100;
+}
 
 function readGroups() {
   try { const p = JSON.parse(fs.readFileSync(GROUPS_DB_PATH, 'utf8')); return Array.isArray(p.groups) ? p.groups : []; } catch { return []; }
@@ -1995,6 +2016,25 @@ const mainServer = http.createServer(async (req, res) => {
       } else if (!orders.find(o => o.stripeSessionId === session.id)) {
         orders.push(order);
         writeOrders(orders);
+
+        // Credit seller if this product was listed by a seller
+        if (productId) {
+          const prod = readProducts().find(p => p.id === productId);
+          if (prod && prod.createdBy && prod.sellerPrice != null) {
+            const txns = readSellerLedger();
+            txns.push({
+              id: 'txn-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+              sellerId: prod.createdBy,
+              type: 'sale_credit',
+              amount: prod.sellerPrice,
+              description: `Sale: ${prod.name || productId}`,
+              date: new Date().toISOString(),
+              orderId: order.id,
+              status: 'ok',
+            });
+            writeSellerLedger(txns);
+          }
+        }
 
         // Deduct gift card balance
         if (gcCode && gcDiscount > 0) {
@@ -4406,6 +4446,71 @@ function migrateEnvToSettings() {
 
 migrateEnvToSettings();
 
+async function runMonthlyListingFees() {
+  const key = getStripeKey();
+  if (!key) { console.log('[listing-fees] Stripe not configured, skipping'); return; }
+  const staffData = readStaff();
+  const sellers = staffData.members.filter(m => m.role === 'seller' && m.status !== 'inactive');
+  const products = readProducts();
+  const settings = readSettings();
+  const commissionPct = Number((settings.shop || {}).sellerCommissionPct) || 20;
+  void commissionPct;
+
+  for (const seller of sellers) {
+    const activeListings = products.filter(p => p.createdBy === seller.id && p.status === 'published');
+    const count = activeListings.length;
+    const fee = calculateListingFee(count);
+
+    if (fee === null) {
+      console.log(`[listing-fees] Seller ${seller.id} (${seller.name}) has ${count} listings — custom tier, skipping`);
+      continue;
+    }
+    if (fee === 0 || count === 0) continue;
+
+    if (!seller.stripeCustomerId || !seller.stripePaymentMethodId) {
+      console.warn(`[listing-fees] Seller ${seller.id} (${seller.name}) has no saved card — cannot charge`);
+      continue;
+    }
+
+    let chargeId = null;
+    let status = 'failed';
+    try {
+      const resp = await stripeRequest('POST', '/v1/payment_intents', {
+        amount: String(Math.round(fee * 100)),
+        currency: 'aud',
+        customer: seller.stripeCustomerId,
+        payment_method: seller.stripePaymentMethodId,
+        confirm: 'true',
+        off_session: 'true',
+        description: `Outback Electronics listing fee — ${count} listings`,
+      });
+      if (resp.status === 200 && resp.body.id) {
+        chargeId = resp.body.id;
+        status = 'ok';
+        console.log(`[listing-fees] Charged ${seller.name} $${fee} — ${chargeId}`);
+      } else {
+        console.error(`[listing-fees] Stripe error for ${seller.name}:`, resp.body);
+      }
+    } catch (err) {
+      console.error(`[listing-fees] Charge failed for ${seller.name}:`, err);
+    }
+
+    const txns = readSellerLedger();
+    txns.push({
+      id: 'txn-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+      sellerId: seller.id,
+      type: 'listing_fee',
+      amount: fee,
+      description: `Monthly listing fee — ${count} listing${count !== 1 ? 's' : ''}`,
+      date: new Date().toISOString(),
+      stripeChargeId: chargeId,
+      status,
+    });
+    writeSellerLedger(txns);
+  }
+  console.log('[listing-fees] Run complete');
+}
+
 function backfillJobEmails() {
   // For every customer that has a name + email, find any jobs matched by name
   // (or phone) that are missing an email, and stamp the customer's email onto them.
@@ -4463,6 +4568,30 @@ function backfillJobEmails() {
 }
 
 backfillJobEmails();
+
+// ── Monthly listing fee cron ──────────────────────────────────────────────────
+(function scheduleDailyCheck() {
+  function msUntilMidnight() {
+    const now = new Date();
+    const midnight = new Date(now);
+    midnight.setHours(24, 0, 0, 0);
+    return midnight - now;
+  }
+  function isLastDayOfMonth() {
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return tomorrow.getDate() === 1;
+  }
+  function tick() {
+    if (isLastDayOfMonth()) {
+      console.log('[cron] Last day of month — running listing fees');
+      runMonthlyListingFees().catch(err => console.error('[cron] listing fee error:', err));
+    }
+    setTimeout(tick, msUntilMidnight() + 1000);
+  }
+  setTimeout(tick, msUntilMidnight() + 1000);
+})();
 
 startServer(mainServer,   MAIN_PORT,   'main  ');
 startServer(forumServer,  FORUM_PORT,  'forum ');
