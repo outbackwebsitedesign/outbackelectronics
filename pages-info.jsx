@@ -714,6 +714,207 @@ function AboutPage({ go }) {
   );
 }
 
+// ============================================================
+// AI / EDGE AI
+// ============================================================
+function AIPage({ go }) {
+  const [models, setModels] = useState([]);
+  const [boxes, setBoxes] = useState([]);
+  const [heading, setHeading] = useState('');
+  const [body, setBody] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/ai').then(r => r.ok ? r.json() : {}).catch(() => ({})),
+      fetch('/api/settings').then(r => r.ok ? r.json() : {}).catch(() => ({})),
+    ]).then(([aiData, settingsData]) => {
+      setModels(aiData.models || []);
+      setBoxes(aiData.boxes || []);
+      // Settings may return an array or object
+      const s = Array.isArray(settingsData) ? {} : (settingsData.settings || settingsData);
+      setHeading(s.aiHeading || '');
+      setBody(s.aiBody || '');
+    }).finally(() => setLoading(false));
+  }, []);
+
+  const heroHeading = heading || 'AI & Edge Intelligence';
+  const heroBody = body || 'Deploying machine learning to remote Australia\'s most isolated communities.';
+
+  const modelStatusColor = (status) => {
+    if (!status) return 'var(--ink-3)';
+    const s = status.toLowerCase();
+    if (s === 'production') return 'var(--eucalyptus)';
+    if (s === 'beta') return 'var(--ochre)';
+    if (s === 'training') return 'var(--rust)';
+    return 'var(--ink-3)'; // draft / default
+  };
+
+  const boxStatusColor = (status) => {
+    if (!status) return 'var(--ink-3)';
+    const s = status.toLowerCase();
+    if (s === 'ok' || s === 'online') return 'var(--eucalyptus)';
+    if (s === 'low batt' || s === 'low_batt' || s === 'low-batt') return 'var(--ochre)';
+    if (s === 'offline') return 'var(--rust)';
+    return 'var(--ink-3)'; // maintenance / default
+  };
+
+  return (
+    <>
+      {/* Hero */}
+      <div className="page-head">
+        <div className="container">
+          <div className="crumbs eyebrow">
+            <span>Outback</span>
+            <span style={{color:'var(--ink-3)'}}>/</span>
+            <span>AI &amp; Edge</span>
+          </div>
+          <h1>{heroHeading}</h1>
+          <p className="lead">{heroBody}</p>
+          <div style={{marginTop:18, display:'flex', gap:12, flexWrap:'wrap'}}>
+            <button className="btn btn-rust" onClick={() => go('quote')}>Start an AI pilot →</button>
+            <button className="btn btn-ghost" onClick={() => go('contact')}>Talk to us</button>
+          </div>
+        </div>
+      </div>
+
+      {/* Models section */}
+      <section className="container" style={{paddingTop:40, paddingBottom:24}}>
+        <div style={{marginBottom:24}}>
+          <span className="eyebrow">EDGE MODELS</span>
+          <h2 className="serif" style={{fontSize:38, marginTop:6, lineHeight:1.05}}>Models in the field.</h2>
+          <p style={{marginTop:10, fontSize:14, color:'var(--ink-2)', maxWidth:560}}>
+            Optimised for low-power inference on solar-powered nodes. Runs offline — no cloud dependency.
+          </p>
+        </div>
+
+        {loading && (
+          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(260px, 1fr))', gap:20}}>
+            {Array.from({length:4}).map((_,i) => (
+              <div key={i} style={{height:160, background:'var(--bg-elev)', animation:'pulse 1.4s ease-in-out infinite', opacity:0.5}} />
+            ))}
+          </div>
+        )}
+
+        {!loading && models.length === 0 && (
+          <div className="card-paper" style={{padding:40, textAlign:'center'}}>
+            <div className="mono" style={{fontSize:13, color:'var(--ink-2)'}}>No models published yet.</div>
+          </div>
+        )}
+
+        {!loading && models.length > 0 && (
+          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(260px, 1fr))', gap:20}}>
+            {models.map((m, i) => (
+              <div key={m.id||i} className="card-paper" style={{padding:24, display:'flex', flexDirection:'column', gap:10}}>
+                <div style={{display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:8}}>
+                  <h3 className="serif" style={{fontSize:22, lineHeight:1.1, flex:1}}>{m.name}</h3>
+                  {m.status && (
+                    <span className="tag" style={{
+                      background: modelStatusColor(m.status),
+                      color: m.status?.toLowerCase() === 'draft' ? 'var(--ink-2)' : 'var(--paper)',
+                      borderColor: modelStatusColor(m.status),
+                      whiteSpace:'nowrap', flexShrink:0
+                    }}>{m.status.toUpperCase()}</span>
+                  )}
+                </div>
+                {m.task && <span className="tag tag-outline" style={{display:'inline-block', alignSelf:'flex-start'}}>{m.task.toUpperCase()}</span>}
+                <div style={{borderTop:'1px solid var(--line)', paddingTop:10, display:'grid', gap:3}}>
+                  {m.size && <div className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>SIZE: {String(m.size).toUpperCase()}</div>}
+                  {m.accuracy != null && <div className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>ACCURACY: {m.accuracy}{typeof m.accuracy === 'number' && m.accuracy <= 1 ? '' : '%'}</div>}
+                  {m.deploymentCount != null && <div className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{m.deploymentCount} DEPLOYMENT{m.deploymentCount !== 1 ? 'S' : ''}</div>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Field Deployments section */}
+      <section className="container" style={{paddingTop:24, paddingBottom:56}}>
+        <div style={{marginBottom:24}}>
+          <span className="eyebrow">FIELD DEPLOYMENTS</span>
+          <h2 className="serif" style={{fontSize:38, marginTop:6, lineHeight:1.05}}>Boxes in the bush.</h2>
+          <p style={{marginTop:10, fontSize:14, color:'var(--ink-2)', maxWidth:560}}>
+            Live status of deployed edge compute nodes. Updated whenever a node checks in.
+          </p>
+        </div>
+
+        {loading && (
+          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:16}}>
+            {Array.from({length:3}).map((_,i) => (
+              <div key={i} style={{height:120, background:'var(--bg-elev)', animation:'pulse 1.4s ease-in-out infinite', opacity:0.5}} />
+            ))}
+          </div>
+        )}
+
+        {!loading && boxes.length === 0 && (
+          <div className="card-paper" style={{padding:40, textAlign:'center'}}>
+            <div className="mono" style={{fontSize:13, color:'var(--ink-2)'}}>No field deployments configured.</div>
+          </div>
+        )}
+
+        {!loading && boxes.length > 0 && (
+          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:16}}>
+            {boxes.map((b, i) => (
+              <div key={b.id||i} className="card-paper" style={{padding:20, display:'flex', flexDirection:'column', gap:8}}>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:8}}>
+                  <div style={{fontWeight:600, fontSize:15}}>{b.siteName || b.site || `Box ${i + 1}`}</div>
+                  {b.status && (
+                    <span className="tag" style={{
+                      background: boxStatusColor(b.status),
+                      color: 'var(--paper)',
+                      borderColor: boxStatusColor(b.status),
+                      whiteSpace:'nowrap', flexShrink:0, fontSize:10
+                    }}>{b.status.toUpperCase()}</span>
+                  )}
+                </div>
+                {b.assignedModel && (
+                  <div className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>MODEL: {b.assignedModel.toUpperCase()}</div>
+                )}
+                <div style={{display:'flex', gap:16, marginTop:4, flexWrap:'wrap'}}>
+                  {b.uptime != null && (
+                    <div style={{fontSize:12, color:'var(--ink-2)'}}>
+                      <span className="mono" style={{fontSize:10, color:'var(--ink-3)', display:'block', marginBottom:1}}>UPTIME</span>
+                      {b.uptime}
+                    </div>
+                  )}
+                  {b.signalQuality != null && (
+                    <div style={{fontSize:12, color:'var(--ink-2)'}}>
+                      <span className="mono" style={{fontSize:10, color:'var(--ink-3)', display:'block', marginBottom:1}}>SIGNAL</span>
+                      {b.signalQuality}
+                    </div>
+                  )}
+                  {b.battery != null && (
+                    <div style={{fontSize:12, color:'var(--ink-2)'}}>
+                      <span className="mono" style={{fontSize:10, color:'var(--ink-3)', display:'block', marginBottom:1}}>BATTERY</span>
+                      {b.battery}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* CTA */}
+      <section className="container" style={{paddingBottom:56}}>
+        <div className="card-paper" style={{padding:40, display:'grid', gridTemplateColumns:'1fr 240px', gap:32, alignItems:'center'}}>
+          <div>
+            <span className="eyebrow">PILOT PROGRAMME</span>
+            <h3 className="serif" style={{fontSize:34, marginTop:8, lineHeight:1.05}}>Your site. Your model. Your data stays local.</h3>
+            <p style={{marginTop:12, color:'var(--ink-2)', fontSize:14, maxWidth:520}}>
+              We scope, source hardware, train on your sensor data, and deploy. No AWS bill, no internet required, no vendor lock-in.
+            </p>
+            <button className="btn btn-rust" style={{marginTop:20}} onClick={() => go('quote')}>Request an AI pilot quote →</button>
+          </div>
+          <div className="slot slot-rust" style={{aspectRatio:'1/1'}}>EDGE NODE · RENDER</div>
+        </div>
+      </section>
+    </>
+  );
+}
+
 window.OE_PAGES = Object.assign(window.OE_PAGES || {}, {
   quote: QuotePage,
   contact: ContactPage,
@@ -721,5 +922,6 @@ window.OE_PAGES = Object.assign(window.OE_PAGES || {}, {
   policies: PoliciesPage,
   register: WarrantyRegisterPage,
   about: AboutPage,
+  ai: AIPage,
   repairs: null, // resolved dynamically — alias to services
 });
