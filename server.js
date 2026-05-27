@@ -22,6 +22,8 @@ const PUBLIC_RATE_WINDOW_MS = 1000 * 60 * 10;
 const PUBLIC_RATE_LIMITS = { checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10 };
 
 fs.mkdirSync(path.join(__dirname, 'assets/uploads'), { recursive: true });
+fs.mkdirSync(path.join(__dirname, 'assets/uploads/software'), { recursive: true });
+fs.mkdirSync(path.join(__dirname, 'assets/uploads/software/.chunks'), { recursive: true });
 
 const STRIPE_SECRET_KEY       = process.env.STRIPE_SECRET_KEY       || '';
 const STRIPE_WEBHOOK_SECRET   = process.env.STRIPE_WEBHOOK_SECRET   || '';
@@ -642,7 +644,8 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null) {
       if (err) return tryRead(paths, idx + 1);
       const ext = path.extname(filePath).toLowerCase();
       const types = { '.html': 'text/html', '.jsx': 'text/javascript', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.woff': 'font/woff', '.woff2': 'font/woff2' };
-      const isImmutable = /\.(js|css|png|jpg|jpeg|webp|gif|svg|ico|woff2?)$/.test(ext);
+      const isSoftwareDownload = filePath.includes('/assets/uploads/software/');
+      const isImmutable = /\.(js|css|png|jpg|jpeg|webp|gif|svg|ico|woff2?)$/.test(ext) && !isSoftwareDownload;
       const cacheHeader = isImmutable
         ? 'public, max-age=31536000, immutable'
         : 'no-cache, must-revalidate';
@@ -656,10 +659,14 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null) {
           ? "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://nominatim.openstreetmap.org; frame-src https://www.openstreetmap.org; frame-ancestors 'self';"
           : "default-src 'self'; script-src 'self' 'unsafe-inline' https://*.tawk.to https://embed.tawk.to https://static.cloudflareinsights.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.tawk.to https://cdn.jsdelivr.net; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com https://*.tawk.to; connect-src 'self' https://portal.outbackelectronics.com.au https://forum.outbackelectronics.com.au https://nominatim.openstreetmap.org wss://*.tawk.to https://*.tawk.to https://va.tawk.to https://cloudflareinsights.com; frame-src https://www.openstreetmap.org https://*.tawk.to; frame-ancestors 'none';",
       } : { 'X-Content-Type-Options': 'nosniff' };
+      const extraHeaders = isSoftwareDownload
+        ? { 'Content-Disposition': `attachment; filename="${path.basename(filePath)}"` }
+        : {};
       res.writeHead(200, {
-        'Content-Type': (types[ext] || 'application/octet-stream') + '; charset=utf-8',
+        'Content-Type': (types[ext] || 'application/octet-stream'),
         'Cache-Control': cacheHeader,
         ...securityHeaders,
+        ...extraHeaders,
       });
       res.end(data);
     });
@@ -2915,6 +2922,130 @@ const adminServer = http.createServer(async (req, res) => {
     const target = path.join(__dirname, 'assets/uploads', filename);
     const uploadsDir = path.resolve(path.join(__dirname, 'assets/uploads'));
     if (!path.resolve(target).startsWith(uploadsDir + path.sep) && path.resolve(target) !== uploadsDir) {
+      return json(res, 400, { error: 'invalid_filename' });
+    }
+    try { fs.unlinkSync(target); } catch {}
+    return json(res, 200, { ok: true });
+  }
+
+  // ---- Software binary file upload (chunked, supports up to 10 GB) ----------
+  // Allowed extensions/MIME for software files (shared by chunk + finalize)
+  const SW_ALLOWED_EXT = new Set([
+    '.zip', '.gz', '.tgz', '.bz2', '.xz', '.7z',
+    '.iso', '.img',
+    '.apk', '.aab',
+    '.exe', '.msi',
+    '.deb', '.rpm',
+    '.dmg', '.pkg',
+    '.appimage', '.run', '.sh',
+    '.tar',
+  ]);
+  // uploadId must be safe to use as a directory name
+  const validUploadId = id => typeof id === 'string' && /^[a-zA-Z0-9_-]{8,64}$/.test(id);
+  const swChunksRoot = path.join(__dirname, 'assets/uploads/software/.chunks');
+
+  // POST /api/admin/software/upload/chunk
+  // Body: { uploadId, chunkIndex, totalChunks, filename, data (base64 data-URI of slice) }
+  // Each chunk is up to 20 MB raw → ~27 MB base64. readJson cap: 30 MB.
+  if (req.method === 'POST' && url.pathname === '/api/admin/software/upload/chunk') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req, 30e6); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    try {
+      const { uploadId, chunkIndex, totalChunks, filename, data } = body;
+      if (!validUploadId(uploadId)) return json(res, 400, { error: 'invalid_upload_id' });
+      if (!Number.isInteger(chunkIndex) || chunkIndex < 0) return json(res, 400, { error: 'invalid_chunk_index' });
+      if (!Number.isInteger(totalChunks) || totalChunks < 1 || totalChunks > 550) return json(res, 400, { error: 'invalid_total_chunks' }); // 550 × 20 MB ≈ 11 GB max
+      const origName = (filename || 'file').replace(/[^a-zA-Z0-9._-]/g, '_');
+      const ext = origName.includes('.tar.') ? '.' + origName.split('.').slice(-2).join('.') : path.extname(origName).toLowerCase();
+      if (!SW_ALLOWED_EXT.has(ext)) return json(res, 400, { error: 'unsupported_file_type' });
+
+      const dataUri = data || '';
+      const mimeMatch = dataUri.match(/^data:([^;]+);base64,/);
+      if (!mimeMatch) return json(res, 400, { error: 'invalid_data_uri' });
+      const raw = dataUri.slice(mimeMatch[0].length);
+      const buf = Buffer.from(raw, 'base64');
+      if (buf.length > 21 * 1024 * 1024) return json(res, 400, { error: 'chunk_too_large' });
+
+      const chunkDir = path.join(swChunksRoot, uploadId);
+      fs.mkdirSync(chunkDir, { recursive: true });
+      fs.writeFileSync(path.join(chunkDir, String(chunkIndex).padStart(6, '0')), buf);
+      return json(res, 200, { ok: true, chunk: chunkIndex });
+    } catch { return json(res, 500, { error: 'chunk_failed' }); }
+  }
+
+  // POST /api/admin/software/upload/finalize
+  // Body: { uploadId, filename, totalChunks }
+  // Assembles chunks → assets/uploads/software/{timestamp}-{filename}
+  if (req.method === 'POST' && url.pathname === '/api/admin/software/upload/finalize') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    try {
+      const { uploadId, filename, totalChunks } = body;
+      if (!validUploadId(uploadId)) return json(res, 400, { error: 'invalid_upload_id' });
+      if (!Number.isInteger(totalChunks) || totalChunks < 1 || totalChunks > 550) return json(res, 400, { error: 'invalid_total_chunks' });
+      const origName = (filename || 'file').replace(/[^a-zA-Z0-9._-]/g, '_');
+      const ext = origName.includes('.tar.') ? '.' + origName.split('.').slice(-2).join('.') : path.extname(origName).toLowerCase();
+      if (!SW_ALLOWED_EXT.has(ext)) return json(res, 400, { error: 'unsupported_file_type' });
+
+      const chunkDir = path.join(swChunksRoot, uploadId);
+      // Verify all chunks are present and measure total size
+      let totalSize = 0;
+      for (let i = 0; i < totalChunks; i++) {
+        const cf = path.join(chunkDir, String(i).padStart(6, '0'));
+        let stat; try { stat = fs.statSync(cf); } catch { return json(res, 400, { error: 'missing_chunk', chunk: i }); }
+        totalSize += stat.size;
+      }
+      const MAX_BYTES = 10 * 1024 * 1024 * 1024; // 10 GB
+      if (totalSize > MAX_BYTES) {
+        try { fs.rmSync(chunkDir, { recursive: true, force: true }); } catch {}
+        return json(res, 400, { error: 'file_too_large', maxGB: 10 });
+      }
+
+      fs.mkdirSync(path.join(__dirname, 'assets/uploads/software'), { recursive: true });
+      const safeFilename = Date.now() + '-' + origName;
+      const outPath = path.join(__dirname, 'assets/uploads/software', safeFilename);
+      // Stream chunks to final file without loading everything into memory at once
+      const outStream = fs.createWriteStream(outPath);
+      await new Promise((resolve, reject) => {
+        let i = 0;
+        const writeNext = () => {
+          if (i >= totalChunks) { outStream.end(); return; }
+          const cf = path.join(chunkDir, String(i++).padStart(6, '0'));
+          const chunk = fs.readFileSync(cf);
+          if (!outStream.write(chunk)) { outStream.once('drain', writeNext); } else { writeNext(); }
+        };
+        outStream.on('finish', resolve);
+        outStream.on('error', reject);
+        writeNext();
+      });
+      // Remove temp chunks
+      try { fs.rmSync(chunkDir, { recursive: true, force: true }); } catch {}
+      return json(res, 200, { ok: true, url: '/assets/uploads/software/' + safeFilename, filename: safeFilename, originalName: origName, size: totalSize });
+    } catch { return json(res, 500, { error: 'finalize_failed' }); }
+  }
+
+  // POST /api/admin/software/upload/abort
+  // Body: { uploadId } — cleans up temp chunks for a failed/cancelled upload
+  if (req.method === 'POST' && url.pathname === '/api/admin/software/upload/abort') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const { uploadId } = body;
+    if (!validUploadId(uploadId)) return json(res, 400, { error: 'invalid_upload_id' });
+    const chunkDir = path.join(swChunksRoot, uploadId);
+    try { fs.rmSync(chunkDir, { recursive: true, force: true }); } catch {}
+    return json(res, 200, { ok: true });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/software/upload/delete') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const filename = path.basename(body.filename || '');
+    if (!filename || filename.includes('\0') || filename.includes('/')) {
+      return json(res, 400, { error: 'invalid_filename' });
+    }
+    const swUploadsDir = path.resolve(path.join(__dirname, 'assets/uploads/software'));
+    const target = path.resolve(path.join(__dirname, 'assets/uploads/software', filename));
+    if (!target.startsWith(swUploadsDir + path.sep) && target !== swUploadsDir) {
       return json(res, 400, { error: 'invalid_filename' });
     }
     try { fs.unlinkSync(target); } catch {}
