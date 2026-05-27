@@ -2006,6 +2006,25 @@ const mainServer = http.createServer(async (req, res) => {
         const payment = { amount: amountAud, method: 'Stripe', note: `Session ${session.id}`, date: new Date().toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' }) };
         orders[existingIdx] = { ...existing, stripeSessionId: session.id, payments: [...(existing.payments || []), payment] };
         writeOrders(orders);
+        // Credit seller for existing-order payment path
+        const existingProductId = meta.productId || '';
+        if (existingProductId) {
+          const prod = readProducts().find(p => p.id === existingProductId);
+          if (prod && prod.createdBy && prod.sellerPrice != null) {
+            const txns = readSellerLedger();
+            txns.push({
+              id: 'txn-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+              sellerId: prod.createdBy,
+              type: 'sale_credit',
+              amount: prod.sellerPrice,
+              description: `Sale: ${prod.name || existingProductId}`,
+              date: new Date().toISOString(),
+              orderId: existing.id,
+              status: 'ok',
+            });
+            writeSellerLedger(txns);
+          }
+        }
         const customerEmail = existing.email || details.email;
         if (customerEmail) {
           const tmpl = emailOrderConfirmation({ orderId: existing.id, customerName: existing.cust || details.name, amountAud, items: existing.items });
@@ -2229,7 +2248,9 @@ const mainServer = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && url.pathname === '/api/settings') {
     const s = readSettings();
-    return json(res, 200, { siteContent: s.siteContent });
+    const stripeIntegration = (s.integrations || []).find(r => r[0] === 'Stripe');
+    const stripePublishableKey = (stripeIntegration && stripeIntegration[3] && stripeIntegration[3].publishableKey) || STRIPE_PUBLISHABLE_KEY || '';
+    return json(res, 200, { siteContent: s.siteContent, stripePublishableKey });
   }
 
   if (req.method === 'GET' && url.pathname === '/api/forum/recent') {
@@ -2857,7 +2878,9 @@ const adminServer = http.createServer(async (req, res) => {
   }
   if (req.method === 'GET' && url.pathname === '/api/settings') {
     const s = readSettings();
-    return json(res, 200, { siteContent: s.siteContent });
+    const stripeIntegration2 = (s.integrations || []).find(r => r[0] === 'Stripe');
+    const stripePublishableKey2 = (stripeIntegration2 && stripeIntegration2[3] && stripeIntegration2[3].publishableKey) || STRIPE_PUBLISHABLE_KEY || '';
+    return json(res, 200, { siteContent: s.siteContent, stripePublishableKey: stripePublishableKey2 });
   }
   if (req.method === 'GET' && url.pathname === '/api/admin/settings') {
     const session = requireRole(req, res, 'staff'); if (!session) return;
@@ -3459,6 +3482,112 @@ const adminServer = http.createServer(async (req, res) => {
     const session = requireRole(req, res, 'manager'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     writeSellers(readSellers().filter(s => s.id !== body.id));
+    return json(res, 200, { ok: true });
+  }
+
+  // ── Seller billing API ───────────────────────────────────────────────────────
+
+  if (req.method === 'GET' && url.pathname === '/api/admin/seller/billing') {
+    const session = requireRole(req, res, 'seller'); if (!session) return;
+    const sellerId = session.staffId;
+    const balance = getSellerBalance(sellerId);
+    const allTxns = readSellerLedger().filter(t => t.sellerId === sellerId);
+    allTxns.sort((a, b) => new Date(b.date) - new Date(a.date));
+    return json(res, 200, { balance, transactions: allTxns.slice(0, 50) });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/seller/setup-intent') {
+    const session = requireRole(req, res, 'seller'); if (!session) return;
+    if (!getStripeKey()) return json(res, 503, { error: 'stripe_not_configured' });
+    const staffData = readStaff();
+    const memberIdx = staffData.members.findIndex(m => m.id === session.staffId);
+    if (memberIdx < 0) return json(res, 404, { error: 'not_found' });
+    let seller = staffData.members[memberIdx];
+    if (!seller.stripeCustomerId) {
+      const custResp = await stripeRequest('POST', '/v1/customers', { email: seller.email || '', name: seller.name || '' }).catch(() => null);
+      if (!custResp || custResp.status !== 200) return json(res, 502, { error: 'stripe_customer_failed' });
+      seller = { ...seller, stripeCustomerId: custResp.body.id };
+      staffData.members[memberIdx] = seller;
+      writeStaff(staffData);
+    }
+    const siResp = await stripeRequest('POST', '/v1/setup_intents', { customer: seller.stripeCustomerId, 'payment_method_types[]': 'card' }).catch(() => null);
+    if (!siResp || siResp.status !== 200) return json(res, 502, { error: 'stripe_setup_intent_failed' });
+    return json(res, 200, { clientSecret: siResp.body.client_secret });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/seller/payment-method/save') {
+    const session = requireRole(req, res, 'seller'); if (!session) return;
+    if (!getStripeKey()) return json(res, 503, { error: 'stripe_not_configured' });
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const { paymentMethodId } = body || {};
+    if (!paymentMethodId) return json(res, 400, { error: 'paymentMethodId required' });
+    const staffData = readStaff();
+    const memberIdx = staffData.members.findIndex(m => m.id === session.staffId);
+    if (memberIdx < 0) return json(res, 404, { error: 'not_found' });
+    const seller = staffData.members[memberIdx];
+    // Fetch PM from Stripe
+    const pmResp = await stripeRequest('GET', `/v1/payment_methods/${encodeURIComponent(paymentMethodId)}`, null).catch(() => null);
+    if (!pmResp || pmResp.status !== 200) return json(res, 502, { error: 'stripe_pm_fetch_failed' });
+    const pm = pmResp.body;
+    const last4 = (pm.card && pm.card.last4) || '';
+    const brand = (pm.card && pm.card.brand) || '';
+    // Attach PM to customer
+    if (seller.stripeCustomerId) {
+      await stripeRequest('POST', `/v1/payment_methods/${encodeURIComponent(paymentMethodId)}/attach`, { customer: seller.stripeCustomerId }).catch(() => null);
+      await stripeRequest('POST', `/v1/customers/${encodeURIComponent(seller.stripeCustomerId)}`, { 'invoice_settings[default_payment_method]': paymentMethodId }).catch(() => null);
+    }
+    staffData.members[memberIdx] = { ...seller, stripePaymentMethodId: paymentMethodId, stripeCardLast4: last4, stripeCardBrand: brand };
+    writeStaff(staffData);
+    return json(res, 200, { ok: true, last4, brand });
+  }
+
+  if (req.method === 'DELETE' && url.pathname === '/api/admin/seller/payment-method') {
+    const session = requireRole(req, res, 'seller'); if (!session) return;
+    if (!getStripeKey()) return json(res, 503, { error: 'stripe_not_configured' });
+    const staffData = readStaff();
+    const memberIdx = staffData.members.findIndex(m => m.id === session.staffId);
+    if (memberIdx < 0) return json(res, 404, { error: 'not_found' });
+    const seller = staffData.members[memberIdx];
+    if (seller.stripePaymentMethodId) {
+      await stripeRequest('POST', `/v1/payment_methods/${encodeURIComponent(seller.stripePaymentMethodId)}/detach`, {}).catch(() => null);
+    }
+    staffData.members[memberIdx] = { ...seller, stripePaymentMethodId: '', stripeCardLast4: '', stripeCardBrand: '' };
+    writeStaff(staffData);
+    return json(res, 200, { ok: true });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/admin/seller-billing') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    const staffData = readStaff();
+    const products = readProducts();
+    const sellers = staffData.members.filter(m => m.role === 'seller');
+    const result = sellers.map(s => {
+      const activeListings = products.filter(p => p.createdBy === s.id && p.status === 'published').length;
+      return {
+        id: s.id,
+        name: s.name,
+        email: s.email,
+        balance: getSellerBalance(s.id),
+        cardLast4: s.stripeCardLast4 || '',
+        cardBrand: s.stripeCardBrand || '',
+        hasCard: !!(s.stripePaymentMethodId),
+        activeListings,
+      };
+    });
+    return json(res, 200, { sellers: result });
+  }
+
+  if (req.method === 'GET' && url.pathname.startsWith('/api/admin/seller-billing/transactions/')) {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    const sellerId = decodeURIComponent(url.pathname.split('/').pop() || '');
+    const txns = readSellerLedger().filter(t => t.sellerId === sellerId);
+    txns.sort((a, b) => new Date(b.date) - new Date(a.date));
+    return json(res, 200, { transactions: txns });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/seller-billing/charge-now') {
+    const session = requireAdmin(req, res); if (!session) return;
+    await runMonthlyListingFees();
     return json(res, 200, { ok: true });
   }
 
