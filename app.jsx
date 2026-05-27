@@ -704,6 +704,12 @@ function OrderSuccessPage({ go }) {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const sid = params.get('session_id');
+    const orderId = params.get('order_id');
+    if (orderId) {
+      // Fully covered by gift card — no Stripe session
+      setSession({ customerEmail: null, amountAud: 0, orderId });
+      return;
+    }
     if (!sid) return;
     fetch(`/api/checkout/session?id=${encodeURIComponent(sid)}`)
       .then(r => r.ok ? r.json() : null)

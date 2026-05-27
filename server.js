@@ -1897,14 +1897,54 @@ const mainServer = http.createServer(async (req, res) => {
 
     let gcDiscount = 0;
     let gcCodeNorm = '';
+    let gcObject = null;
     if (giftCardCode) {
       gcCodeNorm = String(giftCardCode).trim().toUpperCase();
       const gcList = readGiftCards();
-      const gc = gcList.find(c => c.code === gcCodeNorm && !c.isVoid && c.balance > 0);
-      if (!gc) return json(res, 422, { error: 'invalid_gift_card', message: 'Gift card code is invalid, already used, or has no remaining balance.' });
+      gcObject = gcList.find(c => c.code === gcCodeNorm && !c.isVoid && c.balance > 0);
+      if (!gcObject) return json(res, 422, { error: 'invalid_gift_card', message: 'Gift card code is invalid, already used, or has no remaining balance.' });
       const cartTotal = lineItems.reduce((s, li) => s + Math.round(Number(li.priceAud) * 100) * (li.quantity || 1), 0) / 100;
       const orderTotal = cartTotal + validatedShipping;
-      gcDiscount = Math.min(gc.balance, orderTotal);
+      gcDiscount = Math.min(gcObject.balance, orderTotal);
+    }
+
+    // If gift card covers the entire order, skip Stripe and create order directly
+    const cartGross = lineItems.reduce((s, li) => s + Math.round(Number(li.priceAud) * 100) * (li.quantity || 1), 0) / 100;
+    const orderGross = cartGross + validatedShipping;
+    if (gcDiscount >= orderGross && gcObject) {
+      // Redeem gift card balance
+      const gcList = readGiftCards();
+      const gcIdx = gcList.findIndex(c => c.code === gcCodeNorm);
+      if (gcIdx >= 0) {
+        gcList[gcIdx].balance = Math.max(0, Math.round((gcList[gcIdx].balance - gcDiscount) * 100) / 100);
+        gcList[gcIdx].redemptions = [...(gcList[gcIdx].redemptions || []), { orderId: 'pending', amount: gcDiscount, date: new Date().toISOString() }];
+        writeGiftCards(gcList);
+      }
+      const allOrders = readOrders();
+      const maxNum = allOrders.reduce((max, o) => { const m = String(o.id || '').match(/^OE-(\d+)$/); return m ? Math.max(max, parseInt(m[1])) : max; }, 1000);
+      const newOrderId = `OE-${maxNum + 1}`;
+      const gcOnlyOrder = {
+        id: newOrderId,
+        cust: customerEmail || 'Online customer',
+        email: customerEmail || '',
+        items: lineItems.map(li => li.name).join(', '),
+        total: orderGross,
+        date: new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' }),
+        fulfilment: 'pending',
+        payments: [{ amount: gcDiscount, method: 'Gift Card', note: gcCodeNorm, date: new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' }) }],
+      };
+      allOrders.push(gcOnlyOrder);
+      writeOrders(allOrders);
+      // Update gift card redemption with real order ID
+      const gcList2 = readGiftCards();
+      const gcIdx2 = gcList2.findIndex(c => c.code === gcCodeNorm);
+      if (gcIdx2 >= 0) {
+        const r = gcList2[gcIdx2].redemptions || [];
+        const ri = r.findLastIndex ? r.findLastIndex(x => x.orderId === 'pending') : r.map(x => x.orderId).lastIndexOf('pending');
+        if (ri >= 0) gcList2[gcIdx2].redemptions[ri].orderId = newOrderId;
+        writeGiftCards(gcList2);
+      }
+      return json(res, 200, { url: `${getSiteUrl()}/order-success?order_id=${newOrderId}`, sessionId: null, fullyCoveredByGiftCard: true });
     }
 
     const params = {
@@ -3298,12 +3338,21 @@ const adminServer = http.createServer(async (req, res) => {
     const session = requireRole(req, res, 'manager'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     const orders = readOrders();
-    const idx = orders.findIndex(o => o.id && o.id === body.id);
+    // _originalId lets the client rename an order's ID — find by original, save with new
+    const lookupId = body._originalId || body.id;
+    const idx = orders.findIndex(o => o.id && o.id === lookupId);
     const existing = idx >= 0 ? orders[idx] : null;
-    const { draftQuote: _dq, ...bodyToStore } = body;
+    const { draftQuote: _dq, _originalId: _oid, ...bodyToStore } = body;
+    // Check new ID isn't already taken by a different order
+    if (bodyToStore.id && idx >= 0 && bodyToStore.id !== existing.id) {
+      const collision = orders.find((o, i) => i !== idx && o.id === bodyToStore.id);
+      if (collision) return json(res, 409, { error: 'id_taken', message: `Order number ${bodyToStore.id} is already in use.` });
+    }
     if (idx >= 0) { orders[idx] = bodyToStore; } else {
-      const maxN = orders.reduce((max, o) => { const m = String(o.id||'').match(/^OE-(\d+)$/); return m ? Math.max(max, parseInt(m[1])) : max; }, 1000);
-      bodyToStore.id = `OE-${maxN + 1}`;
+      if (!bodyToStore.id) {
+        const maxN = orders.reduce((max, o) => { const m = String(o.id||'').match(/^OE-(\d+)$/); return m ? Math.max(max, parseInt(m[1])) : max; }, 1000);
+        bodyToStore.id = `OE-${maxN + 1}`;
+      }
       orders.push(bodyToStore);
     }
     writeOrders(orders);

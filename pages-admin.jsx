@@ -1,5 +1,30 @@
 import React, { useState, useEffect, useMemo } from 'react';
 
+// ── Shared helpers ────────────────────────────────────────────────────────────
+// Canonical date format for all order dates: "27 May 2026"
+function fmtOrderDate(raw) {
+  if (!raw) return '';
+  // Already in "27 May 2026" form
+  const d = new Date(raw);
+  if (isNaN(d)) {
+    // Try parsing "27/05/2026" or "27/5/2026"
+    const parts = String(raw).split('/');
+    if (parts.length === 3) {
+      const parsed = new Date(`${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`);
+      if (!isNaN(parsed)) return parsed.toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
+    }
+    return String(raw); // leave as-is if unparseable
+  }
+  return d.toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
+}
+function todayOrderDate() {
+  return new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
+}
+// Australian cash rounding: round to nearest 5 cents
+function cashRound(amount) {
+  return Math.round(amount * 20) / 20;
+}
+
 function getCsrf() {
   return document.cookie.split(';').reduce((v, c) => {
     const [k, val] = c.trim().split('=');
@@ -522,8 +547,8 @@ function AdminOrders({ search }) {
   const saveNow = async (patch) => {
     const updated = { ...form, ...patch };
     setForm(updated);
-    await fetch('/api/admin/orders/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(updated) }).catch(()=>null);
-    setRows(rs => rs.map(r => r.id === updated.id ? updated : r));
+    await fetch('/api/admin/orders/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ ...updated, _originalId: edit?.id || updated.id }) }).catch(()=>null);
+    setRows(rs => rs.map(r => r.id === (edit?.id || updated.id) ? updated : r));
   };
 
   const checkTracking = async () => {
@@ -576,25 +601,32 @@ function AdminOrders({ search }) {
     refunded:  { bg:'#f3d5c5', fg:'#7a3a18' },
   };
 
-  const amountPaid = (f) => (f.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
-  const balance = (f) => (Number(f.total) || 0) - amountPaid(f);
+  const amountPaid = (f) => Math.round((f.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0) * 100) / 100;
+  const effectiveTotal = (f) => {
+    // If the last payment was cash, the "expected" total is cash-rounded
+    const payments = f.payments || [];
+    const lastMethod = payments.length ? (payments[payments.length - 1].method || 'Card') : 'Card';
+    const isCash = lastMethod === 'Cash';
+    return isCash ? cashRound(Number(f.total) || 0) : Math.round((Number(f.total) || 0) * 100) / 100;
+  };
+  const balance = (f) => Math.round((effectiveTotal(f) - amountPaid(f)) * 100) / 100;
   const paymentStatus = (f) => {
-    // If a payment log exists, derive status from it
     if ((f.payments || []).length > 0) {
       const paid = amountPaid(f);
-      const total = Number(f.total) || 0;
+      const total = effectiveTotal(f);
       if (paid >= total) return 'paid';
       return 'part-paid';
     }
-    // Fall back to legacy stored status for orders saved before payment log existed
     if (f.status === 'paid' || f.status === 'part-paid') return f.status;
     return 'unpaid';
   };
 
   const addPayment = () => {
-    const amt = Number(payEntry.amount);
-    if (!amt || amt <= 0) return;
-    const payment = { amount: amt, method: payEntry.method, note: payEntry.note, date: new Date().toLocaleDateString('en-AU', {day:'2-digit', month:'short', year:'numeric'}) };
+    const rawAmt = Number(payEntry.amount);
+    if (!rawAmt || rawAmt <= 0) return;
+    const isCash = payEntry.method === 'Cash';
+    const amt = isCash ? cashRound(rawAmt) : Math.round(rawAmt * 100) / 100;
+    const payment = { amount: amt, method: payEntry.method, note: payEntry.note, date: todayOrderDate() };
     setForm(f => ({ ...f, payments: [...(f.payments || []), payment] }));
     setPayEntry({ amount:'', method:'Cash', note:'' });
   };
@@ -603,7 +635,7 @@ function AdminOrders({ search }) {
   };
   const addUpdate = () => {
     if (!updateEntry.text.trim()) return;
-    const u = { text: updateEntry.text.trim(), type: updateEntry.type, date: new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' }), ts: new Date().toISOString() };
+    const u = { text: updateEntry.text.trim(), type: updateEntry.type, date: todayOrderDate(), ts: new Date().toISOString() };
     setForm(f => ({ ...f, updates: [...(f.updates || []), u] }));
     setUpdateEntry({ text:'', type:'note' });
   };
@@ -640,7 +672,7 @@ function AdminOrders({ search }) {
     refunded: rows.filter(r => (r.fulfilment||'pending') === 'refunded').length,
   };
 
-  const blankOrder = () => ({ id:'', cust:'', email:'', loc:'', items:'', date: new Date().toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'}), total:0, fulfilment:'pending', payments:[], parts:[], updates:[] });
+  const blankOrder = () => ({ id:'', cust:'', email:'', phone:'', loc:'', items:'', date: todayOrderDate(), total:0, fulfilment:'pending', payments:[], parts:[], updates:[] });
   const openNew = () => { const b = blankOrder(); setEdit(b); setForm(b); setPayEntry({ amount:'', method:'Cash', note:'' }); setExpenseEdit(null); setExpenseForm({}); setTrackingResult(null); setTrackingEmailStatus(null); };
 
   return (
@@ -658,16 +690,16 @@ function AdminOrders({ search }) {
           { key:'id', label:'Order #', w:'140px', render:r => <span className="mono" style={{fontSize:12, color:'var(--rust)'}}>{r.id}</span> },
           { key:'cust', label:'Customer', w:'1.5fr' },
           { key:'items', label:'Items', w:'2fr', render:r => <span style={{fontSize:13}}>{r.items}</span> },
-          { key:'total', label:'Total', w:'90px', render:r => <span className="mono" style={{fontWeight:600}}>${(Number(r.total)||0).toLocaleString()}</span> },
+          { key:'total', label:'Total', w:'90px', render:r => <span className="mono" style={{fontWeight:600}}>${(Number(r.total)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}</span> },
           { key:'balance', label:'Balance', w:'90px', render:r => {
             const b = balance(r);
-            return b <= 0
+            return b <= 0.005
               ? <span className="mono" style={{fontSize:11, color:'var(--eucalyptus)'}}>CLEAR</span>
-              : <span className="mono" style={{fontSize:12, color:'var(--rust)', fontWeight:600}}>${b.toLocaleString()}</span>;
+              : <span className="mono" style={{fontSize:12, color:'var(--rust)', fontWeight:600}}>${b.toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>;
           }},
           { key:'payment', label:'Payment', w:'100px', render:r => <StatusPill value={paymentStatus(r)} map={paymentMap} /> },
           { key:'fulfilment', label:'Fulfilment', w:'110px', render:r => { const legacyFul = ['packed','shipped','fulfilled','refunded'].includes(r.status) ? r.status : null; return <StatusPill value={r.fulfilment || legacyFul || 'pending'} map={fulfilmentMap} />; } },
-          { key:'date', label:'When', w:'110px', render:r => <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{(r.date||'').toUpperCase()}</span> },
+          { key:'date', label:'When', w:'110px', render:r => <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{fmtOrderDate(r.date).toUpperCase()}</span> },
         ]}
         rows={visibleRows}
         onRowClick={(r) => openRow(r)}
@@ -694,11 +726,13 @@ function AdminOrders({ search }) {
             <div className="row-flex" style={{gap:8}}>
               <button className="btn btn-ghost btn-sm" onClick={() => setEdit(null)}>Cancel</button>
               <button className="btn btn-sm" onClick={async () => {
-                const r = await fetch('/api/admin/orders/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(form) }).catch(()=>null);
+                const payload = { ...form, _originalId: edit.id || form.id };
+                const r = await fetch('/api/admin/orders/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(payload) }).catch(()=>null);
                 if (r && r.ok) {
                   const d = await r.json();
+                  if (!r.ok || d.error) { alert(d.message || 'Save failed'); return; }
                   const saved = d.item || form;
-                  if (edit.id) { setRows(rs => rs.map(row => row.id === saved.id ? saved : row)); }
+                  if (edit.id) { setRows(rs => rs.map(row => row.id === edit.id ? saved : row)); }
                   else { setRows(rs => [saved, ...rs]); }
                 }
                 setEdit(null);
@@ -1131,7 +1165,7 @@ function QuoteCreator({ context, onBack, onQuoteSent }) {
   const hardwareTotal = hw.reduce((s, i) => s + (parseFloat(i.basePrice) || 0) * (parseInt(i.qty) || 1) * (1 + HARDWARE_MARGIN), 0);
   const pcBuildFee = form.pcBuild ? (parseFloat(form.pcHours) || 0) * PC_BUILD_RATE : 0;
   const otherTotal = form.otherItems.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
-  const grandTotal = hardwareTotal + pcBuildFee + otherTotal;
+  const grandTotal = Math.round((hardwareTotal + pcBuildFee + otherTotal) * 100) / 100;
 
   const addHw = () => setForm(f => ({ ...f, hardwareItems: [...f.hardwareItems, { id: 'h' + Date.now(), name: '', qty: 1, basePrice: '' }] }));
   const updHw = (id, patch) => setForm(f => ({ ...f, hardwareItems: f.hardwareItems.map(i => i.id === id ? { ...i, ...patch } : i) }));
@@ -1561,7 +1595,11 @@ function AdminQuotes() {
             </div>
           </div>}
         >
-          <label className="field"><span className="label">ID</span><input className="input" value={form.id||''} onChange={e=>setForm({...form,id:e.target.value})}/></label>
+          <label className="field"><span className="label">Order Number</span>
+            <div style={{display:'flex', gap:8}}>
+              <input className="input" style={{fontFamily:'monospace', fontWeight:700}} value={form.id||''} onChange={e=>setForm({...form,id:e.target.value})} placeholder="e.g. OE-1001"/>
+            </div>
+          </label>
           <label className="field"><span className="label">Name</span><input className="input" value={form.name||''} onChange={e=>setForm({...form,name:e.target.value})}/></label>
           <label className="field"><span className="label">Location</span><input className="input" value={form.loc||''} onChange={e=>setForm({...form,loc:e.target.value})}/></label>
           <label className="field"><span className="label">Kind</span><input className="input" value={form.kind||''} onChange={e=>setForm({...form,kind:e.target.value})}/></label>
