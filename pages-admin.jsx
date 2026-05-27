@@ -638,12 +638,18 @@ function AdminOrders({ search }) {
     refunded: rows.filter(r => (r.fulfilment||'pending') === 'refunded').length,
   };
 
+  const blankOrder = () => ({ id:'', cust:'', email:'', loc:'', items:'', date: new Date().toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'}), total:0, fulfilment:'pending', payments:[], parts:[], updates:[] });
+  const openNew = () => { const b = blankOrder(); setEdit(b); setForm(b); setPayEntry({ amount:'', method:'Cash', note:'' }); setExpenseEdit(null); setExpenseForm({}); setTrackingResult(null); setTrackingEmailStatus(null); };
+
   return (
     <div style={{padding:32}}>
-      <div className="tabs" style={{marginBottom:18}}>
-        {[['all','All'],['unpaid','Unpaid'],['part-paid','Part paid'],['paid','Paid'],['shipped','Shipped'],['refunded','Refunded']].map(([k,l],i) => (
-          <div key={k} className={`tab ${i===0?'active':''}`}>{l} ({tabCounts[k]})</div>
-        ))}
+      <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:18}}>
+        <div className="tabs" style={{margin:0}}>
+          {[['all','All'],['unpaid','Unpaid'],['part-paid','Part paid'],['paid','Paid'],['shipped','Shipped'],['refunded','Refunded']].map(([k,l],i) => (
+            <div key={k} className={`tab ${i===0?'active':''}`}>{l} ({tabCounts[k]})</div>
+          ))}
+        </div>
+        <button className="btn btn-rust btn-sm" onClick={openNew}>+ New order</button>
       </div>
       <Table
         columns={[
@@ -665,32 +671,41 @@ function AdminOrders({ search }) {
         onRowClick={(r) => openRow(r)}
       />
       {edit !== null && (
-        <Drawer open={true} onClose={() => setEdit(null)} title={`Order ${edit.id}`}
+        <Drawer open={true} onClose={() => setEdit(null)} title={edit.id ? `Order ${edit.id}` : 'New order'}
           footer={<div className="row-flex" style={{gap:8, justifyContent:'space-between'}}>
-            <button className="btn btn-ghost btn-sm" style={{fontSize:12}}
-              disabled={trackingEmailStatus === 'sending' || !form.email}
-              title={!form.email ? 'Order has no customer email' : 'Send order tracking email to customer'}
-              onClick={async () => {
-                setTrackingEmailStatus('sending');
-                try {
-                  const r = await fetch('/api/admin/orders/send-tracking-email', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: form.id }) });
-                  setTrackingEmailStatus(r.ok ? 'sent' : 'error');
-                } catch { setTrackingEmailStatus('error'); }
-                setTimeout(() => setTrackingEmailStatus(null), 4000);
-              }}>
-              {trackingEmailStatus === 'sending' ? '⏳ Sending…' : trackingEmailStatus === 'sent' ? '✓ Email sent' : trackingEmailStatus === 'error' ? '✗ Failed' : '✉ Send tracking email'}
-            </button>
+            {edit.id
+              ? <button className="btn btn-ghost btn-sm" style={{fontSize:12}}
+                  disabled={trackingEmailStatus === 'sending' || !form.email}
+                  title={!form.email ? 'Order has no customer email' : 'Send order tracking email to customer'}
+                  onClick={async () => {
+                    setTrackingEmailStatus('sending');
+                    try {
+                      const r = await fetch('/api/admin/orders/send-tracking-email', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: form.id }) });
+                      setTrackingEmailStatus(r.ok ? 'sent' : 'error');
+                    } catch { setTrackingEmailStatus('error'); }
+                    setTimeout(() => setTrackingEmailStatus(null), 4000);
+                  }}>
+                  {trackingEmailStatus === 'sending' ? '⏳ Sending…' : trackingEmailStatus === 'sent' ? '✓ Email sent' : trackingEmailStatus === 'error' ? '✗ Failed' : '✉ Send tracking email'}
+                </button>
+              : <span/>
+            }
             <div className="row-flex" style={{gap:8}}>
               <button className="btn btn-ghost btn-sm" onClick={() => setEdit(null)}>Cancel</button>
               <button className="btn btn-sm" onClick={async () => {
-                await fetch('/api/admin/orders/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(form) }).catch(()=>null);
-                setRows(rs => rs.map(r => r.id === form.id ? form : r));
+                const r = await fetch('/api/admin/orders/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(form) }).catch(()=>null);
+                if (r && r.ok) {
+                  const d = await r.json();
+                  const saved = d.item || form;
+                  if (edit.id) { setRows(rs => rs.map(row => row.id === saved.id ? saved : row)); }
+                  else { setRows(rs => [saved, ...rs]); }
+                }
                 setEdit(null);
-              }}>Save</button>
+              }}>{edit.id ? 'Save' : 'Create order'}</button>
             </div>
           </div>}
         >
           <label className="field"><span className="label">Customer</span><input className="input" value={form.cust||''} onChange={e=>setForm({...form,cust:e.target.value})}/></label>
+          <label className="field"><span className="label">Email</span><input className="input" type="email" value={form.email||''} onChange={e=>setForm({...form,email:e.target.value})}/></label>
           <label className="field"><span className="label">Location</span><input className="input" value={form.loc||''} onChange={e=>setForm({...form,loc:e.target.value})}/></label>
           <label className="field"><span className="label">Items</span><input className="input" value={form.items||''} onChange={e=>setForm({...form,items:e.target.value})}/></label>
           <label className="field"><span className="label">Date</span><input className="input" value={form.date||''} onChange={e=>setForm({...form,date:e.target.value})}/></label>
