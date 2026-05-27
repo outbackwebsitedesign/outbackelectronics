@@ -3925,11 +3925,12 @@ function AdminGiftCards() {
     if (!balance || balance <= 0) { setIssueError('Enter a valid amount.'); return; }
     setIssuing(true);
     setIssueError(null);
+    await ensureCsrf();
     const resp = await fetch('/api/admin/gift-cards/issue', { method: 'POST', headers: postHeaders(), credentials: 'include', body: JSON.stringify(issueForm) });
-    const data = await resp.json();
+    const data = await resp.json().catch(() => ({}));
     setIssuing(false);
     if (data.ok) { setIssueForm({ balance: '', recipientEmail: '', note: '' }); load(); }
-    else setIssueError(data.message || 'Failed to issue gift card.');
+    else setIssueError(data.message || `Failed to issue gift card. (${resp.status} ${data.error || ''})`);
   };
 
   const filtered = filter === 'all' ? rows
@@ -5462,6 +5463,7 @@ function AdminPage({ go }) {
 
   useEffect(() => {
     let mounted = true;
+    ensureCsrf();
     fetchSession(mounted).finally(() => { if (mounted) setChecking(false); });
     return () => { mounted = false; };
   }, []);
