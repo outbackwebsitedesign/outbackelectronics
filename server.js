@@ -1912,19 +1912,38 @@ const mainServer = http.createServer(async (req, res) => {
       'success_url': `${getSiteUrl()}/order-success?session_id={CHECKOUT_SESSION_ID}`,
       'cancel_url': `${getSiteUrl()}/order-cancelled`,
       'payment_intent_data[metadata][source]': 'website',
+      'metadata[source]': 'website',
+      'shipping_address_collection[allowed_countries][0]': 'AU',
+      'phone_number_collection[enabled]': 'true',
     };
-    if (gcCodeNorm) params['payment_intent_data[metadata][giftCardCode]'] = gcCodeNorm;
-    if (gcDiscount > 0) params['payment_intent_data[metadata][giftCardDiscount]'] = String(gcDiscount);
+    if (gcCodeNorm) {
+      params['payment_intent_data[metadata][giftCardCode]'] = gcCodeNorm;
+      params['metadata[giftCardCode]'] = gcCodeNorm;
+    }
+    if (gcDiscount > 0) {
+      params['payment_intent_data[metadata][giftCardDiscount]'] = String(gcDiscount);
+      params['metadata[giftCardDiscount]'] = String(gcDiscount);
+    }
 
     // Store gift card product IDs so the webhook can issue codes (max 500 chars in metadata)
     const gcProductIds = lineItems
       .filter(li => String(li.productId || '').startsWith('gc-'))
       .flatMap(li => Array(li.quantity || 1).fill(`${li.productId}:${li.priceAud}`));
-    if (gcProductIds.length > 0) params['payment_intent_data[metadata][gcItems]'] = gcProductIds.join(',').slice(0, 500);
+    if (gcProductIds.length > 0) {
+      params['payment_intent_data[metadata][gcItems]'] = gcProductIds.join(',').slice(0, 500);
+      params['metadata[gcItems]'] = gcProductIds.join(',').slice(0, 500);
+    }
 
     // Tag membership purchases so the webhook can activate the subscription
     const membershipLineItem = lineItems.find(li => membershipTiers.some(t => t.id === li.productId));
-    if (membershipLineItem) params['payment_intent_data[metadata][membershipTierId]'] = membershipLineItem.productId;
+    if (membershipLineItem) {
+      params['payment_intent_data[metadata][membershipTierId]'] = membershipLineItem.productId;
+      params['metadata[membershipTierId]'] = membershipLineItem.productId;
+    }
+    // Mirror productId and shipping onto session metadata for webhook access
+    if (lineItems.length === 1) params['metadata[productId]'] = lineItems[0].productId || '';
+    if (validatedShipping > 0) params['metadata[shippingAmount]'] = String(validatedShipping);
+    if (shippingService) params['metadata[shippingService]'] = String(shippingService).slice(0, 80);
     const shippingServiceName = shippingService ? String(shippingService).slice(0, 80) : '';
 
     // Build line items; if a gift card covers the full amount, add a $0.50 minimum line item
@@ -2005,16 +2024,33 @@ const mainServer = http.createServer(async (req, res) => {
       const session = event.data.object;
       const details = session.customer_details || {};
       const amountAud = (session.amount_total || 0) / 100;
-      const meta = session.payment_intent_metadata || session.metadata || {};
+      const meta = session.metadata || {};
       const productId = meta.productId || '';
       const gcCode = meta.giftCardCode || '';
       const gcDiscount = Number(meta.giftCardDiscount || 0);
 
+      const existingOrders = readOrders();
+      const maxNum = existingOrders.reduce((max, o) => {
+        const m = String(o.id || '').match(/^OE-(\d+)$/);
+        return m ? Math.max(max, parseInt(m[1])) : max;
+      }, 1000);
+      const shippingDetails = session.shipping_details || session.shipping || {};
+      const shipAddr = shippingDetails.address || details.address || {};
+      const shippingAddress = [
+        shippingDetails.name || details.name || '',
+        shipAddr.line1 || '',
+        shipAddr.line2 || '',
+        [shipAddr.city, shipAddr.state, shipAddr.postal_code].filter(Boolean).join(' '),
+        shipAddr.country || '',
+      ].filter(Boolean).join(', ');
       const order = {
-        id: `stripe-${session.id}`,
+        id: `OE-${maxNum + 1}`,
         stripeSessionId: session.id,
         cust: details.name || details.email || 'Online customer',
-        loc: [details.address?.city, details.address?.country].filter(Boolean).join(', ') || '',
+        email: details.email || '',
+        phone: details.phone || '',
+        loc: [shipAddr.city, shipAddr.state].filter(Boolean).join(', ') || [details.address?.city, details.address?.country].filter(Boolean).join(', ') || '',
+        shippingAddress,
         items: productId || 'Online order',
         total: amountAud + gcDiscount,
         date: new Date().toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' }),
@@ -3265,7 +3301,11 @@ const adminServer = http.createServer(async (req, res) => {
     const idx = orders.findIndex(o => o.id && o.id === body.id);
     const existing = idx >= 0 ? orders[idx] : null;
     const { draftQuote: _dq, ...bodyToStore } = body;
-    if (idx >= 0) { orders[idx] = bodyToStore; } else { bodyToStore.id = 'ord-' + Date.now(); orders.push(bodyToStore); }
+    if (idx >= 0) { orders[idx] = bodyToStore; } else {
+      const maxN = orders.reduce((max, o) => { const m = String(o.id||'').match(/^OE-(\d+)$/); return m ? Math.max(max, parseInt(m[1])) : max; }, 1000);
+      bodyToStore.id = `OE-${maxN + 1}`;
+      orders.push(bodyToStore);
+    }
     writeOrders(orders);
     const justShipped = body.fulfilment === 'shipped' && existing && existing.fulfilment !== 'shipped';
     if (justShipped && body.trackingNumber && body.email) {
@@ -4334,7 +4374,7 @@ const portalServer = http.createServer(async (req, res) => {
     const dq = quote.draftQuote || {};
     const nowStr = new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
     const order = {
-      id: 'ord-' + Date.now(),
+      id: 'OE-' + (readOrders().reduce((mx,o) => { const m=String(o.id||'').match(/^OE-(\d+)$/); return m?Math.max(mx,parseInt(m[1])):mx; }, 1000) + 1),
       cust: quote.name,
       email: quote.email,
       items: quote.summary || quote.quoteRef || quote.description || 'Custom build',
@@ -4407,7 +4447,7 @@ const portalServer = http.createServer(async (req, res) => {
     const dq = quote.draftQuote || {};
     const now = new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
     const order = {
-      id: 'ord-' + Date.now(),
+      id: 'OE-' + (readOrders().reduce((mx,o) => { const m=String(o.id||'').match(/^OE-(\d+)$/); return m?Math.max(mx,parseInt(m[1])):mx; }, 1000) + 1),
       cust: quote.name,
       email: quote.email,
       items: quote.summary || quote.quoteRef || quote.description || 'Custom build',
