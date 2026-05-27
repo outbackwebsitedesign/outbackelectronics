@@ -4343,7 +4343,7 @@ const portalServer = http.createServer(async (req, res) => {
     const dq = quote.draftQuote || {};
     const nowStr = new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
     const order = {
-      id: 'ord-' + Date.now(),
+      id: 'OE-' + (readOrders().reduce((mx,o) => { const m=String(o.id||'').match(/^OE-(\d+)$/); return m?Math.max(mx,parseInt(m[1])):mx; }, 1000) + 1),
       cust: quote.name,
       email: quote.email,
       items: quote.summary || quote.quoteRef || quote.description || 'Custom build',
@@ -4416,7 +4416,7 @@ const portalServer = http.createServer(async (req, res) => {
     const dq = quote.draftQuote || {};
     const now = new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
     const order = {
-      id: 'ord-' + Date.now(),
+      id: 'OE-' + (readOrders().reduce((mx,o) => { const m=String(o.id||'').match(/^OE-(\d+)$/); return m?Math.max(mx,parseInt(m[1])):mx; }, 1000) + 1),
       cust: quote.name,
       email: quote.email,
       items: quote.summary || quote.quoteRef || quote.description || 'Custom build',
