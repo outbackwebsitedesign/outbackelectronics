@@ -1020,20 +1020,82 @@ function MembershipsTab() {
 // ── Rewards ───────────────────────────────────────────────────────────────────
 
 function RewardsTab() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api('/api/portal/rewards')
+      .then(d => setData(d))
+      .catch(() => setData({ points: 0, history: [] }))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <LoadingSection />;
+
+  const points = data?.points ?? 0;
+  const history = data?.history || [];
+  const isEmpty = points === 0 && history.length === 0;
+
+  const typeIcons = {
+    order:    '🛒',
+    repair:   '🔧',
+    referral: '🤝',
+    redeem:   '🎁',
+    bonus:    '⭐',
+  };
+
   return (
     <div className="tab-content">
       <div className="section-block">
         <h2>My Rewards</h2>
-        <div className="card-paper" style={{padding:28, marginTop:16}}>
-          <div className="eyebrow" style={{marginBottom:8}}>COMING SOON</div>
-          <p style={{color:'var(--ink-2)', lineHeight:1.7}}>
-            Loyalty rewards are being built. Every repair, purchase and referral will earn points
-            redeemable for discounts, priority booking and free gear.
-          </p>
-          <p style={{color:'var(--ink-3)', fontSize:13, marginTop:12}}>
-            You'll be notified when the programme launches — no opt-in needed.
-          </p>
+
+        {/* Points balance */}
+        <div className="card-paper" style={{padding:28, marginTop:16, marginBottom:20, borderLeft:'3px solid var(--ochre)'}}>
+          <div className="eyebrow" style={{marginBottom:10}}>POINTS BALANCE</div>
+          <div style={{display:'flex', alignItems:'baseline', gap:10}}>
+            <span style={{fontFamily:'Instrument Serif, serif', fontSize:52, lineHeight:1, color:'var(--ochre)', fontWeight:400}}>
+              {points.toLocaleString('en-AU')}
+            </span>
+            <span style={{fontSize:18, color:'var(--ink-2)', fontWeight:500}}>pts</span>
+          </div>
+          {points > 0 && (
+            <p style={{color:'var(--ink-2)', fontSize:13, marginTop:10}}>
+              Redeem your points on your next order or repair. Contact us to apply them.
+            </p>
+          )}
         </div>
+
+        {/* History */}
+        <div className="eyebrow" style={{marginBottom:12}}>POINTS HISTORY</div>
+        {isEmpty ? (
+          <div className="card-paper" style={{padding:28}}>
+            <p style={{color:'var(--ink-2)'}}>No points yet. Points are earned on completed orders and repairs.</p>
+          </div>
+        ) : history.length === 0 ? (
+          <div className="card-paper" style={{padding:28}}>
+            <p style={{color:'var(--ink-2)'}}>No history to display yet.</p>
+          </div>
+        ) : (
+          <div className="card-paper" style={{overflow:'auto'}}>
+            {history.map((entry, i) => {
+              const isEarn = (entry.points || 0) > 0;
+              return (
+                <div key={entry.id || i} style={{display:'flex', alignItems:'center', gap:14, padding:'14px 20px', borderBottom: i < history.length - 1 ? '1px solid var(--line)' : 'none', flexWrap:'wrap'}}>
+                  <div style={{fontSize:20, flexShrink:0, width:28, textAlign:'center'}}>
+                    {typeIcons[entry.type] || '•'}
+                  </div>
+                  <div style={{flex:1, minWidth:0}}>
+                    <div style={{fontWeight:500, fontSize:14}}>{entry.description || entry.type || 'Points update'}</div>
+                    <div style={{fontSize:12, color:'var(--ink-3)', marginTop:2}}>{fmtDate(entry.date || entry.createdAt)}</div>
+                  </div>
+                  <div style={{fontWeight:700, fontSize:16, color: isEarn ? '#345526' : 'var(--rust)', flexShrink:0}}>
+                    {isEarn ? '+' : ''}{(entry.points || 0).toLocaleString('en-AU')} pts
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1042,19 +1104,94 @@ function RewardsTab() {
 // ── Wallet ────────────────────────────────────────────────────────────────────
 
 function WalletTab() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api('/api/portal/wallet')
+      .then(d => setData(d))
+      .catch(() => setData({ giftCards: [], storeCredits: [] }))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <LoadingSection />;
+
+  const giftCards = data?.giftCards || [];
+  const storeCredits = data?.storeCredits || [];
+
+  function maskCode(code) {
+    if (!code) return '••••';
+    const last4 = code.slice(-4);
+    const masked = '•'.repeat(Math.max(0, code.length - 4));
+    return masked + last4;
+  }
+
   return (
     <div className="tab-content">
       <div className="section-block">
         <h2>My Wallet</h2>
-        <div className="card-paper" style={{padding:28, marginTop:16}}>
-          <div className="eyebrow" style={{marginBottom:8}}>COMING SOON</div>
-          <p style={{color:'var(--ink-2)', lineHeight:1.7}}>
-            Store credit and gift card balances will appear here.
-            If you've been issued store credit, contact us and we'll apply it to your next order manually in the meantime.
-          </p>
-          <p style={{color:'var(--ink-3)', fontSize:13, marginTop:12}}>
-            Got a gift card? <a href="https://outbackelectronics.com.au/contact" style={{color:'var(--rust)'}}>Get in touch →</a>
-          </p>
+
+        {/* Gift Cards */}
+        <div style={{marginTop:20}}>
+          <div className="eyebrow" style={{marginBottom:12}}>GIFT CARDS</div>
+          {giftCards.length === 0 ? (
+            <div className="card-paper" style={{padding:24}}>
+              <p style={{color:'var(--ink-2)'}}>No gift cards linked to your account.</p>
+            </div>
+          ) : (
+            <div style={{display:'grid', gap:12}}>
+              {giftCards.map((card, i) => (
+                <div key={card.id || i} className="card-paper" style={{padding:20, borderLeft:'3px solid var(--ochre)'}}>
+                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:10}}>
+                    <div>
+                      <div className="eyebrow" style={{marginBottom:6}}>GIFT CARD</div>
+                      <div className="mono" style={{fontSize:16, letterSpacing:'.1em', fontWeight:600}}>{maskCode(card.code)}</div>
+                      {card.issuedDate && (
+                        <div style={{fontSize:12, color:'var(--ink-3)', marginTop:4}}>Issued {fmtDate(card.issuedDate)}</div>
+                      )}
+                    </div>
+                    <div style={{textAlign:'right'}}>
+                      <div style={{fontSize:11, color:'var(--ink-3)', marginBottom:4}}>BALANCE</div>
+                      <div style={{fontFamily:'Instrument Serif, serif', fontSize:28, color:'var(--ochre)', lineHeight:1}}>
+                        ${Number(card.balance || 0).toLocaleString('en-AU', {minimumFractionDigits:2})}
+                      </div>
+                      {card.originalBalance != null && (
+                        <div style={{fontSize:11, color:'var(--ink-3)', marginTop:4}}>
+                          of ${Number(card.originalBalance).toLocaleString('en-AU', {minimumFractionDigits:2})} original
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Store Credit */}
+        <div style={{marginTop:28}}>
+          <div className="eyebrow" style={{marginBottom:12}}>STORE CREDIT</div>
+          {storeCredits.length === 0 ? (
+            <div className="card-paper" style={{padding:24}}>
+              <p style={{color:'var(--ink-2)'}}>No store credit available.</p>
+            </div>
+          ) : (
+            <div style={{display:'grid', gap:12}}>
+              {storeCredits.map((credit, i) => (
+                <div key={credit.id || i} className="card-paper" style={{padding:20, display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:10}}>
+                  <div>
+                    <div style={{fontWeight:500, fontSize:14}}>{credit.description || 'Store Credit'}</div>
+                    {credit.issuedDate && (
+                      <div style={{fontSize:12, color:'var(--ink-3)', marginTop:3}}>Issued {fmtDate(credit.issuedDate)}</div>
+                    )}
+                  </div>
+                  <div style={{fontFamily:'Instrument Serif, serif', fontSize:24, color:'#345526', fontWeight:400}}>
+                    ${Number(credit.balance || 0).toLocaleString('en-AU', {minimumFractionDigits:2})}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -1149,44 +1286,146 @@ function AddressesTab() {
 
 // ── Bookings ──────────────────────────────────────────────────────────────────
 
+function BookingStatusBadge({ status }) {
+  const s = (status || '').toLowerCase();
+  const style = {
+    display: 'inline-block',
+    padding: '2px 10px',
+    borderRadius: 10,
+    fontSize: 12,
+    fontWeight: 600,
+    ...(s === 'confirmed'
+      ? { background: '#d4edda', color: '#345526' }
+      : s === 'cancelled' || s === 'canceled'
+      ? { background: '#f0e0e0', color: '#7a2020' }
+      : { background: '#fef3cd', color: '#7a5d10' }) // pending / default = ochre/yellow
+  };
+  return <span style={style}>{status || 'pending'}</span>;
+}
+
 function BookingsTab() {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ serviceName: '', date: '', time: '', notes: '' });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
 
-  useEffect(() => {
-    api('/api/portal/bookings')
+  const today = new Date().toISOString().split('T')[0];
+
+  function loadBookings() {
+    return api('/api/portal/bookings')
       .then(d => setBookings(d.bookings || []))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }
+
+  useEffect(() => { loadBookings(); }, []);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setErr(''); setBusy(true);
+    const r = await api('/api/portal/bookings', {
+      method: 'POST',
+      body: JSON.stringify({ serviceName: form.serviceName, date: form.date, time: form.time, notes: form.notes }),
+    });
+    setBusy(false);
+    if (r.ok) {
+      setSuccessMsg('Booking request submitted. We\'ll confirm your appointment soon.');
+      setShowForm(false);
+      setForm({ serviceName: '', date: '', time: '', notes: '' });
+      setLoading(true);
+      loadBookings();
+    } else {
+      setErr(r.message || 'Failed to submit booking. Please try again.');
+    }
+  }
 
   return (
     <div className="tab-content">
       <div className="section-block">
-        <h2>My Bookings</h2>
+        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16, flexWrap:'wrap', gap:12}}>
+          <h2 style={{margin:0}}>My Bookings</h2>
+          <button className="btn btn-rust" onClick={() => { setShowForm(s => !s); setErr(''); }}>
+            {showForm ? '↑ Cancel' : '+ Request a Booking'}
+          </button>
+        </div>
+
+        {successMsg && <div className="alert alert-success" style={{marginBottom:20}}>{successMsg}</div>}
+
+        {showForm && (
+          <div className="card-paper" style={{padding:28, marginBottom:24}}>
+            <h3 style={{marginBottom:20, fontSize:18}}>New Booking Request</h3>
+            {err && <div className="alert alert-error" style={{marginBottom:16}}>{err}</div>}
+            <form onSubmit={handleSubmit}>
+              <label className="field">
+                <span className="label">Service Name *</span>
+                <input className="input" type="text" value={form.serviceName}
+                  onChange={e => setForm(f => ({...f, serviceName: e.target.value}))}
+                  placeholder="e.g. Laptop repair, field visit, consultation…" required />
+              </label>
+              <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:16}}>
+                <label className="field">
+                  <span className="label">Preferred Date *</span>
+                  <input className="input" type="date" value={form.date} min={today}
+                    onChange={e => setForm(f => ({...f, date: e.target.value}))} required />
+                </label>
+                <label className="field">
+                  <span className="label">Preferred Time *</span>
+                  <input className="input" type="time" value={form.time}
+                    onChange={e => setForm(f => ({...f, time: e.target.value}))} required />
+                </label>
+              </div>
+              <label className="field">
+                <span className="label">Notes <span style={{color:'var(--ink-3)', fontWeight:400}}>(optional)</span></span>
+                <textarea className="input textarea" rows={3} value={form.notes}
+                  onChange={e => setForm(f => ({...f, notes: e.target.value}))}
+                  placeholder="Any details we should know — device type, location, special requirements…" />
+              </label>
+              <div style={{display:'flex', gap:10, marginTop:4}}>
+                <button className="btn btn-rust" type="submit" disabled={busy}>{busy ? 'Submitting…' : 'Submit Request →'}</button>
+                <button className="btn btn-ghost" type="button" onClick={() => { setShowForm(false); setErr(''); }}>Cancel</button>
+              </div>
+            </form>
+          </div>
+        )}
+
         {loading ? <LoadingSection /> : bookings.length === 0
           ? (
-            <div className="card-paper" style={{padding:28, marginTop:16}}>
-              <p style={{color:'var(--ink-2)', marginBottom:16}}>No bookings yet. To arrange a repair drop-off, field visit or consultation, get in touch and we'll schedule it for you.</p>
+            <div className="card-paper" style={{padding:28, marginTop: showForm ? 0 : 16}}>
+              <p style={{color:'var(--ink-2)', marginBottom:16}}>No bookings yet. Use the button above to request an appointment, or contact us directly.</p>
               <div style={{display:'flex', gap:12, flexWrap:'wrap'}}>
-                <a className="btn btn-rust" href="https://outbackelectronics.com.au/quote">Request a Quote →</a>
                 <a className="btn btn-ghost" href="https://outbackelectronics.com.au/contact">Contact us</a>
               </div>
             </div>
           )
           : (
-            <table className="data-table" style={{marginTop:16}}>
-              <thead><tr><th>Date</th><th>Service</th><th>Status</th></tr></thead>
-              <tbody>
-                {bookings.map((b, i) => (
-                  <tr key={i}>
-                    <td>{fmtDate(b.date)}</td>
-                    <td>{b.service || '—'}</td>
-                    <td><StatusTag status={b.status} /></td>
+            <div className="card-paper" style={{overflow:'auto', marginTop: showForm ? 0 : 16}}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Date &amp; Time</th>
+                    <th>Service</th>
+                    <th>Notes</th>
+                    <th>Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {bookings.map((b, i) => (
+                    <tr key={b.id || i}>
+                      <td style={{whiteSpace:'nowrap'}}>
+                        {fmtDate(b.date)}
+                        {b.time && <span style={{color:'var(--ink-3)', marginLeft:6, fontSize:12}}>{b.time}</span>}
+                      </td>
+                      <td>{b.service || b.serviceName || '—'}</td>
+                      <td style={{maxWidth:220, color:'var(--ink-2)', fontSize:13}}>{b.notes || '—'}</td>
+                      <td><BookingStatusBadge status={b.status} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )
         }
       </div>
