@@ -1877,7 +1877,9 @@ const mainServer = http.createServer(async (req, res) => {
       } else if (pid) {
         const catalogEntry = lookupCatalogPrice(pid);
         if (!catalogEntry) return json(res, 422, { error: 'invalid_item', message: `Product not found: ${pid}` });
-        lineItems.push({ ...li, priceAud: catalogEntry.priceAud, name: catalogEntry.name, quantity: qty, productId: pid });
+        const resolvedPrice = Number(catalogEntry.priceAud);
+        if (!Number.isFinite(resolvedPrice) || resolvedPrice <= 0) return json(res, 422, { error: 'invalid_item', message: `"${catalogEntry.name}" has no valid price set. Please contact us.` });
+        lineItems.push({ ...li, priceAud: resolvedPrice, name: catalogEntry.name, quantity: qty, productId: pid });
       } else {
         // No productId — reject; all purchasable items must be in the catalog.
         return json(res, 422, { error: 'invalid_item', message: 'All cart items must have a valid productId.' });
@@ -1949,8 +1951,12 @@ const mainServer = http.createServer(async (req, res) => {
     }
 
     finalLineItems.forEach((li, idx) => {
+      const unitAmount = Math.round(Number(li.priceAud) * 100);
+      if (!Number.isFinite(unitAmount) || unitAmount < 0) {
+        throw new Error(`Invalid price for item "${li.name}": ${li.priceAud}`);
+      }
       params[`line_items[${idx}][price_data][currency]`] = 'aud';
-      params[`line_items[${idx}][price_data][unit_amount]`] = String(Math.round(Number(li.priceAud) * 100));
+      params[`line_items[${idx}][price_data][unit_amount]`] = String(unitAmount);
       params[`line_items[${idx}][price_data][product_data][name]`] = li.name;
       params[`line_items[${idx}][quantity]`] = String(li.quantity || 1);
     });
