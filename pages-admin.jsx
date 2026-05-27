@@ -609,10 +609,12 @@ function AdminOrders({ search }) {
   };
 
   const linkedExpenses = (f) => expenses.filter(e => e.jobId && e.jobId === f.id);
-  const partsCost = (f) => linkedExpenses(f).reduce((s, e) => s + (Number(e.amount) || 0), 0);
+  const partsCost = (f) => linkedExpenses(f).reduce((s, e) => s + (e.partStatus === 'returned' ? 0 : (Number(e.amount) || 0)), 0);
+  const returnedCost = (f) => linkedExpenses(f).reduce((s, e) => s + (e.partStatus === 'returned' ? (Number(e.amount) || 0) : 0), 0);
   const profit = (f) => {
     const cost = partsCost(f);
-    if (!cost) return null;
+    const returned = returnedCost(f);
+    if (!cost && !returned) return null;
     return (Number(f.total) || 0) - cost;
   };
 
@@ -841,7 +843,13 @@ function AdminOrders({ search }) {
                   </div>
                   <div style={{display:'flex', gap:12, alignItems:'center', flexShrink:0}}>
                     <span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>{e.date}</span>
-                    <span className="mono" style={{fontWeight:600, color:'var(--rust)'}}>-${(Number(e.amount)||0).toLocaleString('en-AU',{minimumFractionDigits:2})}</span>
+                    {e.partStatus === 'returned'
+                      ? <span className="mono" style={{fontWeight:600}}>
+                          <span style={{textDecoration:'line-through', color:'var(--ink-3)', marginRight:6}}>-${(Number(e.amount)||0).toLocaleString('en-AU',{minimumFractionDigits:2})}</span>
+                          <span style={{color:'#345526'}}>$0.00</span>
+                        </span>
+                      : <span className="mono" style={{fontWeight:600, color:'var(--rust)'}}>-${(Number(e.amount)||0).toLocaleString('en-AU',{minimumFractionDigits:2})}</span>
+                    }
                     <span style={{fontSize:12, color:'var(--ink-3)'}}>✎</span>
                   </div>
                 </div>
@@ -890,8 +898,9 @@ function AdminOrders({ search }) {
                   </div>
                 )}
                 {linked.length > 0 && (
-                  <div style={{display:'flex', gap:24, padding:'10px 14px', background: p >= 0 ? '#d8e7d0' : '#f3d5c5', marginTop:4}}>
+                  <div style={{display:'flex', gap:24, padding:'10px 14px', background: p >= 0 ? '#d8e7d0' : '#f3d5c5', marginTop:4, flexWrap:'wrap'}}>
                     <div><div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>PARTS COST</div><div className="mono" style={{fontSize:14, fontWeight:600, color:'var(--rust)'}}>-${cost.toLocaleString('en-AU',{minimumFractionDigits:2})}</div></div>
+                    {returnedCost(form) > 0 && <div><div className="mono" style={{fontSize:10, color:'#345526'}}>RETURNED</div><div className="mono" style={{fontSize:14, fontWeight:600, color:'#345526'}}>+${returnedCost(form).toLocaleString('en-AU',{minimumFractionDigits:2})}</div></div>}
                     <div><div className="mono" style={{fontSize:10, color: p >= 0 ? '#345526' : '#7a3a18'}}>PROFIT</div><div className="mono" style={{fontSize:14, fontWeight:600, color: p >= 0 ? '#345526' : '#7a3a18'}}>${p.toLocaleString('en-AU',{minimumFractionDigits:2})}</div></div>
                     <div><div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>MARGIN</div><div className="mono" style={{fontSize:14, fontWeight:600, color:'var(--ink-2)'}}>{form.total ? Math.round(p / Number(form.total) * 100) : 0}%</div></div>
                   </div>
