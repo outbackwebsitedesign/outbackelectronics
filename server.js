@@ -1912,19 +1912,38 @@ const mainServer = http.createServer(async (req, res) => {
       'success_url': `${getSiteUrl()}/order-success?session_id={CHECKOUT_SESSION_ID}`,
       'cancel_url': `${getSiteUrl()}/order-cancelled`,
       'payment_intent_data[metadata][source]': 'website',
+      'metadata[source]': 'website',
+      'shipping_address_collection[allowed_countries][0]': 'AU',
+      'phone_number_collection[enabled]': 'true',
     };
-    if (gcCodeNorm) params['payment_intent_data[metadata][giftCardCode]'] = gcCodeNorm;
-    if (gcDiscount > 0) params['payment_intent_data[metadata][giftCardDiscount]'] = String(gcDiscount);
+    if (gcCodeNorm) {
+      params['payment_intent_data[metadata][giftCardCode]'] = gcCodeNorm;
+      params['metadata[giftCardCode]'] = gcCodeNorm;
+    }
+    if (gcDiscount > 0) {
+      params['payment_intent_data[metadata][giftCardDiscount]'] = String(gcDiscount);
+      params['metadata[giftCardDiscount]'] = String(gcDiscount);
+    }
 
     // Store gift card product IDs so the webhook can issue codes (max 500 chars in metadata)
     const gcProductIds = lineItems
       .filter(li => String(li.productId || '').startsWith('gc-'))
       .flatMap(li => Array(li.quantity || 1).fill(`${li.productId}:${li.priceAud}`));
-    if (gcProductIds.length > 0) params['payment_intent_data[metadata][gcItems]'] = gcProductIds.join(',').slice(0, 500);
+    if (gcProductIds.length > 0) {
+      params['payment_intent_data[metadata][gcItems]'] = gcProductIds.join(',').slice(0, 500);
+      params['metadata[gcItems]'] = gcProductIds.join(',').slice(0, 500);
+    }
 
     // Tag membership purchases so the webhook can activate the subscription
     const membershipLineItem = lineItems.find(li => membershipTiers.some(t => t.id === li.productId));
-    if (membershipLineItem) params['payment_intent_data[metadata][membershipTierId]'] = membershipLineItem.productId;
+    if (membershipLineItem) {
+      params['payment_intent_data[metadata][membershipTierId]'] = membershipLineItem.productId;
+      params['metadata[membershipTierId]'] = membershipLineItem.productId;
+    }
+    // Mirror productId and shipping onto session metadata for webhook access
+    if (lineItems.length === 1) params['metadata[productId]'] = lineItems[0].productId || '';
+    if (validatedShipping > 0) params['metadata[shippingAmount]'] = String(validatedShipping);
+    if (shippingService) params['metadata[shippingService]'] = String(shippingService).slice(0, 80);
     const shippingServiceName = shippingService ? String(shippingService).slice(0, 80) : '';
 
     // Build line items; if a gift card covers the full amount, add a $0.50 minimum line item
@@ -2005,7 +2024,7 @@ const mainServer = http.createServer(async (req, res) => {
       const session = event.data.object;
       const details = session.customer_details || {};
       const amountAud = (session.amount_total || 0) / 100;
-      const meta = session.payment_intent_metadata || session.metadata || {};
+      const meta = session.metadata || {};
       const productId = meta.productId || '';
       const gcCode = meta.giftCardCode || '';
       const gcDiscount = Number(meta.giftCardDiscount || 0);
@@ -2015,11 +2034,23 @@ const mainServer = http.createServer(async (req, res) => {
         const m = String(o.id || '').match(/^OE-(\d+)$/);
         return m ? Math.max(max, parseInt(m[1])) : max;
       }, 1000);
+      const shippingDetails = session.shipping_details || session.shipping || {};
+      const shipAddr = shippingDetails.address || details.address || {};
+      const shippingAddress = [
+        shippingDetails.name || details.name || '',
+        shipAddr.line1 || '',
+        shipAddr.line2 || '',
+        [shipAddr.city, shipAddr.state, shipAddr.postal_code].filter(Boolean).join(' '),
+        shipAddr.country || '',
+      ].filter(Boolean).join(', ');
       const order = {
         id: `OE-${maxNum + 1}`,
         stripeSessionId: session.id,
         cust: details.name || details.email || 'Online customer',
-        loc: [details.address?.city, details.address?.country].filter(Boolean).join(', ') || '',
+        email: details.email || '',
+        phone: details.phone || '',
+        loc: [shipAddr.city, shipAddr.state].filter(Boolean).join(', ') || [details.address?.city, details.address?.country].filter(Boolean).join(', ') || '',
+        shippingAddress,
         items: productId || 'Online order',
         total: amountAud + gcDiscount,
         date: new Date().toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' }),
