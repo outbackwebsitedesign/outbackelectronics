@@ -303,87 +303,420 @@ function ContactPage({ go }) {
 // ============================================================
 // INFO FOR SELLERS
 // ============================================================
+const SELLER_DOCS = [
+  {
+    id: 'OHD001',
+    title: 'Terms and Conditions for Prospective Sellers',
+    content: `In this agreement:
+
+"Seller" refers to the individual or entity seeking to list and sell products on our platform.
+
+"We" or "Our" refers to Outback Electronics, the platform provider.
+
+
+1. Circuit Quality Standards
+
+We will only accept designs and circuits that are designed, produced, and presented in a professional appearance. Designs or circuits utilizing permanent breadboard or veroboard setups will not meet our quality standards. Please see document OHD002 for further information.
+
+
+2. Mains Voltage Circuits
+
+We do not accept mains voltage circuits or circuits not classified as ELV (Extra Low Voltage <50V). The Designer/Manufacturer will retain all responsibility for compliance, injury, loss, or damage arising from use and/or misuse of any design or circuit and retains all responsibility for any potential issues arising from any design and/or circuits.
+
+
+3. Customer Support and Liability
+
+In the event that a customer encounters any issues with a product, the seller is expected to handle customer inquiries and process refunds, bearing full responsibility for customer satisfaction.
+
+
+4. Payment Terms
+
+Sellers will use our platform to market their products, with payment for these products being made upon a successful customer purchase.
+
+Stock held by the seller remains the seller's responsibility until sold. Costs related to stock maintenance, including product packaging, and storage are also the seller's responsibility.
+
+Payment for sales will be made according to the agreed-upon terms, typically upon successful customer purchase.
+
+
+5. Sales Expectations
+
+Our startup is still in its initial stages, and sellers should not anticipate rapid sales. We are working towards establishing our presence in the market.
+
+All products will be marketed equally, without preference or favor. No commitment will be accepted for sold quantities or sales expectations and/or quotas.
+
+
+6. Business Registration
+
+Sellers are required to provide a registered business name and possess a valid tax identification number (ABN or equivalent for their respective country) as part of our partnership.
+
+Sellers should maintain public liability insurance if applicable to their business activities.
+
+
+7. Product Claims and Customer Complaints
+
+If a product is advertised to perform specific functions but fails to do so, and the seller does not respond within a reasonable timeframe to address the issue, we, and/or the purchaser, reserve the right to contact relevant fair trade authorities.
+
+We reserve the right to cease all future business, implied or actual, in response to serious and/or repeated failures, either in product or response.
+
+
+8. Quality Assurance
+
+To ensure that products meet our stringent quality standards, we request samples of all items that will be listed for sale on our platform.
+
+
+9. Shipping and Payment
+
+Products will be shipped from the seller's location to our address. Payment for these products will be issued once a customer completes the purchase, as per the agreed-upon terms.
+
+We shall retain all/any shipping and/or handling fees and charges.
+
+
+10. Product Packaging
+
+The responsibility for product packaging rests with the seller. It is the seller's responsibility to ensure that products are packaged securely and professionally.
+
+
+11. Copyright Infringement
+
+We reserve the right to cease all future business with a seller if they infringe on copyright laws. This includes instances where we are contacted by a company complaining about a product listed by the seller that violates copyright laws.
+
+
+12. Listing Fees and Commission
+
+A monthly listing fee will be applied, the cost of which will vary depending on the number of different product listings a seller wishes to post. Please refer to our fee structure document OHD003 for specific details.
+
+In addition to the listing fees, we reserve the right to apply up to a 20% commission price raise to all products sold through our platform. This commission will be calculated based on the final sale price of the product. Please see document OHD003 for further information.
+
+
+Changes to Terms and Conditions
+
+We reserve the right to change, amend, add, or remove any term or condition as needed.
+
+These terms and conditions are provided to ensure transparency and professionalism in our partnership. We recommend a thorough review of these terms, and if necessary, legal counsel to ensure mutual understanding and compliance. We look forward to the opportunity to collaborate with you as a valued seller on our platform.`,
+  },
+  {
+    id: 'OHD002',
+    title: 'Design Quality Standards',
+    content: `At Outback Electronics, we are committed to maintaining high-quality standards for the products listed on our platform. To ensure consistency and excellence in the products offered to our customers, we have established the following design quality standards for all prospective sellers. We kindly request that you review and adhere to these guidelines when developing and presenting your products on our platform.
+
+
+1. Professional Appearance
+
+Designs and circuits must exhibit a professional appearance, both in physical construction and documentation.
+
+Avoid the use of permanent breadboard or veroboard setups, as they do not meet our quality standards.
+
+
+2. Compliance with Safety Regulations
+
+We do not accept mains voltage circuits or circuits that are not classified as ELV (Extra Low Voltage <50V).
+
+Designers and manufacturers are responsible for ensuring compliance with all relevant safety regulations, including but not limited to electrical safety standards.
+
+
+3. Functionality and Performance
+
+Products must perform the functions and meet the specifications as advertised.
+
+Sellers should thoroughly test their products to ensure they meet the expected performance criteria.
+
+
+4. Documentation
+
+Provide clear and comprehensive documentation for your product, including schematics, assembly instructions, and any necessary usage guidelines.
+
+Ensure that documentation is accurate, up-to-date, and user-friendly.
+
+
+5. Materials and Components
+
+Use high-quality materials and components in the construction of your products.
+
+Clearly specify the materials and components used, and ensure they meet industry standards.
+
+
+6. Reliability and Durability
+
+Products should be designed to be reliable and durable, with a reasonable lifespan.
+
+Consider factors such as component quality, heat management, and long-term performance.
+
+
+7. Compatibility and Interoperability
+
+Ensure that your products are compatible with commonly used components and interfaces as specified in the product description.
+
+Provide compatibility information to help customers integrate your products into their systems.
+
+
+8. Packaging
+
+Packaging should be sturdy and protective to prevent damage during shipping.
+
+Include clear labeling and instructions on the packaging, as well as any necessary safety warnings.
+
+
+9. Customer Support
+
+Sellers should be responsive to customer inquiries and provide timely support to address any issues or questions related to their products.
+
+Be prepared to assist with troubleshooting and technical support when needed.
+
+
+10. Continuous Improvement
+
+Strive for continuous improvement in the quality and performance of your products.
+
+Listen to customer feedback and consider it for product enhancements.
+
+
+By adhering to these design quality standards, you will contribute to the overall excellence of our platform and enhance the trust and satisfaction of our customers. We appreciate your commitment to maintaining these standards and look forward to collaborating with you as a valued seller on Outback Electronics.
+
+If you have any questions or need further clarification on any of these standards, please do not hesitate to contact us. We are here to support your success as a seller on our platform.`,
+  },
+  {
+    id: 'OHD003',
+    title: 'Fees',
+    content: `At Outback Electronics, we strive to maintain a transparent and fair fee structure for our valued sellers. This document outlines the listing fees that may apply when you choose to list your products on our platform. Please review these fees carefully to understand the cost associated with selling on our platform.
+
+
+1. Monthly Listing Fee
+
+A monthly listing fee will be applied to all sellers based on the number of different product listings you wish to post. The fee structure is as follows:
+
+  • 1 to 10 product listings: $0.75 per listing per month.
+  • 11 to 50 product listings: $0.50 per listing per month.
+  • 51 to 100 product listings: $0.30 per listing per month.
+  • Over 100 product listings: Please contact us for a custom fee arrangement.
+
+These monthly listing fees must be paid for each product listing, regardless of whether any of the listed products are sold during that month.
+
+Please note that these fees are subject to change, and we will notify you in advance of any fee adjustments.
+
+
+2. Commission Fee
+
+In addition to the monthly listing fee, a commission fee will be applied to each product listed on our platform. The commission fee will be automatically added to the price set by the seller at the time of listing. The price displayed to customers will include both the seller's listed price and the commission fee.
+
+For example, if a seller lists a product for $50, the product will be listed on our platform for $60 ($50 + 20% commission). When a customer purchases the product at $60, the commission fee will be automatically subtracted, and the seller will receive $50.
+
+This commission fee is calculated based on the final sale price of the product and is due upon a successful customer purchase.
+
+
+3. Purpose of Fees
+
+The listing fees and commission serve a vital purpose in ensuring the continued operation and growth of Outback Electronics. The listing fees help cover the cost of running the website, including server maintenance, security measures, and ongoing platform enhancements.
+
+The commission fees play a crucial role in our ability to run sales, marketing campaigns, and provide customer support. They also contribute to compensating our dedicated staff who work tirelessly to support our sellers and maintain the platform's functionality.
+
+
+4. Payment of Listing Fees
+
+Monthly listing fees are billed at the beginning of each month.
+
+If payment is not made, the listings will be paused or removed until all outstanding payments are made.
+
+
+5. Changing Your Subscription
+
+You can adjust the number of product listings you wish to post at any time to fit your needs. Your monthly listing fee will be adjusted accordingly based on your chosen subscription tier.
+
+
+6. Refunds
+
+Listing fees are non-refundable. In the event of a refund to a customer, any commission fees associated with that sale will also be refunded.
+
+
+7. Extra Advertising Services
+
+In addition to our standard listing fees and commission structure, we offer optional advertising services to help boost the visibility of your products on our platform. These advertising services are available upon request and for an additional fee.
+
+Should you wish to enhance the visibility of your products and increase your reach to potential customers, you can request extra advertising services. These services may include featured product placements, promotional campaigns, or targeted advertisements.
+
+The costs associated with extra advertising services will vary depending on the specific service and the extent of the advertising campaign. Detailed information on available advertising services and their associated fees can be provided upon request.
+
+
+8. Requesting Extra Advertising
+
+To inquire about and request extra advertising services, please contact our support team or your account manager. We will be happy to discuss your advertising needs and provide you with options tailored to your products and goals.
+
+Please note that extra advertising services are entirely optional and come with additional fees. Participation in these services is at the discretion of the seller.
+
+
+9. Fee Changes
+
+Outback Electronics reserves the right to change the listing fees and commission structure. We will provide advance notice of any fee changes, and such changes will only apply to new listings or renewals.
+
+
+10. Questions
+
+If you have any questions or require clarification regarding our listing fees, commission structure, or advertising services, please do not hesitate to contact our support team. We are here to assist you and ensure a transparent and mutually beneficial partnership.
+
+Thank you for choosing Outback Electronics as your platform for selling electronic products. We look forward to your successful presence on our platform.`,
+  },
+  {
+    id: 'OHD004',
+    title: 'Listing Requirements',
+    content: `At Outback Electronics, we are committed to maintaining a high standard of quality and professionalism across all product listings on our platform. This document outlines the listing requirements that must be adhered to by all sellers. Please review these requirements carefully to ensure your product listings meet our standards.
+
+
+1. Product Photographs
+
+The responsibility for providing clear and accurate photographs of the product lies with the seller.
+
+Photograph Quality: Photographs must be well lit, clear, and accurately represent the product being offered for sale.
+
+All product photographs should be taken on a white background to ensure clarity and consistency.
+
+Multiple Angles: Whenever possible, include multiple photographs showing different angles and perspectives of the product.
+
+Ensure that photographs are of high resolution to enable customers to zoom in and examine product details.
+
+No Watermarks: Product photographs should not contain watermarks, logos, or any other promotional material that is not part of the product itself.
+
+
+2. Product Description
+
+Provide a detailed and accurate product description that includes essential information such as specifications, dimensions, features, and any other relevant details.
+
+Clearly indicate the condition of the product, whether it is new, refurbished, or used.
+
+Clearly state the price of the product in Australian Dollars (AUD), including any applicable taxes or fees.
+
+Ensure that the product's availability is up-to-date. Listings for products that are out of stock or unavailable should be promptly updated.
+
+
+3. Title and Keywords
+
+Create a clear and concise product title that accurately describes the item. Avoid using excessive capitalization, special characters, or promotional language.
+
+Include relevant keywords in your product listing to improve its discoverability in search results.
+
+
+4. Contact Information
+
+Be responsive to customer inquiries and provide reliable contact information in your seller profile.
+
+
+5. Compliance with Laws and Regulations
+
+Legal Compliance: Ensure that your product listings adhere to all relevant laws, regulations, and safety standards, including any required certifications or documentation for certain product categories.
+
+
+6. Intellectual Property and Copyright
+
+Sellers must have the legal right to sell the products listed and should not infringe on intellectual property or copyright rights of others.
+
+List only genuine and authentic products. Do not offer counterfeit, replica, or unauthorized items.
+
+
+7. Customer Service
+
+Be prompt in responding to customer inquiries and addressing any concerns or issues related to your products.
+
+Refunds and Returns: Clearly communicate your refund and return policies to customers.
+
+
+8. Compliance with Outback Electronics Policies
+
+Platform Policies: Sellers must adhere to Outback Electronics' policies, terms, and conditions, as outlined in our Terms and Conditions for Prospective Sellers.
+
+
+9. Videos (If Applicable)
+
+If videos are included in your product listing, they must be of good quality and professionalism.
+
+Business Branding: Videos should contain the seller's business name and logo for branding purposes.
+
+Videos must be shorter than five minutes in duration.
+
+Content: Videos can showcase the product or provide instructions on how to use it. They should enhance the overall customer experience.
+
+
+10. Language and Presentation
+
+Spelling, Capitalization, and Punctuation: All listings must have proper spelling, capitalization, and punctuation. Ensure that product descriptions are written in clear and correct English.
+
+
+By listing your products on the Outback Electronics platform, you agree to adhere to these listing requirements. All prices should be listed in Australian Dollars (AUD). Failure to meet these requirements may result in the rejection or removal of your listings from our platform.
+
+We value your commitment to maintaining the quality and professionalism of our platform and look forward to a successful partnership.
+
+If you have any questions or require clarification regarding these listing requirements, please do not hesitate to contact our support team. We are here to assist you and ensure a transparent and mutually beneficial partnership.
+
+Thank you for choosing Outback Electronics as your platform for selling electronic products.`,
+  },
+];
+
 function SellersPage({ go }) {
+  const [activeDoc, setActiveDoc] = useState(null);
+  const current = SELLER_DOCS.find(d => d.id === activeDoc);
+
+  if (current) {
+    return (
+      <>
+        <PageHead
+          crumbs={['Outback', 'Info for Sellers', current.id]}
+          title={current.title}
+        />
+        <section className="container" style={{paddingTop: 8, paddingBottom: 60}}>
+          <button
+            className="btn btn-ghost"
+            style={{marginBottom: 28, fontSize: 13}}
+            onClick={() => setActiveDoc(null)}
+          >
+            ← Back to Information for Sellers
+          </button>
+          <div className="card-paper" style={{padding: '36px 44px', maxWidth: 820}}>
+            <div className="row-flex" style={{alignItems:'center', gap: 12, marginBottom: 24}}>
+              <span className="tag tag-ochre">{current.id}</span>
+            </div>
+            <h2 className="serif" style={{fontSize: 32, lineHeight: 1.1}}>{current.title}</h2>
+            <hr className="thin" style={{margin: '24px 0'}} />
+            <div style={{fontSize: 14.5, lineHeight: 1.8, color: 'var(--ink-2)', whiteSpace: 'pre-wrap'}}>
+              {current.content}
+            </div>
+          </div>
+        </section>
+      </>
+    );
+  }
+
   return (
     <>
-      <PageHead crumbs={['Outback','Info for Sellers']} title="Info for Sellers"
-        lead="We resell other people's gear too. Here's how to sell yours through us — consignment, outright, or a trade." />
-
-      <section className="container" style={{paddingTop: 40}}>
-        <div className="grid-3" style={{gap: 24}}>
-          {[
-            {n:'01', t:'Outright Purchase', d:'Walk in or mail in. We test, we offer, you decide. Cash same day.', tag:'FAST'},
-            {n:'02', t:'Consignment', d:'We list it, photograph it, support it. You set the floor. 18% commission.', tag:'BEST PRICE'},
-            {n:'03', t:'Trade Credit', d:'+15% bonus when you take it as store credit. Stackable with refurb sales.', tag:'+15%'},
-          ].map((c,i) => (
-            <div key={i} className="card-paper" style={{padding: 28}}>
-              <div className="row-flex" style={{justifyContent:'space-between'}}>
-                <span className="serif" style={{fontSize: 48, color:'var(--rust)', lineHeight:0.9}}>{c.n}</span>
-                <span className="tag tag-ochre">{c.tag}</span>
-              </div>
-              <h3 className="serif" style={{fontSize: 28, marginTop:14, lineHeight:1.1}}>{c.t}</h3>
-              <p style={{marginTop:10, fontSize:14, color:'var(--ink-2)'}}>{c.d}</p>
-            </div>
+      <PageHead
+        crumbs={['Outback', 'Info for Sellers']}
+        title="Information For Sellers"
+        lead="Everything you need to know about listing and selling your products on the Outback Electronics platform."
+      />
+      <section className="container" style={{paddingTop: 32, paddingBottom: 60}}>
+        <div style={{maxWidth: 680, display: 'grid', gap: 0}}>
+          {SELLER_DOCS.map((doc, i) => (
+            <button
+              key={doc.id}
+              onClick={() => setActiveDoc(doc.id)}
+              style={{
+                display: 'block',
+                width: '100%',
+                textAlign: 'left',
+                background: 'none',
+                border: 'none',
+                borderBottom: i < SELLER_DOCS.length - 1 ? '1px solid var(--line)' : 'none',
+                padding: '22px 0',
+                cursor: 'pointer',
+              }}
+            >
+              <span style={{
+                fontFamily: 'Instrument Serif, serif',
+                fontSize: 20,
+                color: 'var(--rust)',
+                textDecoration: 'underline',
+                textUnderlineOffset: 3,
+              }}>
+                {doc.id} – {doc.title}
+              </span>
+            </button>
           ))}
-        </div>
-      </section>
-
-      <section className="container" style={{paddingTop: 48, paddingBottom: 40}}>
-        <div className="grid-2" style={{gap: 36}}>
-          <div>
-            <span className="eyebrow">THE PROCESS · 4 STEPS</span>
-            <h2 className="serif" style={{fontSize: 44, marginTop: 8, lineHeight:1.02}}>How a piece of gear becomes someone else's win.</h2>
-            <div style={{marginTop: 24, display:'grid', gap: 16}}>
-              {[
-                {n:'A',t:'Inventory form',d:'List what you\'ve got. Photos welcome but optional.'},
-                {n:'B',t:'Bench appraisal',d:'We test, grade (A–D), and offer a price for each line item.'},
-                {n:'C',t:'Choose your path',d:'Outright cash, consignment listing, or trade credit. Mix & match per item.'},
-                {n:'D',t:'You get paid',d:'EFT within 48h for cash. Consigned items pay out monthly.'},
-              ].map((s,i) => (
-                <div key={i} style={{display:'grid', gridTemplateColumns:'56px 1fr', gap: 14, padding:'18px 0', borderTop:'1px solid var(--line)'}}>
-                  <div className="serif" style={{fontSize: 36, color:'var(--rust)'}}>{s.n}</div>
-                  <div>
-                    <div className="serif" style={{fontSize:22}}>{s.t}</div>
-                    <p style={{marginTop:4, color:'var(--ink-2)', fontSize:14}}>{s.d}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <div className="card-paper" style={{padding: 28}}>
-              <h3 className="serif" style={{fontSize:30, lineHeight:1.05}}>Grading rubric, no surprises.</h3>
-              <table style={{width:'100%', marginTop:14, borderCollapse:'collapse', fontSize:13}}>
-                <thead>
-                  <tr style={{textAlign:'left', borderBottom:'2px solid var(--ink)'}}>
-                    <th style={{padding:'10px 0'}}>GRADE</th><th>CONDITION</th><th>MULTIPLIER</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    ['A','Near-new, original box, ≤2 yrs','×0.65'],
-                    ['B','Working, minor cosmetic, ≤5 yrs','×0.45'],
-                    ['C','Working but tired or 5+ yrs','×0.25'],
-                    ['D','Parts only / needs work','flat $5–80'],
-                  ].map((r,i)=>(
-                    <tr key={i} style={{borderBottom:'1px solid var(--line)'}}>
-                      <td style={{padding:'12px 0', fontFamily:'Instrument Serif, serif', fontSize:24, color:'var(--rust)'}}>{r[0]}</td>
-                      <td>{r[1]}</td>
-                      <td className="mono" style={{fontSize:13}}>{r[2]}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <p style={{marginTop:14, fontSize:12, color:'var(--ink-2)'}}>* Multipliers applied against our refurb sell-through price for the last 90 days.</p>
-            </div>
-
-            <div className="card" style={{padding: 22, marginTop:16, background:'var(--dark)', color:'var(--paper)', borderColor:'var(--dark)'}}>
-              <span className="eyebrow" style={{color:'var(--ochre)'}}>BULK SELLERS · 50+ ITEMS</span>
-              <p style={{marginTop:10, fontSize:14, color:'var(--bg-deep)'}}>Decommissioning a fleet, an office, a station shed? We'll come to you, do the appraisal on-site, and pay one lump sum.</p>
-              <button className="btn btn-rust" style={{marginTop:14}} onClick={() => go('quote')}>Book a site visit →</button>
-            </div>
-          </div>
         </div>
       </section>
     </>
@@ -714,10 +1047,101 @@ function AboutPage({ go }) {
   );
 }
 
+// ============================================================
+// SELL YOUR GEAR (used gear — consignment / outright / trade)
+// ============================================================
+function SellGearPage({ go }) {
+  return (
+    <>
+      <PageHead crumbs={['Outback','Sell Your Gear']} title="Sell Your Gear"
+        lead="We resell other people's gear too. Here's how to sell yours through us — consignment, outright, or a trade." />
+
+      <section className="container" style={{paddingTop: 40}}>
+        <div className="grid-3" style={{gap: 24}}>
+          {[
+            {n:'01', t:'Outright Purchase', d:'Walk in or mail in. We test, we offer, you decide. Cash same day.', tag:'FAST'},
+            {n:'02', t:'Consignment', d:'We list it, photograph it, support it. You set the floor. 18% commission.', tag:'BEST PRICE'},
+            {n:'03', t:'Trade Credit', d:'+15% bonus when you take it as store credit. Stackable with refurb sales.', tag:'+15%'},
+          ].map((c,i) => (
+            <div key={i} className="card-paper" style={{padding: 28}}>
+              <div className="row-flex" style={{justifyContent:'space-between'}}>
+                <span className="serif" style={{fontSize: 48, color:'var(--rust)', lineHeight:0.9}}>{c.n}</span>
+                <span className="tag tag-ochre">{c.tag}</span>
+              </div>
+              <h3 className="serif" style={{fontSize: 28, marginTop:14, lineHeight:1.1}}>{c.t}</h3>
+              <p style={{marginTop:10, fontSize:14, color:'var(--ink-2)'}}>{c.d}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="container" style={{paddingTop: 48, paddingBottom: 40}}>
+        <div className="grid-2" style={{gap: 36}}>
+          <div>
+            <span className="eyebrow">THE PROCESS · 4 STEPS</span>
+            <h2 className="serif" style={{fontSize: 44, marginTop: 8, lineHeight:1.02}}>How a piece of gear becomes someone else's win.</h2>
+            <div style={{marginTop: 24, display:'grid', gap: 16}}>
+              {[
+                {n:'A',t:'Inventory form',d:'List what you\'ve got. Photos welcome but optional.'},
+                {n:'B',t:'Bench appraisal',d:'We test, grade (A–D), and offer a price for each line item.'},
+                {n:'C',t:'Choose your path',d:'Outright cash, consignment listing, or trade credit. Mix & match per item.'},
+                {n:'D',t:'You get paid',d:'EFT within 48h for cash. Consigned items pay out monthly.'},
+              ].map((s,i) => (
+                <div key={i} style={{display:'grid', gridTemplateColumns:'56px 1fr', gap: 14, padding:'18px 0', borderTop:'1px solid var(--line)'}}>
+                  <div className="serif" style={{fontSize: 36, color:'var(--rust)'}}>{s.n}</div>
+                  <div>
+                    <div className="serif" style={{fontSize:22}}>{s.t}</div>
+                    <p style={{marginTop:4, color:'var(--ink-2)', fontSize:14}}>{s.d}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <div className="card-paper" style={{padding: 28}}>
+              <h3 className="serif" style={{fontSize:30, lineHeight:1.05}}>Grading rubric, no surprises.</h3>
+              <table style={{width:'100%', marginTop:14, borderCollapse:'collapse', fontSize:13}}>
+                <thead>
+                  <tr style={{textAlign:'left', borderBottom:'2px solid var(--ink)'}}>
+                    <th style={{padding:'10px 0'}}>GRADE</th><th>CONDITION</th><th>MULTIPLIER</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    ['A','Near-new, original box, ≤2 yrs','×0.65'],
+                    ['B','Working, minor cosmetic, ≤5 yrs','×0.45'],
+                    ['C','Working but tired or 5+ yrs','×0.25'],
+                    ['D','Parts only / needs work','flat $5–80'],
+                  ].map((r,i)=>(
+                    <tr key={i} style={{borderBottom:'1px solid var(--line)'}}>
+                      <td style={{padding:'12px 0', fontFamily:'Instrument Serif, serif', fontSize:24, color:'var(--rust)'}}>{r[0]}</td>
+                      <td>{r[1]}</td>
+                      <td className="mono" style={{fontSize:13}}>{r[2]}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p style={{marginTop:14, fontSize:12, color:'var(--ink-2)'}}>* Multipliers applied against our refurb sell-through price for the last 90 days.</p>
+            </div>
+
+            <div className="card" style={{padding: 22, marginTop:16, background:'var(--dark)', color:'var(--paper)', borderColor:'var(--dark)'}}>
+              <span className="eyebrow" style={{color:'var(--ochre)'}}>BULK SELLERS · 50+ ITEMS</span>
+              <p style={{marginTop:10, fontSize:14, color:'var(--bg-deep)'}}>Decommissioning a fleet, an office, a station shed? We'll come to you, do the appraisal on-site, and pay one lump sum.</p>
+              <button className="btn btn-rust" style={{marginTop:14}} onClick={() => go('quote')}>Book a site visit →</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
+
 window.OE_PAGES = Object.assign(window.OE_PAGES || {}, {
   quote: QuotePage,
   contact: ContactPage,
   sellers: SellersPage,
+  'sell-gear': SellGearPage,
   policies: PoliciesPage,
   register: WarrantyRegisterPage,
   about: AboutPage,

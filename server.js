@@ -2564,7 +2564,15 @@ const adminServer = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && url.pathname === '/api/admin/catalog') {
     const session = requireRole(req, res, 'staff'); if (!session) return;
-    return json(res, 200, readCatalog());
+    const catalog = readCatalog();
+    if (session.role === 'seller') {
+      // Sellers only see their own products, with sellerPrice shown as the editable price
+      const sellerProducts = catalog.products
+        .filter(p => p.createdBy === session.staffId)
+        .map(p => ({ ...p, priceAud: p.sellerPrice != null ? p.sellerPrice : p.priceAud }));
+      return json(res, 200, { products: sellerProducts, services: [] });
+    }
+    return json(res, 200, catalog);
   }
 
   if (req.method === 'POST' && url.pathname === '/api/admin/catalog/products/status') {
@@ -3051,9 +3059,17 @@ const adminServer = http.createServer(async (req, res) => {
     if (session.role === 'seller') {
       if (idx >= 0 && products[idx].createdBy !== session.staffId) return json(res, 403, { error: 'forbidden' });
       body.createdBy = session.staffId;
+      // Sellers enter their own base price; customer-facing priceAud includes the 20% commission.
+      // Store sellerPrice for payout tracking and display back to the seller.
+      const settings = readSettings();
+      const commissionPct = Number((settings.shop || {}).sellerCommissionPct) || 20;
+      const sellerPrice = parseFloat(body.priceAud) || 0;
+      body.sellerPrice = Math.round(sellerPrice * 100) / 100;
+      body.priceAud = Math.round(sellerPrice * (1 + commissionPct / 100) * 100) / 100;
     }
     if (idx >= 0) { products[idx] = body; } else { body.id = 'prod-' + Date.now(); products.push(body); }
     writeProducts(products);
+    // Return sellerPrice to the client so the seller's UI shows their own price
     return json(res, 200, { ok: true, item: body });
   }
   if (req.method === 'POST' && url.pathname === '/api/admin/catalog/products/delete') {
