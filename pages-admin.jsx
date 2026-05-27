@@ -140,6 +140,7 @@ const NAV_ICONS = {
   expenses:     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>,
   policies:     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>,
   settings:     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M16.24 16.24l1.41 1.41M4.93 4.93l1.41 1.41M7.76 16.24l-1.41 1.41M22 12h-2M4 12H2M12 22v-2M12 4V2"/></svg>,
+  'seller-billing': <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>,
 };
 
 const ADMIN_SECTIONS = [
@@ -168,6 +169,7 @@ const ADMIN_SECTIONS = [
     { id:'gift-cards', label:'Gift Cards',   minRole:'staff', excludeRoles:['seller'] },
     { id:'expenses',  label:'Expenses',      minRole:'manager' },
     { id:'policies',  label:'Policies',      minRole:'manager' },
+    { id:'seller-billing', label:'Seller Billing', minRole:'manager' },
     { id:'settings',  label:'Settings',      minRole:'seller' },
   ]},
 ];
@@ -4343,10 +4345,36 @@ function AdminSettings({ sessionInfo = {} }) {
   return <AdminSettingsFull sessionInfo={sessionInfo} />;
 }
 
+async function loadStripeJs(publishableKey) {
+  if (window.Stripe) return window.Stripe(publishableKey);
+  await new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://js.stripe.com/v3/';
+    s.onload = resolve; s.onerror = reject;
+    document.head.appendChild(s);
+  });
+  return window.Stripe(publishableKey);
+}
+
 function SellerSettings({ sessionInfo = {} }) {
   const [form, setForm] = useState(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
+  const [billing, setBilling] = useState(null);
+  const [cardBusy, setCardBusy] = useState(false);
+  const [cardMsg, setCardMsg] = useState('');
+  const [showCardForm, setShowCardForm] = useState(false);
+  const [stripeElements, setStripeElements] = useState(null);
+  const cardElRef = React.useRef(null);
+  const cardDivRef = React.useRef(null);
+
+  const loadBilling = () => {
+    fetch('/api/admin/seller/billing', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setBilling(d))
+      .catch(() => {});
+  };
+
   useEffect(() => {
     fetch('/api/admin/staff', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject())
@@ -4355,7 +4383,9 @@ function SellerSettings({ sessionInfo = {} }) {
         if (me) setForm({ ...me, pin: '', newPin: '' });
       })
       .catch(() => {});
+    loadBilling();
   }, []);
+
   const save = async () => {
     if (!form) return;
     if (form.newPin && !/^\d{4,6}$/.test(form.newPin)) { setMsg('PIN must be 4–6 digits.'); return; }
@@ -4367,11 +4397,76 @@ function SellerSettings({ sessionInfo = {} }) {
     setMsg(r && r.ok ? 'Saved.' : 'Failed to save.');
     if (r && r.ok) setForm(f => ({ ...f, newPin: '' }));
   };
+
+  const openCardForm = async () => {
+    setCardMsg('');
+    setShowCardForm(true);
+    setCardBusy(true);
+    try {
+      const [siResp, settingsResp] = await Promise.all([
+        fetch('/api/admin/seller/setup-intent', { method:'POST', headers:postHeaders(), credentials:'include' }).then(r => r.json()),
+        fetch('/api/settings').then(r => r.json()),
+      ]);
+      const { clientSecret } = siResp;
+      const { stripePublishableKey } = settingsResp;
+      if (!clientSecret || !stripePublishableKey) { setCardMsg('Stripe not configured.'); setCardBusy(false); return; }
+      const stripe = await loadStripeJs(stripePublishableKey);
+      const elements = stripe.elements();
+      const cardEl = elements.create('card', { style: { base: { fontSize: '14px', color: '#333' } } });
+      setStripeElements({ stripe, elements, cardEl });
+      // Mount after render
+      setTimeout(() => {
+        if (cardDivRef.current) cardEl.mount(cardDivRef.current);
+      }, 50);
+    } catch (e) {
+      setCardMsg('Failed to load card form.');
+    }
+    setCardBusy(false);
+  };
+
+  const submitCard = async () => {
+    if (!stripeElements) return;
+    const { stripe, cardEl } = stripeElements;
+    setCardBusy(true);
+    setCardMsg('');
+    // Get the setup intent client secret from a fresh call
+    const siResp = await fetch('/api/admin/seller/setup-intent', { method:'POST', headers:postHeaders(), credentials:'include' }).then(r=>r.json()).catch(()=>null);
+    if (!siResp || !siResp.clientSecret) { setCardMsg('Failed to create setup intent.'); setCardBusy(false); return; }
+    const result = await stripe.confirmCardSetup(siResp.clientSecret, { payment_method: { card: cardEl } });
+    if (result.error) { setCardMsg(result.error.message || 'Card setup failed.'); setCardBusy(false); return; }
+    const pmId = result.setupIntent.payment_method;
+    const saveResp = await fetch('/api/admin/seller/payment-method/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ paymentMethodId: pmId }) }).then(r=>r.json()).catch(()=>null);
+    if (!saveResp || !saveResp.ok) { setCardMsg('Failed to save card.'); setCardBusy(false); return; }
+    cardEl.unmount();
+    setStripeElements(null);
+    setShowCardForm(false);
+    setCardBusy(false);
+    setCardMsg('');
+    loadBilling();
+    // Refresh form to get updated card fields
+    fetch('/api/admin/staff', { credentials:'include' }).then(r=>r.ok?r.json():Promise.reject()).then(d=>{const me=(d.members||[]).find(m=>m.id===sessionInfo.staffId);if(me)setForm({...me,pin:'',newPin:''});}).catch(()=>{});
+  };
+
+  const removeCard = async () => {
+    if (!window.confirm('Remove saved card?')) return;
+    setCardBusy(true);
+    const r = await fetch('/api/admin/seller/payment-method', { method:'DELETE', headers:postHeaders(), credentials:'include' }).catch(()=>null);
+    setCardBusy(false);
+    if (r && r.ok) {
+      loadBilling();
+      fetch('/api/admin/staff', { credentials:'include' }).then(r2=>r2.ok?r2.json():Promise.reject()).then(d=>{const me=(d.members||[]).find(m=>m.id===sessionInfo.staffId);if(me)setForm({...me,pin:'',newPin:''});}).catch(()=>{});
+    }
+  };
+
   if (!form) return <div style={{padding:32, fontSize:13, color:'var(--ink-2)'}}>Loading…</div>;
+
+  const hasCard = !!(form.stripePaymentMethodId);
+  const txns = billing ? (billing.transactions || []).slice(0, 20) : [];
+
   return (
-    <div style={{padding:32, maxWidth:480}}>
+    <div style={{padding:32, maxWidth:560}}>
       {msg && <div style={{marginBottom:16, fontSize:13, color:msg.includes('Failed')||msg.includes('must')?'var(--rust)':'var(--eucalyptus)'}}>{msg}</div>}
-      <div style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24, display:'grid', gap:10}}>
+      <div style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24, display:'grid', gap:10, marginBottom:24}}>
         <span className="eyebrow">MY DETAILS</span>
         <label className="field" style={{marginTop:8}}><span className="label">Name</span><input className="input" value={form.name||''} onChange={e=>setForm({...form,name:e.target.value})}/></label>
         <label className="field"><span className="label">Email</span><input className="input" type="email" value={form.email||''} onChange={e=>setForm({...form,email:e.target.value})}/></label>
@@ -4380,6 +4475,198 @@ function SellerSettings({ sessionInfo = {} }) {
         <label className="field"><span className="label">New PIN (leave blank to keep current)</span><input className="input" type="password" inputMode="numeric" maxLength={6} value={form.newPin||''} onChange={e=>setForm({...form,newPin:e.target.value.replace(/\D/g,'').slice(0,6)})} placeholder="4–6 digits"/></label>
         <button className="btn btn-rust btn-sm" style={{marginTop:4,alignSelf:'flex-start'}} disabled={busy} onClick={save}>{busy?'Saving…':'Save'}</button>
       </div>
+
+      <div style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24, display:'grid', gap:14}}>
+        <span className="eyebrow">BILLING</span>
+        <div style={{display:'flex', gap:32, flexWrap:'wrap'}}>
+          <div>
+            <div style={{fontSize:11, color:'var(--ink-2)', marginBottom:4}}>BALANCE</div>
+            <div style={{fontSize:22, fontWeight:700, color: billing && billing.balance >= 0 ? 'var(--eucalyptus)' : 'var(--rust)'}}>
+              {billing ? `$${billing.balance.toFixed(2)}` : '…'}
+            </div>
+          </div>
+          <div>
+            <div style={{fontSize:11, color:'var(--ink-2)', marginBottom:4}}>SAVED CARD</div>
+            <div style={{fontSize:14, fontWeight:500}}>
+              {hasCard ? `${form.stripeCardBrand ? form.stripeCardBrand.toUpperCase() : 'Card'} •••• ${form.stripeCardLast4}` : 'No card saved'}
+            </div>
+          </div>
+        </div>
+        <div style={{display:'flex', gap:8}}>
+          <button className="btn btn-sm" style={{background:'var(--rust)',color:'#fff'}} disabled={cardBusy} onClick={openCardForm}>{hasCard ? 'Change card' : 'Add card'}</button>
+          {hasCard && <button className="btn btn-sm" style={{background:'var(--line)',color:'var(--ink)'}} disabled={cardBusy} onClick={removeCard}>Remove card</button>}
+        </div>
+        {cardMsg && <div style={{fontSize:13, color:'var(--rust)'}}>{cardMsg}</div>}
+        {showCardForm && (
+          <div style={{border:'1px solid var(--line)', borderRadius:6, padding:16, display:'grid', gap:12}}>
+            <div style={{fontSize:13, fontWeight:600}}>Enter card details</div>
+            {cardBusy && !stripeElements && <div style={{fontSize:13,color:'var(--ink-2)'}}>Loading…</div>}
+            <div ref={cardDivRef} style={{border:'1px solid var(--line)', borderRadius:4, padding:'10px 12px', background:'#fff', minHeight:38}}/>
+            <div style={{display:'flex', gap:8}}>
+              <button className="btn btn-rust btn-sm" disabled={cardBusy || !stripeElements} onClick={submitCard}>{cardBusy?'Saving…':'Save card'}</button>
+              <button className="btn btn-sm" style={{background:'var(--line)',color:'var(--ink)'}} onClick={()=>{setShowCardForm(false);if(stripeElements){stripeElements.cardEl.unmount();setStripeElements(null);}}}>Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {txns.length > 0 && (
+          <div style={{marginTop:8}}>
+            <div style={{fontSize:11, color:'var(--ink-2)', marginBottom:8}}>RECENT TRANSACTIONS</div>
+            <table style={{width:'100%', fontSize:12, borderCollapse:'collapse'}}>
+              <thead>
+                <tr style={{color:'var(--ink-2)'}}>
+                  <th style={{textAlign:'left', padding:'4px 8px 4px 0', fontWeight:500}}>Date</th>
+                  <th style={{textAlign:'left', padding:'4px 8px', fontWeight:500}}>Description</th>
+                  <th style={{textAlign:'center', padding:'4px 8px', fontWeight:500}}>Type</th>
+                  <th style={{textAlign:'right', padding:'4px 0 4px 8px', fontWeight:500}}>Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {txns.map(t => (
+                  <tr key={t.id} style={{borderTop:'1px solid var(--line)'}}>
+                    <td style={{padding:'6px 8px 6px 0', color:'var(--ink-2)'}}>{new Date(t.date).toLocaleDateString('en-AU')}</td>
+                    <td style={{padding:'6px 8px'}}>{t.description}</td>
+                    <td style={{padding:'6px 8px', textAlign:'center'}}>
+                      <span style={{fontSize:10, fontWeight:600, padding:'2px 6px', borderRadius:3, background: t.type==='sale_credit'?'#e8f5e9':'#fce4ec', color: t.type==='sale_credit'?'#2e7d32':'#c62828'}}>
+                        {t.type==='sale_credit'?'CREDIT':'DEBIT'}
+                      </span>
+                    </td>
+                    <td style={{padding:'6px 0 6px 8px', textAlign:'right', color: t.type==='sale_credit'?'var(--eucalyptus)':'var(--rust)', fontWeight:600}}>
+                      {t.type==='sale_credit'?'+':'-'}${t.amount.toFixed(2)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {billing && txns.length === 0 && <div style={{fontSize:13, color:'var(--ink-2)'}}>No transactions yet.</div>}
+      </div>
+    </div>
+  );
+}
+
+function AdminSellerBilling({ sessionInfo = {} }) {
+  const [sellers, setSellers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState(null);
+  const [txnMap, setTxnMap] = useState({});
+  const [txnLoading, setTxnLoading] = useState({});
+  const [chargeBusy, setChargeBusy] = useState(false);
+  const [chargeMsg, setChargeMsg] = useState('');
+  const isOwner = sessionInfo.role === 'owner';
+
+  const load = () => {
+    setLoading(true);
+    fetch('/api/admin/seller-billing', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setSellers(d.sellers || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const toggleExpand = async (id) => {
+    if (expandedId === id) { setExpandedId(null); return; }
+    setExpandedId(id);
+    if (txnMap[id]) return;
+    setTxnLoading(m => ({ ...m, [id]: true }));
+    const d = await fetch(`/api/admin/seller-billing/transactions/${encodeURIComponent(id)}`, { credentials:'include' }).then(r=>r.ok?r.json():Promise.reject()).catch(()=>({ transactions:[] }));
+    setTxnMap(m => ({ ...m, [id]: d.transactions || [] }));
+    setTxnLoading(m => ({ ...m, [id]: false }));
+  };
+
+  const chargeNow = async () => {
+    if (!window.confirm('Run listing fee billing now for all sellers?')) return;
+    setChargeBusy(true); setChargeMsg('');
+    const r = await fetch('/api/admin/seller-billing/charge-now', { method:'POST', headers:postHeaders(), credentials:'include' }).catch(()=>null);
+    setChargeBusy(false);
+    if (r && r.ok) { setChargeMsg('Billing run complete.'); load(); }
+    else setChargeMsg('Billing run failed or Stripe not configured.');
+  };
+
+  if (loading) return <div style={{padding:32, fontSize:13, color:'var(--ink-2)'}}>Loading…</div>;
+
+  return (
+    <div style={{padding:32, maxWidth:860}}>
+      <div style={{display:'flex', alignItems:'center', gap:12, marginBottom:24}}>
+        <div style={{flex:1}}/>
+        {isOwner && <button className="btn btn-rust btn-sm" disabled={chargeBusy} onClick={chargeNow}>{chargeBusy?'Running…':'Run billing now'}</button>}
+      </div>
+      {chargeMsg && <div style={{marginBottom:16, fontSize:13, color: chargeMsg.includes('failed')?'var(--rust)':'var(--eucalyptus)'}}>{chargeMsg}</div>}
+      {sellers.length === 0 && <div style={{fontSize:13, color:'var(--ink-2)'}}>No sellers found.</div>}
+      <table style={{width:'100%', fontSize:13, borderCollapse:'collapse'}}>
+        <thead>
+          <tr style={{color:'var(--ink-2)', borderBottom:'1px solid var(--line)'}}>
+            <th style={{textAlign:'left', padding:'8px 12px 8px 0', fontWeight:500}}>Seller</th>
+            <th style={{textAlign:'center', padding:'8px 12px', fontWeight:500}}>Listings</th>
+            <th style={{textAlign:'right', padding:'8px 12px', fontWeight:500}}>Balance</th>
+            <th style={{textAlign:'center', padding:'8px 12px', fontWeight:500}}>Card</th>
+            <th style={{textAlign:'center', padding:'8px 0', fontWeight:500}}>History</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sellers.map(s => (
+            <React.Fragment key={s.id}>
+              <tr style={{borderTop:'1px solid var(--line)'}}>
+                <td style={{padding:'10px 12px 10px 0'}}>
+                  <div style={{fontWeight:600}}>{s.name}</div>
+                  <div style={{fontSize:11, color:'var(--ink-2)'}}>{s.email}</div>
+                </td>
+                <td style={{textAlign:'center', padding:'10px 12px'}}>{s.activeListings}</td>
+                <td style={{textAlign:'right', padding:'10px 12px', fontWeight:700, color: s.balance >= 0 ? 'var(--eucalyptus)' : 'var(--rust)'}}>
+                  ${s.balance.toFixed(2)}
+                </td>
+                <td style={{textAlign:'center', padding:'10px 12px'}}>
+                  {s.hasCard ? <span style={{color:'var(--eucalyptus)', fontSize:11, fontWeight:600}}>{s.cardBrand ? s.cardBrand.toUpperCase() : 'CARD'} ···· {s.cardLast4}</span> : <span style={{color:'var(--rust)', fontSize:11}}>No card</span>}
+                </td>
+                <td style={{textAlign:'center', padding:'10px 0'}}>
+                  <button className="btn btn-sm" style={{fontSize:11, padding:'3px 10px'}} onClick={()=>toggleExpand(s.id)}>{expandedId===s.id?'Hide':'View'}</button>
+                </td>
+              </tr>
+              {expandedId === s.id && (
+                <tr>
+                  <td colSpan={5} style={{padding:'0 0 12px 0', background:'var(--paper-2, #faf9f7)'}}>
+                    {txnLoading[s.id] && <div style={{padding:'12px 16px', fontSize:12, color:'var(--ink-2)'}}>Loading…</div>}
+                    {!txnLoading[s.id] && txnMap[s.id] && txnMap[s.id].length === 0 && <div style={{padding:'12px 16px', fontSize:12, color:'var(--ink-2)'}}>No transactions.</div>}
+                    {!txnLoading[s.id] && txnMap[s.id] && txnMap[s.id].length > 0 && (
+                      <table style={{width:'100%', fontSize:12, borderCollapse:'collapse'}}>
+                        <thead>
+                          <tr style={{color:'var(--ink-2)'}}>
+                            <th style={{textAlign:'left', padding:'6px 16px', fontWeight:500}}>Date</th>
+                            <th style={{textAlign:'left', padding:'6px 8px', fontWeight:500}}>Description</th>
+                            <th style={{textAlign:'center', padding:'6px 8px', fontWeight:500}}>Type</th>
+                            <th style={{textAlign:'center', padding:'6px 8px', fontWeight:500}}>Status</th>
+                            <th style={{textAlign:'right', padding:'6px 16px', fontWeight:500}}>Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {txnMap[s.id].map(t => (
+                            <tr key={t.id} style={{borderTop:'1px solid var(--line)'}}>
+                              <td style={{padding:'6px 16px', color:'var(--ink-2)'}}>{new Date(t.date).toLocaleDateString('en-AU')}</td>
+                              <td style={{padding:'6px 8px'}}>{t.description}</td>
+                              <td style={{padding:'6px 8px', textAlign:'center'}}>
+                                <span style={{fontSize:10, fontWeight:600, padding:'2px 6px', borderRadius:3, background: t.type==='sale_credit'?'#e8f5e9':'#fce4ec', color: t.type==='sale_credit'?'#2e7d32':'#c62828'}}>
+                                  {t.type==='sale_credit'?'CREDIT':t.type==='listing_fee'?'FEE':'PAYOUT'}
+                                </span>
+                              </td>
+                              <td style={{padding:'6px 8px', textAlign:'center', color: t.status==='ok'?'var(--eucalyptus)':'var(--rust)'}}>{t.status}</td>
+                              <td style={{padding:'6px 16px', textAlign:'right', fontWeight:600, color: t.type==='sale_credit'?'var(--eucalyptus)':'var(--rust)'}}>
+                                {t.type==='sale_credit'?'+':'-'}${t.amount.toFixed(2)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </td>
+                </tr>
+              )}
+            </React.Fragment>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -5129,13 +5416,14 @@ const ADMIN_VIEWS = {
   expenses:   { c: AdminExpenses,   t:'Expenses',         staticSubtitle:'track costs · receipt uploads' },
   policies:   { c: AdminPolicies,   t:'Policies',         staticSubtitle:'edit public-facing policy docs' },
   settings:   { c: AdminSettings,   t:'Settings',         staticSubtitle:'shop · staff · integrations' },
+  'seller-billing': { c: AdminSellerBilling, t:'Seller Billing', staticSubtitle:'listing fees · balances · card management' },
 };
 
 const ADMIN_ALL_IDS = new Set([
   'overview','orders','repairs','quotes','ewaste',
   'products','services','software','tutorials','ai',
   'forum','groups','customers','sellers',
-  'memberships','gift-cards','expenses','policies','settings',
+  'memberships','gift-cards','expenses','policies','seller-billing','settings',
 ]);
 
 function adminSectionFromPath() {
