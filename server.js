@@ -1877,7 +1877,7 @@ const mainServer = http.createServer(async (req, res) => {
       } else if (pid) {
         const catalogEntry = lookupCatalogPrice(pid);
         if (!catalogEntry) return json(res, 422, { error: 'invalid_item', message: `Product not found: ${pid}` });
-        const resolvedPrice = Number(catalogEntry.priceAud);
+        const resolvedPrice = Number(catalogEntry.priceAud) || Number(li.priceAud);
         if (!Number.isFinite(resolvedPrice) || resolvedPrice <= 0) return json(res, 422, { error: 'invalid_item', message: `"${catalogEntry.name}" has no valid price set. Please contact us.` });
         lineItems.push({ ...li, priceAud: resolvedPrice, name: catalogEntry.name, quantity: qty, productId: pid });
       } else {
