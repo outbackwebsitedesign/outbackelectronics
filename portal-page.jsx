@@ -1695,6 +1695,148 @@ function Dashboard({ user, setUser, onLogout }) {
   );
 }
 
+// ── Order tracking token view (no login required) ────────────────────────────
+
+function OrderTokenView({ token, onLogin }) {
+  const [info, setInfo] = useState(null);   // { orderId, customerName, email, hasAccount }
+  const [err, setErr] = useState('');
+  const [step, setStep] = useState('loading'); // 'loading' | 'register' | 'login-required' | 'done'
+  // registration form fields
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [formErr, setFormErr] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api(`/api/order-token?token=${encodeURIComponent(token)}`)
+      .then(d => {
+        if (d.ok) {
+          setInfo(d);
+          if (d.hasAccount) {
+            setStep('login-required');
+          } else {
+            // Pre-fill name if available
+            const parts = (d.customerName || '').split(' ');
+            setFirstName(parts[0] || '');
+            setLastName(parts.slice(1).join(' ') || '');
+            setStep('register');
+          }
+        } else {
+          setErr(d.message || 'This link is invalid or has expired.');
+          setStep('error');
+        }
+      })
+      .catch(() => { setErr('Could not load order details. Please try again.'); setStep('error'); });
+  }, [token]);
+
+  async function handleRegister(e) {
+    e.preventDefault();
+    setFormErr(''); setBusy(true);
+    const r = await api('/api/portal/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ firstName, lastName, email: info.email, phone, address, username, password }),
+    });
+    setBusy(false);
+    if (r.ok) {
+      onLogin(r.user);
+      window.history.replaceState({}, '', '/orders');
+    } else {
+      setFormErr(r.message || 'Registration failed. Please try again.');
+    }
+  }
+
+  if (step === 'loading') return (
+    <div style={{minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', color:'var(--ink-2)', fontSize:14}}>
+      Loading…
+    </div>
+  );
+
+  if (step === 'error') return (
+    <div style={{minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', padding:24}}>
+      <div style={{maxWidth:480, textAlign:'center'}}>
+        <p style={{color:'var(--rust)', marginBottom:16}}>{err}</p>
+        <a href="/" style={{color:'var(--rust)', fontSize:13}}>Go to portal →</a>
+      </div>
+    </div>
+  );
+
+  if (step === 'login-required') return (
+    <div style={{minHeight:'100vh', background:'var(--bg-deep)', display:'flex', alignItems:'center', justifyContent:'center', padding:24}}>
+      <div className="card-paper" style={{maxWidth:440, width:'100%', padding:36, textAlign:'center'}}>
+        <div className="eyebrow" style={{marginBottom:16}}>OUTBACK ELECTRONICS</div>
+        <h2 style={{fontFamily:'Instrument Serif, serif', fontWeight:400, fontSize:28, marginBottom:12}}>Account already exists</h2>
+        <p style={{color:'var(--ink-2)', marginBottom:24}}>
+          A portal account already exists for <strong>{info.email}</strong>.<br/>
+          Log in to track your order.
+        </p>
+        <a href="/" className="btn btn-rust" style={{width:'100%', justifyContent:'center'}}>Log in →</a>
+      </div>
+    </div>
+  );
+
+  // step === 'register'
+  return (
+    <div style={{minHeight:'100vh', background:'var(--bg-deep)', padding:'40px 16px'}}>
+      <div style={{maxWidth:520, margin:'0 auto'}}>
+        <div style={{textAlign:'center', marginBottom:28}}>
+          <div className="eyebrow" style={{marginBottom:8}}>OUTBACK ELECTRONICS</div>
+          <h1 className="serif" style={{fontSize:28, fontWeight:400, marginBottom:8}}>Track your order</h1>
+          <p style={{color:'var(--ink-2)', fontSize:14}}>Create an account to view your order status and updates.</p>
+        </div>
+        <div className="card-paper" style={{padding:28}}>
+          {formErr && <div className="alert alert-error" style={{marginBottom:16}}>{formErr}</div>}
+          <form onSubmit={handleRegister}>
+            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12}}>
+              <label className="field" style={{margin:0}}>
+                <span className="label">First name</span>
+                <input className="input" type="text" value={firstName} autoComplete="given-name" onChange={e => setFirstName(e.target.value)} required />
+              </label>
+              <label className="field" style={{margin:0}}>
+                <span className="label">Last name</span>
+                <input className="input" type="text" value={lastName} autoComplete="family-name" onChange={e => setLastName(e.target.value)} required />
+              </label>
+            </div>
+            <label className="field">
+              <span className="label">Email address</span>
+              <input className="input" type="email" value={info.email} readOnly style={{opacity:0.6, cursor:'not-allowed'}} />
+            </label>
+            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12}}>
+              <label className="field" style={{margin:0}}>
+                <span className="label">Phone <span style={{color:'var(--ink-3)'}}>(optional)</span></span>
+                <input className="input" type="tel" value={phone} autoComplete="tel" onChange={e => setPhone(e.target.value)} />
+              </label>
+              <label className="field" style={{margin:0}}>
+                <span className="label">Address <span style={{color:'var(--ink-3)'}}>(optional)</span></span>
+                <input className="input" type="text" value={address} autoComplete="street-address" onChange={e => setAddress(e.target.value)} />
+              </label>
+            </div>
+            <label className="field">
+              <span className="label">Username</span>
+              <input className="input" type="text" value={username} autoComplete="username" onChange={e => setUsername(e.target.value)} required />
+              <span style={{fontSize:11, color:'var(--ink-3)', marginTop:3, display:'block'}}>3–30 characters, letters, numbers and underscores</span>
+            </label>
+            <label className="field">
+              <span className="label">Password</span>
+              <input className="input" type="password" value={password} autoComplete="new-password" onChange={e => setPassword(e.target.value)} required />
+              <span style={{fontSize:11, color:'var(--ink-3)', marginTop:3, display:'block'}}>Minimum 8 characters</span>
+            </label>
+            <button className="btn btn-rust" type="submit" disabled={busy} style={{width:'100%', justifyContent:'center', marginTop:8}}>
+              {busy ? 'Creating account…' : 'Create account & view order →'}
+            </button>
+          </form>
+          <div style={{marginTop:16, textAlign:'center', fontSize:13, color:'var(--ink-3)'}}>
+            Already have an account? <a href="/" style={{color:'var(--rust)', fontWeight:600}}>Log in →</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Quote token view (no login required) ─────────────────────────────────────
 
 function QuoteTokenView({ token, onAccepted }) {
@@ -1853,6 +1995,7 @@ function PortalApp() {
   const [loading, setLoading] = useState(true);
   const resetToken = new URLSearchParams(window.location.search).get('reset');
   const quoteToken = new URLSearchParams(window.location.search).get('token');
+  const orderToken = new URLSearchParams(window.location.search).get('order_token');
   const warrantyOrderId = new URLSearchParams(window.location.search).get('warranty');
 
   useEffect(() => {
@@ -1873,6 +2016,10 @@ function PortalApp() {
         Loading…
       </div>
     );
+  }
+
+  if (orderToken && !user) {
+    return <OrderTokenView token={orderToken} onLogin={(u) => { setUser(u); }} />;
   }
 
   if (quoteToken && !user) {
