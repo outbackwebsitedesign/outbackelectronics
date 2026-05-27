@@ -57,6 +57,9 @@ const GROUPS_DB_PATH    = path.join(__dirname, 'groups.db');
 const FORUM_DB_PATH     = path.join(__dirname, 'forum.db');
 const SOFTWARE_DB_PATH  = path.join(__dirname, 'software.db');
 const GIFTCARDS_DB_PATH = path.join(__dirname, 'gift-cards.db');
+const DENOMINATIONS_DB_PATH = path.join(__dirname, 'gift-card-denominations.db');
+const REWARDS_DB_PATH = path.join(__dirname, 'rewards.db');
+const BOOKINGS_DB_PATH = path.join(__dirname, 'bookings.db');
 const TUTORIALS_DB_PATH = path.join(__dirname, 'tutorials.db');
 const AI_DB_PATH        = path.join(__dirname, 'ai.db');
 const POLICIES_DB_PATH  = path.join(__dirname, 'policies.db');
@@ -282,6 +285,21 @@ function readGiftCards() {
   catch { return []; }
 }
 function writeGiftCards(giftCards) { atomicWriteFile(GIFTCARDS_DB_PATH, JSON.stringify({ giftCards }, null, 2)); }
+
+function readDenominations() {
+  try { const d = JSON.parse(fs.readFileSync(DENOMINATIONS_DB_PATH, 'utf8')); return Array.isArray(d) ? d : []; } catch { return []; }
+}
+function writeDenominations(denominations) { atomicWriteFile(DENOMINATIONS_DB_PATH, JSON.stringify(denominations, null, 2)); }
+
+function readRewards() {
+  try { const d = JSON.parse(fs.readFileSync(REWARDS_DB_PATH, 'utf8')); return { entries: Array.isArray(d.entries) ? d.entries : [] }; } catch { return { entries: [] }; }
+}
+function writeRewards(data) { atomicWriteFile(REWARDS_DB_PATH, JSON.stringify(data, null, 2)); }
+
+function readBookings() {
+  try { const d = JSON.parse(fs.readFileSync(BOOKINGS_DB_PATH, 'utf8')); return { bookings: Array.isArray(d.bookings) ? d.bookings : [] }; } catch { return { bookings: [] }; }
+}
+function writeBookings(data) { atomicWriteFile(BOOKINGS_DB_PATH, JSON.stringify(data, null, 2)); }
 
 function generateGiftCardCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -2392,10 +2410,13 @@ const forumServer = http.createServer(async (req, res) => {
     }
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     const username = typeof body?.username === 'string' ? body.username : '';
+    const email = typeof body?.email === 'string' ? body.email : '';
     const password = typeof body?.password === 'string' ? body.password : '';
     const forum = readForum();
     if (!Array.isArray(forum.users)) forum.users = [];
-    const user = forum.users.find(u => u.username && u.username.toLowerCase() === username.toLowerCase());
+    const user = email
+      ? forum.users.find(u => u.email && u.email.toLowerCase() === email.toLowerCase())
+      : forum.users.find(u => u.username && u.username.toLowerCase() === username.toLowerCase());
     if (!user || !user.passwordHash || !verifyPassword(password, user.passwordHash)) {
       trackFailure(forumLoginKey);
       return json(res, 401, { ok: false, message: 'Invalid username or password.' });
@@ -2628,6 +2649,39 @@ const adminServer = http.createServer(async (req, res) => {
       sendEmail({ to: recipientEmail, ...tmpl });
     }
     return json(res, 201, { ok: true, card });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/shop/gift-card-denominations') {
+    const denoms = readDenominations();
+    return json(res, 200, { items: denoms.filter(d => d.status === 'published') });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/admin/gift-cards/denominations') {
+    const session = requireAdmin(req, res); if (!session) return;
+    return json(res, 200, { items: readDenominations() });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/gift-cards/denominations/save') {
+    const session = requireAdmin(req, res); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const { id, name, priceAud, description, status } = body || {};
+    if (!id) return json(res, 422, { error: 'id_required' });
+    const denoms = readDenominations();
+    const idx = denoms.findIndex(d => d.id === id);
+    const updated = { id, name: name || '', priceAud: Number(priceAud) || 0, description: description || '', status: status === 'published' ? 'published' : 'draft' };
+    if (idx >= 0) denoms[idx] = updated; else denoms.push(updated);
+    writeDenominations(denoms);
+    return json(res, 200, { ok: true, item: updated });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/gift-cards/denominations/delete') {
+    const session = requireAdmin(req, res); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const { id } = body || {};
+    if (!id) return json(res, 422, { error: 'id_required' });
+    const denoms = readDenominations().filter(d => d.id !== id);
+    writeDenominations(denoms);
+    return json(res, 200, { ok: true });
   }
 
   if (req.method === 'GET' && url.pathname === '/api/admin/orders') {
@@ -3653,6 +3707,44 @@ const adminServer = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true });
   }
 
+  if (req.method === 'POST' && url.pathname === '/api/admin/rewards/grant') {
+    const session = requireAdmin(req, res); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const { userId, points, description } = body || {};
+    if (!userId) return json(res, 422, { error: 'userId_required' });
+    const pts = Number(points);
+    if (!pts || pts <= 0) return json(res, 422, { error: 'invalid_points' });
+    const db = readRewards();
+    let entry = db.entries.find(e => e.userId === userId);
+    if (!entry) {
+      entry = { userId, points: 0, history: [] };
+      db.entries.push(entry);
+    }
+    entry.points += pts;
+    entry.history.push({ type: 'grant', points: pts, description: description || '', date: new Date().toISOString() });
+    writeRewards(db);
+    return json(res, 200, { ok: true, entry });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/admin/bookings') {
+    const session = requireAdmin(req, res); if (!session) return;
+    const db = readBookings();
+    return json(res, 200, { items: db.bookings });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/bookings/update') {
+    const session = requireAdmin(req, res); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const { id, status } = body || {};
+    if (!id) return json(res, 422, { error: 'id_required' });
+    const db = readBookings();
+    const idx = db.bookings.findIndex(b => b.id === id);
+    if (idx < 0) return json(res, 404, { error: 'not_found' });
+    db.bookings[idx] = { ...db.bookings[idx], status };
+    writeBookings(db);
+    return json(res, 200, { ok: true, booking: db.bookings[idx] });
+  }
+
   if (url.pathname === '/admin-login.html' || url.pathname === '/') {
     const ip = getIp(req);
     if (!isIpAllowed(ip)) return json(res, 403, { error: 'forbidden' });
@@ -4175,6 +4267,57 @@ const portalServer = http.createServer(async (req, res) => {
     resetTokens.delete(token);
     saveResetTokens();
     return json(res, 200, { ok: true });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/portal/rewards') {
+    const session = getPortalSession(req);
+    if (!session) return json(res, 401, { error: 'login_required' });
+    const db = readRewards();
+    const entry = db.entries.find(e => e.userId === session.id);
+    return json(res, 200, entry ? { points: entry.points, history: entry.history } : { points: 0, history: [] });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/portal/wallet') {
+    const session = getPortalSession(req);
+    if (!session) return json(res, 401, { error: 'login_required' });
+    const forumDb = readForum();
+    const portalUser = Array.isArray(forumDb.users) ? forumDb.users.find(u => u.id === session.id) : null;
+    const userEmail = portalUser ? String(portalUser.email || '').toLowerCase() : '';
+    const giftCards = userEmail
+      ? readGiftCards().filter(c => String(c.recipientEmail || '').toLowerCase() === userEmail && !c.isVoid && c.balance > 0)
+      : [];
+    return json(res, 200, { giftCards, storeCredits: [] });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/portal/bookings') {
+    const session = getPortalSession(req);
+    if (!session) return json(res, 401, { error: 'login_required' });
+    const db = readBookings();
+    const items = db.bookings.filter(b => b.userId === session.id);
+    return json(res, 200, { items });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/portal/bookings') {
+    const session = getPortalSession(req);
+    if (!session) return json(res, 401, { error: 'login_required' });
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const { serviceName, date, time, notes } = body || {};
+    if (!serviceName) return json(res, 422, { error: 'serviceName_required' });
+    const db = readBookings();
+    const booking = {
+      id: `bk-${Date.now()}`,
+      userId: session.id,
+      username: session.username,
+      serviceName,
+      date: date || '',
+      time: time || '',
+      notes: notes || '',
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+    };
+    db.bookings.push(booking);
+    writeBookings(db);
+    return json(res, 201, { ok: true, booking });
   }
 
   return serveStatic(req, res, url.pathname, '/dist/portal.html', null);
