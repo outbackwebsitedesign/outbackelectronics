@@ -2617,6 +2617,7 @@ const forumServer = http.createServer(async (req, res) => {
 // ── Admin server (8082) ───────────────────────────────────────────────────────
 
 const adminServer = http.createServer(async (req, res) => {
+  try {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
   if (req.method === 'GET' && url.pathname === '/api/csrf-token') {
@@ -4007,6 +4008,10 @@ const adminServer = http.createServer(async (req, res) => {
   }
 
   return serveStatic(req, res, url.pathname, '/dist/admin-login.html', null);
+  } catch (err) {
+    console.error('[adminServer] unhandled error:', err);
+    if (!res.headersSent) json(res, 500, { error: 'server_error', message: 'An unexpected error occurred.' });
+  }
 });
 
 // ── Portal server (8083) ──────────────────────────────────────────────────────
