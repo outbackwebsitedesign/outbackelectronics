@@ -740,6 +740,7 @@ function AdminOrders({ search }) {
             </div>
           </div>}
         >
+          <label className="field"><span className="label">Order Number</span><input className="input" style={{fontFamily:'monospace', fontWeight:700}} value={form.id||''} onChange={e=>setForm({...form,id:e.target.value})} placeholder="e.g. OE-1001"/></label>
           <label className="field"><span className="label">Customer</span><input className="input" value={form.cust||''} onChange={e=>setForm({...form,cust:e.target.value})}/></label>
           <label className="field"><span className="label">Email</span><input className="input" type="email" value={form.email||''} onChange={e=>setForm({...form,email:e.target.value})}/></label>
           <label className="field"><span className="label">Phone</span><input className="input" type="tel" value={form.phone||''} onChange={e=>setForm({...form,phone:e.target.value})}/></label>
