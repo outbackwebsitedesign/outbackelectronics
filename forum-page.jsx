@@ -178,7 +178,7 @@ function LoginModal({ onClose, onLogin }) {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
-    if (!username.trim()) { setError('Please enter a username.'); return; }
+    if (!username.trim()) { setError('Please enter a username or email.'); return; }
     if (!password) { setError('Please enter a password.'); return; }
     if (tab === 'signup') {
       if (!firstName.trim()) { setError('Please enter your first name.'); return; }
@@ -189,8 +189,9 @@ function LoginModal({ onClose, onLogin }) {
     setSaving(true);
     try {
       const endpoint = tab === 'login' ? '/api/forum/auth/login' : '/api/forum/auth/register';
+      const loginValue = username.trim();
       const body = tab === 'login'
-        ? { username: username.trim(), password }
+        ? (loginValue.includes('@') ? { email: loginValue, password } : { username: loginValue, password })
         : { username: username.trim(), password, firstName: firstName.trim(), lastName: lastName.trim(), email: email.trim(), phone: phone.trim(), address: address.trim() };
       const res = await fetch(endpoint, {
         method: 'POST',
@@ -309,14 +310,14 @@ function LoginModal({ onClose, onLogin }) {
                 </div>
               )}
               <label style={labelStyle}>
-                <span style={labelSpanStyle}>Username</span>
+                <span style={labelSpanStyle}>Username or Email</span>
                 <input
                   autoFocus
                   type="text"
                   value={username}
                   onChange={e => setUsername(e.target.value)}
-                  maxLength={50}
-                  placeholder="username"
+                  maxLength={200}
+                  placeholder="Username or email address"
                   style={inputStyle}
                   onFocus={e => e.target.style.borderColor = '#0088cc'}
                   onBlur={e => e.target.style.borderColor = '#d6d9dc'}

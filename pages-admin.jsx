@@ -3821,16 +3821,56 @@ function AdminSellers() {
 // GIFT CARDS
 // ============================================================
 function AdminGiftCards() {
+  const [mainTab, setMainTab] = useState('issued'); // 'issued' | 'denominations'
   const [rows, setRows] = useState([]);
   const [issueForm, setIssueForm] = useState({ balance: '', recipientEmail: '', note: '' });
   const [issueError, setIssueError] = useState(null);
   const [issuing, setIssuing] = useState(false);
   const [filter, setFilter] = useState('all');
 
+  // Denominations state
+  const [denoms, setDenoms] = useState([]);
+  const [denomEdit, setDenomEdit] = useState(null); // null | {} | existing row
+  const [denomForm, setDenomForm] = useState({});
+  const [denomSaving, setDenomSaving] = useState(false);
+  const [denomError, setDenomError] = useState(null);
+
   const load = () => fetch('/api/admin/gift-cards', { credentials: 'include' })
     .then(r => r.json()).then(d => setRows(d.items || [])).catch(() => {});
 
-  useEffect(() => { load(); }, []);
+  const loadDenoms = () => fetch('/api/admin/gift-cards/denominations', { credentials: 'include' })
+    .then(r => r.json()).then(d => setDenoms(d.items || [])).catch(() => {});
+
+  useEffect(() => { load(); loadDenoms(); }, []);
+
+  const openNewDenom = () => { setDenomEdit({}); setDenomForm({ name: '', priceAud: '', description: '', status: 'draft' }); setDenomError(null); };
+  const openEditDenom = (d) => { setDenomEdit(d); setDenomForm({ ...d }); setDenomError(null); };
+  const cancelDenom = () => { setDenomEdit(null); setDenomError(null); };
+
+  const saveDenom = async () => {
+    if (!denomForm.name || !denomForm.name.trim()) { setDenomError('Name is required.'); return; }
+    const price = Number(denomForm.priceAud);
+    if (!price || price <= 0) { setDenomError('Enter a valid price.'); return; }
+    setDenomSaving(true);
+    setDenomError(null);
+    const resp = await fetch('/api/admin/gift-cards/denominations/save', { method: 'POST', headers: postHeaders(), credentials: 'include', body: JSON.stringify(denomForm) }).catch(() => null);
+    setDenomSaving(false);
+    if (resp && resp.ok) {
+      const data = await resp.json();
+      if (denomForm.id) setDenoms(ds => ds.map(d => d.id === denomForm.id ? data.item : d));
+      else setDenoms(ds => [...ds, data.item]);
+      setDenomEdit(null);
+    } else {
+      setDenomError('Failed to save denomination.');
+    }
+  };
+
+  const deleteDenom = async (id) => {
+    if (!confirm('Delete this denomination?')) return;
+    await fetch('/api/admin/gift-cards/denominations/delete', { method: 'POST', headers: postHeaders(), credentials: 'include', body: JSON.stringify({ id }) }).catch(() => null);
+    setDenoms(ds => ds.filter(d => d.id !== id));
+    if (denomEdit && denomEdit.id === id) setDenomEdit(null);
+  };
 
   const voidCard = async (code) => {
     if (!confirm(`Void gift card ${code}? This cannot be undone.`)) return;
@@ -3857,59 +3897,135 @@ function AdminGiftCards() {
 
   return (
     <div style={{padding:32}}>
-      <div style={{display:'grid', gridTemplateColumns:'1fr 320px', gap:32, alignItems:'start'}}>
-        <div>
-          <div className="tabs" style={{marginBottom:18}}>
-            {[['all','All'], ['active','Active'], ['used','Used up'], ['void','Voided']].map(([v,l]) => (
-              <div key={v} className={`tab ${filter===v?'active':''}`} onClick={() => setFilter(v)}>{l} ({(v==='all'?rows:rows.filter(r=>v==='active'?!r.isVoid&&r.balance>0:v==='used'?!r.isVoid&&r.balance===0:r.isVoid)).length})</div>
-            ))}
-          </div>
-          <Table
-            columns={[
-              { key:'code', label:'Code', w:'200px', render: r => <span className="mono" style={{fontSize:12, color:'var(--rust)'}}>{r.code}</span> },
-              { key:'balance', label:'Balance', w:'110px', render: r => (
-                <span className="mono" style={{fontWeight:600, color: r.isVoid ? 'var(--ink-3)' : r.balance===0 ? 'var(--ink-3)' : 'var(--ink)'}}>
-                  ${Number(r.balance).toFixed(2)} <span style={{fontWeight:400, fontSize:11, color:'var(--ink-3)'}}>/ ${Number(r.originalBalance).toFixed(2)}</span>
-                </span>
-              )},
-              { key:'status', label:'Status', w:'100px', render: r => (
-                <span className={`tag ${r.isVoid ? 'tag-outline' : r.balance===0 ? 'tag-outline' : 'tag-euc'}`}>
-                  {r.isVoid ? 'VOIDED' : r.balance === 0 ? 'USED' : 'ACTIVE'}
-                </span>
-              )},
-              { key:'recipientEmail', label:'Recipient', w:'1fr', render: r => <span style={{fontSize:12, color:'var(--ink-2)'}}>{r.recipientEmail || '—'}</span> },
-              { key:'orderId', label:'Order', w:'160px', render: r => <span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>{r.orderId || '—'}</span> },
-              { key:'issuedAt', label:'Issued', w:'110px', render: r => <span style={{fontSize:12}}>{r.issuedAt ? new Date(r.issuedAt).toLocaleDateString('en-AU') : '—'}</span> },
-              { key:'actions', label:'', w:'80px', render: r => !r.isVoid && (
-                <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)', fontSize:11}} onClick={() => voidCard(r.code)}>Void</button>
-              )},
-            ]}
-            rows={filtered}
-          />
-        </div>
-
-        <div style={{position:'sticky', top:24}}>
-          <div className="card-paper" style={{padding:24}}>
-            <div className="eyebrow" style={{marginBottom:14}}>ISSUE GIFT CARD</div>
-            <label className="field" style={{marginBottom:10}}>
-              <span className="label">Amount (AUD)</span>
-              <input className="input" type="number" min="1" placeholder="50" value={issueForm.balance} onChange={e => setIssueForm(f => ({...f, balance: e.target.value}))} />
-            </label>
-            <label className="field" style={{marginBottom:10}}>
-              <span className="label">Recipient email (optional)</span>
-              <input className="input" type="email" placeholder="customer@example.com" value={issueForm.recipientEmail} onChange={e => setIssueForm(f => ({...f, recipientEmail: e.target.value}))} />
-            </label>
-            <label className="field" style={{marginBottom:14}}>
-              <span className="label">Note / reference (optional)</span>
-              <input className="input" placeholder="Refund, promo, etc." value={issueForm.note} onChange={e => setIssueForm(f => ({...f, note: e.target.value}))} />
-            </label>
-            {issueError && <div style={{marginBottom:10, fontSize:12, color:'var(--rust)'}}>{issueError}</div>}
-            <button className="btn btn-rust btn-sm" style={{width:'100%', justifyContent:'center'}} onClick={issue} disabled={issuing}>
-              {issuing ? 'Issuing…' : 'Issue Gift Card'}
-            </button>
-          </div>
-        </div>
+      <div className="tabs" style={{marginBottom:24}}>
+        <div className={`tab ${mainTab==='issued'?'active':''}`} onClick={() => setMainTab('issued')}>Issued Cards ({rows.length})</div>
+        <div className={`tab ${mainTab==='denominations'?'active':''}`} onClick={() => setMainTab('denominations')}>Denominations ({denoms.length})</div>
       </div>
+
+      {mainTab === 'issued' && (
+        <div style={{display:'grid', gridTemplateColumns:'1fr 320px', gap:32, alignItems:'start'}}>
+          <div>
+            <div className="tabs" style={{marginBottom:18}}>
+              {[['all','All'], ['active','Active'], ['used','Used up'], ['void','Voided']].map(([v,l]) => (
+                <div key={v} className={`tab ${filter===v?'active':''}`} onClick={() => setFilter(v)}>{l} ({(v==='all'?rows:rows.filter(r=>v==='active'?!r.isVoid&&r.balance>0:v==='used'?!r.isVoid&&r.balance===0:r.isVoid)).length})</div>
+              ))}
+            </div>
+            <Table
+              columns={[
+                { key:'code', label:'Code', w:'200px', render: r => <span className="mono" style={{fontSize:12, color:'var(--rust)'}}>{r.code}</span> },
+                { key:'balance', label:'Balance', w:'110px', render: r => (
+                  <span className="mono" style={{fontWeight:600, color: r.isVoid ? 'var(--ink-3)' : r.balance===0 ? 'var(--ink-3)' : 'var(--ink)'}}>
+                    ${Number(r.balance).toFixed(2)} <span style={{fontWeight:400, fontSize:11, color:'var(--ink-3)'}}>/ ${Number(r.originalBalance).toFixed(2)}</span>
+                  </span>
+                )},
+                { key:'status', label:'Status', w:'100px', render: r => (
+                  <span className={`tag ${r.isVoid ? 'tag-outline' : r.balance===0 ? 'tag-outline' : 'tag-euc'}`}>
+                    {r.isVoid ? 'VOIDED' : r.balance === 0 ? 'USED' : 'ACTIVE'}
+                  </span>
+                )},
+                { key:'recipientEmail', label:'Recipient', w:'1fr', render: r => <span style={{fontSize:12, color:'var(--ink-2)'}}>{r.recipientEmail || '—'}</span> },
+                { key:'orderId', label:'Order', w:'160px', render: r => <span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>{r.orderId || '—'}</span> },
+                { key:'issuedAt', label:'Issued', w:'110px', render: r => <span style={{fontSize:12}}>{r.issuedAt ? new Date(r.issuedAt).toLocaleDateString('en-AU') : '—'}</span> },
+                { key:'actions', label:'', w:'80px', render: r => !r.isVoid && (
+                  <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)', fontSize:11}} onClick={() => voidCard(r.code)}>Void</button>
+                )},
+              ]}
+              rows={filtered}
+            />
+          </div>
+
+          <div style={{position:'sticky', top:24}}>
+            <div className="card-paper" style={{padding:24}}>
+              <div className="eyebrow" style={{marginBottom:14}}>ISSUE GIFT CARD</div>
+              <label className="field" style={{marginBottom:10}}>
+                <span className="label">Amount (AUD)</span>
+                <input className="input" type="number" min="1" placeholder="50" value={issueForm.balance} onChange={e => setIssueForm(f => ({...f, balance: e.target.value}))} />
+              </label>
+              <label className="field" style={{marginBottom:10}}>
+                <span className="label">Recipient email (optional)</span>
+                <input className="input" type="email" placeholder="customer@example.com" value={issueForm.recipientEmail} onChange={e => setIssueForm(f => ({...f, recipientEmail: e.target.value}))} />
+              </label>
+              <label className="field" style={{marginBottom:14}}>
+                <span className="label">Note / reference (optional)</span>
+                <input className="input" placeholder="Refund, promo, etc." value={issueForm.note} onChange={e => setIssueForm(f => ({...f, note: e.target.value}))} />
+              </label>
+              {issueError && <div style={{marginBottom:10, fontSize:12, color:'var(--rust)'}}>{issueError}</div>}
+              <button className="btn btn-rust btn-sm" style={{width:'100%', justifyContent:'center'}} onClick={issue} disabled={issuing}>
+                {issuing ? 'Issuing…' : 'Issue Gift Card'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {mainTab === 'denominations' && (
+        <div style={{display:'grid', gridTemplateColumns:'1fr 360px', gap:32, alignItems:'start'}}>
+          <div>
+            <div className="row-flex" style={{justifyContent:'flex-end', marginBottom:14}}>
+              <button className="btn btn-rust btn-sm" onClick={openNewDenom}>+ New Denomination</button>
+            </div>
+            <Table
+              columns={[
+                { key:'name', label:'Name', w:'2fr', render: r => <span style={{fontWeight:600}}>{r.name}</span> },
+                { key:'priceAud', label:'Price (AUD)', w:'120px', render: r => <span className="mono" style={{fontWeight:600}}>${Number(r.priceAud).toFixed(2)}</span> },
+                { key:'description', label:'Description', w:'2fr', render: r => <span style={{fontSize:12, color:'var(--ink-2)'}}>{r.description || '—'}</span> },
+                { key:'status', label:'Status', w:'110px', render: r => (
+                  <span className={`tag ${r.status === 'published' ? 'tag-euc' : 'tag-outline'}`}>
+                    {r.status === 'published' ? 'PUBLISHED' : 'DRAFT'}
+                  </span>
+                )},
+                { key:'actions', label:'', w:'130px', render: r => (
+                  <div className="row-flex" style={{gap:6}}>
+                    <button className="btn btn-ghost btn-sm" style={{fontSize:11}} onClick={() => openEditDenom(r)}>Edit</button>
+                    <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)', fontSize:11}} onClick={() => deleteDenom(r.id)}>Delete</button>
+                  </div>
+                )},
+              ]}
+              rows={denoms}
+            />
+            {denoms.length === 0 && <div style={{padding:24, background:'var(--paper)', border:'1px solid var(--line)', fontSize:13, color:'var(--ink-2)', textAlign:'center'}}>No denominations yet. Add one to make gift cards available in the shop.</div>}
+          </div>
+
+          <div style={{position:'sticky', top:24}}>
+            {denomEdit !== null ? (
+              <div className="card-paper" style={{padding:24}}>
+                <div className="eyebrow" style={{marginBottom:14}}>{denomForm.id ? 'EDIT DENOMINATION' : 'NEW DENOMINATION'}</div>
+                <label className="field" style={{marginBottom:10}}>
+                  <span className="label">Name</span>
+                  <input className="input" placeholder="$25 Gift Card" value={denomForm.name || ''} onChange={e => setDenomForm(f => ({...f, name: e.target.value}))} />
+                </label>
+                <label className="field" style={{marginBottom:10}}>
+                  <span className="label">Price AUD</span>
+                  <input className="input" type="number" min="1" placeholder="25" value={denomForm.priceAud || ''} onChange={e => setDenomForm(f => ({...f, priceAud: e.target.value}))} />
+                </label>
+                <label className="field" style={{marginBottom:10}}>
+                  <span className="label">Description (optional)</span>
+                  <input className="input" placeholder="e.g. Perfect for small purchases" value={denomForm.description || ''} onChange={e => setDenomForm(f => ({...f, description: e.target.value}))} />
+                </label>
+                <label className="field" style={{marginBottom:14}}>
+                  <span className="label">Status</span>
+                  <div className="tabs" style={{marginTop:4}}>
+                    {[['draft','Draft'], ['published','Published']].map(([v, l]) => (
+                      <div key={v} className={`tab ${(denomForm.status || 'draft') === v ? 'active' : ''}`} style={{cursor:'pointer'}} onClick={() => setDenomForm(f => ({...f, status: v}))}>{l}</div>
+                    ))}
+                  </div>
+                </label>
+                {denomError && <div style={{marginBottom:10, fontSize:12, color:'var(--rust)'}}>{denomError}</div>}
+                <div className="row-flex" style={{gap:8}}>
+                  <button className="btn btn-ghost btn-sm" onClick={cancelDenom}>Cancel</button>
+                  <button className="btn btn-rust btn-sm" style={{flex:1, justifyContent:'center'}} onClick={saveDenom} disabled={denomSaving}>
+                    {denomSaving ? 'Saving…' : 'Save'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="card-paper" style={{padding:24, textAlign:'center', color:'var(--ink-3)', fontSize:13}}>
+                Select a denomination to edit, or click <strong>+ New Denomination</strong> to add one.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1103,17 +1103,19 @@ function ServiceDetailPage({ go, pageParams }) {
 // GIFT CARDS
 // ============================================================
 function GiftCardsPage({ go, addToCart }) {
-  const [products, setProducts] = useState([]);
+  const [denominations, setDenominations] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [balanceCode, setBalanceCode] = useState('');
   const [balanceResult, setBalanceResult] = useState(null);
   const [balanceError, setBalanceError] = useState(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
 
   useEffect(() => {
-    fetch('/api/catalog/products')
+    fetch('/api/shop/gift-card-denominations')
       .then(r => r.json())
-      .then(d => setProducts((d.items || []).filter(p => p.category === 'Gift Cards')))
-      .catch(() => {});
+      .then(d => setDenominations(d.items || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
   const checkBalance = async () => {
@@ -1134,38 +1136,40 @@ function GiftCardsPage({ go, addToCart }) {
     }
   };
 
-  const denominations = products;
-
   return (
     <>
       <PageHead crumbs={['Outback', 'Gift Cards']} title="Gift Cards"
         lead="The perfect gift for the remote-area tinkerer in your life. Redeemable on products and services. Sent by email instantly." />
       <section className="container" style={{paddingTop:40, paddingBottom:56}}>
-        {denominations.length === 0 && (
-          <div className="notice" style={{marginBottom:24}}>
-            <span className="tag tag-outline">COMING SOON</span>
-            <div style={{fontSize:13, color:'var(--ink-2)'}}>Gift cards are not yet available. Check back soon.</div>
+        {loading ? (
+          <div className="grid-4" style={{gap:24, marginBottom:24}}>
+            {Array.from({length:3}).map((_,i) => (
+              <div key={i} style={{background:'var(--bg-elev)', borderRadius:4, height:260, animation:'pulse 1.4s ease-in-out infinite', opacity: 0.6 + (i % 2) * 0.2}} />
+            ))}
+          </div>
+        ) : denominations.length === 0 ? (
+          <div style={{marginBottom:24, fontSize:14, color:'var(--ink-2)'}}>Gift cards coming soon — check back shortly.</div>
+        ) : (
+          <div className="grid-4" style={{gap:24, marginBottom:24}}>
+            {denominations.map((denom, i) => (
+              <div key={denom.id || i} className="card-paper" style={{padding:28, display:'flex', flexDirection:'column', gap:16}}>
+                <div style={{padding:'32px 0', textAlign:'center', background:'var(--bg-elev)', border:'1px solid var(--line)'}}>
+                  <div className="serif" style={{fontSize:52, color:'var(--rust)', lineHeight:1}}>${Number(denom.priceAud).toFixed(0)}</div>
+                  <div className="eyebrow" style={{marginTop:6}}>GIFT CARD</div>
+                </div>
+                <div>
+                  <div style={{fontWeight:600, marginBottom:4}}>{denom.name}</div>
+                  <p style={{fontSize:13, color:'var(--ink-2)', lineHeight:1.6}}>{denom.description || 'Redeemable on anything in the Outback Electronics online store. Delivered by email. Never expires.'}</p>
+                </div>
+                <div style={{marginTop:'auto', display:'grid', gap:8}}>
+                  <button className="btn btn-rust" style={{justifyContent:'center'}} onClick={() => addToCart({ id: 'gc-' + denom.id, name: denom.name, price: denom.priceAud, type: 'gift-card' })}>
+                    Add to Cart — ${Number(denom.priceAud).toFixed(2)}
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
-        <div className="grid-4" style={{gap:24}}>
-          {denominations.map((gc, i) => (
-            <div key={gc.id || i} className="card-paper" style={{padding:28, display:'flex', flexDirection:'column', gap:16}}>
-              <div style={{padding:'32px 0', textAlign:'center', background:'var(--bg-elev)', border:'1px solid var(--line)'}}>
-                <div className="serif" style={{fontSize:52, color:'var(--rust)', lineHeight:1}}>${gc.price}</div>
-                <div className="eyebrow" style={{marginTop:6}}>GIFT CARD</div>
-              </div>
-              <div>
-                <div className="mono" style={{fontSize:11, color:'var(--ink-3)', marginBottom:6}}>OUTBACK ELECTRONICS</div>
-                <p style={{fontSize:13, color:'var(--ink-2)', lineHeight:1.6}}>{gc.description || 'Redeemable on anything in the Outback Electronics online store. Delivered by email. Never expires.'}</p>
-              </div>
-              <div style={{marginTop:'auto', display:'grid', gap:8}}>
-                <button className="btn btn-rust" style={{justifyContent:'center'}} onClick={() => addToCart(gc)}>
-                  Add to Cart — ${gc.price}
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
 
         <div className="card-paper" style={{marginTop:40, padding:32, display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:24}}>
           {[

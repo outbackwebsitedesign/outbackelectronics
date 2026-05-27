@@ -92,76 +92,109 @@ function TutorialModal({ tutorial, onClose }) {
 // ============================================================
 function TutorialsPage({ go }) {
   const [filter, setFilter] = useState('All');
-  const [search, setSearch] = useState('');
   const [activeTutorial, setActiveTutorial] = useState(null);
   const [tutorials, setTutorials] = useState([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
-    fetch('/api/tutorials').then(r => r.ok ? r.json() : Promise.reject()).then(d => setTutorials(d.items || [])).catch(() => {}).finally(() => setLoading(false));
+    fetch('/api/tutorials').then(r => r.ok ? r.json() : Promise.reject()).then(d => {
+      const all = d.items || [];
+      setTutorials(all.filter(t => t.status === 'published'));
+    }).catch(() => {}).finally(() => setLoading(false));
   }, []);
-  const cats = ['All','Repair','Off-grid','Software','AI','Comms'];
-  const q = search.trim().toLowerCase();
-  const list = tutorials
-    .filter(t => filter === 'All' || t.cat === filter)
-    .filter(t => !q || (t.title||'').toLowerCase().includes(q) || (t.cat||'').toLowerCase().includes(q));
+
+  // Build category list from data, plus 'All'
+  const cats = ['All', ...Array.from(new Set(tutorials.map(t => t.category).filter(Boolean)))];
+
+  const list = filter === 'All' ? tutorials : tutorials.filter(t => t.category === filter);
+
   return (
     <>
-      <PageHead crumbs={['Outback','Tutorials']} title="Tutorials"
-        lead="The bench notes we used to scribble on bits of paper. Now in writing, with photos, and occasionally video." />
-      <section className="container" style={{paddingTop: 32, paddingBottom: 24}}>
-        <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-end', marginBottom:8, gap:16, flexWrap:'wrap'}}>
-          <div className="tabs" style={{flex:1, minWidth:0}}>
-            {cats.map(c => (
-              <div key={c} className={`tab ${filter===c?'active':''}`} onClick={() => setFilter(c)}>{c}</div>
-            ))}
-          </div>
-          <input className="input" placeholder="Search tutorials…" style={{width:220, flexShrink:0, padding:'6px 10px', fontSize:13}} value={search} onChange={e => setSearch(e.target.value)} />
+      <PageHead crumbs={['Outback','Tutorials']} title="Tutorials &amp; Guides"
+        lead="Step-by-step guides, video walkthroughs, and bench notes from the workshop." />
+      <section className="container" style={{paddingTop: 32, paddingBottom: 48}}>
+
+        {/* Category filters */}
+        <div className="tabs" style={{marginBottom: 24}}>
+          {cats.map(c => (
+            <div key={c} className={`tab ${filter===c?'active':''}`} onClick={() => setFilter(c)}>{c}</div>
+          ))}
         </div>
 
-        {/* Featured — first two published tutorials */}
-        {tutorials.length >= 2 && (
-          <div className="grid-2" style={{marginBottom: 32, gap:24}}>
-            {tutorials.slice(0, 2).map((t,i) => (
-              <div key={t.id||i} className="product" style={{cursor:'pointer'}} onClick={() => setActiveTutorial(t)}>
-                <div className={`slot ${i===0?'slot-rust':''}`} style={{aspectRatio:'16/9', fontSize:13}}>{(t.cat||'TUTORIAL').toUpperCase()}{t.dur ? ` · ${t.dur.toUpperCase()}` : ''}</div>
-                <div className="body" style={{padding: 22}}>
-                  <span className={`tag ${i===0?'tag-rust':'tag-ink'}`}>{i===0 ? 'FEATURED' : 'RECENT'}</span>
-                  <h3 className="serif" style={{fontSize: 32, marginTop:10, lineHeight:1.1}}>{t.title}</h3>
+        {/* Loading skeleton */}
+        {loading && (
+          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:20}}>
+            {Array.from({length:6}).map((_,i) => (
+              <div key={i} style={{height:200, background:'var(--bg-elev)', animation:'pulse 1.4s ease-in-out infinite', opacity:0.5}} />
+            ))}
+          </div>
+        )}
+
+        {/* Empty state */}
+        {!loading && list.length === 0 && (
+          <div className="card-paper" style={{padding:40, textAlign:'center'}}>
+            <div className="mono" style={{fontSize:13, color:'var(--ink-2)'}}>No tutorials published yet — check back soon.</div>
+          </div>
+        )}
+
+        {/* Tutorial grid */}
+        {!loading && list.length > 0 && (
+          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:20}}>
+            {list.map((t, i) => (
+              <div key={t.id||i} className="card-paper" style={{display:'flex', flexDirection:'column', overflow:'hidden'}}>
+                <div style={{padding:'20px 24px 0'}}>
+                  {t.category && <span className="tag tag-outline" style={{marginBottom:10, display:'inline-block'}}>{t.category.toUpperCase()}</span>}
+                  <h3 className="serif" style={{fontSize:22, lineHeight:1.15, marginTop:6}}>{t.title}</h3>
+                  <p style={{marginTop:8, fontSize:13, color:'var(--ink-2)', lineHeight:1.6,
+                    overflow:'hidden', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical'}}>
+                    {t.description}
+                  </p>
+                </div>
+                <div style={{padding:'16px 24px 20px', marginTop:'auto'}}>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setActiveTutorial(t)}>Read More →</button>
                 </div>
               </div>
             ))}
           </div>
         )}
-
-        {/* List */}
-        <div>
-          {loading && <div style={{display:'grid', gap:1}}>
-            {Array.from({length:5}).map((_,i) => (
-              <div key={i} style={{height:72, background:'var(--bg-elev)', animation:'pulse 1.4s ease-in-out infinite', opacity: 0.5 + (i % 3) * 0.15, borderBottom:'1px solid var(--line)'}} />
-            ))}
-          </div>}
-          {!loading && list.length === 0 && <div className="mono" style={{fontSize:13, color:'var(--ink-2)', padding:'18px 0'}}>No tutorials published yet.</div>}
-          {list.map((t,i) => (
-            <div key={t.id||i} className="tutorial-row" style={{display:'grid', gridTemplateColumns:'80px 1fr 100px 90px 100px 80px', padding:'18px 8px', borderTop: i===0?'1px solid var(--line)':'none', borderBottom:'1px solid var(--line)', alignItems:'center', gap: 14, cursor:'pointer'}} onClick={() => setActiveTutorial(t)} onMouseEnter={e => e.currentTarget.style.background='var(--bg-elev)'} onMouseLeave={e => e.currentTarget.style.background='transparent'}>
-              <div className="serif" style={{fontSize:32, color:'var(--rust)'}}>{String(i+1).padStart(2,'0')}</div>
-              <div>
-                <div style={{fontWeight:600, fontSize:15}}>{t.title}</div>
-                <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:3}}>{(t.author||'').toUpperCase()}{t.date ? ` · ${t.date.toUpperCase()}` : ''}</div>
-                <div className="tutorial-row-meta" style={{display:'none'}}>
-                  {t.cat && <span className="tag tag-outline" style={{marginTop:6}}>{t.cat}</span>}
-                  {t.diff && <span className="mono" style={{fontSize:11, marginLeft:8, color: t.diff==='Expert'?'var(--rust)':t.diff==='Advanced'?'var(--ochre)':'var(--ink-2)'}}>{t.diff.toUpperCase()}</span>}
-                  {t.dur && <span className="mono" style={{fontSize:11, marginLeft:8, color:'var(--ink-2)'}}>{t.dur}</span>}
-                </div>
-              </div>
-              <span className="tutorial-row-col tag tag-outline">{t.cat}</span>
-              <span className="tutorial-row-col mono" style={{fontSize:11, color: t.diff==='Expert'?'var(--rust)':t.diff==='Advanced'?'var(--ochre)':'var(--ink-2)'}}>{t.diff ? t.diff.toUpperCase() : '—'}</span>
-              <span className="tutorial-row-col mono" style={{fontSize:12, color:'var(--ink-2)'}}>{t.dur || '—'}</span>
-              <span className="mono" style={{fontSize:12, color:'var(--rust)'}}>READ →</span>
-            </div>
-          ))}
-        </div>
       </section>
-      {activeTutorial && <TutorialModal tutorial={activeTutorial} onClose={() => setActiveTutorial(null)} />}
+
+      {/* Expanded tutorial modal */}
+      {activeTutorial && (
+        <div style={{position:'fixed', inset:0, zIndex:500, background:'rgba(15,13,10,0.75)', display:'flex', flexDirection:'column', alignItems:'center', padding:'48px 16px', overflowY:'auto'}}
+          onClick={() => setActiveTutorial(null)}>
+          <div style={{width:'100%', maxWidth:760, background:'var(--paper)', padding:'40px 48px', boxShadow:'0 16px 48px rgba(0,0,0,.3)'}}
+            onClick={e => e.stopPropagation()}>
+            <div className="row-flex" style={{justifyContent:'space-between', marginBottom:8}}>
+              {activeTutorial.category && <span className="tag tag-outline">{activeTutorial.category.toUpperCase()}</span>}
+              <button style={{background:'none', border:'none', cursor:'pointer', fontSize:22, color:'var(--ink-2)', lineHeight:1, marginLeft:'auto'}} onClick={() => setActiveTutorial(null)}>×</button>
+            </div>
+            <h1 style={{fontFamily:'Instrument Serif, serif', fontSize:36, lineHeight:1.05, marginTop:10}}>{activeTutorial.title}</h1>
+            {activeTutorial.description && (
+              <p style={{marginTop:10, fontSize:15, color:'var(--ink-2)', lineHeight:1.7, marginBottom:24}}>{activeTutorial.description}</p>
+            )}
+            {activeTutorial.videoUrl && (
+              <div style={{position:'relative', paddingTop:'56.25%', marginBottom:28, background:'#000'}}>
+                <iframe
+                  src={activeTutorial.videoUrl}
+                  style={{position:'absolute', inset:0, width:'100%', height:'100%', border:0}}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  title={activeTutorial.title}
+                />
+              </div>
+            )}
+            {activeTutorial.content ? (
+              <div style={{fontSize:15, color:'var(--ink)', lineHeight:1.75}}
+                dangerouslySetInnerHTML={{__html: activeTutorial.content}} />
+            ) : (
+              <p style={{color:'var(--ink-2)', fontSize:14}}>No content available for this tutorial yet.</p>
+            )}
+            <div style={{marginTop:28}}>
+              <button className="btn btn-rust" onClick={() => setActiveTutorial(null)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -173,45 +206,55 @@ function GroupsPage({ go }) {
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
-    fetch('/api/groups').then(r => r.ok ? r.json() : Promise.reject()).then(d => setGroups(d.items || [])).catch(() => {}).finally(() => setLoading(false));
+    fetch('/api/groups').then(r => r.ok ? r.json() : Promise.reject()).then(d => {
+      const all = d.groups || d.items || [];
+      setGroups(all.filter(g => g.status === 'active'));
+    }).catch(() => {}).finally(() => setLoading(false));
   }, []);
-  const memberCount = (g) => Array.isArray(g.members) ? g.members.length : (g.memberCount || 0);
+
   return (
     <>
-      <PageHead crumbs={['Outback','Groups']} title="Groups"
-        lead="Town-specific chapters &amp; topic clubs. Most meet in sheds. Some meet on the radio. All of them welcome a quiet beginner."
+      <PageHead crumbs={['Outback','Groups']} title="Community Groups"
+        lead="Connect with other electronics enthusiasts in remote Australia. Local chapters, topic clubs, and fix-it circles — mostly in sheds."
         kicker={<button className="btn btn-rust" onClick={() => go('contact')}>+ Start a chapter</button>} />
 
       <section className="container" style={{paddingTop: 32, paddingBottom: 40}}>
         {loading && (
-          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:20}}>
+          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:20}}>
             {Array.from({length:4}).map((_,i) => (
-              <div key={i} style={{height:140, background:'var(--bg-elev)', borderRadius:4, animation:'pulse 1.4s ease-in-out infinite', opacity: 0.5 + (i % 2) * 0.2}} />
+              <div key={i} style={{height:180, background:'var(--bg-elev)', animation:'pulse 1.4s ease-in-out infinite', opacity: 0.5 + (i % 2) * 0.2}} />
             ))}
           </div>
         )}
-        {!loading && groups.length === 0 && <div className="mono" style={{fontSize:13, color:'var(--ink-2)', padding:'18px 0'}}>No groups listed yet.</div>}
-        <div className="grid-2" style={{gap: 20}}>
-          {groups.map((g,i) => (
-            <div key={g.id||i} className="group-card">
-              <div style={{width:88, flexShrink:0, display:'grid', placeItems:'center', background:'var(--bg-deep)', border:'1px solid var(--line-strong)', fontFamily:'Instrument Serif, serif', fontSize: 40, fontStyle:'italic', color:'var(--rust)'}}>
-                {(g.name||'').split(' ').map(w => w[0]).slice(0,2).join('')}
-              </div>
-              <div style={{flex:1}}>
-                <div className="row-flex" style={{justifyContent:'space-between'}}>
-                  <span className={`tag ${g.badge||'tag-outline'}`}>{(g.loc||'').toUpperCase()}</span>
-                  {g.host && <span className="tag tag-outline">HOSTED IN-STORE</span>}
+        {!loading && groups.length === 0 && (
+          <div className="card-paper" style={{padding:40, textAlign:'center'}}>
+            <div className="mono" style={{fontSize:13, color:'var(--ink-2)'}}>No active groups yet — they're coming soon.</div>
+          </div>
+        )}
+        {!loading && groups.length > 0 && (
+          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:20}}>
+            {groups.map((g,i) => (
+              <div key={g.id||i} className="card-paper" style={{padding:24, display:'flex', flexDirection:'column', gap:12}}>
+                <div>
+                  {g.location && (
+                    <span className="tag tag-outline" style={{marginBottom:8, display:'inline-block'}}>{g.location.toUpperCase()}</span>
+                  )}
+                  <h3 className="serif" style={{fontSize:24, lineHeight:1.1, marginTop:6}}>{g.name}</h3>
+                  <p style={{marginTop:8, fontSize:13, color:'var(--ink-2)', lineHeight:1.6}}>{g.description}</p>
                 </div>
-                <h3 className="serif" style={{fontSize: 26, marginTop: 8, lineHeight:1.1}}>{g.name}</h3>
-                <p style={{marginTop: 6, fontSize:13, color:'var(--ink-2)'}}>{g.focus || g.description}</p>
-                <div className="row-flex" style={{justifyContent:'space-between', marginTop: 14, borderTop:'1px solid var(--line)', paddingTop: 12}}>
-                  <div className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{memberCount(g)} MEMBERS{g.meets ? ` · ${g.meets.toUpperCase()}` : ''}</div>
-                  <button className="mono" style={{fontSize:11, color:'var(--rust)', cursor:'pointer', background:'none', border:'none', padding:0}} onClick={() => go('contact', { subject: `Join ${g.name}`, group: g.slug || g.name })}>JOIN →</button>
+                <div style={{borderTop:'1px solid var(--line)', paddingTop:12, display:'grid', gap:4}}>
+                  {g.meetupFrequency && (
+                    <div className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>MEETS: {g.meetupFrequency.toUpperCase()}</div>
+                  )}
+                  {g.organizer && (
+                    <div className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>ORGANISER: {g.organizer.toUpperCase()}</div>
+                  )}
+                  <div className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{g.memberCount || 0} MEMBERS</div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         <div className="card-paper" style={{padding: 32, marginTop: 40, display:'grid', gridTemplateColumns:'1fr 280px', gap:32, alignItems:'center'}}>
           <div>
