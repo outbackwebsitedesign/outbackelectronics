@@ -1892,6 +1892,9 @@ const mainServer = http.createServer(async (req, res) => {
     }
 
     // Validate and apply gift card if provided
+    // Validate shipping amount (server-side cap to prevent manipulation: max $200)
+    const validatedShipping = shippingAmount && Number(shippingAmount) > 0 ? Math.min(200, Number(shippingAmount)) : 0;
+
     let gcDiscount = 0;
     let gcCodeNorm = '';
     if (giftCardCode) {
@@ -1900,7 +1903,8 @@ const mainServer = http.createServer(async (req, res) => {
       const gc = gcList.find(c => c.code === gcCodeNorm && !c.isVoid && c.balance > 0);
       if (!gc) return json(res, 422, { error: 'invalid_gift_card', message: 'Gift card code is invalid, already used, or has no remaining balance.' });
       const cartTotal = lineItems.reduce((s, li) => s + Math.round(Number(li.priceAud) * 100) * (li.quantity || 1), 0) / 100;
-      gcDiscount = Math.min(gc.balance, cartTotal);
+      const orderTotal = cartTotal + validatedShipping;
+      gcDiscount = Math.min(gc.balance, orderTotal);
     }
 
     const params = {
@@ -1921,9 +1925,6 @@ const mainServer = http.createServer(async (req, res) => {
     // Tag membership purchases so the webhook can activate the subscription
     const membershipLineItem = lineItems.find(li => membershipTiers.some(t => t.id === li.productId));
     if (membershipLineItem) params['payment_intent_data[metadata][membershipTierId]'] = membershipLineItem.productId;
-
-    // Validate shipping amount (server-side cap to prevent manipulation: max $200)
-    const validatedShipping = shippingAmount && Number(shippingAmount) > 0 ? Math.min(200, Number(shippingAmount)) : 0;
     const shippingServiceName = shippingService ? String(shippingService).slice(0, 80) : '';
 
     // Build line items; if a gift card covers the full amount, add a $0.50 minimum line item

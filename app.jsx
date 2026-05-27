@@ -869,7 +869,7 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
       const resp = await fetch('/api/gift-card/apply', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() },
-        body: JSON.stringify({ code, cartTotal: subtotal }),
+        body: JSON.stringify({ code, cartTotal: subtotal + shippingCost }),
       });
       const data = await resp.json();
       if (data.valid) { setGc(data); setGcError(null); }
