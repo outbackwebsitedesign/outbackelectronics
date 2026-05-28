@@ -774,7 +774,7 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
   const [rewardsEmail, setRewardsEmail] = useState('');
   const [rewardsPassword, setRewardsPassword] = useState('');
   const [rewardsData, setRewardsData] = useState(null); // { points, token, displayName }
-  const [rewardsLoading, setRewardsLoading] = useState(false);
+  const [rewardsLoading, setRewardsLoading] = useState(true);
   const [rewardsError, setRewardsError] = useState(null);
   const [rewardsApply, setRewardsApply] = useState(false);
   const [shareLink, setShareLink] = useState(null);
@@ -898,19 +898,30 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
 
   const removeGiftCard = () => { setGc(null); setGcInput(''); setGcError(null); };
 
+  // Auto-load rewards if portal session is active
+  useEffect(() => {
+    fetch('/api/rewards/me', { credentials: 'include' })
+      .then(r => r.json())
+      .then(d => { if (d.loggedIn) { setRewardsData(d); setRewardsApply(d.points > 0); } })
+      .catch(() => {})
+      .finally(() => setRewardsLoading(false));
+  }, []);
+
   const lookupRewards = async () => {
     if (!rewardsEmail.trim() || !rewardsPassword) return;
     setRewardsLoading(true);
     setRewardsError(null);
     try {
+      await ensureCsrf();
       const resp = await fetch('/api/rewards/lookup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() },
         body: JSON.stringify({ email: rewardsEmail.trim(), password: rewardsPassword }),
       });
       const data = await resp.json();
-      if (resp.ok) { setRewardsData(data); setRewardsApply(data.points > 0); }
-      else setRewardsError(data.message || 'Could not verify account.');
+      if (!resp.ok) { setRewardsError(data.message || 'Could not verify account.'); return; }
+      setRewardsData(data);
+      setRewardsApply(data.points > 0);
     } catch {
       setRewardsError('Could not connect. Please try again.');
     } finally {
@@ -1147,7 +1158,7 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
                   )}
                   {rewardsData.points === 0 && <span style={{color:'#92400e'}}>No points to redeem.</span>}
                 </div>
-              ) : (
+              ) : rewardsLoading ? null : (
                 <div style={{marginBottom:14}}>
                   <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:6}}>HAVE AN ACCOUNT? REDEEM YOUR POINTS</div>
                   <div style={{display:'flex', gap:6, marginBottom:4}}>
