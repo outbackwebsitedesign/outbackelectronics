@@ -192,6 +192,7 @@ const ADMIN_SECTIONS = [
   { group:'STORE', items: [
     { id:'memberships', label:'Memberships', minRole:'manager' },
     { id:'gift-cards', label:'Gift Cards',   minRole:'staff', excludeRoles:['seller'] },
+    { id:'rewards',   label:'Rewards',       minRole:'manager' },
     { id:'expenses',  label:'Expenses',      minRole:'manager' },
     { id:'policies',  label:'Policies',      minRole:'manager' },
     { id:'seller-billing', label:'Seller Billing', minRole:'manager' },
@@ -4146,6 +4147,110 @@ function AdminGiftCards() {
   );
 }
 
+// REWARDS
+// ============================================================
+function AdminRewards() {
+  const [entries, setEntries] = useState([]);
+  const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState(null); // { userId, displayName, email, points, history }
+  const [grantForm, setGrantForm] = useState({ points: '', description: '' });
+  const [grantError, setGrantError] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  const load = () => fetch('/api/admin/rewards', { credentials: 'include' })
+    .then(r => r.json()).then(d => {
+      const sorted = (d.entries || []).sort((a, b) => b.points - a.points);
+      setEntries(sorted);
+      if (selected) setSelected(sorted.find(e => e.userId === selected.userId) || null);
+    }).catch(() => {});
+
+  useEffect(() => { load(); }, []);
+
+  const filtered = entries.filter(e => {
+    const q = search.toLowerCase();
+    return !q || (e.displayName || '').toLowerCase().includes(q) || (e.email || '').toLowerCase().includes(q) || (e.username || '').toLowerCase().includes(q);
+  });
+
+  const adjust = async (pts) => {
+    if (!selected) return;
+    const p = Number(grantForm.points);
+    if (!p || p === 0) { setGrantError('Enter a non-zero point amount.'); return; }
+    const amount = pts > 0 ? Math.abs(p) : -Math.abs(p);
+    setSaving(true); setGrantError(null);
+    const resp = await fetch('/api/admin/rewards/adjust', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ userId: selected.userId, points: amount, description: grantForm.description }) }).catch(() => null);
+    setSaving(false);
+    if (resp && resp.ok) { setGrantForm({ points: '', description: '' }); load(); }
+    else setGrantError('Failed to save. Check the amount and try again.');
+  };
+
+  const fmtDate = d => { try { return new Date(d).toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' }); } catch { return d || ''; } };
+  const typeLabel = { order:'Order', repair:'Repair', bonus:'Bonus', redeem:'Redeemed', grant:'Admin grant', adjust:'Admin adjust', signup:'Welcome bonus' };
+
+  return (
+    <div style={{display:'flex', gap:24, alignItems:'flex-start', flexWrap:'wrap'}}>
+      <div style={{flex:'0 0 320px', minWidth:0}}>
+        <input className="input" placeholder="Search by name or email…" value={search} onChange={e => setSearch(e.target.value)} style={{width:'100%', marginBottom:12}} />
+        <div className="card-paper" style={{overflow:'auto', maxHeight:520}}>
+          {filtered.length === 0 && <div style={{padding:20, color:'var(--ink-3)', fontSize:13}}>No reward accounts yet.</div>}
+          {filtered.map(e => (
+            <div key={e.userId} onClick={() => { setSelected(e); setGrantError(null); setGrantForm({ points: '', description: '' }); }}
+              style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 16px', borderBottom:'1px solid var(--line)', cursor:'pointer', background: selected?.userId === e.userId ? 'var(--bg-elev)' : 'transparent'}}>
+              <div>
+                <div style={{fontWeight:500, fontSize:13}}>{e.displayName || e.username || e.userId}</div>
+                <div style={{fontSize:11, color:'var(--ink-3)'}}>{e.email}</div>
+              </div>
+              <div style={{fontWeight:700, fontSize:14, color:'var(--ochre)', flexShrink:0}}>{(e.points || 0).toLocaleString('en-AU')} pts</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {selected ? (
+        <div style={{flex:1, minWidth:260}}>
+          <div className="card-paper" style={{padding:20, marginBottom:16}}>
+            <div style={{fontWeight:600, fontSize:15, marginBottom:2}}>{selected.displayName || selected.username}</div>
+            <div style={{fontSize:12, color:'var(--ink-3)', marginBottom:12}}>{selected.email}</div>
+            <div style={{fontSize:28, fontFamily:'Instrument Serif, serif', color:'var(--ochre)'}}>{(selected.points || 0).toLocaleString('en-AU')} <span style={{fontSize:14, color:'var(--ink-2)'}}>pts</span></div>
+            <div style={{fontSize:12, color:'var(--ink-3)', marginTop:4}}>= ${((selected.points || 0) / 100).toLocaleString('en-AU', {minimumFractionDigits:2})} redemption value</div>
+          </div>
+
+          <div className="card-paper" style={{padding:20, marginBottom:16}}>
+            <div className="eyebrow" style={{marginBottom:10}}>ADJUST POINTS</div>
+            <div style={{display:'flex', gap:8, marginBottom:8}}>
+              <input className="input" type="number" placeholder="Points (e.g. 500)" value={grantForm.points} onChange={e => setGrantForm(f => ({ ...f, points: e.target.value }))} style={{flex:1}} />
+              <input className="input" placeholder="Reason" value={grantForm.description} onChange={e => setGrantForm(f => ({ ...f, description: e.target.value }))} style={{flex:2}} />
+            </div>
+            {grantError && <div style={{fontSize:12, color:'#b91c1c', marginBottom:8}}>{grantError}</div>}
+            <div style={{display:'flex', gap:8}}>
+              <button className="btn btn-sm" style={{background:'#345526', color:'#fff'}} onClick={() => adjust(1)} disabled={saving}>+ Grant</button>
+              <button className="btn btn-sm btn-ghost" onClick={() => adjust(-1)} disabled={saving}>− Deduct</button>
+            </div>
+          </div>
+
+          <div className="card-paper" style={{overflow:'auto', maxHeight:360}}>
+            <div className="eyebrow" style={{padding:'12px 16px 8px'}}>HISTORY</div>
+            {(selected.history || []).length === 0 && <div style={{padding:'8px 16px 16px', color:'var(--ink-3)', fontSize:13}}>No history.</div>}
+            {[...(selected.history || [])].reverse().map((h, i) => (
+              <div key={h.id || i} style={{display:'flex', alignItems:'center', gap:12, padding:'10px 16px', borderTop:'1px solid var(--line)', flexWrap:'wrap'}}>
+                <div style={{flex:1, minWidth:0}}>
+                  <div style={{fontSize:13, fontWeight:500}}>{typeLabel[h.type] || h.type}</div>
+                  <div style={{fontSize:11, color:'var(--ink-3)'}}>{h.description}{h.refId ? ` · ${h.refId}` : ''}</div>
+                  <div style={{fontSize:11, color:'var(--ink-3)'}}>{fmtDate(h.date)}</div>
+                </div>
+                <div style={{fontWeight:700, fontSize:13, color: h.points > 0 ? '#345526' : 'var(--rust)', flexShrink:0}}>
+                  {h.points > 0 ? '+' : ''}{h.points} pts
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div style={{flex:1, display:'flex', alignItems:'center', justifyContent:'center', color:'var(--ink-3)', fontSize:13, padding:40}}>Select a customer to view their rewards.</div>
+      )}
+    </div>
+  );
+}
+
 // EXPENSES
 // ============================================================
 function AdminExpenses() {
@@ -5506,6 +5611,7 @@ const ADMIN_VIEWS = {
   sellers:    { c: AdminSellers,    t:'Sellers' },
   memberships: { c: AdminMemberships, t:'Memberships', staticSubtitle:'tiers · subscriptions · activation' },
   'gift-cards': { c: AdminGiftCards, t:'Gift Cards',        staticSubtitle:'issued codes · balances · manual issuance' },
+  'rewards':    { c: AdminRewards,   t:'Rewards',           staticSubtitle:'points balances · history · manual adjustments' },
   expenses:   { c: AdminExpenses,   t:'Expenses',         staticSubtitle:'track costs · receipt uploads' },
   policies:   { c: AdminPolicies,   t:'Policies',         staticSubtitle:'edit public-facing policy docs' },
   settings:   { c: AdminSettings,   t:'Settings',         staticSubtitle:'shop · staff · integrations' },
@@ -5516,7 +5622,7 @@ const ADMIN_ALL_IDS = new Set([
   'overview','orders','repairs','quotes','ewaste',
   'products','services','software','tutorials','ai',
   'forum','groups','customers','sellers',
-  'memberships','gift-cards','expenses','policies','seller-billing','settings',
+  'memberships','gift-cards','rewards','expenses','policies','seller-billing','settings',
 ]);
 
 function adminSectionFromPath() {
