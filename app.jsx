@@ -771,6 +771,12 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
   const [gc, setGc] = useState(null); // { code, balance, discount }
   const [gcError, setGcError] = useState(null);
   const [gcLoading, setGcLoading] = useState(false);
+  const [rewardsEmail, setRewardsEmail] = useState('');
+  const [rewardsPassword, setRewardsPassword] = useState('');
+  const [rewardsData, setRewardsData] = useState(null); // { points, token, displayName }
+  const [rewardsLoading, setRewardsLoading] = useState(false);
+  const [rewardsError, setRewardsError] = useState(null);
+  const [rewardsApply, setRewardsApply] = useState(false);
   const [shareLink, setShareLink] = useState(null);
   const [sharing, setSharing] = useState(false);
   const [shareError, setShareError] = useState(null);
@@ -837,7 +843,10 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
   const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const discount = gc ? gc.discount : 0;
   const shippingCost = selectedShipping ? selectedShipping.price : 0;
-  const total = Math.max(0, subtotal + shippingCost - discount);
+  const preRewardsTotal = Math.max(0, subtotal + shippingCost - discount);
+  const rewardsPointsToRedeem = (rewardsData && rewardsApply) ? Math.min(rewardsData.points, Math.round(preRewardsTotal * 100)) : 0;
+  const rewardsDollars = rewardsPointsToRedeem / 100;
+  const total = Math.max(0, preRewardsTotal - rewardsDollars);
 
   const getShippingQuote = async () => {
     const pc = postcodeInput.trim();
@@ -889,6 +898,27 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
 
   const removeGiftCard = () => { setGc(null); setGcInput(''); setGcError(null); };
 
+  const lookupRewards = async () => {
+    if (!rewardsEmail.trim() || !rewardsPassword) return;
+    setRewardsLoading(true);
+    setRewardsError(null);
+    try {
+      const resp = await fetch('/api/rewards/lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() },
+        body: JSON.stringify({ email: rewardsEmail.trim(), password: rewardsPassword }),
+      });
+      const data = await resp.json();
+      if (resp.ok) { setRewardsData(data); setRewardsApply(data.points > 0); }
+      else setRewardsError(data.message || 'Could not verify account.');
+    } catch {
+      setRewardsError('Could not connect. Please try again.');
+    } finally {
+      setRewardsLoading(false);
+    }
+  };
+  const removeRewards = () => { setRewardsData(null); setRewardsEmail(''); setRewardsPassword(''); setRewardsError(null); setRewardsApply(false); };
+
   const checkout = async () => {
     if (cart.length === 0) return;
     const hasPhysical = cart.some(i => !i.digital);
@@ -902,6 +932,10 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
       const items = cart.map(i => ({ name: i.name, priceAud: i.price, quantity: i.qty, productId: i.id || i.sku || '' }));
       const body = { items };
       if (gc) body.giftCardCode = gc.code;
+      if (rewardsData && rewardsApply && rewardsPointsToRedeem > 0) {
+        body.redeemPoints = rewardsPointsToRedeem;
+        body.rewardsToken = rewardsData.token;
+      }
       if (selectedShipping) {
         body.shippingAmount = selectedShipping.price;
         body.shippingService = selectedShipping.name;
@@ -1095,6 +1129,35 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
                     </button>
                   </div>
                   {gcError && <div style={{marginTop:6, fontSize:12, color:'#b91c1c'}}>{gcError}</div>}
+                </div>
+              )}
+
+              {/* Rewards points */}
+              {rewardsData ? (
+                <div style={{marginBottom:14, padding:'10px 14px', background:'#fffbeb', border:'1px solid #fde68a', fontSize:13}}>
+                  <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:rewardsData.points > 0 ? 8 : 0}}>
+                    <span style={{color:'#92400e', fontWeight:600}}>{rewardsData.displayName} — {rewardsData.points.toLocaleString('en-AU')} pts</span>
+                    <button onClick={removeRewards} style={{background:'none', border:'none', cursor:'pointer', color:'var(--ink-3)', fontSize:16, padding:0, lineHeight:1}}>×</button>
+                  </div>
+                  {rewardsData.points > 0 && (
+                    <label style={{display:'flex', alignItems:'center', gap:8, cursor:'pointer', color:'#78350f'}}>
+                      <input type="checkbox" checked={rewardsApply} onChange={e => setRewardsApply(e.target.checked)} />
+                      Redeem {Math.min(rewardsData.points, Math.round(preRewardsTotal * 100)).toLocaleString('en-AU')} pts (−${(Math.min(rewardsData.points, Math.round(preRewardsTotal * 100)) / 100).toLocaleString('en-AU', {minimumFractionDigits:2})})
+                    </label>
+                  )}
+                  {rewardsData.points === 0 && <span style={{color:'#92400e'}}>No points to redeem.</span>}
+                </div>
+              ) : (
+                <div style={{marginBottom:14}}>
+                  <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:6}}>HAVE AN ACCOUNT? REDEEM YOUR POINTS</div>
+                  <div style={{display:'flex', gap:6, marginBottom:4}}>
+                    <input className="input" placeholder="Email" type="email" value={rewardsEmail} onChange={e => setRewardsEmail(e.target.value)} style={{flex:1, fontSize:12}} />
+                    <input className="input" placeholder="Password" type="password" value={rewardsPassword} onChange={e => setRewardsPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && lookupRewards()} style={{flex:1, fontSize:12}} />
+                  </div>
+                  <button className="btn btn-ghost btn-sm" onClick={lookupRewards} disabled={rewardsLoading || !rewardsEmail.trim() || !rewardsPassword} style={{width:'100%', justifyContent:'center'}}>
+                    {rewardsLoading ? '…' : 'Check Points Balance'}
+                  </button>
+                  {rewardsError && <div style={{marginTop:6, fontSize:12, color:'#b91c1c'}}>{rewardsError}</div>}
                 </div>
               )}
 
