@@ -1244,200 +1244,157 @@ function SellGearPage({ go }) {
 // ============================================================
 // AI / EDGE AI
 // ============================================================
+function AIModelModal({ model, onClose, go }) {
+  return (
+    <div style={{position:'fixed',inset:0,zIndex:500,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(15,13,10,0.7)'}} onClick={onClose}>
+      <div style={{width:'100%',maxWidth:560,background:'var(--bg)',border:'1px solid var(--line)',boxShadow:'0 12px 40px rgba(0,0,0,.35)',padding:32}} onClick={e => e.stopPropagation()}>
+        <div className="row-flex" style={{justifyContent:'space-between',marginBottom:18}}>
+          <div>
+            <span className="tag tag-euc">OPEN WEIGHTS</span>
+            <h2 className="mono" style={{fontSize:24,marginTop:8,color:'var(--rust)'}}>{model.name}</h2>
+          </div>
+          <button style={{background:'none',border:'none',cursor:'pointer',fontSize:22,color:'var(--ink-2)',lineHeight:1}} onClick={onClose}>×</button>
+        </div>
+        <table style={{width:'100%',borderCollapse:'collapse',fontSize:14,marginBottom:20}}>
+          <tbody>
+            {[['Task',model.task],['Model size',model.size],['Accuracy',model.acc],['Recommended HW',model.hw],['Licence','Apache 2.0'],['Format','ONNX / TFLite']].map(([label,val],i) => (
+              <tr key={i} style={{borderBottom:'1px solid var(--line)'}}>
+                <td style={{padding:'10px 0',color:'var(--ink-2)',width:'40%'}} className="mono">{label}</td>
+                <td style={{padding:'10px 0',fontWeight:500}}>{val}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="term" style={{marginBottom:18}}>
+          <div className="mono" style={{fontSize:10,color:'var(--ink-3)',marginBottom:6}}>// QUICK START</div>
+          <div><span className="prompt">$</span> oe pull {model.name}</div>
+          <div><span className="prompt">$</span> oe deploy {model.name} --camera cam0</div>
+        </div>
+        <div className="row-flex" style={{gap:8}}>
+          <button className="btn btn-rust" onClick={() => { onClose(); go('quote'); }}>Spec a box for this model →</button>
+          <button className="btn btn-ghost" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AIPage({ go }) {
+  const [selectedModel, setSelectedModel] = useState(null);
   const [models, setModels] = useState([]);
-  const [boxes, setBoxes] = useState([]);
-  const [heading, setHeading] = useState('');
-  const [body, setBody] = useState('');
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([
-      fetch('/api/ai').then(r => r.ok ? r.json() : {}).catch(() => ({})),
-      fetch('/api/settings').then(r => r.ok ? r.json() : {}).catch(() => ({})),
-    ]).then(([aiData, settingsData]) => {
-      setModels(aiData.models || []);
-      setBoxes(aiData.boxes || []);
-      // Settings may return an array or object
-      const s = Array.isArray(settingsData) ? {} : (settingsData.settings || settingsData);
-      setHeading(s.aiHeading || '');
-      setBody(s.aiBody || '');
-    }).finally(() => setLoading(false));
+    fetch('/api/ai').then(r => r.ok ? r.json() : Promise.reject()).then(r => setModels(r.models || [])).catch(() => {});
   }, []);
-
-  const heroHeading = heading || 'AI & Edge Intelligence';
-  const heroBody = body || 'Deploying machine learning to remote Australia\'s most isolated communities.';
-
-  const modelStatusColor = (status) => {
-    if (!status) return 'var(--ink-3)';
-    const s = status.toLowerCase();
-    if (s === 'production') return 'var(--eucalyptus)';
-    if (s === 'beta') return 'var(--ochre)';
-    if (s === 'training') return 'var(--rust)';
-    return 'var(--ink-3)'; // draft / default
-  };
-
-  const boxStatusColor = (status) => {
-    if (!status) return 'var(--ink-3)';
-    const s = status.toLowerCase();
-    if (s === 'ok' || s === 'online') return 'var(--eucalyptus)';
-    if (s === 'low batt' || s === 'low_batt' || s === 'low-batt') return 'var(--ochre)';
-    if (s === 'offline') return 'var(--rust)';
-    return 'var(--ink-3)'; // maintenance / default
-  };
 
   return (
     <>
-      {/* Hero */}
-      <div className="page-head">
-        <div className="container">
-          <div className="crumbs eyebrow">
-            <span>Outback</span>
-            <span style={{color:'var(--ink-3)'}}>/</span>
-            <span>AI &amp; Edge</span>
-          </div>
-          <h1>{heroHeading}</h1>
-          <p className="lead">{heroBody}</p>
-          <div style={{marginTop:18, display:'flex', gap:12, flexWrap:'wrap'}}>
-            <button className="btn btn-rust" onClick={() => go('quote')}>Start an AI pilot →</button>
-            <button className="btn btn-ghost" onClick={() => go('contact')}>Talk to us</button>
-          </div>
-        </div>
-      </div>
+      <PageHead
+        crumbs={['Outback', 'AI']}
+        title="Artificial Intelligence"
+        kicker={<span className="tag tag-rust">NEW 2026 · BETA PRICING</span>}
+        lead="Edge models, ruggedised inference boxes, and a training pipeline for whoever has a problem and a hard drive full of paddock footage."
+      />
 
-      {/* Models section */}
-      <section className="container" style={{paddingTop:40, paddingBottom:24}}>
-        <div style={{marginBottom:24}}>
-          <span className="eyebrow">EDGE MODELS</span>
-          <h2 className="serif" style={{fontSize:38, marginTop:6, lineHeight:1.05}}>Models in the field.</h2>
-          <p style={{marginTop:10, fontSize:14, color:'var(--ink-2)', maxWidth:560}}>
-            Optimised for low-power inference on solar-powered nodes. Runs offline — no cloud dependency.
-          </p>
-        </div>
-
-        {loading && (
-          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(260px, 1fr))', gap:20}}>
-            {Array.from({length:4}).map((_,i) => (
-              <div key={i} style={{height:160, background:'var(--bg-elev)', animation:'pulse 1.4s ease-in-out infinite', opacity:0.5}} />
-            ))}
-          </div>
-        )}
-
-        {!loading && models.length === 0 && (
-          <div className="card-paper" style={{padding:40, textAlign:'center'}}>
-            <div className="mono" style={{fontSize:13, color:'var(--ink-2)'}}>No models published yet.</div>
-          </div>
-        )}
-
-        {!loading && models.length > 0 && (
-          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(260px, 1fr))', gap:20}}>
-            {models.map((m, i) => (
-              <div key={m.id||i} className="card-paper" style={{padding:24, display:'flex', flexDirection:'column', gap:10}}>
-                <div style={{display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:8}}>
-                  <h3 className="serif" style={{fontSize:22, lineHeight:1.1, flex:1}}>{m.name}</h3>
-                  {m.status && (
-                    <span className="tag" style={{
-                      background: modelStatusColor(m.status),
-                      color: m.status?.toLowerCase() === 'draft' ? 'var(--ink-2)' : 'var(--paper)',
-                      borderColor: modelStatusColor(m.status),
-                      whiteSpace:'nowrap', flexShrink:0
-                    }}>{m.status.toUpperCase()}</span>
-                  )}
-                </div>
-                {m.task && <span className="tag tag-outline" style={{display:'inline-block', alignSelf:'flex-start'}}>{m.task.toUpperCase()}</span>}
-                <div style={{borderTop:'1px solid var(--line)', paddingTop:10, display:'grid', gap:3}}>
-                  {m.size && <div className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>SIZE: {String(m.size).toUpperCase()}</div>}
-                  {m.accuracy != null && <div className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>ACCURACY: {m.accuracy}{typeof m.accuracy === 'number' && m.accuracy <= 1 ? '' : '%'}</div>}
-                  {m.deploymentCount != null && <div className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{m.deploymentCount} DEPLOYMENT{m.deploymentCount !== 1 ? 'S' : ''}</div>}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* Field Deployments section */}
-      <section className="container" style={{paddingTop:24, paddingBottom:56}}>
-        <div style={{marginBottom:24}}>
-          <span className="eyebrow">FIELD DEPLOYMENTS</span>
-          <h2 className="serif" style={{fontSize:38, marginTop:6, lineHeight:1.05}}>Boxes in the bush.</h2>
-          <p style={{marginTop:10, fontSize:14, color:'var(--ink-2)', maxWidth:560}}>
-            Live status of deployed edge compute nodes. Updated whenever a node checks in.
-          </p>
-        </div>
-
-        {loading && (
-          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:16}}>
-            {Array.from({length:3}).map((_,i) => (
-              <div key={i} style={{height:120, background:'var(--bg-elev)', animation:'pulse 1.4s ease-in-out infinite', opacity:0.5}} />
-            ))}
-          </div>
-        )}
-
-        {!loading && boxes.length === 0 && (
-          <div className="card-paper" style={{padding:40, textAlign:'center'}}>
-            <div className="mono" style={{fontSize:13, color:'var(--ink-2)'}}>No field deployments configured.</div>
-          </div>
-        )}
-
-        {!loading && boxes.length > 0 && (
-          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:16}}>
-            {boxes.map((b, i) => (
-              <div key={b.id||i} className="card-paper" style={{padding:20, display:'flex', flexDirection:'column', gap:8}}>
-                <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:8}}>
-                  <div style={{fontWeight:600, fontSize:15}}>{b.siteName || b.site || `Box ${i + 1}`}</div>
-                  {b.status && (
-                    <span className="tag" style={{
-                      background: boxStatusColor(b.status),
-                      color: 'var(--paper)',
-                      borderColor: boxStatusColor(b.status),
-                      whiteSpace:'nowrap', flexShrink:0, fontSize:10
-                    }}>{b.status.toUpperCase()}</span>
-                  )}
-                </div>
-                {b.assignedModel && (
-                  <div className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>MODEL: {b.assignedModel.toUpperCase()}</div>
-                )}
-                <div style={{display:'flex', gap:16, marginTop:4, flexWrap:'wrap'}}>
-                  {b.uptime != null && (
-                    <div style={{fontSize:12, color:'var(--ink-2)'}}>
-                      <span className="mono" style={{fontSize:10, color:'var(--ink-3)', display:'block', marginBottom:1}}>UPTIME</span>
-                      {b.uptime}
-                    </div>
-                  )}
-                  {b.signalQuality != null && (
-                    <div style={{fontSize:12, color:'var(--ink-2)'}}>
-                      <span className="mono" style={{fontSize:10, color:'var(--ink-3)', display:'block', marginBottom:1}}>SIGNAL</span>
-                      {b.signalQuality}
-                    </div>
-                  )}
-                  {b.battery != null && (
-                    <div style={{fontSize:12, color:'var(--ink-2)'}}>
-                      <span className="mono" style={{fontSize:10, color:'var(--ink-3)', display:'block', marginBottom:1}}>BATTERY</span>
-                      {b.battery}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* CTA */}
-      <section className="container" style={{paddingBottom:56}}>
-        <div className="card-paper" style={{padding:40, display:'grid', gridTemplateColumns:'1fr 240px', gap:32, alignItems:'center'}}>
+      {/* The Thesis */}
+      <section className="container" style={{paddingTop:40}}>
+        <div className="grid-2" style={{gap:32}}>
           <div>
-            <span className="eyebrow">PILOT PROGRAMME</span>
-            <h3 className="serif" style={{fontSize:34, marginTop:8, lineHeight:1.05}}>Your site. Your model. Your data stays local.</h3>
-            <p style={{marginTop:12, color:'var(--ink-2)', fontSize:14, maxWidth:520}}>
-              We scope, source hardware, train on your sensor data, and deploy. No AWS bill, no internet required, no vendor lock-in.
+            <span className="eyebrow">THE THESIS</span>
+            <h2 className="serif" style={{fontSize:56,marginTop:8,lineHeight:1}}>Inference belongs<br />at the edge.</h2>
+            <p style={{marginTop:16,fontSize:16,color:'var(--ink-2)',maxWidth:520}}>
+              Cloud AI breaks when you're 700km from the nearest tower. We build inference boxes that run on 20W, survive 50°C, and don't phone home unless you tell them to. Then we train models on your data — fences, paddocks, mine sites, herds, hives — and hand back the weights.
             </p>
-            <button className="btn btn-rust" style={{marginTop:20}} onClick={() => go('quote')}>Request an AI pilot quote →</button>
+            <ul className="checks" style={{marginTop:22,fontSize:14}}>
+              <li>Privacy-first: your footage never leaves the property</li>
+              <li>Offline by default; sync metadata over LoRa or sat</li>
+              <li>Open weights — no lock-in to our hardware</li>
+              <li>We benchmark before you buy. No magic boxes.</li>
+            </ul>
           </div>
-          <div className="slot slot-rust" style={{aspectRatio:'1/1'}}>EDGE NODE · RENDER</div>
+          <div className="term">
+            <div className="mono" style={{fontSize:10,color:'var(--ink-3)',marginBottom:8}}>// PILOT — bushfire smoke detection, Mt Isa station</div>
+            <div><span className="prompt">$</span> oe deploy smoke-v2 --camera south-ridge</div>
+            <div className="ok">  ✓ model 8.9 MB · loaded in 412ms</div>
+            <div className="ok">  ✓ camera linked · stream @ 4 fps</div>
+            <div>  09:14:02 · no event</div>
+            <div>  09:14:18 · no event</div>
+            <div className="warn">  09:14:34 · smoke (conf 0.91) · alert sent · sat msg #248</div>
+            <div className="ok">  09:14:36 · ack from station phone</div>
+            <div>  09:14:50 · smoke (conf 0.94)</div>
+            <div className="warn">  09:15:06 · smoke (conf 0.96) · escalating · CFS notified</div>
+            <div><span className="prompt">$</span> <span style={{borderRight:'2px solid #d39a37'}}>_</span></div>
+          </div>
         </div>
       </section>
+
+      {/* Model Catalogue */}
+      <section className="container" style={{paddingTop:56}}>
+        <div className="row-flex" style={{justifyContent:'space-between',marginBottom:18,alignItems:'baseline'}}>
+          <div>
+            <span className="eyebrow">MODEL CATALOGUE · OPEN WEIGHTS</span>
+            <h2 className="serif" style={{fontSize:40,marginTop:6}}>Six models on the shelf.</h2>
+          </div>
+          <a className="mono" style={{fontSize:12,color:'var(--rust)',cursor:'pointer'}} onClick={() => go('quote')}>NEED A CUSTOM MODEL? →</a>
+        </div>
+        <div style={{border:'1px solid var(--line)',background:'var(--paper)'}}>
+          <div style={{display:'grid',gridTemplateColumns:'1.5fr 2fr 1fr 1fr 1.5fr 100px',padding:'14px 20px',borderBottom:'2px solid var(--ink)',background:'var(--bg-elev)',fontFamily:'JetBrains Mono, monospace',fontSize:11,letterSpacing:'.08em'}}>
+            <div>MODEL</div><div>TASK</div><div>SIZE</div><div>ACCURACY</div><div>RECOMMENDED HW</div><div></div>
+          </div>
+          {models.length === 0 && (
+            <div className="mono" style={{padding:'18px 20px',fontSize:12,color:'var(--ink-2)'}}>No models listed yet.</div>
+          )}
+          {models.map((m, i) => (
+            <div key={m.name || i} style={{display:'grid',gridTemplateColumns:'1.5fr 2fr 1fr 1fr 1.5fr 100px',padding:'18px 20px',borderTop:i===0?'none':'1px solid var(--line)',alignItems:'center',fontSize:14}}>
+              <div className="mono" style={{color:'var(--rust)'}}>{m.name}</div>
+              <div>{m.task}</div>
+              <div className="mono" style={{fontSize:12}}>{m.size}</div>
+              <div className="mono" style={{fontSize:12}}>{m.acc}</div>
+              <div style={{fontSize:13,color:'var(--ink-2)'}}>{m.hw}</div>
+              <div><button className="btn btn-ghost btn-sm" onClick={() => setSelectedModel(m)}>Card →</button></div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Hardware */}
+      <section className="container" style={{paddingTop:56,paddingBottom:40}}>
+        <div className="grid-3">
+          {[
+            {t:'Inference Box · S', p:'$2,490', d:'Raspberry Pi 5, Coral TPU, IP66 case, PoE-in. Up to 30fps on small models.', hw:'18W typical'},
+            {t:'Inference Box · M', p:'$5,890', d:'Jetson Orin Nano, NVMe, IP66 + sunshade, 12–48V DC. Our most-shipped unit.', hw:'25W typical', highlight:true},
+            {t:'Inference Box · L', p:'$11,490', d:'Jetson Orin NX 16GB, 4× camera, mesh + sat, ruggedised for ute-roof mount.', hw:'42W typical'},
+          ].map((box, i) => (
+            <div key={i} style={{padding:32,background:box.highlight?'var(--dark)':'var(--paper)',color:box.highlight?'var(--paper)':'var(--ink)',border:'1px solid',borderColor:box.highlight?'var(--dark)':'var(--line)'}}>
+              {box.highlight && <span className="tag tag-ochre">MOST SHIPPED</span>}
+              <h3 className="serif" style={{fontSize:32,marginTop:box.highlight?14:0,lineHeight:1.05}}>{box.t}</h3>
+              <div className="price" style={{fontSize:36,marginTop:10}}>{box.p}</div>
+              <p style={{marginTop:14,fontSize:14,color:box.highlight?'var(--bg-deep)':'var(--ink-2)'}}>{box.d}</p>
+              <div className="mono" style={{fontSize:11,marginTop:14,opacity:0.7}}>{box.hw.toUpperCase()}</div>
+              <button className="btn btn-rust" style={{marginTop:20,width:'100%',justifyContent:'center'}} onClick={() => go('quote')}>Spec it →</button>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* AI in Action — video */}
+      <section className="container" style={{paddingTop:56,paddingBottom:56}}>
+        <span className="eyebrow">AI IN ACTION</span>
+        <h2 className="serif" style={{fontSize:40,marginTop:6,marginBottom:8}}>What it's like to be an AI</h2>
+        <p style={{fontSize:13,color:'var(--ink-3)',fontFamily:'JetBrains Mono, monospace',marginBottom:24,maxWidth:620}}>
+          This video was created entirely by Claude AI, using only HTML code, no image or true video generation.
+        </p>
+        <div style={{position:'relative',width:'100%',paddingBottom:'56.25%',background:'#000',border:'1px solid var(--line)'}}>
+          <iframe
+            src="/assets/ai-video.html"
+            title="What It's Like to Be an AI"
+            style={{position:'absolute',inset:0,width:'100%',height:'100%',border:'none'}}
+            allow="autoplay"
+          />
+        </div>
+      </section>
+
+      {selectedModel && <AIModelModal model={selectedModel} onClose={() => setSelectedModel(null)} go={go} />}
     </>
   );
 }
