@@ -6,23 +6,8 @@ APP_DIR="$(cd "$(dirname "$0")" && pwd)"
 NODE_BIN="$(which node)"
 NPM_BIN="$(which npm)"
 
-# ── Preserve live data files before git reset wipes them ────────────────────
-BACKUP_DIR="$(mktemp -d)"
-echo "==> Backing up data files to $BACKUP_DIR..."
-for f in "$APP_DIR"/*.db "$APP_DIR"/.env; do
-    [ -f "$f" ] && cp "$f" "$BACKUP_DIR/" && echo "    backed up: $(basename "$f")"
-done
-
 echo "==> Pulling latest from main..."
-git -C "$APP_DIR" fetch origin main
-git -C "$APP_DIR" reset --hard origin/main
-
-# ── Restore data files ────────────────────────────────────────────────────────
-echo "==> Restoring data files..."
-for f in "$BACKUP_DIR"/*; do
-    [ -f "$f" ] && cp "$f" "$APP_DIR/" && echo "    restored: $(basename "$f")"
-done
-rm -rf "$BACKUP_DIR"
+git -C "$APP_DIR" pull origin main
 
 echo "==> Installing dependencies (including dev for build)..."
 "$NPM_BIN" --prefix "$APP_DIR" install
