@@ -149,6 +149,9 @@ Username required (not email). New users arriving from a warranty link or order 
 ### ❌ 29. Stale docs describe a settings.defaults.json merge pattern that no longer exists
 `README.md` (lines 45, 57) and `CLAUDE.md` (line 66) both describe `settings.db` being merged over `settings.defaults.json` on every read. This is wrong — the file doesn't exist, `readSettings()` uses inline fallbacks only, and all settings are written to `settings.db` via admin → Settings. Both doc files need to be corrected to reflect the actual pattern.
 
+### ❌ 30. Purchasing items does not update stock numbers
+Completing a purchase does not decrement the stock count on the purchased product(s) in `products.db`. Stock figures shown in admin and on product pages remain stale after orders are placed.
+
 ---
 
 ## Summary table
