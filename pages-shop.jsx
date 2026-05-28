@@ -1050,8 +1050,10 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
 const SHOP_LAT = -35.9845;
 const SHOP_LNG = 144.7730;
 const CALLOUT_FREE_KM = 10;
-const CALLOUT_MAX_KM = 400;
-const CALLOUT_RATE = 220 / 400; // $/km (round trip fuel cost per one-way km)
+const CALLOUT_FUEL_RATE = 220 / 400;  // $0.55/km round trip
+const CALLOUT_KM_PER_DAY = 480;        // 6h × 80km/h
+const CALLOUT_DAILY_RATE = 150;
+const CALLOUT_DAILY_THRESHOLD_KM = 400;
 
 function haversineKm(lat1, lng1, lat2, lng2) {
   const R = 6371;
@@ -1063,7 +1065,19 @@ function haversineKm(lat1, lng1, lat2, lng2) {
 
 function calloutFeeAud(distKm) {
   if (distKm <= CALLOUT_FREE_KM) return 0;
-  return Math.round(distKm * CALLOUT_RATE);
+  const fuel = distKm * CALLOUT_FUEL_RATE;
+  const daily = distKm > CALLOUT_DAILY_THRESHOLD_KM
+    ? Math.ceil(distKm / CALLOUT_KM_PER_DAY) * 2 * CALLOUT_DAILY_RATE
+    : 0;
+  return Math.round(fuel + daily);
+}
+
+function calloutFeeBreakdown(distKm) {
+  if (distKm <= CALLOUT_FREE_KM) return null;
+  const fuel = Math.round(distKm * CALLOUT_FUEL_RATE);
+  if (distKm <= CALLOUT_DAILY_THRESHOLD_KM) return `${distKm}km · $0.55/km fuel`;
+  const days = Math.ceil(distKm / CALLOUT_KM_PER_DAY);
+  return `${distKm}km · $${fuel} fuel + ${days * 2} travel days × $${CALLOUT_DAILY_RATE}`;
 }
 
 function ServiceDetailPage({ go, pageParams }) {
@@ -1104,11 +1118,9 @@ function ServiceDetailPage({ go, pageParams }) {
   const fixedPrice = service ? Number(service.priceAud) : NaN;
   const hasFixedPrice = service && !isNaN(fixedPrice) && fixedPrice > 0;
   const travelFee = distanceKm !== null ? calloutFeeAud(distanceKm) : null;
-  const outOfRange = distanceKm !== null && distanceKm > CALLOUT_MAX_KM;
 
   const handlePayAndBook = async (e) => {
     e.preventDefault();
-    if (outOfRange) return;
     setBookError(null);
     setBooking(true);
     try {
@@ -1203,13 +1215,11 @@ function ServiceDetailPage({ go, pageParams }) {
                 <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginBottom:14}}>Checking distance…</div>
               )}
               {!geocoding && distanceKm !== null && (
-                <div style={{marginBottom:14, padding:'10px 14px', fontSize:13, border:'1px solid var(--line)', background: outOfRange ? 'var(--rust)' : distanceKm <= CALLOUT_FREE_KM ? 'var(--bg-elev)' : 'var(--bg-elev)', color: outOfRange ? 'var(--paper)' : 'inherit'}}>
-                  {outOfRange ? (
-                    <>That's {distanceKm}km away — outside our {CALLOUT_MAX_KM}km range. <a style={{color:'inherit', textDecoration:'underline', cursor:'pointer'}} onClick={() => go('quote', service)}>Request a quote</a> and we'll figure out postal or remote options.</>
-                  ) : distanceKm <= CALLOUT_FREE_KM ? (
+                <div style={{marginBottom:14, padding:'10px 14px', fontSize:13, border:'1px solid var(--line)', background:'var(--bg-elev)'}}>
+                  {distanceKm <= CALLOUT_FREE_KM ? (
                     <><span style={{color:'var(--rust)', fontWeight:600}}>✓ Free callout</span> — you're {distanceKm}km away.</>
                   ) : (
-                    <><span style={{fontWeight:600}}>+${travelFee} travel fee</span> — {distanceKm}km at $0.55/km (round trip fuel). Added to your total.</>
+                    <><span style={{fontWeight:600}}>+${travelFee} travel fee</span> — {calloutFeeBreakdown(distanceKm)}. Added to your total.</>
                   )}
                 </div>
               )}
@@ -1223,7 +1233,7 @@ function ServiceDetailPage({ go, pageParams }) {
               </label>
               {bookError && <div style={{color:'var(--rust)', fontSize:13, marginBottom:12}}>{bookError}</div>}
               <div style={{display:'flex', gap:12, alignItems:'center'}}>
-                <button type="submit" className="btn btn-rust" style={{flex:1, justifyContent:'center'}} disabled={booking || outOfRange}>
+                <button type="submit" className="btn btn-rust" style={{flex:1, justifyContent:'center'}} disabled={booking}>
                   {booking ? 'Redirecting…' : travelFee > 0
                     ? `Pay now — $${(fixedPrice + travelFee).toLocaleString('en-AU', {minimumFractionDigits:2})} (incl. travel) →`
                     : `Pay now — $${fixedPrice.toLocaleString('en-AU', {minimumFractionDigits:2})} →`}

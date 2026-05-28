@@ -1895,18 +1895,26 @@ const mainServer = http.createServer(async (req, res) => {
     // Validate and apply gift card if provided
     // Validate shipping amount (server-side cap to prevent manipulation: max $200)
     const validatedShipping = shippingAmount && Number(shippingAmount) > 0 ? Math.min(200, Number(shippingAmount)) : 0;
-    // Travel/callout fee — calculated server-side from reported distance
-    // Rate: $110/tank, 400km one-way range = round trip cost $220 for 400km = $0.55/km. Free within 10km. Max 400km.
+    // Travel/callout fee — calculated server-side from reported one-way distance.
+    // Fuel: $0.55/km round trip ($110/tank ÷ 400km × 2). Free within 10km.
+    // Daily allowance (D > 400km): $150/day, 6h driving/day at ~80km/h = 480km/day; ×2 for return.
     const CALLOUT_FREE_KM = 10;
-    const CALLOUT_MAX_KM = 400;
-    const CALLOUT_RATE = 220 / 400; // $/km (round trip fuel cost per one-way km)
+    const CALLOUT_FUEL_RATE = 220 / 400;  // $0.55/km round trip
+    const CALLOUT_KM_PER_DAY = 480;        // 6h × 80km/h
+    const CALLOUT_DAILY_RATE = 150;
+    const CALLOUT_DAILY_THRESHOLD_KM = 400;
     const reportedDistanceKm = Number(body.travelDistanceKm) || 0;
-    if (reportedDistanceKm < 0 || reportedDistanceKm > CALLOUT_MAX_KM + 1) {
-      return json(res, 422, { error: 'out_of_range', message: 'Location is outside our service area.' });
+    if (reportedDistanceKm < 0 || reportedDistanceKm > 5000) {
+      return json(res, 422, { error: 'invalid_distance', message: 'Invalid distance value.' });
     }
-    const validatedTravelFee = reportedDistanceKm > CALLOUT_FREE_KM
-      ? Math.round(reportedDistanceKm * CALLOUT_RATE)
-      : 0;
+    let validatedTravelFee = 0;
+    if (reportedDistanceKm > CALLOUT_FREE_KM) {
+      const fuelCost = reportedDistanceKm * CALLOUT_FUEL_RATE;
+      const dailyCost = reportedDistanceKm > CALLOUT_DAILY_THRESHOLD_KM
+        ? Math.ceil(reportedDistanceKm / CALLOUT_KM_PER_DAY) * 2 * CALLOUT_DAILY_RATE
+        : 0;
+      validatedTravelFee = Math.round(fuelCost + dailyCost);
+    }
 
     let gcDiscount = 0;
     let gcCodeNorm = '';
