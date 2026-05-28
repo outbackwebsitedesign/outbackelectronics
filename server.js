@@ -560,6 +560,29 @@ function isSecureRequest(req) {
   return req.socket.encrypted || xfProto === 'https';
 }
 
+// Set / clear both customer session cookies in one call (forum + portal share the same accounts)
+function setCustomerSessionCookies(res, user, req) {
+  const sid = randomId();
+  const sessionData = { id: user.id, username: user.username, displayName: user.displayName, createdAt: user.createdAt, expiresAt: now() + PORTAL_SESSION_TTL_MS };
+  forumSessions.set(sid, { ...sessionData, expiresAt: now() + FORUM_SESSION_TTL_MS });
+  portalSessions.set(sid, sessionData);
+  saveSessionsToDisk(FORUM_SESSIONS_DB_PATH, forumSessions);
+  saveSessionsToDisk(PORTAL_SESSIONS_DB_PATH, portalSessions);
+  res.setHeader('Set-Cookie', [
+    sessionCookie('oe_forum_session',  sid, Math.floor(FORUM_SESSION_TTL_MS  / 1000), req),
+    sessionCookie('oe_portal_session', sid, Math.floor(PORTAL_SESSION_TTL_MS / 1000), req),
+  ]);
+  return sid;
+}
+function clearCustomerSessionCookies(res, req, forumSid, portalSid) {
+  if (forumSid)  { forumSessions.delete(forumSid);  saveSessionsToDisk(FORUM_SESSIONS_DB_PATH,  forumSessions); }
+  if (portalSid) { portalSessions.delete(portalSid); saveSessionsToDisk(PORTAL_SESSIONS_DB_PATH, portalSessions); }
+  res.setHeader('Set-Cookie', [
+    sessionCookie('oe_forum_session',  '', 0, req),
+    sessionCookie('oe_portal_session', '', 0, req),
+  ]);
+}
+
 function sessionCookie(name, value, maxAgeSec, req) {
   const parts = [`${name}=${value}`, 'HttpOnly', 'SameSite=Strict', 'Path=/', `Max-Age=${maxAgeSec}`];
   if (isSecureRequest(req)) parts.push('Secure');
@@ -2621,11 +2644,7 @@ const mainServer = http.createServer(async (req, res) => {
     const token = randomId();
     for (const [k, v] of rewardsTokens) { if (v.expiresAt < Date.now()) rewardsTokens.delete(k); }
     rewardsTokens.set(token, { email, userId: user.id, points, expiresAt: Date.now() + 30 * 60 * 1000 });
-    // Also sign them into the portal session so the cookie persists across the site
-    const sid = randomId();
-    portalSessions.set(sid, { id: user.id, username: user.username, displayName: user.displayName, createdAt: user.createdAt, expiresAt: now() + PORTAL_SESSION_TTL_MS });
-    saveSessionsToDisk(PORTAL_SESSIONS_DB_PATH, portalSessions);
-    res.setHeader('Set-Cookie', sessionCookie('oe_portal_session', sid, Math.floor(PORTAL_SESSION_TTL_MS / 1000), req));
+    setCustomerSessionCookies(res, user, req);
     return json(res, 200, { ok: true, points, token, displayName: user.displayName || user.username });
   }
 
@@ -2826,10 +2845,8 @@ const forumServer = http.createServer(async (req, res) => {
     const user = { id: 'U-' + Date.now(), username, firstName, lastName, displayName: resolvedDisplayName, email, phone, address, passwordHash: hashPassword(password), createdAt: new Date().toISOString() };
     forum.users.push(user);
     writeForum(forum);
-    const sid = randomId();
-    forumSessions.set(sid, { id: user.id, username: user.username, displayName: user.displayName, createdAt: user.createdAt, expiresAt: now() + FORUM_SESSION_TTL_MS });
-    saveSessionsToDisk(FORUM_SESSIONS_DB_PATH, forumSessions);
-    res.setHeader('Set-Cookie', sessionCookie('oe_forum_session', sid, Math.floor(FORUM_SESSION_TTL_MS / 1000), req));
+    grantRewardPoints(email, 50, 'bonus', 'Welcome bonus', `signup-${user.id}`);
+    setCustomerSessionCookies(res, user, req);
     if (email) {
       const tmpl = emailPortalWelcome({ username: user.username, displayName: user.displayName });
       sendEmail({ to: email, ...tmpl });
@@ -2860,17 +2877,14 @@ const forumServer = http.createServer(async (req, res) => {
       return json(res, 401, { ok: false, message: 'Invalid username or password.' });
     }
     clearFailures(forumLoginKey);
-    const sid = randomId();
-    forumSessions.set(sid, { id: user.id, username: user.username, displayName: user.displayName, createdAt: user.createdAt, expiresAt: now() + FORUM_SESSION_TTL_MS });
-    saveSessionsToDisk(FORUM_SESSIONS_DB_PATH, forumSessions);
-    res.setHeader('Set-Cookie', sessionCookie('oe_forum_session', sid, Math.floor(FORUM_SESSION_TTL_MS / 1000), req));
+    setCustomerSessionCookies(res, user, req);
     return json(res, 200, { ok: true, user: { id: user.id, username: user.username, displayName: user.displayName, createdAt: user.createdAt } });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/forum/auth/logout') {
     const forumSession = getForumSession(req);
-    if (forumSession) { forumSessions.delete(forumSession.sid); saveSessionsToDisk(FORUM_SESSIONS_DB_PATH, forumSessions); }
-    res.setHeader('Set-Cookie', sessionCookie('oe_forum_session', '', 0, req));
+    const portalSession = getPortalSession(req);
+    clearCustomerSessionCookies(res, req, forumSession?.sid, portalSession?.sid);
     return json(res, 200, { ok: true });
   }
 
@@ -4455,10 +4469,7 @@ const portalServer = http.createServer(async (req, res) => {
       return json(res, 401, { ok: false, message: 'Invalid username or password.' });
     }
     loginAttempts.delete(portalKey);
-    const sid = randomId();
-    portalSessions.set(sid, { id: user.id, username: user.username, displayName: user.displayName, createdAt: user.createdAt, expiresAt: now() + PORTAL_SESSION_TTL_MS });
-    saveSessionsToDisk(PORTAL_SESSIONS_DB_PATH, portalSessions);
-    res.setHeader('Set-Cookie', sessionCookie('oe_portal_session', sid, Math.floor(PORTAL_SESSION_TTL_MS / 1000), req));
+    setCustomerSessionCookies(res, user, req);
     return json(res, 200, { ok: true, user: { id: user.id, username: user.username, displayName: user.displayName, createdAt: user.createdAt } });
   }
 
@@ -4488,10 +4499,7 @@ const portalServer = http.createServer(async (req, res) => {
     forum.users.push(user);
     writeForum(forum);
     grantRewardPoints(email, 50, 'bonus', 'Welcome bonus', `signup-${user.id}`);
-    const sid = randomId();
-    portalSessions.set(sid, { id: user.id, username: user.username, displayName: user.displayName, createdAt: user.createdAt, expiresAt: now() + PORTAL_SESSION_TTL_MS });
-    saveSessionsToDisk(PORTAL_SESSIONS_DB_PATH, portalSessions);
-    res.setHeader('Set-Cookie', sessionCookie('oe_portal_session', sid, Math.floor(PORTAL_SESSION_TTL_MS / 1000), req));
+    setCustomerSessionCookies(res, user, req);
     if (email) {
       const tmpl = emailPortalWelcome({ username: user.username, displayName: user.displayName });
       sendEmail({ to: email, ...tmpl });
@@ -4500,9 +4508,9 @@ const portalServer = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/portal/auth/logout') {
+    const forumSession = getForumSession(req);
     const session = getPortalSession(req);
-    if (session) { portalSessions.delete(session.sid); saveSessionsToDisk(PORTAL_SESSIONS_DB_PATH, portalSessions); }
-    res.setHeader('Set-Cookie', sessionCookie('oe_portal_session', '', 0, req));
+    clearCustomerSessionCookies(res, req, forumSession?.sid, session?.sid);
     return json(res, 200, { ok: true });
   }
 
