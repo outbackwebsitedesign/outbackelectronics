@@ -2,6 +2,19 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## ⚠️ CRITICAL — DATA SAFETY — READ THIS FIRST
+
+**The `.db` files are the entire business database.** They are not in the repo (gitignored) but live alongside the code on the production server. They contain every order, customer, product, service, forum post, repair job, and financial record.
+
+**NEVER, under any circumstances:**
+- Use `git reset --hard` — it deletes all untracked files, including every `.db` file
+- Use `git clean -f` or `git clean -fd` — same result
+- Suggest or write any script, command, or deploy step that could wipe untracked files
+
+**For deployment, always use `git pull`** — it only updates tracked files and leaves `.db` files and `.env` alone.
+
+This mistake was made once and wiped the entire live database. Do not let it happen again.
+
 ## Commands
 
 ```bash
