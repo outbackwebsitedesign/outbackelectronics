@@ -2280,7 +2280,12 @@ const mainServer = http.createServer(async (req, res) => {
     return json(res, 200, { received: true });
   }
 
-  // ── Gift card: balance lookup ────────────────────────────────────────────────
+  // ── Gift card: denominations (public) ────────────────────────────────────────
+  if (req.method === 'GET' && url.pathname === '/api/shop/gift-card-denominations') {
+    return json(res, 200, { items: readDenominations().filter(d => d.status === 'published') });
+  }
+
+// ── Gift card: balance lookup ────────────────────────────────────────────────
   if (req.method === 'GET' && url.pathname === '/api/gift-card/balance') {
     if (publicRateLimited(getIp(req), 'gift-card/balance')) return json(res, 429, { error: 'too_many_requests' });
     const code = (url.searchParams.get('code') || '').trim().toUpperCase();
@@ -2877,11 +2882,6 @@ const adminServer = http.createServer(async (req, res) => {
       sendEmail({ to: recipientEmail, ...tmpl });
     }
     return json(res, 201, { ok: true, card });
-  }
-
-  if (req.method === 'GET' && url.pathname === '/api/shop/gift-card-denominations') {
-    const denoms = readDenominations();
-    return json(res, 200, { items: denoms.filter(d => d.status === 'published') });
   }
 
   if (req.method === 'GET' && url.pathname === '/api/admin/gift-cards/denominations') {
