@@ -31,7 +31,7 @@ const DEFAULT_TIERS = [
       'Everything in Basic',
       'Pro-only blog posts & build logs',
       'Pro member groups',
-      '10% discount on all shop purchases',
+      '1% discount on all shop purchases',
       'Priority support queue',
     ],
     color: 'tag-rust',
@@ -45,7 +45,7 @@ const DEFAULT_TIERS = [
     features: [
       'Everything in Pro',
       'Elite-only groups & special content',
-      '20% discount on all shop purchases',
+      '2% discount on all shop purchases',
       'One free bench diagnostic per month',
       'Workshop & field event invites',
       'Direct line to the tech team',
