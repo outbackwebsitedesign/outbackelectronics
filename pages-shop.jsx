@@ -761,95 +761,90 @@ function ModelCardModal({ model, onClose, go }) {
   );
 }
 
+const AI_SERVICES = [
+  {
+    tag: 'INTEGRATION',
+    title: 'Custom Integration',
+    desc: 'We wire AI into your existing systems — APIs, databases, workflows. If you have a process, we can find where intelligence fits.',
+  },
+  {
+    tag: 'CONVERSATIONAL',
+    title: 'Chatbots',
+    desc: 'Purpose-built conversational agents for customer support, internal tooling, or guided workflows. Trained on your content, deployed on your terms.',
+  },
+  {
+    tag: 'PROJECT-SPECIFIC',
+    title: 'Project AI',
+    desc: 'AI scoped to a single project — one problem, one solution, built to fit. No bloat, no generic model handed over with a PDF.',
+  },
+  {
+    tag: 'DOMAIN',
+    title: 'Subject-Specific AI',
+    desc: 'Models fine-tuned on a particular field or discipline. If your domain has a body of knowledge, we can build a model that understands it.',
+  },
+  {
+    tag: 'LARGE LANGUAGE MODELS',
+    title: 'LLM Work',
+    desc: 'Prompt engineering, fine-tuning, RAG pipelines, and production deployment of large language models for real business problems.',
+  },
+  {
+    tag: 'SMALL LANGUAGE MODELS',
+    title: 'SLM Work',
+    desc: 'Compact, efficient models that run fast and cost less to operate. Right-sized intelligence for constrained environments or high-volume inference.',
+  },
+];
+
 function AIPage({ go }) {
-  const [modelCard, setModelCard] = React.useState(null);
-  const [models, setModels] = useState([]);
-  const [boxes, setBoxes] = useState([]);
-  useEffect(() => {
-    fetch('/api/ai').then(r => r.ok ? r.json() : Promise.reject()).then(d => {
-      setModels(d.models || []);
-      setBoxes(d.boxes || []);
-    }).catch(() => {});
-  }, []);
   return (
     <>
       <PageHead crumbs={['Outback','AI']} title="Artificial Intelligence"
         kicker={<span className="tag tag-rust">NEW 2026 · BETA PRICING</span>}
-        lead="Edge models, ruggedised inference boxes, and a training pipeline for whoever has a problem and a hard drive full of paddock footage." />
+        lead="Custom AI built to your problem — from production chatbots and integrations to subject-specific models and frontier research into artificial general intelligence." />
 
-      <section className="container" style={{paddingTop: 40}}>
-        <div className="grid-2" style={{gap:32}}>
-          <div>
-            <span className="eyebrow">THE THESIS</span>
-            <h2 className="serif" style={{fontSize: 56, marginTop:8, lineHeight:1}}>Inference belongs<br/>at the edge.</h2>
-            <p style={{marginTop: 16, fontSize: 16, color:'var(--ink-2)', maxWidth:520}}>
-              Cloud AI breaks when you're 700km from the nearest tower. We build inference boxes that run on 20W, survive 50°C, and don't phone home unless you tell them to. Then we train models on your data — fences, paddocks, mine sites, herds, hives — and hand back the weights.
+      <section className="container" style={{paddingTop: 40, paddingBottom: 16}}>
+        <span className="eyebrow">WHAT WE BUILD</span>
+        <h2 className="serif" style={{fontSize: 48, marginTop: 8, lineHeight: 1.1, maxWidth: 640}}>AI for real problems.<br/>Built to spec.</h2>
+        <p style={{marginTop: 16, fontSize: 16, color: 'var(--ink-2)', maxWidth: 560}}>
+          We don't sell a platform or lock you into a product. Every engagement starts with your problem and ends with something that solves it — whether that's a chatbot, a fine-tuned model, or a full integration into your stack.
+        </p>
+      </section>
+
+      <section className="container" style={{paddingTop: 32, paddingBottom: 16}}>
+        <div className="grid-2" style={{gap: 1, border: '1px solid var(--line)', background: 'var(--line)'}}>
+          {AI_SERVICES.map((s) => (
+            <div key={s.tag} style={{background: 'var(--paper)', padding: 32}}>
+              <span className="eyebrow" style={{fontSize: 10}}>{s.tag}</span>
+              <h3 className="serif" style={{fontSize: 26, marginTop: 8, marginBottom: 10}}>{s.title}</h3>
+              <p style={{fontSize: 14, color: 'var(--ink-2)', lineHeight: 1.6, margin: 0}}>{s.desc}</p>
+            </div>
+          ))}
+        </div>
+        <div style={{marginTop: 24, textAlign: 'center'}}>
+          <button className="btn btn-rust" onClick={() => go('quote')}>Talk to us about your project →</button>
+        </div>
+      </section>
+
+      <section className="container" style={{paddingTop: 56, paddingBottom: 16}}>
+        <div className="grid-2" style={{gap: 32, alignItems: 'start'}}>
+          <div style={{padding: 40, background: 'var(--dark)', color: 'var(--paper)', border: '1px solid var(--line)'}}>
+            <span className="tag tag-rust" style={{marginBottom: 16, display: 'inline-block'}}>RESEARCH · AGI</span>
+            <h2 className="serif" style={{fontSize: 40, lineHeight: 1.1, marginTop: 12}}>Attempting true AGI.</h2>
+            <p style={{marginTop: 16, fontSize: 15, color: 'var(--bg-deep)', lineHeight: 1.7}}>
+              We are actively pursuing artificial general intelligence — not as a marketing claim, but as a research direction. This is hard, unsolved, and we say so plainly. If you want to follow the work or collaborate, get in touch.
             </p>
-            <ul className="checks" style={{marginTop: 22, fontSize:14}}>
-              <li>Privacy-first: your footage never leaves the property</li>
-              <li>Offline by default; sync metadata over LoRa or sat</li>
-              <li>Open weights — no lock-in to our hardware</li>
-              <li>We benchmark before you buy. No magic boxes.</li>
-            </ul>
+            <button className="btn btn-rust" style={{marginTop: 28}} onClick={() => go('quote')}>Get in touch →</button>
           </div>
-          <div className="term">
-            <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:8}}>// PILOT — bushfire smoke detection, Mt Isa station</div>
-            <div><span className="prompt">$</span> oe deploy smoke-v2 --camera south-ridge</div>
-            <div className="ok">  ✓ model 8.9 MB · loaded in 412ms</div>
-            <div className="ok">  ✓ camera linked · stream @ 4 fps</div>
-            <div>  09:14:02 · no event</div>
-            <div>  09:14:18 · no event</div>
-            <div className="warn">  09:14:34 · smoke (conf 0.91) · alert sent · sat msg #248</div>
-            <div className="ok">  09:14:36 · ack from station phone</div>
-            <div>  09:14:50 · smoke (conf 0.94)</div>
-            <div className="warn">  09:15:06 · smoke (conf 0.96) · escalating · CFS notified</div>
-            <div><span className="prompt">$</span> <span style={{borderRight:'2px solid #d39a37'}}>_</span></div>
+          <div style={{padding: 40, background: 'var(--paper)', border: '1px solid var(--line)'}}>
+            <span className="tag tag-euc" style={{marginBottom: 16, display: 'inline-block'}}>RESEARCH · HUMANLY AI</span>
+            <h2 className="serif" style={{fontSize: 40, lineHeight: 1.1, marginTop: 12}}>Growing a mind from scratch.</h2>
+            <p style={{marginTop: 16, fontSize: 15, color: 'var(--ink-2)', lineHeight: 1.7}}>
+              Humanly AI is an attempt to grow a sandboxed digital cognitive organism from raw sensory experience — using developmental learning principles modeled after the human brain. No pretraining on human knowledge. No shortcuts. The goal is to see whether genuine cognition can emerge from the bottom up.
+            </p>
+            <button className="btn btn-ghost" style={{marginTop: 28}} onClick={() => go('quote')}>Follow the research →</button>
           </div>
         </div>
       </section>
 
-      <section className="container" style={{paddingTop: 56}}>
-        <div className="row-flex" style={{justifyContent:'space-between', marginBottom: 18, alignItems:'baseline'}}>
-          <div>
-            <span className="eyebrow">MODEL CATALOGUE · OPEN WEIGHTS</span>
-            <h2 className="serif" style={{fontSize: 40, marginTop:6}}>Six models on the shelf.</h2>
-          </div>
-          <a className="mono" style={{fontSize:12, color:'var(--rust)', cursor:'pointer'}} onClick={() => go('quote')}>NEED A CUSTOM MODEL? →</a>
-        </div>
-        <div style={{border:'1px solid var(--line)', background:'var(--paper)'}}>
-          <div style={{display:'grid', gridTemplateColumns:'1.5fr 2fr 1fr 1fr 1.5fr 100px', padding:'14px 20px', borderBottom:'2px solid var(--ink)', background:'var(--bg-elev)', fontFamily:'JetBrains Mono, monospace', fontSize:11, letterSpacing:'.08em'}}>
-            <div>MODEL</div><div>TASK</div><div>SIZE</div><div>ACCURACY</div><div>RECOMMENDED HW</div><div></div>
-          </div>
-          {models.length === 0 && <div className="mono" style={{padding:'18px 20px', fontSize:12, color:'var(--ink-2)'}}>No models listed yet.</div>}
-          {models.map((m,i) => (
-            <div key={m.name||i} style={{display:'grid', gridTemplateColumns:'1.5fr 2fr 1fr 1fr 1.5fr 100px', padding:'18px 20px', borderTop: i===0?'none':'1px solid var(--line)', alignItems:'center', fontSize:14}}>
-              <div className="mono" style={{color:'var(--rust)'}}>{m.name}</div>
-              <div>{m.task}</div>
-              <div className="mono" style={{fontSize:12}}>{m.size}</div>
-              <div className="mono" style={{fontSize:12}}>{m.acc}</div>
-              <div style={{fontSize:13, color:'var(--ink-2)'}}>{m.hw}</div>
-              <div><button className="btn btn-ghost btn-sm" onClick={() => setModelCard(m)}>Card →</button></div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {boxes.length > 0 && (
-      <section className="container" style={{paddingTop: 56, paddingBottom: 40}}>
-        <div className="grid-3">
-          {boxes.map((b, i) => (
-            <div key={b.id || i} style={{padding: 32, background: b.highlight ? 'var(--dark)' : 'var(--paper)', color: b.highlight ? 'var(--paper)' : 'var(--ink)', border:'1px solid', borderColor: b.highlight ? 'var(--dark)' : 'var(--line)'}}>
-              {b.highlight && <span className="tag tag-ochre">MOST SHIPPED</span>}
-              <h3 className="serif" style={{fontSize: 32, marginTop: b.highlight?14:0, lineHeight:1.05}}>{b.name || b.t}</h3>
-              <div className="price" style={{fontSize: 36, marginTop: 10}}>{b.price != null ? `$${Number(b.price).toLocaleString()}` : (b.p || 'POA')}</div>
-              <p style={{marginTop: 14, fontSize:14, color: b.highlight ? 'var(--bg-deep)' : 'var(--ink-2)'}}>{b.description || b.d}</p>
-              {(b.wattage || b.hw) && <div className="mono" style={{fontSize:11, marginTop:14, opacity:.7}}>{(b.wattage || b.hw).toUpperCase()}</div>}
-              <button className="btn btn-rust" style={{marginTop: 20, width:'100%', justifyContent:'center'}} onClick={() => go('quote')}>Spec it →</button>
-            </div>
-          ))}
-        </div>
-      </section>
-      )}
       <section className="container" style={{paddingTop: 56, paddingBottom: 56}}>
         <span className="eyebrow">AI IN ACTION</span>
         <h2 className="serif" style={{fontSize: 40, marginTop: 6, marginBottom: 8}}>What it's like to be an AI</h2>
@@ -865,8 +860,6 @@ function AIPage({ go }) {
           />
         </div>
       </section>
-
-      {modelCard && <ModelCardModal model={modelCard} onClose={() => setModelCard(null)} go={go} />}
     </>
   );
 }
