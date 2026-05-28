@@ -1543,7 +1543,8 @@ function HumanlyAIPage({ go }) {
           <p style={{fontSize: 16, color: 'var(--ink-2)', lineHeight: 1.8, marginBottom: 36}}>
             We don't know if it will work. We think it's worth trying.
           </p>
-          <div className="mono" style={{fontSize: 11, color: 'var(--ink-3)', letterSpacing: '.1em'}}>// Biology is the developmental template. Silicon is the substrate.</div>
+          <div className="mono" style={{fontSize: 11, color: 'var(--ink-3)', marginBottom: 24, letterSpacing: '.1em'}}>// Biology is the developmental template. Silicon is the substrate.</div>
+          <button className="btn btn-ghost" onClick={() => go('contact')}>Get in touch →</button>
         </div>
       </section>
     </>
