@@ -10,13 +10,11 @@
 
 ## CRITICAL — Breaks or silently degrades real user flows
 
-### ❌ 1. shop.email not set in admin Settings
-`readSettings()` falls back to `shop: {}` when settings.db is absent or missing the key. Until an admin sets the contact email via admin → Settings → Shop, every staff notification (contact forms, quote requests, warranty registrations, order confirmations) falls back to `NOTIFY_EMAIL` → `SMTP_USER`, which may also be empty. Contact page renders `—` when empty (pages-info.jsx:342).  
-**Fix:** Set shop email in admin → Settings.
+### ✅ 1. shop.email not set in admin Settings (RESOLVED)
+`settings.db` is the single source of truth — all settings are read from and written to it via admin → Settings. An unset email is just an unset field, not a silent fallback issue. Set via admin → Settings → Shop if not already done.
 
-### ❌ 2. shop.description not set in admin Settings
-Footer falls back to hardcoded string `'An independent electronics outpost serving remote Australia...'` (app.jsx:565) when not set.  
-**Fix:** Set shop description in admin → Settings.
+### ✅ 2. shop.description not set in admin Settings (RESOLVED)
+Same as above — settings.db only, no defaults file. Set via admin → Settings → Shop if not already done.
 
 ### ❌ 3. SMTP not configured (server.js:35–38)
 `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS` all default to `''`. No email is ever delivered (quote confirmations, order shipped, warranty, password reset, contact form).  
@@ -169,8 +167,8 @@ Username required (not email). New users arriving from a warranty link or order 
 
 | # | Location | Issue | Severity | Status |
 |---|----------|-------|----------|--------|
-| 1 | server.js / settings.db | shop.email empty | CRITICAL | ❌ OPEN |
-| 2 | server.js / settings.db | shop.description empty | CRITICAL | ❌ OPEN |
+| 1 | admin → Settings | shop.email empty | CRITICAL | ✅ DONE |
+| 2 | admin → Settings | shop.description empty | CRITICAL | ✅ DONE |
 | 3 | server.js env vars | SMTP not configured | CRITICAL | ❌ OPEN |
 | 4 | server.js env vars | Stripe not configured | CRITICAL | ❌ OPEN |
 | 5 | server.js env vars | AusPost not configured | CRITICAL | ❌ OPEN |
