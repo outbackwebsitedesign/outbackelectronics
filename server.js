@@ -1903,9 +1903,25 @@ const mainServer = http.createServer(async (req, res) => {
     const CALLOUT_KM_PER_DAY = 480;        // 6h × 80km/h
     const CALLOUT_DAILY_RATE = 150;
     const CALLOUT_DAILY_THRESHOLD_KM = 400;
+    const CALLOUT_LOCAL_CAP_KM = 200;      // cap for services under $10k
+    const CALLOUT_HIVAL_THRESHOLD = 10000; // jobs at or above this go anywhere
     const reportedDistanceKm = Number(body.travelDistanceKm) || 0;
     if (reportedDistanceKm < 0 || reportedDistanceKm > 5000) {
       return json(res, 422, { error: 'invalid_distance', message: 'Invalid distance value.' });
+    }
+    // Enforce distance cap for lower-value services
+    if (reportedDistanceKm > CALLOUT_LOCAL_CAP_KM) {
+      // Look up the service being booked to check its value
+      const bookedService = rawLineItems && rawLineItems.length === 1
+        ? catalogServices.find(s => s.id === rawLineItems[0].productId && s.status === 'published')
+        : null;
+      const serviceValue = bookedService ? Number(bookedService.priceAud) : 0;
+      if (serviceValue < CALLOUT_HIVAL_THRESHOLD) {
+        return json(res, 422, {
+          error: 'outside_callout_range',
+          message: `On-site bookings for this service are limited to ${CALLOUT_LOCAL_CAP_KM}km. For longer distances, please post your device or request a quote.`,
+        });
+      }
     }
     let validatedTravelFee = 0;
     if (reportedDistanceKm > CALLOUT_FREE_KM) {

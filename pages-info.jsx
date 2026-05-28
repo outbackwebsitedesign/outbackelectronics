@@ -15,6 +15,8 @@ function getCsrf() {
 const _SHOP_LAT = -35.9845;
 const _SHOP_LNG = 144.7730;
 const _CALLOUT_FREE_KM = 10;
+const _CALLOUT_LOCAL_CAP_KM = 200;
+const _CALLOUT_HIVAL_THRESHOLD = 10000;
 const _CALLOUT_FUEL_RATE = 220 / 400;
 const _CALLOUT_KM_PER_DAY = 480;
 const _CALLOUT_DAILY_RATE = 150;
@@ -204,13 +206,17 @@ function QuotePage({ go, pageParams }) {
             {!locGeocoding && locDistKm !== null && (() => {
               const fee = _calloutFeeAud(locDistKm);
               const days = locDistKm > _CALLOUT_DAILY_THRESHOLD_KM ? Math.ceil(locDistKm / _CALLOUT_KM_PER_DAY) : 0;
+              const isHiVal = pageParams && Number(pageParams.priceAud) >= _CALLOUT_HIVAL_THRESHOLD;
+              const capExceeded = locDistKm > _CALLOUT_LOCAL_CAP_KM && !isHiVal;
               return (
-                <div style={{marginTop:4, marginBottom:4, padding:'8px 12px', fontSize:13, border:'1px solid var(--line)', background:'var(--bg-elev)'}}>
-                  {fee === 0
-                    ? <span><span style={{color:'var(--rust)', fontWeight:600}}>Free callout</span> — you're {locDistKm}km away.</span>
-                    : days > 0
-                      ? <span><span style={{fontWeight:600}}>~${fee} travel fee</span> — {locDistKm}km: fuel + {days * 2} travel days @ $150/day. We'll confirm in the quote.</span>
-                      : <span><span style={{fontWeight:600}}>~${fee} travel fee</span> — {locDistKm}km at $0.55/km (round trip fuel). We'll confirm in the quote.</span>
+                <div style={{marginTop:4, marginBottom:4, padding:'8px 12px', fontSize:13, border:'1px solid var(--line)', background:'var(--bg-elev)', borderColor: capExceeded ? 'var(--rust)' : 'var(--line)'}}>
+                  {capExceeded
+                    ? <span style={{color:'var(--rust)'}}>That's {locDistKm}km — on-site visits for most services are capped at {_CALLOUT_LOCAL_CAP_KM}km. We can still quote; or post the device to us.</span>
+                    : fee === 0
+                      ? <span><span style={{color:'var(--rust)', fontWeight:600}}>Free callout</span> — you're {locDistKm}km away.</span>
+                      : days > 0
+                        ? <span><span style={{fontWeight:600}}>~${fee} travel fee</span> — {locDistKm}km: fuel + {days * 2} travel days @ $150/day. We'll confirm in the quote.</span>
+                        : <span><span style={{fontWeight:600}}>~${fee} travel fee</span> — {locDistKm}km at $0.55/km (round trip fuel). We'll confirm in the quote.</span>
                   }
                 </div>
               );
