@@ -2583,7 +2583,20 @@ const forumServer = http.createServer(async (req, res) => {
     if (!thread) return json(res, 404, { error: 'Thread not found.' });
     thread.views = (thread.views || 0) + 1;
     writeForum(forum);
-    return json(res, 200, { thread, posts: forum.posts.filter(p => p.threadId === threadId) });
+    // Enrich posts with member tier badge
+    const { tiers: mbTiers, subscriptions: mbSubs } = readMemberships();
+    const memberTierMap = {};
+    for (const sub of mbSubs) {
+      if (sub.status === 'active') {
+        const t = mbTiers.find(t => t.id === sub.tierId);
+        if (t) memberTierMap[sub.username] = t.name;
+      }
+    }
+    const enrichedPosts = forum.posts.filter(p => p.threadId === threadId).map(p => ({
+      ...p,
+      memberTier: memberTierMap[p.author] || null,
+    }));
+    return json(res, 200, { thread, posts: enrichedPosts });
   }
 
   if (req.method === 'POST' && url.pathname.startsWith('/api/forum/threads/') && url.pathname.split('/').length === 6 && url.pathname.split('/')[5] === 'posts') {
@@ -4583,6 +4596,9 @@ const portalServer = http.createServer(async (req, res) => {
     if (!body.email || !body.email.trim()) return json(res, 422, { error: 'invalid_payload', message: 'Email is required.' });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email.trim())) return json(res, 422, { error: 'invalid_email', message: 'Email address is invalid.' });
     const quotes = readQuotes();
+    const { tiers: qTiers, subscriptions: qSubs } = readMemberships();
+    const qSub = qSubs.find(s => s.username === session.username && s.status === 'active');
+    const qTier = qSub ? qTiers.find(t => t.id === qSub.tierId) : null;
     const quote = {
       id: 'quot-' + Date.now(),
       name: body.name || session.displayName || session.username,
@@ -4591,6 +4607,7 @@ const portalServer = http.createServer(async (req, res) => {
       status: 'new',
       createdAt: new Date().toISOString(),
       portalUser: session.username,
+      ...(qTier ? { memberTier: qTier.name, priority: true } : {}),
     };
     quotes.push(quote);
     writeQuotes(quotes);

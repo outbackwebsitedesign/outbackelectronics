@@ -1526,6 +1526,8 @@ function AdminQuotes() {
                   <span className="mono" style={{fontSize:11, color:'var(--rust)'}}>{q.id}</span>
                   {q.kind && <span className="tag tag-outline">{q.kind.toUpperCase()}</span>}
                   <StatusPill value={q.status || 'new'} map={statusMap} />
+                  {q.priority && <span className="tag tag-rust" style={{fontSize:10}}>PRIORITY</span>}
+                  {q.memberTier && <span className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>{q.memberTier.toUpperCase()}</span>}
                 </div>
                 {q.age && <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{q.age.toUpperCase()} AGO</span>}
               </div>
@@ -2670,6 +2672,14 @@ function AdminTutorials() {
                   <option>Beginner</option><option>Intermediate</option><option>Advanced</option><option>Expert</option>
                 </select>
               </label>
+              <label className="field"><span className="label">Access</span>
+                <select className="select" value={form.accessLevel != null ? String(form.accessLevel) : '0'} onChange={e=>setForm({...form, accessLevel: Number(e.target.value)})}>
+                  <option value="0">Public</option>
+                  <option value="1">Members+</option>
+                  <option value="2">Pro+</option>
+                  <option value="3">Elite only</option>
+                </select>
+              </label>
               <label className="field"><span className="label">Estimated read</span>
                 <input className="input" placeholder="22 min" value={form.duration||''} onChange={e=>setForm({...form, duration:e.target.value})}/>
               </label>
@@ -3411,6 +3421,14 @@ function AdminGroups() {
             {(form.joinType==='subscription'||form.joinType==='one-time') && (
               <label className="field"><span className="label">Price</span><input className="input" placeholder={form.joinType==='subscription'?'e.g. $9/mo':'e.g. $49'} value={form.price} onChange={e=>setForm({...form,price:e.target.value})}/></label>
             )}
+            <label className="field"><span className="label">Required membership</span>
+              <select className="select" value={form.requiredTierLevel != null ? String(form.requiredTierLevel) : '0'} onChange={e=>setForm({...form, requiredTierLevel: Number(e.target.value)})}>
+                <option value="0">None</option>
+                <option value="1">Basic+</option>
+                <option value="2">Pro+</option>
+                <option value="3">Elite only</option>
+              </select>
+            </label>
           </>)}
 
           {drawerTab==='members' && (<>
@@ -5431,6 +5449,9 @@ function AdminMemberships() {
           </label>
           <label className="field"><span className="label">Features (one per line)</span>
             <textarea className="textarea" style={{ minHeight: 120 }} placeholder={"10% off all products\nPriority repair queue\nExclusive member events"} value={form.features || ''} onChange={e => setForm({ ...form, features: e.target.value })} />
+          </label>
+          <label className="field"><span className="label">Shop discount %</span>
+            <input className="input" type="number" min="0" max="100" step="0.01" placeholder="0" value={form.discountPercent || ''} onChange={e => setForm({ ...form, discountPercent: e.target.value })} />
           </label>
           <label className="field"><span className="label">Card accent colour (CSS value, optional)</span>
             <input className="input" placeholder="e.g. #1f88f5 or var(--rust)" value={form.color || ''} onChange={e => setForm({ ...form, color: e.target.value })} />

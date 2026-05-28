@@ -1446,6 +1446,11 @@ function ThreadView({ threadId, cats, threads, onThreadUpdate, fromCategory, use
                 <div className="post-meta">
                   <div style={{display:'flex',alignItems:'center',gap:8}}>
                     <span className="post-author">{post.author || 'Unknown'}</span>
+                    {post.memberTier && (
+                      <span style={{fontSize:10,background:'var(--rust)',color:'var(--paper)',borderRadius:3,padding:'1px 6px',fontWeight:700,marginLeft:4}}>
+                        {post.memberTier.toUpperCase()}
+                      </span>
+                    )}
                     {isOP && (
                       <span style={{fontSize:11,background:'#e8f0f8',color:'#0066bb',borderRadius:3,padding:'1px 6px',fontWeight:600}}>
                         Original Poster
