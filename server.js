@@ -634,6 +634,24 @@ function getPortalSession(req) {
   return { sid, ...session };
 }
 
+// ── Membership tier level helper ─────────────────────────────────────────────
+// Returns 0=none, 1=basic, 2=pro, 3=elite based on active subscription
+function getMemberTierLevel(username) {
+  if (!username) return 0;
+  const { tiers, subscriptions } = readMemberships();
+  const sub = (subscriptions || []).find(s => s.username === username && s.status === 'active');
+  if (!sub) return 0;
+  const tier = (tiers || []).find(t => t.id === sub.tierId);
+  if (!tier) return 0;
+  if (Number.isFinite(Number(tier.level))) return Number(tier.level);
+  // Fall back to id-based detection
+  const id = String(tier.id || '').toLowerCase();
+  if (id.includes('elite')) return 3;
+  if (id.includes('pro')) return 2;
+  if (id.includes('basic')) return 1;
+  return 1; // any active subscription = at least level 1
+}
+
 // ── Static file serving ───────────────────────────────────────────────────────
 
 // spaRoutes: Set of route names to serve rootFile for (main SPA).
@@ -1668,13 +1686,30 @@ const mainServer = http.createServer(async (req, res) => {
     return json(res, 200, { items: readSoftware().filter(i => i.live) });
   }
   if (req.method === 'GET' && url.pathname === '/api/tutorials') {
-    return json(res, 200, { items: readTutorials().filter(i => i.status === 'Published') });
+    const tutorialPortalSession = getPortalSession(req);
+    const tutorialUserLevel = getMemberTierLevel(tutorialPortalSession ? tutorialPortalSession.username : null);
+    const allTutorials = readTutorials().filter(i => i.status === 'Published');
+    const tutorialItems = allTutorials.map(t => {
+      const required = Number(t.accessLevel) || 0;
+      if (required <= tutorialUserLevel) return t;
+      // User level too low — return locked tutorial without body
+      const { body: _body, content: _content, ...rest } = t;
+      return { ...rest, locked: true };
+    });
+    return json(res, 200, { items: tutorialItems });
   }
   if (req.method === 'GET' && url.pathname === '/api/ai') {
     return json(res, 200, readAI());
   }
   if (req.method === 'GET' && url.pathname === '/api/groups') {
-    return json(res, 200, { items: readGroups() });
+    const groupPortalSession = getPortalSession(req);
+    const groupUserLevel = getMemberTierLevel(groupPortalSession ? groupPortalSession.username : null);
+    const groupItems = readGroups().map(g => {
+      const required = Number(g.requiredTierLevel) || 0;
+      if (required > 0 && groupUserLevel < required) return { ...g, locked: true };
+      return g;
+    });
+    return json(res, 200, { items: groupItems });
   }
   if (req.method === 'GET' && url.pathname === '/api/policies') {
     return json(res, 200, { items: readPolicies().filter(p => p.status === 'published') });
@@ -1892,6 +1927,37 @@ const mainServer = http.createServer(async (req, res) => {
       }
     }
 
+    // Apply member discount if applicable
+    const checkoutPortalSession = getPortalSession(req);
+    let memberDiscountPercent = 0;
+    let memberDiscountTierName = '';
+    if (checkoutPortalSession) {
+      const { tiers: mTiers, subscriptions: mSubs } = readMemberships();
+      const mSub = (mSubs || []).find(s => s.username === checkoutPortalSession.username && s.status === 'active');
+      if (mSub) {
+        const mTier = (mTiers || []).find(t => t.id === mSub.tierId);
+        if (mTier) {
+          memberDiscountPercent = Number(mTier.discountPercent) || 0;
+          memberDiscountTierName = mTier.name || '';
+        }
+      }
+    }
+    // Only apply discount if cart doesn't consist solely of membership items
+    const onlyMembershipItems = lineItems.every(li => membershipTiers.some(t => t.id === li.productId));
+    if (memberDiscountPercent > 0 && !onlyMembershipItems) {
+      const discountableTotal = lineItems.reduce((s, li) => s + Math.round(Number(li.priceAud) * 100) * (li.quantity || 1), 0) / 100;
+      const discountAmount = Math.round(discountableTotal * memberDiscountPercent / 100 * 100) / 100;
+      if (discountAmount > 0) {
+        lineItems.push({
+          name: `Member discount (${memberDiscountPercent}%)`,
+          priceAud: -discountAmount,
+          quantity: 1,
+          productId: '',
+          _isMemberDiscount: true,
+        });
+      }
+    }
+
     // Validate and apply gift card if provided
     // Validate shipping amount (server-side cap to prevent manipulation: max $200)
     const validatedShipping = shippingAmount && Number(shippingAmount) > 0 ? Math.min(200, Number(shippingAmount)) : 0;
@@ -2045,14 +2111,29 @@ const mainServer = http.createServer(async (req, res) => {
         productId: '',
       });
     }
+    // Add member discount metadata to Stripe
+    const memberDiscountItem = lineItems.find(li => li._isMemberDiscount);
+    if (memberDiscountItem) {
+      const memberDiscountAmt = Math.abs(memberDiscountItem.priceAud);
+      params['payment_intent_data[metadata][memberDiscount]'] = String(memberDiscountAmt);
+      params['metadata[memberDiscount]'] = String(memberDiscountAmt);
+      if (memberDiscountTierName) {
+        params['payment_intent_data[metadata][memberDiscountTier]'] = memberDiscountTierName;
+        params['metadata[memberDiscountTier]'] = memberDiscountTierName;
+      }
+    }
+
     // Stripe doesn't support negative unit_amount; use a free line item workaround:
-    // we compute net total and replace all line items with a single "Order total" line when a GC is applied
+    // we compute net total and replace all line items with a single "Order total" line when a GC or member discount is applied
     let finalLineItems = adjustedLineItems;
-    if (gcDiscount > 0) {
-      const grossCents = lineItems.reduce((s, li) => s + Math.round(Number(li.priceAud) * 100) * (li.quantity || 1), 0);
+    const hasMemberDiscount = memberDiscountItem && Math.abs(memberDiscountItem.priceAud) > 0;
+    if (gcDiscount > 0 || hasMemberDiscount) {
+      const productCents = lineItems.filter(li => !li._isMemberDiscount).reduce((s, li) => s + Math.round(Number(li.priceAud) * 100) * (li.quantity || 1), 0);
       const shippingCents = Math.round(validatedShipping * 100);
-      const netCents = Math.max(50, grossCents + shippingCents - Math.round(gcDiscount * 100)); // Stripe min 50c
-      finalLineItems = [{ name: 'Outback Electronics Order', priceAud: netCents / 100, quantity: 1, productId: lineItems.length === 1 ? (lineItems[0].productId || '') : '' }];
+      const memberDiscountCents = hasMemberDiscount ? Math.round(Math.abs(memberDiscountItem.priceAud) * 100) : 0;
+      const netCents = Math.max(50, productCents + shippingCents - Math.round(gcDiscount * 100) - memberDiscountCents); // Stripe min 50c
+      const nonDiscountItems = lineItems.filter(li => !li._isMemberDiscount);
+      finalLineItems = [{ name: 'Outback Electronics Order', priceAud: netCents / 100, quantity: 1, productId: nonDiscountItems.length === 1 ? (nonDiscountItems[0].productId || '') : '' }];
     }
 
     finalLineItems.forEach((li, idx) => {
