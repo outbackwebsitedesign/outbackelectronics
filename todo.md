@@ -29,11 +29,8 @@ Server reads AusPost API key from `integrations.find('AusPost')` in `settings.db
 
 ## HIGH — Visible "coming soon" / disabled features presented to customers
 
-### ❌ 6. Gift Cards page — "coming soon" notice (pages-shop.jsx:1311)
-```
-"Gift cards coming soon — check back shortly."
-```
-Page is fully linked from nav and footer. Customers land on it and see this. Either implement or remove from nav.
+### ✅ 6. Gift Cards page — "coming soon" notice (RESOLVED)
+Gift card products migrated from `products.db` to `gift-card-denominations.db` (including images). Public denomination API route moved to mainServer (port 8080) — it was incorrectly registered on adminServer. Gift Cards page now shows real purchasable denominations.
 
 ### ❌ 7. Memberships page — tiers shown but purchase disabled (pages-shop.jsx:1462–1475)
 ```
