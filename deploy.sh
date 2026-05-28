@@ -1,4 +1,18 @@
 #!/bin/bash
+# ============================================================
+# WARNING — DO NOT ADD git reset --hard OR git clean TO THIS SCRIPT
+#
+# The .db files (products.db, orders.db, customers.db, services.db,
+# repairs.db, quotes.db, forum.db, staff.db, carts.db, sessions.db,
+# gift-cards.db, memberships.db, software.db, tutorials.db, sellers.db,
+# etc.) are the ENTIRE LIVE BUSINESS DATABASE. They are gitignored and
+# live only on the production server alongside this code.
+#
+# git reset --hard and git clean WILL DELETE THEM WITH NO RECOVERY.
+# This happened once and wiped everything. Never again.
+#
+# git pull is the only safe way to update — it only touches tracked files.
+# ============================================================
 set -e
 
 SERVICE_NAME="outbackelectronics"
