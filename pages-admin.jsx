@@ -5233,7 +5233,7 @@ function AdminMemberships() {
   const openTier = (i) => {
     setEdit(i);
     setForm(i === 'new'
-      ? { name: '', price: '', billingCycle: 'month', description: '', features: '', color: '', highlight: false, status: 'draft' }
+      ? { name: '', price: '', billingCycle: 'one-off', description: '', features: '', color: '', highlight: false, status: 'draft' }
       : { ...tiers[i], features: Array.isArray(tiers[i].features) ? tiers[i].features.join('\n') : (tiers[i].features || '') });
   };
 
@@ -5330,7 +5330,7 @@ function AdminMemberships() {
             : <Table
                 columns={[
                   { key: 'name', label: 'Name', w: '1.5fr', render: r => <span style={{ fontWeight: 600 }}>{r.name}</span> },
-                  { key: 'price', label: 'Price', w: '100px', render: r => <span className="mono" style={{ fontWeight: 600 }}>${r.price || r.priceAud || 0}<span style={{ fontWeight: 400, fontSize: 11, color: 'var(--ink-2)' }}>/{r.billingCycle || 'mo'}</span></span> },
+                  { key: 'price', label: 'Price', w: '100px', render: r => { const cycle = r.billingCycle || 'one-off'; return <span className="mono" style={{ fontWeight: 600 }}>${r.price || r.priceAud || 0}<span style={{ fontWeight: 400, fontSize: 11, color: 'var(--ink-2)' }}>{cycle === 'one-off' ? ' one-off' : `/${cycle}`}</span></span>; } },
                   { key: 'features', label: 'Features', w: '2fr', render: r => <span style={{ fontSize: 12, color: 'var(--ink-2)' }}>{(Array.isArray(r.features) ? r.features : []).slice(0, 3).join(' · ')}</span> },
                   { key: 'status', label: 'Status', w: '120px', render: r => (
                     <span className="tag" style={{
@@ -5419,7 +5419,8 @@ function AdminMemberships() {
           <label className="field"><span className="label">Price (AUD / billing cycle)</span>
             <div style={{ display: 'flex', gap: 8 }}>
               <input className="input" type="number" min="0" step="0.01" placeholder="0.00" value={form.price || ''} onChange={e => setForm({ ...form, price: e.target.value })} style={{ flex: 1 }} />
-              <select className="select" value={form.billingCycle || 'month'} onChange={e => setForm({ ...form, billingCycle: e.target.value })} style={{ width: 110 }}>
+              <select className="select" value={form.billingCycle || 'one-off'} onChange={e => setForm({ ...form, billingCycle: e.target.value })} style={{ width: 110 }}>
+                <option value="one-off">one-off</option>
                 <option value="month">/ month</option>
                 <option value="year">/ year</option>
               </select>
