@@ -12,12 +12,28 @@ function getCsrf() {
 // ============================================================
 // REQUEST A QUOTE
 // ============================================================
+const _SHOP_LAT = -35.9845;
+const _SHOP_LNG = 144.7730;
+const _CALLOUT_FREE_KM = 10;
+const _CALLOUT_MAX_KM = 400;
+const _CALLOUT_RATE = 220 / 400; // $/km (round trip fuel cost per one-way km)
+
+function _haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
 function QuotePage({ go, pageParams }) {
   const shop = useShop();
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
   const [ticketId, setTicketId] = useState(null);
+  const [locDistKm, setLocDistKm] = useState(null);
+  const [locGeocoding, setLocGeocoding] = useState(false);
 
   const initForm = () => {
     const svc = pageParams;
@@ -37,10 +53,32 @@ function QuotePage({ go, pageParams }) {
   const [form, setForm] = useState(initForm);
 
   useEffect(() => {
-    if (pageParams) setForm(initForm());
+    if (pageParams) { setForm(initForm()); setLocDistKm(null); }
   }, [pageParams]);
 
   const update = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  useEffect(() => {
+    if (!form.loc || form.loc.trim().length < 3) { setLocDistKm(null); return; }
+    const t = setTimeout(async () => {
+      setLocGeocoding(true);
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(form.loc + ', Australia')}&limit=1`,
+          { headers: { 'Accept-Language': 'en' } }
+        );
+        const data = await res.json();
+        if (data[0]) {
+          const km = _haversineKm(_SHOP_LAT, _SHOP_LNG, parseFloat(data[0].lat), parseFloat(data[0].lon));
+          setLocDistKm(Math.round(km));
+        } else {
+          setLocDistKm(null);
+        }
+      } catch { setLocDistKm(null); }
+      finally { setLocGeocoding(false); }
+    }, 700);
+    return () => clearTimeout(t);
+  }, [form.loc]);
 
   if (submitted) {
     return (
@@ -151,6 +189,21 @@ function QuotePage({ go, pageParams }) {
               <label className="field"><span className="label">Email or sat number</span><input required className="input" value={form.email} onChange={e => update('email', e.target.value)} placeholder="your@email.com" /></label>
             </div>
             <label className="field"><span className="label">Location / nearest town</span><input className="input" value={form.loc} onChange={e => update('loc', e.target.value)} placeholder="Newman, WA" /></label>
+            {locGeocoding && <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:4, marginBottom:4}}>Checking distance…</div>}
+            {!locGeocoding && locDistKm !== null && (() => {
+              const fee = locDistKm > _CALLOUT_FREE_KM ? Math.round(locDistKm * _CALLOUT_RATE) : 0;
+              const over = locDistKm > _CALLOUT_MAX_KM;
+              return (
+                <div style={{marginTop:4, marginBottom:4, padding:'8px 12px', fontSize:13, border:'1px solid var(--line)', background:'var(--bg-elev)'}}>
+                  {over
+                    ? <span style={{color:'var(--rust)'}}>That's {locDistKm}km — outside our {_CALLOUT_MAX_KM}km callout range. We can still quote for postal or remote work.</span>
+                    : fee === 0
+                      ? <span><span style={{color:'var(--rust)', fontWeight:600}}>Free callout</span> — you're {locDistKm}km away.</span>
+                      : <span><span style={{fontWeight:600}}>+${fee} travel fee</span> will apply — {locDistKm}km at $0.55/km (round trip fuel). We'll confirm in the quote.</span>
+                  }
+                </div>
+              );
+            })()}
 
             <hr className="thin" />
             <span className="eyebrow">05 · DESCRIBE THE JOB</span>

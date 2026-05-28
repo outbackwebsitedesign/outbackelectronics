@@ -1895,6 +1895,18 @@ const mainServer = http.createServer(async (req, res) => {
     // Validate and apply gift card if provided
     // Validate shipping amount (server-side cap to prevent manipulation: max $200)
     const validatedShipping = shippingAmount && Number(shippingAmount) > 0 ? Math.min(200, Number(shippingAmount)) : 0;
+    // Travel/callout fee — calculated server-side from reported distance
+    // Rate: $110/tank, 400km one-way range = round trip cost $220 for 400km = $0.55/km. Free within 10km. Max 400km.
+    const CALLOUT_FREE_KM = 10;
+    const CALLOUT_MAX_KM = 400;
+    const CALLOUT_RATE = 220 / 400; // $/km (round trip fuel cost per one-way km)
+    const reportedDistanceKm = Number(body.travelDistanceKm) || 0;
+    if (reportedDistanceKm < 0 || reportedDistanceKm > CALLOUT_MAX_KM + 1) {
+      return json(res, 422, { error: 'out_of_range', message: 'Location is outside our service area.' });
+    }
+    const validatedTravelFee = reportedDistanceKm > CALLOUT_FREE_KM
+      ? Math.round(reportedDistanceKm * CALLOUT_RATE)
+      : 0;
 
     let gcDiscount = 0;
     let gcCodeNorm = '';
@@ -1911,7 +1923,7 @@ const mainServer = http.createServer(async (req, res) => {
 
     // If gift card covers the entire order, skip Stripe and create order directly
     const cartGross = lineItems.reduce((s, li) => s + Math.round(Number(li.priceAud) * 100) * (li.quantity || 1), 0) / 100;
-    const orderGross = cartGross + validatedShipping;
+    const orderGross = cartGross + validatedShipping + validatedTravelFee;
     if (gcDiscount >= orderGross && gcObject) {
       // Redeem gift card balance
       const gcList = readGiftCards();
@@ -1997,6 +2009,9 @@ const mainServer = http.createServer(async (req, res) => {
         quantity: 1,
         productId: '',
       });
+    }
+    if (validatedTravelFee > 0) {
+      adjustedLineItems.push({ name: 'Callout / Travel Fee', priceAud: validatedTravelFee, quantity: 1, productId: '' });
     }
     if (gcDiscount > 0) {
       adjustedLineItems.push({

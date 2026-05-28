@@ -1047,27 +1047,74 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
 // ============================================================
 // SERVICE DETAIL
 // ============================================================
+const SHOP_LAT = -35.9845;
+const SHOP_LNG = 144.7730;
+const CALLOUT_FREE_KM = 10;
+const CALLOUT_MAX_KM = 400;
+const CALLOUT_RATE = 220 / 400; // $/km (round trip fuel cost per one-way km)
+
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function calloutFeeAud(distKm) {
+  if (distKm <= CALLOUT_FREE_KM) return 0;
+  return Math.round(distKm * CALLOUT_RATE);
+}
+
 function ServiceDetailPage({ go, pageParams }) {
   const [service, setService] = useState(pageParams || null);
-  const [bookForm, setBookForm] = useState({ name: '', email: '', date: '', notes: '' });
+  const [bookForm, setBookForm] = useState({ name: '', email: '', loc: '', date: '', notes: '' });
   const [booking, setBooking] = useState(false);
   const [bookError, setBookError] = useState(null);
+  const [distanceKm, setDistanceKm] = useState(null); // null = not checked yet
+  const [geocoding, setGeocoding] = useState(false);
 
   useEffect(() => {
-    if (pageParams) { setService(pageParams); setBookForm({ name: '', email: '', date: '', notes: '' }); setBookError(null); }
+    if (pageParams) { setService(pageParams); setBookForm({ name: '', email: '', loc: '', date: '', notes: '' }); setBookError(null); setDistanceKm(null); }
   }, [pageParams]);
+
+  // Debounced geocode on loc change
+  useEffect(() => {
+    if (!bookForm.loc || bookForm.loc.trim().length < 3) { setDistanceKm(null); return; }
+    const t = setTimeout(async () => {
+      setGeocoding(true);
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(bookForm.loc + ', Australia')}&limit=1`,
+          { headers: { 'Accept-Language': 'en' } }
+        );
+        const data = await res.json();
+        if (data[0]) {
+          const km = haversineKm(SHOP_LAT, SHOP_LNG, parseFloat(data[0].lat), parseFloat(data[0].lon));
+          setDistanceKm(Math.round(km));
+        } else {
+          setDistanceKm(null);
+        }
+      } catch { setDistanceKm(null); }
+      finally { setGeocoding(false); }
+    }, 700);
+    return () => clearTimeout(t);
+  }, [bookForm.loc]);
 
   const fixedPrice = service ? Number(service.priceAud) : NaN;
   const hasFixedPrice = service && !isNaN(fixedPrice) && fixedPrice > 0;
+  const travelFee = distanceKm !== null ? calloutFeeAud(distanceKm) : null;
+  const outOfRange = distanceKm !== null && distanceKm > CALLOUT_MAX_KM;
 
   const handlePayAndBook = async (e) => {
     e.preventDefault();
+    if (outOfRange) return;
     setBookError(null);
     setBooking(true);
     try {
       await fetch('/api/csrf-token', { credentials: 'include' }).catch(() => {});
       const csrf = getCsrf();
-      // Log the booking as a quote first
+      const travelLine = travelFee > 0 ? ` · Travel fee: $${travelFee} (${distanceKm}km)` : ' · Free callout';
       await fetch('/api/quote/request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
@@ -1077,17 +1124,19 @@ function ServiceDetailPage({ go, pageParams }) {
           urgency: 'Standard',
           name: bookForm.name,
           email: bookForm.email,
-          loc: '',
-          desc: `Service booking: ${service.name}${bookForm.date ? ` · Preferred date: ${bookForm.date}` : ''}${bookForm.notes ? ` · Notes: ${bookForm.notes}` : ''}`,
+          loc: bookForm.loc,
+          desc: `Service booking: ${service.name}${bookForm.date ? ` · Preferred date: ${bookForm.date}` : ''}${travelLine}${bookForm.notes ? ` · Notes: ${bookForm.notes}` : ''}`,
           _service: service.name,
           _serviceSku: service.sku || '',
         }),
       }).catch(() => {});
-      // Then redirect to Stripe checkout
       const resp = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
-        body: JSON.stringify({ items: [{ productId: service.id, name: service.name, priceAud: fixedPrice, quantity: 1 }] }),
+        body: JSON.stringify({
+          items: [{ productId: service.id, name: service.name, priceAud: fixedPrice, quantity: 1 }],
+          travelDistanceKm: distanceKm || 0,
+        }),
       });
       const data = await resp.json().catch(() => ({}));
       if (data.url) {
@@ -1145,6 +1194,25 @@ function ServiceDetailPage({ go, pageParams }) {
                 <label className="field"><span className="label">Name</span><input required className="input" value={bookForm.name} onChange={e => setBookForm(f => ({...f, name: e.target.value}))} placeholder="Your name" /></label>
                 <label className="field"><span className="label">Email or sat number</span><input required className="input" value={bookForm.email} onChange={e => setBookForm(f => ({...f, email: e.target.value}))} placeholder="your@email.com" /></label>
               </div>
+              <label className="field" style={{marginBottom:6}}>
+                <span className="label">Your location / nearest town</span>
+                <input className="input" value={bookForm.loc} onChange={e => setBookForm(f => ({...f, loc: e.target.value}))} placeholder="Newman, WA" />
+              </label>
+              {/* Callout fee banner */}
+              {geocoding && (
+                <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginBottom:14}}>Checking distance…</div>
+              )}
+              {!geocoding && distanceKm !== null && (
+                <div style={{marginBottom:14, padding:'10px 14px', fontSize:13, border:'1px solid var(--line)', background: outOfRange ? 'var(--rust)' : distanceKm <= CALLOUT_FREE_KM ? 'var(--bg-elev)' : 'var(--bg-elev)', color: outOfRange ? 'var(--paper)' : 'inherit'}}>
+                  {outOfRange ? (
+                    <>That's {distanceKm}km away — outside our {CALLOUT_MAX_KM}km range. <a style={{color:'inherit', textDecoration:'underline', cursor:'pointer'}} onClick={() => go('quote', service)}>Request a quote</a> and we'll figure out postal or remote options.</>
+                  ) : distanceKm <= CALLOUT_FREE_KM ? (
+                    <><span style={{color:'var(--rust)', fontWeight:600}}>✓ Free callout</span> — you're {distanceKm}km away.</>
+                  ) : (
+                    <><span style={{fontWeight:600}}>+${travelFee} travel fee</span> — {distanceKm}km at $0.55/km (round trip fuel). Added to your total.</>
+                  )}
+                </div>
+              )}
               <label className="field" style={{marginBottom:14}}>
                 <span className="label">Preferred date (optional)</span>
                 <input className="input" type="date" value={bookForm.date} onChange={e => setBookForm(f => ({...f, date: e.target.value}))} min={new Date().toISOString().slice(0,10)} />
@@ -1155,8 +1223,10 @@ function ServiceDetailPage({ go, pageParams }) {
               </label>
               {bookError && <div style={{color:'var(--rust)', fontSize:13, marginBottom:12}}>{bookError}</div>}
               <div style={{display:'flex', gap:12, alignItems:'center'}}>
-                <button type="submit" className="btn btn-rust" style={{flex:1, justifyContent:'center'}} disabled={booking}>
-                  {booking ? 'Redirecting…' : `Pay now — $${fixedPrice.toLocaleString('en-AU', {minimumFractionDigits:2})} →`}
+                <button type="submit" className="btn btn-rust" style={{flex:1, justifyContent:'center'}} disabled={booking || outOfRange}>
+                  {booking ? 'Redirecting…' : travelFee > 0
+                    ? `Pay now — $${(fixedPrice + travelFee).toLocaleString('en-AU', {minimumFractionDigits:2})} (incl. travel) →`
+                    : `Pay now — $${fixedPrice.toLocaleString('en-AU', {minimumFractionDigits:2})} →`}
                 </button>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => go('quote', service)}>Request a quote instead</button>
               </div>
