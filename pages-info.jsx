@@ -1282,9 +1282,13 @@ function AIModelModal({ model, onClose, go }) {
 function AIPage({ go }) {
   const [selectedModel, setSelectedModel] = useState(null);
   const [models, setModels] = useState([]);
+  const [boxes, setBoxes] = useState([]);
 
   useEffect(() => {
-    fetch('/api/ai').then(r => r.ok ? r.json() : Promise.reject()).then(r => setModels(r.models || [])).catch(() => {});
+    fetch('/api/ai').then(r => r.ok ? r.json() : Promise.reject()).then(r => {
+      setModels(r.models || []);
+      setBoxes(r.boxes || []);
+    }).catch(() => {});
   }, []);
 
   return (
@@ -1357,25 +1361,27 @@ function AIPage({ go }) {
         </div>
       </section>
 
-      {/* Hardware */}
-      <section className="container" style={{paddingTop:56,paddingBottom:40}}>
-        <div className="grid-3">
-          {[
-            {t:'Inference Box · S', p:'$2,490', d:'Raspberry Pi 5, Coral TPU, IP66 case, PoE-in. Up to 30fps on small models.', hw:'18W typical'},
-            {t:'Inference Box · M', p:'$5,890', d:'Jetson Orin Nano, NVMe, IP66 + sunshade, 12–48V DC. Our most-shipped unit.', hw:'25W typical', highlight:true},
-            {t:'Inference Box · L', p:'$11,490', d:'Jetson Orin NX 16GB, 4× camera, mesh + sat, ruggedised for ute-roof mount.', hw:'42W typical'},
-          ].map((box, i) => (
-            <div key={i} style={{padding:32,background:box.highlight?'var(--dark)':'var(--paper)',color:box.highlight?'var(--paper)':'var(--ink)',border:'1px solid',borderColor:box.highlight?'var(--dark)':'var(--line)'}}>
-              {box.highlight && <span className="tag tag-ochre">MOST SHIPPED</span>}
-              <h3 className="serif" style={{fontSize:32,marginTop:box.highlight?14:0,lineHeight:1.05}}>{box.t}</h3>
-              <div className="price" style={{fontSize:36,marginTop:10}}>{box.p}</div>
-              <p style={{marginTop:14,fontSize:14,color:box.highlight?'var(--bg-deep)':'var(--ink-2)'}}>{box.d}</p>
-              <div className="mono" style={{fontSize:11,marginTop:14,opacity:0.7}}>{box.hw.toUpperCase()}</div>
-              <button className="btn btn-rust" style={{marginTop:20,width:'100%',justifyContent:'center'}} onClick={() => go('quote')}>Spec it →</button>
-            </div>
-          ))}
-        </div>
-      </section>
+      {/* Hardware Boxes — fetched from /api/ai, only shown if configured */}
+      {boxes.length > 0 && (
+        <section className="container" style={{paddingTop:56,paddingBottom:40}}>
+          <div className="grid-3">
+            {boxes.map((box, i) => (
+              <div key={box.id || i} style={{padding:32,background:box.highlight?'var(--dark)':'var(--paper)',color:box.highlight?'var(--paper)':'var(--ink)',border:'1px solid',borderColor:box.highlight?'var(--dark)':'var(--line)'}}>
+                {box.highlight && <span className="tag tag-ochre">MOST SHIPPED</span>}
+                <h3 className="serif" style={{fontSize:32,marginTop:box.highlight?14:0,lineHeight:1.05}}>{box.name || box.t}</h3>
+                <div className="price" style={{fontSize:36,marginTop:10}}>
+                  {box.price != null ? `$${Number(box.price).toLocaleString()}` : (box.p || 'POA')}
+                </div>
+                <p style={{marginTop:14,fontSize:14,color:box.highlight?'var(--bg-deep)':'var(--ink-2)'}}>{box.description || box.d}</p>
+                {(box.wattage || box.hw) && (
+                  <div className="mono" style={{fontSize:11,marginTop:14,opacity:0.7}}>{(box.wattage || box.hw).toUpperCase()}</div>
+                )}
+                <button className="btn btn-rust" style={{marginTop:20,width:'100%',justifyContent:'center'}} onClick={() => go('quote')}>Spec it →</button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* AI in Action — video */}
       <section className="container" style={{paddingTop:56,paddingBottom:56}}>
