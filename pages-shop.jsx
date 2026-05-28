@@ -1398,6 +1398,7 @@ function MembershipsPage({ go, portalUser }) {
   const [tiersLoading, setTiersLoading] = useState(true);
   const [checkingOut, setCheckingOut] = useState(null); // tier id currently processing
   const [checkoutError, setCheckoutError] = useState(null);
+  const [activeTier, setActiveTier] = useState(null); // active membership tier for logged-in user
 
   useEffect(() => {
     fetch('/api/memberships')
@@ -1406,6 +1407,14 @@ function MembershipsPage({ go, portalUser }) {
       .catch(() => {})
       .finally(() => setTiersLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!portalUser) return;
+    fetch('/api/portal/membership', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d && d.tier) setActiveTier(d.tier); })
+      .catch(() => {});
+  }, [portalUser]);
 
   const displayTiers = tiers;
 
@@ -1495,6 +1504,13 @@ function MembershipsPage({ go, portalUser }) {
             );
           })}
         </div>
+
+        {activeTier && Number(activeTier.discountPercent) > 0 && (
+          <div style={{marginTop:24, padding:'12px 18px', background:'#f0faf4', border:'1px solid #86efac', fontSize:13, color:'#166534', display:'flex', alignItems:'center', gap:8}}>
+            <span style={{fontWeight:700}}>✓</span>
+            Your {Number(activeTier.discountPercent)}% member discount is applied automatically at checkout.
+          </div>
+        )}
 
         <div style={{marginTop:48, padding:32, background:'var(--bg-elev)', border:'1px solid var(--line)'}}>
           <div className="eyebrow" style={{marginBottom:12}}>MEMBER CONTENT INCLUDES</div>

@@ -140,9 +140,10 @@ function TutorialsPage({ go }) {
         {!loading && list.length > 0 && (
           <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:20}}>
             {list.map((t, i) => (
-              <div key={t.id||i} className="card-paper" style={{display:'flex', flexDirection:'column', overflow:'hidden'}}>
+              <div key={t.id||i} className="card-paper" style={{display:'flex', flexDirection:'column', overflow:'hidden', opacity: t.locked ? 0.8 : 1}}>
                 <div style={{padding:'20px 24px 0'}}>
-                  {t.category && <span className="tag tag-outline" style={{marginBottom:10, display:'inline-block'}}>{t.category.toUpperCase()}</span>}
+                  {t.locked && <span className="tag tag-rust" style={{marginBottom:8, display:'inline-block'}}>MEMBERS ONLY</span>}
+                  {!t.locked && t.category && <span className="tag tag-outline" style={{marginBottom:10, display:'inline-block'}}>{t.category.toUpperCase()}</span>}
                   <h3 className="serif" style={{fontSize:22, lineHeight:1.15, marginTop:6}}>{t.title}</h3>
                   <p style={{marginTop:8, fontSize:13, color:'var(--ink-2)', lineHeight:1.6,
                     overflow:'hidden', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical'}}>
@@ -150,7 +151,10 @@ function TutorialsPage({ go }) {
                   </p>
                 </div>
                 <div style={{padding:'16px 24px 20px', marginTop:'auto'}}>
-                  <button className="btn btn-ghost btn-sm" onClick={() => setActiveTutorial(t)}>Read More →</button>
+                  {t.locked
+                    ? <a href="/memberships" className="btn btn-ghost btn-sm" style={{textDecoration:'none'}}>Join to unlock →</a>
+                    : <button className="btn btn-ghost btn-sm" onClick={() => setActiveTutorial(t)}>Read More →</button>
+                  }
                 </div>
               </div>
             ))}
@@ -234,9 +238,10 @@ function GroupsPage({ go }) {
         {!loading && groups.length > 0 && (
           <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:20}}>
             {groups.map((g,i) => (
-              <div key={g.id||i} className="card-paper" style={{padding:24, display:'flex', flexDirection:'column', gap:12}}>
+              <div key={g.id||i} className="card-paper" style={{padding:24, display:'flex', flexDirection:'column', gap:12, opacity: g.locked ? 0.8 : 1}}>
                 <div>
-                  {g.location && (
+                  {g.locked && <span className="tag tag-rust" style={{marginBottom:8, display:'inline-block'}}>MEMBERS ONLY</span>}
+                  {!g.locked && g.location && (
                     <span className="tag tag-outline" style={{marginBottom:8, display:'inline-block'}}>{g.location.toUpperCase()}</span>
                   )}
                   <h3 className="serif" style={{fontSize:24, lineHeight:1.1, marginTop:6}}>{g.name}</h3>
@@ -250,6 +255,9 @@ function GroupsPage({ go }) {
                     <div className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>ORGANISER: {g.organizer.toUpperCase()}</div>
                   )}
                   <div className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{g.memberCount || 0} MEMBERS</div>
+                  {g.locked && (
+                    <a href="/memberships" className="btn btn-ghost btn-sm" style={{textDecoration:'none', marginTop:8, textAlign:'center'}}>Upgrade to join →</a>
+                  )}
                 </div>
               </div>
             ))}
