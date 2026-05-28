@@ -2590,6 +2590,19 @@ const mainServer = http.createServer(async (req, res) => {
     if (og) return serveIndexWithOg(res, og);
   }
 
+  // ── Rewards: return balance for already-logged-in portal session ─────────────
+  if (req.method === 'GET' && url.pathname === '/api/rewards/me') {
+    const session = getPortalSession(req);
+    if (!session) return json(res, 200, { loggedIn: false });
+    const db = readRewards();
+    const entry = db.entries.find(e => e.userId === session.id);
+    const points = entry ? entry.points : 0;
+    const token = randomId();
+    for (const [k, v] of rewardsTokens) { if (v.expiresAt < Date.now()) rewardsTokens.delete(k); }
+    rewardsTokens.set(token, { email: '', userId: session.id, points, expiresAt: Date.now() + 30 * 60 * 1000 });
+    return json(res, 200, { loggedIn: true, points, token, displayName: session.displayName || session.username });
+  }
+
   // ── Rewards: verify account credentials and return points balance + token ────
   if (req.method === 'POST' && url.pathname === '/api/rewards/lookup') {
     if (publicRateLimited(getIp(req), 'register')) return json(res, 429, { error: 'too_many_requests' });
@@ -2608,6 +2621,11 @@ const mainServer = http.createServer(async (req, res) => {
     const token = randomId();
     for (const [k, v] of rewardsTokens) { if (v.expiresAt < Date.now()) rewardsTokens.delete(k); }
     rewardsTokens.set(token, { email, userId: user.id, points, expiresAt: Date.now() + 30 * 60 * 1000 });
+    // Also sign them into the portal session so the cookie persists across the site
+    const sid = randomId();
+    portalSessions.set(sid, { id: user.id, username: user.username, displayName: user.displayName, createdAt: user.createdAt, expiresAt: now() + PORTAL_SESSION_TTL_MS });
+    saveSessionsToDisk(PORTAL_SESSIONS_DB_PATH, portalSessions);
+    res.setHeader('Set-Cookie', sessionCookie('oe_portal_session', sid, Math.floor(PORTAL_SESSION_TTL_MS / 1000), req));
     return json(res, 200, { ok: true, points, token, displayName: user.displayName || user.username });
   }
 
