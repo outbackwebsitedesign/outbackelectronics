@@ -560,8 +560,54 @@ function isSecureRequest(req) {
   return req.socket.encrypted || xfProto === 'https';
 }
 
+// Set / clear both customer session cookies in one call (forum + portal share the same accounts)
+function setCustomerSessionCookies(res, user, req) {
+  const sid = randomId();
+  const sessionData = { id: user.id, username: user.username, displayName: user.displayName, createdAt: user.createdAt, expiresAt: now() + PORTAL_SESSION_TTL_MS };
+  forumSessions.set(sid, { ...sessionData, expiresAt: now() + FORUM_SESSION_TTL_MS });
+  portalSessions.set(sid, sessionData);
+  saveSessionsToDisk(FORUM_SESSIONS_DB_PATH, forumSessions);
+  saveSessionsToDisk(PORTAL_SESSIONS_DB_PATH, portalSessions);
+  res.setHeader('Set-Cookie', [
+    customerSessionCookie('oe_forum_session',  sid, Math.floor(FORUM_SESSION_TTL_MS  / 1000), req),
+    customerSessionCookie('oe_portal_session', sid, Math.floor(PORTAL_SESSION_TTL_MS / 1000), req),
+  ]);
+  return sid;
+}
+function clearCustomerSessionCookies(res, req, forumSid, portalSid) {
+  if (forumSid)  { forumSessions.delete(forumSid);  saveSessionsToDisk(FORUM_SESSIONS_DB_PATH,  forumSessions); }
+  if (portalSid) { portalSessions.delete(portalSid); saveSessionsToDisk(PORTAL_SESSIONS_DB_PATH, portalSessions); }
+  res.setHeader('Set-Cookie', [
+    customerSessionCookie('oe_forum_session',  '', 0, req),
+    customerSessionCookie('oe_portal_session', '', 0, req),
+  ]);
+}
+
 function sessionCookie(name, value, maxAgeSec, req) {
   const parts = [`${name}=${value}`, 'HttpOnly', 'SameSite=Strict', 'Path=/', `Max-Age=${maxAgeSec}`];
+  if (isSecureRequest(req)) parts.push('Secure');
+  return parts.join('; ');
+}
+
+// Customer session cookies need Domain set to the parent domain so they're shared
+// across all subdomains (forum., portal., games., etc.). Localhost is exempt —
+// browsers already share cookies across ports on the same hostname.
+function sharedDomain() {
+  try {
+    const hostname = new URL(getSiteUrl()).hostname;
+    if (hostname === 'localhost' || /^\d+\.\d+\.\d+\.\d+$/.test(hostname)) return null;
+    const parts = hostname.split('.');
+    // For country-code second-levels like .com.au keep last 3 parts, else last 2
+    const root = (parts.length >= 3 && parts[parts.length - 2].length <= 4)
+      ? parts.slice(-3).join('.')
+      : parts.slice(-2).join('.');
+    return '.' + root; // e.g. .outbackelectronics.com.au
+  } catch { return null; }
+}
+function customerSessionCookie(name, value, maxAgeSec, req) {
+  const parts = [`${name}=${value}`, 'HttpOnly', 'SameSite=Strict', 'Path=/', `Max-Age=${maxAgeSec}`];
+  const domain = sharedDomain();
+  if (domain) parts.push(`Domain=${domain}`);
   if (isSecureRequest(req)) parts.push('Secure');
   return parts.join('; ');
 }
@@ -1649,6 +1695,87 @@ function verifyStripeSignature(rawBody, sigHeader, secret) {
   return crypto.timingSafeEqual(actualBuf, expectedBuf);
 }
 
+// ── Shared customer auth handlers (used by all five servers) ─────────────────
+// Single source of truth for register / login / logout / me.
+// Any server that needs these just calls the function — no duplicate logic.
+
+async function handleCustomerRegister(req, res) {
+  if (publicRateLimited(getIp(req), 'register')) return json(res, 429, { error: 'too_many_requests' });
+  let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+  if (!body || typeof body !== 'object') return json(res, 422, { error: 'invalid_payload', message: 'Payload must be a JSON object.' });
+  const username = typeof body.username === 'string' ? body.username : '';
+  const password = typeof body.password === 'string' ? body.password : '';
+  const firstName = typeof body.firstName === 'string' ? body.firstName.trim() : '';
+  const lastName  = typeof body.lastName  === 'string' ? body.lastName.trim()  : '';
+  const email     = typeof body.email     === 'string' ? body.email.trim().toLowerCase() : '';
+  const phone     = typeof body.phone     === 'string' ? body.phone.trim()     : '';
+  const address   = typeof body.address   === 'string' ? body.address.trim()   : '';
+  if (!firstName) return json(res, 422, { error: 'invalid_payload', message: 'First name is required.' });
+  if (!lastName)  return json(res, 422, { error: 'invalid_payload', message: 'Last name is required.' });
+  if (!email)     return json(res, 422, { error: 'invalid_payload', message: 'Email address is required.' });
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json(res, 422, { error: 'invalid_payload', message: 'Email address is invalid.' });
+  if (!/^[a-zA-Z0-9_]{3,30}$/.test(username)) return json(res, 422, { error: 'invalid_payload', message: 'Username must be 3–30 characters, letters, numbers and underscores only.' });
+  if (password.length < 8) return json(res, 422, { error: 'invalid_payload', message: 'Password must be at least 8 characters.' });
+  const displayName = `${firstName} ${lastName}`.trim();
+  const forum = readForum();
+  if (!Array.isArray(forum.users)) forum.users = [];
+  if (forum.users.find(u => u.username && u.username.toLowerCase() === username.toLowerCase()))
+    return json(res, 409, { error: 'username_taken', message: 'That username is already taken.' });
+  if (forum.users.find(u => u.email && u.email === email))
+    return json(res, 409, { error: 'email_taken', message: 'An account with that email address already exists.' });
+  const user = { id: 'U-' + Date.now(), username, firstName, lastName, displayName, email, phone, address, passwordHash: hashPassword(password), createdAt: new Date().toISOString() };
+  forum.users.push(user);
+  writeForum(forum);
+  grantRewardPoints(email, 50, 'bonus', 'Welcome bonus', `signup-${user.id}`);
+  setCustomerSessionCookies(res, user, req);
+  sendEmail({ to: email, ...emailPortalWelcome({ username: user.username, displayName: user.displayName }) });
+  return json(res, 201, { ok: true, user: { id: user.id, username: user.username, displayName: user.displayName, createdAt: user.createdAt } });
+}
+
+async function handleCustomerLogin(req, res) {
+  const ip = getIp(req);
+  const loginKey = `customer:${ip}`;
+  const lockEntry = loginAttempts.get(loginKey);
+  if (lockEntry && lockEntry.lockedUntil && lockEntry.lockedUntil > now()) {
+    const retryAfterSec = Math.ceil((lockEntry.lockedUntil - now()) / 1000);
+    res.setHeader('Retry-After', retryAfterSec);
+    return json(res, 429, { error: 'locked_out', retryAfterSec });
+  }
+  let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+  // Accept username, email, or usernameOrEmail field — any server's form will work
+  const credential = typeof body?.usernameOrEmail === 'string' ? body.usernameOrEmail.trim()
+    : (typeof body?.email === 'string' && body.email.trim() ? body.email.trim()
+    : (typeof body?.username === 'string' ? body.username.trim() : ''));
+  const password = typeof body?.password === 'string' ? body.password : '';
+  if (!credential) return json(res, 422, { error: 'missing_fields', message: 'Username or email is required.' });
+  const forum = readForum();
+  if (!Array.isArray(forum.users)) forum.users = [];
+  const isEmail = credential.includes('@');
+  const user = isEmail
+    ? forum.users.find(u => u.email && u.email.toLowerCase() === credential.toLowerCase())
+    : forum.users.find(u => u.username && u.username.toLowerCase() === credential.toLowerCase());
+  if (!user || !user.passwordHash || !verifyPassword(password, user.passwordHash)) {
+    trackFailure(loginKey);
+    return json(res, 401, { ok: false, message: 'Invalid username/email or password.' });
+  }
+  clearFailures(loginKey);
+  setCustomerSessionCookies(res, user, req);
+  return json(res, 200, { ok: true, user: { id: user.id, username: user.username, displayName: user.displayName, createdAt: user.createdAt } });
+}
+
+function handleCustomerLogout(req, res) {
+  const forumSession  = getForumSession(req);
+  const portalSession = getPortalSession(req);
+  clearCustomerSessionCookies(res, req, forumSession?.sid, portalSession?.sid);
+  return json(res, 200, { ok: true });
+}
+
+function handleCustomerMe(req, res) {
+  const session = getPortalSession(req) || getForumSession(req);
+  if (!session) return json(res, 200, { user: null });
+  return json(res, 200, { user: { id: session.id, username: session.username, displayName: session.displayName, createdAt: session.createdAt } });
+}
+
 // ── Main server (8080) ────────────────────────────────────────────────────────
 
 const mainServer = http.createServer(async (req, res) => {
@@ -2590,6 +2717,25 @@ const mainServer = http.createServer(async (req, res) => {
     if (og) return serveIndexWithOg(res, og);
   }
 
+  // ── Universal customer auth (same endpoints on every server) ─────────────────
+  if (req.method === 'GET'  && url.pathname === '/api/auth/me')       return handleCustomerMe(req, res);
+  if (req.method === 'POST' && url.pathname === '/api/auth/register') return handleCustomerRegister(req, res);
+  if (req.method === 'POST' && url.pathname === '/api/auth/login')    return handleCustomerLogin(req, res);
+  if (req.method === 'POST' && url.pathname === '/api/auth/logout')   return handleCustomerLogout(req, res);
+
+  // ── Rewards: return balance for already-logged-in portal session ─────────────
+  if (req.method === 'GET' && url.pathname === '/api/rewards/me') {
+    const session = getPortalSession(req);
+    if (!session) return json(res, 200, { loggedIn: false });
+    const db = readRewards();
+    const entry = db.entries.find(e => e.userId === session.id);
+    const points = entry ? entry.points : 0;
+    const token = randomId();
+    for (const [k, v] of rewardsTokens) { if (v.expiresAt < Date.now()) rewardsTokens.delete(k); }
+    rewardsTokens.set(token, { email: '', userId: session.id, points, expiresAt: Date.now() + 30 * 60 * 1000 });
+    return json(res, 200, { loggedIn: true, points, token, displayName: session.displayName || session.username });
+  }
+
   // ── Rewards: verify account credentials and return points balance + token ────
   if (req.method === 'POST' && url.pathname === '/api/rewards/lookup') {
     if (publicRateLimited(getIp(req), 'register')) return json(res, 429, { error: 'too_many_requests' });
@@ -2608,6 +2754,7 @@ const mainServer = http.createServer(async (req, res) => {
     const token = randomId();
     for (const [k, v] of rewardsTokens) { if (v.expiresAt < Date.now()) rewardsTokens.delete(k); }
     rewardsTokens.set(token, { email, userId: user.id, points, expiresAt: Date.now() + 30 * 60 * 1000 });
+    setCustomerSessionCookies(res, user, req);
     return json(res, 200, { ok: true, points, token, displayName: user.displayName || user.username });
   }
 
@@ -2779,82 +2926,15 @@ const forumServer = http.createServer(async (req, res) => {
     return json(res, 200, { user: { id: forumSession.id, username: forumSession.username, displayName: forumSession.displayName, email: dbUser ? (dbUser.email || '') : '', createdAt: forumSession.createdAt } });
   }
 
-  if (req.method === 'POST' && url.pathname === '/api/forum/auth/register') {
-    if (publicRateLimited(getIp(req), 'register')) return json(res, 429, { error: 'too_many_requests' });
-    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
-    if (!body || typeof body !== 'object') return json(res, 422, { error: 'invalid_payload', message: 'Payload must be a JSON object.' });
-    const username = typeof body.username === 'string' ? body.username : '';
-    const password = typeof body.password === 'string' ? body.password : '';
-    const firstName = typeof body.firstName === 'string' ? body.firstName.trim() : '';
-    const lastName = typeof body.lastName === 'string' ? body.lastName.trim() : '';
-    const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
-    const phone = typeof body.phone === 'string' ? body.phone.trim() : '';
-    const address = typeof body.address === 'string' ? body.address.trim() : '';
-    if (!firstName) return json(res, 422, { error: 'invalid_payload', message: 'First name is required.' });
-    if (!lastName) return json(res, 422, { error: 'invalid_payload', message: 'Last name is required.' });
-    if (!email) return json(res, 422, { error: 'invalid_payload', message: 'Email address is required.' });
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json(res, 422, { error: 'invalid_payload', message: 'Email address is invalid.' });
-    if (!/^[a-zA-Z0-9_]{3,30}$/.test(username)) return json(res, 422, { error: 'invalid_payload', message: 'Username must be 3–30 characters, letters, numbers and underscores only.' });
-    if (password.length < 8) return json(res, 422, { error: 'invalid_payload', message: 'Password must be at least 8 characters.' });
-    const resolvedDisplayName = `${firstName} ${lastName}`.trim();
-    const forum = readForum();
-    if (!Array.isArray(forum.users)) forum.users = [];
-    if (forum.users.find(u => u.username && u.username.toLowerCase() === username.toLowerCase())) {
-      return json(res, 409, { error: 'username_taken', message: 'That username is already taken.' });
-    }
-    if (forum.users.find(u => u.email && u.email === email)) {
-      return json(res, 409, { error: 'email_taken', message: 'An account with that email address already exists.' });
-    }
-    const user = { id: 'U-' + Date.now(), username, firstName, lastName, displayName: resolvedDisplayName, email, phone, address, passwordHash: hashPassword(password), createdAt: new Date().toISOString() };
-    forum.users.push(user);
-    writeForum(forum);
-    const sid = randomId();
-    forumSessions.set(sid, { id: user.id, username: user.username, displayName: user.displayName, createdAt: user.createdAt, expiresAt: now() + FORUM_SESSION_TTL_MS });
-    saveSessionsToDisk(FORUM_SESSIONS_DB_PATH, forumSessions);
-    res.setHeader('Set-Cookie', sessionCookie('oe_forum_session', sid, Math.floor(FORUM_SESSION_TTL_MS / 1000), req));
-    if (email) {
-      const tmpl = emailPortalWelcome({ username: user.username, displayName: user.displayName });
-      sendEmail({ to: email, ...tmpl });
-    }
-    return json(res, 201, { ok: true, user: { id: user.id, username: user.username, displayName: user.displayName, createdAt: user.createdAt } });
-  }
-
-  if (req.method === 'POST' && url.pathname === '/api/forum/auth/login') {
-    const ip = getIp(req);
-    const forumLoginKey = `forum:${ip}`;
-    const lockEntry = loginAttempts.get(forumLoginKey);
-    if (lockEntry && lockEntry.lockedUntil && lockEntry.lockedUntil > now()) {
-      const retryAfterSec = Math.ceil((lockEntry.lockedUntil - now()) / 1000);
-      res.setHeader('Retry-After', retryAfterSec);
-      return json(res, 429, { error: 'locked_out', retryAfterSec });
-    }
-    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
-    const username = typeof body?.username === 'string' ? body.username : '';
-    const email = typeof body?.email === 'string' ? body.email : '';
-    const password = typeof body?.password === 'string' ? body.password : '';
-    const forum = readForum();
-    if (!Array.isArray(forum.users)) forum.users = [];
-    const user = email
-      ? forum.users.find(u => u.email && u.email.toLowerCase() === email.toLowerCase())
-      : forum.users.find(u => u.username && u.username.toLowerCase() === username.toLowerCase());
-    if (!user || !user.passwordHash || !verifyPassword(password, user.passwordHash)) {
-      trackFailure(forumLoginKey);
-      return json(res, 401, { ok: false, message: 'Invalid username or password.' });
-    }
-    clearFailures(forumLoginKey);
-    const sid = randomId();
-    forumSessions.set(sid, { id: user.id, username: user.username, displayName: user.displayName, createdAt: user.createdAt, expiresAt: now() + FORUM_SESSION_TTL_MS });
-    saveSessionsToDisk(FORUM_SESSIONS_DB_PATH, forumSessions);
-    res.setHeader('Set-Cookie', sessionCookie('oe_forum_session', sid, Math.floor(FORUM_SESSION_TTL_MS / 1000), req));
-    return json(res, 200, { ok: true, user: { id: user.id, username: user.username, displayName: user.displayName, createdAt: user.createdAt } });
-  }
-
-  if (req.method === 'POST' && url.pathname === '/api/forum/auth/logout') {
-    const forumSession = getForumSession(req);
-    if (forumSession) { forumSessions.delete(forumSession.sid); saveSessionsToDisk(FORUM_SESSIONS_DB_PATH, forumSessions); }
-    res.setHeader('Set-Cookie', sessionCookie('oe_forum_session', '', 0, req));
-    return json(res, 200, { ok: true });
-  }
+  // Universal auth aliases (same handlers as all other servers)
+  if (req.method === 'GET'  && url.pathname === '/api/auth/me')       return handleCustomerMe(req, res);
+  if (req.method === 'POST' && url.pathname === '/api/auth/register') return handleCustomerRegister(req, res);
+  if (req.method === 'POST' && url.pathname === '/api/auth/login')    return handleCustomerLogin(req, res);
+  if (req.method === 'POST' && url.pathname === '/api/auth/logout')   return handleCustomerLogout(req, res);
+  // Legacy forum-prefixed paths — delegate to shared handlers
+  if (req.method === 'POST' && url.pathname === '/api/forum/auth/register') return handleCustomerRegister(req, res);
+  if (req.method === 'POST' && url.pathname === '/api/forum/auth/login')    return handleCustomerLogin(req, res);
+  if (req.method === 'POST' && url.pathname === '/api/forum/auth/logout')   return handleCustomerLogout(req, res);
 
   if (req.method === 'PATCH' && url.pathname === '/api/forum/auth/me') {
     const forumSession = getForumSession(req);
@@ -4417,76 +4497,15 @@ const portalServer = http.createServer(async (req, res) => {
     return json(res, 200, { user: { id: session.id, username: session.username, displayName: session.displayName, createdAt: session.createdAt } });
   }
 
-  if (req.method === 'POST' && url.pathname === '/api/portal/auth/login') {
-    const ip = getIp(req);
-    const portalKey = `portal:${ip}`;
-    const lockEntry = loginAttempts.get(portalKey);
-    if (lockEntry && lockEntry.lockedUntil && lockEntry.lockedUntil > now()) {
-      const retryAfterSec = Math.ceil((lockEntry.lockedUntil - now()) / 1000);
-      res.setHeader('Retry-After', retryAfterSec);
-      return json(res, 429, { error: 'locked_out', retryAfterSec });
-    }
-    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
-    const username = typeof body?.username === 'string' ? body.username : '';
-    const password = typeof body?.password === 'string' ? body.password : '';
-    const forum = readForum();
-    if (!Array.isArray(forum.users)) forum.users = [];
-    const user = forum.users.find(u => u.username && u.username.toLowerCase() === username.toLowerCase());
-    if (!user || !user.passwordHash || !verifyPassword(password, user.passwordHash)) {
-      trackFailure(portalKey);
-      return json(res, 401, { ok: false, message: 'Invalid username or password.' });
-    }
-    loginAttempts.delete(portalKey);
-    const sid = randomId();
-    portalSessions.set(sid, { id: user.id, username: user.username, displayName: user.displayName, createdAt: user.createdAt, expiresAt: now() + PORTAL_SESSION_TTL_MS });
-    saveSessionsToDisk(PORTAL_SESSIONS_DB_PATH, portalSessions);
-    res.setHeader('Set-Cookie', sessionCookie('oe_portal_session', sid, Math.floor(PORTAL_SESSION_TTL_MS / 1000), req));
-    return json(res, 200, { ok: true, user: { id: user.id, username: user.username, displayName: user.displayName, createdAt: user.createdAt } });
-  }
-
-  if (req.method === 'POST' && url.pathname === '/api/portal/auth/register') {
-    if (publicRateLimited(getIp(req), 'register')) return json(res, 429, { error: 'too_many_requests' });
-    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
-    if (!body || typeof body !== 'object') return json(res, 422, { error: 'invalid_payload', message: 'Payload must be a JSON object.' });
-    const username = typeof body.username === 'string' ? body.username : '';
-    const password = typeof body.password === 'string' ? body.password : '';
-    const firstName = typeof body.firstName === 'string' ? body.firstName.trim() : '';
-    const lastName = typeof body.lastName === 'string' ? body.lastName.trim() : '';
-    const phone = typeof body.phone === 'string' ? body.phone.trim() : '';
-    const address = typeof body.address === 'string' ? body.address.trim() : '';
-    if (!firstName) return json(res, 422, { error: 'invalid_payload', message: 'First name is required.' });
-    if (!lastName) return json(res, 422, { error: 'invalid_payload', message: 'Last name is required.' });
-    if (!/^[a-zA-Z0-9_]{3,30}$/.test(username)) return json(res, 422, { error: 'invalid_payload', message: 'Username must be 3–30 characters, letters, numbers and underscores only.' });
-    if (password.length < 8) return json(res, 422, { error: 'invalid_payload', message: 'Password must be at least 8 characters.' });
-    const resolvedDisplayName = `${firstName} ${lastName}`.trim();
-    const forum = readForum();
-    if (!Array.isArray(forum.users)) forum.users = [];
-    if (forum.users.find(u => u.username && u.username.toLowerCase() === username.toLowerCase())) {
-      return json(res, 409, { error: 'username_taken', message: 'That username is already taken.' });
-    }
-    const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
-    if (!email) return json(res, 422, { error: 'invalid_payload', message: 'Email address is required.' });
-    const user = { id: 'U-' + Date.now(), username, firstName, lastName, displayName: resolvedDisplayName, email, phone, address, passwordHash: hashPassword(password), createdAt: new Date().toISOString() };
-    forum.users.push(user);
-    writeForum(forum);
-    grantRewardPoints(email, 50, 'bonus', 'Welcome bonus', `signup-${user.id}`);
-    const sid = randomId();
-    portalSessions.set(sid, { id: user.id, username: user.username, displayName: user.displayName, createdAt: user.createdAt, expiresAt: now() + PORTAL_SESSION_TTL_MS });
-    saveSessionsToDisk(PORTAL_SESSIONS_DB_PATH, portalSessions);
-    res.setHeader('Set-Cookie', sessionCookie('oe_portal_session', sid, Math.floor(PORTAL_SESSION_TTL_MS / 1000), req));
-    if (email) {
-      const tmpl = emailPortalWelcome({ username: user.username, displayName: user.displayName });
-      sendEmail({ to: email, ...tmpl });
-    }
-    return json(res, 201, { ok: true, user: { id: user.id, username: user.username, displayName: user.displayName, createdAt: user.createdAt } });
-  }
-
-  if (req.method === 'POST' && url.pathname === '/api/portal/auth/logout') {
-    const session = getPortalSession(req);
-    if (session) { portalSessions.delete(session.sid); saveSessionsToDisk(PORTAL_SESSIONS_DB_PATH, portalSessions); }
-    res.setHeader('Set-Cookie', sessionCookie('oe_portal_session', '', 0, req));
-    return json(res, 200, { ok: true });
-  }
+  // Universal auth aliases (same handlers as all other servers)
+  if (req.method === 'GET'  && url.pathname === '/api/auth/me')       return handleCustomerMe(req, res);
+  if (req.method === 'POST' && url.pathname === '/api/auth/register') return handleCustomerRegister(req, res);
+  if (req.method === 'POST' && url.pathname === '/api/auth/login')    return handleCustomerLogin(req, res);
+  if (req.method === 'POST' && url.pathname === '/api/auth/logout')   return handleCustomerLogout(req, res);
+  // Legacy portal-prefixed paths — delegate to shared handlers
+  if (req.method === 'POST' && url.pathname === '/api/portal/auth/register') return handleCustomerRegister(req, res);
+  if (req.method === 'POST' && url.pathname === '/api/portal/auth/login')    return handleCustomerLogin(req, res);
+  if (req.method === 'POST' && url.pathname === '/api/portal/auth/logout')   return handleCustomerLogout(req, res);
 
   if (req.method === 'PATCH' && url.pathname === '/api/portal/profile') {
     const session = getPortalSession(req);
@@ -4952,16 +4971,34 @@ const portalServer = http.createServer(async (req, res) => {
 
 // ── Games server (8084) ───────────────────────────────────────────────────────
 
-const gamesServer = http.createServer((req, res) => {
+const gamesServer = http.createServer(async (req, res) => {
+  try {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
   if (checkMaintenance(req, res, url)) return;
 
-  if (req.method === 'GET' && url.pathname === '/api/config') {
-    return json(res, 200, { portalUrl: PORTAL_URL });
+  if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
+
+  if (req.method === 'GET' && url.pathname === '/api/csrf-token') {
+    const token = ensureCsrfCookie(req, res);
+    return json(res, 200, { token });
   }
 
+  if ((req.method === 'POST' || req.method === 'PATCH') && url.pathname.startsWith('/api/')) {
+    if (!verifyCsrf(req, res)) return;
+  }
+
+  if (req.method === 'GET'  && url.pathname === '/api/config')        return json(res, 200, { portalUrl: PORTAL_URL });
+  if (req.method === 'GET'  && url.pathname === '/api/auth/me')       return handleCustomerMe(req, res);
+  if (req.method === 'POST' && url.pathname === '/api/auth/register') return handleCustomerRegister(req, res);
+  if (req.method === 'POST' && url.pathname === '/api/auth/login')    return handleCustomerLogin(req, res);
+  if (req.method === 'POST' && url.pathname === '/api/auth/logout')   return handleCustomerLogout(req, res);
+
   return serveStatic(req, res, url.pathname, '/dist/games.html', null);
+  } catch (err) {
+    console.error('[gamesServer] unhandled error:', err);
+    if (!res.headersSent) json(res, 500, { error: 'server_error' });
+  }
 });
 
 // ── Start all servers ─────────────────────────────────────────────────────────
