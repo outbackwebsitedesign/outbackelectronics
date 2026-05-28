@@ -1050,6 +1050,8 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
 const SHOP_LAT = -35.9845;
 const SHOP_LNG = 144.7730;
 const CALLOUT_FREE_KM = 10;
+const CALLOUT_LOCAL_CAP_KM = 200;
+const CALLOUT_HIVAL_THRESHOLD = 10000;
 const CALLOUT_FUEL_RATE = 220 / 400;  // $0.55/km round trip
 const CALLOUT_KM_PER_DAY = 480;        // 6h × 80km/h
 const CALLOUT_DAILY_RATE = 150;
@@ -1117,7 +1119,9 @@ function ServiceDetailPage({ go, pageParams }) {
 
   const fixedPrice = service ? Number(service.priceAud) : NaN;
   const hasFixedPrice = service && !isNaN(fixedPrice) && fixedPrice > 0;
-  const travelFee = distanceKm !== null ? calloutFeeAud(distanceKm) : null;
+  const isHighValue = fixedPrice >= CALLOUT_HIVAL_THRESHOLD;
+  const outOfRange = distanceKm !== null && distanceKm > CALLOUT_LOCAL_CAP_KM && !isHighValue;
+  const travelFee = distanceKm !== null && !outOfRange ? calloutFeeAud(distanceKm) : null;
 
   const handlePayAndBook = async (e) => {
     e.preventDefault();
@@ -1215,8 +1219,10 @@ function ServiceDetailPage({ go, pageParams }) {
                 <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginBottom:14}}>Checking distance…</div>
               )}
               {!geocoding && distanceKm !== null && (
-                <div style={{marginBottom:14, padding:'10px 14px', fontSize:13, border:'1px solid var(--line)', background:'var(--bg-elev)'}}>
-                  {distanceKm <= CALLOUT_FREE_KM ? (
+                <div style={{marginBottom:14, padding:'10px 14px', fontSize:13, border:'1px solid var(--line)', background: outOfRange ? '#fff3f3' : 'var(--bg-elev)', borderColor: outOfRange ? 'var(--rust)' : 'var(--line)'}}>
+                  {outOfRange ? (
+                    <>That's {distanceKm}km — on-site bookings for this service are capped at {CALLOUT_LOCAL_CAP_KM}km. <span style={{color:'var(--rust)', fontWeight:600}}>Post your device to us</span> or <a style={{color:'var(--rust)', cursor:'pointer', textDecoration:'underline'}} onClick={() => go('quote', service)}>request a quote</a> for a discussion.</>
+                  ) : distanceKm <= CALLOUT_FREE_KM ? (
                     <><span style={{color:'var(--rust)', fontWeight:600}}>✓ Free callout</span> — you're {distanceKm}km away.</>
                   ) : (
                     <><span style={{fontWeight:600}}>+${travelFee} travel fee</span> — {calloutFeeBreakdown(distanceKm)}. Added to your total.</>
@@ -1233,7 +1239,7 @@ function ServiceDetailPage({ go, pageParams }) {
               </label>
               {bookError && <div style={{color:'var(--rust)', fontSize:13, marginBottom:12}}>{bookError}</div>}
               <div style={{display:'flex', gap:12, alignItems:'center'}}>
-                <button type="submit" className="btn btn-rust" style={{flex:1, justifyContent:'center'}} disabled={booking}>
+                <button type="submit" className="btn btn-rust" style={{flex:1, justifyContent:'center'}} disabled={booking || outOfRange}>
                   {booking ? 'Redirecting…' : travelFee > 0
                     ? `Pay now — $${(fixedPrice + travelFee).toLocaleString('en-AU', {minimumFractionDigits:2})} (incl. travel) →`
                     : `Pay now — $${fixedPrice.toLocaleString('en-AU', {minimumFractionDigits:2})} →`}

@@ -7,8 +7,7 @@ NODE_BIN="$(which node)"
 NPM_BIN="$(which npm)"
 
 echo "==> Pulling latest from main..."
-git -C "$APP_DIR" fetch origin main
-git -C "$APP_DIR" reset --hard origin/main
+git -C "$APP_DIR" pull origin main
 
 echo "==> Installing dependencies (including dev for build)..."
 "$NPM_BIN" --prefix "$APP_DIR" install
