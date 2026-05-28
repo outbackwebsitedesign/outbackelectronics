@@ -2519,6 +2519,7 @@ function AdminTutorials() {
   const [notice, setNotice] = useState({ type:'', msg:'' });
   const [saving, setSaving] = useState(false);
   const [previewing, setPreviewing] = useState(false);
+  const [membershipTiers, setMembershipTiers] = useState([]);
   const bodyRef = React.useRef(null);
 
   const applyFormat = (fmt) => {
@@ -2589,6 +2590,10 @@ function AdminTutorials() {
       .then(d => setRows(d.items || []))
       .catch(() => setError('Failed to load tutorials.'))
       .finally(() => setLoading(false));
+    fetch('/api/admin/memberships', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setMembershipTiers((d.tiers || []).filter(t => t.status === 'published')))
+      .catch(() => {});
   }, []);
   const save = async (overrides = {}) => {
     setNotice({ type:'', msg:'' });
@@ -2673,11 +2678,11 @@ function AdminTutorials() {
                 </select>
               </label>
               <label className="field"><span className="label">Access</span>
-                <select className="select" value={form.accessLevel != null ? String(form.accessLevel) : '0'} onChange={e=>setForm({...form, accessLevel: Number(e.target.value)})}>
-                  <option value="0">Public</option>
-                  <option value="1">Members+</option>
-                  <option value="2">Pro+</option>
-                  <option value="3">Elite only</option>
+                <select className="select" value={form.requiredTierId || ''} onChange={e=>setForm({...form, requiredTierId: e.target.value})}>
+                  <option value="">Public</option>
+                  {membershipTiers.map(t => (
+                    <option key={t.id} value={t.id}>{t.name}+</option>
+                  ))}
                 </select>
               </label>
               <label className="field"><span className="label">Estimated read</span>
@@ -3292,12 +3297,17 @@ function AdminGroups() {
   const [optionsLoading, setOptionsLoading] = useState(true);
   const [drawerTab, setDrawerTab] = useState('details');
   const [newMember, setNewMember] = useState('');
+  const [membershipTiers, setMembershipTiers] = useState([]);
 
   useEffect(() => {
     fetch('/api/admin/groups', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(d => setRows(d.items || []))
       .catch(() => setRows([]));
+    fetch('/api/admin/memberships', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setMembershipTiers((d.tiers || []).filter(t => t.status === 'published')))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -3422,11 +3432,11 @@ function AdminGroups() {
               <label className="field"><span className="label">Price</span><input className="input" placeholder={form.joinType==='subscription'?'e.g. $9/mo':'e.g. $49'} value={form.price} onChange={e=>setForm({...form,price:e.target.value})}/></label>
             )}
             <label className="field"><span className="label">Required membership</span>
-              <select className="select" value={form.requiredTierLevel != null ? String(form.requiredTierLevel) : '0'} onChange={e=>setForm({...form, requiredTierLevel: Number(e.target.value)})}>
-                <option value="0">None</option>
-                <option value="1">Basic+</option>
-                <option value="2">Pro+</option>
-                <option value="3">Elite only</option>
+              <select className="select" value={form.requiredTierId || ''} onChange={e=>setForm({...form, requiredTierId: e.target.value})}>
+                <option value="">None (public)</option>
+                {membershipTiers.map(t => (
+                  <option key={t.id} value={t.id}>{t.name}+</option>
+                ))}
               </select>
             </label>
           </>)}
