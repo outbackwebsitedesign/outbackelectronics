@@ -16,17 +16,14 @@
 ### ✅ 2. shop.description not set in admin Settings (RESOLVED)
 Same as above — settings.db only, no defaults file. Set via admin → Settings → Shop if not already done.
 
-### ❌ 3. SMTP not configured (server.js:35–38)
-`SMTP_HOST`, `SMTP_USER`, `SMTP_PASS` all default to `''`. No email is ever delivered (quote confirmations, order shipped, warranty, password reset, contact form).  
-**Fix:** Set env vars `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `NOTIFY_EMAIL`.
+### ✅ 3. SMTP not configured (RESOLVED)
+Server reads SMTP config from `integrations.find('Email')` in `settings.db` (server.js:1481–1487), falling back to env vars only if no admin entry exists. Configurable via admin → Settings → Integrations → Email.
 
-### ❌ 4. Stripe not configured (server.js:28–30)
-`STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET` all default to `''`. Portal "Pay Now" and checkout return `503 stripe_not_configured`.  
-**Fix:** Set Stripe env vars.
+### ✅ 4. Stripe not configured (RESOLVED)
+Server reads Stripe secret key from `integrations.find('Stripe')` in `settings.db` (server.js:1385–1386), falling back to env var only if no admin entry exists. Configurable via admin → Settings → Integrations → Stripe.
 
-### ❌ 5. AusPost API not configured (server.js:31)
-`AUSPOST_API_KEY` defaults to `''`. Shipping quote endpoint returns `503 auspost_not_configured`. Shop checkout has no live shipping rates.  
-**Fix:** Set `AUSPOST_API_KEY` env var.
+### ✅ 5. AusPost API not configured (RESOLVED)
+Server reads AusPost API key from `integrations.find('AusPost')` in `settings.db` (server.js:1401–1402), falling back to env var only if no admin entry exists. Configurable via admin → Settings → Integrations → AusPost.
 
 ---
 
@@ -169,9 +166,9 @@ Username required (not email). New users arriving from a warranty link or order 
 |---|----------|-------|----------|--------|
 | 1 | admin → Settings | shop.email empty | CRITICAL | ✅ DONE |
 | 2 | admin → Settings | shop.description empty | CRITICAL | ✅ DONE |
-| 3 | server.js env vars | SMTP not configured | CRITICAL | ❌ OPEN |
-| 4 | server.js env vars | Stripe not configured | CRITICAL | ❌ OPEN |
-| 5 | server.js env vars | AusPost not configured | CRITICAL | ❌ OPEN |
+| 3 | admin → Settings → Integrations | SMTP not configured | CRITICAL | ✅ DONE |
+| 4 | admin → Settings → Integrations | Stripe not configured | CRITICAL | ✅ DONE |
+| 5 | admin → Settings → Integrations | AusPost not configured | CRITICAL | ✅ DONE |
 | 6 | pages-shop.jsx:1311 | Gift cards "coming soon" | HIGH | ❌ OPEN |
 | 7 | pages-shop.jsx:1462 | Memberships disabled/greyed | HIGH | ❌ OPEN |
 | 8 | pages-shop.jsx:1405 | Hardcoded membership default tiers | HIGH | ❌ OPEN |
