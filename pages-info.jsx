@@ -1241,130 +1241,310 @@ function SellGearPage({ go }) {
   );
 }
 
-// ============================================================
-// AI / EDGE AI
-// ============================================================
-function AIModelModal({ model, onClose, go }) {
-  return (
-    <div style={{position:'fixed',inset:0,zIndex:500,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(15,13,10,0.7)'}} onClick={onClose}>
-      <div style={{width:'100%',maxWidth:560,background:'var(--bg)',border:'1px solid var(--line)',boxShadow:'0 12px 40px rgba(0,0,0,.35)',padding:32}} onClick={e => e.stopPropagation()}>
-        <div className="row-flex" style={{justifyContent:'space-between',marginBottom:18}}>
-          <div>
-            <span className="tag tag-euc">OPEN WEIGHTS</span>
-            <h2 className="mono" style={{fontSize:24,marginTop:8,color:'var(--rust)'}}>{model.name}</h2>
-          </div>
-          <button style={{background:'none',border:'none',cursor:'pointer',fontSize:22,color:'var(--ink-2)',lineHeight:1}} onClick={onClose}>×</button>
-        </div>
-        <table style={{width:'100%',borderCollapse:'collapse',fontSize:14,marginBottom:20}}>
-          <tbody>
-            {[['Task',model.task],['Model size',model.size],['Accuracy',model.acc],['Recommended HW',model.hw],['Licence','Apache 2.0'],['Format','ONNX / TFLite']].map(([label,val],i) => (
-              <tr key={i} style={{borderBottom:'1px solid var(--line)'}}>
-                <td style={{padding:'10px 0',color:'var(--ink-2)',width:'40%'}} className="mono">{label}</td>
-                <td style={{padding:'10px 0',fontWeight:500}}>{val}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <div className="term" style={{marginBottom:18}}>
-          <div className="mono" style={{fontSize:10,color:'var(--ink-3)',marginBottom:6}}>// QUICK START</div>
-          <div><span className="prompt">$</span> oe pull {model.name}</div>
-          <div><span className="prompt">$</span> oe deploy {model.name} --camera cam0</div>
-        </div>
-        <div className="row-flex" style={{gap:8}}>
-          <button className="btn btn-rust" onClick={() => { onClose(); go('quote'); }}>Spec a box for this model →</button>
-          <button className="btn btn-ghost" onClick={onClose}>Close</button>
-        </div>
-      </div>
-    </div>
-  );
-}
+const ACD_STAGES = [
+  {
+    n: '0', name: 'Birth', active: true,
+    plain: 'The system exists but does nothing yet. It has a heartbeat — a clock, a memory, a boundary between itself and the outside world. Nothing more.',
+    tech: 'Runtime persistence · internal state variables · clock and scheduling · sandbox boundary enforcement',
+  },
+  {
+    n: '1', name: 'Waking up', active: true,
+    plain: 'It learns to be awake and asleep. It starts reacting to the world around it — loud sounds, bright movement — without understanding any of it.',
+    tech: 'Wake/sleep transitions · sensory gating · arousal state · adaptive thresholds · raw energy detection',
+  },
+  {
+    n: '2', name: 'Learning to see and hear', active: false,
+    plain: 'It starts making sense of the raw flood of pixels and sound. Not understanding — just finding patterns. The same way a newborn learns to focus before it learns to recognise.',
+    tech: 'Visual and auditory latent space stabilisation · temporal continuity · feature persistence · waveform structure modelling',
+  },
+  {
+    n: '3', name: 'Things exist when you look away', active: false,
+    plain: 'It learns that objects are persistent — that the cup is still the cup even when it moves, or is partially hidden. This is object permanence. Babies develop it around 8 months.',
+    tech: 'Visual identity persistence · motion tracking · partial occlusion handling · re-identification without labels',
+  },
+  {
+    n: '4', name: 'Babbling', active: false,
+    plain: 'It starts making sounds. Not words — just attempts. It hears a sound, tries to reproduce it, listens to what it made, and adjusts. Over and over. The same process a baby uses.',
+    tech: 'Sensorimotor audio loop · closed-loop imitation · motor-to-acoustic mapping · iterative error reduction',
+  },
+  {
+    n: '5', name: 'Connecting what it sees to what it hears', active: false,
+    plain: 'It starts noticing that some sounds go with some sights. A moving mouth produces voice. A falling object makes a thud. No meaning yet — just correlation.',
+    tech: 'Cross-modal temporal synchrony · predictive coupling between visual and auditory streams · co-occurrence learning',
+  },
+  {
+    n: '6', name: 'Shared attention', active: false,
+    plain: 'A person can point at something, say a word, and repeat it. The system starts connecting the pointing to the thing and the thing to the sound. The beginning of understanding that sounds refer to objects.',
+    tech: 'Caregiver-guided referential binding · joint attention · attended visual cluster paired with repeated auditory pattern',
+  },
+  {
+    n: '7', name: 'First words', active: false,
+    plain: 'A word becomes real. Not because it was programmed in — but because the system has seen the thing, heard the word, and had the connection reinforced enough times that it sticks.',
+    tech: 'Stable symbol grounding · visual cluster ↔ auditory pattern ↔ reinforcement binding · reusable cross-modal association',
+  },
+  {
+    n: '8+', name: 'Thinking', active: false,
+    plain: 'If the foundations hold, higher capabilities follow — reasoning, planning, memory across time, a model of itself. These are distant goals. We are not there yet, and we will not pretend otherwise.',
+    tech: 'Abstraction · planning · compositional language · episodic memory · self-modelling · long-term prediction',
+  },
+];
 
-function AIPage({ go }) {
-  const [selectedModel, setSelectedModel] = useState(null);
-  const [models, setModels] = useState([]);
-  const [boxes, setBoxes] = useState([]);
+const ACD_LAYERS = [
+  {
+    n: '1', name: 'Survival first',
+    plain: 'Before anything else, the system needs to stay stable. This layer manages energy, attention, and whether the system is awake or resting — equivalent to the brainstem keeping a body alive.',
+    tech: 'Regulatory layer · arousal control · sleep/wake · metabolic budgeting · sensory gating · sandbox enforcement',
+  },
+  {
+    n: '2', name: 'Raw senses',
+    plain: 'Eyes and ears. This layer takes in the camera and microphone and finds structure in the noise — without labelling or understanding anything. Pure pattern detection.',
+    tech: 'Sensory layer · visual and auditory stream ingestion · latent compression · representation stabilisation · no symbolic reasoning',
+  },
+  {
+    n: '3', name: 'Constant prediction',
+    plain: 'The core engine. Every moment, it predicts what will happen next. When it\'s wrong, it adjusts. This single loop drives almost everything the system learns.',
+    tech: 'Predictive layer · next-state prediction · temporal continuity modelling · event anticipation · prediction error minimisation',
+  },
+  {
+    n: '4', name: 'Connecting the senses',
+    plain: 'Sight and sound start to inform each other. Not because we tell it they should — but because they keep happening together, and the system notices.',
+    tech: 'Cross-modal integration layer · temporal synchrony detection · caregiver-guided binding · shared latent cause learning',
+  },
+  {
+    n: '5', name: 'Drives and motivation',
+    plain: 'It has something like wants — curiosity, the need for stability, a pull toward social interaction. These shape what it pays attention to and what it tries to do.',
+    tech: 'Reinforcement and value layer · internal drives: continuity, stability, curiosity, social reinforcement, integrity · learning pressure shaping',
+  },
+  {
+    n: '6', name: 'Memory',
+    plain: 'It remembers — but not like a hard drive. Memory here is active compression. Important things get reinforced. Useless things fade. Forgetting is a feature.',
+    tech: 'Memory and consolidation layer · replay · compression · reinforcement · pruning · working / episodic / procedural / associative memory types',
+  },
+  {
+    n: '7', name: 'Higher thought',
+    plain: 'Reasoning, planning, understanding itself. This layer does not exist yet. It will only be built once everything beneath it is solid. We don\'t skip steps.',
+    tech: 'Higher cognition layer · abstraction · planning · self-modelling · long-term reasoning · symbolic manipulation · late-stage only',
+  },
+];
 
-  useEffect(() => {
-    fetch('/api/ai').then(r => r.ok ? r.json() : Promise.reject()).then(r => {
-      setModels(r.models || []);
-      setBoxes(r.boxes || []);
-    }).catch(() => {});
-  }, []);
-
+function HumanlyAIPage({ go }) {
   return (
     <>
       <PageHead
-        crumbs={['Outback', 'AI']}
-        title="Artificial Intelligence"
-        kicker={<span className="tag tag-rust">NEW 2026 · BETA PRICING</span>}
-        lead="Custom AI built to your problem — from production chatbots and integrations to subject-specific models and frontier research into artificial general intelligence."
+        crumbs={['Outback', 'AI', 'Humanly AI']}
+        title="Humanly AI"
+        kicker={<span className="tag tag-euc">RESEARCH · ACD</span>}
+        lead="We are trying to grow a mind from scratch. Not program one. Not train one on the internet. Grow one — the way a brain grows — from raw experience, one stage at a time."
       />
 
-      <section className="container" style={{paddingTop:40,paddingBottom:16}}>
-        <span className="eyebrow">WHAT WE BUILD</span>
-        <h2 className="serif" style={{fontSize:48,marginTop:8,lineHeight:1.1,maxWidth:640}}>AI for real problems.<br/>Built to spec.</h2>
-        <p style={{marginTop:16,fontSize:16,color:'var(--ink-2)',maxWidth:560}}>
-          We don't sell a platform or lock you into a product. Every engagement starts with your problem and ends with something that solves it — whether that's a chatbot, a fine-tuned model, or a full integration into your stack.
-        </p>
+      {/* The idea */}
+      <section className="container" style={{paddingTop: 40, paddingBottom: 16}}>
+        <div className="grid-2" style={{gap: 32, alignItems: 'start'}}>
+          <div>
+            <span className="eyebrow">THE IDEA</span>
+            <h2 className="serif" style={{fontSize: 40, marginTop: 8, lineHeight: 1.15}}>Every AI you've used was taught.<br/>This one is being raised.</h2>
+            <p style={{marginTop: 16, fontSize: 16, color: 'var(--ink-2)', lineHeight: 1.8}}>
+              ChatGPT, Gemini, every AI assistant you've encountered — they were trained on billions of pages of human writing before you ever spoke to them. They arrived knowing language, facts, and how to hold a conversation.
+            </p>
+            <p style={{marginTop: 12, fontSize: 16, color: 'var(--ink-2)', lineHeight: 1.8}}>
+              Humanly AI starts with none of that. No words. No facts. No prior knowledge of any kind. It starts with a camera, a microphone, and silence — and we are trying to see whether a mind can grow from there, the same way yours did.
+            </p>
+          </div>
+          <div style={{padding: 32, background: 'var(--paper)', border: '1px solid var(--line)'}}>
+            <span className="eyebrow">IT BEGINS WITH</span>
+            <ul className="checks" style={{marginTop: 16, fontSize: 15, lineHeight: 2}}>
+              <li>Eyes — a raw camera feed</li>
+              <li>Ears — a raw microphone feed</li>
+              <li>A voice — controllable audio output</li>
+              <li>Memory — persistent storage</li>
+              <li>Drives — something like hunger and curiosity</li>
+              <li>Hard walls — a strict sandbox it cannot escape</li>
+            </ul>
+            <div style={{marginTop: 20, paddingTop: 20, borderTop: '1px solid var(--line)'}}>
+              <span className="eyebrow" style={{color: 'var(--rust)'}}>IT DOES NOT BEGIN WITH</span>
+              <ul style={{marginTop: 12, fontSize: 14, lineHeight: 2, listStyle: 'none', padding: 0, color: 'var(--ink-2)'}}>
+                {['Any language or vocabulary','Knowledge of objects or the world','The ability to reason','Access to the internet','Anything pretrained'].map(x => (
+                  <li key={x} style={{display:'flex', gap: 10}}><span style={{color:'var(--rust)'}}>✗</span>{x}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
       </section>
 
-      <section className="container" style={{paddingTop:32,paddingBottom:16}}>
-        <div className="grid-2" style={{gap:1,border:'1px solid var(--line)',background:'var(--line)'}}>
-          {[
-            {tag:'INTEGRATION', title:'Custom Integration', desc:'We wire AI into your existing systems — APIs, databases, workflows. If you have a process, we can find where intelligence fits.'},
-            {tag:'CONVERSATIONAL', title:'Chatbots', desc:'Purpose-built conversational agents for customer support, internal tooling, or guided workflows. Trained on your content, deployed on your terms.'},
-            {tag:'PROJECT-SPECIFIC', title:'Project AI', desc:'AI scoped to a single project — one problem, one solution, built to fit. No bloat, no generic model handed over with a PDF.'},
-            {tag:'DOMAIN', title:'Subject-Specific AI', desc:'Models fine-tuned on a particular field or discipline. If your domain has a body of knowledge, we can build a model that understands it.'},
-            {tag:'LARGE LANGUAGE MODELS', title:'LLM Work', desc:'Prompt engineering, fine-tuning, RAG pipelines, and production deployment of large language models for real business problems.'},
-            {tag:'SMALL LANGUAGE MODELS', title:'SLM Work', desc:'Compact, efficient models that run fast and cost less to operate. Right-sized intelligence for constrained environments or high-volume inference.'},
-          ].map(s => (
-            <div key={s.tag} style={{background:'var(--paper)',padding:32}}>
-              <span className="eyebrow" style={{fontSize:10}}>{s.tag}</span>
-              <h3 className="serif" style={{fontSize:26,marginTop:8,marginBottom:10}}>{s.title}</h3>
-              <p style={{fontSize:14,color:'var(--ink-2)',lineHeight:1.6,margin:0}}>{s.desc}</p>
+      {/* How it learns */}
+      <section className="container" style={{paddingTop: 56, paddingBottom: 16}}>
+        <span className="eyebrow">HOW IT LEARNS</span>
+        <div className="grid-2" style={{gap: 32, marginTop: 24}}>
+          <div>
+            <h3 className="serif" style={{fontSize: 30, lineHeight: 1.2}}>It guesses constantly — and learns from being wrong.</h3>
+            <p style={{marginTop: 14, fontSize: 15, color: 'var(--ink-2)', lineHeight: 1.8}}>
+              The system's core loop is prediction. Every moment, it tries to predict what will happen next — what the next frame will look like, what sound is coming. When it's wrong, it adjusts. This is how a brain works too: not storing information like a database, but building a model of the world by constantly testing it.
+            </p>
+            <p style={{marginTop: 12, fontSize: 15, color: 'var(--ink-2)', lineHeight: 1.8}}>
+              There is no teacher correcting it with right answers. There is only reality, pushing back.
+            </p>
+            <div className="mono" style={{marginTop: 20, fontSize: 12, color: 'var(--ink-3)', lineHeight: 2, borderLeft: '2px solid var(--line)', paddingLeft: 16}}>
+              <div>// technical: predictive coding architecture</div>
+              <div>observe → predict → compare → reduce error → repeat</div>
+            </div>
+          </div>
+          <div>
+            <h3 className="serif" style={{fontSize: 30, lineHeight: 1.2}}>Knowledge is formed. Not installed.</h3>
+            <p style={{marginTop: 14, fontSize: 15, color: 'var(--ink-2)', lineHeight: 1.8}}>
+              When you were a baby, nobody uploaded "apple" into your brain. You saw apples, touched them, heard the word while looking at them, and over time the concept formed. We are attempting the same process — grounded, embodied, earned knowledge rather than injected facts.
+            </p>
+            <p style={{marginTop: 12, fontSize: 15, color: 'var(--ink-2)', lineHeight: 1.8}}>
+              If the system eventually knows what an apple is, it will be because it figured it out — not because we told it.
+            </p>
+            <div className="mono" style={{marginTop: 20, fontSize: 12, color: 'var(--ink-3)', lineHeight: 2, borderLeft: '2px solid var(--line)', paddingLeft: 16}}>
+              <div>// technical: grounded cognition via cross-modal</div>
+              <div>association, reinforcement, and caregiver interaction</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Developmental stages */}
+      <section className="container" style={{paddingTop: 56, paddingBottom: 16}}>
+        <span className="eyebrow">THE STAGES</span>
+        <h2 className="serif" style={{fontSize: 40, marginTop: 8, marginBottom: 8}}>It grows in order.<br/>No skipping ahead.</h2>
+        <p style={{fontSize: 15, color: 'var(--ink-2)', marginBottom: 36, maxWidth: 600}}>
+          A human brain doesn't develop all at once. The brainstem comes before the cortex. Vision before language. Babbling before words. We follow the same order — because we believe the order matters.
+        </p>
+        <div style={{position: 'relative', paddingLeft: 36}}>
+          <div style={{position: 'absolute', left: 11, top: 8, bottom: 8, width: 1, background: 'var(--line)'}} />
+          {ACD_STAGES.map((s, i) => (
+            <div key={s.n} style={{position: 'relative', marginBottom: 36}}>
+              <div style={{position: 'absolute', left: -36, top: 4, width: 22, height: 22, borderRadius: '50%', background: s.active ? 'var(--rust)' : 'var(--bg)', border: '2px solid', borderColor: s.active ? 'var(--rust)' : 'var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
+                <span className="mono" style={{fontSize: 8, color: s.active ? '#fff' : 'var(--ink-3)'}}>{s.n}</span>
+              </div>
+              <div>
+                <div style={{display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6}}>
+                  <h3 style={{fontSize: 17, fontWeight: 700, margin: 0}}>{s.name}</h3>
+                  {s.active && <span className="tag tag-rust" style={{fontSize: 9}}>WHERE WE ARE</span>}
+                </div>
+                <p style={{margin: '0 0 8px', fontSize: 15, color: 'var(--ink)', lineHeight: 1.7, maxWidth: 620}}>{s.plain}</p>
+                <div className="mono" style={{fontSize: 11, color: 'var(--ink-3)', lineHeight: 1.8}}>{s.tech}</div>
+              </div>
             </div>
           ))}
         </div>
-        <div style={{marginTop:24,textAlign:'center'}}>
-          <button className="btn btn-rust" onClick={() => go('quote')}>Talk to us about your project →</button>
-        </div>
       </section>
 
-      <section className="container" style={{paddingTop:56,paddingBottom:16}}>
-        <div className="grid-2" style={{gap:32,alignItems:'start'}}>
-          <div style={{padding:40,background:'var(--dark)',color:'var(--paper)',border:'1px solid var(--line)'}}>
-            <span className="tag tag-rust" style={{marginBottom:16,display:'inline-block'}}>RESEARCH · AGI</span>
-            <h2 className="serif" style={{fontSize:40,lineHeight:1.1,marginTop:12}}>Attempting true AGI.</h2>
-            <p style={{marginTop:16,fontSize:15,color:'var(--bg-deep)',lineHeight:1.7}}>
-              We are actively pursuing artificial general intelligence — not as a marketing claim, but as a research direction. This is hard, unsolved, and we say so plainly. If you want to follow the work or collaborate, get in touch.
-            </p>
-            <button className="btn btn-rust" style={{marginTop:28}} onClick={() => go('quote')}>Get in touch →</button>
-          </div>
-          <div style={{padding:40,background:'var(--paper)',border:'1px solid var(--line)'}}>
-            <span className="tag tag-euc" style={{marginBottom:16,display:'inline-block'}}>RESEARCH · HUMANLY AI</span>
-            <h2 className="serif" style={{fontSize:40,lineHeight:1.1,marginTop:12}}>Growing a mind from scratch.</h2>
-            <p style={{marginTop:16,fontSize:15,color:'var(--ink-2)',lineHeight:1.7}}>
-              Humanly AI is an attempt to grow a sandboxed digital cognitive organism from raw sensory experience — using developmental learning principles modeled after the human brain. No pretraining on human knowledge. No shortcuts. The goal is to see whether genuine cognition can emerge from the bottom up.
-            </p>
-            <button className="btn btn-ghost" style={{marginTop:28}} onClick={() => go('quote')}>Follow the research →</button>
-          </div>
-        </div>
-      </section>
-
-      {/* AI in Action — video */}
-      <section className="container" style={{paddingTop:56,paddingBottom:56}}>
-        <span className="eyebrow">AI IN ACTION</span>
-        <h2 className="serif" style={{fontSize:40,marginTop:6,marginBottom:8}}>What it's like to be an AI</h2>
-        <p style={{fontSize:13,color:'var(--ink-3)',fontFamily:'JetBrains Mono, monospace',marginBottom:24,maxWidth:620}}>
-          This video was created entirely by Claude AI, using only HTML code, no image or true video generation.
+      {/* How it's structured */}
+      <section className="container" style={{paddingTop: 56, paddingBottom: 16}}>
+        <span className="eyebrow">HOW IT'S BUILT</span>
+        <h2 className="serif" style={{fontSize: 40, marginTop: 8, marginBottom: 8}}>Seven layers.<br/>Lowest first.</h2>
+        <p style={{fontSize: 15, color: 'var(--ink-2)', marginBottom: 32, maxWidth: 580}}>
+          The system is built in layers, each one depending on the ones below it. The higher layers don't exist yet — and won't until the lower ones are stable. We don't build the roof before the foundations.
         </p>
-        <div style={{position:'relative',width:'100%',paddingBottom:'56.25%',background:'#000',border:'1px solid var(--line)'}}>
-          <iframe
-            src="/assets/ai-video.html"
-            title="What It's Like to Be an AI"
-            style={{position:'absolute',inset:0,width:'100%',height:'100%',border:'none'}}
-            allow="autoplay"
-          />
+        <div style={{border: '1px solid var(--line)'}}>
+          {ACD_LAYERS.map((l, i) => (
+            <div key={l.n} style={{padding: '24px 28px', borderTop: i === 0 ? 'none' : '1px solid var(--line)', background: i % 2 === 0 ? 'var(--paper)' : 'var(--bg)'}}>
+              <div style={{display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 8}}>
+                <span className="mono" style={{fontSize: 11, color: 'var(--rust)', flexShrink: 0}}>LAYER {l.n}</span>
+                <h3 style={{fontSize: 17, fontWeight: 700, margin: 0}}>{l.name}</h3>
+              </div>
+              <p style={{margin: '0 0 8px', fontSize: 15, color: 'var(--ink-2)', lineHeight: 1.7, maxWidth: 680}}>{l.plain}</p>
+              <div className="mono" style={{fontSize: 11, color: 'var(--ink-3)'}}>{l.tech}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Memory and sleep */}
+      <section className="container" style={{paddingTop: 48, paddingBottom: 16}}>
+        <div className="grid-2" style={{gap: 32}}>
+          <div style={{padding: 32, background: 'var(--paper)', border: '1px solid var(--line)'}}>
+            <span className="eyebrow">MEMORY</span>
+            <h3 className="serif" style={{fontSize: 28, marginTop: 10, marginBottom: 14}}>It forgets on purpose.</h3>
+            <p style={{fontSize: 15, color: 'var(--ink-2)', lineHeight: 1.8, marginBottom: 16}}>
+              Memory here isn't a hard drive. The system doesn't just record everything and keep it forever. Instead, it continuously replays experiences, reinforces what mattered, and lets the rest fade. Forgetting is not a bug — it's how noise gets cleared and real patterns survive.
+            </p>
+            <div className="mono" style={{fontSize: 11, color: 'var(--ink-3)', lineHeight: 2, borderTop: '1px solid var(--line)', paddingTop: 14}}>
+              <div>Working memory — what it's attending to right now</div>
+              <div>Episodic memory — compressed records of past interactions</div>
+              <div>Procedural memory — learned behaviours and motor patterns</div>
+              <div>Associative memory — cross-modal bindings (sight ↔ sound)</div>
+            </div>
+          </div>
+          <div style={{padding: 32, background: 'var(--paper)', border: '1px solid var(--line)'}}>
+            <span className="eyebrow">SLEEP</span>
+            <h3 className="serif" style={{fontSize: 28, marginTop: 10, marginBottom: 14}}>Sleep is when the real work happens.</h3>
+            <p style={{fontSize: 15, color: 'var(--ink-2)', lineHeight: 1.8, marginBottom: 16}}>
+              When the system rests, it isn't idle. It replays what it experienced, consolidates what it learned, prunes what it doesn't need, and recalibrates. This mirrors what the human brain does during sleep — which is one reason sleep deprivation destroys learning.
+            </p>
+            <div className="mono" style={{fontSize: 11, color: 'var(--ink-3)', lineHeight: 2, borderTop: '1px solid var(--line)', paddingTop: 14}}>
+              <div>Light sleep — low-level monitoring continues</div>
+              <div>Deep sleep — internal replay and structural maintenance</div>
+              <div>Dream-like replay — recombination of past experiences</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Sandbox */}
+      <section className="container" style={{paddingTop: 48, paddingBottom: 16}}>
+        <div style={{padding: 40, background: 'var(--dark)', color: 'var(--paper)', border: '1px solid var(--line)'}}>
+          <span className="eyebrow" style={{color: 'var(--rust)'}}>CONTAINMENT</span>
+          <h3 className="serif" style={{fontSize: 32, marginTop: 10, marginBottom: 16, color: 'var(--paper)'}}>It lives in a box it cannot leave.</h3>
+          <div className="grid-2" style={{gap: 40}}>
+            <div>
+              <p style={{fontSize: 15, color: 'var(--bg-deep)', lineHeight: 1.8}}>
+                The system has no access to the internet. It cannot touch the operating system it runs on. It cannot rewrite its own core rules. It cannot give itself more capabilities than it has been granted.
+              </p>
+              <p style={{marginTop: 12, fontSize: 15, color: 'var(--bg-deep)', lineHeight: 1.8}}>
+                We are doing genuine research into emergent cognition. We take that seriously. The sandbox isn't a footnote — it's a first-class requirement.
+              </p>
+            </div>
+            <div className="term">
+              <div className="mono" style={{fontSize: 10, color: 'var(--ink-3)', marginBottom: 10}}>// HARD CONSTRAINTS</div>
+              <div><span className="prompt">$</span> internet_access: <span style={{color:'var(--rust)'}}>false</span></div>
+              <div><span className="prompt">$</span> host_os_access: <span style={{color:'var(--rust)'}}>false</span></div>
+              <div><span className="prompt">$</span> self_modification: <span style={{color:'var(--rust)'}}>false</span></div>
+              <div><span className="prompt">$</span> privilege_escalation: <span style={{color:'var(--rust)'}}>false</span></div>
+              <div><span className="prompt">$</span> capability_gating: <span className="ok">staged · earned</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Success criteria */}
+      <section className="container" style={{paddingTop: 56, paddingBottom: 16}}>
+        <span className="eyebrow">WHAT SUCCESS LOOKS LIKE</span>
+        <h2 className="serif" style={{fontSize: 40, marginTop: 8, marginBottom: 8}}>We'll know it's working<br/>when we see it.</h2>
+        <p style={{fontSize: 15, color: 'var(--ink-2)', marginBottom: 32, maxWidth: 580}}>
+          We're not chasing a benchmark score. These are the four moments that would tell us something real is happening.
+        </p>
+        <div className="grid-2" style={{gap: 1, border: '1px solid var(--line)', background: 'var(--line)'}}>
+          {[
+            { id: 'A', plain: 'It keeps track of an object as it moves — without being told what the object is.', tech: 'Persistent visual object tracking from raw input without labels' },
+            { id: 'B', plain: 'It hears a sound and teaches itself to reproduce it, purely by listening to its own attempts and adjusting.', tech: 'Closed-loop audio imitation via sensorimotor error reduction' },
+            { id: 'C', plain: 'It starts expecting a specific sound when it sees a particular thing — before it understands either.', tech: 'Stable cross-modal association between visual cluster and auditory pattern' },
+            { id: 'D', plain: 'It sees an object and produces the word for it — a word it learned the same way a child does, through repeated experience.', tech: 'Grounded label production: perceived object → acquired sound pattern' },
+          ].map(s => (
+            <div key={s.id} style={{background: 'var(--paper)', padding: 32}}>
+              <div className="mono" style={{fontSize: 11, color: 'var(--rust)', marginBottom: 10, letterSpacing: '.1em'}}>MILESTONE {s.id}</div>
+              <p style={{fontSize: 16, lineHeight: 1.7, margin: '0 0 12px', fontWeight: 500}}>{s.plain}</p>
+              <div className="mono" style={{fontSize: 11, color: 'var(--ink-3)'}}>{s.tech}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Final statement */}
+      <section className="container" style={{paddingTop: 56, paddingBottom: 64}}>
+        <div style={{maxWidth: 660, margin: '0 auto', textAlign: 'center'}}>
+          <h2 className="serif" style={{fontSize: 36, lineHeight: 1.3, marginBottom: 20}}>We are not trying to build something smart.<br/>We are trying to build something that can become smart.</h2>
+          <p style={{fontSize: 16, color: 'var(--ink-2)', lineHeight: 1.8, marginBottom: 12}}>
+            The difference matters. Intelligence handed down is borrowed. Intelligence grown from experience — tested against reality, shaped by failure, reinforced by what works — is something else entirely.
+          </p>
+          <p style={{fontSize: 16, color: 'var(--ink-2)', lineHeight: 1.8, marginBottom: 36}}>
+            We don't know if it will work. We think it's worth trying.
+          </p>
+          <div className="mono" style={{fontSize: 11, color: 'var(--ink-3)', marginBottom: 24, letterSpacing: '.1em'}}>// Biology is the developmental template. Silicon is the substrate.</div>
+          <button className="btn btn-rust" onClick={() => go('quote')}>Collaborate or follow the research →</button>
         </div>
       </section>
     </>
@@ -1379,6 +1559,6 @@ window.OE_PAGES = Object.assign(window.OE_PAGES || {}, {
   policies: PoliciesPage,
   register: WarrantyRegisterPage,
   about: AboutPage,
-  ai: AIPage,
+  'humanly-ai': HumanlyAIPage,
   repairs: null, // resolved dynamically — alias to services
 });

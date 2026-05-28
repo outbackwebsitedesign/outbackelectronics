@@ -840,7 +840,7 @@ function AIPage({ go }) {
             <p style={{marginTop: 16, fontSize: 15, color: 'var(--ink-2)', lineHeight: 1.7}}>
               Humanly AI is an attempt to grow a sandboxed digital cognitive organism from raw sensory experience — using developmental learning principles modeled after the human brain. No pretraining on human knowledge. No shortcuts. The goal is to see whether genuine cognition can emerge from the bottom up.
             </p>
-            <button className="btn btn-ghost" style={{marginTop: 28}} onClick={() => go('quote')}>Follow the research →</button>
+            <button className="btn btn-ghost" style={{marginTop: 28}} onClick={() => go('humanly-ai')}>Follow the research →</button>
           </div>
         </div>
       </section>
