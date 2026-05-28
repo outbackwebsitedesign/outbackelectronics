@@ -904,6 +904,7 @@ const MAIN_SPA_ROUTES = new Set([
   'order-success', 'order-cancelled',
   'cart',
   'register',
+  'about', 'repairs',
 ]);
 
 // ── Email ─────────────────────────────────────────────────────────────────────
@@ -4428,7 +4429,7 @@ const portalServer = http.createServer(async (req, res) => {
       email: quote.email,
       items: quote.summary || quote.quoteRef || quote.description || 'Custom build',
       date: nowStr,
-      total: dq.grandTotal || 0,
+      total: Math.round((dq.grandTotal || 0) * 100) / 100,
       fulfilment: 'pending',
       payments: [],
       sourceQuoteId: quote.id,
@@ -4501,7 +4502,7 @@ const portalServer = http.createServer(async (req, res) => {
       email: quote.email,
       items: quote.summary || quote.quoteRef || quote.description || 'Custom build',
       date: now,
-      total: dq.grandTotal || 0,
+      total: Math.round((dq.grandTotal || 0) * 100) / 100,
       fulfilment: 'pending',
       payments: [],
       sourceQuoteId: quote.id,
