@@ -32,17 +32,11 @@ Server reads AusPost API key from `integrations.find('AusPost')` in `settings.db
 ### ✅ 6. Gift Cards page — "coming soon" notice (RESOLVED)
 Gift card products migrated from `products.db` to `gift-card-denominations.db` (including images). Public denomination API route moved to mainServer (port 8080) — it was incorrectly registered on adminServer. Gift Cards page now shows real purchasable denominations.
 
-### ❌ 7. Memberships page — tiers shown but purchase disabled (pages-shop.jsx:1462–1475)
-```
-"Memberships are not yet active. The tiers and prices shown below are
-illustrative only — you cannot subscribe at this time."
-opacity: usingDefaults ? 0.4 : 1
-pointerEvents: usingDefaults ? 'none' : 'auto'
-```
-Three hardcoded default tiers shown greyed-out. Subscribe buttons completely disabled. Linked from nav. Either activate via admin → Memberships or remove from nav.
+### ✅ 7. Memberships page — tiers shown but purchase disabled (RESOLVED)
+COMING SOON banner removed, greyed-out/pointer-events disabled state removed. Tiers are now live and purchasable via Stripe checkout (one-off payment).
 
-### ❌ 8. Hardcoded membership default tiers (pages-shop.jsx:1405–1425)
-`defaultTiers` array hardcodes prices `$9`, `$19`, `$39` and feature lists directly in JSX. These placeholders should only exist in admin settings, not in source code.
+### ✅ 8. Hardcoded membership default tiers (RESOLVED)
+`defaultTiers` array and `usingDefaults` fallback removed from JSX. Tiers seeded into `memberships.db` via `scripts/seed-membership-tiers.js`.
 
 ### ✅ 9. Portal Rewards tab — ~~"COMING SOON"~~ (FIXED)
 RewardsTab now loads real data from `/api/portal/rewards`, shows actual points balance and history. "No points yet" shown when empty — not a "coming soon" placeholder. (portal-page.jsx:1022–1101)
@@ -167,8 +161,8 @@ Username required (not email). New users arriving from a warranty link or order 
 | 4 | admin → Settings → Integrations | Stripe not configured | CRITICAL | ✅ DONE |
 | 5 | admin → Settings → Integrations | AusPost not configured | CRITICAL | ✅ DONE |
 | 6 | pages-shop.jsx:1311 | Gift cards "coming soon" | HIGH | ❌ OPEN |
-| 7 | pages-shop.jsx:1462 | Memberships disabled/greyed | HIGH | ❌ OPEN |
-| 8 | pages-shop.jsx:1405 | Hardcoded membership default tiers | HIGH | ❌ OPEN |
+| 7 | pages-shop.jsx:1462 | Memberships disabled/greyed | HIGH | ✅ DONE |
+| 8 | pages-shop.jsx:1405 | Hardcoded membership default tiers | HIGH | ✅ DONE |
 | 9 | portal-page.jsx:1022 | Rewards "coming soon" | HIGH | ✅ DONE |
 | 10 | portal-page.jsx:1106 / server.js:4680 | Wallet: gift cards work, store credit is hollow | HIGH | ⚠️ PARTIAL |
 | 11 | settings.db / admin Settings | aiEnabled not set | HIGH | ❌ OPEN |
