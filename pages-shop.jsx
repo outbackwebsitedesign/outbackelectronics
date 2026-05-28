@@ -1407,30 +1407,7 @@ function MembershipsPage({ go, portalUser }) {
       .finally(() => setTiersLoading(false));
   }, []);
 
-  const defaultTiers = [
-    {
-      id: 'basic', name: 'Basic Member', price: 9, billingCycle: 'monthly',
-      description: 'Join the community and get access to member-only groups and the monthly newsletter.',
-      features: ['Member-only forum groups', 'Monthly members newsletter', 'Early access to new tutorials', 'Member badge on your forum profile'],
-      color: 'tag-euc',
-    },
-    {
-      id: 'pro', name: 'Pro Member', price: 19, billingCycle: 'monthly',
-      description: 'Everything in Basic plus exclusive deep-dive content, pro groups, and a 10% discount in the shop.',
-      features: ['Everything in Basic', 'Pro-only blog posts & build logs', 'Pro member groups', '10% discount on all shop purchases', 'Priority support queue'],
-      color: 'tag-rust',
-      highlight: true,
-    },
-    {
-      id: 'elite', name: 'Elite Member', price: 39, billingCycle: 'monthly',
-      description: 'Full access — every group, every post, workshop event invites, and the biggest shop discount we offer.',
-      features: ['Everything in Pro', 'Elite-only groups & special content', '20% discount on all shop purchases', 'One free bench diagnostic per month', 'Workshop & field event invites', 'Direct line to the tech team'],
-      color: 'tag-ochre',
-    },
-  ];
-
-  const usingDefaults = !tiersLoading && tiers.length === 0;
-  const displayTiers = usingDefaults ? defaultTiers : tiers;
+  const displayTiers = tiers;
 
   const portalUrl = shop._portalUrl || 'https://portal.outbackelectronics.com.au';
 
@@ -1464,20 +1441,13 @@ function MembershipsPage({ go, portalUser }) {
       <PageHead crumbs={['Outback', 'Memberships']} title="Memberships"
         lead="Get access to member-only groups, exclusive content, and workshop perks. Cancel any time." />
       <section className="container" style={{paddingTop:40, paddingBottom:56}}>
-        {usingDefaults && (
-          <div style={{marginBottom:28, padding:'18px 24px', background:'var(--ochre)', color:'var(--dark)', display:'flex', gap:16, alignItems:'flex-start'}}>
-            <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:11, letterSpacing:'.1em', fontWeight:700, whiteSpace:'nowrap', paddingTop:2}}>COMING SOON</span>
-            <div style={{fontSize:14, lineHeight:1.6}}>Memberships are not yet active. The tiers and prices shown below are illustrative only — <strong>you cannot subscribe at this time.</strong></div>
-          </div>
-        )}
-
         {checkoutError && (
           <div style={{marginBottom:20, padding:'12px 16px', background:'#fff1f0', border:'1px solid #fca5a5', fontSize:13, color:'#b91c1c'}}>
             {checkoutError}
           </div>
         )}
 
-        <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:24, opacity: usingDefaults ? 0.4 : 1, pointerEvents: usingDefaults ? 'none' : 'auto'}}>
+        <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:24}}>
           {displayTiers.map((tier, i) => {
             const displayPrice = Number(tier.priceAud || tier.price);
             const isProcessing = checkingOut === tier.id;
