@@ -1049,10 +1049,58 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
 // ============================================================
 function ServiceDetailPage({ go, pageParams }) {
   const [service, setService] = useState(pageParams || null);
+  const [bookForm, setBookForm] = useState({ name: '', email: '', date: '', notes: '' });
+  const [booking, setBooking] = useState(false);
+  const [bookError, setBookError] = useState(null);
 
   useEffect(() => {
-    if (pageParams) setService(pageParams);
+    if (pageParams) { setService(pageParams); setBookForm({ name: '', email: '', date: '', notes: '' }); setBookError(null); }
   }, [pageParams]);
+
+  const fixedPrice = service ? Number(service.priceAud) : NaN;
+  const hasFixedPrice = service && !isNaN(fixedPrice) && fixedPrice > 0;
+
+  const handlePayAndBook = async (e) => {
+    e.preventDefault();
+    setBookError(null);
+    setBooking(true);
+    try {
+      await fetch('/api/csrf-token', { credentials: 'include' }).catch(() => {});
+      const csrf = getCsrf();
+      // Log the booking as a quote first
+      await fetch('/api/quote/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+        body: JSON.stringify({
+          kind: 'Repair',
+          budget: `$${fixedPrice} (fixed)`,
+          urgency: 'Standard',
+          name: bookForm.name,
+          email: bookForm.email,
+          loc: '',
+          desc: `Service booking: ${service.name}${bookForm.date ? ` · Preferred date: ${bookForm.date}` : ''}${bookForm.notes ? ` · Notes: ${bookForm.notes}` : ''}`,
+          _service: service.name,
+          _serviceSku: service.sku || '',
+        }),
+      }).catch(() => {});
+      // Then redirect to Stripe checkout
+      const resp = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+        body: JSON.stringify({ items: [{ productId: service.id, name: service.name, priceAud: fixedPrice, quantity: 1 }] }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setBookError(data.message || 'Could not start checkout — please try again or call us.');
+      }
+    } catch {
+      setBookError('Could not connect to payment provider. Please try again.');
+    } finally {
+      setBooking(false);
+    }
+  };
 
   if (!service) {
     return (
@@ -1089,10 +1137,36 @@ function ServiceDetailPage({ go, pageParams }) {
               <div style={{fontWeight:600, fontSize:16}}>{service.tat}</div>
             </div>
           </div>
-          <div style={{display:'flex', gap:12}}>
-            <button className="btn btn-rust" style={{flex:1, justifyContent:'center'}} onClick={() => go('quote')}>Book this Service →</button>
-            <button className="btn btn-ghost" onClick={() => go('contact')}>Ask a Question</button>
-          </div>
+
+          {hasFixedPrice ? (
+            <form onSubmit={handlePayAndBook} style={{borderTop:'2px solid var(--rust)', paddingTop:24, marginTop:8}}>
+              <span className="eyebrow" style={{marginBottom:12, display:'block'}}>BOOK &amp; PAY — {service.priceLine}</span>
+              <div className="grid-2" style={{gap:14, marginBottom:14}}>
+                <label className="field"><span className="label">Name</span><input required className="input" value={bookForm.name} onChange={e => setBookForm(f => ({...f, name: e.target.value}))} placeholder="Your name" /></label>
+                <label className="field"><span className="label">Email or sat number</span><input required className="input" value={bookForm.email} onChange={e => setBookForm(f => ({...f, email: e.target.value}))} placeholder="your@email.com" /></label>
+              </div>
+              <label className="field" style={{marginBottom:14}}>
+                <span className="label">Preferred date (optional)</span>
+                <input className="input" type="date" value={bookForm.date} onChange={e => setBookForm(f => ({...f, date: e.target.value}))} min={new Date().toISOString().slice(0,10)} />
+              </label>
+              <label className="field" style={{marginBottom:18}}>
+                <span className="label">Notes (optional)</span>
+                <textarea className="textarea" rows={3} value={bookForm.notes} onChange={e => setBookForm(f => ({...f, notes: e.target.value}))} placeholder="Anything we should know before the appointment." />
+              </label>
+              {bookError && <div style={{color:'var(--rust)', fontSize:13, marginBottom:12}}>{bookError}</div>}
+              <div style={{display:'flex', gap:12, alignItems:'center'}}>
+                <button type="submit" className="btn btn-rust" style={{flex:1, justifyContent:'center'}} disabled={booking}>
+                  {booking ? 'Redirecting…' : `Pay now — $${fixedPrice.toLocaleString('en-AU', {minimumFractionDigits:2})} →`}
+                </button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => go('quote', service)}>Request a quote instead</button>
+              </div>
+            </form>
+          ) : (
+            <div style={{display:'flex', gap:12}}>
+              <button className="btn btn-rust" style={{flex:1, justifyContent:'center'}} onClick={() => go('quote', service)}>Book this Service →</button>
+              <button className="btn btn-ghost" onClick={() => go('contact')}>Ask a Question</button>
+            </div>
+          )}
         </div>
       </section>
     </>
