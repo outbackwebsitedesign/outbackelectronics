@@ -832,7 +832,7 @@ function AIPage({ go }) {
             <p style={{marginTop: 16, fontSize: 15, color: 'var(--bg-deep)', lineHeight: 1.7}}>
               We are actively pursuing artificial general intelligence — not as a marketing claim, but as a research direction. This is hard, unsolved, and we say so plainly. If you want to follow the work or collaborate, get in touch.
             </p>
-            <button className="btn btn-rust" style={{marginTop: 28}} onClick={() => go('quote')}>Get in touch →</button>
+            <button className="btn btn-rust" style={{marginTop: 28}} onClick={() => go('contact')}>Get in touch →</button>
           </div>
           <div style={{padding: 40, background: 'var(--paper)', border: '1px solid var(--line)'}}>
             <span className="tag tag-euc" style={{marginBottom: 16, display: 'inline-block'}}>RESEARCH · HUMANLY AI</span>
