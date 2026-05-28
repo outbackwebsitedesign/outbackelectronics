@@ -634,22 +634,25 @@ function getPortalSession(req) {
   return { sid, ...session };
 }
 
-// ── Membership tier level helper ─────────────────────────────────────────────
-// Returns 0=none, 1=basic, 2=pro, 3=elite based on active subscription
-function getMemberTierLevel(username) {
-  if (!username) return 0;
+// ── Membership tier access helpers ───────────────────────────────────────────
+function getMemberActiveTier(username) {
+  if (!username) return null;
   const { tiers, subscriptions } = readMemberships();
   const sub = (subscriptions || []).find(s => s.username === username && s.status === 'active');
-  if (!sub) return 0;
-  const tier = (tiers || []).find(t => t.id === sub.tierId);
-  if (!tier) return 0;
-  if (Number.isFinite(Number(tier.level))) return Number(tier.level);
-  // Fall back to id-based detection
-  const id = String(tier.id || '').toLowerCase();
-  if (id.includes('elite')) return 3;
-  if (id.includes('pro')) return 2;
-  if (id.includes('basic')) return 1;
-  return 1; // any active subscription = at least level 1
+  if (!sub) return null;
+  return (tiers || []).find(t => t.id === sub.tierId) || null;
+}
+
+function memberCanAccess(username, requiredTierId) {
+  if (!requiredTierId) return true; // public
+  const { tiers } = readMemberships();
+  const requiredTier = tiers.find(t => t.id === requiredTierId);
+  if (!requiredTier) return true; // required tier doesn't exist, allow access
+  const userTier = getMemberActiveTier(username);
+  if (!userTier) return false; // no membership
+  const userPrice = Number(userTier.price || userTier.priceAud) || 0;
+  const requiredPrice = Number(requiredTier.price || requiredTier.priceAud) || 0;
+  return userPrice >= requiredPrice;
 }
 
 // ── Static file serving ───────────────────────────────────────────────────────
@@ -1687,12 +1690,11 @@ const mainServer = http.createServer(async (req, res) => {
   }
   if (req.method === 'GET' && url.pathname === '/api/tutorials') {
     const tutorialPortalSession = getPortalSession(req);
-    const tutorialUserLevel = getMemberTierLevel(tutorialPortalSession ? tutorialPortalSession.username : null);
+    const tutorialUsername = tutorialPortalSession ? tutorialPortalSession.username : null;
     const allTutorials = readTutorials().filter(i => i.status === 'Published');
     const tutorialItems = allTutorials.map(t => {
-      const required = Number(t.accessLevel) || 0;
-      if (required <= tutorialUserLevel) return t;
-      // User level too low — return locked tutorial without body
+      if (memberCanAccess(tutorialUsername, t.requiredTierId)) return t;
+      // User lacks access — return locked tutorial without body
       const { body: _body, content: _content, ...rest } = t;
       return { ...rest, locked: true };
     });
@@ -1703,10 +1705,9 @@ const mainServer = http.createServer(async (req, res) => {
   }
   if (req.method === 'GET' && url.pathname === '/api/groups') {
     const groupPortalSession = getPortalSession(req);
-    const groupUserLevel = getMemberTierLevel(groupPortalSession ? groupPortalSession.username : null);
+    const groupUsername = groupPortalSession ? groupPortalSession.username : null;
     const groupItems = readGroups().map(g => {
-      const required = Number(g.requiredTierLevel) || 0;
-      if (required > 0 && groupUserLevel < required) return { ...g, locked: true };
+      if (!memberCanAccess(groupUsername, g.requiredTierId)) return { ...g, locked: true };
       return g;
     });
     return json(res, 200, { items: groupItems });
