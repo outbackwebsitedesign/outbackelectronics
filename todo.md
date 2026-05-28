@@ -38,8 +38,12 @@ COMING SOON banner removed, greyed-out/pointer-events disabled state removed. Ti
 ### ✅ 8. Hardcoded membership default tiers (RESOLVED)
 `defaultTiers` array and `usingDefaults` fallback removed from JSX. Tiers seeded into `memberships.db` via `scripts/seed-membership-tiers.js`.
 
-### ✅ 9. Portal Rewards tab — ~~"COMING SOON"~~ (FIXED)
-RewardsTab now loads real data from `/api/portal/rewards`, shows actual points balance and history. "No points yet" shown when empty — not a "coming soon" placeholder. (portal-page.jsx:1022–1101)
+### ✅ 9. Portal Rewards tab — full system implemented (RESOLVED)
+Full rewards system built end-to-end:
+- **Earning:** 50pts on signup; 1pt/$1 when order reaches `fulfilled` (admin save or AusPost auto-tracking); 1pt/$1 when repair card moves to `Done` column. Dedup by refId prevents double-granting.
+- **Redemption:** Cart checkout has email+password login to verify account, shows points balance, checkbox to apply points as a discount (100pts = $1). Applied as a Stripe line-item; deducted atomically on webhook payment confirmation.
+- **Admin panel:** New "Rewards" section in admin STORE group — searchable customer list, full history, manual grant/deduct with reason.
+- **Portal tab:** Already shows real balance and history from `rewards.db` via `/api/portal/rewards`.
 
 ### ⚠️ 10. Portal Wallet tab — partially implemented (portal-page.jsx:1106–1199)
 **Gift cards:** Fully working — fetches cards matched to user's email from DB, shows masked code, balance, issue date.  
