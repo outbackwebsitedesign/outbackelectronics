@@ -1459,7 +1459,7 @@ function MembershipsPage({ go, portalUser }) {
                   <span className={`tag ${tier.color || 'tag-outline'}`} style={{marginBottom:12, display:'inline-block'}}>{tier.name.toUpperCase()}</span>
                   <div style={{display:'flex', alignItems:'baseline', gap:6}}>
                     <span className="serif" style={{fontSize:52, lineHeight:1, color: tier.highlight ? 'var(--paper)' : 'var(--rust)'}}>${displayPrice}</span>
-                    <span style={{fontSize:13, color: tier.highlight ? 'var(--bg-deep)' : 'var(--ink-2)'}}>/ {tier.billingCycle || 'month'}</span>
+                    <span style={{fontSize:13, color: tier.highlight ? 'var(--bg-deep)' : 'var(--ink-2)'}}>one-off</span>
                   </div>
                 </div>
                 <p style={{fontSize:14, color: tier.highlight ? 'var(--bg-deep)' : 'var(--ink-2)', lineHeight:1.6}}>{tier.description}</p>
@@ -1484,12 +1484,12 @@ function MembershipsPage({ go, portalUser }) {
                   <button className="btn btn-rust" style={{width:'100%', justifyContent:'center', marginTop:8}}
                     disabled={isProcessing}
                     onClick={() => startCheckout(tier)}>
-                    {isProcessing ? 'Redirecting to checkout…' : `Subscribe — $${displayPrice}/mo →`}
+                    {isProcessing ? 'Redirecting to checkout…' : `Join — $${displayPrice} →`}
                   </button>
                 )}
 
                 <div className="mono" style={{fontSize:10, color: tier.highlight ? 'rgba(244,237,225,0.5)' : 'var(--ink-3)', textAlign:'center'}}>
-                  CANCEL ANY TIME · SECURE CHECKOUT VIA STRIPE
+                  ONE-OFF PAYMENT · SECURE CHECKOUT VIA STRIPE
                 </div>
               </div>
             );

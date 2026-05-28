@@ -13,7 +13,6 @@ const DEFAULT_TIERS = [
     id: 'basic',
     name: 'Basic Member',
     price: 9,
-    billingCycle: 'monthly',
     description: 'Join the community and get access to member-only groups and the monthly newsletter.',
     features: [
       'Member-only forum groups',
@@ -27,7 +26,6 @@ const DEFAULT_TIERS = [
     id: 'pro',
     name: 'Pro Member',
     price: 19,
-    billingCycle: 'monthly',
     description: 'Everything in Basic plus exclusive deep-dive content, pro groups, and a 10% discount in the shop.',
     features: [
       'Everything in Basic',
@@ -43,7 +41,6 @@ const DEFAULT_TIERS = [
     id: 'elite',
     name: 'Elite Member',
     price: 39,
-    billingCycle: 'monthly',
     description: 'Full access — every group, every post, workshop event invites, and the biggest shop discount we offer.',
     features: [
       'Everything in Pro',
