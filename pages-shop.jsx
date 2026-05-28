@@ -1313,9 +1313,14 @@ function GiftCardsPage({ go, addToCart }) {
           <div className="grid-4" style={{gap:24, marginBottom:24}}>
             {denominations.map((denom, i) => (
               <div key={denom.id || i} className="card-paper" style={{padding:28, display:'flex', flexDirection:'column', gap:16}}>
-                <div style={{padding:'32px 0', textAlign:'center', background:'var(--bg-elev)', border:'1px solid var(--line)'}}>
-                  <div className="serif" style={{fontSize:52, color:'var(--rust)', lineHeight:1}}>${Number(denom.priceAud).toFixed(0)}</div>
-                  <div className="eyebrow" style={{marginTop:6}}>GIFT CARD</div>
+                <div style={{position:'relative', textAlign:'center', background:'var(--bg-elev)', border:'1px solid var(--line)', overflow:'hidden'}}>
+                  {denom.imageUrl
+                    ? <img src={denom.imageUrl} alt={denom.name} style={{width:'100%', height:180, objectFit:'cover', display:'block'}} />
+                    : <div style={{padding:'32px 0'}}>
+                        <div className="serif" style={{fontSize:52, color:'var(--rust)', lineHeight:1}}>${Number(denom.priceAud).toFixed(0)}</div>
+                        <div className="eyebrow" style={{marginTop:6}}>GIFT CARD</div>
+                      </div>
+                  }
                 </div>
                 <div>
                   <div style={{fontWeight:600, marginBottom:4}}>{denom.name}</div>

@@ -4086,6 +4086,10 @@ function AdminGiftCards() {
                   <span className="label">Description (optional)</span>
                   <input className="input" placeholder="e.g. Perfect for small purchases" value={denomForm.description || ''} onChange={e => setDenomForm(f => ({...f, description: e.target.value}))} />
                 </label>
+                <label className="field" style={{marginBottom:10}}>
+                  <span className="label">Image URL (optional)</span>
+                  <input className="input" placeholder="/uploads/..." value={denomForm.imageUrl || ''} onChange={e => setDenomForm(f => ({...f, imageUrl: e.target.value}))} />
+                </label>
                 <label className="field" style={{marginBottom:14}}>
                   <span className="label">Status</span>
                   <div className="tabs" style={{marginTop:4}}>

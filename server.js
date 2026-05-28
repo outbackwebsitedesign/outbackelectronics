@@ -2892,11 +2892,11 @@ const adminServer = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/admin/gift-cards/denominations/save') {
     const session = requireAdmin(req, res); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
-    const { id, name, priceAud, description, status } = body || {};
+    const { id, name, priceAud, description, status, imageUrl } = body || {};
     if (!id) return json(res, 422, { error: 'id_required' });
     const denoms = readDenominations();
     const idx = denoms.findIndex(d => d.id === id);
-    const updated = { id, name: name || '', priceAud: Number(priceAud) || 0, description: description || '', status: status === 'published' ? 'published' : 'draft' };
+    const updated = { id, name: name || '', priceAud: Number(priceAud) || 0, description: description || '', status: status === 'published' ? 'published' : 'draft', imageUrl: imageUrl || '' };
     if (idx >= 0) denoms[idx] = updated; else denoms.push(updated);
     writeDenominations(denoms);
     return json(res, 200, { ok: true, item: updated });
