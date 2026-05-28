@@ -569,8 +569,8 @@ function setCustomerSessionCookies(res, user, req) {
   saveSessionsToDisk(FORUM_SESSIONS_DB_PATH, forumSessions);
   saveSessionsToDisk(PORTAL_SESSIONS_DB_PATH, portalSessions);
   res.setHeader('Set-Cookie', [
-    sessionCookie('oe_forum_session',  sid, Math.floor(FORUM_SESSION_TTL_MS  / 1000), req),
-    sessionCookie('oe_portal_session', sid, Math.floor(PORTAL_SESSION_TTL_MS / 1000), req),
+    customerSessionCookie('oe_forum_session',  sid, Math.floor(FORUM_SESSION_TTL_MS  / 1000), req),
+    customerSessionCookie('oe_portal_session', sid, Math.floor(PORTAL_SESSION_TTL_MS / 1000), req),
   ]);
   return sid;
 }
@@ -578,13 +578,36 @@ function clearCustomerSessionCookies(res, req, forumSid, portalSid) {
   if (forumSid)  { forumSessions.delete(forumSid);  saveSessionsToDisk(FORUM_SESSIONS_DB_PATH,  forumSessions); }
   if (portalSid) { portalSessions.delete(portalSid); saveSessionsToDisk(PORTAL_SESSIONS_DB_PATH, portalSessions); }
   res.setHeader('Set-Cookie', [
-    sessionCookie('oe_forum_session',  '', 0, req),
-    sessionCookie('oe_portal_session', '', 0, req),
+    customerSessionCookie('oe_forum_session',  '', 0, req),
+    customerSessionCookie('oe_portal_session', '', 0, req),
   ]);
 }
 
 function sessionCookie(name, value, maxAgeSec, req) {
   const parts = [`${name}=${value}`, 'HttpOnly', 'SameSite=Strict', 'Path=/', `Max-Age=${maxAgeSec}`];
+  if (isSecureRequest(req)) parts.push('Secure');
+  return parts.join('; ');
+}
+
+// Customer session cookies need Domain set to the parent domain so they're shared
+// across all subdomains (forum., portal., games., etc.). Localhost is exempt —
+// browsers already share cookies across ports on the same hostname.
+function sharedDomain() {
+  try {
+    const hostname = new URL(getSiteUrl()).hostname;
+    if (hostname === 'localhost' || /^\d+\.\d+\.\d+\.\d+$/.test(hostname)) return null;
+    const parts = hostname.split('.');
+    // For country-code second-levels like .com.au keep last 3 parts, else last 2
+    const root = (parts.length >= 3 && parts[parts.length - 2].length <= 4)
+      ? parts.slice(-3).join('.')
+      : parts.slice(-2).join('.');
+    return '.' + root; // e.g. .outbackelectronics.com.au
+  } catch { return null; }
+}
+function customerSessionCookie(name, value, maxAgeSec, req) {
+  const parts = [`${name}=${value}`, 'HttpOnly', 'SameSite=Strict', 'Path=/', `Max-Age=${maxAgeSec}`];
+  const domain = sharedDomain();
+  if (domain) parts.push(`Domain=${domain}`);
   if (isSecureRequest(req)) parts.push('Secure');
   return parts.join('; ');
 }
