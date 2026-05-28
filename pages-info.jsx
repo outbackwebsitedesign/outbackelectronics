@@ -12,14 +12,84 @@ function getCsrf() {
 // ============================================================
 // REQUEST A QUOTE
 // ============================================================
-function QuotePage({ go }) {
+const _SHOP_LAT = -35.9845;
+const _SHOP_LNG = 144.7730;
+const _CALLOUT_FREE_KM = 10;
+const _CALLOUT_FUEL_RATE = 220 / 400;
+const _CALLOUT_KM_PER_DAY = 480;
+const _CALLOUT_DAILY_RATE = 150;
+const _CALLOUT_DAILY_THRESHOLD_KM = 400;
+
+function _calloutFeeAud(distKm) {
+  if (distKm <= _CALLOUT_FREE_KM) return 0;
+  const fuel = distKm * _CALLOUT_FUEL_RATE;
+  const daily = distKm > _CALLOUT_DAILY_THRESHOLD_KM
+    ? Math.ceil(distKm / _CALLOUT_KM_PER_DAY) * 2 * _CALLOUT_DAILY_RATE
+    : 0;
+  return Math.round(fuel + daily);
+}
+
+function _haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function QuotePage({ go, pageParams }) {
   const shop = useShop();
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
   const [ticketId, setTicketId] = useState(null);
-  const [form, setForm] = useState({ kind: 'Repair', budget: '$1k–$5k', urgency: 'Standard', name: '', email: '', loc: '', desc: '' });
+  const [locDistKm, setLocDistKm] = useState(null);
+  const [locGeocoding, setLocGeocoding] = useState(false);
+
+  const initForm = () => {
+    const svc = pageParams;
+    return {
+      kind: 'Repair',
+      budget: '$1k–$5k',
+      urgency: 'Standard',
+      name: '',
+      email: '',
+      loc: '',
+      desc: svc?.name ? `Service: ${svc.name}` : '',
+      _service: svc?.name || '',
+      _serviceSku: svc?.sku || '',
+    };
+  };
+
+  const [form, setForm] = useState(initForm);
+
+  useEffect(() => {
+    if (pageParams) { setForm(initForm()); setLocDistKm(null); }
+  }, [pageParams]);
+
   const update = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  useEffect(() => {
+    if (!form.loc || form.loc.trim().length < 3) { setLocDistKm(null); return; }
+    const t = setTimeout(async () => {
+      setLocGeocoding(true);
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(form.loc + ', Australia')}&limit=1`,
+          { headers: { 'Accept-Language': 'en' } }
+        );
+        const data = await res.json();
+        if (data[0]) {
+          const km = _haversineKm(_SHOP_LAT, _SHOP_LNG, parseFloat(data[0].lat), parseFloat(data[0].lon));
+          setLocDistKm(Math.round(km));
+        } else {
+          setLocDistKm(null);
+        }
+      } catch { setLocDistKm(null); }
+      finally { setLocGeocoding(false); }
+    }, 700);
+    return () => clearTimeout(t);
+  }, [form.loc]);
 
   if (submitted) {
     return (
@@ -74,6 +144,13 @@ function QuotePage({ go }) {
           }
         }}>
           <div className="card-paper" style={{padding: 32}}>
+            {form._service && (
+              <div style={{marginBottom:20, padding:'12px 16px', background:'var(--bg-elev)', border:'1px solid var(--rust)', borderRadius:4, display:'flex', alignItems:'center', gap:10}}>
+                <span className="mono" style={{fontSize:11, color:'var(--rust)'}}>SERVICE</span>
+                <span style={{fontWeight:600, fontSize:14}}>{form._service}</span>
+                {pageParams?.priceLine && <span className="mono" style={{fontSize:12, color:'var(--ink-2)', marginLeft:'auto'}}>{pageParams.priceLine}</span>}
+              </div>
+            )}
             <span className="eyebrow">01 · WHAT KIND OF JOB?</span>
             <div className="row-flex" style={{marginTop: 12, gap:8}}>
               {['Repair','Custom Build','Off-grid System','AI Pilot','Bulk eWaste','Other'].map(k => (
@@ -86,11 +163,14 @@ function QuotePage({ go }) {
               <div>
                 <span className="eyebrow">02 · BUDGET BAND</span>
                 <div className="stack" style={{marginTop: 10, gap:6}}>
-                  {['Under $500','$500–$1k','$1k–$5k','$5k–$25k','$25k+','Tell us'].map(b => (
-                    <label key={b} style={{display:'flex', alignItems:'center', gap:8, fontSize:14, padding:'4px 0', cursor:'pointer'}}>
-                      <input type="radio" name="budget" checked={form.budget===b} onChange={() => update('budget',b)} />{b}
-                    </label>
-                  ))}
+                  {['Under $500','$500–$1k','$1k–$5k','$5k–$25k','$25k+','Tell us'].map(b => {
+                    const bid = `budget-${b.replace(/[^a-z0-9]/gi, '-')}`;
+                    return (
+                      <label key={b} htmlFor={bid} style={{display:'flex', alignItems:'center', gap:8, fontSize:14, padding:'4px 0', cursor:'pointer'}}>
+                        <input id={bid} type="radio" name="budget" checked={form.budget===b} onChange={() => update('budget',b)} />{b}
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
               <div>
@@ -101,11 +181,14 @@ function QuotePage({ go }) {
                     {v:'Standard',l:'Standard (2–4 weeks)'},
                     {v:'Soon',l:'Soon (≤7 days)'},
                     {v:'Yesterday',l:"Yesterday (call us)"},
-                  ].map(b => (
-                    <label key={b.v} style={{display:'flex', alignItems:'center', gap:8, fontSize:14, padding:'4px 0', cursor:'pointer'}}>
-                      <input type="radio" name="urgency" checked={form.urgency===b.v} onChange={() => update('urgency',b.v)} />{b.l}
-                    </label>
-                  ))}
+                  ].map(b => {
+                    const uid = `urgency-${b.v.toLowerCase()}`;
+                    return (
+                      <label key={b.v} htmlFor={uid} style={{display:'flex', alignItems:'center', gap:8, fontSize:14, padding:'4px 0', cursor:'pointer'}}>
+                        <input id={uid} type="radio" name="urgency" checked={form.urgency===b.v} onChange={() => update('urgency',b.v)} />{b.l}
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -117,6 +200,21 @@ function QuotePage({ go }) {
               <label className="field"><span className="label">Email or sat number</span><input required className="input" value={form.email} onChange={e => update('email', e.target.value)} placeholder="your@email.com" /></label>
             </div>
             <label className="field"><span className="label">Location / nearest town</span><input className="input" value={form.loc} onChange={e => update('loc', e.target.value)} placeholder="Newman, WA" /></label>
+            {locGeocoding && <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:4, marginBottom:4}}>Checking distance…</div>}
+            {!locGeocoding && locDistKm !== null && (() => {
+              const fee = _calloutFeeAud(locDistKm);
+              const days = locDistKm > _CALLOUT_DAILY_THRESHOLD_KM ? Math.ceil(locDistKm / _CALLOUT_KM_PER_DAY) : 0;
+              return (
+                <div style={{marginTop:4, marginBottom:4, padding:'8px 12px', fontSize:13, border:'1px solid var(--line)', background:'var(--bg-elev)'}}>
+                  {fee === 0
+                    ? <span><span style={{color:'var(--rust)', fontWeight:600}}>Free callout</span> — you're {locDistKm}km away.</span>
+                    : days > 0
+                      ? <span><span style={{fontWeight:600}}>~${fee} travel fee</span> — {locDistKm}km: fuel + {days * 2} travel days @ $150/day. We'll confirm in the quote.</span>
+                      : <span><span style={{fontWeight:600}}>~${fee} travel fee</span> — {locDistKm}km at $0.55/km (round trip fuel). We'll confirm in the quote.</span>
+                  }
+                </div>
+              );
+            })()}
 
             <hr className="thin" />
             <span className="eyebrow">05 · DESCRIBE THE JOB</span>

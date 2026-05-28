@@ -1895,6 +1895,26 @@ const mainServer = http.createServer(async (req, res) => {
     // Validate and apply gift card if provided
     // Validate shipping amount (server-side cap to prevent manipulation: max $200)
     const validatedShipping = shippingAmount && Number(shippingAmount) > 0 ? Math.min(200, Number(shippingAmount)) : 0;
+    // Travel/callout fee — calculated server-side from reported one-way distance.
+    // Fuel: $0.55/km round trip ($110/tank ÷ 400km × 2). Free within 10km.
+    // Daily allowance (D > 400km): $150/day, 6h driving/day at ~80km/h = 480km/day; ×2 for return.
+    const CALLOUT_FREE_KM = 10;
+    const CALLOUT_FUEL_RATE = 220 / 400;  // $0.55/km round trip
+    const CALLOUT_KM_PER_DAY = 480;        // 6h × 80km/h
+    const CALLOUT_DAILY_RATE = 150;
+    const CALLOUT_DAILY_THRESHOLD_KM = 400;
+    const reportedDistanceKm = Number(body.travelDistanceKm) || 0;
+    if (reportedDistanceKm < 0 || reportedDistanceKm > 5000) {
+      return json(res, 422, { error: 'invalid_distance', message: 'Invalid distance value.' });
+    }
+    let validatedTravelFee = 0;
+    if (reportedDistanceKm > CALLOUT_FREE_KM) {
+      const fuelCost = reportedDistanceKm * CALLOUT_FUEL_RATE;
+      const dailyCost = reportedDistanceKm > CALLOUT_DAILY_THRESHOLD_KM
+        ? Math.ceil(reportedDistanceKm / CALLOUT_KM_PER_DAY) * 2 * CALLOUT_DAILY_RATE
+        : 0;
+      validatedTravelFee = Math.round(fuelCost + dailyCost);
+    }
 
     let gcDiscount = 0;
     let gcCodeNorm = '';
@@ -1911,7 +1931,7 @@ const mainServer = http.createServer(async (req, res) => {
 
     // If gift card covers the entire order, skip Stripe and create order directly
     const cartGross = lineItems.reduce((s, li) => s + Math.round(Number(li.priceAud) * 100) * (li.quantity || 1), 0) / 100;
-    const orderGross = cartGross + validatedShipping;
+    const orderGross = cartGross + validatedShipping + validatedTravelFee;
     if (gcDiscount >= orderGross && gcObject) {
       // Redeem gift card balance
       const gcList = readGiftCards();
@@ -1997,6 +2017,9 @@ const mainServer = http.createServer(async (req, res) => {
         quantity: 1,
         productId: '',
       });
+    }
+    if (validatedTravelFee > 0) {
+      adjustedLineItems.push({ name: 'Callout / Travel Fee', priceAud: validatedTravelFee, quantity: 1, productId: '' });
     }
     if (gcDiscount > 0) {
       adjustedLineItems.push({
