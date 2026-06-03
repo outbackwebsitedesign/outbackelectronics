@@ -549,6 +549,7 @@ function TopNav({ page, go, cart, onSearchOpen, accountOpen, setAccountOpen, por
 function Footer({ go }) {
   const shop = useShop();
   const [topCategories, setTopCategories] = useState([]);
+  const [footerServices, setFooterServices] = useState([]);
 
   useEffect(() => {
     fetch('/api/catalog/products')
@@ -565,6 +566,13 @@ function Footer({ go }) {
           .slice(0, 5)
           .map(([cat]) => cat);
         setTopCategories(sorted);
+      })
+      .catch(() => {});
+
+    fetch('/api/catalog/services')
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => {
+        setFooterServices((d.items || []).slice(0, 5));
       })
       .catch(() => {});
   }, []);
@@ -597,11 +605,9 @@ function Footer({ go }) {
           <div>
             <h5>Services</h5>
             <ul>
-              <li><a href="/services" onClick={(e) => { e.preventDefault(); go('services'); }}>Field Repair</a></li>
-              <li><a href="/software" onClick={(e) => { e.preventDefault(); go('software'); }}>Software</a></li>
-              <li><a href="/ai" onClick={(e) => { e.preventDefault(); go('ai'); }}>Edge AI</a></li>
-              <li><a href="/ewaste" onClick={(e) => { e.preventDefault(); go('ewaste'); }}>eWaste Take-back</a></li>
-              <li><a href="/quote" onClick={(e) => { e.preventDefault(); go('quote'); }}>Get a Quote</a></li>
+              {footerServices.map((svc) => (
+                <li key={svc.id}><a href={`/service/${svc.slug || svc.id}`} onClick={(e) => { e.preventDefault(); go('service', svc); }}>{svc.name}</a></li>
+              ))}
             </ul>
           </div>
           <div>
