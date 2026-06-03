@@ -548,16 +548,26 @@ function TopNav({ page, go, cart, onSearchOpen, accountOpen, setAccountOpen, por
 // ---------------- Footer ----------------
 function Footer({ go }) {
   const shop = useShop();
-  const renderFooterLink = (item) => {
-    if (item.filterType === 'page') {
-      return <a href={`/${item.filterValue}`} onClick={(e) => { e.preventDefault(); go(item.filterValue); }}>{item.label}</a>;
-    } else if (item.filterType === 'category') {
-      return <a href="/shop" onClick={(e) => { e.preventDefault(); go('shop', { initialCat: item.filterValue }); }}>{item.label}</a>;
-    } else if (item.filterType === 'cond') {
-      return <a href="/shop" onClick={(e) => { e.preventDefault(); go('shop', { initialCond: item.filterValue }); }}>{item.label}</a>;
-    }
-    return <a href={item.href || '#'}>{item.label}</a>;
-  };
+  const [topCategories, setTopCategories] = useState([]);
+
+  useEffect(() => {
+    fetch('/api/catalog/products')
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => {
+        const counts = {};
+        (d.items || []).forEach(p => {
+          if (p.status === 'published' && p.category) {
+            counts[p.category] = (counts[p.category] || 0) + 1;
+          }
+        });
+        const sorted = Object.entries(counts)
+          .sort(([, a], [, b]) => b - a)
+          .slice(0, 5)
+          .map(([cat]) => cat);
+        setTopCategories(sorted);
+      })
+      .catch(() => {});
+  }, []);
 
   return (
     <footer>
@@ -579,8 +589,8 @@ function Footer({ go }) {
           <div>
             <h5>Shop</h5>
             <ul>
-              {(shop.footerCategories || []).map((item, i) => (
-                <li key={i}>{renderFooterLink(item)}</li>
+              {topCategories.map((cat) => (
+                <li key={cat}><a href="/shop" onClick={(e) => { e.preventDefault(); go('shop', { initialCat: cat }); }}>{cat}</a></li>
               ))}
             </ul>
           </div>

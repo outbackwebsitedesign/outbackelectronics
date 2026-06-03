@@ -4875,6 +4875,7 @@ function AdminSettingsFull({ sessionInfo = {} }) {
     phone: '',
     email: '',
     tagline: '',
+    description: '',
     siteUrl: '',
   }), []);
   const defaultAnnouncement = useMemo(() => ({ text: '', enabled: false, expiresAt: '' }), []);
@@ -4957,6 +4958,7 @@ function AdminSettingsFull({ sessionInfo = {} }) {
         phone: (payload.shop?.phone || '').trim(),
         email: (payload.shop?.email || '').trim(),
         tagline: (payload.shop?.tagline || '').trim(),
+        description: (payload.shop?.description || '').trim(),
         siteUrl: (payload.shop?.siteUrl || '').trim(),
       },
       announcement: {
@@ -5081,6 +5083,7 @@ function AdminSettingsFull({ sessionInfo = {} }) {
           <label className="field"><span className="label">Phone</span><input className="input" value={shop.phone} onChange={(e) => setShop({ ...shop, phone: e.target.value })}/></label>
           <label className="field"><span className="label">Contact email</span><input className="input" type="email" value={shop.email||''} onChange={(e) => setShop({ ...shop, email: e.target.value })}/></label>
           <label className="field"><span className="label">Tagline</span><input className="input" value={shop.tagline} onChange={(e) => setShop({ ...shop, tagline: e.target.value })}/></label>
+          <label className="field"><span className="label">Description (footer)</span><textarea className="textarea" value={shop.description||''} onChange={(e) => setShop({ ...shop, description: e.target.value })} style={{minHeight:80}} placeholder="e.g. An independent electronics outpost..."/></label>
           <label className="field">
             <span className="label">Site URL</span>
             <input className="input" value={shop.siteUrl||''} onChange={(e) => setShop({ ...shop, siteUrl: e.target.value })} placeholder="https://outbackelectronics.com.au"/>
