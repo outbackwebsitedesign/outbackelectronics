@@ -548,6 +548,17 @@ function TopNav({ page, go, cart, onSearchOpen, accountOpen, setAccountOpen, por
 // ---------------- Footer ----------------
 function Footer({ go }) {
   const shop = useShop();
+  const renderFooterLink = (item) => {
+    if (item.filterType === 'page') {
+      return <a href={`/${item.filterValue}`} onClick={(e) => { e.preventDefault(); go(item.filterValue); }}>{item.label}</a>;
+    } else if (item.filterType === 'category') {
+      return <a href="/shop" onClick={(e) => { e.preventDefault(); go('shop', { initialCat: item.filterValue }); }}>{item.label}</a>;
+    } else if (item.filterType === 'cond') {
+      return <a href="/shop" onClick={(e) => { e.preventDefault(); go('shop', { initialCond: item.filterValue }); }}>{item.label}</a>;
+    }
+    return <a href={item.href || '#'}>{item.label}</a>;
+  };
+
   return (
     <footer>
       <div className="container">
@@ -558,25 +569,19 @@ function Footer({ go }) {
                 <img src="assets/logo.webp" alt="Outback Electronics" />
               </div>
               <div className="logo-text">
-                <div className="sub" style={{color:'var(--ochre)'}}>{shop.tagline || 'Built for where the signal ends'}</div>
+                <div className="sub" style={{color:'var(--ochre)'}}>{shop.tagline}</div>
               </div>
             </div>
             <p style={{marginTop: 18, fontSize: 13, color: 'var(--ink-3)', maxWidth: 360, lineHeight: 1.6}}>
-              {shop.description || 'An independent electronics outpost serving remote Australia. Repairs, refurbished gear, off-grid kits, edge AI & a noisy community workshop.'}
+              {shop.description}
             </p>
-            <div className="row-flex" style={{marginTop: 18}}>
-              {(shop._flags || SITE_FLAGS).showBCorpBadge && <span className="tag tag-outline" style={{color:'var(--ochre)', borderColor:'#3a3127'}}>B-CORP CERTIFIED</span>}
-              {(shop._flags || SITE_FLAGS).showRepairOrgBadge && <span className="tag tag-outline" style={{color:'var(--ochre)', borderColor:'#3a3127'}}>REPAIR.ORG MEMBER</span>}
-            </div>
           </div>
           <div>
             <h5>Shop</h5>
             <ul>
-              <li><a href="/shop" onClick={(e) => { e.preventDefault(); go('shop', { initialCat: 'Rugged Laptops' }); }}>Rugged Laptops</a></li>
-              <li><a href="/shop" onClick={(e) => { e.preventDefault(); go('shop', { initialCat: 'Solar & Power' }); }}>Solar &amp; Power</a></li>
-              <li><a href="/shop" onClick={(e) => { e.preventDefault(); go('shop', { initialCat: 'Sat Comms' }); }}>Sat Comms</a></li>
-              <li><a href="/shop" onClick={(e) => { e.preventDefault(); go('shop', { initialCond: 'Refurbished' }); }}>Refurbished</a></li>
-              <li><a href="/gift-cards" onClick={(e) => { e.preventDefault(); go('gift-cards'); }}>Gift Cards</a></li>
+              {(shop.footerCategories || []).map((item, i) => (
+                <li key={i}>{renderFooterLink(item)}</li>
+              ))}
             </ul>
           </div>
           <div>
@@ -602,14 +607,14 @@ function Footer({ go }) {
           <div>
             <h5>Visit</h5>
             <ul style={{color:'var(--ink-3)'}}>
-              <li>{shop.address || '183 Peericoota Forest Rd, Moama NSW 2731'}<br/>No public access, arrive by appointment only.</li>
+              <li>{shop.address}<br/>No public access, arrive by appointment only.</li>
               {shop.phone && <li>{shop.phone}</li>}
               <li><a href="/contact" onClick={(e) => { e.preventDefault(); go('contact'); }} style={{color:'var(--ochre)'}}>Get directions →</a></li>
             </ul>
           </div>
         </div>
         <div className="baseline">
-          <span>© 2023–2026 {shop.tradingName || 'Outback Electronics Pty Ltd'}{shop.abn ? ` · ABN ${shop.abn}` : ' · ABN 41 552 008 991'}</span>
+          <span>© 2023–2026 {shop.tradingName}{shop.abn ? ` · ABN ${shop.abn}` : ''}</span>
           <span>ACKNOWLEDGES THE ARRERNTE PEOPLE AS TRADITIONAL OWNERS OF MPARNTWE</span>
         </div>
       </div>

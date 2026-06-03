@@ -268,14 +268,14 @@ function readSettings() {
     const d = JSON.parse(fs.readFileSync(SETTINGS_DB_PATH, 'utf8'));
     return {
       shop: d.shop || {},
-      announcement: d.announcement || { text: '', enabled: false, expiresAt: '' },
-      maintenance: d.maintenance || { enabled: false },
+      announcement: d.announcement || {},
+      maintenance: d.maintenance || {},
       staff: Array.isArray(d.staff) ? d.staff : [],
       integrations: Array.isArray(d.integrations) ? d.integrations : [],
       siteContent: d.siteContent || {},
-      security: d.security || { adminUsername: '', adminPasswordHash: '' },
+      security: d.security || {},
     };
-  } catch { return { shop: {}, announcement: { text: '', enabled: false, expiresAt: '' }, maintenance: { enabled: false }, staff: [], integrations: [], siteContent: {}, security: { adminUsername: '', adminPasswordHash: '' } }; }
+  } catch { return { shop: {}, announcement: {}, maintenance: {}, staff: [], integrations: [], siteContent: {}, security: {} }; }
 }
 function writeSettings(data) { atomicWriteFile(SETTINGS_DB_PATH, JSON.stringify(data, null, 2)); }
 
