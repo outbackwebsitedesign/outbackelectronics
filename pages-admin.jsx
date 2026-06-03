@@ -193,6 +193,7 @@ const ADMIN_SECTIONS = [
     { id:'memberships', label:'Memberships', minRole:'manager' },
     { id:'gift-cards', label:'Gift Cards',   minRole:'staff', excludeRoles:['seller'] },
     { id:'rewards',   label:'Rewards',       minRole:'manager' },
+    { id:'store-credit', label:'Store Credit', minRole:'manager' },
     { id:'expenses',  label:'Expenses',      minRole:'manager' },
     { id:'policies',  label:'Policies',      minRole:'manager' },
     { id:'seller-billing', label:'Seller Billing', minRole:'manager' },
@@ -4251,6 +4252,108 @@ function AdminRewards() {
   );
 }
 
+function AdminStoreCredit() {
+  const [entries, setEntries] = useState([]);
+  const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState(null); // { userId, displayName, email, balance, history }
+  const [grantForm, setGrantForm] = useState({ amount: '', description: '' });
+  const [grantError, setGrantError] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  const load = () => fetch('/api/admin/store-credit', { credentials: 'include' })
+    .then(r => r.json()).then(d => {
+      const sorted = (d.entries || []).sort((a, b) => b.balance - a.balance);
+      setEntries(sorted);
+      if (selected) setSelected(sorted.find(e => e.userId === selected.userId) || null);
+    }).catch(() => {});
+
+  useEffect(() => { load(); }, []);
+
+  const filtered = entries.filter(e => {
+    const q = search.toLowerCase();
+    return !q || (e.displayName || '').toLowerCase().includes(q) || (e.email || '').toLowerCase().includes(q) || (e.username || '').toLowerCase().includes(q);
+  });
+
+  const adjust = async (sign) => {
+    if (!selected) return;
+    const v = Number(grantForm.amount);
+    if (!v || v <= 0) { setGrantError('Enter a positive dollar amount.'); return; }
+    const amount = sign > 0 ? Math.abs(v) : -Math.abs(v);
+    setSaving(true); setGrantError(null);
+    const resp = await fetch('/api/admin/store-credit/adjust', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ userId: selected.userId, amount, description: grantForm.description }) }).catch(() => null);
+    setSaving(false);
+    if (resp && resp.ok) { setGrantForm({ amount: '', description: '' }); load(); }
+    else setGrantError('Failed to save. Check the amount and try again.');
+  };
+
+  const fmtDate = d => { try { return new Date(d).toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' }); } catch { return d || ''; } };
+  const fmt$ = n => '$' + (Number(n) || 0).toLocaleString('en-AU', { minimumFractionDigits: 2 });
+  const typeLabel = { order:'Order', repair:'Repair', refund:'Refund', redeem:'Redeemed', grant:'Admin grant', adjust:'Admin adjust' };
+
+  return (
+    <div style={{display:'flex', gap:24, alignItems:'flex-start', flexWrap:'wrap'}}>
+      <div style={{flex:'0 0 320px', minWidth:0}}>
+        <input className="input" placeholder="Search by name or email…" value={search} onChange={e => setSearch(e.target.value)} style={{width:'100%', marginBottom:12}} />
+        <div className="card-paper" style={{overflow:'auto', maxHeight:520}}>
+          {filtered.length === 0 && <div style={{padding:20, color:'var(--ink-3)', fontSize:13}}>No store credit accounts yet.</div>}
+          {filtered.map(e => (
+            <div key={e.userId} onClick={() => { setSelected(e); setGrantError(null); setGrantForm({ amount: '', description: '' }); }}
+              style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 16px', borderBottom:'1px solid var(--line)', cursor:'pointer', background: selected?.userId === e.userId ? 'var(--bg-elev)' : 'transparent'}}>
+              <div>
+                <div style={{fontWeight:500, fontSize:13}}>{e.displayName || e.username || e.userId}</div>
+                <div style={{fontSize:11, color:'var(--ink-3)'}}>{e.email}</div>
+              </div>
+              <div style={{fontWeight:700, fontSize:14, color:'var(--ochre)', flexShrink:0}}>{fmt$(e.balance)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {selected ? (
+        <div style={{flex:1, minWidth:260}}>
+          <div className="card-paper" style={{padding:20, marginBottom:16}}>
+            <div style={{fontWeight:600, fontSize:15, marginBottom:2}}>{selected.displayName || selected.username}</div>
+            <div style={{fontSize:12, color:'var(--ink-3)', marginBottom:12}}>{selected.email}</div>
+            <div style={{fontSize:28, fontFamily:'Instrument Serif, serif', color:'var(--ochre)'}}>{fmt$(selected.balance)} <span style={{fontSize:14, color:'var(--ink-2)'}}>balance</span></div>
+          </div>
+
+          <div className="card-paper" style={{padding:20, marginBottom:16}}>
+            <div className="eyebrow" style={{marginBottom:10}}>ADJUST STORE CREDIT</div>
+            <div style={{display:'flex', gap:8, marginBottom:8}}>
+              <input className="input" type="number" step="0.01" placeholder="Amount (e.g. 25.00)" value={grantForm.amount} onChange={e => setGrantForm(f => ({ ...f, amount: e.target.value }))} style={{flex:1}} />
+              <input className="input" placeholder="Reason" value={grantForm.description} onChange={e => setGrantForm(f => ({ ...f, description: e.target.value }))} style={{flex:2}} />
+            </div>
+            {grantError && <div style={{fontSize:12, color:'#b91c1c', marginBottom:8}}>{grantError}</div>}
+            <div style={{display:'flex', gap:8}}>
+              <button className="btn btn-sm" style={{background:'#345526', color:'#fff'}} onClick={() => adjust(1)} disabled={saving}>+ Issue</button>
+              <button className="btn btn-sm btn-ghost" onClick={() => adjust(-1)} disabled={saving}>− Deduct</button>
+            </div>
+          </div>
+
+          <div className="card-paper" style={{overflow:'auto', maxHeight:360}}>
+            <div className="eyebrow" style={{padding:'12px 16px 8px'}}>HISTORY</div>
+            {(selected.history || []).length === 0 && <div style={{padding:'8px 16px 16px', color:'var(--ink-3)', fontSize:13}}>No history.</div>}
+            {[...(selected.history || [])].reverse().map((h, i) => (
+              <div key={h.id || i} style={{display:'flex', alignItems:'center', gap:12, padding:'10px 16px', borderTop:'1px solid var(--line)', flexWrap:'wrap'}}>
+                <div style={{flex:1, minWidth:0}}>
+                  <div style={{fontSize:13, fontWeight:500}}>{typeLabel[h.type] || h.type}</div>
+                  <div style={{fontSize:11, color:'var(--ink-3)'}}>{h.description}{h.refId ? ` · ${h.refId}` : ''}</div>
+                  <div style={{fontSize:11, color:'var(--ink-3)'}}>{fmtDate(h.date)}</div>
+                </div>
+                <div style={{fontWeight:700, fontSize:13, color: h.amount > 0 ? '#345526' : 'var(--rust)', flexShrink:0}}>
+                  {h.amount > 0 ? '+' : '−'}{fmt$(Math.abs(h.amount))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div style={{flex:1, display:'flex', alignItems:'center', justifyContent:'center', color:'var(--ink-3)', fontSize:13, padding:40}}>Select a customer to view their store credit.</div>
+      )}
+    </div>
+  );
+}
+
 // EXPENSES
 // ============================================================
 function AdminExpenses() {
@@ -5615,6 +5718,7 @@ const ADMIN_VIEWS = {
   memberships: { c: AdminMemberships, t:'Memberships', staticSubtitle:'tiers · subscriptions · activation' },
   'gift-cards': { c: AdminGiftCards, t:'Gift Cards',        staticSubtitle:'issued codes · balances · manual issuance' },
   'rewards':    { c: AdminRewards,   t:'Rewards',           staticSubtitle:'points balances · history · manual adjustments' },
+  'store-credit': { c: AdminStoreCredit, t:'Store Credit',  staticSubtitle:'credit balances · history · manual adjustments' },
   expenses:   { c: AdminExpenses,   t:'Expenses',         staticSubtitle:'track costs · receipt uploads' },
   policies:   { c: AdminPolicies,   t:'Policies',         staticSubtitle:'edit public-facing policy docs' },
   settings:   { c: AdminSettings,   t:'Settings',         staticSubtitle:'shop · staff · integrations' },

@@ -59,6 +59,7 @@ const SOFTWARE_DB_PATH  = path.join(__dirname, 'software.db');
 const GIFTCARDS_DB_PATH = path.join(__dirname, 'gift-cards.db');
 const DENOMINATIONS_DB_PATH = path.join(__dirname, 'gift-card-denominations.db');
 const REWARDS_DB_PATH = path.join(__dirname, 'rewards.db');
+const STORE_CREDIT_DB_PATH = path.join(__dirname, 'store-credits.db');
 const BOOKINGS_DB_PATH = path.join(__dirname, 'bookings.db');
 const TUTORIALS_DB_PATH = path.join(__dirname, 'tutorials.db');
 const AI_DB_PATH        = path.join(__dirname, 'ai.db');
@@ -319,7 +320,7 @@ function readRewards() {
 function writeRewards(data) { atomicWriteFile(REWARDS_DB_PATH, JSON.stringify(data, null, 2)); }
 
 // In-memory map of short-lived redemption tokens issued at cart time (30-min TTL)
-const rewardsTokens = new Map(); // token -> { email, userId, points, expiresAt }
+const rewardsTokens = new Map(); // token -> { email, userId, points, storeCredit, expiresAt }
 
 function grantRewardPoints(email, points, type, description, refId) {
   if (!email || !Number.isFinite(points) || points <= 0) return;
@@ -344,6 +345,44 @@ function deductRewardPoints(userId, points, description, refId) {
   entry.points = Math.max(0, entry.points - points);
   entry.history.push({ id: 'rh-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6), type: 'redeem', points: -points, description: description || '', refId: refId || null, date: new Date().toISOString() });
   writeRewards(db);
+  return true;
+}
+
+// ── Store credit (dollar balances) — mirrors the rewards system but in AUD ──
+function readStoreCredits() {
+  try { const d = JSON.parse(fs.readFileSync(STORE_CREDIT_DB_PATH, 'utf8')); return { entries: Array.isArray(d.entries) ? d.entries : [] }; } catch { return { entries: [] }; }
+}
+function writeStoreCredits(data) { atomicWriteFile(STORE_CREDIT_DB_PATH, JSON.stringify(data, null, 2)); }
+
+// Round to whole cents to avoid floating-point drift on balances.
+function roundCents(n) { return Math.round((Number(n) || 0) * 100) / 100; }
+
+function grantStoreCredit(email, amount, type, description, refId) {
+  const amt = roundCents(amount);
+  if (!email || !Number.isFinite(amt) || amt <= 0) return false;
+  const forum = readForum();
+  const user = Array.isArray(forum.users) ? forum.users.find(u => String(u.email || '').toLowerCase() === String(email).toLowerCase()) : null;
+  if (!user) return false;
+  const db = readStoreCredits();
+  let entry = db.entries.find(e => e.userId === user.id);
+  if (!entry) { entry = { userId: user.id, email: String(user.email || '').toLowerCase(), balance: 0, history: [] }; db.entries.push(entry); }
+  if (refId && entry.history.some(h => h.refId === refId)) return false; // deduplicate
+  entry.balance = roundCents(entry.balance + amt);
+  entry.history.push({ id: 'sc-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6), type: type || 'grant', amount: amt, description: description || '', refId: refId || null, date: new Date().toISOString() });
+  writeStoreCredits(db);
+  return true;
+}
+
+function deductStoreCredit(userId, amount, description, refId) {
+  const amt = roundCents(amount);
+  if (!userId || !Number.isFinite(amt) || amt <= 0) return false;
+  const db = readStoreCredits();
+  const entry = db.entries.find(e => e.userId === userId);
+  if (!entry || entry.balance < amt) return false;
+  if (refId && entry.history.some(h => h.refId === refId)) return false; // deduplicate
+  entry.balance = roundCents(Math.max(0, entry.balance - amt));
+  entry.history.push({ id: 'sc-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6), type: 'redeem', amount: -amt, description: description || '', refId: refId || null, date: new Date().toISOString() });
+  writeStoreCredits(db);
   return true;
 }
 
@@ -2033,7 +2072,7 @@ const mainServer = http.createServer(async (req, res) => {
     if (!getStripeKey()) return json(res, 503, { error: 'stripe_not_configured', message: 'Payment is not configured. Please contact us.' });
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
 
-    const { productId, name, priceAud, quantity = 1, customerEmail, items, giftCardCode, shippingAmount, shippingService, redeemPoints: redeemPointsBody, rewardsToken: rewardsTokenBody } = body;
+    const { productId, name, priceAud, quantity = 1, customerEmail, items, giftCardCode, shippingAmount, shippingService, redeemPoints: redeemPointsBody, rewardsToken: rewardsTokenBody, redeemStoreCredit: redeemStoreCreditBody } = body;
 
     // Normalise to a line-items array (multi-item cart or legacy single-item)
     const rawLineItems = Array.isArray(items) && items.length > 0
@@ -2192,6 +2231,20 @@ const mainServer = http.createServer(async (req, res) => {
       }
     }
 
+    // Validate store-credit token and compute discount (1:1 AUD). Reuses the
+    // same rewards token; store credit applies after gift card and points.
+    let storeCreditDiscount = 0;
+    let storeCreditUserId = null;
+    const redeemStoreCreditRaw = roundCents(redeemStoreCreditBody);
+    if (rewardsTokenRaw && redeemStoreCreditRaw > 0) {
+      const tokenData = rewardsTokens.get(rewardsTokenRaw);
+      if (tokenData && tokenData.expiresAt > Date.now() && (tokenData.storeCredit || 0) >= redeemStoreCreditRaw) {
+        const maxDiscount = Math.max(0, roundCents(orderGross - gcDiscount - rewardsDiscount));
+        storeCreditDiscount = roundCents(Math.min(redeemStoreCreditRaw, maxDiscount));
+        if (storeCreditDiscount > 0) storeCreditUserId = tokenData.userId;
+      }
+    }
+
     if (gcDiscount >= orderGross && gcObject) {
       // Redeem gift card balance
       const gcList = readGiftCards();
@@ -2278,6 +2331,12 @@ const mainServer = http.createServer(async (req, res) => {
       params['payment_intent_data[metadata][rewardsPoints]'] = String(rewardsPtsUsed);
       rewardsTokens.delete(validatedRewardsToken);
     }
+    if (storeCreditDiscount > 0 && storeCreditUserId) {
+      params['metadata[storeCreditUserId]'] = storeCreditUserId;
+      params['metadata[storeCreditAmount]'] = String(storeCreditDiscount);
+      params['payment_intent_data[metadata][storeCreditUserId]'] = storeCreditUserId;
+      params['payment_intent_data[metadata][storeCreditAmount]'] = String(storeCreditDiscount);
+    }
     const shippingServiceName = shippingService ? String(shippingService).slice(0, 80) : '';
 
     // Build line items; if a gift card covers the full amount, add a $0.50 minimum line item
@@ -2309,6 +2368,15 @@ const mainServer = http.createServer(async (req, res) => {
         quantity: 1,
         productId: '',
         _isRewardsDiscount: true,
+      });
+    }
+    if (storeCreditDiscount > 0) {
+      adjustedLineItems.push({
+        name: `Store Credit (−$${storeCreditDiscount.toFixed(2)})`,
+        priceAud: -storeCreditDiscount,
+        quantity: 1,
+        productId: '',
+        _isStoreCreditDiscount: true,
       });
     }
     // Add member discount metadata to Stripe
@@ -2496,6 +2564,13 @@ const mainServer = http.createServer(async (req, res) => {
         const rewardsPoints = Math.floor(Number(meta.rewardsPoints || 0));
         if (rewardsUserId && rewardsPoints > 0) {
           deductRewardPoints(rewardsUserId, rewardsPoints, `Order ${order.id}`, `redeem-${order.id}`);
+        }
+
+        // Deduct store credit if redeemed at checkout
+        const storeCreditUserId = meta.storeCreditUserId || '';
+        const storeCreditAmount = roundCents(meta.storeCreditAmount);
+        if (storeCreditUserId && storeCreditAmount > 0) {
+          deductStoreCredit(storeCreditUserId, storeCreditAmount, `Order ${order.id}`, `redeem-${order.id}`);
         }
 
         // Deduct gift card balance
@@ -2730,10 +2805,12 @@ const mainServer = http.createServer(async (req, res) => {
     const db = readRewards();
     const entry = db.entries.find(e => e.userId === session.id);
     const points = entry ? entry.points : 0;
+    const scEntry = readStoreCredits().entries.find(e => e.userId === session.id);
+    const storeCredit = scEntry ? scEntry.balance : 0;
     const token = randomId();
     for (const [k, v] of rewardsTokens) { if (v.expiresAt < Date.now()) rewardsTokens.delete(k); }
-    rewardsTokens.set(token, { email: '', userId: session.id, points, expiresAt: Date.now() + 30 * 60 * 1000 });
-    return json(res, 200, { loggedIn: true, points, token, displayName: session.displayName || session.username });
+    rewardsTokens.set(token, { email: '', userId: session.id, points, storeCredit, expiresAt: Date.now() + 30 * 60 * 1000 });
+    return json(res, 200, { loggedIn: true, points, storeCredit, token, displayName: session.displayName || session.username });
   }
 
   // ── Rewards: verify account credentials and return points balance + token ────
@@ -2751,11 +2828,13 @@ const mainServer = http.createServer(async (req, res) => {
     const db = readRewards();
     const entry = db.entries.find(e => e.userId === user.id);
     const points = entry ? entry.points : 0;
+    const scEntry = readStoreCredits().entries.find(e => e.userId === user.id);
+    const storeCredit = scEntry ? scEntry.balance : 0;
     const token = randomId();
     for (const [k, v] of rewardsTokens) { if (v.expiresAt < Date.now()) rewardsTokens.delete(k); }
-    rewardsTokens.set(token, { email, userId: user.id, points, expiresAt: Date.now() + 30 * 60 * 1000 });
+    rewardsTokens.set(token, { email, userId: user.id, points, storeCredit, expiresAt: Date.now() + 30 * 60 * 1000 });
     setCustomerSessionCookies(res, user, req);
-    return json(res, 200, { ok: true, points, token, displayName: user.displayName || user.username });
+    return json(res, 200, { ok: true, points, storeCredit, token, displayName: user.displayName || user.username });
   }
 
   return serveStatic(req, res, url.pathname, '/dist/index.html', MAIN_SPA_ROUTES);
@@ -4424,6 +4503,38 @@ const adminServer = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true, entry });
   }
 
+  if (req.method === 'GET' && url.pathname === '/api/admin/store-credit') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    const db = readStoreCredits();
+    const forum = readForum();
+    const entries = db.entries.map(e => {
+      const user = Array.isArray(forum.users) ? forum.users.find(u => u.id === e.userId) : null;
+      return { ...e, displayName: user?.displayName || '', username: user?.username || '', email: user?.email || e.email || '' };
+    });
+    return json(res, 200, { entries });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/store-credit/adjust') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const { userId, amount, description } = body || {};
+    if (!userId) return json(res, 422, { error: 'userId_required' });
+    const amt = roundCents(amount);
+    if (!amt || amt === 0) return json(res, 422, { error: 'invalid_amount' });
+    const db = readStoreCredits();
+    let entry = db.entries.find(e => e.userId === userId);
+    if (!entry) {
+      const forum = readForum();
+      const user = Array.isArray(forum.users) ? forum.users.find(u => u.id === userId) : null;
+      entry = { userId, email: user ? String(user.email || '').toLowerCase() : '', balance: 0, history: [] };
+      db.entries.push(entry);
+    }
+    entry.balance = roundCents(Math.max(0, entry.balance + amt));
+    entry.history.push({ id: 'sc-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6), type: amt > 0 ? 'grant' : 'adjust', amount: amt, description: description || '', refId: null, date: new Date().toISOString() });
+    writeStoreCredits(db);
+    return json(res, 200, { ok: true, entry });
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/admin/bookings') {
     const session = requireAdmin(req, res); if (!session) return;
     const db = readBookings();
@@ -4932,7 +5043,11 @@ const portalServer = http.createServer(async (req, res) => {
     const giftCards = userEmail
       ? readGiftCards().filter(c => String(c.recipientEmail || '').toLowerCase() === userEmail && !c.isVoid && c.balance > 0)
       : [];
-    return json(res, 200, { giftCards, storeCredits: [] });
+    const scEntry = readStoreCredits().entries.find(e => e.userId === session.id);
+    const storeCredits = scEntry && scEntry.balance > 0
+      ? [{ description: 'Store credit', balance: scEntry.balance, history: scEntry.history || [] }]
+      : [];
+    return json(res, 200, { giftCards, storeCredits });
   }
 
   if (req.method === 'GET' && url.pathname === '/api/portal/bookings') {

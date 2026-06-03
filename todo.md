@@ -45,9 +45,13 @@ Full rewards system built end-to-end:
 - **Admin panel:** New "Rewards" section in admin STORE group — searchable customer list, full history, manual grant/deduct with reason.
 - **Portal tab:** Already shows real balance and history from `rewards.db` via `/api/portal/rewards`.
 
-### ⚠️ 10. Portal Wallet tab — partially implemented (portal-page.jsx:1106–1199)
+### ✅ 10. Portal Wallet tab — store credit now fully implemented (RESOLVED)
 **Gift cards:** Fully working — fetches cards matched to user's email from DB, shows masked code, balance, issue date.  
-**Store credit:** Always returns `storeCredits: []` (server.js:4680 hardcoded). No store credit data model exists anywhere — no `.db` file, no admin UI to issue credit, no checkout integration. The UI renders "No store credit available." for every user. This half of the wallet is a hollow shell.
+**Store credit:** Built end-to-end, mirroring the Rewards system:
+- **Data model:** `store-credits.db` (`{ entries: [{ userId, email, balance, history }] }`) with `readStoreCredits`/`writeStoreCredits` (atomic write) and `grantStoreCredit`/`deductStoreCredit` helpers (dedup by refId) in server.js.
+- **Admin UI:** New "Store Credit" section in admin STORE group (manager+) — searchable customer list, balance, history, manual issue/deduct with reason. Endpoints `GET /api/admin/store-credit` and `POST /api/admin/store-credit/adjust`.
+- **Portal display:** `/api/portal/wallet` now returns the user's real store-credit balance + history; the Wallet tab renders it.
+- **Checkout redemption:** Customer logs in once at cart (`/api/rewards/me` + `/api/rewards/lookup` now also return `storeCredit`); a checkbox applies credit 1:1 AUD as a Stripe line-item discount (after gift card + points), deducted atomically on the `checkout.session.completed` webhook via `deductStoreCredit`.
 
 ### ✅ 11. AI/Edge AI page — NOT AN ISSUE (INVALID)
 Earlier audit claimed the AI page was feature-flagged off. This is wrong. `aiEnabled` only toggles a cosmetic "NEW · 2026" badge (pages-shop.jsx:169); the AI editorial section, its body, and the "See the AI suite →" CTA always render, and the page is always reachable. There is no page-level enable/disable flag — nor should there be. The admin checkbox (pages-admin.jsx:5121) is explicitly labelled "Show 'NEW · 2026' badge on AI section". Nothing to do.
@@ -171,7 +175,7 @@ Completing a purchase does not decrement the stock count on the purchased produc
 | 7 | pages-shop.jsx:1462 | Memberships disabled/greyed | HIGH | ✅ DONE |
 | 8 | pages-shop.jsx:1405 | Hardcoded membership default tiers | HIGH | ✅ DONE |
 | 9 | portal-page.jsx:1022 | Rewards "coming soon" | HIGH | ✅ DONE |
-| 10 | portal-page.jsx:1106 / server.js:4680 | Wallet: gift cards work, store credit is hollow | HIGH | ⚠️ PARTIAL |
+| 10 | portal-page.jsx / server.js | Wallet store credit — full build (model, admin, redemption) | HIGH | ✅ DONE |
 | 11 | pages-shop.jsx:169 | AI page "disabled" — INVALID, aiEnabled only toggles a badge | HIGH | ✅ N/A |
 | 12 | pages-info.jsx:1129,1143 | Address hardcoded fallback in AboutPage | MEDIUM | ⚠️ PARTIAL |
 | 13 | app.jsx:613 | Acknowledgement hardcoded | MEDIUM | ❌ OPEN |
