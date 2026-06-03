@@ -1255,6 +1255,24 @@ function emailOrderDelivered({ orderId, customerName, trackingNumber }) {
   };
 }
 
+function emailOrderRefunded({ orderId, customerName, amount, method }) {
+  const name = customerName ? customerName.split(' ')[0] : '';
+  const amtStr = '$' + (Number(amount) || 0).toLocaleString('en-AU', { minimumFractionDigits: 2 });
+  return {
+    subject: `Your refund has been processed — ${orderId}`,
+    html: emailHtml("Your refund has been processed", `
+      <p>Hi${name ? ` ${escHtml(name)}` : ''},</p>
+      <p>We've processed a refund of <strong>${escHtml(amtStr)}</strong> for your order to ${escHtml(method)}.</p>
+      <div class="detail">
+        <dt>ORDER ID</dt><dd>${escHtml(orderId)}</dd>
+        <dt>REFUND AMOUNT</dt><dd>${escHtml(amtStr)}</dd>
+      </div>
+      <p>If this was a refund to your original payment method, please allow a few business days for it to appear. If you have any questions, just reply to this email.</p>
+      <a class="btn" href="${getPortalUrl()}/orders">View your order →</a>
+    `),
+  };
+}
+
 function emailOrderShipped({ orderId, customerName, trackingNumber }) {
   const name = customerName ? customerName.split(' ')[0] : '';
   const trackingUrl = `https://auspost.com.au/mypost/track/#/details/${encodeURIComponent(trackingNumber)}`;
@@ -2476,6 +2494,7 @@ const mainServer = http.createServer(async (req, res) => {
       const order = {
         id: `OE-${maxNum + 1}`,
         stripeSessionId: session.id,
+        stripePaymentIntent: session.payment_intent || '',
         cust: details.name || details.email || 'Online customer',
         email: details.email || '',
         phone: details.phone || '',
@@ -3762,6 +3781,57 @@ const adminServer = http.createServer(async (req, res) => {
       sendEmail({ to: body.email, ...tmpl });
     }
     return json(res, 200, { ok: true, item: body });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/orders/refund') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const { id, method } = body || {};
+    if (!id) return json(res, 422, { error: 'id_required' });
+    if (method !== 'stripe' && method !== 'store-credit') return json(res, 422, { error: 'invalid_method', message: 'Refund method must be "stripe" or "store-credit".' });
+    const orders = readOrders();
+    const idx = orders.findIndex(o => o.id === id);
+    if (idx < 0) return json(res, 404, { error: 'not_found' });
+    const order = orders[idx];
+    if (order.refund) return json(res, 409, { error: 'already_refunded', message: `Order ${id} has already been refunded.` });
+
+    const stripePaid = roundCents((order.payments || []).filter(p => p.method === 'Stripe').reduce((s, p) => s + (Number(p.amount) || 0), 0));
+    const orderTotal = roundCents(order.total);
+    const maxRefund = method === 'stripe' ? stripePaid : orderTotal;
+    const requested = body.amount != null ? roundCents(body.amount) : maxRefund;
+    if (!(requested > 0)) return json(res, 422, { error: 'invalid_amount', message: 'Refund amount must be greater than zero.' });
+    if (requested > maxRefund) return json(res, 422, { error: 'amount_too_high', message: `Maximum refundable via ${method === 'stripe' ? 'Stripe' : 'store credit'} is $${maxRefund.toFixed(2)}.` });
+
+    const nowStr = new Date().toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
+    if (method === 'store-credit') {
+      const ok = grantStoreCredit(order.email, requested, 'refund', `Refund for order ${id}`, `refund-${id}`);
+      if (!ok) return json(res, 422, { error: 'no_account', message: 'Store credit requires the customer to have an account with this email. Use a Stripe refund instead, or ask the customer to register.' });
+    } else {
+      // Stripe refund — resolve the payment intent (older orders may only have a session id)
+      let pi = order.stripePaymentIntent || '';
+      if (!pi && order.stripeSessionId) {
+        const sResp = await stripeRequest('GET', `/v1/checkout/sessions/${encodeURIComponent(order.stripeSessionId)}`, null).catch(() => null);
+        pi = sResp && sResp.status === 200 ? (sResp.body.payment_intent || '') : '';
+      }
+      if (!pi) return json(res, 422, { error: 'no_payment_intent', message: 'No Stripe payment found for this order. It may have been paid another way — issue store credit instead.' });
+      let rResp;
+      try { rResp = await stripeRequest('POST', '/v1/refunds', { payment_intent: pi, amount: String(Math.round(requested * 100)) }); }
+      catch { return json(res, 502, { error: 'stripe_error', message: 'Payment provider unreachable. Please try again.' }); }
+      if (!rResp || rResp.status !== 200) {
+        const msg = rResp?.body?.error?.message || 'Stripe refund failed.';
+        return json(res, 502, { error: 'stripe_error', message: msg });
+      }
+    }
+
+    order.fulfilment = 'refunded';
+    order.refund = { method, amount: requested, date: new Date().toISOString(), by: session.username || session.role || 'admin' };
+    order.payments = [...(order.payments || []), { amount: -requested, method: method === 'stripe' ? 'Stripe Refund' : 'Store Credit', note: `Refund for ${id}`, date: nowStr }];
+    orders[idx] = order;
+    writeOrders(orders);
+    if (order.email) {
+      const tmpl = emailOrderRefunded({ orderId: id, customerName: order.cust, amount: requested, method: method === 'stripe' ? 'your original payment method' : 'store credit' });
+      sendEmail({ to: order.email, ...tmpl }).catch(() => {});
+    }
+    return json(res, 200, { ok: true, order });
   }
   if (req.method === 'POST' && url.pathname === '/api/admin/orders/check-tracking') {
     const session = requireRole(req, res, 'staff'); if (!session) return;

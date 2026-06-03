@@ -543,6 +543,9 @@ function AdminOrders({ search }) {
   }, []);
   const [trackingBusy, setTrackingBusy] = useState(false);
   const [trackingResult, setTrackingResult] = useState(null);
+  const [refundEntry, setRefundEntry] = useState({ method:'stripe', amount:'' });
+  const [refundBusy, setRefundBusy] = useState(false);
+  const [refundError, setRefundError] = useState(null);
 
   const openRow = (r) => { setEdit(r); setForm({...r}); setPayEntry({ amount:'', method:'Cash', note:'' }); setExpenseEdit(null); setExpenseForm({}); setTrackingResult(null); setTrackingEmailStatus(null); };
 
@@ -551,6 +554,22 @@ function AdminOrders({ search }) {
     setForm(updated);
     await fetch('/api/admin/orders/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ ...updated, _originalId: edit?.id || updated.id }) }).catch(()=>null);
     setRows(rs => rs.map(r => r.id === (edit?.id || updated.id) ? updated : r));
+  };
+
+  const doRefund = async () => {
+    const amt = Number(refundEntry.amount);
+    if (!amt || amt <= 0) { setRefundError('Enter a refund amount greater than zero.'); return; }
+    const methodLabel = refundEntry.method === 'stripe' ? 'refund to the original card via Stripe' : 'issue store credit';
+    if (!confirm(`This will ${methodLabel} of $${amt.toFixed(2)} for order ${form.id} and mark it refunded. Continue?`)) return;
+    setRefundBusy(true); setRefundError(null);
+    const r = await fetch('/api/admin/orders/refund', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: form.id, method: refundEntry.method, amount: amt }) }).catch(()=>null);
+    setRefundBusy(false);
+    if (!r) { setRefundError('Network error. Please try again.'); return; }
+    const d = await r.json().catch(()=>({}));
+    if (!r.ok) { setRefundError(d.message || 'Refund failed.'); return; }
+    setForm(d.order);
+    setRows(rs => rs.map(row => row.id === form.id ? d.order : row));
+    setRefundEntry({ method:'stripe', amount:'' });
   };
 
   const checkTracking = async () => {
@@ -1015,6 +1034,34 @@ function AdminOrders({ search }) {
             <label className="field" style={{margin:0}}><span className="label">Note (optional)</span><input className="input" placeholder="e.g. deposit, part payment" value={payEntry.note} onChange={e=>setPayEntry(v=>({...v,note:e.target.value}))}/></label>
             <button className="btn btn-sm" style={{marginBottom:1}} onClick={addPayment}>Log</button>
           </div>
+
+          {/* Refund */}
+          {form.id && (
+            <div style={{marginTop:16, padding:'14px', background:'#fbeae1', border:'1px solid #e3b9a3'}}>
+              <div className="mono" style={{fontSize:10, letterSpacing:'.1em', color:'#7a3a18', marginBottom:10}}>REFUND</div>
+              {form.refund ? (
+                <div style={{fontSize:13, color:'#7a3a18'}}>
+                  Refunded <strong>${Number(form.refund.amount).toLocaleString('en-AU',{minimumFractionDigits:2})}</strong> via {form.refund.method === 'stripe' ? 'Stripe (original payment)' : 'store credit'} on {new Date(form.refund.date).toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'})}.
+                </div>
+              ) : (
+                <>
+                  <div style={{fontSize:12, color:'var(--ink-2)', marginBottom:10}}>Ask the customer whether they want their money back or store credit, then choose below. The customer is emailed automatically and the order is marked refunded.</div>
+                  <div style={{display:'grid', gridTemplateColumns:'1fr 120px auto', gap:8, alignItems:'end'}}>
+                    <label className="field" style={{margin:0}}><span className="label">Method</span>
+                      <select className="select" value={refundEntry.method} onChange={e=>setRefundEntry(v=>({...v,method:e.target.value}))}>
+                        <option value="stripe">Money back (Stripe)</option>
+                        <option value="store-credit">Store credit</option>
+                      </select>
+                    </label>
+                    <label className="field" style={{margin:0}}><span className="label">Amount</span><input className="input" type="number" min="0" step="0.01" placeholder={Number(form.total||0).toFixed(2)} value={refundEntry.amount} onChange={e=>setRefundEntry(v=>({...v,amount:e.target.value}))}/></label>
+                    <button className="btn btn-sm" style={{background:'#7a3a18', color:'#fff', border:'none', marginBottom:1}} onClick={doRefund} disabled={refundBusy}>{refundBusy ? 'Processing…' : 'Issue Refund'}</button>
+                  </div>
+                  {refundEntry.method === 'store-credit' && <div style={{fontSize:11, color:'var(--ink-3)', marginTop:6}}>Store credit requires the customer to have an account with email {form.email || '(none set)'}.</div>}
+                  {refundError && <div style={{fontSize:12, color:'#b91c1c', marginTop:8}}>{refundError}</div>}
+                </>
+              )}
+            </div>
+          )}
 
           {/* Customer-visible updates */}
           <div style={{borderTop:'1px solid var(--line)', margin:'16px 0 16px'}}/>
