@@ -50,7 +50,7 @@ const PUBLIC_CSP = "default-src 'self'; " +
     "https://www.google.com https://ep2.adtrafficquality.google; " +
   "frame-ancestors 'none';";
 const PUBLIC_RATE_WINDOW_MS = 1000 * 60 * 10;
-const PUBLIC_RATE_LIMITS = { checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10, 'forgot-password': 5, 'reset-password': 10, 'gift-card/apply': 10, 'gift-card/balance': 5, 'warranty/order-lookup': 10, 'cart/get': 20 };
+const PUBLIC_RATE_LIMITS = { analytics: 120, checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10, 'forgot-password': 5, 'reset-password': 10, 'gift-card/apply': 10, 'gift-card/balance': 5, 'warranty/order-lookup': 10, 'cart/get': 20 };
 
 fs.mkdirSync(path.join(__dirname, 'assets/uploads'), { recursive: true });
 fs.mkdirSync(path.join(__dirname, 'assets/uploads/software'), { recursive: true });
@@ -90,6 +90,7 @@ const SOFTWARE_DB_PATH  = path.join(__dirname, 'software.db');
 const GIFTCARDS_DB_PATH = path.join(__dirname, 'gift-cards.db');
 const DENOMINATIONS_DB_PATH = path.join(__dirname, 'gift-card-denominations.db');
 const REWARDS_DB_PATH = path.join(__dirname, 'rewards.db');
+const ANALYTICS_DB_PATH = path.join(__dirname, 'analytics.db');
 const STORE_CREDIT_DB_PATH = path.join(__dirname, 'store-credits.db');
 const BOOKINGS_DB_PATH = path.join(__dirname, 'bookings.db');
 const TUTORIALS_DB_PATH = path.join(__dirname, 'tutorials.db');
@@ -348,6 +349,29 @@ function maskIntegrationConfig(name, config) {
 
 function readExpenses() { try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'expenses.db'), 'utf8')).expenses || []; } catch { return []; } }
 function writeExpenses(e) { atomicWriteFile(path.join(__dirname, 'expenses.db'), JSON.stringify({ expenses: e }, null, 2)); }
+
+// Analytics — append-only event log. Kept in memory for fast aggregation;
+// flushed to disk on a 30-second timer and on each new event batch.
+let _analyticsEvents = [];
+let _analyticsDirty = false;
+try {
+  const raw = JSON.parse(fs.readFileSync(ANALYTICS_DB_PATH, 'utf8'));
+  _analyticsEvents = Array.isArray(raw.events) ? raw.events : [];
+} catch { _analyticsEvents = []; }
+
+function flushAnalytics() {
+  if (!_analyticsDirty) return;
+  atomicWriteFile(ANALYTICS_DB_PATH, JSON.stringify({ events: _analyticsEvents }));
+  _analyticsDirty = false;
+}
+setInterval(flushAnalytics, 30_000).unref();
+
+function appendAnalyticsEvent(ev) {
+  _analyticsEvents.push(ev);
+  // Keep at most 200 000 events to bound memory / disk usage (~60 MB).
+  if (_analyticsEvents.length > 200_000) _analyticsEvents = _analyticsEvents.slice(-200_000);
+  _analyticsDirty = true;
+}
 
 function readGiftCards() {
   try { const d = JSON.parse(fs.readFileSync(GIFTCARDS_DB_PATH, 'utf8')); return Array.isArray(d.giftCards) ? d.giftCards : []; }
@@ -1955,6 +1979,23 @@ const mainServer = http.createServer(async (req, res) => {
     return json(res, 200, { testimonial: { quote: featured.testimonial, name: featured.name, loc: featured.loc } });
   }
 
+  // Public analytics event ingestion
+  if (req.method === 'POST' && url.pathname === '/api/analytics/event') {
+    if (publicRateLimited(getIp(req), 'analytics')) return json(res, 429, { error: 'rate_limited' });
+    let body;
+    try { body = await readJson(req); } catch { return json(res, 400, { error: 'bad_request' }); }
+    const type = typeof body.type === 'string' ? body.type.slice(0, 64) : null;
+    if (!type) return json(res, 400, { error: 'missing_type' });
+    const page = typeof body.page === 'string' ? body.page.slice(0, 256) : '';
+    const referrer = typeof body.referrer === 'string' ? body.referrer.slice(0, 256) : '';
+    const ua = (req.headers['user-agent'] || '').slice(0, 256);
+    const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+    // Rough bot detection — don't record bot traffic
+    if (/bot|crawl|spider|slurp|headless/i.test(ua)) return json(res, 204, {});
+    appendAnalyticsEvent({ ts: Date.now(), type, page, referrer, ua, ip });
+    return json(res, 204, {});
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/metrics') {
     const repairs = readRepairs();
     const ewaste = readEwaste();
@@ -3289,6 +3330,17 @@ const forumServer = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true });
   }
 
+  if (req.method === 'POST' && url.pathname === '/api/analytics/event') {
+    if (publicRateLimited(getIp(req), 'analytics')) return json(res, 429, { error: 'rate_limited' });
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'bad_request' }); }
+    const type = typeof body.type === 'string' ? body.type.slice(0, 64) : null;
+    if (!type) return json(res, 400, { error: 'missing_type' });
+    const ua = (req.headers['user-agent'] || '').slice(0, 256);
+    if (/bot|crawl|spider|slurp|headless/i.test(ua)) return json(res, 204, {});
+    appendAnalyticsEvent({ ts: Date.now(), type, page: (body.page || '').slice(0, 256), referrer: (body.referrer || '').slice(0, 256), ua, ip: getIp(req) });
+    return json(res, 204, {});
+  }
+
   return serveStatic(req, res, url.pathname, '/dist/forum.html', null);
   } catch (err) {
     console.error('[forumServer] unhandled error:', err);
@@ -3478,6 +3530,56 @@ const adminServer = http.createServer(async (req, res) => {
     const items = readOrders().map(o => hydrateOrder(o, quotes));
     return json(res, 200, { items });
   }
+  if (req.method === 'GET' && url.pathname === '/api/admin/analytics') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    // Range: default last 30 days; supports ?days=N
+    const days = Math.min(Math.max(parseInt(url.searchParams.get('days') || '30', 10) || 30, 1), 365);
+    const since = Date.now() - days * 24 * 60 * 60 * 1000;
+    const events = _analyticsEvents.filter(e => e.ts >= since && e.type === 'pageview');
+
+    // Daily page views
+    const dailyMap = {};
+    for (const e of events) {
+      const d = new Date(e.ts);
+      const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      dailyMap[key] = (dailyMap[key] || 0) + 1;
+    }
+    const daily = Object.entries(dailyMap).sort(([a],[b]) => a < b ? -1 : 1).map(([date, views]) => ({ date, views }));
+
+    // Top pages
+    const pageMap = {};
+    for (const e of events) {
+      const p = e.page || '/';
+      pageMap[p] = (pageMap[p] || 0) + 1;
+    }
+    const topPages = Object.entries(pageMap).sort(([,a],[,b]) => b - a).slice(0, 20).map(([page, views]) => ({ page, views }));
+
+    // Top referrers
+    const refMap = {};
+    for (const e of events) {
+      if (!e.referrer) continue;
+      let host = e.referrer;
+      try { host = new URL(e.referrer).hostname.replace(/^www\./, ''); } catch {}
+      refMap[host] = (refMap[host] || 0) + 1;
+    }
+    const topReferrers = Object.entries(refMap).sort(([,a],[,b]) => b - a).slice(0, 10).map(([referrer, views]) => ({ referrer, views }));
+
+    // Device breakdown via UA
+    let mobile = 0, tablet = 0, desktop = 0;
+    for (const e of events) {
+      const ua = e.ua || '';
+      if (/tablet|ipad/i.test(ua)) tablet++;
+      else if (/mobile|android|iphone/i.test(ua)) mobile++;
+      else desktop++;
+    }
+
+    const totalViews = events.length;
+    // Unique IPs as a proxy for unique visitors
+    const uniqueIps = new Set(events.map(e => e.ip)).size;
+
+    return json(res, 200, { days, totalViews, uniqueVisitors: uniqueIps, daily, topPages, topReferrers, devices: { mobile, tablet, desktop } });
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/admin/metrics') {
     const session = requireRole(req, res, 'staff'); if (!session) return;
     return json(res, 200, buildAdminMetrics());
@@ -5339,6 +5441,17 @@ const portalServer = http.createServer(async (req, res) => {
     return json(res, 201, { ok: true, booking });
   }
 
+  if (req.method === 'POST' && url.pathname === '/api/analytics/event') {
+    if (publicRateLimited(getIp(req), 'analytics')) return json(res, 429, { error: 'rate_limited' });
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'bad_request' }); }
+    const type = typeof body.type === 'string' ? body.type.slice(0, 64) : null;
+    if (!type) return json(res, 400, { error: 'missing_type' });
+    const ua = (req.headers['user-agent'] || '').slice(0, 256);
+    if (/bot|crawl|spider|slurp|headless/i.test(ua)) return json(res, 204, {});
+    appendAnalyticsEvent({ ts: Date.now(), type, page: (body.page || '').slice(0, 256), referrer: (body.referrer || '').slice(0, 256), ua, ip: getIp(req) });
+    return json(res, 204, {});
+  }
+
   return serveStatic(req, res, url.pathname, '/dist/portal.html', null);
   } catch (err) {
     console.error('[portalServer] unhandled error:', err);
@@ -5370,6 +5483,17 @@ const gamesServer = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/auth/register') return handleCustomerRegister(req, res);
   if (req.method === 'POST' && url.pathname === '/api/auth/login')    return handleCustomerLogin(req, res);
   if (req.method === 'POST' && url.pathname === '/api/auth/logout')   return handleCustomerLogout(req, res);
+
+  if (req.method === 'POST' && url.pathname === '/api/analytics/event') {
+    if (publicRateLimited(getIp(req), 'analytics')) return json(res, 429, { error: 'rate_limited' });
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'bad_request' }); }
+    const type = typeof body.type === 'string' ? body.type.slice(0, 64) : null;
+    if (!type) return json(res, 400, { error: 'missing_type' });
+    const ua = (req.headers['user-agent'] || '').slice(0, 256);
+    if (/bot|crawl|spider|slurp|headless/i.test(ua)) return json(res, 204, {});
+    appendAnalyticsEvent({ ts: Date.now(), type, page: (body.page || '').slice(0, 256), referrer: (body.referrer || '').slice(0, 256), ua, ip: getIp(req) });
+    return json(res, 204, {});
+  }
 
   return serveStatic(req, res, url.pathname, '/dist/games.html', null);
   } catch (err) {

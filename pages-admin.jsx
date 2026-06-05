@@ -176,6 +176,7 @@ const NAV_ICONS = {
   sellers:      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
   memberships:  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
   'gift-cards': <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z"/></svg>,
+  analytics:    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
   expenses:     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>,
   policies:     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>,
   settings:     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M16.24 16.24l1.41 1.41M4.93 4.93l1.41 1.41M7.76 16.24l-1.41 1.41M22 12h-2M4 12H2M12 22v-2M12 4V2"/></svg>,
@@ -208,6 +209,7 @@ const ADMIN_SECTIONS = [
     { id:'gift-cards', label:'Gift Cards',   minRole:'staff', excludeRoles:['seller'] },
     { id:'rewards',   label:'Rewards',       minRole:'manager' },
     { id:'store-credit', label:'Store Credit', minRole:'manager' },
+    { id:'analytics', label:'Analytics',      minRole:'manager' },
     { id:'expenses',  label:'Expenses',      minRole:'manager' },
     { id:'policies',  label:'Policies',      minRole:'manager' },
     { id:'seller-billing', label:'Seller Billing', minRole:'manager' },
@@ -4432,6 +4434,131 @@ function AdminStoreCredit() {
   );
 }
 
+// ANALYTICS
+// ============================================================
+function AdminAnalytics() {
+  const [data, setData] = useState(null);
+  const [days, setDays] = useState(30);
+  const [loading, setLoading] = useState(true);
+
+  const load = (d) => {
+    setLoading(true);
+    fetch(`/api/admin/analytics?days=${d}`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => { setData(d); setLoading(false); })
+      .catch(() => { setData(null); setLoading(false); });
+  };
+
+  useEffect(() => { load(days); }, [days]);
+
+  const card = (label, value, sub) => (
+    <div style={{ background: 'var(--paper)', border: '1px solid var(--line)', borderRadius: 8, padding: '16px 20px', minWidth: 140 }}>
+      <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--ink)' }}>{value}</div>
+      {sub && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{sub}</div>}
+    </div>
+  );
+
+  const barMax = data ? Math.max(1, ...data.daily.map(d => d.views)) : 1;
+
+  return (
+    <div style={{ padding: '24px 28px', maxWidth: 960 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+        <span style={{ fontSize: 13, color: 'var(--muted)' }}>Last</span>
+        {[7, 30, 90].map(n => (
+          <button key={n} onClick={() => setDays(n)}
+            className={days === n ? 'btn btn-rust btn-sm' : 'btn btn-ghost btn-sm'}>
+            {n} days
+          </button>
+        ))}
+      </div>
+
+      {loading && <div style={{ color: 'var(--muted)', padding: 32 }}>Loading…</div>}
+      {!loading && !data && <div style={{ color: 'var(--muted)', padding: 32 }}>Failed to load analytics.</div>}
+      {!loading && data && <>
+        {/* Summary cards */}
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 28 }}>
+          {card('Page Views', data.totalViews.toLocaleString(), `last ${data.days} days`)}
+          {card('Unique Visitors', data.uniqueVisitors.toLocaleString(), 'by IP address')}
+          {card('Avg / Day', data.daily.length ? Math.round(data.totalViews / data.daily.length).toLocaleString() : '0', 'page views')}
+        </div>
+
+        {/* Daily chart */}
+        <div style={{ background: 'var(--paper)', border: '1px solid var(--line)', borderRadius: 8, padding: '20px 20px 12px', marginBottom: 20 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 16 }}>Daily Page Views</div>
+          {data.daily.length === 0
+            ? <div style={{ color: 'var(--muted)', fontSize: 13 }}>No data yet.</div>
+            : <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 80, overflowX: 'auto' }}>
+                {data.daily.map(d => (
+                  <div key={d.date} title={`${d.date}: ${d.views}`} style={{ flex: '0 0 auto', width: Math.max(6, Math.floor(560 / data.daily.length) - 3), background: 'var(--rust, #c0392b)', borderRadius: '2px 2px 0 0', height: `${Math.round((d.views / barMax) * 80)}px`, minHeight: 2 }} />
+                ))}
+              </div>
+          }
+          {data.daily.length > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: 11, color: 'var(--muted)' }}>
+              <span>{data.daily[0]?.date}</span>
+              <span>{data.daily[data.daily.length - 1]?.date}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Top pages + referrers + devices */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16, marginBottom: 20 }}>
+          {/* Top pages */}
+          <div style={{ background: 'var(--paper)', border: '1px solid var(--line)', borderRadius: 8, padding: 20 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Top Pages</div>
+            {data.topPages.length === 0
+              ? <div style={{ color: 'var(--muted)', fontSize: 13 }}>No data yet.</div>
+              : data.topPages.map((p, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 0', borderBottom: i < data.topPages.length - 1 ? '1px solid var(--line)' : 'none' }}>
+                  <span style={{ fontSize: 13, color: 'var(--ink)', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '75%' }} title={p.page}>{p.page || '/'}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--rust, #c0392b)', flexShrink: 0 }}>{p.views.toLocaleString()}</span>
+                </div>
+              ))}
+          </div>
+
+          {/* Top referrers */}
+          <div style={{ background: 'var(--paper)', border: '1px solid var(--line)', borderRadius: 8, padding: 20 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Top Referrers</div>
+            {data.topReferrers.length === 0
+              ? <div style={{ color: 'var(--muted)', fontSize: 13 }}>No referrer data yet.</div>
+              : data.topReferrers.map((r, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 0', borderBottom: i < data.topReferrers.length - 1 ? '1px solid var(--line)' : 'none' }}>
+                  <span style={{ fontSize: 13, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '75%' }} title={r.referrer}>{r.referrer}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--rust, #c0392b)', flexShrink: 0 }}>{r.views.toLocaleString()}</span>
+                </div>
+              ))}
+          </div>
+
+          {/* Devices */}
+          <div style={{ background: 'var(--paper)', border: '1px solid var(--line)', borderRadius: 8, padding: 20 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Devices</div>
+            {[
+              { label: 'Desktop', value: data.devices.desktop },
+              { label: 'Mobile', value: data.devices.mobile },
+              { label: 'Tablet', value: data.devices.tablet },
+            ].map(({ label, value }) => {
+              const total = data.devices.desktop + data.devices.mobile + data.devices.tablet || 1;
+              const pct = Math.round((value / total) * 100);
+              return (
+                <div key={label} style={{ marginBottom: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
+                    <span style={{ color: 'var(--ink)' }}>{label}</span>
+                    <span style={{ color: 'var(--muted)' }}>{value.toLocaleString()} ({pct}%)</span>
+                  </div>
+                  <div style={{ height: 6, background: 'var(--line)', borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{ width: `${pct}%`, height: '100%', background: 'var(--rust, #c0392b)', borderRadius: 3 }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </>}
+    </div>
+  );
+}
+
 // EXPENSES
 // ============================================================
 function AdminExpenses() {
@@ -5802,6 +5929,7 @@ const ADMIN_VIEWS = {
   'gift-cards': { c: AdminGiftCards, t:'Gift Cards',        staticSubtitle:'issued codes · balances · manual issuance' },
   'rewards':    { c: AdminRewards,   t:'Rewards',           staticSubtitle:'points balances · history · manual adjustments' },
   'store-credit': { c: AdminStoreCredit, t:'Store Credit',  staticSubtitle:'credit balances · history · manual adjustments' },
+  analytics:  { c: AdminAnalytics,  t:'Analytics',        staticSubtitle:'page views · top pages · referrers · devices' },
   expenses:   { c: AdminExpenses,   t:'Expenses',         staticSubtitle:'track costs · receipt uploads' },
   policies:   { c: AdminPolicies,   t:'Policies',         staticSubtitle:'edit public-facing policy docs' },
   settings:   { c: AdminSettings,   t:'Settings',         staticSubtitle:'shop · staff · integrations' },
@@ -5812,7 +5940,7 @@ const ADMIN_ALL_IDS = new Set([
   'overview','orders','repairs','quotes','ewaste',
   'products','services','software','tutorials','ai',
   'forum','groups','customers','sellers',
-  'memberships','gift-cards','rewards','expenses','policies','seller-billing','settings',
+  'memberships','gift-cards','rewards','analytics','expenses','policies','seller-billing','settings',
 ]);
 
 function adminSectionFromPath() {
