@@ -17,7 +17,9 @@ This mistake was made once and wiped the entire live database. Do not let it hap
 
 ## Git workflow
 
-**Always commit and push directly to `main`.** Do not create feature branches, do not open pull requests. The owner merges nothing — changes go straight to production via `git pull` on the server.
+**Always commit and push directly to `main`.** Do not open pull requests. The owner merges nothing — changes go straight to production via `git pull` on the server.
+
+When running inside a Claude Code web session, the environment pre-creates a feature branch (e.g. `claude/next-todo-issue-*`). In that case: commit on the session branch, then fast-forward merge to `main` and push `main`. That is the accepted flow — the feature branch is just session scaffolding, not a real branch to review or merge via PR.
 
 ## Commands
 
