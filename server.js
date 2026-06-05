@@ -3094,7 +3094,10 @@ const mainServer = http.createServer(async (req, res) => {
     const thumbsDir = path.join(__dirname, 'assets/uploads/.thumbs');
     fs.mkdirSync(thumbsDir, { recursive: true });
     const baseName = path.basename(src, path.extname(src));
-    const thumbPath = path.join(thumbsDir, `${baseName}-w${w}.webp`);
+    const THUMB_QUALITY = 68;
+    // Quality is part of the cache key so tuning it regenerates variants
+    // instead of serving stale higher-weight files.
+    const thumbPath = path.join(thumbsDir, `${baseName}-w${w}-q${THUMB_QUALITY}.webp`);
     const serveThumb = (buf) => {
       res.writeHead(200, { 'Content-Type': 'image/webp', 'Cache-Control': 'public, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff', 'Vary': 'Accept-Encoding' });
       res.end(buf);
@@ -3102,7 +3105,7 @@ const mainServer = http.createServer(async (req, res) => {
     try {
       if (fs.existsSync(thumbPath)) return serveThumb(fs.readFileSync(thumbPath));
       const buf = fs.readFileSync(srcPath);
-      const thumb = await sharp(buf).resize({ width: w, withoutEnlargement: true }).webp({ quality: 78 }).toBuffer();
+      const thumb = await sharp(buf).resize({ width: w, withoutEnlargement: true }).webp({ quality: THUMB_QUALITY }).toBuffer();
       fs.writeFileSync(thumbPath, thumb);
       serveThumb(thumb);
     } catch { return json(res, 500, { error: 'thumb_failed' }); }
