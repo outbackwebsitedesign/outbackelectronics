@@ -276,14 +276,15 @@ function ContactPage({ go }) {
   const [mapCoords, setMapCoords] = useState(null);
 
   React.useEffect(() => {
-    if (!shop.address) return;
-    fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(shop.address)}&limit=1`, {
+    const fullAddress = [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(', ');
+    if (!fullAddress) return;
+    fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullAddress)}&limit=1`, {
       headers: { 'Accept-Language': 'en' },
     })
       .then(r => r.json())
       .then(data => { if (data[0]) setMapCoords({ lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) }); })
       .catch(() => {});
-  }, [shop.address]);
+  }, [shop.streetAddress, shop.suburb, shop.state, shop.postcode]);
 
   const sendQuickMsg = async (e) => {
     e.preventDefault();
@@ -314,7 +315,7 @@ function ContactPage({ go }) {
           <div className="stack" style={{gap:18}}>
             <div className="card-paper" style={{padding: 28}}>
               <span className="eyebrow">THE SHOP</span>
-              <h3 className="serif" style={{fontSize: 36, marginTop: 8}}>{shop.address}</h3>
+              <h3 className="serif" style={{fontSize: 36, marginTop: 8}}>{[shop.streetAddress, [shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ')].filter(Boolean).join(', ')}</h3>
               <p style={{marginTop: 12, color:'var(--ink-2)', fontSize:14}}>No public access, arrive by appointment only.</p>
               <table style={{width:'100%', marginTop: 18, borderCollapse:'collapse', fontSize:14}}>
                 <tbody>
@@ -376,7 +377,7 @@ function ContactPage({ go }) {
                 allowFullScreen
               />
               <div style={{position:'absolute', bottom:0, left:0, right:0, background:'var(--ink)', color:'var(--paper)', padding:'8px 12px', fontFamily:'JetBrains Mono, monospace', fontSize:10}}>
-                MAP · {(shop.address || 'MOAMA NSW · PEERICOOTA FOREST RD').toUpperCase()}
+                MAP · {([shop.suburb, shop.state].filter(Boolean).join(' ') || 'BLACKALL QLD').toUpperCase()}
               </div>
             </div>
             <div className="card" style={{padding:18, marginTop:16}}>
@@ -1152,7 +1153,7 @@ function AboutPage({ go }) {
           <div className="card-paper" style={{ padding: 28, background: 'var(--dark)', color: 'var(--paper)' }}>
             <div className="eyebrow" style={{ color: 'var(--ochre)', marginBottom: 12 }}>FIND US</div>
             <div style={{ fontSize: 15, lineHeight: 1.8 }}>
-              <div>{shop?.address || '183 Peericoota Forest Rd, Moama NSW 2731'}</div>
+              <div>{[shop?.streetAddress, [shop?.suburb, shop?.state, shop?.postcode].filter(Boolean).join(' ')].filter(Boolean).join(', ') || 'Blackall QLD 4472'}</div>
               {shop?.phone && <div style={{ marginTop: 6 }}>{shop.phone}</div>}
               <div style={{ marginTop: 6, color: 'var(--ink-3)', fontSize: 13 }}>No public access — appointment only.</div>
             </div>
