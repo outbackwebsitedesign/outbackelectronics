@@ -968,7 +968,7 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
     setCheckingOut(true);
     setError(null);
     try {
-      const items = cart.map(i => ({ name: i.name, priceAud: i.price, quantity: i.qty, productId: i.id || i.sku || '' }));
+      const items = cart.map(i => ({ name: i.name, priceAud: i.price, quantity: i.qty, productId: i.id || i.sku || '', variantSku: i._variantSku || null }));
       const body = { items };
       if (gc) body.giftCardCode = gc.code;
       if (rewardsData && rewardsApply && rewardsPointsToRedeem > 0) {

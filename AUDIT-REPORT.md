@@ -76,10 +76,10 @@ Note: path traversal *out* of `__dirname` is correctly blocked (Node's `new URL`
 **What:** Writes are atomic individually, but handlers `await` between read and write with no locking, so concurrent requests interleave and the later write clobbers the earlier (lost update). Two concurrent checkouts with the same gift‑card code each read the same balance and both succeed → **spend the balance twice**. Order IDs can collide.
 **Impact:** High — financial loss / data corruption. **Effort:** M. **Fix:** per‑file in‑process async mutex/queue; re‑validate balances inside the critical section.
 
-### 🟠 H4 — Client‑controlled price for zero/variant‑priced products
+### ✅ H4 — Client‑controlled price for zero/variant‑priced products — **FIXED**
 **Where:** `server.js:2049‑2080` (`lookupCatalogPrice`).
 **What:** Prices are resolved server‑side from the catalog (good), **except** the fallback `const price = Number(prod.priceAud) || Number(clientPrice)` (`:2055`). For any published product whose top‑level `priceAud` is `0`/`null` (the documented variant case, and any misconfigured product), the client‑supplied `priceAud` is trusted. The only downstream check is `resolvedPrice > 0` (`:2078‑2079`), so an attacker checks out a real product for `$1`. Same fallback for services (`:2059`) and tiers (`:2061`).
-**Impact:** High (conditional on such products existing — variants do). **Effort:** M. **Fix:** require a resolved server‑side price per purchasable SKU/variant; reject if missing rather than trusting the client.
+**Impact:** High (conditional on such products existing — variants do). **Effort:** M. **Fix applied:** `lookupCatalogPrice` no longer accepts or uses a client‑supplied price. For variant products the frontend now sends a `variantSku` (SKU or name) in the checkout payload (`pages-shop.jsx`, `app.jsx`); the server resolves the price by finding the matching variant in the catalog and rejects the order if the variant cannot be identified or has no price. For flat‑priced products, services, and tiers the catalog `priceAud` is used directly; a zero/null catalog price results in a 422 rejection rather than a client fallback.
 
 ### 🟠 H5 — Single unhandled exception takes down all five services (site‑wide DoS)
 **Where:** `forumServer` (`server.js:2770`) and `portalServer` (`:4466`) have **no `try/catch`**; there is **no `process.on('uncaughtException'|'unhandledRejection')`** anywhere. One process serves all 5 ports.

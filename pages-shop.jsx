@@ -985,7 +985,7 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
             <div style={{display:'flex', gap:12}}>
               <button className="btn btn-rust" style={{flex:1, justifyContent:'center'}}
                 disabled={!inStock}
-                onClick={() => { addToCart(hasVariants ? { ...product, ...selectedVariant } : product); }}>
+                onClick={() => { addToCart(hasVariants ? { ...product, ...selectedVariant, _variantSku: selectedVariant.sku || selectedVariant.name || '' } : product); }}>
                 {inStock ? 'Add to Cart' : 'Out of Stock'}
               </button>
               <button className="btn btn-ghost" onClick={() => go('quote')}>Request a Quote</button>
