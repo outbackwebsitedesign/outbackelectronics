@@ -47,6 +47,10 @@
     font-feature-settings: "ss01", "cv11";
     -webkit-font-smoothing: antialiased;
   }
+  /* Inline font-display:swap so text renders immediately before async Google Fonts CSS applies */
+  @font-face { font-family: 'JetBrains Mono'; src: local('JetBrains Mono'), local('JetBrainsMono-Regular'); font-weight: 100 900; font-style: normal; font-display: swap; }
+  @font-face { font-family: 'Archivo'; src: local('Archivo'), local('Archivo-Regular'); font-weight: 100 900; font-style: normal; font-display: swap; }
+  @font-face { font-family: 'Instrument Serif'; src: local('Instrument Serif'), local('InstrumentSerif-Regular'); font-weight: 100 900; font-style: normal; font-display: swap; }
   h1, h2, h3, h4, h5 { margin: 0; font-weight: 600; line-height: 1.1; letter-spacing: -0.01em; }
   p { margin: 0; }
   a { color: inherit; text-decoration: none; }
@@ -488,15 +492,22 @@ if ('serviceWorker' in navigator) {
     var from = encodeURIComponent(window.location.pathname + window.location.search);
     window.location.href = '/maintenance?from=' + from;
   }
-  var es = new EventSource('/api/maintenance-events');
-  es.onmessage = function (e) {
-    try { if (JSON.parse(e.data).enabled) redirect(); } catch {}
-  };
-  es.onerror = function () {
-    es.close();
-    // fall back to a single check if SSE fails
-    fetch('/api/maintenance-status').then(function (r) { return r.json(); }).then(function (d) { if (d.enabled) redirect(); }).catch(function () {});
-  };
+  function startMaintenanceWatch() {
+    var es = new EventSource('/api/maintenance-events');
+    es.onmessage = function (e) {
+      try { if (JSON.parse(e.data).enabled) redirect(); } catch {}
+    };
+    es.onerror = function () {
+      es.close();
+      fetch('/api/maintenance-status').then(function (r) { return r.json(); }).then(function (d) { if (d.enabled) redirect(); }).catch(function () {});
+    };
+  }
+  // Defer SSE connection until after load so it doesn't appear on the critical path
+  if (document.readyState === 'complete') {
+    startMaintenanceWatch();
+  } else {
+    window.addEventListener('load', startMaintenanceWatch);
+  }
 }());
 </script>
 </head>
