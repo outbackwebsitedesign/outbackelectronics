@@ -18,6 +18,31 @@ const RATE_WINDOW_MS = 1000 * 60 * 10;
 const RATE_MAX_ATTEMPTS = 5;
 const LOCKOUT_MS = 1000 * 60 * 15;
 const ADMIN_IP_ALLOWLIST = (process.env.ADMIN_IP_ALLOWLIST || '').split(',').map(v => v.trim()).filter(Boolean);
+
+const PUBLIC_CSP = "default-src 'self'; " +
+  "script-src 'self' 'unsafe-inline' " +
+    "https://*.tawk.to https://embed.tawk.to " +
+    "https://static.cloudflareinsights.com " +
+    "https://cdn.jsdelivr.net " +
+    "https://pagead2.googlesyndication.com https://*.googlesyndication.com " +
+    "https://securepubads.g.doubleclick.net https://*.doubleclick.net " +
+    "https://partner.googleadservices.com https://*.googleadservices.com " +
+    "https://*.googletagservices.com " +
+    "https://adservice.google.com https://adservice.google.com.au; " +
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.tawk.to https://cdn.jsdelivr.net; " +
+  "img-src 'self' data: https:; " +
+  "font-src 'self' data: https://fonts.gstatic.com https://*.tawk.to; " +
+  "connect-src 'self' " +
+    "https://portal.outbackelectronics.com.au https://forum.outbackelectronics.com.au " +
+    "https://nominatim.openstreetmap.org " +
+    "wss://*.tawk.to https://*.tawk.to https://va.tawk.to " +
+    "https://cloudflareinsights.com " +
+    "https://*.googlesyndication.com https://*.doubleclick.net https://securepubads.g.doubleclick.net " +
+    "https://adservice.google.com https://adservice.google.com.au; " +
+  "frame-src https://www.openstreetmap.org https://*.tawk.to " +
+    "https://googleads.g.doubleclick.net https://tpc.googlesyndication.com " +
+    "https://www.google.com; " +
+  "frame-ancestors 'none';";
 const PUBLIC_RATE_WINDOW_MS = 1000 * 60 * 10;
 const PUBLIC_RATE_LIMITS = { checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10, 'forgot-password': 5, 'reset-password': 10, 'gift-card/apply': 10 };
 
@@ -826,7 +851,7 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null) {
         'Referrer-Policy': 'strict-origin-when-cross-origin',
         'Content-Security-Policy': isEmbeddable
           ? "default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://nominatim.openstreetmap.org; frame-src https://www.openstreetmap.org; frame-ancestors 'self';"
-          : "default-src 'self'; script-src 'self' 'unsafe-inline' https://*.tawk.to https://embed.tawk.to https://static.cloudflareinsights.com https://cdn.jsdelivr.net https://pagead2.googlesyndication.com https://*.googlesyndication.com https://partner.googleadservices.com https://*.googletagservices.com https://adservice.google.com https://adservice.google.com.au; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.tawk.to https://cdn.jsdelivr.net; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com https://*.tawk.to; connect-src 'self' https://portal.outbackelectronics.com.au https://forum.outbackelectronics.com.au https://nominatim.openstreetmap.org wss://*.tawk.to https://*.tawk.to https://va.tawk.to https://cloudflareinsights.com https://*.googlesyndication.com https://*.doubleclick.net https://adservice.google.com https://adservice.google.com.au; frame-src https://www.openstreetmap.org https://*.tawk.to https://googleads.g.doubleclick.net https://tpc.googlesyndication.com; frame-ancestors 'none';",
+          : PUBLIC_CSP,
       } : { 'X-Content-Type-Options': 'nosniff' };
       const isPdf = ext === '.pdf';
       const extraHeaders = (isSoftwareDownload || isPdf)
@@ -933,7 +958,7 @@ function serveIndexWithOg(res, og) {
       'X-Frame-Options': 'DENY',
       'X-Content-Type-Options': 'nosniff',
       'Referrer-Policy': 'strict-origin-when-cross-origin',
-      'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://*.tawk.to https://embed.tawk.to https://static.cloudflareinsights.com https://cdn.jsdelivr.net https://pagead2.googlesyndication.com https://*.googlesyndication.com https://partner.googleadservices.com https://*.googletagservices.com https://adservice.google.com https://adservice.google.com.au; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.tawk.to https://cdn.jsdelivr.net; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com https://*.tawk.to; connect-src 'self' https://portal.outbackelectronics.com.au https://forum.outbackelectronics.com.au https://nominatim.openstreetmap.org wss://*.tawk.to https://*.tawk.to https://va.tawk.to https://cloudflareinsights.com https://*.googlesyndication.com https://*.doubleclick.net https://adservice.google.com https://adservice.google.com.au; frame-src 'self' https://www.openstreetmap.org https://*.tawk.to https://googleads.g.doubleclick.net https://tpc.googlesyndication.com; frame-ancestors 'none';",
+      'Content-Security-Policy': PUBLIC_CSP,
     });
     res.end(html);
   });
