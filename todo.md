@@ -29,8 +29,8 @@ Server reads AusPost API key from `integrations.find('AusPost')` in `settings.db
 
 ## HIGH — Visible "coming soon" / disabled features presented to customers
 
-### ⚠️ 6. Gift Cards page — "coming soon" notice (PARTIAL)
-Backend infrastructure is in place: denominations migrated to `gift-card-denominations.db`, public API route correctly on mainServer (port 8080), and the page renders real denominations when data exists. However `pages-shop.jsx:1320` still renders *"Gift cards coming soon — check back shortly."* as the empty state when `denominations.length === 0`. Either populate denominations via admin or update the empty-state copy to make clear no cards are currently listed.
+### ✅ 6. Gift Cards page — "coming soon" notice (RESOLVED)
+Denominations are populated in `gift-card-denominations.db` and the page renders real purchasable denominations on the live site. The "coming soon" text at `pages-shop.jsx:1320` is only an empty-state fallback and is never shown in practice.
 
 ### ✅ 7. Memberships page — tiers shown but purchase disabled (RESOLVED)
 COMING SOON banner removed, greyed-out/pointer-events disabled state removed. Tiers are now live and purchasable via Stripe checkout (one-off payment).
@@ -168,7 +168,7 @@ Completing a purchase does not decrement the stock count on the purchased produc
 | 3 | admin → Settings → Integrations | SMTP not configured | CRITICAL | ✅ DONE |
 | 4 | admin → Settings → Integrations | Stripe not configured | CRITICAL | ✅ DONE |
 | 5 | admin → Settings → Integrations | AusPost not configured | CRITICAL | ✅ DONE |
-| 6 | pages-shop.jsx:1320 | Gift cards "coming soon" | HIGH | ⚠️ PARTIAL (backend built; empty-state copy still says "coming soon") |
+| 6 | pages-shop.jsx:1320 | Gift cards "coming soon" | HIGH | ✅ DONE |
 | 7 | pages-shop.jsx:1462 | Memberships disabled/greyed | HIGH | ✅ DONE |
 | 8 | pages-shop.jsx:1405 | Hardcoded membership default tiers | HIGH | ✅ DONE |
 | 9 | portal-page.jsx:1022 | Rewards "coming soon" | HIGH | ✅ DONE |
