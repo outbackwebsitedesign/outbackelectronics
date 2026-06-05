@@ -60,7 +60,7 @@ Note: path traversal *out* of `__dirname` is correctly blocked (Node's `new URL`
 
 ## 3. High‑Priority Issues
 
-### 🟠 H1 — Privilege escalation: a `seller` (lowest role) can make themselves `owner`
+### ✅ H1 — Privilege escalation: a `seller` (lowest role) can make themselves `owner` — **FIXED** (`server.js` commit `d191a4d`)
 **Where:** `server.js:4288‑4302` (`POST /api/admin/staff/members/save`).
 **What:** The route requires only `seller` (`:4289`). A seller is restricted to editing their own record (`body.id !== session.staffId → 403`, `:4292`), but the record is then merged with the **raw request body**: `data.members[idx] = { ...data.members[idx], ...body }` (`:4300`). Only `pin` is specially handled; `role`, `status`, `email` are never validated or stripped. A seller POSTs `{"id":"<their staffId>","name":"x","role":"owner"}` and is promoted to owner → full admin.
 **Impact:** High — full admin compromise from the lowest privileged account.
