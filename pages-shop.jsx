@@ -157,7 +157,7 @@ function HomePage({ go, addToCart, portalUser }) {
             <span className="eyebrow">SECTIONS</span>
             <h2 className="serif" style={{fontSize: 42, marginTop:6}}>Shop by terrain.</h2>
           </div>
-          <a className="mono" style={{fontSize:12, color:'var(--rust)', cursor:'pointer'}} onClick={() => go('shop')}>VIEW ALL CATEGORIES →</a>
+          <a className="mono" href="/shop" style={{fontSize:12, color:'var(--rust)', cursor:'pointer'}} onClick={(e) => { e.preventDefault(); go('shop'); }}>VIEW ALL CATEGORIES →</a>
         </div>
         <div className="grid-4">
           {(categories.length > 0 ? categories.slice(0, 4) : []).map((catName, i) => {
@@ -235,7 +235,7 @@ function HomePage({ go, addToCart, portalUser }) {
             <span className="eyebrow">ON THE BENCH THIS WEEK</span>
             <h2 className="serif" style={{fontSize: 42, marginTop: 6}}>Tested. Tagged. Ready.</h2>
           </div>
-          <a className="mono" style={{fontSize:12, color:'var(--rust)', cursor:'pointer'}} onClick={() => go('shop')}>ALL {featuredProducts.length || '—'} LISTINGS →</a>
+          <a className="mono" href="/shop" style={{fontSize:12, color:'var(--rust)', cursor:'pointer'}} onClick={(e) => { e.preventDefault(); go('shop'); }}>ALL {featuredProducts.length || '—'} LISTINGS →</a>
         </div>
         <div className="grid-4">
           {featuredProducts.slice(0,4).map((p,i) => <ProductCard key={i} p={p} onClick={() => go('product', p)} />)}
@@ -1227,7 +1227,7 @@ function ServiceDetailPage({ go, pageParams }) {
               {!geocoding && distanceKm !== null && (
                 <div style={{marginBottom:14, padding:'10px 14px', fontSize:13, border:'1px solid var(--line)', background: outOfRange ? '#fff3f3' : 'var(--bg-elev)', borderColor: outOfRange ? 'var(--rust)' : 'var(--line)'}}>
                   {outOfRange ? (
-                    <>That's {distanceKm}km — on-site bookings for this service are capped at {CALLOUT_LOCAL_CAP_KM}km. <span style={{color:'var(--rust)', fontWeight:600}}>Post your device to us</span> or <a style={{color:'var(--rust)', cursor:'pointer', textDecoration:'underline'}} onClick={() => go('quote', service)}>request a quote</a> for a discussion.</>
+                    <>That's {distanceKm}km — on-site bookings for this service are capped at {CALLOUT_LOCAL_CAP_KM}km. <span style={{color:'var(--rust)', fontWeight:600}}>Post your device to us</span> or <a href="/quote" style={{color:'var(--rust)', cursor:'pointer', textDecoration:'underline'}} onClick={(e) => { e.preventDefault(); go('quote', service); }}>request a quote</a> for a discussion.</>
                   ) : distanceKm <= CALLOUT_FREE_KM ? (
                     <><span style={{color:'var(--rust)', fontWeight:600}}>✓ Free callout</span> — you're {distanceKm}km away.</>
                   ) : (
