@@ -35,6 +35,7 @@
     --line-strong: #b9ac8d;
     --paper: #fbf7ed;
     --ink-on-dark: #f4ede1;
+    --ink-on-dark-muted: #c9bda0;
     --dark: #1f1a14;
     --shadow: 0 1px 0 rgba(31,26,20,0.05), 0 8px 24px -12px rgba(31,26,20,0.18);
   }
@@ -216,7 +217,7 @@
     width: calc(100% - 24px);
     left: 12px;
   }
-  .mainlinks a.active { color: var(--rust); }
+  .mainlinks a.active { color: var(--rust-deep); }
 
   .topnav-actions { display: flex; align-items: center; gap: 10px; }
   .icon-btn {
@@ -249,9 +250,9 @@
   footer { background: var(--ink); color: var(--bg-deep); margin-top: 80px; padding: 60px 0 24px;}
   footer a:hover { color: var(--ochre); }
   footer .grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 32px; }
-  footer h5 { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ochre); margin-bottom: 14px; font-weight: 500;}
+  footer h3 { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ochre); margin-bottom: 14px; font-weight: 500;}
   footer ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; font-size: 13px; }
-  footer .baseline { margin-top: 48px; padding-top: 20px; border-top: 1px solid #3a3127; display: flex; justify-content: space-between; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-3); }
+  footer .baseline { margin-top: 48px; padding-top: 20px; border-top: 1px solid #3a3127; display: flex; justify-content: space-between; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-on-dark-muted); }
 
   /* utilities */
   .stack { display: grid; gap: 16px; }
