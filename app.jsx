@@ -1356,6 +1356,14 @@ const KNOWN_PAGES = [...PRIMARY_PAGES, ...UTILITY_PAGES, ...ACCOUNT_PAGES, {id:'
 function App() {
   useEffect(() => { ensureCsrf(); }, []);
 
+  // Re-render when deferred page chunks register themselves
+  const [, forcePageUpdate] = useState(0);
+  useEffect(() => {
+    const handler = () => forcePageUpdate(n => n + 1);
+    window.addEventListener('oe:pages-updated', handler);
+    return () => window.removeEventListener('oe:pages-updated', handler);
+  }, []);
+
   // Button ripple effect via event delegation
   useEffect(() => {
     const handler = (e) => {

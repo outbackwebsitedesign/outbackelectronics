@@ -1574,3 +1574,4 @@ window.OE_PAGES = Object.assign(window.OE_PAGES || {}, {
   'humanly-ai': HumanlyAIPage,
   repairs: null, // resolved dynamically — alias to services
 });
+window.dispatchEvent(new Event('oe:pages-updated'));

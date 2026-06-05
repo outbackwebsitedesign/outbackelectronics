@@ -282,3 +282,4 @@ window.OE_PAGES = Object.assign(window.OE_PAGES || {}, {
   tutorials: TutorialsPage,
   groups: GroupsPage,
 });
+window.dispatchEvent(new Event('oe:pages-updated'));
