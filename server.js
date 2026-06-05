@@ -2989,6 +2989,33 @@ const mainServer = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true, points, storeCredit, token, displayName: user.displayName || user.username });
   }
 
+  // GET /api/thumb?src=/assets/uploads/...&w=N — resized image cache
+  if (req.method === 'GET' && url.pathname === '/api/thumb') {
+    const src = url.searchParams.get('src') || '';
+    const w = Math.min(Math.max(parseInt(url.searchParams.get('w') || '600', 10), 32), 1200);
+    if (!src.startsWith('/assets/uploads/') || src.includes('..') || src.includes('\0')) {
+      return json(res, 400, { error: 'invalid_src' });
+    }
+    const srcPath = path.join(__dirname, src.replace(/^\//, ''));
+    const uploadsDir = path.resolve(path.join(__dirname, 'assets/uploads'));
+    if (!path.resolve(srcPath).startsWith(uploadsDir + path.sep)) return json(res, 403, { error: 'forbidden' });
+    const thumbsDir = path.join(__dirname, 'assets/uploads/.thumbs');
+    fs.mkdirSync(thumbsDir, { recursive: true });
+    const baseName = path.basename(src, path.extname(src));
+    const thumbPath = path.join(thumbsDir, `${baseName}-w${w}.webp`);
+    const serveThumb = (buf) => {
+      res.writeHead(200, { 'Content-Type': 'image/webp', 'Cache-Control': 'public, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff', 'Vary': 'Accept-Encoding' });
+      res.end(buf);
+    };
+    try {
+      if (fs.existsSync(thumbPath)) return serveThumb(fs.readFileSync(thumbPath));
+      const buf = fs.readFileSync(srcPath);
+      const thumb = await sharp(buf).resize({ width: w, withoutEnlargement: true }).webp({ quality: 78 }).toBuffer();
+      fs.writeFileSync(thumbPath, thumb);
+      serveThumb(thumb);
+    } catch { return json(res, 500, { error: 'thumb_failed' }); }
+  }
+
   return serveStatic(req, res, url.pathname, '/dist/index.html', MAIN_SPA_ROUTES);
   } catch (err) {
     console.error('[mainServer] unhandled error:', err);

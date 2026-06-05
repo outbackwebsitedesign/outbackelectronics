@@ -3,6 +3,11 @@ import React, { useState, useEffect, useMemo, useContext } from 'react';
 const _fallbackShopCtx = React.createContext({});
 const useShop = () => useContext(window.__ShopContext__ || _fallbackShopCtx);
 
+function thumbUrl(src, w) {
+  if (!src || !src.startsWith('/assets/uploads/')) return src;
+  return `/api/thumb?src=${encodeURIComponent(src)}&w=${w}`;
+}
+
 function getCsrf() {
   return document.cookie.split(';').reduce((v, c) => {
     const [k, val] = c.trim().split('=');
@@ -108,7 +113,7 @@ function HomePage({ go, addToCart, portalUser }) {
             </div>
             <div className="hero-image" style={{position:'relative'}}>
               {heroProduct && heroProduct.images && heroProduct.images.length > 0
-                ? <img src={heroProduct.images[0]} alt={heroProduct.name} fetchpriority="high" style={{width:'100%', aspectRatio:'4/5', objectFit:'cover', display:'block'}} />
+                ? <img src={thumbUrl(heroProduct.images[0], 800)} alt={heroProduct.name} fetchpriority="high" style={{width:'100%', aspectRatio:'4/5', objectFit:'cover', display:'block'}} />
                 : <div className="slot slot-rust" style={{aspectRatio: '4/5'}}>RUGGED LAPTOP ON RED-DIRT WORKBENCH</div>}
               {heroProduct && (
                 <div className="card-paper" style={{position:'absolute', bottom:16, left:16, padding:18, width:240, boxShadow:'var(--shadow)'}}>
@@ -299,7 +304,7 @@ function ProductCard({ p, onClick }) {
   return (
     <div className="product" onClick={onClick}>
       {thumb
-        ? <img src={thumb} alt={p.name} loading="lazy" style={{width:'100%', aspectRatio:'4/3', objectFit:'cover', display:'block'}} />
+        ? <img src={thumbUrl(thumb, 600)} alt={p.name} loading="lazy" style={{width:'100%', aspectRatio:'4/3', objectFit:'cover', display:'block'}} />
         : <div className="slot" style={{aspectRatio:'4/3'}}>{p.name.toUpperCase()}</div>}
       <div className="body">
         <div className="meta">{p.cond} · {displaySku}</div>
@@ -930,14 +935,14 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
         <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:48, alignItems:'start'}}>
           <div>
             {activeImage
-              ? <img src={activeImage} alt={product.name} loading="lazy" style={{aspectRatio:'4/3', width:'100%', objectFit:'cover', display:'block'}} />
+              ? <img src={activeImage} alt={product.name} loading="lazy" style={{width:'100%', maxHeight:'70vh', objectFit:'contain', display:'block', background:'var(--bg-deep)'}} />
               : <div className="slot" style={{aspectRatio:'4/3', width:'100%'}}>{product.name.toUpperCase()}</div>}
             {product.images && product.images.length > 1 && (
               <div style={{display:'flex', gap:8, marginTop:10, flexWrap:'wrap'}}>
                 {product.images.map((url, i) => (
                   <div key={i} onClick={() => setActiveImage(url)}
                     style={{width:64, height:64, cursor:'pointer', border: activeImage===url ? '2px solid var(--rust)' : '2px solid transparent', flexShrink:0}}>
-                    <img src={url} alt="" loading="lazy" style={{width:'100%', height:'100%', objectFit:'cover', display:'block'}} />
+                    <img src={thumbUrl(url, 128)} alt="" loading="lazy" style={{width:'100%', height:'100%', objectFit:'cover', display:'block'}} />
                   </div>
                 ))}
               </div>
