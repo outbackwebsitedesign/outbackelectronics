@@ -377,7 +377,7 @@ function ContactPage({ go }) {
                 allowFullScreen
               />
               <div style={{position:'absolute', bottom:0, left:0, right:0, background:'var(--ink)', color:'var(--paper)', padding:'8px 12px', fontFamily:'JetBrains Mono, monospace', fontSize:10}}>
-                MAP · {([shop.suburb, shop.state].filter(Boolean).join(' ') || 'BLACKALL QLD').toUpperCase()}
+                MAP · {[shop.suburb, shop.state].filter(Boolean).join(' ').toUpperCase()}
               </div>
             </div>
             <div className="card" style={{padding:18, marginTop:16}}>
@@ -1153,7 +1153,7 @@ function AboutPage({ go }) {
           <div className="card-paper" style={{ padding: 28, background: 'var(--dark)', color: 'var(--paper)' }}>
             <div className="eyebrow" style={{ color: 'var(--ochre)', marginBottom: 12 }}>FIND US</div>
             <div style={{ fontSize: 15, lineHeight: 1.8 }}>
-              <div>{[shop?.streetAddress, [shop?.suburb, shop?.state, shop?.postcode].filter(Boolean).join(' ')].filter(Boolean).join(', ') || 'Blackall QLD 4472'}</div>
+              <div>{[shop?.streetAddress, [shop?.suburb, shop?.state, shop?.postcode].filter(Boolean).join(' ')].filter(Boolean).join(', ')}</div>
               {shop?.phone && <div style={{ marginTop: 6 }}>{shop.phone}</div>}
               <div style={{ marginTop: 6, color: 'var(--ink-3)', fontSize: 13 }}>No public access — appointment only.</div>
             </div>
