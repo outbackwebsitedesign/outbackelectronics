@@ -43,7 +43,7 @@ const PUBLIC_CSP = "default-src 'self'; " +
     "https://*.adtrafficquality.google; " +
   "frame-src https://www.openstreetmap.org https://*.tawk.to " +
     "https://googleads.g.doubleclick.net https://tpc.googlesyndication.com " +
-    "https://www.google.com; " +
+    "https://www.google.com https://ep2.adtrafficquality.google; " +
   "frame-ancestors 'none';";
 const PUBLIC_RATE_WINDOW_MS = 1000 * 60 * 10;
 const PUBLIC_RATE_LIMITS = { checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10, 'forgot-password': 5, 'reset-password': 10, 'gift-card/apply': 10 };
