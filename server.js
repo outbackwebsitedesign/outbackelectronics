@@ -2771,13 +2771,43 @@ const mainServer = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/cart/save') {
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     if (!Array.isArray(body.items) || body.items.length === 0) return json(res, 422, { error: 'empty_cart' });
-    const id = crypto.randomBytes(4).toString('hex'); // 8-char hex
-    const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days
-    const items = body.items.map(i => ({
-      id: i.id || '', sku: i.sku || '', name: String(i.name || '').slice(0, 200),
-      price: Number(i.price) || 0, qty: Math.max(1, Math.floor(Number(i.qty) || 1)),
-      cond: i.cond || '',
-    }));
+    const cartProducts = readProducts();
+    const cartServices = readServices();
+    const items = [];
+    for (const i of body.items) {
+      const pid = String(i.id || i.sku || '');
+      const variantSku = i._variantSku ? String(i._variantSku) : null;
+      const qty = Math.max(1, Math.floor(Number(i.qty) || 1));
+      // Resolve price and name authoritatively from catalog
+      const prod = cartProducts.find(p => p.id === pid && p.status === 'published');
+      if (prod) {
+        let price, name;
+        if (prod.variants && prod.variants.length > 0) {
+          const variant = variantSku
+            ? (prod.variants.find(v => v.sku === variantSku) || prod.variants.find(v => v.name === variantSku))
+            : prod.variants[0];
+          if (!variant) continue; // skip unresolvable variant
+          price = Number(variant.price);
+          name = `${prod.name}${variant.name ? ` — ${variant.name}` : ''}`;
+        } else {
+          price = Number(prod.priceAud);
+          name = prod.name;
+        }
+        if (!price || price <= 0) continue;
+        items.push({ id: prod.id, sku: variantSku || prod.sku || '', name, price, qty, _variantSku: variantSku || undefined, cond: i.cond || '' });
+        continue;
+      }
+      const svc = cartServices.find(s => s.id === pid && s.status === 'published');
+      if (svc) {
+        const price = Number(svc.priceAud);
+        if (!price || price <= 0) continue;
+        items.push({ id: svc.id, sku: svc.sku || '', name: svc.name, price, qty, cond: i.cond || '' });
+      }
+      // Items not found in catalog are silently dropped
+    }
+    if (items.length === 0) return json(res, 422, { error: 'empty_cart' });
+    const id = crypto.randomBytes(4).toString('hex');
+    const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
     const carts = readCarts().filter(c => c.expiresAt > Date.now());
     carts.push({ id, items, expiresAt });
     writeCarts(carts);
