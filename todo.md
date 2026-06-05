@@ -29,8 +29,8 @@ Server reads AusPost API key from `integrations.find('AusPost')` in `settings.db
 
 ## HIGH — Visible "coming soon" / disabled features presented to customers
 
-### ✅ 6. Gift Cards page — "coming soon" notice (RESOLVED)
-Gift card products migrated from `products.db` to `gift-card-denominations.db` (including images). Public denomination API route moved to mainServer (port 8080) — it was incorrectly registered on adminServer. Gift Cards page now shows real purchasable denominations.
+### ⚠️ 6. Gift Cards page — "coming soon" notice (PARTIAL)
+Backend infrastructure is in place: denominations migrated to `gift-card-denominations.db`, public API route correctly on mainServer (port 8080), and the page renders real denominations when data exists. However `pages-shop.jsx:1320` still renders *"Gift cards coming soon — check back shortly."* as the empty state when `denominations.length === 0`. Either populate denominations via admin or update the empty-state copy to make clear no cards are currently listed.
 
 ### ✅ 7. Memberships page — tiers shown but purchase disabled (RESOLVED)
 COMING SOON banner removed, greyed-out/pointer-events disabled state removed. Tiers are now live and purchasable via Stripe checkout (one-off payment).
@@ -66,11 +66,8 @@ Earlier audit claimed the AI page was feature-flagged off. This is wrong. `aiEna
 ```
 Now reads from `shop.address` — but the hardcoded fallback string is still baked into JSX. The prose sentence at line 1129 also still hardcodes the full address inline. If the address changes and isn't set in admin Settings, both spots revert to the hardcoded string.
 
-### ❌ 13. Hardcoded acknowledgement of country (app.jsx:613)
-```
-"ACKNOWLEDGES THE ARRERNTE PEOPLE AS TRADITIONAL OWNERS OF MPARNTWE"
-```
-Hardcoded in footer. Mparntwe is Alice Springs — needs verification this is correct for Moama/Echuca country. Should be editable via settings.
+### ✅ 13. Hardcoded acknowledgement of country (app.jsx:613) — RESOLVED
+`app.jsx:618` now reads from `shop.acknowledgmentPeople` and `shop.acknowledgmentCountry`, both editable via admin → Settings → Shop. Updated to "Bidjara People, Bidjara Country (Blackall)". The footer renders blank if neither field is set.
 
 ### ❌ 14. Hardcoded portal/forum/games URLs as fallbacks (app.jsx:25–27)
 ```js
@@ -171,14 +168,14 @@ Completing a purchase does not decrement the stock count on the purchased produc
 | 3 | admin → Settings → Integrations | SMTP not configured | CRITICAL | ✅ DONE |
 | 4 | admin → Settings → Integrations | Stripe not configured | CRITICAL | ✅ DONE |
 | 5 | admin → Settings → Integrations | AusPost not configured | CRITICAL | ✅ DONE |
-| 6 | pages-shop.jsx:1311 | Gift cards "coming soon" | HIGH | ❌ OPEN |
+| 6 | pages-shop.jsx:1320 | Gift cards "coming soon" | HIGH | ⚠️ PARTIAL (backend built; empty-state copy still says "coming soon") |
 | 7 | pages-shop.jsx:1462 | Memberships disabled/greyed | HIGH | ✅ DONE |
 | 8 | pages-shop.jsx:1405 | Hardcoded membership default tiers | HIGH | ✅ DONE |
 | 9 | portal-page.jsx:1022 | Rewards "coming soon" | HIGH | ✅ DONE |
 | 10 | portal-page.jsx / server.js | Wallet store credit — full build (model, admin, redemption) | HIGH | ✅ DONE |
 | 11 | pages-shop.jsx:169 | AI page "disabled" — INVALID, aiEnabled only toggles a badge | HIGH | ✅ N/A |
 | 12 | pages-info.jsx:1129,1143 | Address hardcoded fallback in AboutPage | MEDIUM | ⚠️ PARTIAL |
-| 13 | app.jsx:613 | Acknowledgement hardcoded | MEDIUM | ❌ OPEN |
+| 13 | app.jsx:618 | Acknowledgement hardcoded | MEDIUM | ✅ DONE |
 | 14 | app.jsx:25–27 | Portal/forum/games URLs hardcoded | MEDIUM | ❌ OPEN |
 | 15 | portal-page.jsx:1686 | Footer links hardcoded | MEDIUM | ❌ OPEN |
 | 16 | pages-admin.jsx:134 | Back-to-site URL hardcoded | MEDIUM | ❌ OPEN |

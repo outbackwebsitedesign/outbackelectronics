@@ -95,14 +95,14 @@ Note: path traversal *out* of `__dirname` is correctly blocked (Node's `new URL`
 
 ## 4. Medium‑Priority Issues
 
-### 🟡 M1 — CSRF not enforced on `DELETE`/`PUT` for forum/admin/portal servers
-**Where:** `server.js:2780`, `:3026`, `:4490` check only `POST`/`PATCH`; the main server (`:1792`) correctly includes `DELETE`. `SameSite=Strict` mitigates in modern browsers, but the double‑submit check should cover all mutating verbs. **Fix:** include `DELETE`/`PUT` in all four handlers. **Impact:** Med. **Effort:** S.
+### ⚠️ M1 — CSRF not enforced on `DELETE`/`PUT` for forum/admin/portal servers — **PARTIAL**
+**Where:** Main server (`:2008`) now correctly covers `['POST', 'PATCH', 'DELETE']`. However forum (`:3145`), admin (`:3414`), portal (`:5021`), and tools (`:5593`) still check only `POST`/`PATCH` — `DELETE` mutations on those four servers remain unprotected by the double‑submit check. `SameSite=Strict` mitigates in modern browsers but this should be fully closed. **Fix:** extend the `['POST', 'PATCH', 'DELETE']` check to all four remaining server handlers. **Impact:** Med. **Effort:** S.
 
 ### 🟡 M2 — Stored XSS via tutorial content + unvalidated iframe
 **Where:** `pages-community.jsx:191‑192` renders `dangerouslySetInnerHTML={{__html: activeTutorial.content}}` (the only such sink in the app); adjacent `<iframe src={activeTutorial.videoUrl}>` (`:182`) has no URL allowlist. Tutorial content is saved by the admin endpoint with **no sanitization**, then injected raw on the public site. A malicious/compromised manager — or any seller via H1 — can plant persistent JS for every visitor. **Fix:** sanitize HTML server‑side (allowlist) or render markdown as React; validate the iframe URL host. **Impact:** Med. **Effort:** S–M.
 
-### 🟡 M3 — Unauthenticated order enumeration / info disclosure
-**Where:** `server.js:2656‑2668` (`GET /api/warranty/order-lookup?id=`). No auth, **no rate limit** (unlike the adjacent `warranty/register`). Order IDs are sequential (`OE‑1001`, `OE‑1002`…), so anyone can enumerate existing orders and read their date + expense/part line items. **Fix:** require ownership (logged‑in email match) or a non‑guessable token; rate‑limit. **Impact:** Med. **Effort:** S.
+### ⚠️ M3 — Unauthenticated order enumeration / info disclosure — **PARTIAL**
+**Where:** `server.js:2977` (`GET /api/warranty/order-lookup?id=`). Rate limiting has been added (`PUBLIC_RATE_LIMITS['warranty/order-lookup']: 10`, `server.js:54`), but the endpoint remains **unauthenticated** and order IDs are still sequential (`OE‑1001`, `OE‑1002`…), so a patient attacker can still enumerate order data. **Fix:** require ownership verification (logged‑in email match) or replace sequential IDs with non‑guessable tokens. **Impact:** Med. **Effort:** S.
 
 ### 🟡 M4 — Stripe webhook: no body‑size cap, no replay/timestamp check
 **Where:** `server.js:1679‑1696`, `:2375`. `readRawBody` buffers the full request with no cap (unauthenticated memory‑exhaustion DoS); `verifyStripeSignature` checks the HMAC but ignores the timestamp `t`, so a captured signed body can be replayed indefinitely (duplicate orders / re‑fulfilment). **Fix:** cap raw body size; reject signatures outside a tolerance window. **Impact:** Med. **Effort:** S.
@@ -122,8 +122,8 @@ Note: path traversal *out* of `__dirname` is correctly blocked (Node's `new URL`
 ### 🟡 M9 — God‑components
 **Where:** `AdminOrders` (`pages-admin.jsx:527`, 531 lines, 11 `useState`), `AdminSettingsFull` (`:4868`, 475 lines, 23 `useState`), plus several 250–310‑line components. They mix fetching, form state, and sub‑forms; re‑render wholesale on every keystroke; hard to test. (Portal, by contrast, is well‑decomposed with reusable `LoadingSection`/`EmptyState`.) **Fix:** split by concern; memoize heavy lists. **Impact:** Med. **Effort:** L.
 
-### 🟡 M10 — Contradictory build strategy (committed `dist/` *and* rebuild on deploy)
-**Where:** `dist/` is committed (CLAUDE.md says intentionally), but `deploy.sh:26‑30` also runs `npm install` + `npm run build` on the prod box every deploy. The committed bundles can drift from source (a dev edits JSX, forgets to rebuild), and `npm start` without building serves stale assets. **Fix:** pick one — either build in CI and commit, or build on deploy and gitignore `dist/`. **Impact:** Med. **Effort:** S.
+### ✅ M10 — Contradictory build strategy (committed `dist/` *and* rebuild on deploy) — **FIXED**
+**Where:** `dist/` is now gitignored (`.gitignore:7`) and not tracked in the repository (`git ls-files dist/` returns empty). `deploy.sh` builds on deploy, which is the single canonical strategy. **CLAUDE.md** has been updated to document `dist/` as gitignored and rebuilt by `deploy.sh`.
 
 ### 🟡 M11 — Unhandled promise rejections in portal fetches
 **Where:** `portal-page.jsx:611, 686, 744, 755, 767` use bare `.then()` with no `.catch`; the `api()` wrapper (`:21`) only catches `r.json()`, not network errors. On offline/server‑down the tab throws uncaught and can stick on its loading state. **Fix:** add `.catch` / use the wrapper consistently. **Impact:** Med. **Effort:** S.
@@ -137,9 +137,9 @@ Note: path traversal *out* of `__dirname` is correctly blocked (Node's `new URL`
 | L1 | `.gitignore` gaps: `*.tmp` (atomic‑write orphans contain **live data**), `.env*` variants, generic `*.log` | `.gitignore` | add `*.tmp`, `.env*`, `*.log` |
 | L2 | Audit log barely used — `auditAdminAction` called for only 2 actions; no trail for order edits, deletes, gift‑card issue/void, role/settings changes | `server.js:499‑510` | log all privileged mutations |
 | L3 | Unbounded in‑memory maps (`loginAttempts`, `publicRateCounts`) never swept | `server.js:46‑47` | add to the periodic sweep (`:127`) |
-| L4 | `readJson` overflow calls `req.destroy()` but never resolves/rejects the promise | `server.js:512‑519` | reject on overflow |
+| ~~L4~~ | ~~`readJson` overflow calls `req.destroy()` but never resolves/rejects the promise~~ | ~~`server.js:512‑519`~~ | **FIXED** — `req.destroy()` triggers the `error` event which correctly calls `reject` at the `on('error')` handler. |
 | L5 | `forum/users/save` matches by `u.name` and overwrites the whole object → can wipe `passwordHash`/`email` by omission | `server.js:3366‑3374` | merge, match by id |
-| L6 | 8‑char hex gift‑card codes & cart‑share ids (`crypto.randomBytes(4)`) | `server.js:2605` | 16+ hex |
+| ~~L6~~ | ~~8‑char hex gift‑card codes & cart‑share ids (`crypto.randomBytes(4)`)~~ | ~~`server.js:2605`~~ | **FIXED** — `generateGiftCardCode()` now uses `crypto.randomInt` with base32 charset producing 12-character codes (3×4 segments, e.g. `OBE-XXXX-XXXX-XXXX`). |
 | L7 | No `engines` field; Node 18+ assumed but unenforced | `package.json` | add `"engines":{"node":">=18"}` |
 | L8 | Migration script mutates `products.db` with no backup + broad substring match | `migrate-giftcards-to-denominations.js` | snapshot before run |
 | L9 | systemd runs as `$(whoami)` (possibly root), not a dedicated low‑priv account | `deploy.sh:35‑53` | dedicated service user |
