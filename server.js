@@ -918,6 +918,8 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null) {
 const OG_BASE_URL = 'https://outbackelectronics.com.au';
 
 const STATIC_OG = {
+  '/':          { title: 'Outback Electronics — Built for where the signal ends', description: 'Rugged gear, solar kits, comms, and tools built for remote Australia. Shop online or visit us for expert off-grid advice.', image: '/assets/og-image.webp' },
+  '/home':      { title: 'Outback Electronics — Built for where the signal ends', description: 'Rugged gear, solar kits, comms, and tools built for remote Australia. Shop online or visit us for expert off-grid advice.', image: '/assets/og-image.webp' },
   '/shop':        { title: 'Shop — Outback Electronics',           description: 'Browse rugged laptops, solar gear, satellite comms, UHF radios and off-grid tools built for remote Australia.',           image: '/assets/og-image.webp' },
   '/services':    { title: 'Services — Outback Electronics',       description: 'Expert repairs, field service and bench diagnostics for rugged devices. Book a repair or drop in.',                       image: '/assets/og-image.webp' },
   '/groups':      { title: 'Community Groups — Outback Electronics', description: 'Connect with community chapters across remote Australia. Find your local Outback Electronics group.',                  image: '/assets/og-image.webp' },
