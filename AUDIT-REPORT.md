@@ -30,7 +30,7 @@ The remaining issues — privilege escalation, rate‑limit bypass, gift‑card 
 
 ## 2. Critical Issues
 
-### 🔴 C1 — Unauthenticated disclosure of the entire database, all secrets, and live admin sessions
+### ✅ C1 — Unauthenticated disclosure of the entire database, all secrets, and live admin sessions — **FIXED** (`server.js` commit `c108367`)
 **Where:** `server.js:737‑797` (`serveStatic`), reached via the catch‑all `serveStatic(req, res, url.pathname, '/dist/index.html', …)` on every server (`server.js:2761`, `3012`, `4451`, `4969`, `4997`).
 **What:** `serveStatic` resolves the request path against the app root and serves the file if it exists. The **only** guard is `filePath.startsWith(__dirname)` (`server.js:764`). There is **no allowlist of servable directories or extensions and no dotfile/`.db`/`.env` blocklist.** Because all data files live in `__dirname`, requests for them resolve *inside* `__dirname`, pass the guard, and are returned with `Content-Type: application/octet-stream` (served inline — `Content-Disposition: attachment` is only set for `/assets/uploads/software/` and `.pdf`).
 
@@ -48,7 +48,7 @@ req "/sessions.db" → candidate /home/user/outbackelectronics/sessions.db  guar
 Note: path traversal *out* of `__dirname` is correctly blocked (Node's `new URL` normalizes `..`); the bug is serving files that are legitimately *inside* the root but must never be web‑exposed. Cloudflare will not save you — these are ordinary‑looking paths with no traversal.
 
 **Impact:** Critical — total confidentiality breach + admin/account takeover + secret theft.
-**Effort:** S–M. **Fix:** serve static content only from an explicit set of roots (`dist/`, `public/`, `assets/` minus sensitive subpaths). After resolving, require `filePath.startsWith(distDir|publicDir|assetsDir)`, not merely `__dirname`. Move data files out of the web root entirely (e.g. a `data/` dir outside `__dirname`) as defense in depth, and add a Cloudflare WAF rule blocking `*.db`, `.env`, `*.log`, `*.js` at the root as a stopgap **today**.
+**Effort:** S–M. **Fix applied:** replaced `filePath.startsWith(__dirname)` guard with an explicit `ALLOWED_SERVE_ROOTS` allowlist (`dist/`, `public/`, `assets/`). Any request resolving outside those three directories now returns `403 Forbidden`. Remaining defense-in-depth steps (move `.db` files to `../data/`, Cloudflare WAF rule) are still recommended but the web-exposure vector is closed.
 
 ### 🔴 C2 — No backup or recovery strategy for the business database
 **Where:** `deploy.sh` (no backup step), `.gitignore` (`*.db` excluded), README/CLAUDE.md (describe none).
