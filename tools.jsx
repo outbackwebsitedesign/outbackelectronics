@@ -1,0 +1,751 @@
+import { useState, useCallback } from 'react';
+
+// ── Design tokens ─────────────────────────────────────────────────────────────
+const C = {
+  bg:      '#f4ede1',
+  bgElev:  '#faf6ec',
+  bgDeep:  '#e9dfc9',
+  ink:     '#1f1a14',
+  ink2:    '#5a4f40',
+  ink3:    '#8b7e69',
+  blue:    '#1f88f5',
+  ochre:   '#d39a37',
+  green:   '#4f6b3e',
+  red:     '#c0392b',
+  line:    '#d8cdb6',
+  paper:   '#fbf7ed',
+};
+
+// ── Wire data ─────────────────────────────────────────────────────────────────
+// resistance in mΩ/m, current rating (A) at 60°C for automotive
+const WIRE_TABLE = [
+  { awg: '0000 (4/0)', mm2: 107, resistance: 0.16,  rating: 230 },
+  { awg: '000 (3/0)',  mm2: 85,  resistance: 0.197, rating: 200 },
+  { awg: '00 (2/0)',   mm2: 67.4,resistance: 0.253, rating: 175 },
+  { awg: '0 (1/0)',    mm2: 53.5,resistance: 0.328, rating: 150 },
+  { awg: '1',          mm2: 42.4,resistance: 0.411, rating: 130 },
+  { awg: '2',          mm2: 33.6,resistance: 0.518, rating: 115 },
+  { awg: '4',          mm2: 21.2,resistance: 0.821, rating: 95  },
+  { awg: '6',          mm2: 13.3,resistance: 1.296, rating: 75  },
+  { awg: '8',          mm2: 8.37,resistance: 2.060, rating: 55  },
+  { awg: '10',         mm2: 5.26,resistance: 3.280, rating: 40  },
+  { awg: '12',         mm2: 3.31,resistance: 5.210, rating: 30  },
+  { awg: '14',         mm2: 2.08,resistance: 8.290, rating: 25  },
+  { awg: '16',         mm2: 1.31,resistance: 13.17, rating: 18  },
+  { awg: '18',         mm2: 0.82,resistance: 20.95, rating: 14  },
+  { awg: '20',         mm2: 0.52,resistance: 33.31, rating: 11  },
+  { awg: '22',         mm2: 0.33,resistance: 52.96, rating: 7   },
+];
+
+// ── Shared UI primitives ──────────────────────────────────────────────────────
+function Field({ label, unit, value, onChange, type = 'number', min, step, options }) {
+  const s = {
+    wrapper: { display: 'flex', flexDirection: 'column', gap: 4 },
+    label: { fontSize: 12, fontWeight: 600, color: C.ink2, textTransform: 'uppercase', letterSpacing: '0.05em' },
+    row: { display: 'flex', alignItems: 'stretch', borderRadius: 8, border: `1px solid ${C.line}`, overflow: 'hidden', background: C.paper },
+    input: { flex: 1, padding: '9px 12px', fontSize: 14, background: 'transparent', border: 'none', outline: 'none', color: C.ink, fontFamily: 'inherit' },
+    select: { flex: 1, padding: '9px 12px', fontSize: 14, background: 'transparent', border: 'none', outline: 'none', color: C.ink, fontFamily: 'inherit', cursor: 'pointer' },
+    unit: { padding: '9px 12px', fontSize: 13, color: C.ink3, background: C.bgDeep, borderLeft: `1px solid ${C.line}`, display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' },
+  };
+  return (
+    <div style={s.wrapper}>
+      <span style={s.label}>{label}</span>
+      <div style={s.row}>
+        {options ? (
+          <select style={s.select} value={value} onChange={e => onChange(e.target.value)}>
+            {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        ) : (
+          <input style={s.input} type={type} value={value} min={min} step={step}
+            onChange={e => onChange(e.target.value)} />
+        )}
+        {unit && <span style={s.unit}>{unit}</span>}
+      </div>
+    </div>
+  );
+}
+
+function Result({ label, value, color, note }) {
+  return (
+    <div style={{ padding: '14px 16px', borderRadius: 10, background: C.bgDeep, border: `1.5px solid ${color || C.line}` }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: C.ink3, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 700, color: color || C.ink, fontFamily: "'JetBrains Mono', monospace" }}>{value}</div>
+      {note && <div style={{ fontSize: 12, color: C.ink2, marginTop: 4 }}>{note}</div>}
+    </div>
+  );
+}
+
+function Card({ title, icon, children }) {
+  return (
+    <div style={{ background: C.bgElev, borderRadius: 14, border: `1px solid ${C.line}`, overflow: 'hidden' }}>
+      <div style={{ padding: '18px 22px', borderBottom: `1px solid ${C.line}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontSize: 22 }}>{icon}</span>
+        <h2 style={{ fontSize: 17, fontWeight: 700, color: C.ink }}>{title}</h2>
+      </div>
+      <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Divider() {
+  return <div style={{ height: 1, background: C.line, margin: '4px 0' }} />;
+}
+
+function CalcBtn({ onClick }) {
+  return (
+    <button onClick={onClick} style={{
+      padding: '10px 20px', borderRadius: 8, background: C.blue, color: '#fff',
+      border: 'none', fontWeight: 600, fontSize: 14, alignSelf: 'flex-start',
+      transition: 'opacity 0.15s',
+    }}
+      onMouseEnter={e => e.target.style.opacity = '0.85'}
+      onMouseLeave={e => e.target.style.opacity = '1'}
+    >
+      Calculate
+    </button>
+  );
+}
+
+// ── 1. Voltage Drop Calculator ────────────────────────────────────────────────
+function VoltageDropCalc() {
+  const [current, setCurrent] = useState('10');
+  const [length, setLength] = useState('5');
+  const [wire, setWire] = useState('12');
+  const [system, setSystem] = useState('12');
+  const [result, setResult] = useState(null);
+
+  const calc = useCallback(() => {
+    const I = parseFloat(current);
+    const L = parseFloat(length);
+    const V = parseFloat(system);
+    const awgIdx = parseInt(wire);
+    if (!I || !L || !V || isNaN(awgIdx)) return;
+    const row = WIRE_TABLE[awgIdx];
+    // total wire length = 2× (there and back)
+    const drop = (row.resistance / 1000) * 2 * L * I;
+    const pct = (drop / V) * 100;
+    const color = pct > 5 ? C.red : pct > 3 ? C.ochre : C.green;
+
+    // find recommended wire (≤3% drop and handles current)
+    const rec = WIRE_TABLE.find(w => {
+      const d = (w.resistance / 1000) * 2 * L * I;
+      return (d / V) * 100 <= 3 && w.rating >= I;
+    });
+
+    setResult({ drop, pct, color, rec, selectedWire: row });
+  }, [current, length, wire, system]);
+
+  return (
+    <Card title="Voltage Drop Calculator" icon="⚡">
+      <Field label="System Voltage" value={system} onChange={setSystem} options={[
+        { value: '12', label: '12V' }, { value: '24', label: '24V' }, { value: '48', label: '48V' },
+      ]} />
+      <Field label="Current (Load)" unit="A" value={current} onChange={setCurrent} min="0" step="0.5" />
+      <Field label="Cable Run (one way)" unit="m" value={length} onChange={setLength} min="0" step="0.5" />
+      <Field label="Wire Size" value={wire} onChange={setWire} options={
+        WIRE_TABLE.map((w, i) => ({ value: String(i), label: `AWG ${w.awg} (${w.mm2} mm²) — rated ${w.rating}A` }))
+      } />
+      <CalcBtn onClick={calc} />
+      {result && (
+        <>
+          <Divider />
+          <Result label="Voltage Drop" value={`${result.drop.toFixed(3)} V  (${result.pct.toFixed(1)}%)`} color={result.color}
+            note={result.pct > 5 ? 'Exceeds 5% — significant power loss, upgrade wire' : result.pct > 3 ? 'Between 3–5% — acceptable for lighting, marginal for motors' : 'Under 3% — good'} />
+          {result.rec && result.rec.awg !== result.selectedWire.awg && (
+            <Result label="Recommended Wire" color={C.green}
+              value={`AWG ${result.rec.awg} (${result.rec.mm2} mm²)`}
+              note={`Keeps drop ≤3% and handles ${result.rec.rating}A`} />
+          )}
+          {!result.rec && (
+            <Result label="Recommendation" color={C.red}
+              value="Parallel runs required"
+              note="No single wire in the table keeps drop ≤3% at this current/length" />
+          )}
+        </>
+      )}
+    </Card>
+  );
+}
+
+// ── 2. Fuse Rating Calculator ─────────────────────────────────────────────────
+const FUSE_SIZES = [1,2,3,5,7.5,10,15,20,25,30,35,40,50,60,70,80,100,125,150,200];
+
+function FuseCalc() {
+  const [watts, setWatts] = useState('100');
+  const [voltage, setVoltage] = useState('12');
+  const [margin, setMargin] = useState('125');
+  const [result, setResult] = useState(null);
+
+  const calc = useCallback(() => {
+    const W = parseFloat(watts);
+    const V = parseFloat(voltage);
+    const M = parseFloat(margin) / 100;
+    if (!W || !V || !M) return;
+    const amps = W / V;
+    const fusedAmps = amps * M;
+    const recommended = FUSE_SIZES.find(f => f >= fusedAmps) || FUSE_SIZES[FUSE_SIZES.length - 1];
+    setResult({ amps, fusedAmps, recommended });
+  }, [watts, voltage, margin]);
+
+  return (
+    <Card title="Fuse Rating Calculator" icon="🔌">
+      <Field label="Load Power" unit="W" value={watts} onChange={setWatts} min="0" step="1" />
+      <Field label="System Voltage" value={voltage} onChange={setVoltage} options={[
+        { value: '12', label: '12V' }, { value: '24', label: '24V' }, { value: '48', label: '48V' }, { value: '240', label: '240V AC' },
+      ]} />
+      <Field label="Safety Margin" value={margin} onChange={setMargin} options={[
+        { value: '110', label: '110% — very tight' },
+        { value: '125', label: '125% — standard (recommended)' },
+        { value: '150', label: '150% — conservative' },
+      ]} />
+      <CalcBtn onClick={calc} />
+      {result && (
+        <>
+          <Divider />
+          <Result label="Load Current" value={`${result.amps.toFixed(2)} A`} color={C.ink} />
+          <Result label="Fused at (×margin)" value={`${result.fusedAmps.toFixed(2)} A`} color={C.ink2} />
+          <Result label="Recommended Fuse" value={`${result.recommended} A`} color={C.blue}
+            note="Next standard fuse size up from calculated value" />
+        </>
+      )}
+    </Card>
+  );
+}
+
+// ── 3. Battery Runtime Estimator ──────────────────────────────────────────────
+function BatteryCalc() {
+  const [capacity, setCapacity] = useState('100');
+  const [load, setLoad] = useState('50');
+  const [voltage, setVoltage] = useState('12');
+  const [dod, setDod] = useState('50');
+  const [result, setResult] = useState(null);
+
+  const calc = useCallback(() => {
+    const Ah = parseFloat(capacity);
+    const W = parseFloat(load);
+    const V = parseFloat(voltage);
+    const DOD = parseFloat(dod) / 100;
+    if (!Ah || !W || !V || !DOD) return;
+    const usableAh = Ah * DOD;
+    const loadAmps = W / V;
+    const hours = usableAh / loadAmps;
+    setResult({ hours, usableAh, loadAmps });
+  }, [capacity, load, voltage, dod]);
+
+  const fmt = h => {
+    if (h >= 24) return `${Math.floor(h / 24)}d ${Math.round(h % 24)}h`;
+    return `${Math.floor(h)}h ${Math.round((h % 1) * 60)}m`;
+  };
+
+  return (
+    <Card title="Battery Runtime Estimator" icon="🔋">
+      <Field label="Battery Capacity" unit="Ah" value={capacity} onChange={setCapacity} min="0" step="1" />
+      <Field label="System Voltage" value={voltage} onChange={setVoltage} options={[
+        { value: '12', label: '12V' }, { value: '24', label: '24V' }, { value: '48', label: '48V' },
+      ]} />
+      <Field label="Total Load" unit="W" value={load} onChange={setLoad} min="0" step="1" />
+      <Field label="Depth of Discharge" value={dod} onChange={setDod} options={[
+        { value: '50', label: '50% — AGM / Flooded Lead Acid' },
+        { value: '80', label: '80% — Lithium (LiFePO₄)' },
+        { value: '100', label: '100% — theoretical max' },
+      ]} />
+      <CalcBtn onClick={calc} />
+      {result && (
+        <>
+          <Divider />
+          <Result label="Usable Capacity" value={`${result.usableAh.toFixed(1)} Ah`} color={C.ink2} />
+          <Result label="Load Current" value={`${result.loadAmps.toFixed(2)} A`} color={C.ink2} />
+          <Result label="Estimated Runtime" value={fmt(result.hours)} color={C.green}
+            note="Assumes constant load and no charging" />
+        </>
+      )}
+    </Card>
+  );
+}
+
+// ── 4. Solar Panel Sizing Tool ────────────────────────────────────────────────
+function SolarCalc() {
+  const [dailyWh, setDailyWh] = useState('500');
+  const [sunHours, setSunHours] = useState('5');
+  const [voltage, setVoltage] = useState('12');
+  const [dod, setDod] = useState('50');
+  const [days, setDays] = useState('2');
+  const [result, setResult] = useState(null);
+
+  const calc = useCallback(() => {
+    const Wh = parseFloat(dailyWh);
+    const PSH = parseFloat(sunHours);
+    const V = parseFloat(voltage);
+    const DOD = parseFloat(dod) / 100;
+    const autonomy = parseFloat(days);
+    if (!Wh || !PSH || !V || !DOD || !autonomy) return;
+
+    // panel watts needed (add 20% system losses)
+    const panelW = (Wh / PSH) * 1.2;
+    // battery bank (Wh needed for autonomy days at DOD)
+    const bankWh = (Wh * autonomy) / DOD;
+    const bankAh = bankWh / V;
+
+    setResult({ panelW, bankWh, bankAh });
+  }, [dailyWh, sunHours, voltage, dod, days]);
+
+  return (
+    <Card title="Solar Panel Sizing Tool" icon="☀️">
+      <Field label="Daily Energy Use" unit="Wh/day" value={dailyWh} onChange={setDailyWh} min="0" step="10" />
+      <Field label="Peak Sun Hours" value={sunHours} onChange={setSunHours} options={[
+        { value: '3', label: '3h — overcast / winter / south-facing' },
+        { value: '4', label: '4h — coastal / partly cloudy' },
+        { value: '5', label: '5h — inland Australia (average)' },
+        { value: '6', label: '6h — outback / optimal tilt' },
+        { value: '7', label: '7h — peak summer / north-facing' },
+      ]} />
+      <Field label="System Voltage" value={voltage} onChange={setVoltage} options={[
+        { value: '12', label: '12V' }, { value: '24', label: '24V' }, { value: '48', label: '48V' },
+      ]} />
+      <Field label="Battery Type (DoD)" value={dod} onChange={setDod} options={[
+        { value: '50', label: '50% — AGM / Flooded' },
+        { value: '80', label: '80% — Lithium LiFePO₄' },
+      ]} />
+      <Field label="Days Autonomy (no sun)" unit="days" value={days} onChange={setDays} min="1" step="1" />
+      <CalcBtn onClick={calc} />
+      {result && (
+        <>
+          <Divider />
+          <Result label="Minimum Panel Output" value={`${Math.ceil(result.panelW)} W`} color={C.blue}
+            note="Includes 20% for system losses (MPPT, wiring, temp derating)" />
+          <Result label="Battery Bank" value={`${Math.ceil(result.bankAh)} Ah  @${voltage}V  (${Math.ceil(result.bankWh / 1000 * 10) / 10} kWh)`} color={C.green}
+            note={`Supports ${days} day${days > 1 ? 's' : ''} without solar`} />
+        </>
+      )}
+    </Card>
+  );
+}
+
+// ── 5. Wire Gauge Selector ────────────────────────────────────────────────────
+function WireGaugeCalc() {
+  const [current, setCurrent] = useState('20');
+  const [length, setLength] = useState('3');
+  const [voltage, setVoltage] = useState('12');
+  const [maxDrop, setMaxDrop] = useState('3');
+  const [result, setResult] = useState(null);
+
+  const calc = useCallback(() => {
+    const I = parseFloat(current);
+    const L = parseFloat(length);
+    const V = parseFloat(voltage);
+    const maxPct = parseFloat(maxDrop) / 100;
+    if (!I || !L || !V || !maxPct) return;
+
+    const maxDropV = V * maxPct;
+    // find smallest wire that: handles current AND stays within drop limit
+    const matches = WIRE_TABLE.filter(w => {
+      const drop = (w.resistance / 1000) * 2 * L * I;
+      return drop <= maxDropV && w.rating >= I;
+    });
+    const best = matches[matches.length - 1]; // smallest that qualifies
+
+    // also find wire just by current rating
+    const byRating = WIRE_TABLE.find(w => w.rating >= I);
+
+    setResult({ best, byRating, maxDropV });
+  }, [current, length, voltage, maxDrop]);
+
+  return (
+    <Card title="Wire Gauge Selector" icon="🔧">
+      <Field label="Current" unit="A" value={current} onChange={setCurrent} min="0" step="1" />
+      <Field label="Cable Run (one way)" unit="m" value={length} onChange={setLength} min="0" step="0.5" />
+      <Field label="System Voltage" value={voltage} onChange={setVoltage} options={[
+        { value: '12', label: '12V' }, { value: '24', label: '24V' }, { value: '48', label: '48V' },
+      ]} />
+      <Field label="Max Acceptable Drop" value={maxDrop} onChange={setMaxDrop} options={[
+        { value: '2', label: '2% — sensitive electronics' },
+        { value: '3', label: '3% — general 12V / motors' },
+        { value: '5', label: '5% — lighting OK' },
+      ]} />
+      <CalcBtn onClick={calc} />
+      {result && (
+        <>
+          <Divider />
+          {result.best ? (
+            <Result label="Recommended Wire" value={`AWG ${result.best.awg}  (${result.best.mm2} mm²)`} color={C.green}
+              note={`Rated ${result.best.rating}A — keeps drop ≤${maxDrop}% (≤${result.maxDropV.toFixed(2)}V)`} />
+          ) : (
+            <Result label="No Single Wire Sufficient" color={C.red}
+              value="Use parallel runs"
+              note="Consider two cables or reduce run length / increase voltage" />
+          )}
+          {result.byRating && result.best && result.byRating.awg !== result.best.awg && (
+            <Result label="By Current Rating Only" value={`AWG ${result.byRating.awg}  (${result.byRating.mm2} mm²)`} color={C.ochre}
+              note="Handles current but may exceed your drop limit" />
+          )}
+        </>
+      )}
+    </Card>
+  );
+}
+
+// ── 6. LED Resistor Calculator ────────────────────────────────────────────────
+function LEDCalc() {
+  const [supply, setSupply] = useState('12');
+  const [vf, setVf] = useState('2.1');
+  const [mA, setMa] = useState('20');
+  const [leds, setLeds] = useState('1');
+  const [result, setResult] = useState(null);
+
+  const calc = useCallback(() => {
+    const Vs = parseFloat(supply);
+    const Vf = parseFloat(vf);
+    const If = parseFloat(mA) / 1000;
+    const n = parseInt(leds);
+    if (!Vs || !Vf || !If || !n) return;
+    const totalVf = Vf * n;
+    if (totalVf >= Vs) {
+      setResult({ error: `Total LED forward voltage (${totalVf.toFixed(1)}V) ≥ supply voltage — reduce LEDs in series or increase supply` });
+      return;
+    }
+    const R = (Vs - totalVf) / If;
+    const P = (Vs - totalVf) * If;
+    // nearest E12 resistor value
+    const e12 = [1,1.2,1.5,1.8,2.2,2.7,3.3,3.9,4.7,5.6,6.8,8.2];
+    const exp = Math.floor(Math.log10(R));
+    const man = R / Math.pow(10, exp);
+    const nearest = e12.reduce((a, b) => Math.abs(b - man) < Math.abs(a - man) ? b : a);
+    const stdR = nearest * Math.pow(10, exp);
+    const stdP = (Vs - totalVf) / stdR * (Vs - totalVf);
+    setResult({ R, P, stdR, stdP, totalVf, dropR: Vs - totalVf });
+  }, [supply, vf, mA, leds]);
+
+  const fmtR = v => v >= 1000 ? `${(v / 1000).toFixed(2)} kΩ` : `${Math.round(v)} Ω`;
+
+  return (
+    <Card title="LED Resistor Calculator" icon="💡">
+      <Field label="Supply Voltage" unit="V" value={supply} onChange={setSupply} min="0" step="0.1" />
+      <Field label="LEDs in Series" unit="LEDs" value={leds} onChange={setLeds} min="1" step="1" />
+      <Field label="LED Forward Voltage (Vf)" value={vf} onChange={setVf} options={[
+        { value: '1.8', label: '1.8V — Red / Infrared' },
+        { value: '2.0', label: '2.0V — Yellow / Orange' },
+        { value: '2.1', label: '2.1V — Red (standard)' },
+        { value: '2.5', label: '2.5V — Green' },
+        { value: '3.0', label: '3.0V — Blue / White' },
+        { value: '3.2', label: '3.2V — White / UV' },
+      ]} />
+      <Field label="LED Current" unit="mA" value={mA} onChange={setMa} min="0" step="1" />
+      <CalcBtn onClick={calc} />
+      {result && (
+        <>
+          <Divider />
+          {result.error ? (
+            <Result label="Error" value="Check inputs" color={C.red} note={result.error} />
+          ) : (
+            <>
+              <Result label="Exact Resistor" value={fmtR(result.R)} color={C.ink}
+                note={`Power: ${(result.P * 1000).toFixed(0)} mW`} />
+              <Result label="Nearest E12 Standard Value" value={fmtR(result.stdR)} color={C.blue}
+                note={`Power dissipated: ${(result.stdP * 1000).toFixed(0)} mW — use ≥${result.stdP < 0.125 ? '1/8W' : result.stdP < 0.25 ? '1/4W' : result.stdP < 0.5 ? '1/2W' : '1W'} resistor`} />
+            </>
+          )}
+        </>
+      )}
+    </Card>
+  );
+}
+
+// ── 7. Ohm's Law Calculator ───────────────────────────────────────────────────
+function OhmsLawCalc() {
+  const [v, setV] = useState('');
+  const [i, setI] = useState('');
+  const [r, setR] = useState('');
+  const [p, setP] = useState('');
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState('');
+
+  const calc = useCallback(() => {
+    const vals = { v: parseFloat(v) || null, i: parseFloat(i) || null, r: parseFloat(r) || null, p: parseFloat(p) || null };
+    const known = Object.entries(vals).filter(([, val]) => val !== null);
+    if (known.length < 2) { setError('Enter at least 2 values'); setResult(null); return; }
+    setError('');
+
+    let V = vals.v, I = vals.i, R = vals.r, P = vals.p;
+
+    // Solve using all combinations
+    if (V && I) { R = R ?? V / I; P = P ?? V * I; }
+    else if (V && R) { I = I ?? V / R; P = P ?? V * V / R; }
+    else if (V && P) { I = I ?? P / V; R = R ?? V * V / P; }
+    else if (I && R) { V = V ?? I * R; P = P ?? I * I * R; }
+    else if (I && P) { V = V ?? P / I; R = R ?? P / (I * I); }
+    else if (R && P) { V = V ?? Math.sqrt(P * R); I = I ?? Math.sqrt(P / R); }
+
+    setResult({ V, I, R, P });
+  }, [v, i, r, p]);
+
+  const fmtVal = (val, unit) => {
+    if (val === null || isNaN(val)) return '—';
+    if (Math.abs(val) >= 1000) return `${(val / 1000).toFixed(3)} k${unit}`;
+    if (Math.abs(val) < 0.01) return `${(val * 1000).toFixed(3)} m${unit}`;
+    return `${val.toFixed(4).replace(/\.?0+$/, '')} ${unit}`;
+  };
+
+  return (
+    <Card title="Ohm's Law Calculator" icon="🧮">
+      <p style={{ fontSize: 13, color: C.ink2 }}>Enter any 2 values — the other 2 are calculated.</p>
+      <Field label="Voltage (V)" unit="V" value={v} onChange={setV} min="0" step="any" />
+      <Field label="Current (I)" unit="A" value={i} onChange={setI} min="0" step="any" />
+      <Field label="Resistance (R)" unit="Ω" value={r} onChange={setR} min="0" step="any" />
+      <Field label="Power (P)" unit="W" value={p} onChange={setP} min="0" step="any" />
+      <CalcBtn onClick={calc} />
+      {error && <div style={{ color: C.red, fontSize: 13 }}>{error}</div>}
+      {result && (
+        <>
+          <Divider />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <Result label="Voltage" value={fmtVal(result.V, 'V')} />
+            <Result label="Current" value={fmtVal(result.I, 'A')} />
+            <Result label="Resistance" value={fmtVal(result.R, 'Ω')} />
+            <Result label="Power" value={fmtVal(result.P, 'W')} />
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+
+// ── 8. Capacitor Charge/Discharge Timer ───────────────────────────────────────
+function CapacitorCalc() {
+  const [mode, setMode] = useState('rc');
+  const [r, setR] = useState('10000');
+  const [c, setC] = useState('100');
+  const [vSupply, setVSupply] = useState('5');
+  const [vTarget, setVTarget] = useState('3.3');
+  const [tauCount, setTauCount] = useState('5');
+  const [result, setResult] = useState(null);
+
+  const calc = useCallback(() => {
+    const R = parseFloat(r);
+    const Cuf = parseFloat(c) / 1e6; // µF → F
+    const Vs = parseFloat(vSupply);
+    const Vt = parseFloat(vTarget);
+    const taus = parseFloat(tauCount);
+    if (!R || !Cuf) return;
+
+    const tau = R * Cuf;
+    const freq = 1 / (2 * Math.PI * R * Cuf); // -3dB cutoff
+    const fullChargeTime = tau * taus;
+
+    let timeToTarget = null;
+    if (Vs && Vt && Vt < Vs) {
+      // charging: V(t) = Vs(1 - e^(-t/tau))  → t = -tau * ln(1 - Vt/Vs)
+      timeToTarget = -tau * Math.log(1 - Vt / Vs);
+    }
+
+    const fmtT = s => {
+      if (s >= 1) return `${s.toFixed(3)} s`;
+      if (s >= 0.001) return `${(s * 1000).toFixed(3)} ms`;
+      return `${(s * 1e6).toFixed(3)} µs`;
+    };
+
+    setResult({ tau, fullChargeTime, timeToTarget, freq, fmtT });
+  }, [r, c, vSupply, vTarget, tauCount]);
+
+  return (
+    <Card title="Capacitor Charge/Discharge Timer" icon="⏱️">
+      <Field label="Resistance" unit="Ω" value={r} onChange={setR} min="0" step="any" />
+      <Field label="Capacitance" unit="µF" value={c} onChange={setC} min="0" step="any" />
+      <Field label="Supply Voltage" unit="V" value={vSupply} onChange={setVSupply} min="0" step="any" />
+      <Field label="Target Voltage (charge to)" unit="V" value={vTarget} onChange={setVTarget} min="0" step="any" />
+      <Field label="Time Constants for 'Full Charge'" value={tauCount} onChange={setTauCount} options={[
+        { value: '3', label: '3τ — 95%' },
+        { value: '4', label: '4τ — 98%' },
+        { value: '5', label: '5τ — 99.3% (standard)' },
+      ]} />
+      <CalcBtn onClick={calc} />
+      {result && (
+        <>
+          <Divider />
+          <Result label="Time Constant (τ = RC)" value={result.fmtT(result.tau)} color={C.blue} />
+          <Result label={`Full Charge Time (${tauCount}τ)`} value={result.fmtT(result.fullChargeTime)} color={C.ink2} />
+          {result.timeToTarget !== null && (
+            <Result label={`Time to reach ${vTarget}V`} value={result.fmtT(result.timeToTarget)} color={C.green} />
+          )}
+          <Result label="RC Filter Cutoff Freq" value={`${result.freq >= 1000 ? (result.freq / 1000).toFixed(2) + ' kHz' : result.freq.toFixed(2) + ' Hz'}`}
+            color={C.ink3} note="−3dB point for low-pass filter" />
+        </>
+      )}
+    </Card>
+  );
+}
+
+// ── 9. Relay Wiring Guide ─────────────────────────────────────────────────────
+function RelayGuide() {
+  const [type, setType] = useState('5pin');
+
+  const pin4 = [
+    { pin: '85', color: '#e74c3c', label: 'Coil −', desc: 'Connect to ground (chassis earth)' },
+    { pin: '86', color: '#f39c12', label: 'Coil +', desc: 'Connect to 12V trigger signal (switch, ECU output, etc.)' },
+    { pin: '30', color: '#3498db', label: 'Common', desc: 'Connect to your 12V power source (fused)' },
+    { pin: '87', color: '#2ecc71', label: 'NO — Normally Open', desc: 'Connect to load +ve. Circuit closed when relay energised.' },
+  ];
+
+  const pin5 = [
+    ...pin4,
+    { pin: '87a', color: '#9b59b6', label: 'NC — Normally Closed', desc: 'Connected to pin 30 when relay is OFF. Use for fail-safe / bypass circuits.' },
+  ];
+
+  const pins = type === '5pin' ? pin5 : pin4;
+
+  return (
+    <Card title="Relay Wiring Guide" icon="🔄">
+      <Field label="Relay Type" value={type} onChange={setType} options={[
+        { value: '5pin', label: '5-pin relay (SPDT — has NC contact)' },
+        { value: '4pin', label: '4-pin relay (SPST — NO only)' },
+      ]} />
+
+      {/* ASCII diagram */}
+      <div style={{ background: C.paper, borderRadius: 10, border: `1px solid ${C.line}`, padding: '16px 20px' }}>
+        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: C.ink2, lineHeight: 1.8, whiteSpace: 'pre' }}>
+{type === '5pin' ? `
+    ┌──────────────────┐
+    │  RELAY (5-pin)   │
+    │                  │
+ 85 ┤ Coil −    30 ├── Common (power in)
+ 86 ┤ Coil +    87 ├── NO  (load +ve)
+    │          87a ├── NC  (bypass)
+    └──────────────────┘
+
+  Energised: 30 ↔ 87  (NO closes)
+  De-energised: 30 ↔ 87a (NC closes)
+` : `
+    ┌──────────────────┐
+    │  RELAY (4-pin)   │
+    │                  │
+ 85 ┤ Coil −    30 ├── Common (power in)
+ 86 ┤ Coil +    87 ├── NO  (load +ve)
+    └──────────────────┘
+
+  Energised: 30 ↔ 87  (circuit closes)
+  De-energised: open circuit
+`}
+        </div>
+      </div>
+
+      {/* Pin descriptions */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {pins.map(({ pin, color, label, desc }) => (
+          <div key={pin} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+            <div style={{
+              minWidth: 42, height: 36, borderRadius: 8, background: color, color: '#fff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontWeight: 700, fontSize: 13, fontFamily: "'JetBrains Mono', monospace",
+            }}>{pin}</div>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 13, color: C.ink }}>{label}</div>
+              <div style={{ fontSize: 12, color: C.ink2 }}>{desc}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ padding: '12px 14px', borderRadius: 8, background: '#fff8e6', border: `1px solid ${C.ochre}`, fontSize: 12, color: C.ink2 }}>
+        <strong>Tip:</strong> Always fuse the wire going to pin 30. Coil draws ~150–200 mA — any small signal wire can trigger it. Keep coil wiring away from sensitive audio/sensor cables to avoid interference.
+      </div>
+    </Card>
+  );
+}
+
+// ── Nav ───────────────────────────────────────────────────────────────────────
+const TOOLS = [
+  { id: 'vdrop',    label: 'Voltage Drop',    icon: '⚡' },
+  { id: 'fuse',     label: 'Fuse Rating',     icon: '🔌' },
+  { id: 'battery',  label: 'Battery Runtime', icon: '🔋' },
+  { id: 'solar',    label: 'Solar Sizing',    icon: '☀️' },
+  { id: 'wire',     label: 'Wire Gauge',      icon: '🔧' },
+  { id: 'led',      label: 'LED Resistor',    icon: '💡' },
+  { id: 'ohms',     label: "Ohm's Law",       icon: '🧮' },
+  { id: 'cap',      label: 'Capacitor Timer', icon: '⏱️' },
+  { id: 'relay',    label: 'Relay Wiring',    icon: '🔄' },
+];
+
+// ── App ───────────────────────────────────────────────────────────────────────
+export default function App() {
+  const [active, setActive] = useState('vdrop');
+
+  const navS = {
+    wrapper: {
+      background: C.bgDeep,
+      borderBottom: `1px solid ${C.line}`,
+      overflowX: 'auto',
+      WebkitOverflowScrolling: 'touch',
+    },
+    inner: {
+      display: 'flex',
+      gap: 2,
+      padding: '10px 16px',
+      minWidth: 'max-content',
+    },
+    btn: (id) => ({
+      padding: '7px 14px',
+      borderRadius: 8,
+      border: 'none',
+      background: active === id ? C.blue : 'transparent',
+      color: active === id ? '#fff' : C.ink2,
+      fontWeight: active === id ? 600 : 500,
+      fontSize: 13,
+      display: 'flex', alignItems: 'center', gap: 6,
+      cursor: 'pointer',
+      whiteSpace: 'nowrap',
+      transition: 'background 0.15s',
+    }),
+  };
+
+  const renderTool = () => {
+    switch (active) {
+      case 'vdrop':   return <VoltageDropCalc />;
+      case 'fuse':    return <FuseCalc />;
+      case 'battery': return <BatteryCalc />;
+      case 'solar':   return <SolarCalc />;
+      case 'wire':    return <WireGaugeCalc />;
+      case 'led':     return <LEDCalc />;
+      case 'ohms':    return <OhmsLawCalc />;
+      case 'cap':     return <CapacitorCalc />;
+      case 'relay':   return <RelayGuide />;
+      default:        return null;
+    }
+  };
+
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: C.bg }}>
+      {/* Header */}
+      <header style={{ background: C.dark, padding: '18px 24px', display: 'flex', alignItems: 'center', gap: 16 }}>
+        <a href="/" style={{ color: '#fff', textDecoration: 'none' }}>
+          <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', fontWeight: 500 }}>Outback Electronics</span>
+        </a>
+        <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 18 }}>›</span>
+        <h1 style={{ fontSize: 18, fontWeight: 700, color: '#fff', margin: 0 }}>Tools & Calculators</h1>
+      </header>
+
+      {/* Tool nav */}
+      <nav style={navS.wrapper}>
+        <div style={navS.inner}>
+          {TOOLS.map(t => (
+            <button key={t.id} style={navS.btn(t.id)} onClick={() => setActive(t.id)}>
+              <span>{t.icon}</span>
+              <span>{t.label}</span>
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      {/* Content */}
+      <main style={{ flex: 1, padding: '28px 20px', maxWidth: 680, width: '100%', margin: '0 auto' }}>
+        {renderTool()}
+      </main>
+
+      {/* Footer */}
+      <footer style={{ borderTop: `1px solid ${C.line}`, padding: '16px 24px', textAlign: 'center', fontSize: 12, color: C.ink3 }}>
+        Results are estimates for guidance only. Always verify critical installations with a qualified auto-electrician.
+        &nbsp;·&nbsp;<a href="/" style={{ color: C.ink3 }}>outbackelectronics.com.au</a>
+      </footer>
+    </div>
+  );
+}
