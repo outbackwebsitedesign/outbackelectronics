@@ -1139,7 +1139,10 @@ function AboutPage({ go }) {
         <div style={{ maxWidth: 720 }}>
           <h2 className="serif" style={{ fontSize: 28, marginBottom: 16 }}>The workshop</h2>
           <p style={{ color: 'var(--ink-2)', lineHeight: 1.8, marginBottom: 24 }}>
-            Outback Electronics is an independent electronics outpost based at 183 Peericoota Forest Rd, Moama NSW 2731.
+            Outback Electronics is an independent electronics outpost{(() => {
+              const addr = [shop?.streetAddress, [shop?.suburb, shop?.state, shop?.postcode].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+              return addr ? ` based at ${addr}` : '';
+            })()}.
             We repair rugged laptops, satellite uplinks and off-grid power systems — and we build custom rigs for people who live and work where the signal ends.
           </p>
           <p style={{ color: 'var(--ink-2)', lineHeight: 1.8, marginBottom: 24 }}>

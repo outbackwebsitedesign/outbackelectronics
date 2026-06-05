@@ -60,11 +60,8 @@ Earlier audit claimed the AI page was feature-flagged off. This is wrong. `aiEna
 
 ## MEDIUM — Hardcoded values that should come from config/settings
 
-### ⚠️ 12. Address in AboutPage uses hardcoded fallback (pages-info.jsx:1143)
-```js
-<div>{shop?.address || '183 Peericoota Forest Rd, Moama NSW 2731'}</div>
-```
-Now reads from `shop.address` — but the hardcoded fallback string is still baked into JSX. The prose sentence at line 1129 also still hardcodes the full address inline. If the address changes and isn't set in admin Settings, both spots revert to the hardcoded string.
+### ✅ 12. Address in AboutPage uses hardcoded fallback (RESOLVED)
+Both the prose paragraph and the FIND US card now read from `shop.streetAddress`, `shop.suburb`, `shop.state`, and `shop.postcode`. If none of those fields are set the address phrase is omitted entirely rather than falling back to a hardcoded string.
 
 ### ✅ 13. Hardcoded acknowledgement of country (app.jsx:613) — RESOLVED
 `app.jsx:618` now reads from `shop.acknowledgmentPeople` and `shop.acknowledgmentCountry`, both editable via admin → Settings → Shop. Updated to "Bidjara People, Bidjara Country (Blackall)". The footer renders blank if neither field is set.
@@ -174,7 +171,7 @@ Completing a purchase does not decrement the stock count on the purchased produc
 | 9 | portal-page.jsx:1022 | Rewards "coming soon" | HIGH | ✅ DONE |
 | 10 | portal-page.jsx / server.js | Wallet store credit — full build (model, admin, redemption) | HIGH | ✅ DONE |
 | 11 | pages-shop.jsx:169 | AI page "disabled" — INVALID, aiEnabled only toggles a badge | HIGH | ✅ N/A |
-| 12 | pages-info.jsx:1129,1143 | Address hardcoded fallback in AboutPage | MEDIUM | ⚠️ PARTIAL |
+| 12 | pages-info.jsx:1129,1143 | Address hardcoded fallback in AboutPage | MEDIUM | ✅ DONE |
 | 13 | app.jsx:618 | Acknowledgement hardcoded | MEDIUM | ✅ DONE |
 | 14 | app.jsx:25–27 | Portal/forum/games URLs hardcoded | MEDIUM | ❌ OPEN |
 | 15 | portal-page.jsx:1686 | Footer links hardcoded | MEDIUM | ❌ OPEN |
