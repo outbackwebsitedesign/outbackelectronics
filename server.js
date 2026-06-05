@@ -1028,11 +1028,11 @@ function _computeHeroImagePreload() {
     if (hero && hero.images && hero.images.length > 0) {
       const src = hero.images[0];
       if (src.startsWith('/assets/uploads/')) {
-        const u = w => `/api/thumb?src=${encodeURIComponent(src)}&w=${w}`;
-        const srcset = [400, 600, 800].map(w => `${u(w)} ${w}w`).join(', ');
+        const u = w => `/api/thumb?src=${encodeURIComponent(src)}&w=${w}&q=82`;
+        const srcset = [600, 800, 1000, 1200].map(w => `${u(w)} ${w}w`).join(', ');
         // Mirror the hero <img> srcset/sizes so the preload matches the variant
         // the browser actually picks — no wasted second download.
-        return `<link rel="preload" as="image" href="${u(800)}" imagesrcset="${srcset}" imagesizes="(max-width: 900px) 100vw, 400px" fetchpriority="high">`;
+        return `<link rel="preload" as="image" href="${u(1000)}" imagesrcset="${srcset}" imagesizes="(max-width: 900px) 100vw, 560px" fetchpriority="high">`;
       }
     }
   } catch {}
@@ -3085,6 +3085,9 @@ const mainServer = http.createServer(async (req, res) => {
   if (req.method === 'GET' && url.pathname === '/api/thumb') {
     const src = url.searchParams.get('src') || '';
     const w = Math.min(Math.max(parseInt(url.searchParams.get('w') || '600', 10), 32), 1200);
+    // Optional per-image quality (clamped). Larger LCP images (e.g. the hero)
+    // request a higher quality so they don't look soft after downscaling.
+    const qParam = parseInt(url.searchParams.get('q') || '', 10);
     if (!src.startsWith('/assets/uploads/') || src.includes('..') || src.includes('\0')) {
       return json(res, 400, { error: 'invalid_src' });
     }
@@ -3094,7 +3097,7 @@ const mainServer = http.createServer(async (req, res) => {
     const thumbsDir = path.join(__dirname, 'assets/uploads/.thumbs');
     fs.mkdirSync(thumbsDir, { recursive: true });
     const baseName = path.basename(src, path.extname(src));
-    const THUMB_QUALITY = 68;
+    const THUMB_QUALITY = Number.isFinite(qParam) ? Math.min(Math.max(qParam, 40), 90) : 68;
     // Quality is part of the cache key so tuning it regenerates variants
     // instead of serving stale higher-weight files.
     const thumbPath = path.join(thumbsDir, `${baseName}-w${w}-q${THUMB_QUALITY}.webp`);
