@@ -4475,6 +4475,7 @@ const adminServer = http.createServer(async (req, res) => {
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     if (!body || typeof body.name !== 'string' || !body.name.trim()) return json(res, 422, { error: 'invalid_payload', message: 'Field "name" is required.' });
     if (session.role === 'seller' && body.id !== session.staffId) return json(res, 403, { error: 'forbidden' });
+    if (session.role !== 'owner') { delete body.role; delete body.status; }
     if (typeof body.pin === 'string' && body.pin.length > 0) {
       if (!/^\d{4,6}$/.test(body.pin)) return json(res, 422, { error: 'invalid_payload', message: 'PIN must be 4–6 digits.' });
       body.pinHash = hashPassword(body.pin);
