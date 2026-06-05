@@ -2144,19 +2144,26 @@ const mainServer = http.createServer(async (req, res) => {
     const catalogProducts = readProducts();
     const catalogServices = readServices();
     const { tiers: membershipTiers } = readMemberships();
-    function lookupCatalogPrice(pid, clientPrice) {
+    function lookupCatalogPrice(pid, variantSku) {
       if (!pid) return null;
       const prod = catalogProducts.find(p => p.id === pid && p.status === 'published');
       if (prod) {
-        // For variant products, priceAud lives on the variant not the parent.
-        // Fall back to client-supplied price (validated against a reasonable cap).
-        const price = Number(prod.priceAud) || Number(clientPrice);
-        return { priceAud: price, name: prod.name };
+        if (prod.variants && prod.variants.length > 0) {
+          // Price lives on the variant — must identify it server-side; never trust client price.
+          const variant = variantSku
+            ? (prod.variants.find(v => v.sku === variantSku) || prod.variants.find(v => v.name === variantSku))
+            : null;
+          if (!variant) return null;
+          const price = Number(variant.price);
+          return price > 0 ? { priceAud: price, name: `${prod.name}${variant.name ? ` — ${variant.name}` : ''}` } : null;
+        }
+        const price = Number(prod.priceAud);
+        return price > 0 ? { priceAud: price, name: prod.name } : null;
       }
       const svc = catalogServices.find(s => s.id === pid && s.status === 'published');
-      if (svc) return { priceAud: Number(svc.priceAud) || Number(clientPrice), name: svc.name };
+      if (svc) { const price = Number(svc.priceAud); return price > 0 ? { priceAud: price, name: svc.name } : null; }
       const tier = membershipTiers.find(t => t.id === pid && t.status === 'published');
-      if (tier) return { priceAud: Number(tier.priceAud) || Number(clientPrice), name: tier.name };
+      if (tier) { const price = Number(tier.priceAud); return price > 0 ? { priceAud: price, name: tier.name } : null; }
       return null;
     }
     const lineItems = [];
@@ -2171,8 +2178,9 @@ const mainServer = http.createServer(async (req, res) => {
         if (!resolvedPrice || resolvedPrice <= 0) return json(res, 422, { error: 'invalid_item', message: `Invalid gift card: ${pid}` });
         lineItems.push({ ...li, priceAud: resolvedPrice, name: li.name || (catalogEntry ? catalogEntry.name : `Gift Card`), quantity: qty, productId: pid });
       } else if (pid) {
-        const catalogEntry = lookupCatalogPrice(pid, li.priceAud);
-        if (!catalogEntry) return json(res, 422, { error: 'invalid_item', message: `Product not found: ${pid}` });
+        const variantSku = li.variantSku ? String(li.variantSku) : null;
+        const catalogEntry = lookupCatalogPrice(pid, variantSku);
+        if (!catalogEntry) return json(res, 422, { error: 'invalid_item', message: `Product not found or variant not specified: ${pid}` });
         const resolvedPrice = Number(catalogEntry.priceAud);
         if (!Number.isFinite(resolvedPrice) || resolvedPrice <= 0) return json(res, 422, { error: 'invalid_item', message: `"${catalogEntry.name}" has no valid price set. Please contact us.` });
         lineItems.push({ ...li, priceAud: resolvedPrice, name: catalogEntry.name, quantity: qty, productId: pid });
