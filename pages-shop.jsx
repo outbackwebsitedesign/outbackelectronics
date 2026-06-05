@@ -3,16 +3,17 @@ import React, { useState, useEffect, useMemo, useContext } from 'react';
 const _fallbackShopCtx = React.createContext({});
 const useShop = () => useContext(window.__ShopContext__ || _fallbackShopCtx);
 
-function thumbUrl(src, w) {
+function thumbUrl(src, w, q) {
   if (!src || !src.startsWith('/assets/uploads/')) return src;
-  return `/api/thumb?src=${encodeURIComponent(src)}&w=${w}`;
+  const qs = q ? `&q=${q}` : '';
+  return `/api/thumb?src=${encodeURIComponent(src)}&w=${w}${qs}`;
 }
 
 // Responsive srcset so the browser downloads an image sized for the actual
 // display + device pixel ratio instead of always pulling the largest variant.
-function thumbSrcSet(src, widths) {
+function thumbSrcSet(src, widths, q) {
   if (!src || !src.startsWith('/assets/uploads/')) return undefined;
-  return widths.map(w => `${thumbUrl(src, w)} ${w}w`).join(', ');
+  return widths.map(w => `${thumbUrl(src, w, q)} ${w}w`).join(', ');
 }
 
 function getCsrf() {
@@ -120,7 +121,7 @@ function HomePage({ go, addToCart, portalUser }) {
             </div>
             <div className="hero-image" style={{position:'relative'}}>
               {heroProduct && heroProduct.images && heroProduct.images.length > 0
-                ? <img src={thumbUrl(heroProduct.images[0], 800)} srcSet={thumbSrcSet(heroProduct.images[0], [400, 600, 800])} sizes="(max-width: 900px) 100vw, 400px" alt={heroProduct.name} fetchpriority="high" style={{width:'100%', aspectRatio:'4/5', objectFit:'cover', display:'block'}} />
+                ? <img src={thumbUrl(heroProduct.images[0], 1000, 82)} srcSet={thumbSrcSet(heroProduct.images[0], [600, 800, 1000, 1200], 82)} sizes="(max-width: 900px) 100vw, 560px" alt={heroProduct.name} fetchpriority="high" style={{width:'100%', aspectRatio:'4/5', objectFit:'cover', display:'block'}} />
                 : <div className="slot slot-rust" style={{aspectRatio: '4/5'}}>RUGGED LAPTOP ON RED-DIRT WORKBENCH</div>}
               {heroProduct && (
                 <div className="card-paper" style={{position:'absolute', bottom:16, left:16, padding:18, width:240, boxShadow:'var(--shadow)'}}>
