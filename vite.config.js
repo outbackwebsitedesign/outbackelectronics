@@ -12,6 +12,7 @@ export default defineConfig({
         forum: 'forum.html',
         portal: 'portal.html',
         games: 'games.html',
+        tools: 'tools.html',
         maintenance: 'maintenance.html',
       },
       output: {

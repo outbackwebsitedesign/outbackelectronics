@@ -13,6 +13,7 @@ const FORUM_PORT = process.env.FORUM_PORT || 8081;
 const ADMIN_PORT = process.env.ADMIN_PORT || 8082;
 const PORTAL_PORT = process.env.PORTAL_PORT || 8083;
 const GAMES_PORT  = process.env.GAMES_PORT  || 8084;
+const TOOLS_PORT  = process.env.TOOLS_PORT  || 8085;
 
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
 const ADMIN_PASSWORD_RAW = process.env.ADMIN_PASSWORD || '';
@@ -115,6 +116,7 @@ function _defaultSubUrl(base, port, sub) {
 const FORUM_URL  = process.env.FORUM_URL  || _defaultSubUrl(SITE_URL, 8081, 'forum');
 const PORTAL_URL = process.env.PORTAL_URL || _defaultSubUrl(SITE_URL, 8083, 'portal');
 const GAMES_URL  = process.env.GAMES_URL  || _defaultSubUrl(SITE_URL, 8084, 'games');
+const TOOLS_URL  = process.env.TOOLS_URL  || _defaultSubUrl(SITE_URL, 8085, 'tools');
 
 function loadSessionsFromDisk(filePath) {
   try {
@@ -5459,6 +5461,39 @@ const portalServer = http.createServer(async (req, res) => {
   }
 });
 
+// ── Tools server (8085) ───────────────────────────────────────────────────────
+
+const toolsServer = http.createServer(async (req, res) => {
+  try {
+  const url = new URL(req.url, `http://${req.headers.host}`);
+
+  if (checkMaintenance(req, res, url)) return;
+
+  if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
+
+  if (req.method === 'GET' && url.pathname === '/api/csrf-token') {
+    const token = ensureCsrfCookie(req, res);
+    return json(res, 200, { token });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/analytics/event') {
+    if (publicRateLimited(getIp(req), 'analytics')) return json(res, 429, { error: 'rate_limited' });
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'bad_request' }); }
+    const type = typeof body.type === 'string' ? body.type.slice(0, 64) : null;
+    if (!type) return json(res, 400, { error: 'missing_type' });
+    const ua = (req.headers['user-agent'] || '').slice(0, 256);
+    if (/bot|crawl|spider|slurp|headless/i.test(ua)) return json(res, 204, {});
+    appendAnalyticsEvent({ ts: Date.now(), type, page: (body.page || '').slice(0, 256), referrer: (body.referrer || '').slice(0, 256), ua, ip: getIp(req) });
+    return json(res, 204, {});
+  }
+
+  return serveStatic(req, res, url.pathname, '/dist/tools.html', null);
+  } catch (err) {
+    console.error('[toolsServer] unhandled error:', err);
+    if (!res.headersSent) json(res, 500, { error: 'server_error' });
+  }
+});
+
 // ── Games server (8084) ───────────────────────────────────────────────────────
 
 const gamesServer = http.createServer(async (req, res) => {
@@ -5717,3 +5752,4 @@ startServer(forumServer,  FORUM_PORT,  'forum ');
 startServer(adminServer,  ADMIN_PORT,  'admin ');
 startServer(portalServer, PORTAL_PORT, 'portal');
 startServer(gamesServer,  GAMES_PORT,  'games ');
+startServer(toolsServer,  TOOLS_PORT,  'tools ');

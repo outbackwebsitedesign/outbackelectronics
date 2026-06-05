@@ -47,6 +47,7 @@
     font-feature-settings: "ss01", "cv11";
     -webkit-font-smoothing: antialiased;
   }
+  /* Inline font-display:swap so text renders immediately before async Google Fonts CSS applies */
   @font-face { font-family: 'JetBrains Mono'; src: local('JetBrains Mono'), local('JetBrainsMono-Regular'); font-weight: 100 900; font-style: normal; font-display: swap; }
   @font-face { font-family: 'Archivo'; src: local('Archivo'), local('Archivo-Regular'); font-weight: 100 900; font-style: normal; font-display: swap; }
   @font-face { font-family: 'Instrument Serif'; src: local('Instrument Serif'), local('InstrumentSerif-Regular'); font-weight: 100 900; font-style: normal; font-display: swap; }
@@ -501,6 +502,7 @@ if ('serviceWorker' in navigator) {
       fetch('/api/maintenance-status').then(function (r) { return r.json(); }).then(function (d) { if (d.enabled) redirect(); }).catch(function () {});
     };
   }
+  // Defer SSE connection until after load so it doesn't appear on the critical path
   if (document.readyState === 'complete') {
     startMaintenanceWatch();
   } else {
