@@ -983,12 +983,31 @@ function resolveOgTags(pathname) {
 const ESC_HTML_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 function escOg(s) { return String(s || '').replace(/[&<>"]/g, c => ESC_HTML_MAP[c]); }
 
-function serveIndexWithOg(res, og) {
+function getHeroImagePreload() {
+  try {
+    const products = readProducts().filter(p => p.status === 'published');
+    const hero = products.find(p => p.infiniteStock || p.stock > 0) || products[0];
+    if (hero && hero.images && hero.images.length > 0) {
+      const src = hero.images[0];
+      if (src.startsWith('/assets/uploads/')) {
+        return `<link rel="preload" as="image" href="/api/thumb?src=${encodeURIComponent(src)}&w=800" fetchpriority="high">`;
+      }
+    }
+  } catch {}
+  return '';
+}
+
+const PORTAL_PRECONNECT = '<link rel="preconnect" href="https://portal.outbackelectronics.com.au">';
+
+function serveIndexWithOg(res, og, pathname) {
   const distPath = path.join(__dirname, 'dist', 'index.html');
   fs.readFile(distPath, 'utf8', (err, template) => {
     if (err) return sendErrorPage(res, 404, 'Not found', ERROR_404_HTML);
     const ogType = og.type === 'product' ? 'product' : 'website';
+    const isHome = pathname === '/' || pathname === '/shop';
+    const extraHead = (isHome ? getHeroImagePreload() + '\n' : '') + PORTAL_PRECONNECT;
     const html = template
+      .replace(/<\/head>/, `${extraHead}\n</head>`)
       .replace(/<title>[^<]*<\/title>/, `<title>${escOg(og.title)}</title>`)
       .replace(/<meta name="description"[^>]*\/?>/, `<meta name="description" content="${escOg(og.description)}" />`)
       .replace(/<meta property="og:title"[^>]*\/?>/, `<meta property="og:title" content="${escOg(og.title)}" />`)
@@ -2941,7 +2960,7 @@ const mainServer = http.createServer(async (req, res) => {
   // Inject per-route OG tags for social crawlers (Facebook, Slack, iMessage, etc.)
   if (req.method === 'GET') {
     const og = resolveOgTags(url.pathname);
-    if (og) return serveIndexWithOg(res, og);
+    if (og) return serveIndexWithOg(res, og, url.pathname);
   }
 
   // ── Universal customer auth (same endpoints on every server) ─────────────────
