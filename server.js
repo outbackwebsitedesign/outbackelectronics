@@ -5550,6 +5550,14 @@ const toolsServer = http.createServer(async (req, res) => {
     return json(res, 200, { shop, flags: flags || {}, portalUrl: getPortalUrl(), forumUrl: getForumUrl(), gamesUrl: getGamesUrl(), toolsUrl: getToolsUrl() });
   }
 
+  if (req.method === 'GET' && url.pathname === '/api/catalog/products') {
+    return json(res, 200, { items: readProducts().filter(p => p.status === 'published') });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/catalog/services') {
+    return json(res, 200, { items: readServices().filter(s => s.status === 'published') });
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/announcement') {
     const { announcement } = readSettings();
     if (!announcement.enabled) return json(res, 200, { active: false });
