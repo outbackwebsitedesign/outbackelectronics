@@ -362,33 +362,6 @@ function AccountPlaceholderPage({ title, portalPath }) {
   );
 }
 
-function AccountDashboardPage({ go }) {
-  return (
-    <>
-      <PageHead crumbs={['Outback', 'Account']} title="Account Dashboard"
-        lead="Manage your account, view orders, and jump to your support options."
-      />
-      <section className="container" style={{paddingTop:32, paddingBottom:48}}>
-        <div className="grid-2" style={{gap:20}}>
-          <div className="card-paper" style={{padding:24}}>
-            <span className="eyebrow">ORDERS</span>
-            <h3 className="serif" style={{fontSize:30, marginTop:8}}>Track recent purchases</h3>
-            <p style={{marginTop:10, color:'var(--ink-2)'}}>Open your order history to check progress, invoices, and shipment updates.</p>
-            <button className="btn btn-rust" style={{marginTop:16}} onClick={() => go('orders')}>Go to My Orders →</button>
-          </div>
-          <div className="card-paper" style={{padding:24}}>
-            <span className="eyebrow">SUPPORT</span>
-            <h3 className="serif" style={{fontSize:30, marginTop:8}}>Need help with an order?</h3>
-            <p style={{marginTop:10, color:'var(--ink-2)'}}>Our support team can help with tracking issues, returns, or changes.</p>
-            <button className="btn btn-ghost" style={{marginTop:16}} onClick={() => go('contact')}>Contact support</button>
-          </div>
-        </div>
-      </section>
-    </>
-  );
-}
-
-
 function UtilityBar({ go }) {
   const shop = useShop();
   return (
@@ -1533,7 +1506,7 @@ window.__ShopContext__ = ShopContext;
 Object.assign(window, { PageHead, PRIMARY_PAGES, UTILITY_PAGES });
 window.OE_PAGES = Object.assign(window.OE_PAGES || {}, {
   register: RegisterPage,
-  account: AccountDashboardPage,
+  account: () => <AccountPlaceholderPage title="Account Dashboard" portalPath="/account" />,
   orders: () => <AccountPlaceholderPage title="My Orders" portalPath="/orders" />,
   profile: () => <AccountPlaceholderPage title="Profile" portalPath="/profile" />,
   subscriptions: () => <AccountPlaceholderPage title="My Subscriptions" portalPath="/subscriptions" />,
