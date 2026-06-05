@@ -2936,6 +2936,7 @@ const mainServer = http.createServer(async (req, res) => {
 // ── Forum server (8081) ───────────────────────────────────────────────────────
 
 const forumServer = http.createServer(async (req, res) => {
+  try {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
   if (checkMaintenance(req, res, url)) return;
@@ -3178,6 +3179,10 @@ const forumServer = http.createServer(async (req, res) => {
   }
 
   return serveStatic(req, res, url.pathname, '/dist/forum.html', null);
+  } catch (err) {
+    console.error('[forumServer] unhandled error:', err);
+    if (!res.headersSent) json(res, 500, { error: 'server_error', message: 'An unexpected error occurred.' });
+  }
 });
 
 // ── Admin server (8082) ───────────────────────────────────────────────────────
@@ -4716,6 +4721,7 @@ const PORTAL_CORS_ORIGINS = new Set([
 ].filter(Boolean));
 
 const portalServer = http.createServer(async (req, res) => {
+  try {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
   if (checkMaintenance(req, res, url)) return;
@@ -5223,6 +5229,10 @@ const portalServer = http.createServer(async (req, res) => {
   }
 
   return serveStatic(req, res, url.pathname, '/dist/portal.html', null);
+  } catch (err) {
+    console.error('[portalServer] unhandled error:', err);
+    if (!res.headersSent) json(res, 500, { error: 'server_error', message: 'An unexpected error occurred.' });
+  }
 });
 
 // ── Games server (8084) ───────────────────────────────────────────────────────
@@ -5255,6 +5265,16 @@ const gamesServer = http.createServer(async (req, res) => {
     console.error('[gamesServer] unhandled error:', err);
     if (!res.headersSent) json(res, 500, { error: 'server_error' });
   }
+});
+
+// ── Global crash guards — keep the process alive on unexpected throws ─────────
+
+process.on('uncaughtException', (err) => {
+  console.error('[process] uncaughtException — continuing:', err);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[process] unhandledRejection — continuing:', reason);
 });
 
 // ── Start all servers ─────────────────────────────────────────────────────────
