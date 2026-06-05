@@ -175,6 +175,21 @@ function atomicWriteFile(filePath, data) {
   fs.renameSync(tmp, filePath);
 }
 
+// Per-key async mutex — serialises concurrent read-modify-write operations on
+// shared data files so a later write can never clobber an earlier one.
+const _locks = new Map();
+async function withFileLock(key, fn) {
+  const prev = _locks.get(key) || Promise.resolve();
+  let release;
+  const held = new Promise(r => { release = r; });
+  _locks.set(key, held);
+  try { await prev; } catch {}
+  try { return await fn(); } finally { release(); }
+}
+// Single lock key for all checkout/webhook financial writes (orders + gift cards
+// + rewards). A hierarchy of per-file locks would risk deadlock; one key is safe.
+const CHECKOUT_LOCK = 'checkout';
+
 function readCarts() {
   try { const p = JSON.parse(fs.readFileSync(CARTS_DB_PATH, 'utf8')); return Array.isArray(p.carts) ? p.carts : []; } catch { return []; }
 }
@@ -2305,44 +2320,40 @@ const mainServer = http.createServer(async (req, res) => {
     }
 
     if (gcDiscount >= orderGross && gcObject) {
-      // Redeem gift card balance
-      const gcList = readGiftCards();
-      const gcIdx = gcList.findIndex(c => c.code === gcCodeNorm);
-      if (gcIdx >= 0) {
+      // Hold the checkout lock for the entire read-modify-write so concurrent
+      // requests with the same gift card code cannot both succeed.
+      const gcResult = await withFileLock(CHECKOUT_LOCK, async () => {
+        // Re-read and re-validate inside the lock to prevent double-spend.
+        const gcList = readGiftCards();
+        const gcIdx = gcList.findIndex(c => c.code === gcCodeNorm && !c.isVoid && c.balance >= gcDiscount);
+        if (gcIdx < 0) return null; // balance already spent by a concurrent request
+        const allOrders = readOrders();
+        const maxNum = allOrders.reduce((max, o) => { const m = String(o.id || '').match(/^OE-(\d+)$/); return m ? Math.max(max, parseInt(m[1])) : max; }, 1000);
+        const newOrderId = `OE-${maxNum + 1}`;
         gcList[gcIdx].balance = Math.max(0, Math.round((gcList[gcIdx].balance - gcDiscount) * 100) / 100);
-        gcList[gcIdx].redemptions = [...(gcList[gcIdx].redemptions || []), { orderId: 'pending', amount: gcDiscount, date: new Date().toISOString() }];
+        gcList[gcIdx].redemptions = [...(gcList[gcIdx].redemptions || []), { orderId: newOrderId, amount: gcDiscount, date: new Date().toISOString() }];
         writeGiftCards(gcList);
-      }
-      const allOrders = readOrders();
-      const maxNum = allOrders.reduce((max, o) => { const m = String(o.id || '').match(/^OE-(\d+)$/); return m ? Math.max(max, parseInt(m[1])) : max; }, 1000);
-      const newOrderId = `OE-${maxNum + 1}`;
-      const gcOnlyOrder = {
-        id: newOrderId,
-        cust: customerEmail || 'Online customer',
-        email: customerEmail || '',
-        items: lineItems.map(li => li.name).join(', '),
-        total: orderGross,
-        date: new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' }),
-        fulfilment: 'pending',
-        payments: [{ amount: gcDiscount, method: 'Gift Card', note: gcCodeNorm, date: new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' }) }],
-      };
-      allOrders.push(gcOnlyOrder);
-      writeOrders(allOrders);
-      // Update gift card redemption with real order ID
-      const gcList2 = readGiftCards();
-      const gcIdx2 = gcList2.findIndex(c => c.code === gcCodeNorm);
-      if (gcIdx2 >= 0) {
-        const r = gcList2[gcIdx2].redemptions || [];
-        const ri = r.findLastIndex ? r.findLastIndex(x => x.orderId === 'pending') : r.map(x => x.orderId).lastIndexOf('pending');
-        if (ri >= 0) gcList2[gcIdx2].redemptions[ri].orderId = newOrderId;
-        writeGiftCards(gcList2);
-      }
+        const gcOnlyOrder = {
+          id: newOrderId,
+          cust: customerEmail || 'Online customer',
+          email: customerEmail || '',
+          items: lineItems.map(li => li.name).join(', '),
+          total: orderGross,
+          date: new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' }),
+          fulfilment: 'pending',
+          payments: [{ amount: gcDiscount, method: 'Gift Card', note: gcCodeNorm, date: new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' }) }],
+        };
+        allOrders.push(gcOnlyOrder);
+        writeOrders(allOrders);
+        return newOrderId;
+      });
+      if (!gcResult) return json(res, 422, { error: 'invalid_gift_card', message: 'Gift card has already been used or has insufficient balance.' });
       if (validatedRewardsToken && rewardsUserId) {
         const pts = Math.round(rewardsDiscount * 100);
-        if (pts > 0) deductRewardPoints(rewardsUserId, pts, `Order ${newOrderId}`, `redeem-${newOrderId}`);
+        if (pts > 0) deductRewardPoints(rewardsUserId, pts, `Order ${gcResult}`, `redeem-${gcResult}`);
         rewardsTokens.delete(validatedRewardsToken);
       }
-      return json(res, 200, { url: `${getSiteUrl()}/order-success?order_id=${newOrderId}`, sessionId: null, fullyCoveredByGiftCard: true });
+      return json(res, 200, { url: `${getSiteUrl()}/order-success?order_id=${gcResult}`, sessionId: null, fullyCoveredByGiftCard: true });
     }
 
     const params = {
@@ -2518,11 +2529,7 @@ const mainServer = http.createServer(async (req, res) => {
       const gcCode = meta.giftCardCode || '';
       const gcDiscount = Number(meta.giftCardDiscount || 0);
 
-      const existingOrders = readOrders();
-      const maxNum = existingOrders.reduce((max, o) => {
-        const m = String(o.id || '').match(/^OE-(\d+)$/);
-        return m ? Math.max(max, parseInt(m[1])) : max;
-      }, 1000);
+      // Build shipping address outside the lock (pure computation, no I/O).
       const shippingDetails = session.shipping_details || session.shipping || {};
       const shipAddr = shippingDetails.address || details.address || {};
       const shippingAddress = [
@@ -2532,71 +2539,76 @@ const mainServer = http.createServer(async (req, res) => {
         [shipAddr.city, shipAddr.state, shipAddr.postal_code].filter(Boolean).join(' '),
         shipAddr.country || '',
       ].filter(Boolean).join(', ');
-      const order = {
-        id: `OE-${maxNum + 1}`,
-        stripeSessionId: session.id,
-        stripePaymentIntent: session.payment_intent || '',
-        cust: details.name || details.email || 'Online customer',
-        email: details.email || '',
-        phone: details.phone || '',
-        loc: [shipAddr.city, shipAddr.state].filter(Boolean).join(', ') || [details.address?.city, details.address?.country].filter(Boolean).join(', ') || '',
-        shippingAddress,
-        items: productId || 'Online order',
-        total: amountAud + gcDiscount,
-        date: new Date().toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' }),
-        fulfilment: 'pending',
-        payments: [{
-          amount: amountAud,
-          method: 'Stripe',
-          note: `Session ${session.id}`,
-          date: new Date().toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' }),
-        }],
-      };
-      if (gcCode && gcDiscount > 0) {
-        order.payments.push({
-          amount: gcDiscount,
-          method: 'Gift Card',
-          note: gcCode,
-          date: new Date().toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' }),
-        });
-      }
 
-      const orders = readOrders();
-      const existingOrderId = meta.existingOrderId || '';
-      const existingIdx = existingOrderId ? orders.findIndex(o => o.id === existingOrderId) : orders.findIndex(o => o.stripeSessionId === session.id);
-      if (existingIdx >= 0 && existingOrderId) {
-        // Payment for a pre-existing order (e.g. from accepted quote)
-        const existing = orders[existingIdx];
-        const payment = { amount: amountAud, method: 'Stripe', note: `Session ${session.id}`, date: new Date().toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' }) };
-        orders[existingIdx] = { ...existing, stripeSessionId: session.id, payments: [...(existing.payments || []), payment] };
-        writeOrders(orders);
-        // Credit seller for existing-order payment path
-        const existingProductId = meta.productId || '';
-        if (existingProductId) {
-          const prod = readProducts().find(p => p.id === existingProductId);
-          if (prod && prod.createdBy && prod.sellerPrice != null) {
-            const txns = readSellerLedger();
-            txns.push({
-              id: 'txn-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
-              sellerId: prod.createdBy,
-              type: 'sale_credit',
-              amount: prod.sellerPrice,
-              description: `Sale: ${prod.name || existingProductId}`,
-              date: new Date().toISOString(),
-              orderId: existing.id,
-              status: 'ok',
-            });
-            writeSellerLedger(txns);
+      // All order/GC/rewards writes are held under CHECKOUT_LOCK to prevent
+      // concurrent webhook deliveries from generating duplicate order IDs or
+      // double-spending the same gift card balance.
+      const webhookEmails = await withFileLock(CHECKOUT_LOCK, async () => {
+        const orders = readOrders();
+        const existingOrderId = meta.existingOrderId || '';
+        const existingIdx = existingOrderId
+          ? orders.findIndex(o => o.id === existingOrderId)
+          : orders.findIndex(o => o.stripeSessionId === session.id);
+
+        if (existingIdx >= 0 && existingOrderId) {
+          // Payment for a pre-existing order (e.g. from accepted quote)
+          const existing = orders[existingIdx];
+          const payment = { amount: amountAud, method: 'Stripe', note: `Session ${session.id}`, date: new Date().toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' }) };
+          orders[existingIdx] = { ...existing, stripeSessionId: session.id, payments: [...(existing.payments || []), payment] };
+          writeOrders(orders);
+          const existingProductId = meta.productId || '';
+          if (existingProductId) {
+            const prod = readProducts().find(p => p.id === existingProductId);
+            if (prod && prod.createdBy && prod.sellerPrice != null) {
+              const txns = readSellerLedger();
+              txns.push({
+                id: 'txn-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+                sellerId: prod.createdBy,
+                type: 'sale_credit',
+                amount: prod.sellerPrice,
+                description: `Sale: ${prod.name || existingProductId}`,
+                date: new Date().toISOString(),
+                orderId: existing.id,
+                status: 'ok',
+              });
+              writeSellerLedger(txns);
+            }
           }
+          return { type: 'existing', orderId: existing.id, cust: existing.cust, email: existing.email || details.email, items: existing.items, amountAud };
         }
-        const customerEmail = existing.email || details.email;
-        if (customerEmail) {
-          const tmpl = emailOrderConfirmation({ orderId: existing.id, customerName: existing.cust || details.name, amountAud, items: existing.items });
-          sendEmail({ to: customerEmail, ...tmpl });
+
+        if (orders.find(o => o.stripeSessionId === session.id)) return null; // already processed (idempotent)
+
+        // Generate a collision-free order ID from the freshly-read list.
+        const maxNum = orders.reduce((max, o) => { const m = String(o.id || '').match(/^OE-(\d+)$/); return m ? Math.max(max, parseInt(m[1])) : max; }, 1000);
+        const order = {
+          id: `OE-${maxNum + 1}`,
+          stripeSessionId: session.id,
+          stripePaymentIntent: session.payment_intent || '',
+          cust: details.name || details.email || 'Online customer',
+          email: details.email || '',
+          phone: details.phone || '',
+          loc: [shipAddr.city, shipAddr.state].filter(Boolean).join(', ') || [details.address?.city, details.address?.country].filter(Boolean).join(', ') || '',
+          shippingAddress,
+          items: productId || 'Online order',
+          total: amountAud + gcDiscount,
+          date: new Date().toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+          fulfilment: 'pending',
+          payments: [{
+            amount: amountAud,
+            method: 'Stripe',
+            note: `Session ${session.id}`,
+            date: new Date().toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' }),
+          }],
+        };
+        if (gcCode && gcDiscount > 0) {
+          order.payments.push({
+            amount: gcDiscount,
+            method: 'Gift Card',
+            note: gcCode,
+            date: new Date().toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' }),
+          });
         }
-        const staffTmpl = emailStaffNewOrder({ orderId: existing.id, customerName: existing.cust || details.name || details.email, amountAud, items: existing.items });
-        sendEmail({ to: getNotifyEmail(), ...staffTmpl });
-      } else if (!orders.find(o => o.stripeSessionId === session.id)) {
         orders.push(order);
         writeOrders(orders);
 
@@ -2633,7 +2645,7 @@ const mainServer = http.createServer(async (req, res) => {
           deductStoreCredit(storeCreditUserId, storeCreditAmount, `Order ${order.id}`, `redeem-${order.id}`);
         }
 
-        // Deduct gift card balance
+        // Deduct gift card balance (re-read inside lock so balance is current)
         if (gcCode && gcDiscount > 0) {
           const gcList = readGiftCards();
           const gc = gcList.find(c => c.code === gcCode);
@@ -2657,6 +2669,7 @@ const mainServer = http.createServer(async (req, res) => {
 
         // Activate membership subscription if this was a membership purchase
         const membershipTierId = meta.membershipTierId || '';
+        let membershipWelcomeEmail = null;
         if (membershipTierId && details.email) {
           const mb = readMemberships();
           const tier = mb.tiers.find(t => t.id === membershipTierId);
@@ -2664,7 +2677,6 @@ const mainServer = http.createServer(async (req, res) => {
             const forum = readForum();
             const user = (forum.users || []).find(u => u.email && u.email.toLowerCase() === details.email.toLowerCase());
             if (user) {
-              // Cancel any existing active subscription first
               mb.subscriptions = mb.subscriptions.map(s =>
                 s.username === user.username && s.status === 'active'
                   ? { ...s, status: 'cancelled', cancelledAt: new Date().toISOString(), cancelReason: 'replaced_by_new_purchase' }
@@ -2679,25 +2691,34 @@ const mainServer = http.createServer(async (req, res) => {
                 orderId: order.id,
               });
               writeMemberships(mb);
-              const tmpl = emailMembershipWelcome({ customerName: user.displayName || user.username, tierName: tier.name });
-              sendEmail({ to: user.email, ...tmpl });
+              membershipWelcomeEmail = { to: user.email, tmpl: emailMembershipWelcome({ customerName: user.displayName || user.username, tierName: tier.name }) };
             } else {
               // No portal account yet — tag the order so admin can activate manually
-              order.pendingMembershipActivation = { tierId: membershipTierId, email: details.email };
               const updatedOrders = readOrders();
               const idx = updatedOrders.findIndex(o => o.stripeSessionId === session.id);
-              if (idx >= 0) { updatedOrders[idx] = order; writeOrders(updatedOrders); }
+              if (idx >= 0) {
+                updatedOrders[idx] = { ...updatedOrders[idx], pendingMembershipActivation: { tierId: membershipTierId, email: details.email } };
+                writeOrders(updatedOrders);
+              }
             }
           }
         }
 
-        const customerEmail = details.email;
-        if (customerEmail) {
-          const tmpl = emailOrderConfirmation({ orderId: order.id, customerName: details.name, amountAud: order.total, items: order.items });
-          sendEmail({ to: customerEmail, ...tmpl });
+        return { type: 'new', order, membershipWelcomeEmail };
+      });
+
+      // Send emails outside the lock.
+      if (webhookEmails) {
+        if (webhookEmails.type === 'existing') {
+          const { orderId, cust, email: custEmail, items, amountAud: amt } = webhookEmails;
+          if (custEmail) sendEmail({ to: custEmail, ...emailOrderConfirmation({ orderId, customerName: cust || details.name, amountAud: amt, items }) });
+          sendEmail({ to: getNotifyEmail(), ...emailStaffNewOrder({ orderId, customerName: cust || details.name || details.email, amountAud: amt, items }) });
+        } else if (webhookEmails.type === 'new') {
+          const { order, membershipWelcomeEmail } = webhookEmails;
+          if (membershipWelcomeEmail) sendEmail({ to: membershipWelcomeEmail.to, ...membershipWelcomeEmail.tmpl });
+          if (details.email) sendEmail({ to: details.email, ...emailOrderConfirmation({ orderId: order.id, customerName: details.name, amountAud: order.total, items: order.items }) });
+          sendEmail({ to: getNotifyEmail(), ...emailStaffNewOrder({ orderId: order.id, customerName: details.name || details.email, amountAud: order.total, items: order.items }) });
         }
-        const staffTmpl = emailStaffNewOrder({ orderId: order.id, customerName: details.name || details.email, amountAud: order.total, items: order.items });
-        sendEmail({ to: getNotifyEmail(), ...staffTmpl });
       }
     }
 
