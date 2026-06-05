@@ -1011,23 +1011,53 @@ function resolveOgTags(pathname) {
 const ESC_HTML_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 function escOg(s) { return String(s || '').replace(/[&<>"]/g, c => ESC_HTML_MAP[c]); }
 
+let _heroPreloadCache = { html: '', expires: 0 };
 function getHeroImagePreload() {
+  // Recomputing this reads + parses products.db on every home-page request.
+  // Cache for a short window so the document TTFB stays low under load.
+  const now = Date.now();
+  if (now < _heroPreloadCache.expires) return _heroPreloadCache.html;
+  const html = _computeHeroImagePreload();
+  _heroPreloadCache = { html, expires: now + 30000 };
+  return html;
+}
+function _computeHeroImagePreload() {
   try {
     const products = readProducts().filter(p => p.status === 'published');
     const hero = products.find(p => p.infiniteStock || p.stock > 0) || products[0];
     if (hero && hero.images && hero.images.length > 0) {
       const src = hero.images[0];
       if (src.startsWith('/assets/uploads/')) {
-        return `<link rel="preload" as="image" href="/api/thumb?src=${encodeURIComponent(src)}&w=800" fetchpriority="high">`;
+        const u = w => `/api/thumb?src=${encodeURIComponent(src)}&w=${w}`;
+        const srcset = [400, 600, 800].map(w => `${u(w)} ${w}w`).join(', ');
+        // Mirror the hero <img> srcset/sizes so the preload matches the variant
+        // the browser actually picks — no wasted second download.
+        return `<link rel="preload" as="image" href="${u(800)}" imagesrcset="${srcset}" imagesizes="(max-width: 900px) 100vw, 400px" fetchpriority="high">`;
       }
     }
   } catch {}
   return '';
 }
 
+let _indexTemplateCache = { template: null, mtimeMs: 0 };
+function readIndexTemplate(distPath, cb) {
+  // The base index.html never changes between deploys; avoid re-reading it from
+  // disk on every document request. Invalidate via mtime so a deploy is picked up.
+  fs.stat(distPath, (statErr, stat) => {
+    if (!statErr && _indexTemplateCache.template != null && stat.mtimeMs === _indexTemplateCache.mtimeMs) {
+      return cb(null, _indexTemplateCache.template);
+    }
+    fs.readFile(distPath, 'utf8', (err, template) => {
+      if (err) return cb(err);
+      if (!statErr) _indexTemplateCache = { template, mtimeMs: stat.mtimeMs };
+      cb(null, template);
+    });
+  });
+}
+
 function serveIndexWithOg(res, og, pathname) {
   const distPath = path.join(__dirname, 'dist', 'index.html');
-  fs.readFile(distPath, 'utf8', (err, template) => {
+  readIndexTemplate(distPath, (err, template) => {
     if (err) return sendErrorPage(res, 404, 'Not found', ERROR_404_HTML);
     const ogType = og.type === 'product' ? 'product' : 'website';
     const isHome = pathname === '/' || pathname === '/shop';

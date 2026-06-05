@@ -8,6 +8,13 @@ function thumbUrl(src, w) {
   return `/api/thumb?src=${encodeURIComponent(src)}&w=${w}`;
 }
 
+// Responsive srcset so the browser downloads an image sized for the actual
+// display + device pixel ratio instead of always pulling the largest variant.
+function thumbSrcSet(src, widths) {
+  if (!src || !src.startsWith('/assets/uploads/')) return undefined;
+  return widths.map(w => `${thumbUrl(src, w)} ${w}w`).join(', ');
+}
+
 function getCsrf() {
   return document.cookie.split(';').reduce((v, c) => {
     const [k, val] = c.trim().split('=');
@@ -113,7 +120,7 @@ function HomePage({ go, addToCart, portalUser }) {
             </div>
             <div className="hero-image" style={{position:'relative'}}>
               {heroProduct && heroProduct.images && heroProduct.images.length > 0
-                ? <img src={thumbUrl(heroProduct.images[0], 800)} alt={heroProduct.name} fetchpriority="high" style={{width:'100%', aspectRatio:'4/5', objectFit:'cover', display:'block'}} />
+                ? <img src={thumbUrl(heroProduct.images[0], 800)} srcSet={thumbSrcSet(heroProduct.images[0], [400, 600, 800])} sizes="(max-width: 900px) 100vw, 400px" alt={heroProduct.name} fetchpriority="high" style={{width:'100%', aspectRatio:'4/5', objectFit:'cover', display:'block'}} />
                 : <div className="slot slot-rust" style={{aspectRatio: '4/5'}}>RUGGED LAPTOP ON RED-DIRT WORKBENCH</div>}
               {heroProduct && (
                 <div className="card-paper" style={{position:'absolute', bottom:16, left:16, padding:18, width:240, boxShadow:'var(--shadow)'}}>
@@ -304,7 +311,7 @@ function ProductCard({ p, onClick }) {
   return (
     <div className="product" onClick={onClick}>
       {thumb
-        ? <img src={thumbUrl(thumb, 600)} alt={p.name} loading="lazy" style={{width:'100%', aspectRatio:'4/3', objectFit:'cover', display:'block'}} />
+        ? <img src={thumbUrl(thumb, 600)} srcSet={thumbSrcSet(thumb, [300, 450, 600])} sizes="(max-width: 600px) 50vw, (max-width: 1100px) 33vw, 300px" alt={p.name} loading="lazy" style={{width:'100%', aspectRatio:'4/3', objectFit:'cover', display:'block'}} />
         : <div className="slot" style={{aspectRatio:'4/3'}}>{p.name.toUpperCase()}</div>}
       <div className="body">
         <div className="meta">{p.cond} · {displaySku}</div>
