@@ -603,8 +603,6 @@ async function parseForumPayload(res, req, validate) {
   return parsed.body;
 }
 
-// Only trust X-Forwarded-For when the direct connection comes from a known private/loopback proxy.
-// Otherwise use the socket address directly to prevent IP spoofing via crafted headers.
 function isPrivateIp(ip) {
   if (!ip) return false;
   return ip === '127.0.0.1' || ip === '::1' ||
@@ -613,13 +611,20 @@ function isPrivateIp(ip) {
     /^192\.168\./.test(ip) ||
     /^::ffff:(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)/.test(ip);
 }
+
 function getIp(req) {
-  // Cloudflare sets CF-Connecting-IP to the real visitor IP — prefer it.
-  const cf = (req.headers['cf-connecting-ip'] || '').trim();
-  if (cf) return cf;
-  const forwarded = (req.headers['x-forwarded-for'] || '').split(',')[0].trim();
-  if (forwarded) return forwarded;
-  return req.socket.remoteAddress || 'unknown';
+  const remoteIp = req.socket.remoteAddress || 'unknown';
+  // With a Cloudflare Tunnel (cloudflared), all traffic arrives via loopback (127.0.0.1),
+  // so isPrivateIp is sufficient to identify trusted proxy connections. Only trust
+  // CF-Connecting-IP / X-Forwarded-For from private/loopback addresses to prevent spoofing
+  // if the tunnel is ever misconfigured and a port is exposed directly.
+  if (isPrivateIp(remoteIp)) {
+    const cf = (req.headers['cf-connecting-ip'] || '').trim();
+    if (cf) return cf;
+    const forwarded = (req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+    if (forwarded) return forwarded;
+  }
+  return remoteIp;
 }
 
 function isSecureRequest(req) {

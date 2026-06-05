@@ -66,10 +66,10 @@ Note: path traversal *out* of `__dirname` is correctly blocked (Node's `new URL`
 **Impact:** High — full admin compromise from the lowest privileged account.
 **Effort:** S. **Fix:** whitelist editable fields; never let a non‑owner set `role`/`status`.
 
-### 🟠 H2 — Rate limiting, lockout, and IP allowlist are trivially bypassable (IP spoofing)
+### ✅ H2 — Rate limiting, lockout, and IP allowlist are trivially bypassable (IP spoofing) — **FIXED**
 **Where:** `getIp()` `server.js:549‑556`; dead anti‑spoof code `isPrivateIp()` `server.js:541‑548`.
 **What:** `getIp` blindly trusts `CF‑Connecting‑IP` then `X‑Forwarded‑For`. The comment (`:539‑540`) claims XFF is only trusted from private proxies, and `isPrivateIp` implements exactly that — **but `isPrivateIp` is never called.** If the origin is reachable directly (origin IPs are routinely discovered), an attacker rotates `CF‑Connecting‑IP:` per request to defeat the admin 5‑attempt/15‑min lockout (`:677‑684`), the customer‑login lockout, the admin IP allowlist (`isIpAllowed`), and every public bucket (checkout, register, forgot/reset‑password, quote, contact). Enables unthrottled credential brute‑force and form spam.
-**Impact:** High. **Effort:** S. **Fix:** only trust `CF‑Connecting‑IP`/XFF when `req.socket.remoteAddress` is a known proxy (use the already‑written `isPrivateIp`); lock origin ingress to Cloudflare IP ranges at the firewall.
+**Impact:** High. **Effort:** S. **Fix applied:** `getIp()` now checks `isPrivateIp(req.socket.remoteAddress)` before trusting `CF‑Connecting‑IP` or `X‑Forwarded‑For`. With a Cloudflare Tunnel (`cloudflared`), all inbound traffic arrives via loopback (`127.0.0.1`) — no origin port is publicly exposed, so there is no direct‑bypass vector; the private‑IP check is sufficient and correct.
 
 ### 🟠 H3 — Read‑modify‑write races → gift‑card / rewards double‑spend, lost updates
 **Where:** `atomicWriteFile` `server.js:143‑147` + every `read*()/…await…/write*()` handler (e.g. gift‑card redemption `server.js:2161‑2234`, webhook balance decrement `:2502‑2511`, rewards redemption, order‑id `OE-${max+1}`).
