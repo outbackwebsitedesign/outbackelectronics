@@ -1852,6 +1852,13 @@ function getGamesUrl() {
     return base.replace(/(:\d+)?(\/|$)/, ':8084$2');
   return base.replace(/^(https?:\/\/)/, '$1games.');
 }
+function getToolsUrl() {
+  if (TOOLS_URL) return TOOLS_URL;
+  const base = getSiteUrl();
+  if (/^https?:\/\/(localhost|127\.|0\.0\.0\.0)(:\d+)?/.test(base))
+    return base.replace(/(:\d+)?(\/|$)/, ':8085$2');
+  return base.replace(/^(https?:\/\/)/, '$1tools.');
+}
 function getAdminUsername() {
   try { return readSettings().security?.adminUsername || ADMIN_USERNAME; } catch { return ADMIN_USERNAME; }
 }
@@ -2112,6 +2119,7 @@ const mainServer = http.createServer(async (req, res) => {
       portalUrl: getPortalUrl(),
       forumUrl: getForumUrl(),
       gamesUrl: getGamesUrl(),
+      toolsUrl: getToolsUrl(),
     });
   }
 

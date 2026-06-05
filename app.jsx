@@ -25,9 +25,11 @@ const SITE_FLAGS = Object.assign(
 let _PORTAL_URL = 'https://portal.outbackelectronics.com.au';
 let _FORUM_URL  = 'https://forum.outbackelectronics.com.au';
 let _GAMES_URL  = 'https://games.outbackelectronics.com.au';
+let _TOOLS_URL  = 'https://tools.outbackelectronics.com.au';
 function getPortalUrl() { return _PORTAL_URL; }
 function getForumUrl()  { return _FORUM_URL; }
 function getGamesUrl()  { return _GAMES_URL; }
+function getToolsUrl()  { return _TOOLS_URL; }
 
 // ---------------- Scroll Reveal Hook ----------------
 function useReveal(options = {}) {
@@ -79,7 +81,7 @@ function SearchOverlay({ go, onClose }) {
   }, []);
 
   const allPages = [
-    ...PRIMARY_PAGES.filter(p => p.id !== 'forum-link' && p.id !== 'games-link'),
+    ...PRIMARY_PAGES.filter(p => !isExternalLink(p.id)),
     ...UTILITY_PAGES,
   ];
 
@@ -100,8 +102,7 @@ function SearchOverlay({ go, onClose }) {
 
   const pick = (item) => {
     if (item._isProduct) { go('product', item); onClose(); return; }
-    if (item.id === 'forum-link') { window.location.href = getForumUrl(); return; }
-    if (item.id === 'games-link') { window.location.href = getGamesUrl(); return; }
+    if (isExternalLink(item.id)) { window.location.href = externalHref(item.id); return; }
     go(item.id);
     onClose();
   };
@@ -305,10 +306,20 @@ const PRIMARY_PAGES = [
   { id: 'ewaste', label: 'eWaste' },
   { id: 'ai', label: 'AI' },
   { id: 'tutorials', label: 'Tutorials' },
+  { id: 'tools-link', label: 'Tools' },
   { id: 'forum-link', label: 'Forum' },
   { id: 'games-link', label: 'Games' },
   { id: 'groups', label: 'Groups' },
 ];
+// Pages served from their own subdomain (tools./forum./games.) — clicking these
+// navigates the browser to the external service rather than SPA-routing.
+const EXTERNAL_LINKS = {
+  'forum-link': getForumUrl,
+  'games-link': getGamesUrl,
+  'tools-link': getToolsUrl,
+};
+const isExternalLink = (id) => Object.prototype.hasOwnProperty.call(EXTERNAL_LINKS, id);
+const externalHref = (id) => EXTERNAL_LINKS[id] ? EXTERNAL_LINKS[id]() : null;
 const UTILITY_PAGES = [
   { id: 'quote', label: 'Request a Quote' },
   { id: 'gift-cards', label: 'Gift Cards' },
@@ -407,6 +418,7 @@ function useShopInfo() {
         if (d.portalUrl) _PORTAL_URL = d.portalUrl;
         if (d.forumUrl)  _FORUM_URL  = d.forumUrl;
         if (d.gamesUrl)  _GAMES_URL  = d.gamesUrl;
+        if (d.toolsUrl)  _TOOLS_URL  = d.toolsUrl;
         setInfo({
           shop: d.shop || {},
           flags: d.flags || {},
@@ -456,8 +468,7 @@ function TopNav({ page, go, cart, onSearchOpen, accountOpen, setAccountOpen, por
 
   const handleNavClick = (id) => {
     setMobileMenuOpen(false);
-    if (id === 'forum-link') window.location.href = getForumUrl();
-    else if (id === 'games-link') window.location.href = getGamesUrl();
+    if (isExternalLink(id)) window.location.href = externalHref(id);
     else go(id);
   };
 
@@ -472,10 +483,10 @@ function TopNav({ page, go, cart, onSearchOpen, accountOpen, setAccountOpen, por
             {PRIMARY_PAGES.map(p => (
               <a
                 key={p.id}
-                href={p.id === 'forum-link' ? getForumUrl() : p.id === 'games-link' ? getGamesUrl() : `/${p.id}`}
+                href={isExternalLink(p.id) ? externalHref(p.id) : `/${p.id}`}
                 className={page === p.id ? 'active' : ''}
-                onClick={(p.id === 'forum-link' || p.id === 'games-link') ? undefined : (e) => { e.preventDefault(); go(p.id); }}
-                {...((p.id === 'forum-link' || p.id === 'games-link') ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                onClick={isExternalLink(p.id) ? undefined : (e) => { e.preventDefault(); go(p.id); }}
+                {...(isExternalLink(p.id) ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
               >
                 {p.label}
               </a>
@@ -523,10 +534,10 @@ function TopNav({ page, go, cart, onSearchOpen, accountOpen, setAccountOpen, por
           </div>
           {PRIMARY_PAGES.map(p => (
             <a key={p.id}
-              href={p.id === 'forum-link' ? getForumUrl() : p.id === 'games-link' ? getGamesUrl() : `/${p.id}`}
+              href={isExternalLink(p.id) ? externalHref(p.id) : `/${p.id}`}
               className={page === p.id ? 'active' : ''}
-              onClick={(p.id === 'forum-link' || p.id === 'games-link') ? undefined : (e) => { e.preventDefault(); handleNavClick(p.id); }}
-              {...((p.id === 'forum-link' || p.id === 'games-link') ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>
+              onClick={isExternalLink(p.id) ? undefined : (e) => { e.preventDefault(); handleNavClick(p.id); }}
+              {...(isExternalLink(p.id) ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>
               {p.label}
             </a>
           ))}
