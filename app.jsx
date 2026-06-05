@@ -590,12 +590,12 @@ function Footer({ go }) {
                 <div className="sub" style={{color:'var(--ochre)'}}>{shop.tagline}</div>
               </div>
             </div>
-            <p style={{marginTop: 18, fontSize: 13, color: 'var(--ink-3)', maxWidth: 360, lineHeight: 1.6}}>
+            <p style={{marginTop: 18, fontSize: 13, color: 'var(--ink-on-dark-muted)', maxWidth: 360, lineHeight: 1.6}}>
               {shop.description}
             </p>
           </div>
           <div>
-            <h5>Shop</h5>
+            <h3>Shop</h3>
             <ul>
               {topCategories.map((cat) => (
                 <li key={cat}><a href="/shop" onClick={(e) => { e.preventDefault(); go('shop', { initialCat: cat }); }}>{cat}</a></li>
@@ -603,7 +603,7 @@ function Footer({ go }) {
             </ul>
           </div>
           <div>
-            <h5>Services</h5>
+            <h3>Services</h3>
             <ul>
               {footerServices.map((svc) => (
                 <li key={svc.id}><a href={`/service/${svc.slug || svc.id}`} onClick={(e) => { e.preventDefault(); go('service', svc); }}>{svc.name}</a></li>
@@ -611,7 +611,7 @@ function Footer({ go }) {
             </ul>
           </div>
           <div>
-            <h5>Community</h5>
+            <h3>Community</h3>
             <ul>
               <li><a href="/tutorials" onClick={(e) => { e.preventDefault(); go('tutorials'); }}>Tutorials</a></li>
               <li><a href="/groups" onClick={(e) => { e.preventDefault(); go('groups'); }}>Groups</a></li>
@@ -621,8 +621,8 @@ function Footer({ go }) {
             </ul>
           </div>
           <div>
-            <h5>Visit</h5>
-            <ul style={{color:'var(--ink-3)'}}>
+            <h3>Visit</h3>
+            <ul style={{color:'var(--ink-on-dark-muted)'}}>
               <li>{shop.address}<br/>No public access, arrive by appointment only.</li>
               {shop.phone && <li>{shop.phone}</li>}
               <li><a href="/contact" onClick={(e) => { e.preventDefault(); go('contact'); }} style={{color:'var(--ochre)'}}>Get directions →</a></li>
