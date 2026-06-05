@@ -771,6 +771,14 @@ function memberCanAccess(username, requiredTierId) {
 
 // ── Static file serving ───────────────────────────────────────────────────────
 
+// Only files under these directories may be served. Data files (.db), .env,
+// server.js, logs, etc. live in __dirname but must never be web-accessible.
+const ALLOWED_SERVE_ROOTS = [
+  path.join(__dirname, 'dist') + '/',
+  path.join(__dirname, 'public') + '/',
+  path.join(__dirname, 'assets') + '/',
+];
+
 // spaRoutes: Set of route names to serve rootFile for (main SPA).
 // Pass null to serve rootFile for all non-asset paths (forum/admin/portal).
 function serveStatic(req, res, urlPath, rootFile, spaRoutes = null) {
@@ -800,7 +808,7 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null) {
   const tryRead = (paths, idx) => {
     if (idx >= paths.length) { return sendErrorPage(res, 404, 'Not found', ERROR_404_HTML); }
     const filePath = paths[idx];
-    if (!filePath.startsWith(__dirname)) { return sendErrorPage(res, 403, 'Forbidden', ERROR_403_HTML); }
+    if (!ALLOWED_SERVE_ROOTS.some(root => filePath.startsWith(root))) { return sendErrorPage(res, 403, 'Forbidden', ERROR_403_HTML); }
     fs.readFile(filePath, (err, data) => {
       if (err) return tryRead(paths, idx + 1);
       const ext = path.extname(filePath).toLowerCase();
