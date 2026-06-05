@@ -5188,6 +5188,8 @@ function AdminSettingsFull({ sessionInfo = {} }) {
     tagline: '',
     description: '',
     siteUrl: '',
+    acknowledgmentPeople: '',
+    acknowledgmentCountry: '',
   }), []);
   const defaultAnnouncement = useMemo(() => ({ text: '', enabled: false, expiresAt: '' }), []);
   const defaultSiteContent = useMemo(() => ({ aiHeading: '', aiBody: '', aiEnabled: false, workshopBlurb: '' }), []);
@@ -5271,6 +5273,8 @@ function AdminSettingsFull({ sessionInfo = {} }) {
         tagline: (payload.shop?.tagline || '').trim(),
         description: (payload.shop?.description || '').trim(),
         siteUrl: (payload.shop?.siteUrl || '').trim(),
+        acknowledgmentPeople: (payload.shop?.acknowledgmentPeople || '').trim(),
+        acknowledgmentCountry: (payload.shop?.acknowledgmentCountry || '').trim(),
       },
       announcement: {
         text: (payload.announcement?.text || '').trim(),
@@ -5397,6 +5401,10 @@ function AdminSettingsFull({ sessionInfo = {} }) {
           <label className="field"><span className="label">Contact email</span><input className="input" type="email" value={shop.email||''} onChange={(e) => setShop({ ...shop, email: e.target.value })}/></label>
           <label className="field"><span className="label">Tagline</span><input className="input" value={shop.tagline} onChange={(e) => setShop({ ...shop, tagline: e.target.value })}/></label>
           <label className="field"><span className="label">Description (footer)</span><textarea className="textarea" value={shop.description||''} onChange={(e) => setShop({ ...shop, description: e.target.value })} style={{minHeight:80}} placeholder="e.g. An independent electronics outpost..."/></label>
+          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:8}}>
+            <label className="field"><span className="label">Acknowledgment — People</span><input className="input" value={shop.acknowledgmentPeople||''} onChange={(e) => setShop({ ...shop, acknowledgmentPeople: e.target.value })} placeholder="e.g. Bidjara People"/></label>
+            <label className="field"><span className="label">Acknowledgment — Country</span><input className="input" value={shop.acknowledgmentCountry||''} onChange={(e) => setShop({ ...shop, acknowledgmentCountry: e.target.value })} placeholder="e.g. Bidjara Country"/></label>
+          </div>
           <label className="field">
             <span className="label">Site URL</span>
             <input className="input" value={shop.siteUrl||''} onChange={(e) => setShop({ ...shop, siteUrl: e.target.value })} placeholder="https://outbackelectronics.com.au"/>

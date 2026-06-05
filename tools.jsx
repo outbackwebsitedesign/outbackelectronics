@@ -1190,7 +1190,7 @@ function Footer() {
         </div>
         <div className="baseline">
           <span>© 2023–2026 {shop.tradingName}{shop.abn ? ` · ABN ${shop.abn}` : ''}</span>
-          <span>ACKNOWLEDGES THE BIDJARA PEOPLE AS TRADITIONAL CUSTODIANS OF BIDJARA COUNTRY</span>
+          <span>ACKNOWLEDGES THE {(shop.acknowledgmentPeople || 'BIDJARA PEOPLE').toUpperCase()} AS TRADITIONAL CUSTODIANS OF {(shop.acknowledgmentCountry || 'BIDJARA COUNTRY').toUpperCase()}</span>
         </div>
       </div>
     </footer>
