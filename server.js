@@ -614,12 +614,17 @@ function isPrivateIp(ip) {
     /^::ffff:(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)/.test(ip);
 }
 function getIp(req) {
-  // Cloudflare sets CF-Connecting-IP to the real visitor IP — prefer it.
-  const cf = (req.headers['cf-connecting-ip'] || '').trim();
-  if (cf) return cf;
-  const forwarded = (req.headers['x-forwarded-for'] || '').split(',')[0].trim();
-  if (forwarded) return forwarded;
-  return req.socket.remoteAddress || 'unknown';
+  const remoteIp = req.socket.remoteAddress || 'unknown';
+  // Only trust proxy-injected headers when the direct connection is from a known private proxy.
+  // If the origin is reachable directly, an attacker could spoof CF-Connecting-IP/XFF to bypass
+  // rate limits, lockouts, and the IP allowlist.
+  if (isPrivateIp(remoteIp)) {
+    const cf = (req.headers['cf-connecting-ip'] || '').trim();
+    if (cf) return cf;
+    const forwarded = (req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+    if (forwarded) return forwarded;
+  }
+  return remoteIp;
 }
 
 function isSecureRequest(req) {
