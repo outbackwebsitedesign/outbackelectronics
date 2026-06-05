@@ -15,6 +15,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This mistake was made once and wiped the entire live database. Do not let it happen again.
 
+## Git workflow
+
+**Always commit and push directly to `main`.** Do not create feature branches, do not open pull requests. The owner merges nothing — changes go straight to production via `git pull` on the server.
+
 ## Commands
 
 ```bash
@@ -63,7 +67,7 @@ Each entry point in `src/` (e.g. `src/main.jsx`) imports the relevant page JSX a
 
 ### Data storage
 
-No database server. All data is stored as flat JSON files in the repo root with `.db` extension (e.g. `products.db`, `orders.db`, `forum.db`). Writes use an atomic rename pattern (write to `.tmp`, then `fs.rename`). `settings.db` is merged at runtime with `settings.defaults.json`.
+No database server. All data is stored as flat JSON files in the repo root with `.db` extension (e.g. `products.db`, `orders.db`, `forum.db`). Writes use an atomic rename pattern (write to `.tmp`, then `fs.rename`). `settings.db` is the single source of truth for all settings — `readSettings()` uses inline code fallbacks for missing keys; there is no `settings.defaults.json` file.
 
 Key data files: `products.db`, `orders.db`, `customers.db`, `repairs.db`, `quotes.db`, `services.db`, `forum.db`, `staff.db`, `sellers.db`, `memberships.db`, `gift-cards.db`, `software.db`, `tutorials.db`, `carts.db`.
 
