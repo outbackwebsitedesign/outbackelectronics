@@ -86,10 +86,10 @@ Note: path traversal *out* of `__dirname` is correctly blocked (Node's `new URL`
 **What:** Any unhandled throw/rejection in a forum or portal request crashes the whole process → shop + forum + admin + portal + games all go down together. systemd restarts in ~5s, but it's a trivial, repeatable DoS and also wipes in‑memory rate‑limit state on each restart.
 **Impact:** High — availability of the entire business. **Effort:** S. **Fix:** wrap both handlers in `try/catch` (as main/admin/games already are); add top‑level `uncaughtException`/`unhandledRejection` handlers that log and keep the process alive.
 
-### 🟠 H6 — Admin saves fail silently with optimistic UI → staff lose business data
+### ✅ H6 — Admin saves fail silently with optimistic UI → staff lose business data — **FIXED**
 **Where:** ~50 sites in `pages-admin.jsx` (e.g. `saveNow` `:551`; expenses `:574`/`:584`; quotes `:1481`/`:1590`).
 **What:** The dominant admin write pattern is `await fetch(...).catch(()=>null)` immediately followed by an optimistic local‑state update regardless of outcome. If the POST fails (network/500/expired CSRF), the row shows the new value, **nothing is persisted, no error is shown**, and the change is lost on reload. This is the entire order/quote/expense editing surface failing invisibly.
-**Impact:** High — silent business‑data loss + staff trust. **Effort:** M. **Fix:** check `res.ok`, surface failures, and don't mutate state on error (ideally a shared `apiSave` helper — see M8).
+**Impact:** High — silent business‑data loss + staff trust. **Effort:** M. **Fix:** Added `adminToast()` helper for error feedback. `saveNow` and `doAssign` now roll back optimistic state on failure. All delete handlers (`deleteExpense`, `deleteGroup`, `deleteCustomer`, sellers, ewaste, quotes, staff) now check `r.ok` before mutating state. `saveStaffMember` no longer closes the form on failure. `doPayouts` now surfaces failure.
 
 ---
 

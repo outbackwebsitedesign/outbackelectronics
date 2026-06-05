@@ -38,6 +38,20 @@ function ensureCsrf() {
 }
 function postHeaders() { return { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() }; }
 
+function adminToast(msg, type = 'error') {
+  const el = document.createElement('div');
+  el.textContent = msg;
+  Object.assign(el.style, {
+    position: 'fixed', bottom: '24px', left: '50%', transform: 'translateX(-50%)',
+    background: type === 'error' ? 'var(--rust, #c0392b)' : '#345526',
+    color: '#fff', padding: '10px 20px', borderRadius: '4px',
+    fontSize: '13px', zIndex: '99999', pointerEvents: 'none',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+  });
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
 async function uploadImage(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -551,9 +565,16 @@ function AdminOrders({ search }) {
 
   const saveNow = async (patch) => {
     const updated = { ...form, ...patch };
+    const prevForm = form;
+    const rowId = edit?.id || updated.id;
     setForm(updated);
-    await fetch('/api/admin/orders/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ ...updated, _originalId: edit?.id || updated.id }) }).catch(()=>null);
-    setRows(rs => rs.map(r => r.id === (edit?.id || updated.id) ? updated : r));
+    setRows(rs => rs.map(r => r.id === rowId ? updated : r));
+    const r = await fetch('/api/admin/orders/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ ...updated, _originalId: rowId }) }).catch(()=>null);
+    if (!r || !r.ok) {
+      setForm(prevForm);
+      setRows(rs => rs.map(r => r.id === rowId ? prevForm : r));
+      adminToast('Save failed — change not persisted. Please try again.');
+    }
   };
 
   const doRefund = async () => {
@@ -601,7 +622,8 @@ function AdminOrders({ search }) {
 
   const deleteExpense = async (id) => {
     if (!confirm('Delete this expense?')) return;
-    await fetch('/api/admin/expenses/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id }) }).catch(()=>null);
+    const r = await fetch('/api/admin/expenses/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id }) }).catch(()=>null);
+    if (!r || !r.ok) { adminToast('Failed to delete expense.'); return; }
     setExpenses(es => es.filter(e => e.id !== id));
     setExpenseEdit(null); setExpenseForm({});
   };
@@ -1523,10 +1545,13 @@ function AdminQuotes() {
 
   const doAssign = async () => {
     if (!assignee) return;
-    const updated = quotes.map(q => q.id === assignTarget.id ? {...q, assignee, status: q.status === 'new' ? 'in-review' : q.status} : q);
+    const prevQuotes = quotes;
+    const target = assignTarget;
+    const updated = quotes.map(q => q.id === target.id ? {...q, assignee, status: q.status === 'new' ? 'in-review' : q.status} : q);
     setQuotes(updated);
     setAssignTarget(null);
-    await fetch('/api/admin/quotes/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({...assignTarget, assignee, status: assignTarget.status === 'new' ? 'in-review' : assignTarget.status}) }).catch(()=>null);
+    const r = await fetch('/api/admin/quotes/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({...target, assignee, status: target.status === 'new' ? 'in-review' : target.status}) }).catch(()=>null);
+    if (!r || !r.ok) { setQuotes(prevQuotes); adminToast('Failed to assign quote — please try again.'); }
   };
 
   const statusMap = {
@@ -1628,7 +1653,8 @@ function AdminQuotes() {
         <Drawer open={true} onClose={() => setEdit(null)} title={`Quote ${edit.id}`}
           footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
             <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={async () => {
-              await fetch('/api/admin/quotes/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: edit.id }) }).catch(()=>null);
+              const r = await fetch('/api/admin/quotes/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: edit.id }) }).catch(()=>null);
+              if (!r || !r.ok) { adminToast('Failed to delete quote.'); return; }
               setQuotes(qs => qs.filter(q => q.id !== edit.id));
               setEdit(null);
             }}>Delete</button>
@@ -1639,10 +1665,10 @@ function AdminQuotes() {
                 if (r && r.ok) {
                   const d = await r.json();
                   setQuotes(qs => qs.map(q => q.id === edit.id ? d.item : q));
+                  setEdit(null);
                 } else {
-                  setQuotes(qs => qs.map(q => q.id === edit.id ? form : q));
+                  adminToast('Failed to save quote — changes not persisted.');
                 }
-                setEdit(null);
               }}>Save</button>
             </div>
           </div>}
@@ -1739,7 +1765,8 @@ function AdminEwaste() {
         <Drawer open={true} onClose={() => setEdit(null)} title={edit.id ? `Intake ${edit.id}` : 'New intake'}
           footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
             {edit.id && <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={async () => {
-              await fetch('/api/admin/ewaste/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: edit.id }) }).catch(()=>null);
+              const r = await fetch('/api/admin/ewaste/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: edit.id }) }).catch(()=>null);
+              if (!r || !r.ok) { adminToast('Failed to delete intake.'); return; }
               setIntakes(rs => rs.filter(r => r.id !== edit.id));
               setEdit(null);
             }}>Delete</button>}
@@ -3398,7 +3425,8 @@ function AdminGroups() {
   };
 
   const deleteGroup = async () => {
-    await fetch('/api/admin/groups/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: edit.id }) }).catch(()=>null);
+    const r = await fetch('/api/admin/groups/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: edit.id }) }).catch(()=>null);
+    if (!r || !r.ok) { adminToast('Failed to delete group.'); return; }
     setRows(rs => rs.filter(r => r.id !== edit.id));
     setEdit(null);
   };
@@ -3814,7 +3842,8 @@ function AdminCustomers() {
           footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
             {edit.id && <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={async () => {
               if (!confirm('Delete this customer?')) return;
-              await fetch('/api/admin/customers/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: edit.id }) }).catch(()=>null);
+              const r = await fetch('/api/admin/customers/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: edit.id }) }).catch(()=>null);
+              if (!r || !r.ok) { adminToast('Failed to delete customer.'); return; }
               setRows(rs => rs.filter(r => r.id !== edit.id));
               setEdit(null);
             }}>Delete</button>}
@@ -3884,8 +3913,9 @@ function AdminSellers() {
   }, 0);
   const doPayouts = async () => {
     setPayoutsBusy(true);
-    await fetch('/api/admin/sellers/process-payouts', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ ids: soldRows.map(r => r.id) }) }).catch(()=>null);
+    const r = await fetch('/api/admin/sellers/process-payouts', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ ids: soldRows.map(r => r.id) }) }).catch(()=>null);
     setPayoutsBusy(false);
+    if (!r || !r.ok) { adminToast('Payout processing failed — please try again.'); return; }
     setPayoutsDone(true);
   };
   return (
@@ -3940,7 +3970,8 @@ function AdminSellers() {
         <Drawer open={true} onClose={() => setEdit(null)} title={edit.id ? `Consignment ${edit.id}` : 'New consignment'}
           footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
             {edit.id && <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={async () => {
-              await fetch('/api/admin/sellers/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: edit.id }) }).catch(()=>null);
+              const r = await fetch('/api/admin/sellers/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: edit.id }) }).catch(()=>null);
+              if (!r || !r.ok) { adminToast('Failed to delete consignment.'); return; }
               setRows(rs => rs.filter(r => r.id !== edit.id));
               setEdit(null);
             }}>Delete</button>}
@@ -4426,13 +4457,16 @@ function AdminExpenses() {
       const d = await r.json();
       if (!edit.id) setRows(rs => [...rs, d.item]);
       else setRows(rs => rs.map(x => x.id === edit.id ? d.item : x));
+      setEdit(null);
+    } else {
+      adminToast('Failed to save expense — changes not persisted.');
     }
-    setEdit(null);
   };
 
   const del = async () => {
     if (!form.id || !confirm('Delete this expense?')) return;
-    await fetch('/api/admin/expenses/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: form.id }) }).catch(()=>null);
+    const r = await fetch('/api/admin/expenses/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: form.id }) }).catch(()=>null);
+    if (!r || !r.ok) { adminToast('Failed to delete expense.'); return; }
     setRows(rs => rs.filter(x => x.id !== form.id));
     setEdit(null);
   };
@@ -5198,13 +5232,15 @@ function AdminSettingsFull({ sessionInfo = {} }) {
     if (!staffForm.id && !/^\d{4,6}$/.test(staffForm.pin || '')) { alert('PIN must be 4–6 digits.'); return; }
     if (staffForm.pin && !/^\d{4,6}$/.test(staffForm.pin)) { alert('PIN must be 4–6 digits.'); return; }
     setStaffBusy(true);
-    await fetch('/api/admin/staff/members/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ ...staffForm, name: staffForm.name.trim() }) }).catch(()=>null);
+    const r = await fetch('/api/admin/staff/members/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ ...staffForm, name: staffForm.name.trim() }) }).catch(()=>null);
     setStaffBusy(false);
+    if (!r || !r.ok) { adminToast('Failed to save staff member.'); return; }
     setStaffForm(null);
     loadStaff();
   };
   const deleteStaffMember = async (id) => {
-    await fetch('/api/admin/staff/members/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id }) }).catch(()=>null);
+    const r = await fetch('/api/admin/staff/members/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id }) }).catch(()=>null);
+    if (!r || !r.ok) { adminToast('Failed to delete staff member.'); return; }
     loadStaff();
   };
   const [settingsTab, setSettingsTab] = useState('general');
