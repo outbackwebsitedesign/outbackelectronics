@@ -3390,6 +3390,14 @@ const adminServer = http.createServer(async (req, res) => {
   try {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
+  // Keep the admin dashboard out of search engines entirely.
+  res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+
+  if (url.pathname === '/robots.txt') {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    return res.end('User-agent: *\nDisallow: /\n');
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/csrf-token') {
     const token = ensureCsrfCookie(req, res);
     return json(res, 200, { token });
@@ -4972,6 +4980,14 @@ const PORTAL_CORS_ORIGINS = new Set([
 const portalServer = http.createServer(async (req, res) => {
   try {
   const url = new URL(req.url, `http://${req.headers.host}`);
+
+  // Keep the customer portal out of search engines entirely.
+  res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+
+  if (url.pathname === '/robots.txt') {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    return res.end('User-agent: *\nDisallow: /\n');
+  }
 
   if (checkMaintenance(req, res, url)) return;
 
