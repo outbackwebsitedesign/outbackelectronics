@@ -50,7 +50,7 @@ Note: path traversal *out* of `__dirname` is correctly blocked (Node's `new URL`
 **Impact:** Critical — total confidentiality breach + admin/account takeover + secret theft.
 **Effort:** S–M. **Fix applied:** replaced `filePath.startsWith(__dirname)` guard with an explicit `ALLOWED_SERVE_ROOTS` allowlist (`dist/`, `public/`, `assets/`). Any request resolving outside those three directories now returns `403 Forbidden`. Remaining defense-in-depth steps (move `.db` files to `../data/`, Cloudflare WAF rule) are still recommended but the web-exposure vector is closed.
 
-### 🔴 C2 — No backup or recovery strategy for the business database
+### ✅ C2 — No backup or recovery strategy for the business database — **FIXED** (`deploy.sh` commit `b77782b`)
 **Where:** `deploy.sh` (no backup step), `.gitignore` (`*.db` excluded), README/CLAUDE.md (describe none).
 **What:** The flat‑JSON `.db` files *are* the entire business (orders, customers, repairs, financials, forum). They live only on the production disk, gitignored, with **no cron/snapshot/off‑box copy anywhere**. The repo itself records that this data was **wiped to zero once already** (`deploy.sh:11‑12`). A single disk failure, bad migration, ransomware, or one errant command = total, unrecoverable loss.
 **Impact:** Critical — existential business risk.
