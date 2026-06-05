@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef, createContext, useContext } from 'react';
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 // Mapped to the shared site palette (see tools.html / index.html :root vars) so
@@ -652,10 +652,29 @@ const TOOLS = [
   { id: 'relay',    label: 'Relay Wiring',    icon: '🔄' },
 ];
 
-// ── Site chrome (header + footer) — mirrors app.jsx so this standalone page
-//    reads like every other page on outbackelectronics.com.au ──────────────────
+// ── Site chrome (header + footer) ─────────────────────────────────────────────
+// Ported verbatim from app.jsx so this standalone page renders the EXACT same
+// header and footer as every other page on outbackelectronics.com.au. Because
+// this bundle has no SPA router or cart context, `go()` performs a real browser
+// navigation and the cart count is read from localStorage.
+
+// ShopContext mirrors app.jsx
+const ShopContext = createContext({});
+const useShop = () => useContext(ShopContext);
+
+// Cross-site URLs — populated from /api/shop-info at runtime (mirrors app.jsx).
+let _PORTAL_URL = 'https://portal.outbackelectronics.com.au';
+let _FORUM_URL  = 'https://forum.outbackelectronics.com.au';
+let _GAMES_URL  = 'https://games.outbackelectronics.com.au';
+let _TOOLS_URL  = 'https://tools.outbackelectronics.com.au';
+function getPortalUrl() { return _PORTAL_URL; }
+function getForumUrl()  { return _FORUM_URL; }
+function getGamesUrl()  { return _GAMES_URL; }
+function getToolsUrl()  { return _TOOLS_URL; }
+
+// ---------------- Nav ----------------
 const PRIMARY_PAGES = [
-  { id: '', label: 'Home' },
+  { id: 'home', label: 'Home' },
   { id: 'shop', label: 'Shop' },
   { id: 'services', label: 'Services' },
   { id: 'memberships', label: 'Memberships' },
@@ -663,7 +682,19 @@ const PRIMARY_PAGES = [
   { id: 'ewaste', label: 'eWaste' },
   { id: 'ai', label: 'AI' },
   { id: 'tutorials', label: 'Tutorials' },
+  { id: 'tools-link', label: 'Tools' },
+  { id: 'forum-link', label: 'Forum' },
+  { id: 'games-link', label: 'Games' },
+  { id: 'groups', label: 'Groups' },
 ];
+// Pages served from their own subdomain (tools./forum./games.) — mirrors app.jsx.
+const EXTERNAL_LINKS = {
+  'forum-link': getForumUrl,
+  'games-link': getGamesUrl,
+  'tools-link': getToolsUrl,
+};
+const isExternalLink = (id) => Object.prototype.hasOwnProperty.call(EXTERNAL_LINKS, id);
+const externalHref = (id) => EXTERNAL_LINKS[id] ? EXTERNAL_LINKS[id]() : null;
 const UTILITY_PAGES = [
   { id: 'quote', label: 'Request a Quote' },
   { id: 'gift-cards', label: 'Gift Cards' },
@@ -673,110 +704,492 @@ const UTILITY_PAGES = [
   { id: 'policies', label: 'Policies' },
 ];
 
-function useShopInfo() {
-  const [info, setInfo] = useState({ shop: {}, forumUrl: '', gamesUrl: '' });
-  useEffect(() => {
-    fetch('/api/shop-info')
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d) setInfo({ shop: d.shop || {}, forumUrl: d.forumUrl || '', gamesUrl: d.gamesUrl || '' }); })
-      .catch(() => {});
-  }, []);
-  return info;
+// This bundle is served from the tools. subdomain, so links to main-site pages
+// (/shop, /services, …) must target the main origin, not tools.*. Derive it from
+// the current location by stripping the `tools.` host or the dev port.
+function getSiteRoot() {
+  try {
+    const u = new URL(window.location.href);
+    if (u.hostname.startsWith('tools.')) u.hostname = u.hostname.slice('tools.'.length);
+    else if (u.port === '8085') u.port = '8080';
+    return u.origin + '/';
+  } catch { return '/'; }
 }
 
-function SiteHeader({ shop }) {
+// Standalone navigation: replaces the SPA `go()` with a real browser navigation.
+function go(id, params = null) {
+  if (id === 'home') { window.location.href = getSiteRoot(); return; }
+  if (isExternalLink(id)) { window.location.href = externalHref(id); return; }
+  if (id === 'product' && params) { window.location.href = getSiteRoot() + 'product/' + (params.slug || params.id || ''); return; }
+  if (id === 'service' && params) { window.location.href = getSiteRoot() + 'service/' + (params.slug || params.id || ''); return; }
+  window.location.href = getSiteRoot() + id;
+}
+
+// ---------------- Cross-origin portal API helpers ----------------
+let _portalCsrfPromise = null;
+async function getPortalCsrf() {
+  if (!_portalCsrfPromise) {
+    _portalCsrfPromise = fetch(getPortalUrl() + '/api/csrf-token', { credentials: 'include' })
+      .then(r => r.json()).then(d => d.token || '').catch(() => { _portalCsrfPromise = null; return ''; });
+  }
+  return _portalCsrfPromise;
+}
+async function portalApi(path, opts = {}) {
+  const isPost = opts.method && opts.method.toUpperCase() !== 'GET';
+  const csrfToken = isPost ? await getPortalCsrf() : '';
+  const headers = { 'Content-Type': 'application/json', ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}) };
+  return fetch(getPortalUrl() + path, { headers, credentials: 'include', ...opts })
+    .then(async r => { const body = await r.json().catch(() => ({})); return { ok: r.ok, status: r.status, ...body }; });
+}
+
+function usePortalUser() {
+  const [user, setUser] = useState(undefined);
+  useEffect(() => {
+    fetch(getPortalUrl() + '/api/portal/auth/me', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setUser(d?.user || null))
+      .catch(() => setUser(null));
+  }, []);
+  return user;
+}
+
+// ---------------- Search Overlay ----------------
+function SearchOverlay({ onClose }) {
+  const [q, setQ] = useState('');
+  const [products, setProducts] = useState([]);
+  const [highlightIdx, setHighlightIdx] = useState(0);
+  const inputRef = useRef(null);
+  const listRef = useRef(null);
+  useEffect(() => { inputRef.current && inputRef.current.focus(); }, []);
+
+  useEffect(() => {
+    fetch('/api/catalog/products')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setProducts(d.items || []); })
+      .catch(() => {});
+  }, []);
+
+  const allPages = [
+    ...PRIMARY_PAGES.filter(p => !isExternalLink(p.id)),
+    ...UTILITY_PAGES,
+  ];
+
+  const query = q.trim().toLowerCase();
+  const pageResults = query.length < 1
+    ? allPages.slice(0, 6)
+    : allPages.filter(p => p.label.toLowerCase().includes(query));
+  const productResults = query.length >= 2 ? products.filter(p =>
+    (p.name || '').toLowerCase().includes(query) ||
+    (p.brand || '').toLowerCase().includes(query) ||
+    (p.sku || '').toLowerCase().includes(query) ||
+    (p.category || '').toLowerCase().includes(query)
+  ).slice(0, 6) : [];
+
+  const allResults = [...pageResults, ...productResults.map(p => ({ ...p, _isProduct: true }))];
+
+  useEffect(() => { setHighlightIdx(0); }, [q]);
+
+  const pick = (item) => {
+    if (item._isProduct) { go('product', item); onClose(); return; }
+    if (isExternalLink(item.id)) { window.location.href = externalHref(item.id); return; }
+    go(item.id);
+    onClose();
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Escape') { onClose(); return; }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightIdx(i => Math.min(i + 1, allResults.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightIdx(i => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter' && allResults[highlightIdx]) {
+      pick(allResults[highlightIdx]);
+    }
+  };
+
+  return (
+    <div className="search-backdrop" style={{position:'fixed', inset:0, zIndex:500, display:'flex', flexDirection:'column', alignItems:'center', paddingTop:80, background:'rgba(15,13,10,0.72)'}}
+      onClick={onClose}>
+      <div style={{width:'100%', maxWidth:560, background:'var(--bg)', border:'1px solid var(--line)', boxShadow:'0 12px 40px rgba(0,0,0,.35)'}}
+        onClick={e => e.stopPropagation()}>
+        <div style={{display:'flex', alignItems:'center', padding:'12px 16px', borderBottom:'1px solid var(--line)', gap:10}}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{flexShrink:0, color:'var(--ink-2)'}}><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          <input ref={inputRef} value={q} onChange={e => setQ(e.target.value)}
+            placeholder="Search pages and products…" style={{flex:1, border:'none', outline:'none', background:'transparent', fontSize:15, color:'var(--ink)'}}
+            onKeyDown={handleKeyDown} />
+          <button onClick={onClose} style={{background:'none', border:'none', cursor:'pointer', color:'var(--ink-2)', fontSize:18, lineHeight:1}} aria-label="Close search">×</button>
+        </div>
+        <div ref={listRef} style={{maxHeight:420, overflowY:'auto'}}>
+          {query.length === 0 && (
+            <div style={{padding:'6px 20px 2px', fontSize:11, color:'var(--ink-3)', fontFamily:'monospace', letterSpacing:'0.08em'}}>QUICK LINKS</div>
+          )}
+          {query.length >= 2 && pageResults.length > 0 && (
+            <div style={{padding:'6px 20px 2px', fontSize:11, color:'var(--ink-3)', fontFamily:'monospace', letterSpacing:'0.08em'}}>PAGES</div>
+          )}
+          {pageResults.map((p, idx) => {
+            const isHighlighted = highlightIdx === idx;
+            return (
+              <div key={p.id} onClick={() => pick(p)}
+                style={{padding:'12px 20px', cursor:'pointer', fontSize:14, borderBottom:'1px solid var(--line)', display:'flex', alignItems:'center', gap:10, background: isHighlighted ? 'var(--bg-elev)' : 'transparent'}}
+                onMouseEnter={() => setHighlightIdx(idx)}
+                onMouseLeave={() => setHighlightIdx(idx)}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{color:'var(--ink-3)'}}><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                {p.label}
+              </div>
+            );
+          })}
+          {productResults.length > 0 && (
+            <div style={{padding:'6px 20px 2px', fontSize:11, color:'var(--ink-3)', fontFamily:'monospace', letterSpacing:'0.08em', borderTop: pageResults.length > 0 ? '1px solid var(--line)' : 'none'}}>PRODUCTS</div>
+          )}
+          {productResults.map((p, relIdx) => {
+            const idx = pageResults.length + relIdx;
+            const isHighlighted = highlightIdx === idx;
+            return (
+              <div key={p.id || p.sku} onClick={() => pick({...p, _isProduct: true})}
+                style={{padding:'12px 20px', cursor:'pointer', fontSize:14, borderBottom:'1px solid var(--line)', display:'flex', alignItems:'center', gap:10, background: isHighlighted ? 'var(--bg-elev)' : 'transparent'}}
+                onMouseEnter={() => setHighlightIdx(idx)}
+                onMouseLeave={() => setHighlightIdx(idx)}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{color:'var(--rust)'}}><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M16 3v4M8 3v4M2 11h20"/></svg>
+                <div>
+                  <div style={{fontWeight:500}}>{p.name}</div>
+                  {(p.brand || p.category) && <div style={{fontSize:12, color:'var(--ink-2)', marginTop:2}}>{[p.brand, p.category].filter(Boolean).join(' · ')}</div>}
+                </div>
+                {p.price && <div style={{marginLeft:'auto', fontWeight:600, color:'var(--rust)', whiteSpace:'nowrap'}}>${Number(p.price).toLocaleString('en-AU')}</div>}
+              </div>
+            );
+          })}
+          {allResults.length === 0 && query.length > 0 && <div style={{padding:'16px 20px', color:'var(--ink-2)', fontSize:14}}>No results for "{q}".</div>}
+          {query.length === 0 && (
+            <div style={{padding:'10px 20px', fontSize:12, color:'var(--ink-3)', borderTop:'1px solid var(--line)'}}>
+              Type to search products, or use ↑↓ arrows + Enter to navigate
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------- Account Dropdown ----------------
+function AccountDropdown({ onClose, user }) {
+  const ref = useRef(null);
+  const portal = (path = '') => { window.location.href = getPortalUrl() + path; };
+  const goPage = (id) => { go(id); onClose(); };
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [onClose]);
+
+  const dropdownStyle = {position:'absolute', top:'calc(100% + 8px)', right:0, width:220, background:'var(--bg)', border:'1px solid var(--line)', boxShadow:'0 8px 24px rgba(0,0,0,.15)', zIndex:300};
+  const btnStyle = (last) => ({width:'100%', textAlign:'left', padding:'12px 16px', cursor:'pointer', fontSize:14, border:'none', borderBottom: last ? 'none' : '1px solid var(--line)', background:'transparent', color:'var(--ink)'});
+  const hoverOn = e => { e.currentTarget.style.background = 'var(--bg-elev)'; };
+  const hoverOff = e => { e.currentTarget.style.background = 'transparent'; };
+
+  if (!user) {
+    return (
+      <div ref={ref} style={dropdownStyle}>
+        <div style={{padding:'16px 16px 12px', borderBottom:'1px solid var(--line)'}}>
+          <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:6}}>ACCOUNT</div>
+          <p style={{fontSize:13, color:'var(--ink-2)', lineHeight:1.5, margin:0}}>
+            Sign in to track orders, book repairs, and access your account.
+          </p>
+        </div>
+        <button style={{...btnStyle(false), fontWeight:600, color:'var(--rust)'}}
+          onMouseEnter={hoverOn} onMouseLeave={hoverOff}
+          onClick={() => { portal('/'); onClose(); }}>
+          Sign In →
+        </button>
+        <button style={btnStyle(true)}
+          onMouseEnter={hoverOn} onMouseLeave={hoverOff}
+          onClick={() => goPage('register')}>
+          Create an Account
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={ref} style={dropdownStyle}>
+      {user.displayName && (
+        <div style={{padding:'12px 16px', borderBottom:'1px solid var(--line)'}}>
+          <div className="mono" style={{fontSize:10, color:'var(--ink-3)'}}>SIGNED IN AS</div>
+          <div style={{fontSize:14, marginTop:3, fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{user.displayName}</div>
+        </div>
+      )}
+      {[
+        { label:'Profile',           action: () => portal('/#account') },
+        { label:'My Subscriptions',  action: () => portal('/#memberships') },
+        { label:'My Rewards',        action: () => portal('/#rewards') },
+        { label:'My Wallet',         action: () => portal('/#wallet') },
+        { label:'My Groups',         action: () => { go('groups'); onClose(); } },
+        { label:'My Orders',         action: () => portal('/orders') },
+        { label:'My Addresses',      action: () => portal('/addresses') },
+        { label:'My Bookings',       action: () => portal('/bookings') },
+        { label:'My Account',        action: () => portal('/account') },
+        { label:'Log Out',           action: () => { portalApi('/api/portal/auth/logout', { method: 'POST' }).then(() => window.location.reload()); onClose(); } },
+      ].map((item, i, arr) => (
+        <button key={item.label} onClick={() => { item.action(); onClose(); }}
+          style={btnStyle(i === arr.length - 1)}
+          onMouseEnter={hoverOn} onMouseLeave={hoverOff}>
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ---------------- Brand Mark ----------------
+function Logo({ onClick }) {
+  return (
+    <div className="logo" onClick={onClick}>
+      <div className="logo-mark">
+        <img src="assets/logo.webp" alt="Outback Electronics" width="55" height="40" />
+      </div>
+      <div className="logo-text">
+        <div className="sub">Est. 2023 · Appointment only</div>
+      </div>
+    </div>
+  );
+}
+
+function UtilityBar() {
+  const shop = useShop();
+  return (
+    <div className="utility-bar">
+      <div className="container">
+        <div className="links">
+          <span>FREE FREIGHT OVER $200 · OUTBACK NT/SA/WA</span>
+        </div>
+        <div className="links">
+          {UTILITY_PAGES.map(p => (
+            <a key={p.id} href={getSiteRoot() + p.id} onClick={(e) => { e.preventDefault(); go(p.id); }}>{p.label}</a>
+          ))}
+          {shop.phone && <span style={{color:'var(--ochre)'}}>{shop.phone}</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function useAnnouncement() {
+  const [text, setText] = useState('');
+  useEffect(() => {
+    fetch('/api/announcement')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d && d.active && d.text) setText(d.text); })
+      .catch(() => {});
+  }, []);
+  return text;
+}
+
+function useCartCount() {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    const read = () => {
+      try {
+        const cart = JSON.parse(localStorage.getItem('oe_cart') || '[]');
+        setCount(Array.isArray(cart) ? cart.reduce((s, i) => s + (i.qty || 0), 0) : 0);
+      } catch { setCount(0); }
+    };
+    read();
+    window.addEventListener('storage', read);
+    return () => window.removeEventListener('storage', read);
+  }, []);
+  return count;
+}
+
+// ---------------- Top Nav ----------------
+function TopNav({ page, onSearchOpen, accountOpen, setAccountOpen, portalUser, cart }) {
+  const announcement = useAnnouncement();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const signedOut = portalUser === null;
   const [scrolled, setScrolled] = useState(false);
+
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
+
+  const handleNavClick = (id) => {
+    setMobileMenuOpen(false);
+    if (isExternalLink(id)) window.location.href = externalHref(id);
+    else go(id);
+  };
+
   return (
     <header>
-      <div className="utility-bar">
-        <div className="container">
-          <span>FREE FREIGHT OVER $200 · OUTBACK NT/SA/WA</span>
-          <span style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'center' }}>
-            {UTILITY_PAGES.map(p => <a key={p.id} href={`/${p.id}`}>{p.label}</a>)}
-            {shop.phone && <span style={{ color: 'var(--ochre)' }}>{shop.phone}</span>}
-          </span>
-        </div>
-      </div>
+      {announcement && <div className="announce">{announcement}</div>}
+      <UtilityBar />
       <div className={scrolled ? 'topnav scrolled' : 'topnav'}>
         <div className="container row">
-          <a className="logo" href="/">
-            <div className="logo-mark">
-              <img src="assets/logo.webp" alt="Outback Electronics" width="55" height="40" />
-            </div>
-            <div className="logo-text">
-              <div className="sub">Est. 2023 · Appointment only</div>
-            </div>
-          </a>
+          <Logo onClick={() => go('home')} />
           <nav className="mainlinks">
-            {PRIMARY_PAGES.map(p => <a key={p.id} href={`/${p.id}`}>{p.label}</a>)}
-            <a href="/tools" className="active">Tools</a>
+            {PRIMARY_PAGES.map(p => (
+              <a
+                key={p.id}
+                href={isExternalLink(p.id) ? externalHref(p.id) : getSiteRoot() + p.id}
+                className={page === p.id ? 'active' : ''}
+                onClick={isExternalLink(p.id) ? undefined : (e) => { e.preventDefault(); go(p.id); }}
+                {...((p.id === 'forum-link' || p.id === 'games-link') ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+              >
+                {p.label}
+              </a>
+            ))}
           </nav>
+          <div className="topnav-actions">
+            <button className="icon-btn" title="Search" aria-label="Search" onClick={onSearchOpen}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+            </button>
+            <div style={{position:'relative'}}>
+              <button
+                className="icon-btn"
+                title={signedOut ? 'Sign In / Create Account' : 'Account'}
+                aria-label={signedOut ? 'Sign In / Create Account' : 'Account'}
+                onClick={() => setAccountOpen(o => !o)}
+                style={signedOut ? {display:'flex', alignItems:'center', gap:6, padding:'6px 10px', border:'1px solid var(--line)', fontSize:13} : {}}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>
+                {signedOut && <span className="sign-in-text" style={{whiteSpace:'nowrap'}}>Sign In</span>}
+              </button>
+              {accountOpen && <AccountDropdown onClose={() => setAccountOpen(false)} user={portalUser} />}
+            </div>
+            <button className="icon-btn" title="Cart" aria-label={cart > 0 ? `Cart, ${cart} item${cart === 1 ? '' : 's'}` : 'Cart'} onClick={() => go('cart')}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M3 4h2l2.5 12h11l2-9H6"/><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/></svg>
+              {cart > 0 && <span className="cart-count" aria-hidden="true">{cart}</span>}
+            </button>
+            {/* Hamburger — hidden on desktop via CSS, shown on mobile */}
+            <button className="icon-btn hamburger" style={{display:'none'}} title="Menu" aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'} aria-expanded={mobileMenuOpen} aria-controls="mobile-nav" onClick={() => setMobileMenuOpen(o => !o)}>
+              {mobileMenuOpen
+                ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+              }
+            </button>
+          </div>
         </div>
       </div>
+      {/* Mobile nav drawer — hidden on desktop via CSS */}
+      {mobileMenuOpen && (
+        <div id="mobile-nav" className="mobile-nav" role="dialog" aria-modal="true" aria-label="Navigation menu">
+          <div className="mobile-nav-header">
+            <Logo onClick={() => { go('home'); setMobileMenuOpen(false); }} />
+            <button className="icon-btn" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+          {PRIMARY_PAGES.map(p => (
+            <a key={p.id}
+              href={isExternalLink(p.id) ? externalHref(p.id) : getSiteRoot() + p.id}
+              className={page === p.id ? 'active' : ''}
+              onClick={isExternalLink(p.id) ? undefined : (e) => { e.preventDefault(); handleNavClick(p.id); }}
+              {...((p.id === 'forum-link' || p.id === 'games-link') ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>
+              {p.label}
+            </a>
+          ))}
+          <div style={{borderTop:'2px solid var(--line)', marginTop:8}}>
+            {UTILITY_PAGES.map(p => (
+              <a key={p.id} href={getSiteRoot() + p.id} className={page === p.id ? 'active' : ''}
+                onClick={(e) => { e.preventDefault(); handleNavClick(p.id); }}
+                style={{fontSize:14, color:'var(--ink-2)'}}>
+                {p.label}
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
     </header>
   );
 }
 
-function SiteFooter({ shop }) {
+// ---------------- Footer ----------------
+function Footer() {
+  const shop = useShop();
+  const [topCategories, setTopCategories] = useState([]);
+  const [footerServices, setFooterServices] = useState([]);
+
+  useEffect(() => {
+    fetch('/api/catalog/products')
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => {
+        const counts = {};
+        (d.items || []).forEach(p => {
+          if (p.status === 'published' && p.category) {
+            counts[p.category] = (counts[p.category] || 0) + 1;
+          }
+        });
+        const sorted = Object.entries(counts)
+          .sort(([, a], [, b]) => b - a)
+          .slice(0, 5)
+          .map(([cat]) => cat);
+        setTopCategories(sorted);
+      })
+      .catch(() => {});
+
+    fetch('/api/catalog/services')
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => {
+        setFooterServices((d.items || []).slice(0, 5));
+      })
+      .catch(() => {});
+  }, []);
+
   return (
     <footer>
       <div className="container">
         <div className="grid">
           <div>
-            <a className="logo" href="/">
-              <div className="logo-mark sm" style={{ background: '#000' }}>
+            <div className="logo">
+              <div className="logo-mark sm" style={{background:'#000'}}>
                 <img src="assets/logo.webp" alt="Outback Electronics" width="40" height="29" />
               </div>
               <div className="logo-text">
-                <div className="sub" style={{ color: 'var(--ochre)' }}>{shop.tagline || 'Outback Electronics'}</div>
+                <div className="sub" style={{color:'var(--ochre)'}}>{shop.tagline}</div>
               </div>
-            </a>
-            <p style={{ marginTop: 18, fontSize: 13, color: 'var(--ink-on-dark-muted)', maxWidth: 360, lineHeight: 1.6 }}>
-              {shop.description || 'Repairs, custom builds and off-grid electronics for the bush.'}
+            </div>
+            <p style={{marginTop: 18, fontSize: 13, color: 'var(--ink-on-dark-muted)', maxWidth: 360, lineHeight: 1.6}}>
+              {shop.description}
             </p>
-          </div>
-          <div>
-            <h3>Tools</h3>
-            <ul>
-              {TOOLS.map(t => <li key={t.id}><a href="/tools">{t.label}</a></li>)}
-            </ul>
           </div>
           <div>
             <h3>Shop</h3>
             <ul>
-              <li><a href="/shop">Shop</a></li>
-              <li><a href="/services">Services</a></li>
-              <li><a href="/software">Software</a></li>
-              <li><a href="/ewaste">eWaste</a></li>
-              <li><a href="/memberships">Memberships</a></li>
+              {topCategories.map((cat) => (
+                <li key={cat}><a href="/shop" onClick={(e) => { e.preventDefault(); go('shop', { initialCat: cat }); }}>{cat}</a></li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <h3>Services</h3>
+            <ul>
+              {footerServices.map((svc) => (
+                <li key={svc.id}><a href={`/service/${svc.slug || svc.id}`} onClick={(e) => { e.preventDefault(); go('service', svc); }}>{svc.name}</a></li>
+              ))}
             </ul>
           </div>
           <div>
             <h3>Community</h3>
             <ul>
-              <li><a href="/tutorials">Tutorials</a></li>
-              <li><a href="/groups">Groups</a></li>
-              <li><a href="/sellers">Info for Sellers</a></li>
-              <li><a href="/sell-gear">Sell Your Gear</a></li>
-              <li><a href="/policies">Policies</a></li>
+              <li><a href="/tutorials" onClick={(e) => { e.preventDefault(); go('tutorials'); }}>Tutorials</a></li>
+              <li><a href="/groups" onClick={(e) => { e.preventDefault(); go('groups'); }}>Groups</a></li>
+              <li><a href="/memberships" onClick={(e) => { e.preventDefault(); go('memberships'); }}>Memberships</a></li>
+              <li><a href="/sellers" onClick={(e) => { e.preventDefault(); go('sellers'); }}>Info for Sellers</a></li>
+              <li><a href="/sell-gear" onClick={(e) => { e.preventDefault(); go('sell-gear'); }}>Sell Your Gear</a></li>
             </ul>
           </div>
           <div>
             <h3>Visit</h3>
-            <ul style={{ color: 'var(--ink-on-dark-muted)' }}>
-              <li>{shop.address || 'By appointment only'}<br />No public access, arrive by appointment only.</li>
+            <ul style={{color:'var(--ink-on-dark-muted)'}}>
+              <li>{shop.address}<br/>No public access, arrive by appointment only.</li>
               {shop.phone && <li>{shop.phone}</li>}
-              <li><a href="/contact" style={{ color: 'var(--ochre)' }}>Get directions →</a></li>
+              <li><a href="/contact" onClick={(e) => { e.preventDefault(); go('contact'); }} style={{color:'var(--ochre)'}}>Get directions →</a></li>
             </ul>
           </div>
         </div>
         <div className="baseline">
-          <span>© 2023–2026 {shop.tradingName || 'Outback Electronics'}{shop.abn ? ` · ABN ${shop.abn}` : ''}</span>
+          <span>© 2023–2026 {shop.tradingName}{shop.abn ? ` · ABN ${shop.abn}` : ''}</span>
           <span>ACKNOWLEDGES THE ARRERNTE PEOPLE AS TRADITIONAL OWNERS OF MPARNTWE</span>
         </div>
       </div>
@@ -784,10 +1197,31 @@ function SiteFooter({ shop }) {
   );
 }
 
+function useShopInfo() {
+  const [info, setInfo] = useState({ shop: {} });
+  useEffect(() => {
+    fetch('/api/shop-info')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d) return;
+        if (d.portalUrl) _PORTAL_URL = d.portalUrl;
+        if (d.forumUrl)  _FORUM_URL  = d.forumUrl;
+        if (d.gamesUrl)  _GAMES_URL  = d.gamesUrl;
+        setInfo({ shop: d.shop || {} });
+      })
+      .catch(() => {});
+  }, []);
+  return info;
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 export default function App() {
   const [active, setActive] = useState('vdrop');
   const { shop } = useShopInfo();
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const portalUser = usePortalUser();
+  const cart = useCartCount();
 
   const renderTool = () => {
     switch (active) {
@@ -805,8 +1239,8 @@ export default function App() {
   };
 
   return (
-    <>
-      <SiteHeader shop={shop} />
+    <ShopContext.Provider value={shop}>
+      <TopNav page="tools-link" cart={cart} onSearchOpen={() => setSearchOpen(true)} accountOpen={accountOpen} setAccountOpen={setAccountOpen} portalUser={portalUser} />
 
       {/* Page head — matches the shared PageHead on other pages */}
       <div className="page-head">
@@ -840,7 +1274,8 @@ export default function App() {
         {renderTool()}
       </main>
 
-      <SiteFooter shop={shop} />
-    </>
+      <Footer />
+      {searchOpen && <SearchOverlay onClose={() => setSearchOpen(false)} />}
+    </ShopContext.Provider>
   );
 }
