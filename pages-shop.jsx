@@ -113,7 +113,7 @@ function HomePage({ go, addToCart, portalUser }) {
             </div>
             <div className="hero-image" style={{position:'relative'}}>
               {heroProduct && heroProduct.images && heroProduct.images.length > 0
-                ? <img src={thumbUrl(heroProduct.images[0], 800)} alt={heroProduct.name} fetchpriority="high" width="4" height="5" style={{width:'100%', aspectRatio:'4/5', objectFit:'cover', display:'block'}} />
+                ? <img src={thumbUrl(heroProduct.images[0], 800)} alt={heroProduct.name} fetchpriority="high" style={{width:'100%', aspectRatio:'4/5', objectFit:'cover', display:'block'}} />
                 : <div className="slot slot-rust" style={{aspectRatio: '4/5'}}>RUGGED LAPTOP ON RED-DIRT WORKBENCH</div>}
               {heroProduct && (
                 <div className="card-paper" style={{position:'absolute', bottom:16, left:16, padding:18, width:240, boxShadow:'var(--shadow)'}}>
@@ -304,7 +304,7 @@ function ProductCard({ p, onClick }) {
   return (
     <div className="product" onClick={onClick}>
       {thumb
-        ? <img src={thumbUrl(thumb, 600)} alt={p.name} loading="lazy" width="4" height="3" style={{width:'100%', aspectRatio:'4/3', objectFit:'cover', display:'block'}} />
+        ? <img src={thumbUrl(thumb, 600)} alt={p.name} loading="lazy" style={{width:'100%', aspectRatio:'4/3', objectFit:'cover', display:'block'}} />
         : <div className="slot" style={{aspectRatio:'4/3'}}>{p.name.toUpperCase()}</div>}
       <div className="body">
         <div className="meta">{p.cond} · {displaySku}</div>
@@ -935,7 +935,7 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
         <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:48, alignItems:'start'}}>
           <div>
             {activeImage
-              ? <img src={activeImage} alt={product.name} loading="lazy" width="4" height="3" style={{width:'100%', maxHeight:'70vh', objectFit:'contain', display:'block', background:'var(--bg-deep)'}} />
+              ? <img src={activeImage} alt={product.name} loading="lazy" style={{width:'100%', aspectRatio:'4/3', maxHeight:'70vh', objectFit:'contain', display:'block', background:'var(--bg-deep)'}} />
               : <div className="slot" style={{aspectRatio:'4/3', width:'100%'}}>{product.name.toUpperCase()}</div>}
             {product.images && product.images.length > 1 && (
               <div style={{display:'flex', gap:8, marginTop:10, flexWrap:'wrap'}}>
