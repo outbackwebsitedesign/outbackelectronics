@@ -80,6 +80,7 @@
 <script>if(window.innerWidth>1400){(adsbygoogle=window.adsbygoogle||[]).push({});}</script>
 </div>
   <div id="root"></div>
+  <script>(function(){function pv(){fetch('/api/analytics/event',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'pageview',page:location.pathname+location.search,referrer:document.referrer}),keepalive:true}).catch(function(){});}pv();window.addEventListener('popstate',pv);})();</script>
 <style>
 .anchor-bottom{display:none;position:fixed;bottom:0;left:0;width:100%;z-index:1000;text-align:center;background:#fff;}@media(max-width:600px){.anchor-bottom{display:block;}}
 </style>
