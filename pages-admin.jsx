@@ -80,7 +80,14 @@ function AdminLogin({ onAuth }) {
   const [p, setP] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
-  useEffect(() => { ensureCsrf(); }, []);
+  const [siteUrl, setSiteUrl] = useState('');
+  useEffect(() => {
+    ensureCsrf();
+    fetch('/api/shop-info').then(r => r.json()).then(d => {
+      const url = d.siteUrl || d.shop?.siteUrl;
+      if (url) setSiteUrl(url);
+    }).catch(() => {});
+  }, []);
   const submit = async (e) => {
     e.preventDefault();
     setErr('');
@@ -145,7 +152,7 @@ function AdminLogin({ onAuth }) {
           </button>
         </form>
         <div style={{marginTop:18, textAlign:'center'}}>
-          <a className="mono" style={{fontSize:11, color:'#c4a75d', textDecoration:'underline', textUnderlineOffset:3, cursor:'pointer'}} onClick={() => { window.location.href = 'https://outbackelectronics.com.au/home'; }}>← Back to public site</a>
+          <a className="mono" style={{fontSize:11, color:'#c4a75d', textDecoration:'underline', textUnderlineOffset:3, cursor:'pointer'}} onClick={() => { if (siteUrl) window.location.href = siteUrl + '/home'; }}>← Back to public site</a>
         </div>
       </div>
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>

@@ -66,39 +66,17 @@ Both the prose paragraph and the FIND US card now read from `shop.streetAddress`
 ### ✅ 13. Hardcoded acknowledgement of country (app.jsx:613) — RESOLVED
 `app.jsx:618` now reads from `shop.acknowledgmentPeople` and `shop.acknowledgmentCountry`, both editable via admin → Settings → Shop. Updated to "Bidjara People, Bidjara Country (Blackall)". The footer renders blank if neither field is set.
 
-### ❌ 14. Hardcoded portal/forum/games URLs as fallbacks (app.jsx:25–27)
-```js
-let _PORTAL_URL = 'https://portal.outbackelectronics.com.au'
-let _FORUM_URL  = 'https://forum.outbackelectronics.com.au'
-let _GAMES_URL  = 'https://games.outbackelectronics.com.au'
-```
-Overwritten at runtime from `/api/shop-info`, but hardcoded fallbacks mean a misconfigured server silently sends users to the wrong place.
+### ✅ 14. Hardcoded portal/forum/games URLs as fallbacks (app.jsx:25–27) — RESOLVED
+Empty-string defaults replace the hardcoded production URLs. The fallback values in `app.jsx` are now `''` so a misconfigured server surfaces the gap (broken link) rather than silently routing to the wrong domain.
 
-### ❌ 15. Hardcoded site URL in portal footer links (portal-page.jsx:1686–1689)
-```jsx
-<a href="https://outbackelectronics.com.au">Main site</a>
-<a href="https://forum.outbackelectronics.com.au">Forum</a>
-<a href="https://outbackelectronics.com.au/contact">Contact</a>
-<a href="https://outbackelectronics.com.au/policies">Policies</a>
-```
-All hardcoded. Should read from the portal's equivalent of `shop._siteUrl` / `shop._forumUrl`.
+### ✅ 15. Hardcoded site URL in portal footer links (portal-page.jsx) — RESOLVED
+Footer now uses `getSiteUrl()` / `getForumUrl()` module helpers populated at startup from `/api/shop-info`.
 
-### ❌ 16. Hardcoded "Back to public site" URL in admin login (pages-admin.jsx:134)
-```js
-window.location.href = 'https://outbackelectronics.com.au/home'
-```
-Hardcoded. Should use `shop.siteUrl` from settings.
+### ✅ 16. Hardcoded "Back to public site" URL in admin login (pages-admin.jsx) — RESOLVED
+`AdminLogin` fetches `/api/shop-info` (added to admin server) and stores `siteUrl` in state. The "Back to public site" link uses that value; the link is inert until the fetch completes rather than pointing to a hardcoded domain.
 
-### ❌ 17. Hardcoded portal/shop/contact links throughout portal (portal-page.jsx)
-Multiple `href="https://outbackelectronics.com.au/..."` links throughout portal tabs:
-- Line 111: back-to-main-site link
-- Line 311: logo link
-- Line 400: "Go to Shop →" in overview empty state
-- Line 406: "Contact us →" in overview empty state
-- Line 1399: "Contact us" in bookings tab
-- Line 1534: "Contact our team →" in warranty tab
-
-All should use a `getSiteUrl()` equivalent.
+### ✅ 17. Hardcoded portal/shop/contact links throughout portal (portal-page.jsx) — RESOLVED
+`portal-page.jsx` now fetches `/api/shop-info` at startup (added to portal server) and exposes `getSiteUrl()` / `getForumUrl()` module helpers. All six previously hardcoded links now use these helpers: back-to-main-site in login, logo link, "Go to Shop →", "Contact us →" in overview, bookings-tab contact link, empty-state "Contact our team →", and all four footer links.
 
 ---
 
@@ -173,10 +151,10 @@ Completing a purchase does not decrement the stock count on the purchased produc
 | 11 | pages-shop.jsx:169 | AI page "disabled" — INVALID, aiEnabled only toggles a badge | HIGH | ✅ N/A |
 | 12 | pages-info.jsx:1129,1143 | Address hardcoded fallback in AboutPage | MEDIUM | ✅ DONE |
 | 13 | app.jsx:618 | Acknowledgement hardcoded | MEDIUM | ✅ DONE |
-| 14 | app.jsx:25–27 | Portal/forum/games URLs hardcoded | MEDIUM | ❌ OPEN |
-| 15 | portal-page.jsx:1686 | Footer links hardcoded | MEDIUM | ❌ OPEN |
-| 16 | pages-admin.jsx:134 | Back-to-site URL hardcoded | MEDIUM | ❌ OPEN |
-| 17 | portal-page.jsx:111,311,400,406,1399,1534 | CTA links hardcoded | MEDIUM | ❌ OPEN |
+| 14 | app.jsx:25–27 | Portal/forum/games URLs hardcoded | MEDIUM | ✅ DONE |
+| 15 | portal-page.jsx:1686 | Footer links hardcoded | MEDIUM | ✅ DONE |
+| 16 | pages-admin.jsx:134 | Back-to-site URL hardcoded | MEDIUM | ✅ DONE |
+| 17 | portal-page.jsx:111,311,400,406,1399,1534 | CTA links hardcoded | MEDIUM | ✅ DONE |
 | 18 | pages-shop.jsx:604 | Software — no data | MEDIUM | ❌ OPEN |
 | 19 | pages-community.jsx:135 | Tutorials — no data | MEDIUM | ❌ OPEN |
 | 20 | pages-community.jsx:231 | Groups — no data | MEDIUM | ❌ OPEN |

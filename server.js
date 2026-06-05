@@ -3411,6 +3411,11 @@ const adminServer = http.createServer(async (req, res) => {
     return json(res, 200, { token });
   }
 
+  if (req.method === 'GET' && url.pathname === '/api/shop-info') {
+    const { shop, flags } = readSettings();
+    return json(res, 200, { shop, flags: flags || {}, siteUrl: getSiteUrl(), portalUrl: getPortalUrl(), forumUrl: getForumUrl() });
+  }
+
   if (req.method === 'POST' || req.method === 'PATCH') {
     if (!verifyCsrf(req, res)) return;
   }
@@ -5020,6 +5025,11 @@ const portalServer = http.createServer(async (req, res) => {
 
   if (req.method === 'POST' || req.method === 'PATCH') {
     if (!verifyCsrf(req, res)) return;
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/shop-info') {
+    const { shop, flags } = readSettings();
+    return json(res, 200, { shop, flags: flags || {}, portalUrl: getPortalUrl(), forumUrl: getForumUrl(), gamesUrl: getGamesUrl(), toolsUrl: getToolsUrl() });
   }
 
   if (req.method === 'GET' && url.pathname === '/api/portal/auth/me') {

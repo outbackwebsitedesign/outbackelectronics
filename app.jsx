@@ -21,11 +21,12 @@ const SITE_FLAGS = Object.assign(
   window.OE_FLAGS || {}
 );
 
-// Cross-site URLs — populated from /api/shop-info at runtime.
-let _PORTAL_URL = 'https://portal.outbackelectronics.com.au';
-let _FORUM_URL  = 'https://forum.outbackelectronics.com.au';
-let _GAMES_URL  = 'https://games.outbackelectronics.com.au';
-let _TOOLS_URL  = 'https://tools.outbackelectronics.com.au';
+// Cross-site URLs — populated from /api/shop-info at runtime. No hardcoded fallbacks
+// so a misconfigured server surfaces the gap rather than silently routing users wrong.
+let _PORTAL_URL = '';
+let _FORUM_URL  = '';
+let _GAMES_URL  = '';
+let _TOOLS_URL  = '';
 function getPortalUrl() { return _PORTAL_URL; }
 function getForumUrl()  { return _FORUM_URL; }
 function getGamesUrl()  { return _GAMES_URL; }

@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 
+// Cross-site URLs — populated from /api/shop-info at startup. No hardcoded fallbacks.
+let _SITE_URL  = '';
+let _FORUM_URL = '';
+function getSiteUrl()  { return _SITE_URL; }
+function getForumUrl() { return _FORUM_URL; }
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function getCsrf() {
@@ -108,7 +114,7 @@ function LoginPage({ onLogin }) {
                 </button>
               </div>
               <div style={{marginTop:12, textAlign:'center', fontSize:12, color:'var(--ink-3)'}}>
-                <a href="https://outbackelectronics.com.au">← Back to main site</a>
+                <a href={getSiteUrl()}>← Back to main site</a>
               </div>
             </>
         }
@@ -308,7 +314,7 @@ function PortalNav({ user, tab, setTab, onLogout }) {
     <>
       <div className="topnav">
         <div className="container row">
-          <a href="https://outbackelectronics.com.au" className="logo">
+          <a href={getSiteUrl()} className="logo">
             <div className="logo-mark">
               <img src="assets/logo.webp" alt="Outback Electronics" />
             </div>
@@ -397,13 +403,13 @@ function OverviewTab({ user, setTab }) {
             <span className="eyebrow">Shop</span>
             <h3 className="serif" style={{fontSize:26, marginTop:8}}>Browse our catalogue</h3>
             <p style={{marginTop:8, color:'var(--ink-2)', fontSize:14}}>Rugged laptops, radios, solar gear and more — built for where the signal ends.</p>
-            <a href="https://outbackelectronics.com.au/shop" className="btn btn-rust" style={{marginTop:16, display:'inline-flex'}}>Go to Shop →</a>
+            <a href={getSiteUrl() + '/shop'} className="btn btn-rust" style={{marginTop:16, display:'inline-flex'}}>Go to Shop →</a>
           </div>
           <div className="card-paper" style={{padding:24}}>
             <span className="eyebrow">Support</span>
             <h3 className="serif" style={{fontSize:26, marginTop:8}}>Need help?</h3>
             <p style={{marginTop:8, color:'var(--ink-2)', fontSize:14}}>Our team can help with orders, repairs, returns and anything else. Phone or email.</p>
-            <a href="https://outbackelectronics.com.au/contact" className="btn btn-ghost" style={{marginTop:16, display:'inline-flex'}}>Contact us →</a>
+            <a href={getSiteUrl() + '/contact'} className="btn btn-ghost" style={{marginTop:16, display:'inline-flex'}}>Contact us →</a>
           </div>
         </div>
       </div>
@@ -1396,7 +1402,7 @@ function BookingsTab() {
             <div className="card-paper" style={{padding:28, marginTop: showForm ? 0 : 16}}>
               <p style={{color:'var(--ink-2)', marginBottom:16}}>No bookings yet. Use the button above to request an appointment, or contact us directly.</p>
               <div style={{display:'flex', gap:12, flexWrap:'wrap'}}>
-                <a className="btn btn-ghost" href="https://outbackelectronics.com.au/contact">Contact us</a>
+                <a className="btn btn-ghost" href={getSiteUrl() + '/contact'}>Contact us</a>
               </div>
             </div>
           )
@@ -1531,7 +1537,7 @@ function EmptyState({ icon, message }) {
       </svg>
       <p>{message}</p>
       <p style={{marginTop:8, fontSize:13}}>
-        Need help? <a href="https://outbackelectronics.com.au/contact" style={{color:'var(--rust)'}}>Contact our team →</a>
+        Need help? <a href={getSiteUrl() + '/contact'} style={{color:'var(--rust)'}}>Contact our team →</a>
       </p>
     </div>
   );
@@ -1689,10 +1695,10 @@ function Dashboard({ user, setUser, onLogout }) {
           <div className="row-flex">
             <span>© {new Date().getFullYear()} Outback Electronics</span>
             <div style={{display:'flex', gap:20}}>
-              <a href="https://outbackelectronics.com.au">Main site</a>
-              <a href="https://forum.outbackelectronics.com.au">Forum</a>
-              <a href="https://outbackelectronics.com.au/contact">Contact</a>
-              <a href="https://outbackelectronics.com.au/policies">Policies</a>
+              <a href={getSiteUrl()}>Main site</a>
+              <a href={getForumUrl()}>Forum</a>
+              <a href={getSiteUrl() + '/contact'}>Contact</a>
+              <a href={getSiteUrl() + '/policies'}>Policies</a>
             </div>
           </div>
         </div>
@@ -2006,9 +2012,15 @@ function PortalApp() {
 
   useEffect(() => {
     ensureCsrf().then(() =>
-      api('/api/portal/auth/me')
-        .then(d => { setUser(d.user || null); setLoading(false); })
-        .catch(() => setLoading(false))
+      Promise.all([
+        api('/api/portal/auth/me'),
+        fetch('/api/shop-info').then(r => r.json()).catch(() => ({})),
+      ]).then(([d, shopInfo]) => {
+        if (shopInfo.shop?.siteUrl) _SITE_URL  = shopInfo.shop.siteUrl;
+        if (shopInfo.forumUrl)      _FORUM_URL = shopInfo.forumUrl;
+        setUser(d.user || null);
+        setLoading(false);
+      }).catch(() => setLoading(false))
     );
   }, []);
 
