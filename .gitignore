@@ -4,3 +4,4 @@
 node_modules/
 .env
 admin-audit.log
+dist/
