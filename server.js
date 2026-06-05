@@ -5545,6 +5545,21 @@ const toolsServer = http.createServer(async (req, res) => {
     return json(res, 204, {});
   }
 
+  if (req.method === 'GET' && url.pathname === '/api/shop-info') {
+    const { shop, flags } = readSettings();
+    return json(res, 200, { shop, flags: flags || {}, portalUrl: getPortalUrl(), forumUrl: getForumUrl(), gamesUrl: getGamesUrl(), toolsUrl: getToolsUrl() });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/announcement') {
+    const { announcement } = readSettings();
+    if (!announcement.enabled) return json(res, 200, { active: false });
+    if (announcement.expiresAt) {
+      const expires = new Date(announcement.expiresAt);
+      if (!isNaN(expires) && expires < new Date()) return json(res, 200, { active: false });
+    }
+    return json(res, 200, { active: true, text: announcement.text });
+  }
+
   return serveStatic(req, res, url.pathname, '/dist/tools.html', null);
   } catch (err) {
     console.error('[toolsServer] unhandled error:', err);
