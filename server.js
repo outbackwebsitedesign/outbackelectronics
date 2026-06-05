@@ -1025,15 +1025,13 @@ function getHeroImagePreload() {
   return '';
 }
 
-const PORTAL_PRECONNECT = '<link rel="preconnect" href="https://portal.outbackelectronics.com.au">';
-
 function serveIndexWithOg(res, og, pathname) {
   const distPath = path.join(__dirname, 'dist', 'index.html');
   fs.readFile(distPath, 'utf8', (err, template) => {
     if (err) return sendErrorPage(res, 404, 'Not found', ERROR_404_HTML);
     const ogType = og.type === 'product' ? 'product' : 'website';
     const isHome = pathname === '/' || pathname === '/shop';
-    const extraHead = (isHome ? getHeroImagePreload() + '\n' : '') + PORTAL_PRECONNECT;
+    const extraHead = isHome ? getHeroImagePreload() : '';
     const html = template
       .replace(/<\/head>/, `${extraHead}\n</head>`)
       .replace(/<title>[^<]*<\/title>/, `<title>${escOg(og.title)}</title>`)
