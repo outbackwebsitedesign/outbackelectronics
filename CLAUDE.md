@@ -47,7 +47,7 @@ In production, subdomains map to ports: `forum.outbackelectronics.com.au` → 80
 
 ### Frontend
 
-React 18 + Vite. The build produces a single `dist/` folder with multiple HTML entry points (configured in `vite.config.js` as a multi-page app). **`dist/` is committed to the repo** — no build step is required in deployment.
+React 18 + Vite. The build produces a single `dist/` folder with multiple HTML entry points (configured in `vite.config.js` as a multi-page app). **`dist/` must NEVER be committed or tracked** — it is gitignored and rebuilt from source every time `./deploy.sh` runs.
 
 JSX source files at the repo root map to services:
 
