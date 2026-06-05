@@ -193,6 +193,7 @@ const ADMIN_SECTIONS = [
     { id:'memberships', label:'Memberships', minRole:'manager' },
     { id:'gift-cards', label:'Gift Cards',   minRole:'staff', excludeRoles:['seller'] },
     { id:'rewards',   label:'Rewards',       minRole:'manager' },
+    { id:'store-credit', label:'Store Credit', minRole:'manager' },
     { id:'expenses',  label:'Expenses',      minRole:'manager' },
     { id:'policies',  label:'Policies',      minRole:'manager' },
     { id:'seller-billing', label:'Seller Billing', minRole:'manager' },
@@ -542,6 +543,9 @@ function AdminOrders({ search }) {
   }, []);
   const [trackingBusy, setTrackingBusy] = useState(false);
   const [trackingResult, setTrackingResult] = useState(null);
+  const [refundEntry, setRefundEntry] = useState({ method:'stripe', amount:'' });
+  const [refundBusy, setRefundBusy] = useState(false);
+  const [refundError, setRefundError] = useState(null);
 
   const openRow = (r) => { setEdit(r); setForm({...r}); setPayEntry({ amount:'', method:'Cash', note:'' }); setExpenseEdit(null); setExpenseForm({}); setTrackingResult(null); setTrackingEmailStatus(null); };
 
@@ -550,6 +554,22 @@ function AdminOrders({ search }) {
     setForm(updated);
     await fetch('/api/admin/orders/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ ...updated, _originalId: edit?.id || updated.id }) }).catch(()=>null);
     setRows(rs => rs.map(r => r.id === (edit?.id || updated.id) ? updated : r));
+  };
+
+  const doRefund = async () => {
+    const amt = Number(refundEntry.amount);
+    if (!amt || amt <= 0) { setRefundError('Enter a refund amount greater than zero.'); return; }
+    const methodLabel = refundEntry.method === 'stripe' ? 'refund to the original card via Stripe' : 'issue store credit';
+    if (!confirm(`This will ${methodLabel} of $${amt.toFixed(2)} for order ${form.id} and mark it refunded. Continue?`)) return;
+    setRefundBusy(true); setRefundError(null);
+    const r = await fetch('/api/admin/orders/refund', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: form.id, method: refundEntry.method, amount: amt }) }).catch(()=>null);
+    setRefundBusy(false);
+    if (!r) { setRefundError('Network error. Please try again.'); return; }
+    const d = await r.json().catch(()=>({}));
+    if (!r.ok) { setRefundError(d.message || 'Refund failed.'); return; }
+    setForm(d.order);
+    setRows(rs => rs.map(row => row.id === form.id ? d.order : row));
+    setRefundEntry({ method:'stripe', amount:'' });
   };
 
   const checkTracking = async () => {
@@ -1014,6 +1034,34 @@ function AdminOrders({ search }) {
             <label className="field" style={{margin:0}}><span className="label">Note (optional)</span><input className="input" placeholder="e.g. deposit, part payment" value={payEntry.note} onChange={e=>setPayEntry(v=>({...v,note:e.target.value}))}/></label>
             <button className="btn btn-sm" style={{marginBottom:1}} onClick={addPayment}>Log</button>
           </div>
+
+          {/* Refund */}
+          {form.id && (
+            <div style={{marginTop:16, padding:'14px', background:'#fbeae1', border:'1px solid #e3b9a3'}}>
+              <div className="mono" style={{fontSize:10, letterSpacing:'.1em', color:'#7a3a18', marginBottom:10}}>REFUND</div>
+              {form.refund ? (
+                <div style={{fontSize:13, color:'#7a3a18'}}>
+                  Refunded <strong>${Number(form.refund.amount).toLocaleString('en-AU',{minimumFractionDigits:2})}</strong> via {form.refund.method === 'stripe' ? 'Stripe (original payment)' : 'store credit'} on {new Date(form.refund.date).toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'})}.
+                </div>
+              ) : (
+                <>
+                  <div style={{fontSize:12, color:'var(--ink-2)', marginBottom:10}}>Ask the customer whether they want their money back or store credit, then choose below. The customer is emailed automatically and the order is marked refunded.</div>
+                  <div style={{display:'grid', gridTemplateColumns:'1fr 120px auto', gap:8, alignItems:'end'}}>
+                    <label className="field" style={{margin:0}}><span className="label">Method</span>
+                      <select className="select" value={refundEntry.method} onChange={e=>setRefundEntry(v=>({...v,method:e.target.value}))}>
+                        <option value="stripe">Money back (Stripe)</option>
+                        <option value="store-credit">Store credit</option>
+                      </select>
+                    </label>
+                    <label className="field" style={{margin:0}}><span className="label">Amount</span><input className="input" type="number" min="0" step="0.01" placeholder={Number(form.total||0).toFixed(2)} value={refundEntry.amount} onChange={e=>setRefundEntry(v=>({...v,amount:e.target.value}))}/></label>
+                    <button className="btn btn-sm" style={{background:'#7a3a18', color:'#fff', border:'none', marginBottom:1}} onClick={doRefund} disabled={refundBusy}>{refundBusy ? 'Processing…' : 'Issue Refund'}</button>
+                  </div>
+                  {refundEntry.method === 'store-credit' && <div style={{fontSize:11, color:'var(--ink-3)', marginTop:6}}>Store credit requires the customer to have an account with email {form.email || '(none set)'}.</div>}
+                  {refundError && <div style={{fontSize:12, color:'#b91c1c', marginTop:8}}>{refundError}</div>}
+                </>
+              )}
+            </div>
+          )}
 
           {/* Customer-visible updates */}
           <div style={{borderTop:'1px solid var(--line)', margin:'16px 0 16px'}}/>
@@ -4251,6 +4299,108 @@ function AdminRewards() {
   );
 }
 
+function AdminStoreCredit() {
+  const [entries, setEntries] = useState([]);
+  const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState(null); // { userId, displayName, email, balance, history }
+  const [grantForm, setGrantForm] = useState({ amount: '', description: '' });
+  const [grantError, setGrantError] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  const load = () => fetch('/api/admin/store-credit', { credentials: 'include' })
+    .then(r => r.json()).then(d => {
+      const sorted = (d.entries || []).sort((a, b) => b.balance - a.balance);
+      setEntries(sorted);
+      if (selected) setSelected(sorted.find(e => e.userId === selected.userId) || null);
+    }).catch(() => {});
+
+  useEffect(() => { load(); }, []);
+
+  const filtered = entries.filter(e => {
+    const q = search.toLowerCase();
+    return !q || (e.displayName || '').toLowerCase().includes(q) || (e.email || '').toLowerCase().includes(q) || (e.username || '').toLowerCase().includes(q);
+  });
+
+  const adjust = async (sign) => {
+    if (!selected) return;
+    const v = Number(grantForm.amount);
+    if (!v || v <= 0) { setGrantError('Enter a positive dollar amount.'); return; }
+    const amount = sign > 0 ? Math.abs(v) : -Math.abs(v);
+    setSaving(true); setGrantError(null);
+    const resp = await fetch('/api/admin/store-credit/adjust', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ userId: selected.userId, amount, description: grantForm.description }) }).catch(() => null);
+    setSaving(false);
+    if (resp && resp.ok) { setGrantForm({ amount: '', description: '' }); load(); }
+    else setGrantError('Failed to save. Check the amount and try again.');
+  };
+
+  const fmtDate = d => { try { return new Date(d).toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' }); } catch { return d || ''; } };
+  const fmt$ = n => '$' + (Number(n) || 0).toLocaleString('en-AU', { minimumFractionDigits: 2 });
+  const typeLabel = { order:'Order', repair:'Repair', refund:'Refund', redeem:'Redeemed', grant:'Admin grant', adjust:'Admin adjust' };
+
+  return (
+    <div style={{display:'flex', gap:24, alignItems:'flex-start', flexWrap:'wrap'}}>
+      <div style={{flex:'0 0 320px', minWidth:0}}>
+        <input className="input" placeholder="Search by name or email…" value={search} onChange={e => setSearch(e.target.value)} style={{width:'100%', marginBottom:12}} />
+        <div className="card-paper" style={{overflow:'auto', maxHeight:520}}>
+          {filtered.length === 0 && <div style={{padding:20, color:'var(--ink-3)', fontSize:13}}>No store credit accounts yet.</div>}
+          {filtered.map(e => (
+            <div key={e.userId} onClick={() => { setSelected(e); setGrantError(null); setGrantForm({ amount: '', description: '' }); }}
+              style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 16px', borderBottom:'1px solid var(--line)', cursor:'pointer', background: selected?.userId === e.userId ? 'var(--bg-elev)' : 'transparent'}}>
+              <div>
+                <div style={{fontWeight:500, fontSize:13}}>{e.displayName || e.username || e.userId}</div>
+                <div style={{fontSize:11, color:'var(--ink-3)'}}>{e.email}</div>
+              </div>
+              <div style={{fontWeight:700, fontSize:14, color:'var(--ochre)', flexShrink:0}}>{fmt$(e.balance)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {selected ? (
+        <div style={{flex:1, minWidth:260}}>
+          <div className="card-paper" style={{padding:20, marginBottom:16}}>
+            <div style={{fontWeight:600, fontSize:15, marginBottom:2}}>{selected.displayName || selected.username}</div>
+            <div style={{fontSize:12, color:'var(--ink-3)', marginBottom:12}}>{selected.email}</div>
+            <div style={{fontSize:28, fontFamily:'Instrument Serif, serif', color:'var(--ochre)'}}>{fmt$(selected.balance)} <span style={{fontSize:14, color:'var(--ink-2)'}}>balance</span></div>
+          </div>
+
+          <div className="card-paper" style={{padding:20, marginBottom:16}}>
+            <div className="eyebrow" style={{marginBottom:10}}>ADJUST STORE CREDIT</div>
+            <div style={{display:'flex', gap:8, marginBottom:8}}>
+              <input className="input" type="number" step="0.01" placeholder="Amount (e.g. 25.00)" value={grantForm.amount} onChange={e => setGrantForm(f => ({ ...f, amount: e.target.value }))} style={{flex:1}} />
+              <input className="input" placeholder="Reason" value={grantForm.description} onChange={e => setGrantForm(f => ({ ...f, description: e.target.value }))} style={{flex:2}} />
+            </div>
+            {grantError && <div style={{fontSize:12, color:'#b91c1c', marginBottom:8}}>{grantError}</div>}
+            <div style={{display:'flex', gap:8}}>
+              <button className="btn btn-sm" style={{background:'#345526', color:'#fff'}} onClick={() => adjust(1)} disabled={saving}>+ Issue</button>
+              <button className="btn btn-sm btn-ghost" onClick={() => adjust(-1)} disabled={saving}>− Deduct</button>
+            </div>
+          </div>
+
+          <div className="card-paper" style={{overflow:'auto', maxHeight:360}}>
+            <div className="eyebrow" style={{padding:'12px 16px 8px'}}>HISTORY</div>
+            {(selected.history || []).length === 0 && <div style={{padding:'8px 16px 16px', color:'var(--ink-3)', fontSize:13}}>No history.</div>}
+            {[...(selected.history || [])].reverse().map((h, i) => (
+              <div key={h.id || i} style={{display:'flex', alignItems:'center', gap:12, padding:'10px 16px', borderTop:'1px solid var(--line)', flexWrap:'wrap'}}>
+                <div style={{flex:1, minWidth:0}}>
+                  <div style={{fontSize:13, fontWeight:500}}>{typeLabel[h.type] || h.type}</div>
+                  <div style={{fontSize:11, color:'var(--ink-3)'}}>{h.description}{h.refId ? ` · ${h.refId}` : ''}</div>
+                  <div style={{fontSize:11, color:'var(--ink-3)'}}>{fmtDate(h.date)}</div>
+                </div>
+                <div style={{fontWeight:700, fontSize:13, color: h.amount > 0 ? '#345526' : 'var(--rust)', flexShrink:0}}>
+                  {h.amount > 0 ? '+' : '−'}{fmt$(Math.abs(h.amount))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div style={{flex:1, display:'flex', alignItems:'center', justifyContent:'center', color:'var(--ink-3)', fontSize:13, padding:40}}>Select a customer to view their store credit.</div>
+      )}
+    </div>
+  );
+}
+
 // EXPENSES
 // ============================================================
 function AdminExpenses() {
@@ -5615,6 +5765,7 @@ const ADMIN_VIEWS = {
   memberships: { c: AdminMemberships, t:'Memberships', staticSubtitle:'tiers · subscriptions · activation' },
   'gift-cards': { c: AdminGiftCards, t:'Gift Cards',        staticSubtitle:'issued codes · balances · manual issuance' },
   'rewards':    { c: AdminRewards,   t:'Rewards',           staticSubtitle:'points balances · history · manual adjustments' },
+  'store-credit': { c: AdminStoreCredit, t:'Store Credit',  staticSubtitle:'credit balances · history · manual adjustments' },
   expenses:   { c: AdminExpenses,   t:'Expenses',         staticSubtitle:'track costs · receipt uploads' },
   policies:   { c: AdminPolicies,   t:'Policies',         staticSubtitle:'edit public-facing policy docs' },
   settings:   { c: AdminSettings,   t:'Settings',         staticSubtitle:'shop · staff · integrations' },

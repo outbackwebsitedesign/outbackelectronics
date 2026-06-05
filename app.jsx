@@ -798,6 +798,7 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
   const [rewardsLoading, setRewardsLoading] = useState(true);
   const [rewardsError, setRewardsError] = useState(null);
   const [rewardsApply, setRewardsApply] = useState(false);
+  const [storeCreditApply, setStoreCreditApply] = useState(false);
   const [shareLink, setShareLink] = useState(null);
   const [sharing, setSharing] = useState(false);
   const [shareError, setShareError] = useState(null);
@@ -867,7 +868,12 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
   const preRewardsTotal = Math.max(0, subtotal + shippingCost - discount);
   const rewardsPointsToRedeem = (rewardsData && rewardsApply) ? Math.min(rewardsData.points, Math.round(preRewardsTotal * 100)) : 0;
   const rewardsDollars = rewardsPointsToRedeem / 100;
-  const total = Math.max(0, preRewardsTotal - rewardsDollars);
+  const afterRewardsTotal = Math.max(0, preRewardsTotal - rewardsDollars);
+  const storeCreditAvail = rewardsData ? (rewardsData.storeCredit || 0) : 0;
+  const storeCreditToRedeem = (rewardsData && storeCreditApply)
+    ? Math.round(Math.min(storeCreditAvail, afterRewardsTotal) * 100) / 100
+    : 0;
+  const total = Math.max(0, Math.round((afterRewardsTotal - storeCreditToRedeem) * 100) / 100);
 
   const getShippingQuote = async () => {
     const pc = postcodeInput.trim();
@@ -923,7 +929,7 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
   useEffect(() => {
     fetch('/api/rewards/me', { credentials: 'include' })
       .then(r => r.json())
-      .then(d => { if (d.loggedIn) { setRewardsData(d); setRewardsApply(d.points > 0); } })
+      .then(d => { if (d.loggedIn) { setRewardsData(d); setRewardsApply(d.points > 0); setStoreCreditApply((d.storeCredit || 0) > 0); } })
       .catch(() => {})
       .finally(() => setRewardsLoading(false));
   }, []);
@@ -943,13 +949,14 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
       if (!resp.ok) { setRewardsError(data.message || 'Could not verify account.'); return; }
       setRewardsData(data);
       setRewardsApply(data.points > 0);
+      setStoreCreditApply((data.storeCredit || 0) > 0);
     } catch {
       setRewardsError('Could not connect. Please try again.');
     } finally {
       setRewardsLoading(false);
     }
   };
-  const removeRewards = () => { setRewardsData(null); setRewardsEmail(''); setRewardsPassword(''); setRewardsError(null); setRewardsApply(false); };
+  const removeRewards = () => { setRewardsData(null); setRewardsEmail(''); setRewardsPassword(''); setRewardsError(null); setRewardsApply(false); setStoreCreditApply(false); };
 
   const checkout = async () => {
     if (cart.length === 0) return;
@@ -966,6 +973,10 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
       if (gc) body.giftCardCode = gc.code;
       if (rewardsData && rewardsApply && rewardsPointsToRedeem > 0) {
         body.redeemPoints = rewardsPointsToRedeem;
+        body.rewardsToken = rewardsData.token;
+      }
+      if (rewardsData && storeCreditApply && storeCreditToRedeem > 0) {
+        body.redeemStoreCredit = storeCreditToRedeem;
         body.rewardsToken = rewardsData.token;
       }
       if (selectedShipping) {
@@ -1110,7 +1121,7 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
                 </div>
               )}
 
-              {(discount > 0 || shippingCost > 0) && (
+              {(discount > 0 || shippingCost > 0 || rewardsDollars > 0 || storeCreditToRedeem > 0) && (
                 <>
                   <div style={{display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:6, color:'var(--ink-2)'}}>
                     <span>Subtotal</span>
@@ -1126,6 +1137,18 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
                     <div style={{display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:6, color:'#16a34a'}}>
                       <span>Gift card ({gc.code})</span>
                       <span>−${discount.toLocaleString('en-AU', {minimumFractionDigits:2})}</span>
+                    </div>
+                  )}
+                  {rewardsDollars > 0 && (
+                    <div style={{display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:6, color:'#16a34a'}}>
+                      <span>Rewards points</span>
+                      <span>−${rewardsDollars.toLocaleString('en-AU', {minimumFractionDigits:2})}</span>
+                    </div>
+                  )}
+                  {storeCreditToRedeem > 0 && (
+                    <div style={{display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:6, color:'#16a34a'}}>
+                      <span>Store credit</span>
+                      <span>−${storeCreditToRedeem.toLocaleString('en-AU', {minimumFractionDigits:2})}</span>
                     </div>
                   )}
                   <hr className="thin" />
@@ -1177,7 +1200,13 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
                       Redeem {Math.min(rewardsData.points, Math.round(preRewardsTotal * 100)).toLocaleString('en-AU')} pts (−${(Math.min(rewardsData.points, Math.round(preRewardsTotal * 100)) / 100).toLocaleString('en-AU', {minimumFractionDigits:2})})
                     </label>
                   )}
-                  {rewardsData.points === 0 && <span style={{color:'#92400e'}}>No points to redeem.</span>}
+                  {rewardsData.points === 0 && (rewardsData.storeCredit || 0) === 0 && <span style={{color:'#92400e'}}>No points to redeem.</span>}
+                  {storeCreditAvail > 0 && (
+                    <label style={{display:'flex', alignItems:'center', gap:8, cursor:'pointer', color:'#78350f', marginTop: rewardsData.points > 0 ? 8 : 0}}>
+                      <input type="checkbox" checked={storeCreditApply} onChange={e => setStoreCreditApply(e.target.checked)} />
+                      Apply store credit ${storeCreditAvail.toLocaleString('en-AU', {minimumFractionDigits:2})} (−${Math.min(storeCreditAvail, afterRewardsTotal).toLocaleString('en-AU', {minimumFractionDigits:2})})
+                    </label>
+                  )}
                 </div>
               ) : rewardsLoading ? null : (
                 <div style={{marginBottom:14}}>
