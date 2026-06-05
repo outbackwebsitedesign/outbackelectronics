@@ -42,6 +42,7 @@ const PUBLIC_CSP = "default-src 'self'; " +
     "https://adservice.google.com https://adservice.google.com.au " +
     "https://*.adtrafficquality.google; " +
   "frame-src https://www.openstreetmap.org https://*.tawk.to " +
+    "https://pagead2.googlesyndication.com https://*.googlesyndication.com " +
     "https://googleads.g.doubleclick.net https://tpc.googlesyndication.com " +
     "https://www.google.com https://ep2.adtrafficquality.google; " +
   "frame-ancestors 'none';";
@@ -839,7 +840,7 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null) {
     fs.readFile(filePath, (err, data) => {
       if (err) return tryRead(paths, idx + 1);
       const ext = path.extname(filePath).toLowerCase();
-      const types = { '.html': 'text/html', '.jsx': 'text/javascript', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.woff': 'font/woff', '.woff2': 'font/woff2' };
+      const types = { '.html': 'text/html', '.jsx': 'text/javascript', '.js': 'text/javascript', '.css': 'text/css', '.txt': 'text/plain', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.woff': 'font/woff', '.woff2': 'font/woff2' };
       const isSoftwareDownload = filePath.includes('/assets/uploads/software/');
       const isImmutable = /\.(js|css|png|jpg|jpeg|webp|gif|svg|ico|woff2?)$/.test(ext) && !isSoftwareDownload;
       const cacheHeader = isImmutable
