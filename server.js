@@ -603,8 +603,6 @@ async function parseForumPayload(res, req, validate) {
   return parsed.body;
 }
 
-// Only trust X-Forwarded-For when the direct connection comes from a known private/loopback proxy.
-// Otherwise use the socket address directly to prevent IP spoofing via crafted headers.
 function isPrivateIp(ip) {
   if (!ip) return false;
   return ip === '127.0.0.1' || ip === '::1' ||
@@ -613,12 +611,59 @@ function isPrivateIp(ip) {
     /^192\.168\./.test(ip) ||
     /^::ffff:(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)/.test(ip);
 }
+
+// Cloudflare's published IPv4 and IPv6 egress ranges (https://www.cloudflare.com/ips/).
+// Only trust CF-Connecting-IP / X-Forwarded-For when the TCP connection arrives from one of
+// these ranges or a local private proxy — otherwise an attacker hitting the origin directly
+// could spoof those headers to bypass rate limits, lockouts, and the admin IP allowlist.
+const CLOUDFLARE_CIDRS_V4 = [
+  [0x67390000, 16], // 103.57.0.0/16  — placeholder; real list below
+].filter(() => false); // replaced by the cidr helper below
+
+// We store CIDRs as [base, mask] pairs for fast matching without a dependency.
+function parseCidr(cidr) {
+  const [addr, bits] = cidr.split('/');
+  const parts = addr.split('.').map(Number);
+  const base = ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0;
+  const mask = bits === '32' ? 0xffffffff : (~(0xffffffff >>> Number(bits))) >>> 0;
+  return [base, mask];
+}
+const CF_V4_CIDRS = [
+  '103.21.244.0/22', '103.22.200.0/22', '103.31.4.0/22',
+  '104.16.0.0/13',   '104.24.0.0/14',
+  '108.162.192.0/18',
+  '131.0.72.0/22',
+  '141.101.64.0/18',
+  '162.158.0.0/15',
+  '172.64.0.0/13',
+  '173.245.48.0/20',
+  '188.114.96.0/20',
+  '190.93.240.0/20',
+  '197.234.240.0/22',
+  '198.41.128.0/17',
+].map(parseCidr);
+
+function isCloudflareIp(ip) {
+  if (!ip) return false;
+  // Strip IPv4-mapped IPv6 prefix
+  const raw = ip.startsWith('::ffff:') ? ip.slice(7) : ip;
+  if (!raw.includes('.')) return false; // IPv6 Cloudflare ranges not included; extend if needed
+  const parts = raw.split('.').map(Number);
+  if (parts.length !== 4 || parts.some(isNaN)) return false;
+  const n = ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0;
+  return CF_V4_CIDRS.some(([base, mask]) => (n & mask) === base);
+}
+
+function isTrustedProxy(ip) {
+  return isPrivateIp(ip) || isCloudflareIp(ip);
+}
+
 function getIp(req) {
   const remoteIp = req.socket.remoteAddress || 'unknown';
-  // Only trust proxy-injected headers when the direct connection is from a known private proxy.
-  // If the origin is reachable directly, an attacker could spoof CF-Connecting-IP/XFF to bypass
-  // rate limits, lockouts, and the IP allowlist.
-  if (isPrivateIp(remoteIp)) {
+  // Only trust proxy-injected headers when the direct connection is from a known proxy
+  // (local private address or a published Cloudflare egress IP). If the origin is reachable
+  // directly from arbitrary IPs, those headers must not be trusted.
+  if (isTrustedProxy(remoteIp)) {
     const cf = (req.headers['cf-connecting-ip'] || '').trim();
     if (cf) return cf;
     const forwarded = (req.headers['x-forwarded-for'] || '').split(',')[0].trim();
