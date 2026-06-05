@@ -1552,10 +1552,12 @@ function WarrantyPage({ orderId: initialOrderId }) {
     if (initialOrderId) doLookup(initialOrderId);
   }, []);
 
-  async function doLookup(id) {
+  async function doLookup(id, email) {
     setLookupErr('');
-    const d = await api(`/api/warranty/order-lookup?id=${encodeURIComponent(id)}`).catch(() => null);
-    if (!d || !d.found) { setLookupErr('Order not found. Check the ID in your email and try again.'); return; }
+    const em = (email || form.email || '').trim();
+    if (!em) { setLookupErr('Please enter your email address first.'); return; }
+    const d = await api(`/api/warranty/order-lookup?id=${encodeURIComponent(id)}&email=${encodeURIComponent(em)}`).catch(() => null);
+    if (!d || !d.found) { setLookupErr('Order not found. Check the ID and email in your confirmation email and try again.'); return; }
     setLookup(d);
   }
 
@@ -1588,10 +1590,14 @@ function WarrantyPage({ orderId: initialOrderId }) {
         <p style={{ color: 'var(--ink-2)', marginBottom: 24 }}>Enter your order ID and we'll pull up your build details automatically.</p>
 
         {!lookup ? (
-          <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
-            <input className="input" style={{ flex: 1 }} placeholder="e.g. ord-1234567890" value={orderId}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24 }}>
+            <input className="input" placeholder="e.g. ord-1234567890" value={orderId}
               onChange={e => setOrderId(e.target.value)} />
-            <button className="btn btn-rust" onClick={() => doLookup(orderId)} disabled={!orderId.trim()}>Look up →</button>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <input className="input" type="email" style={{ flex: 1 }} placeholder="Email from your order confirmation"
+                value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))} />
+              <button className="btn btn-rust" onClick={() => doLookup(orderId, form.email)} disabled={!orderId.trim() || !form.email.trim()}>Look up →</button>
+            </div>
           </div>
         ) : (
           <div className="card-paper" style={{ padding: 16, marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

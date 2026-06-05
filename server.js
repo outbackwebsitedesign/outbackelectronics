@@ -47,7 +47,7 @@ const PUBLIC_CSP = "default-src 'self'; " +
     "https://www.google.com https://ep2.adtrafficquality.google; " +
   "frame-ancestors 'none';";
 const PUBLIC_RATE_WINDOW_MS = 1000 * 60 * 10;
-const PUBLIC_RATE_LIMITS = { checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10, 'forgot-password': 5, 'reset-password': 10, 'gift-card/apply': 10 };
+const PUBLIC_RATE_LIMITS = { checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10, 'forgot-password': 5, 'reset-password': 10, 'gift-card/apply': 10, 'gift-card/balance': 5, 'warranty/order-lookup': 10, 'cart/get': 20 };
 
 fs.mkdirSync(path.join(__dirname, 'assets/uploads'), { recursive: true });
 fs.mkdirSync(path.join(__dirname, 'assets/uploads/software'), { recursive: true });
@@ -2742,9 +2742,14 @@ const mainServer = http.createServer(async (req, res) => {
   if (req.method === 'GET' && url.pathname === '/api/gift-card/balance') {
     if (publicRateLimited(getIp(req), 'gift-card/balance')) return json(res, 429, { error: 'too_many_requests' });
     const code = (url.searchParams.get('code') || '').trim().toUpperCase();
+    const emailParam = (url.searchParams.get('email') || '').trim().toLowerCase();
     if (!code) return json(res, 400, { error: 'missing_code' });
+    if (!emailParam) return json(res, 400, { error: 'missing_email' });
     const gc = readGiftCards().find(c => c.code === code);
-    if (!gc) return json(res, 404, { error: 'not_found' });
+    // Always do the email comparison to prevent timing-based code enumeration
+    const gcEmail = gc ? (gc.recipientEmail || '').toLowerCase() : '';
+    const emailMatch = gcEmail && gcEmail === emailParam;
+    if (!gc || !emailMatch) return json(res, 404, { error: 'not_found' });
     if (gc.isVoid) return json(res, 200, { code: gc.code, balance: 0, originalBalance: gc.originalBalance, isVoid: true });
     return json(res, 200, { code: gc.code, balance: gc.balance, originalBalance: gc.originalBalance, isVoid: false });
   }
@@ -2780,6 +2785,7 @@ const mainServer = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'GET' && url.pathname.startsWith('/api/cart/')) {
+    if (publicRateLimited(getIp(req), 'cart/get')) return json(res, 429, { error: 'too_many_requests' });
     const id = url.pathname.split('/api/cart/')[1];
     if (!id || !/^[0-9a-f]{8}$/.test(id)) return json(res, 404, { error: 'not_found' });
     const cart = readCarts().find(c => c.id === id && c.expiresAt > Date.now());
@@ -2818,11 +2824,17 @@ const mainServer = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'GET' && url.pathname === '/api/warranty/order-lookup') {
+    if (publicRateLimited(getIp(req), 'warranty/order-lookup')) return json(res, 429, { error: 'too_many_requests' });
     const orderId = (url.searchParams.get('id') || '').trim();
+    const emailParam = (url.searchParams.get('email') || '').trim().toLowerCase();
     if (!orderId) return json(res, 400, { error: 'missing_id' });
+    if (!emailParam) return json(res, 400, { error: 'missing_email' });
     const orders = readOrders();
     const order = orders.find(o => o.id === orderId);
-    if (!order) return json(res, 404, { found: false });
+    // Always compare email to prevent timing-based order ID enumeration
+    const orderEmail = order ? (order.email || '').toLowerCase() : '';
+    const emailMatch = orderEmail && orderEmail === emailParam;
+    if (!order || !emailMatch) return json(res, 404, { found: false });
     const expenses = readExpenses().filter(e => e.jobId === order.id);
     return json(res, 200, {
       found: true,

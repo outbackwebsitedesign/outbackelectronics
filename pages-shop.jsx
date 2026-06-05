@@ -1259,6 +1259,7 @@ function GiftCardsPage({ go, addToCart }) {
   const [denominations, setDenominations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [balanceCode, setBalanceCode] = useState('');
+  const [balanceEmail, setBalanceEmail] = useState('');
   const [balanceResult, setBalanceResult] = useState(null);
   const [balanceError, setBalanceError] = useState(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
@@ -1273,15 +1274,17 @@ function GiftCardsPage({ go, addToCart }) {
 
   const checkBalance = async () => {
     const code = balanceCode.trim().toUpperCase();
-    if (!code) return;
+    const email = balanceEmail.trim().toLowerCase();
+    if (!code || !email) return;
     setBalanceLoading(true);
     setBalanceResult(null);
     setBalanceError(null);
     try {
-      const resp = await fetch(`/api/gift-card/balance?code=${encodeURIComponent(code)}`);
+      const resp = await fetch(`/api/gift-card/balance?code=${encodeURIComponent(code)}&email=${encodeURIComponent(email)}`);
       const data = await resp.json();
       if (resp.ok) setBalanceResult(data);
-      else setBalanceError(data.error === 'not_found' ? 'Gift card not found.' : 'Could not look up this code.');
+      else if (data.error === 'missing_email') setBalanceError('Please enter the email address the gift card was sent to.');
+      else setBalanceError(data.error === 'not_found' ? 'Gift card not found or email address does not match.' : 'Could not look up this code.');
     } catch {
       setBalanceError('Could not connect. Please try again.');
     } finally {
@@ -1345,18 +1348,29 @@ function GiftCardsPage({ go, addToCart }) {
 
         <div className="card-paper" style={{marginTop:32, padding:32, maxWidth:480}}>
           <div className="eyebrow" style={{marginBottom:12}}>CHECK YOUR BALANCE</div>
-          <div style={{display:'flex', gap:8}}>
+          <div style={{display:'flex', flexDirection:'column', gap:8}}>
             <input
               className="input"
               placeholder="OBE-XXXX-XXXX-XXXX"
               value={balanceCode}
               onChange={e => { setBalanceCode(e.target.value.toUpperCase()); setBalanceResult(null); setBalanceError(null); }}
               onKeyDown={e => e.key === 'Enter' && checkBalance()}
-              style={{flex:1, fontFamily:'monospace', letterSpacing:'.05em', fontSize:13}}
+              style={{fontFamily:'monospace', letterSpacing:'.05em', fontSize:13}}
             />
-            <button className="btn btn-ghost btn-sm" onClick={checkBalance} disabled={balanceLoading || !balanceCode.trim()}>
-              {balanceLoading ? '…' : 'Check'}
-            </button>
+            <div style={{display:'flex', gap:8}}>
+              <input
+                className="input"
+                type="email"
+                placeholder="Email the card was sent to"
+                value={balanceEmail}
+                onChange={e => { setBalanceEmail(e.target.value); setBalanceResult(null); setBalanceError(null); }}
+                onKeyDown={e => e.key === 'Enter' && checkBalance()}
+                style={{flex:1, fontSize:13}}
+              />
+              <button className="btn btn-ghost btn-sm" onClick={checkBalance} disabled={balanceLoading || !balanceCode.trim() || !balanceEmail.trim()}>
+                {balanceLoading ? '…' : 'Check'}
+              </button>
+            </div>
           </div>
           {balanceError && <p style={{marginTop:10, fontSize:13, color:'#b91c1c'}}>{balanceError}</p>}
           {balanceResult && (

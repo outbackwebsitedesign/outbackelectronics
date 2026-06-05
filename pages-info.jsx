@@ -896,13 +896,15 @@ function WarrantyRegisterPage({ go }) {
 
   const lookupOrder = async () => {
     const id = form.orderId.trim();
-    if (!id) return;
+    const email = form.email.trim();
+    if (!id || !email) return;
     setLooking(true);
     setLookupError(null);
     setOrderData(null);
     try {
-      const res = await fetch(`/api/warranty/order-lookup?id=${encodeURIComponent(id)}`);
-      if (res.status === 404) { setLookupError('Order not found. Check the ID on your confirmation email.'); return; }
+      const res = await fetch(`/api/warranty/order-lookup?id=${encodeURIComponent(id)}&email=${encodeURIComponent(email)}`);
+      if (res.status === 404) { setLookupError('Order not found. Check the ID and email on your confirmation email.'); return; }
+      if (res.status === 400) { setLookupError('Please enter your email address below first.'); return; }
       if (!res.ok) throw new Error();
       const data = await res.json();
       setOrderData(data);
@@ -1002,19 +1004,29 @@ function WarrantyRegisterPage({ go }) {
             <p style={{ fontSize: 13, color: 'var(--ink-2)', marginTop: 6, marginBottom: 12 }}>
               Find this on your order confirmation email from us.
             </p>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <input
                 required
                 className="input"
-                style={{ flex: 1 }}
                 value={form.orderId}
                 onChange={e => { update('orderId', e.target.value); setOrderData(null); setLookupError(null); }}
                 placeholder="ord-1234567890"
               />
-              <button type="button" className="btn" onClick={lookupOrder} disabled={!form.orderId.trim() || looking}
-                style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
-                {looking ? 'Looking up…' : 'Look up →'}
-              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  required
+                  type="email"
+                  className="input"
+                  style={{ flex: 1 }}
+                  value={form.email}
+                  onChange={e => { update('email', e.target.value); setOrderData(null); setLookupError(null); }}
+                  placeholder="Email from your order confirmation"
+                />
+                <button type="button" className="btn" onClick={lookupOrder} disabled={!form.orderId.trim() || !form.email.trim() || looking}
+                  style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
+                  {looking ? 'Looking up…' : 'Look up →'}
+                </button>
+              </div>
             </div>
             {lookupError && (
               <div className="notice" style={{ marginTop: 10, fontSize: 13, color: 'var(--rust)' }}>{lookupError}</div>
