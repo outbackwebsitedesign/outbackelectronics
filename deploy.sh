@@ -59,5 +59,70 @@ fi
 echo "==> Restarting service..."
 sudo systemctl restart "$SERVICE_NAME"
 
+# ── Backup script ────────────────────────────────────────────
+BACKUP_SCRIPT="/home/$(whoami)/backup-db.sh"
+USB_MOUNT="/media/$(whoami)/USB STICK"
+BACKUP_DEST="$USB_MOUNT/outback-backups"
+
+cat > "$BACKUP_SCRIPT" <<'BACKUP_EOF'
+#!/bin/bash
+APP_DIR="$(cd "$(dirname "$0")/../outbackelectronics" 2>/dev/null && pwd || echo "/home/daniel/outbackelectronics")"
+USB_MOUNT="/media/$(whoami)/USB STICK"
+DEST="$USB_MOUNT/outback-backups"
+STAMP=$(date +%Y%m%d-%H%M)
+LOG="/home/$(whoami)/backup.log"
+
+if ! mountpoint -q "$USB_MOUNT"; then
+  echo "$(date): USB not mounted — backup skipped" >> "$LOG"
+  exit 1
+fi
+
+mkdir -p "$DEST"
+
+# Find the app dir — same directory as this script's parent
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SRC="$(cd "$SCRIPT_DIR/../outbackelectronics" 2>/dev/null && pwd)"
+# Fallback: look for .db files relative to the script
+if [ ! -d "$SRC" ]; then
+  SRC="$SCRIPT_DIR"
+fi
+
+DB_FILES=("$SRC"/*.db)
+if [ ! -e "${DB_FILES[0]}" ]; then
+  echo "$(date): No .db files found in $SRC — backup skipped" >> "$LOG"
+  exit 1
+fi
+
+tar czf "$DEST/db-$STAMP.tar.gz" "${DB_FILES[@]}"
+
+# Keep last 72 backups (~3 days of hourly)
+ls -t "$DEST"/db-*.tar.gz 2>/dev/null | tail -n +73 | xargs -r rm
+
+echo "$(date): OK → $DEST/db-$STAMP.tar.gz ($(du -h "$DEST/db-$STAMP.tar.gz" | cut -f1))" >> "$LOG"
+BACKUP_EOF
+
+# Patch in the correct app dir path now that we know it
+sed -i "s|/home/daniel/outbackelectronics|$APP_DIR|g" "$BACKUP_SCRIPT"
+chmod +x "$BACKUP_SCRIPT"
+echo "==> Backup script written to $BACKUP_SCRIPT"
+
+# Install hourly cron if not already present
+CRON_LINE="0 * * * * $BACKUP_SCRIPT >> /home/$(whoami)/backup.log 2>&1"
+if crontab -l 2>/dev/null | grep -qF "$BACKUP_SCRIPT"; then
+  echo "==> Hourly backup cron already installed — skipping."
+else
+  (crontab -l 2>/dev/null; echo "$CRON_LINE") | crontab -
+  echo "==> Hourly backup cron installed."
+fi
+
+# Run one backup immediately so there's something on the USB straight away
+echo "==> Running initial backup..."
+if "$BACKUP_SCRIPT"; then
+  echo "==> Initial backup complete."
+else
+  echo "==> Initial backup skipped (USB may not be mounted yet — cron will retry hourly)."
+fi
+# ── End backup ───────────────────────────────────────────────
+
 echo "==> Done. Service status:"
 sudo systemctl status "$SERVICE_NAME" --no-pager -l
