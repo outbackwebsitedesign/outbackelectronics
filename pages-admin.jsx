@@ -5180,7 +5180,10 @@ function AdminSettingsFull({ sessionInfo = {} }) {
   const defaultShop = useMemo(() => ({
     tradingName: '',
     abn: '',
-    address: '',
+    streetAddress: '',
+    suburb: '',
+    state: '',
+    postcode: '',
     mapLat: '',
     mapLng: '',
     phone: '',
@@ -5188,6 +5191,8 @@ function AdminSettingsFull({ sessionInfo = {} }) {
     tagline: '',
     description: '',
     siteUrl: '',
+    acknowledgmentPeople: '',
+    acknowledgmentCountry: '',
   }), []);
   const defaultAnnouncement = useMemo(() => ({ text: '', enabled: false, expiresAt: '' }), []);
   const defaultSiteContent = useMemo(() => ({ aiHeading: '', aiBody: '', aiEnabled: false, workshopBlurb: '' }), []);
@@ -5263,7 +5268,10 @@ function AdminSettingsFull({ sessionInfo = {} }) {
       shop: {
         tradingName: (payload.shop?.tradingName || '').trim(),
         abn: (payload.shop?.abn || '').trim(),
-        address: (payload.shop?.address || '').trim(),
+        streetAddress: (payload.shop?.streetAddress || '').trim(),
+        suburb: (payload.shop?.suburb || '').trim(),
+        state: (payload.shop?.state || '').trim(),
+        postcode: (payload.shop?.postcode || '').trim(),
         mapLat: (payload.shop?.mapLat || '').trim(),
         mapLng: (payload.shop?.mapLng || '').trim(),
         phone: (payload.shop?.phone || '').trim(),
@@ -5271,6 +5279,8 @@ function AdminSettingsFull({ sessionInfo = {} }) {
         tagline: (payload.shop?.tagline || '').trim(),
         description: (payload.shop?.description || '').trim(),
         siteUrl: (payload.shop?.siteUrl || '').trim(),
+        acknowledgmentPeople: (payload.shop?.acknowledgmentPeople || '').trim(),
+        acknowledgmentCountry: (payload.shop?.acknowledgmentCountry || '').trim(),
       },
       announcement: {
         text: (payload.announcement?.text || '').trim(),
@@ -5388,7 +5398,12 @@ function AdminSettingsFull({ sessionInfo = {} }) {
           <span className="eyebrow">Shop Details</span>
           <label className="field" style={{marginTop:12}}><span className="label">Trading name</span><input className="input" value={shop.tradingName} onChange={(e) => setShop({ ...shop, tradingName: e.target.value })}/></label>
           <label className="field"><span className="label">ABN</span><input className="input" value={shop.abn} onChange={(e) => setShop({ ...shop, abn: e.target.value })}/></label>
-          <label className="field"><span className="label">Street address</span><input className="input" value={shop.address} onChange={(e) => setShop({ ...shop, address: e.target.value })}/></label>
+          <label className="field"><span className="label">Street address</span><input className="input" value={shop.streetAddress||''} onChange={(e) => setShop({ ...shop, streetAddress: e.target.value })} placeholder="e.g. 12 Station St"/></label>
+          <div style={{display:'grid', gridTemplateColumns:'2fr 1fr 1fr', gap:8}}>
+            <label className="field"><span className="label">Suburb / Town</span><input className="input" value={shop.suburb||''} onChange={(e) => setShop({ ...shop, suburb: e.target.value })} placeholder="e.g. Blackall"/></label>
+            <label className="field"><span className="label">State</span><input className="input" value={shop.state||''} onChange={(e) => setShop({ ...shop, state: e.target.value })} placeholder="QLD"/></label>
+            <label className="field"><span className="label">Postcode</span><input className="input" value={shop.postcode||''} onChange={(e) => setShop({ ...shop, postcode: e.target.value })} placeholder="4472"/></label>
+          </div>
           <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:8}}>
             <label className="field"><span className="label">Map latitude</span><input className="input" value={shop.mapLat||''} onChange={(e) => setShop({ ...shop, mapLat: e.target.value })} placeholder="-35.9833"/></label>
             <label className="field"><span className="label">Map longitude</span><input className="input" value={shop.mapLng||''} onChange={(e) => setShop({ ...shop, mapLng: e.target.value })} placeholder="144.7500"/></label>
@@ -5397,6 +5412,10 @@ function AdminSettingsFull({ sessionInfo = {} }) {
           <label className="field"><span className="label">Contact email</span><input className="input" type="email" value={shop.email||''} onChange={(e) => setShop({ ...shop, email: e.target.value })}/></label>
           <label className="field"><span className="label">Tagline</span><input className="input" value={shop.tagline} onChange={(e) => setShop({ ...shop, tagline: e.target.value })}/></label>
           <label className="field"><span className="label">Description (footer)</span><textarea className="textarea" value={shop.description||''} onChange={(e) => setShop({ ...shop, description: e.target.value })} style={{minHeight:80}} placeholder="e.g. An independent electronics outpost..."/></label>
+          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:8}}>
+            <label className="field"><span className="label">Acknowledgment — People</span><input className="input" value={shop.acknowledgmentPeople||''} onChange={(e) => setShop({ ...shop, acknowledgmentPeople: e.target.value })} placeholder="e.g. Bidjara People"/></label>
+            <label className="field"><span className="label">Acknowledgment — Country</span><input className="input" value={shop.acknowledgmentCountry||''} onChange={(e) => setShop({ ...shop, acknowledgmentCountry: e.target.value })} placeholder="e.g. Bidjara Country"/></label>
+          </div>
           <label className="field">
             <span className="label">Site URL</span>
             <input className="input" value={shop.siteUrl||''} onChange={(e) => setShop({ ...shop, siteUrl: e.target.value })} placeholder="https://outbackelectronics.com.au"/>

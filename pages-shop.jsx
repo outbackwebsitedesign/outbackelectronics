@@ -97,7 +97,7 @@ function HomePage({ go, addToCart, portalUser }) {
                 <span className="italic" style={{color:'var(--rust)'}}>the signal ends.</span>
               </h1>
               <p className="hero-sub" style={{marginTop: 22, fontSize: 18, maxWidth: 520, color:'var(--ink-2)'}}>
-                Rugged laptops, satellite uplinks, off-grid power, repair benches and an obstinate community of tinkerers — serving remote Australia{shop.address ? ` from ${shop.address}` : ''} by appointment only.
+                Rugged laptops, satellite uplinks, off-grid power, repair benches and an obstinate community of tinkerers — serving remote Australia{(shop.suburb || shop.state) ? ` from ${[shop.suburb, shop.state].filter(Boolean).join(', ')}` : ''} by appointment only.
               </p>
               <div className="row-flex hero-actions" style={{marginTop: 28}}>
                 <button className="btn btn-rust" onClick={() => go('shop')}>Browse the Shop →</button>

@@ -1182,7 +1182,7 @@ function Footer() {
           <div>
             <h3>Visit</h3>
             <ul style={{color:'var(--ink-on-dark-muted)'}}>
-              <li>{shop.address}<br/>No public access, arrive by appointment only.</li>
+              <li>{[shop.streetAddress, [shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ')].filter(Boolean).join(', ')}<br/>No public access, arrive by appointment only.</li>
               {shop.phone && <li>{shop.phone}</li>}
               <li><a href="/contact" onClick={(e) => { e.preventDefault(); go('contact'); }} style={{color:'var(--ochre)'}}>Get directions →</a></li>
             </ul>
@@ -1190,7 +1190,7 @@ function Footer() {
         </div>
         <div className="baseline">
           <span>© 2023–2026 {shop.tradingName}{shop.abn ? ` · ABN ${shop.abn}` : ''}</span>
-          <span>ACKNOWLEDGES THE ARRERNTE PEOPLE AS TRADITIONAL OWNERS OF MPARNTWE</span>
+          {(shop.acknowledgmentPeople || shop.acknowledgmentCountry) && <span>ACKNOWLEDGES THE {(shop.acknowledgmentPeople || '').toUpperCase()} AS TRADITIONAL CUSTODIANS OF {(shop.acknowledgmentCountry || '').toUpperCase()}</span>}
         </div>
       </div>
     </footer>

@@ -225,6 +225,23 @@
     .mainlinks { gap: 0; flex-wrap: wrap; }
     .mainlinks a { padding: 6px 10px; font-size: 12px; }
   }
+  .topnav-actions { display: flex; align-items: center; gap: 10px; }
+  .icon-btn {
+    width: 36px; height: 36px;
+    display: grid; place-items: center;
+    border: 1px solid var(--line-strong); background: var(--bg-elev);
+    cursor: pointer;
+    color: var(--ink);
+  }
+  .icon-btn:hover { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .cart-count {
+    position: absolute; transform: translate(11px,-11px);
+    background: var(--rust); color: var(--paper);
+    border-radius: 999px; min-width: 16px; height: 16px;
+    font-size: 10px; font-weight: 700;
+    display: grid; place-items: center; padding: 0 4px;
+  }
+
   @media (max-width: 700px) {
     .page-head h1 { font-size: 44px; }
     .container { padding: 0 20px; }
