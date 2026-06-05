@@ -85,7 +85,12 @@ if [ ! -e "\${DB_FILES[0]}" ]; then
   exit 1
 fi
 
-tar czf "\$DEST/db-\$STAMP.tar.gz" "\${DB_FILES[@]}"
+# Collect extra files that are gitignored but required to run the site
+EXTRAS=()
+[ -f "\$SRC/.env" ] && EXTRAS+=("\$SRC/.env")
+[ -f "\$SRC/admin-audit.log" ] && EXTRAS+=("\$SRC/admin-audit.log")
+
+tar czf "\$DEST/db-\$STAMP.tar.gz" "\${DB_FILES[@]}" "\${EXTRAS[@]}"
 
 # Keep last 72 backups (~3 days of hourly)
 ls -t "\$DEST"/db-*.tar.gz 2>/dev/null | tail -n +73 | xargs -r rm
