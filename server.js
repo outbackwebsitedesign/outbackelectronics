@@ -28,7 +28,8 @@ const PUBLIC_CSP = "default-src 'self'; " +
     "https://securepubads.g.doubleclick.net https://*.doubleclick.net " +
     "https://partner.googleadservices.com https://*.googleadservices.com " +
     "https://*.googletagservices.com " +
-    "https://adservice.google.com https://adservice.google.com.au; " +
+    "https://adservice.google.com https://adservice.google.com.au " +
+    "https://*.adtrafficquality.google; " +
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.tawk.to https://cdn.jsdelivr.net; " +
   "img-src 'self' data: https:; " +
   "font-src 'self' data: https://fonts.gstatic.com https://*.tawk.to; " +
@@ -38,7 +39,8 @@ const PUBLIC_CSP = "default-src 'self'; " +
     "wss://*.tawk.to https://*.tawk.to https://va.tawk.to " +
     "https://cloudflareinsights.com " +
     "https://*.googlesyndication.com https://*.doubleclick.net https://securepubads.g.doubleclick.net " +
-    "https://adservice.google.com https://adservice.google.com.au; " +
+    "https://adservice.google.com https://adservice.google.com.au " +
+    "https://*.adtrafficquality.google; " +
   "frame-src https://www.openstreetmap.org https://*.tawk.to " +
     "https://googleads.g.doubleclick.net https://tpc.googlesyndication.com " +
     "https://www.google.com; " +
