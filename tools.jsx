@@ -1,19 +1,21 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
+// Mapped to the shared site palette (see tools.html / index.html :root vars) so
+// this page reads like the rest of outbackelectronics.com.au.
 const C = {
-  bg:      '#f4ede1',
-  bgElev:  '#faf6ec',
-  bgDeep:  '#e9dfc9',
-  ink:     '#1f1a14',
-  ink2:    '#5a4f40',
-  ink3:    '#8b7e69',
-  blue:    '#1f88f5',
-  ochre:   '#d39a37',
-  green:   '#4f6b3e',
-  red:     '#c0392b',
-  line:    '#d8cdb6',
-  paper:   '#fbf7ed',
+  bg:      'var(--bg)',
+  bgElev:  'var(--bg-elev)',
+  bgDeep:  'var(--bg-deep)',
+  ink:     'var(--ink)',
+  ink2:    'var(--ink-2)',
+  ink3:    'var(--ink-3)',
+  blue:    'var(--rust)',        // primary accent
+  ochre:   'var(--ochre)',
+  green:   'var(--eucalyptus)',
+  red:     '#b5451b',
+  line:    'var(--line)',
+  paper:   'var(--paper)',
 };
 
 // ── Wire data ─────────────────────────────────────────────────────────────────
@@ -38,51 +40,42 @@ const WIRE_TABLE = [
 ];
 
 // ── Shared UI primitives ──────────────────────────────────────────────────────
+// These lean on the shared site stylesheet (.field/.input/.select/.card-paper/
+// .eyebrow/.btn etc.) so the calculators match the rest of the site.
 function Field({ label, unit, value, onChange, type = 'number', min, step, options }) {
-  const s = {
-    wrapper: { display: 'flex', flexDirection: 'column', gap: 4 },
-    label: { fontSize: 12, fontWeight: 600, color: C.ink2, textTransform: 'uppercase', letterSpacing: '0.05em' },
-    row: { display: 'flex', alignItems: 'stretch', borderRadius: 8, border: `1px solid ${C.line}`, overflow: 'hidden', background: C.paper },
-    input: { flex: 1, padding: '9px 12px', fontSize: 14, background: 'transparent', border: 'none', outline: 'none', color: C.ink, fontFamily: 'inherit' },
-    select: { flex: 1, padding: '9px 12px', fontSize: 14, background: 'transparent', border: 'none', outline: 'none', color: C.ink, fontFamily: 'inherit', cursor: 'pointer' },
-    unit: { padding: '9px 12px', fontSize: 13, color: C.ink3, background: C.bgDeep, borderLeft: `1px solid ${C.line}`, display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' },
-  };
   return (
-    <div style={s.wrapper}>
-      <span style={s.label}>{label}</span>
-      <div style={s.row}>
-        {options ? (
-          <select style={s.select} value={value} onChange={e => onChange(e.target.value)}>
-            {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-        ) : (
-          <input style={s.input} type={type} value={value} min={min} step={step}
-            onChange={e => onChange(e.target.value)} />
-        )}
-        {unit && <span style={s.unit}>{unit}</span>}
-      </div>
-    </div>
+    <label className="field" style={{ marginBottom: 0 }}>
+      <span className="label">{label}{unit ? ` · ${unit}` : ''}</span>
+      {options ? (
+        <select className="select" value={value} onChange={e => onChange(e.target.value)}>
+          {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      ) : (
+        <input className="input" type={type} value={value} min={min} step={step}
+          onChange={e => onChange(e.target.value)} />
+      )}
+    </label>
   );
 }
 
 function Result({ label, value, color, note }) {
   return (
-    <div style={{ padding: '14px 16px', borderRadius: 10, background: C.bgDeep, border: `1.5px solid ${color || C.line}` }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: C.ink3, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 700, color: color || C.ink, fontFamily: "'JetBrains Mono', monospace" }}>{value}</div>
-      {note && <div style={{ fontSize: 12, color: C.ink2, marginTop: 4 }}>{note}</div>}
+    <div className="card-paper" style={{ padding: '14px 16px', borderLeft: `3px solid ${color || 'var(--line-strong)'}` }}>
+      <div className="eyebrow" style={{ marginBottom: 6 }}>{label}</div>
+      <div className="serif" style={{ fontSize: 30, lineHeight: 1.05, color: color || C.ink }}>{value}</div>
+      {note && <div style={{ fontSize: 13, color: C.ink2, marginTop: 6 }}>{note}</div>}
     </div>
   );
 }
 
 function Card({ title, icon, children }) {
   return (
-    <div style={{ background: C.bgElev, borderRadius: 14, border: `1px solid ${C.line}`, overflow: 'hidden' }}>
-      <div style={{ padding: '18px 22px', borderBottom: `1px solid ${C.line}`, display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ fontSize: 22 }}>{icon}</span>
-        <h2 style={{ fontSize: 17, fontWeight: 700, color: C.ink }}>{title}</h2>
+    <div className="card-paper">
+      <div style={{ padding: '20px 24px', borderBottom: `1px solid ${C.line}`, display: 'flex', alignItems: 'center', gap: 12 }}>
+        <span style={{ fontSize: 26 }}>{icon}</span>
+        <h2 className="serif" style={{ fontSize: 30, color: C.ink }}>{title}</h2>
       </div>
-      <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 18 }}>
         {children}
       </div>
     </div>
@@ -90,20 +83,13 @@ function Card({ title, icon, children }) {
 }
 
 function Divider() {
-  return <div style={{ height: 1, background: C.line, margin: '4px 0' }} />;
+  return <hr className="thin" style={{ margin: '2px 0' }} />;
 }
 
 function CalcBtn({ onClick }) {
   return (
-    <button onClick={onClick} style={{
-      padding: '10px 20px', borderRadius: 8, background: C.blue, color: '#fff',
-      border: 'none', fontWeight: 600, fontSize: 14, alignSelf: 'flex-start',
-      transition: 'opacity 0.15s',
-    }}
-      onMouseEnter={e => e.target.style.opacity = '0.85'}
-      onMouseLeave={e => e.target.style.opacity = '1'}
-    >
-      Calculate
+    <button className="btn btn-rust" onClick={onClick} style={{ alignSelf: 'flex-start' }}>
+      Calculate →
     </button>
   );
 }
@@ -666,37 +652,142 @@ const TOOLS = [
   { id: 'relay',    label: 'Relay Wiring',    icon: '🔄' },
 ];
 
+// ── Site chrome (header + footer) — mirrors app.jsx so this standalone page
+//    reads like every other page on outbackelectronics.com.au ──────────────────
+const PRIMARY_PAGES = [
+  { id: '', label: 'Home' },
+  { id: 'shop', label: 'Shop' },
+  { id: 'services', label: 'Services' },
+  { id: 'memberships', label: 'Memberships' },
+  { id: 'software', label: 'Software' },
+  { id: 'ewaste', label: 'eWaste' },
+  { id: 'ai', label: 'AI' },
+  { id: 'tutorials', label: 'Tutorials' },
+];
+const UTILITY_PAGES = [
+  { id: 'quote', label: 'Request a Quote' },
+  { id: 'gift-cards', label: 'Gift Cards' },
+  { id: 'sellers', label: 'Info for Sellers' },
+  { id: 'sell-gear', label: 'Sell Your Gear' },
+  { id: 'contact', label: 'Contact' },
+  { id: 'policies', label: 'Policies' },
+];
+
+function useShopInfo() {
+  const [info, setInfo] = useState({ shop: {}, forumUrl: '', gamesUrl: '' });
+  useEffect(() => {
+    fetch('/api/shop-info')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setInfo({ shop: d.shop || {}, forumUrl: d.forumUrl || '', gamesUrl: d.gamesUrl || '' }); })
+      .catch(() => {});
+  }, []);
+  return info;
+}
+
+function SiteHeader({ shop }) {
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+  return (
+    <header>
+      <div className="utility-bar">
+        <div className="container">
+          <span>FREE FREIGHT OVER $200 · OUTBACK NT/SA/WA</span>
+          <span style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'center' }}>
+            {UTILITY_PAGES.map(p => <a key={p.id} href={`/${p.id}`}>{p.label}</a>)}
+            {shop.phone && <span style={{ color: 'var(--ochre)' }}>{shop.phone}</span>}
+          </span>
+        </div>
+      </div>
+      <div className={scrolled ? 'topnav scrolled' : 'topnav'}>
+        <div className="container row">
+          <a className="logo" href="/">
+            <div className="logo-mark">
+              <img src="assets/logo.webp" alt="Outback Electronics" width="55" height="40" />
+            </div>
+            <div className="logo-text">
+              <div className="sub">Est. 2023 · Appointment only</div>
+            </div>
+          </a>
+          <nav className="mainlinks">
+            {PRIMARY_PAGES.map(p => <a key={p.id} href={`/${p.id}`}>{p.label}</a>)}
+            <a href="/tools" className="active">Tools</a>
+          </nav>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function SiteFooter({ shop }) {
+  return (
+    <footer>
+      <div className="container">
+        <div className="grid">
+          <div>
+            <a className="logo" href="/">
+              <div className="logo-mark sm" style={{ background: '#000' }}>
+                <img src="assets/logo.webp" alt="Outback Electronics" width="40" height="29" />
+              </div>
+              <div className="logo-text">
+                <div className="sub" style={{ color: 'var(--ochre)' }}>{shop.tagline || 'Outback Electronics'}</div>
+              </div>
+            </a>
+            <p style={{ marginTop: 18, fontSize: 13, color: 'var(--ink-on-dark-muted)', maxWidth: 360, lineHeight: 1.6 }}>
+              {shop.description || 'Repairs, custom builds and off-grid electronics for the bush.'}
+            </p>
+          </div>
+          <div>
+            <h3>Tools</h3>
+            <ul>
+              {TOOLS.map(t => <li key={t.id}><a href="/tools">{t.label}</a></li>)}
+            </ul>
+          </div>
+          <div>
+            <h3>Shop</h3>
+            <ul>
+              <li><a href="/shop">Shop</a></li>
+              <li><a href="/services">Services</a></li>
+              <li><a href="/software">Software</a></li>
+              <li><a href="/ewaste">eWaste</a></li>
+              <li><a href="/memberships">Memberships</a></li>
+            </ul>
+          </div>
+          <div>
+            <h3>Community</h3>
+            <ul>
+              <li><a href="/tutorials">Tutorials</a></li>
+              <li><a href="/groups">Groups</a></li>
+              <li><a href="/sellers">Info for Sellers</a></li>
+              <li><a href="/sell-gear">Sell Your Gear</a></li>
+              <li><a href="/policies">Policies</a></li>
+            </ul>
+          </div>
+          <div>
+            <h3>Visit</h3>
+            <ul style={{ color: 'var(--ink-on-dark-muted)' }}>
+              <li>{shop.address || 'By appointment only'}<br />No public access, arrive by appointment only.</li>
+              {shop.phone && <li>{shop.phone}</li>}
+              <li><a href="/contact" style={{ color: 'var(--ochre)' }}>Get directions →</a></li>
+            </ul>
+          </div>
+        </div>
+        <div className="baseline">
+          <span>© 2023–2026 {shop.tradingName || 'Outback Electronics'}{shop.abn ? ` · ABN ${shop.abn}` : ''}</span>
+          <span>ACKNOWLEDGES THE ARRERNTE PEOPLE AS TRADITIONAL OWNERS OF MPARNTWE</span>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 export default function App() {
   const [active, setActive] = useState('vdrop');
-
-  const navS = {
-    wrapper: {
-      background: C.bgDeep,
-      borderBottom: `1px solid ${C.line}`,
-      overflowX: 'auto',
-      WebkitOverflowScrolling: 'touch',
-    },
-    inner: {
-      display: 'flex',
-      gap: 2,
-      padding: '10px 16px',
-      minWidth: 'max-content',
-    },
-    btn: (id) => ({
-      padding: '7px 14px',
-      borderRadius: 8,
-      border: 'none',
-      background: active === id ? C.blue : 'transparent',
-      color: active === id ? '#fff' : C.ink2,
-      fontWeight: active === id ? 600 : 500,
-      fontSize: 13,
-      display: 'flex', alignItems: 'center', gap: 6,
-      cursor: 'pointer',
-      whiteSpace: 'nowrap',
-      transition: 'background 0.15s',
-    }),
-  };
+  const { shop } = useShopInfo();
 
   const renderTool = () => {
     switch (active) {
@@ -714,38 +805,42 @@ export default function App() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: C.bg }}>
-      {/* Header */}
-      <header style={{ background: C.dark, padding: '18px 24px', display: 'flex', alignItems: 'center', gap: 16 }}>
-        <a href="/" style={{ color: '#fff', textDecoration: 'none' }}>
-          <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', fontWeight: 500 }}>Outback Electronics</span>
-        </a>
-        <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 18 }}>›</span>
-        <h1 style={{ fontSize: 18, fontWeight: 700, color: '#fff', margin: 0 }}>Tools & Calculators</h1>
-      </header>
+    <>
+      <SiteHeader shop={shop} />
 
-      {/* Tool nav */}
-      <nav style={navS.wrapper}>
-        <div style={navS.inner}>
-          {TOOLS.map(t => (
-            <button key={t.id} style={navS.btn(t.id)} onClick={() => setActive(t.id)}>
-              <span>{t.icon}</span>
-              <span>{t.label}</span>
-            </button>
-          ))}
+      {/* Page head — matches the shared PageHead on other pages */}
+      <div className="page-head">
+        <div className="container">
+          <div className="crumbs eyebrow">
+            <span>Outback</span>
+            <span style={{ color: 'var(--ink-3)' }}>/</span>
+            <span>Tools &amp; Calculators</span>
+          </div>
+          <h1>Tools &amp; Calculators</h1>
+          <p className="lead">Free field calculators for 12/24/48V builds — voltage drop, fusing, battery runtime, solar sizing and more. Estimates for guidance; always verify critical installs with a qualified auto-electrician.</p>
         </div>
-      </nav>
+      </div>
+
+      {/* Tool tabs */}
+      <div style={{ background: 'var(--bg-elev)', borderBottom: '1px solid var(--line)' }}>
+        <div className="container hscroll">
+          <nav className="tabs" style={{ border: 'none', minWidth: 'max-content' }}>
+            {TOOLS.map(t => (
+              <button key={t.id} className={active === t.id ? 'tab active' : 'tab'} onClick={() => setActive(t.id)}>
+                <span>{t.icon}</span>
+                <span>{t.label}</span>
+              </button>
+            ))}
+          </nav>
+        </div>
+      </div>
 
       {/* Content */}
-      <main style={{ flex: 1, padding: '28px 20px', maxWidth: 680, width: '100%', margin: '0 auto' }}>
+      <main className="container" style={{ flex: 1, paddingTop: 36, paddingBottom: 60, maxWidth: 720 }}>
         {renderTool()}
       </main>
 
-      {/* Footer */}
-      <footer style={{ borderTop: `1px solid ${C.line}`, padding: '16px 24px', textAlign: 'center', fontSize: 12, color: C.ink3 }}>
-        Results are estimates for guidance only. Always verify critical installations with a qualified auto-electrician.
-        &nbsp;·&nbsp;<a href="/" style={{ color: C.ink3 }}>outbackelectronics.com.au</a>
-      </footer>
-    </div>
+      <SiteFooter shop={shop} />
+    </>
   );
 }
