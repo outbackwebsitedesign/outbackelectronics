@@ -286,7 +286,7 @@ function Logo({ onClick }) {
   return (
     <div className="logo" onClick={onClick}>
       <div className="logo-mark">
-        <img src="assets/logo.webp" alt="Outback Electronics" />
+        <img src="assets/logo.webp" alt="Outback Electronics" width="55" height="40" />
       </div>
       <div className="logo-text">
         <div className="sub">Est. 2023 · Appointment only</div>
@@ -584,7 +584,7 @@ function Footer({ go }) {
           <div>
             <div className="logo">
               <div className="logo-mark sm" style={{background:'#000'}}>
-                <img src="assets/logo.webp" alt="Outback Electronics" />
+                <img src="assets/logo.webp" alt="Outback Electronics" width="40" height="29" />
               </div>
               <div className="logo-text">
                 <div className="sub" style={{color:'var(--ochre)'}}>{shop.tagline}</div>
