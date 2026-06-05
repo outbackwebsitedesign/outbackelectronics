@@ -2,8 +2,11 @@ const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
 const crypto = require('crypto');
 const sharp = require('sharp');
+
+const gzipCache = new Map();
 
 const MAIN_PORT  = process.env.MAIN_PORT  || 8080;
 const FORUM_PORT = process.env.FORUM_PORT || 8081;
@@ -880,13 +883,31 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null) {
       const extraHeaders = (isSoftwareDownload || isPdf)
         ? { 'Content-Disposition': `attachment; filename="${path.basename(filePath)}"` }
         : {};
-      res.writeHead(200, {
+      const baseHeaders = {
         'Content-Type': (types[ext] || 'application/octet-stream'),
         'Cache-Control': cacheHeader,
         ...securityHeaders,
         ...extraHeaders,
-      });
-      res.end(data);
+      };
+      const compressible = new Set(['.js', '.css', '.html', '.svg', '.json', '.txt']);
+      const acceptEnc = req.headers['accept-encoding'] || '';
+      if (compressible.has(ext) && acceptEnc.includes('gzip')) {
+        const cached = gzipCache.get(filePath);
+        if (cached) {
+          res.writeHead(200, { ...baseHeaders, 'Content-Encoding': 'gzip', 'Vary': 'Accept-Encoding' });
+          res.end(cached);
+        } else {
+          zlib.gzip(data, { level: 6 }, (gzErr, buf) => {
+            if (gzErr) { res.writeHead(200, baseHeaders); res.end(data); return; }
+            if (isImmutable) gzipCache.set(filePath, buf);
+            res.writeHead(200, { ...baseHeaders, 'Content-Encoding': 'gzip', 'Vary': 'Accept-Encoding' });
+            res.end(buf);
+          });
+        }
+      } else {
+        res.writeHead(200, baseHeaders);
+        res.end(data);
+      }
     });
   };
   tryRead(candidates, 0);
