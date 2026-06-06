@@ -1076,6 +1076,94 @@ function ShippingContent({ email }) {
   );
 }
 
+function CookieContent({ email }) {
+  const s = {mt: {marginTop:32}, p: {fontSize:15, lineHeight:1.75, marginTop:8}};
+  const cookieRow = (name, purpose, type, expires) => (
+    <div style={{borderTop:'1px solid var(--line)', padding:'12px 0', display:'grid', gridTemplateColumns:'160px 1fr', gap:'4px 16px', fontSize:14}}>
+      <span className="mono" style={{fontSize:12, color:'var(--rust)', gridColumn:'1/-1', marginBottom:4}}>{name}</span>
+      {purpose && <><span style={{color:'var(--ink-2)'}}>Purpose</span><span>{purpose}</span></>}
+      <span style={{color:'var(--ink-2)'}}>Type</span><span className="mono" style={{fontSize:12}}>{type}</span>
+      <span style={{color:'var(--ink-2)'}}>Expires</span><span>{expires}</span>
+    </div>
+  );
+  return (
+    <div>
+      <span className="eyebrow">LEGAL · COOKIE POLICY</span>
+      <h2 style={{marginTop:8}}>Cookie Policy</h2>
+      <p style={s.p}>This Cookie Policy explains how Outback Electronics ('Company', 'we', 'us', and 'our') uses cookies and similar technologies to recognise you when you visit our website at <a href="https://www.outbackelectronics.com.au">https://www.outbackelectronics.com.au</a> ('Website'). It explains what these technologies are and why we use them, as well as your rights to control our use of them.</p>
+      <p style={s.p}>In some cases we may use cookies to collect personal information, or that becomes personal information if we combine it with other information.</p>
+
+      <div style={s.mt}><h3>What Are Cookies?</h3>
+        <p style={s.p}>Cookies are small data files placed on your computer or mobile device when you visit a website. Cookies are widely used by website owners to make their websites work, or work more efficiently, as well as to provide reporting information.</p>
+        <p style={s.p}>Cookies set by the website owner are called 'first-party cookies.' Cookies set by parties other than the website owner are called 'third-party cookies.' Third-party cookies enable third-party features or functionality to be provided on or through the website (e.g. analytics). The parties that set these third-party cookies can recognise your computer both when it visits this website and also when it visits certain other websites.</p>
+      </div>
+
+      <div style={s.mt}><h3>Why Do We Use Cookies?</h3>
+        <p style={s.p}>We use first- and third-party cookies for several reasons. Some cookies are required for technical reasons in order for our Website to operate — we refer to these as 'essential' or 'strictly necessary' cookies. Other cookies enable us to track and target the interests of our users to enhance their experience. Third parties serve cookies through our Website for analytics and other purposes.</p>
+      </div>
+
+      <div style={s.mt}><h3>How Can I Control Cookies?</h3>
+        <p style={s.p}>You have the right to decide whether to accept or reject cookies. You can set or amend your web browser controls to accept or refuse cookies. If you choose to reject cookies, you may still use our website though your access to some functionality and areas may be restricted.</p>
+      </div>
+
+      <div style={s.mt}><h3>Essential Website Cookies</h3>
+        <p style={s.p}>These cookies are strictly necessary to provide you with services available through our Website, such as maintaining your login session and protecting against cross-site request forgery.</p>
+        {cookieRow('oe_admin_session', 'Maintains your admin login session', 'server_cookie (HttpOnly, SameSite=Strict)', '8 hours')}
+        {cookieRow('oe_portal_session', 'Maintains your customer portal and forum login session', 'server_cookie (HttpOnly, SameSite=Strict)', '30 days')}
+        {cookieRow('_csrf', 'Protects against Cross-Site Request Forgery (CSRF) attacks', 'server_cookie (SameSite=Strict)', '24 hours')}
+      </div>
+
+      <div style={s.mt}><h3>Performance and Functionality</h3>
+        <p style={s.p}>We store your shopping cart locally in your browser to preserve it between visits. This data never leaves your device unless you proceed to checkout.</p>
+        {cookieRow('oe_cart', 'Stores your shopping cart items between visits', 'localStorage (client-side only)', 'Persistent until cleared')}
+      </div>
+
+      <div style={s.mt}><h3>Analytics Cookies</h3>
+        <p style={s.p}>We may use Google Analytics to understand how visitors interact with our Website. Google Analytics uses cookies to collect information such as how often users visit the site, what pages they visit, and what other sites they used prior to coming to our site. You can opt out of Google Analytics tracking at <a href="https://tools.google.com/dlpage/gaoptout" target="_blank" rel="noopener noreferrer">https://tools.google.com/dlpage/gaoptout</a>.</p>
+      </div>
+
+      <div style={s.mt}><h3>How Can I Control Cookies on My Browser?</h3>
+        <p style={s.p}>The means by which you can refuse cookies vary from browser to browser. Please visit your browser's help menu for more information. Links for the most popular browsers:</p>
+        <ul style={{paddingLeft:20, lineHeight:2, marginTop:8}}>
+          <li><a href="https://support.google.com/chrome/answer/95647" target="_blank" rel="noopener noreferrer">Chrome</a></li>
+          <li><a href="https://support.microsoft.com/en-us/windows/delete-and-manage-cookies-168dab11-0753-043d-7c16-ede5947fc64d" target="_blank" rel="noopener noreferrer">Internet Explorer / Edge</a></li>
+          <li><a href="https://support.mozilla.org/en-US/kb/cookies-information-websites-store-on-your-computer" target="_blank" rel="noopener noreferrer">Firefox</a></li>
+          <li><a href="https://support.apple.com/en-au/guide/safari/sfri11471/mac" target="_blank" rel="noopener noreferrer">Safari</a></li>
+          <li><a href="https://help.opera.com/en/latest/web-preferences/" target="_blank" rel="noopener noreferrer">Opera</a></li>
+        </ul>
+        <p style={s.p}>In addition, most advertising networks offer a way to opt out of targeted advertising. For more information please visit:</p>
+        <ul style={{paddingLeft:20, lineHeight:2, marginTop:8}}>
+          <li><a href="https://optout.aboutads.info/" target="_blank" rel="noopener noreferrer">Digital Advertising Alliance</a></li>
+          <li><a href="https://youradchoices.ca/" target="_blank" rel="noopener noreferrer">Digital Advertising Alliance of Canada</a></li>
+          <li><a href="https://www.youronlinechoices.eu/" target="_blank" rel="noopener noreferrer">European Interactive Digital Advertising Alliance</a></li>
+        </ul>
+      </div>
+
+      <div style={s.mt}><h3>What About Other Tracking Technologies?</h3>
+        <p style={s.p}>Cookies are not the only way to recognise or track visitors. We may use other similar technologies from time to time, like web beacons (sometimes called 'tracking pixels' or 'clear gifs'). These are tiny graphics files that contain a unique identifier that enables us to recognise when someone has visited our Website or opened an email. In many instances, these technologies are reliant on cookies to function properly, and so declining cookies will impair their functioning.</p>
+      </div>
+
+      <div style={s.mt}><h3>Do You Serve Targeted Advertising?</h3>
+        <p style={s.p}>Third parties may serve cookies on your computer or mobile device to serve advertising through our Website. These companies may use information about your visits to this and other websites to provide relevant advertisements about goods and services you may be interested in. The information collected through this process does not enable us or them to identify your name, contact details, or other personally identifying information unless you choose to provide these.</p>
+      </div>
+
+      <div style={s.mt}><h3>How Often Will You Update This Cookie Policy?</h3>
+        <p style={s.p}>We may update this Cookie Policy from time to time to reflect changes to the cookies we use or for other operational, legal, or regulatory reasons. Please revisit this Cookie Policy regularly to stay informed. The date at the top of this Cookie Policy indicates when it was last updated.</p>
+      </div>
+
+      <div style={s.mt}><h3>Where Can I Get Further Information?</h3>
+        <p style={s.p}>If you have any questions about our use of cookies or other technologies, please contact us at <a href={`mailto:${email}`}>{email}</a>.</p>
+      </div>
+
+      <hr className="thin" style={{marginTop:40}} />
+      <div className="notice" style={{marginTop:24}}>
+        <span className="tag tag-ink">QUESTIONS?</span>
+        <div style={{fontSize:13, color:'var(--ink-2)'}}>Email <strong><a href={`mailto:${email}`}>{email}</a></strong> — we'll get back to you as soon as we can.</div>
+      </div>
+    </div>
+  );
+}
+
 // POLICIES
 // ============================================================
 function PoliciesPage({ go, pageParams }) {
@@ -1091,6 +1179,7 @@ function PoliciesPage({ go, pageParams }) {
     'terms-and-conditions': { title: 'Terms & Conditions', updated: 'June 6, 2026' },
     'privacy-policy': { title: 'Privacy Policy', updated: 'September 18, 2024' },
     'shipping-and-delivery': { title: 'Shipping & Delivery', updated: 'September 18, 2024' },
+    'cookie-policy': { title: 'Cookie Policy', updated: 'September 18, 2024' },
   };
   const activeDoc = DOCS[slug] ? slug : 'terms-and-conditions';
 
@@ -1107,7 +1196,7 @@ function PoliciesPage({ go, pageParams }) {
             ))}
           </aside>
           <div className="policy-content">
-            {activeDoc === 'terms-and-conditions' ? <TermsContent email={email} phone={phone} address={address} /> : activeDoc === 'privacy-policy' ? <PrivacyContent email={email} phone={phone} address={address} /> : <ShippingContent email={email} />}
+            {activeDoc === 'terms-and-conditions' ? <TermsContent email={email} phone={phone} address={address} /> : activeDoc === 'privacy-policy' ? <PrivacyContent email={email} phone={phone} address={address} /> : activeDoc === 'shipping-and-delivery' ? <ShippingContent email={email} /> : <CookieContent email={email} />}
 
           </div>
         </div>
