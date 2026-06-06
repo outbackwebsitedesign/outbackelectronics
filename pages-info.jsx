@@ -1246,6 +1246,97 @@ function DisclaimerContent() {
   );
 }
 
+function AcceptableUseContent({ email }) {
+  const s = {mt: {marginTop:32}, p: {fontSize:15, lineHeight:1.75, marginTop:8}};
+  const li = (text) => <li style={{marginBottom:6}}>{text}</li>;
+  return (
+    <div>
+      <span className="eyebrow">LEGAL · ACCEPTABLE USE POLICY</span>
+      <h2 style={{marginTop:8}}>Acceptable Use Policy</h2>
+      <p style={s.p}>This Acceptable Use Policy ('Policy') is part of our Terms and Conditions ('Legal Terms') and should be read alongside our main Legal Terms at <a href="/policies/terms-and-conditions">outbackelectronics.com.au/policies/terms-and-conditions</a>. If you do not agree with these Legal Terms, please refrain from using our Services. Your continued use of our Services implies acceptance of these Legal Terms.</p>
+      <p style={s.p}>This Policy applies to any and all: (a) uses of our Services; (b) forms, materials, consent tools, comments, posts, and all other content available on the Services ('Content'); and (c) material you contribute to the Services including uploads, posts, reviews, ratings, comments, chat, etc. ('Contribution').</p>
+
+      <div style={s.mt}><h3>Who We Are</h3>
+        <p style={s.p}>We are Outback Electronics ('Company', 'we', 'us', or 'our'), a company registered in Australia at 38 Rosebery Street, Penshurst, New South Wales 2222. We operate the website <a href="https://www.outbackelectronics.com.au">https://www.outbackelectronics.com.au</a> (the 'Site'), as well as any other related products and services that refer or link to this Policy (collectively, the 'Services').</p>
+      </div>
+
+      <div style={s.mt}><h3>Use of the Services</h3>
+        <p style={s.p}>When you use the Services, you warrant that you will comply with this Policy and with all applicable laws. You also acknowledge that you may not:</p>
+        <ul style={{paddingLeft:20, lineHeight:1.9, marginTop:8}}>
+          {li('Systematically retrieve data or other content from the Services to create or compile a collection, compilation, database, or directory without written permission from us.')}
+          {li('Make any unauthorised use of the Services, including collecting email addresses of users for sending unsolicited email, or creating user accounts by automated means or under false pretences.')}
+          {li('Circumvent, disable, or otherwise interfere with security-related features of the Services.')}
+          {li('Engage in unauthorised framing of or linking to the Services.')}
+          {li('Trick, defraud, or mislead us and other users, especially in any attempt to learn sensitive account information such as user passwords.')}
+          {li('Make improper use of our support services or submit false reports of abuse or misconduct.')}
+          {li('Engage in any automated use of the Services, such as using scripts to send comments or messages, or using data mining, robots, or similar data gathering and extraction tools.')}
+          {li('Interfere with, disrupt, or create an undue burden on the Services or the networks connected to the Services.')}
+          {li('Attempt to impersonate another user or person or use the username of another user.')}
+          {li('Use any information obtained from the Services in order to harass, abuse, or harm another person.')}
+          {li('Use the Services as part of any effort to compete with us or for any revenue-generating endeavour or commercial enterprise.')}
+          {li('Decipher, decompile, disassemble, or reverse engineer any of the software comprising or in any way making up a part of the Services, except as expressly permitted by applicable law.')}
+          {li('Attempt to bypass any measures of the Services designed to prevent or restrict access to the Services, or any portion of the Services.')}
+          {li('Harass, annoy, intimidate, or threaten any of our employees or agents.')}
+          {li('Delete the copyright or other proprietary rights notice from any Content.')}
+          {li('Copy or adapt the Services\' software, including but not limited to HTML, JavaScript, or other code.')}
+          {li('Upload or transmit viruses, Trojan horses, spyware, or other material that interferes with any party\'s uninterrupted use and enjoyment of the Services.')}
+          {li('Use any automated system, including spiders, robots, scrapers, or offline readers, that accesses the Services without authorisation.')}
+          {li('Disparage, tarnish, or otherwise harm, in our opinion, us and/or the Services.')}
+          {li('Use the Services in a manner inconsistent with any applicable laws or regulations.')}
+          {li('Use a buying agent or purchasing agent to make purchases on the Services.')}
+          {li('Sell or otherwise transfer your or any other user\'s profile.')}
+        </ul>
+        <p style={{...s.p, marginTop:20}}><strong>Subscriptions.</strong> If you subscribe to our Services, you may not: engage in any use, modification, copying, redistribution, or retransmission of any portions of the Services without prior written consent; reconstruct or attempt to discover any source code or algorithms; provide the Services to any third party; intercept data not intended for you; or damage, reveal, or alter any user's data or information relating to another person or entity.</p>
+      </div>
+
+      <div style={s.mt}><h3>Community / Forum Guidelines</h3>
+        <p style={s.p}>Please review our forum rules at <a href="https://www.outbackelectronics.com.au/forum/general-discussion/forum-rules-1" target="_blank" rel="noopener noreferrer">https://www.outbackelectronics.com.au/forum/general-discussion/forum-rules-1</a>.</p>
+      </div>
+
+      <div style={s.mt}><h3>Contributions</h3>
+        <p style={s.p}>A 'Contribution' means any data, information, software, text, code, music, scripts, sound, graphics, photos, videos, tags, messages, interactive features, or other materials you post, share, upload, submit, or otherwise provide on or through the Services.</p>
+        <p style={s.p}>We may but are under no obligation to review or moderate Contributions, and we expressly exclude our liability for any loss or damage resulting from any user's breach of this Policy. Please report any Contribution that you believe breaches this Policy.</p>
+        <p style={s.p}>You warrant that: you are the creator and owner of, or have the necessary licences and permissions to use your Contributions; all your Contributions comply with applicable laws and are original and true; your Contributions do not infringe the intellectual property rights of any third party; and you have verifiable consent from any identifiable individual person in your Contributions.</p>
+        <p style={s.p}>You also agree that you will not post any Contribution that is: in breach of applicable laws or court orders; defamatory, obscene, offensive, hateful, bullying, or threatening; false, inaccurate, or misleading; sexually explicit or harmful to minors; promoting violence or terrorism; discriminatory based on race, sex, religion, nationality, disability, sexual orientation, or age; or unsolicited advertising, spam, or pyramid schemes.</p>
+        <p style={s.p}>You may not use our Services to offer or promote: items that encourage illegal activity; cigarettes, nicotine, alcohol, or controlled substances; regulated weapons, firearms, or ammunition; sexually oriented materials; stolen goods; or any transaction requiring pre-approval that has not been obtained.</p>
+      </div>
+
+      <div style={s.mt}><h3>Reviews and Ratings</h3>
+        <p style={s.p}>When your Contribution is a review or rating, you also agree that: you have firsthand experience with the goods or services being reviewed; your Contribution is true to your experience; you are not affiliated with competitors if posting negative reviews; you will not make false or misleading statements; and you will not organise a campaign encouraging others to post reviews.</p>
+      </div>
+
+      <div style={s.mt}><h3>Reporting a Breach of This Policy</h3>
+        <p style={s.p}>If you consider that any Service, Content, or Contribution breaches this Policy, please visit <a href="https://www.outbackelectronics.com.au/forum" target="_blank" rel="noopener noreferrer">https://www.outbackelectronics.com.au/forum</a> or contact us using the details below. For suspected intellectual property infringement, please review our <a href="/policies/terms-and-conditions">Terms and Conditions</a>.</p>
+        <p style={s.p}>We will reasonably determine whether a Service, Content, or Contribution breaches this Policy.</p>
+      </div>
+
+      <div style={s.mt}><h3>Consequences of Breaching This Policy</h3>
+        <p style={s.p}>The consequences for violating our Policy will vary depending on the severity of the breach and the user's history on the Services. We may issue a warning and/or remove the infringing Contribution. For serious or repeated breaches, we have the right to suspend or terminate your access and, if applicable, disable your account. We may also notify law enforcement or issue legal proceedings when we believe there is a genuine risk to an individual or a threat to public safety.</p>
+        <p style={s.p}>We exclude our liability for all action we may take in response to your breach of this Policy.</p>
+      </div>
+
+      <div style={s.mt}><h3>Complaints and Removal of Legitimate Content</h3>
+        <p style={s.p}>If you consider that Content or a Contribution has been mistakenly removed or blocked, please contact us using the details below and we will promptly review our decision. The Content or Contribution may stay 'down' whilst we conduct the review. For more information, visit <a href="https://www.outbackelectronics.com.au/forum/general-discussion/forum-rules-1" target="_blank" rel="noopener noreferrer">https://www.outbackelectronics.com.au/forum/general-discussion/forum-rules-1</a>.</p>
+      </div>
+
+      <div style={s.mt}><h3>Disclaimer</h3>
+        <p style={s.p}>Outback Electronics is under no obligation to monitor users' activities, and we disclaim any responsibility for any user's misuse of the Services. Outback Electronics has no responsibility for any user or other Content or Contribution created, maintained, stored, transmitted, or accessible on or through the Services, and is not obligated to monitor or exercise any editorial control over such material. If Outback Electronics becomes aware that any such Content or Contribution violates this Policy, Outback Electronics may, in addition to removing such Content or Contribution and blocking your account, report such breach to the police or appropriate regulatory authority.</p>
+      </div>
+
+      <div style={s.mt}><h3>Contact Us</h3>
+        <p style={s.p}>If you have any further questions or comments, or wish to report any problematic Content or Contribution, please contact us:</p>
+        <p style={s.p}>Email: <a href={`mailto:${email}`}>{email}</a><br/>Online contact form: <a href="/contact">outbackelectronics.com.au/contact</a></p>
+      </div>
+
+      <hr className="thin" style={{marginTop:40}} />
+      <div className="notice" style={{marginTop:24}}>
+        <span className="tag tag-ink">QUESTIONS?</span>
+        <div style={{fontSize:13, color:'var(--ink-2)'}}>Email <strong><a href={`mailto:${email}`}>{email}</a></strong> or use the <a href="/contact">contact form</a>.</div>
+      </div>
+    </div>
+  );
+}
+
 // POLICIES
 // ============================================================
 function PoliciesPage({ go, pageParams }) {
@@ -1264,6 +1355,7 @@ function PoliciesPage({ go, pageParams }) {
     'cookie-policy': { title: 'Cookie Policy', updated: 'September 18, 2024' },
     'return-policy': { title: 'Return Policy', updated: 'September 18, 2024' },
     'disclaimer': { title: 'Disclaimer', updated: 'September 18, 2024' },
+    'acceptable-use': { title: 'Acceptable Use Policy', updated: 'September 18, 2024' },
   };
   const activeDoc = DOCS[slug] ? slug : 'terms-and-conditions';
 
@@ -1280,7 +1372,7 @@ function PoliciesPage({ go, pageParams }) {
             ))}
           </aside>
           <div className="policy-content">
-            {activeDoc === 'terms-and-conditions' ? <TermsContent email={email} phone={phone} address={address} /> : activeDoc === 'privacy-policy' ? <PrivacyContent email={email} phone={phone} address={address} /> : activeDoc === 'shipping-and-delivery' ? <ShippingContent email={email} /> : activeDoc === 'cookie-policy' ? <CookieContent email={email} /> : activeDoc === 'return-policy' ? <ReturnContent email={email} phone={phone} address={address} /> : <DisclaimerContent />}
+            {activeDoc === 'terms-and-conditions' ? <TermsContent email={email} phone={phone} address={address} /> : activeDoc === 'privacy-policy' ? <PrivacyContent email={email} phone={phone} address={address} /> : activeDoc === 'shipping-and-delivery' ? <ShippingContent email={email} /> : activeDoc === 'cookie-policy' ? <CookieContent email={email} /> : activeDoc === 'return-policy' ? <ReturnContent email={email} phone={phone} address={address} /> : activeDoc === 'disclaimer' ? <DisclaimerContent /> : <AcceptableUseContent email={email} />}
 
           </div>
         </div>
