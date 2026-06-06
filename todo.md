@@ -91,12 +91,8 @@ Empty state replaced with: "Writing up the first ones now. We have plenty of har
 ### ✅ 20. Groups page — "No active groups yet — they're coming soon." (pages-community.jsx:231)
 Empty state replaced with: "First chapter forming. We're getting the first local group off the ground. If you'd like to start one in your area, hit the button above and we'll make it happen."
 
-### ❌ 21. Admin overview "No activity yet" (pages-admin.jsx:458)
-```
-"No activity yet"
-"Orders and new quote requests will appear here."
-```
-First thing a new admin sees. Fine for a fresh install, but no onboarding guidance on what to configure first.
+### ✅ 21. Admin overview "No activity yet" (pages-admin.jsx:458) — RESOLVED
+Empty state replaced with a 4-step onboarding checklist: Shop details → Integrations → Add products → Membership tiers. Each step shows a label, description, and nav hint. "Orders and quote requests will appear here…" retained as a sub-note.
 
 ### ❌ 22. Admin → Memberships: tiers disconnected from public page (pages-admin.jsx:5325)
 Admin panel says "No tiers yet. Create one to enable memberships on the public site." — but public memberships page still shows hardcoded ghost tiers regardless. The two systems are not connected until real tiers are saved.
@@ -158,7 +154,7 @@ Completing a purchase does not decrement the stock count on the purchased produc
 | 18 | pages-shop.jsx:604 | Software — no data | MEDIUM | ✅ DONE |
 | 19 | pages-community.jsx:135 | Tutorials — no data | MEDIUM | ✅ DONE |
 | 20 | pages-community.jsx:231 | Groups — no data | MEDIUM | ✅ DONE |
-| 21 | pages-admin.jsx:458 | Overview "no activity yet" | MEDIUM | ❌ OPEN |
+| 21 | pages-admin.jsx:458 | Overview "no activity yet" | MEDIUM | ✅ DONE |
 | 22 | pages-admin.jsx:5325 | Memberships tiers disconnected | MEDIUM | ❌ OPEN |
 | 23 | pages-admin.jsx:5350 | No subscriptions yet | MEDIUM | ❌ OPEN |
 | 24 | portal-page.jsx:1306 | Bookings — no create flow | LOW | ✅ DONE |

@@ -478,10 +478,26 @@ function AdminOverview({ go }) {
                 ...(quotes || []).filter(q => q.status === 'new').map(q => ({ type:'quote', label: `Quote request · ${q.name}`, sub: q.loc || '', date: '' })),
               ].slice(-10).reverse();
               if (events.length === 0) return (
-                <div style={{padding:'28px 18px', textAlign:'center', color:'var(--ink-2)'}}>
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{margin:'0 auto 10px', display:'block', opacity:.3}}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                  <div style={{fontSize:13, fontWeight:500}}>No activity yet</div>
-                  <div style={{fontSize:12, marginTop:4, color:'var(--ink-3)'}}>Orders and new quote requests will appear here.</div>
+                <div style={{padding:'24px 20px'}}>
+                  <div style={{fontSize:13, fontWeight:600, marginBottom:14, color:'var(--ink-1)'}}>Get started — set up your store</div>
+                  <div style={{display:'grid', gap:10}}>
+                    {[
+                      { step:'1', label:'Shop details', desc:'Name, email, address, acknowledgement of country', nav:'Settings → Shop' },
+                      { step:'2', label:'Integrations', desc:'Stripe payments, SMTP email, AusPost shipping', nav:'Settings → Integrations' },
+                      { step:'3', label:'Add products', desc:'Create your first product listing or import a catalog', nav:'Catalog' },
+                      { step:'4', label:'Membership tiers', desc:'Create tiers to enable subscriptions on the public site', nav:'Memberships' },
+                    ].map(({ step, label, desc, nav }) => (
+                      <div key={step} style={{display:'flex', gap:14, alignItems:'flex-start', padding:'10px 12px', background:'var(--bg)', border:'1px solid var(--line)'}}>
+                        <div style={{minWidth:22, height:22, borderRadius:'50%', background:'var(--ochre)', color:'var(--dark)', fontSize:11, fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center', marginTop:1}}>{step}</div>
+                        <div style={{flex:1}}>
+                          <div style={{fontSize:13, fontWeight:600}}>{label}</div>
+                          <div style={{fontSize:12, color:'var(--ink-2)', marginTop:2}}>{desc}</div>
+                        </div>
+                        <span className="mono" style={{fontSize:10, color:'var(--ink-3)', whiteSpace:'nowrap', marginTop:4}}>{nav}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{fontSize:12, color:'var(--ink-3)', marginTop:14}}>Orders and quote requests will appear here once customers start arriving.</div>
                 </div>
               );
               return events.map((ev, i) => (
