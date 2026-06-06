@@ -1164,6 +1164,59 @@ function CookieContent({ email }) {
   );
 }
 
+function ReturnContent({ email, phone, address }) {
+  const s = {mt: {marginTop:32}, p: {fontSize:15, lineHeight:1.75, marginTop:8}};
+  return (
+    <div>
+      <span className="eyebrow">LEGAL · RETURN POLICY</span>
+      <h2 style={{marginTop:8}}>Return Policy</h2>
+      <p style={s.p}>Thank you for your purchase. We hope you are happy with your purchase. However, if you are not completely satisfied for any reason, you may return it to us for a full refund. Please see below for more information.</p>
+
+      <div style={s.mt}><h3>Returns</h3>
+        <p style={s.p}>All returns must be postmarked within <strong>seven (7) days</strong> of the purchase date. All returned items must be in new and unused condition, with all original tags and labels attached.</p>
+      </div>
+
+      <div style={s.mt}><h3>Return Process</h3>
+        <p style={s.p}>To return an item, please email customer service at <a href={`mailto:${email}`}>{email}</a> to obtain a Return Merchandise Authorisation (RMA) number. After receiving an RMA number, place the item securely in its original packaging and include proof of purchase, then mail your return to:</p>
+        <div style={{margin:'16px 0', padding:'16px 20px', background:'var(--bg-elev)', border:'1px solid var(--line)', fontSize:14, lineHeight:2}}>
+          <strong>Outback Electronics</strong><br/>
+          Attn: Returns<br/>
+          RMA # [your number]<br/>
+          {address}<br/>
+          Australia
+        </div>
+        <p style={s.p}>You will be responsible for all return shipping charges. We strongly recommend using a trackable method to mail your return.</p>
+      </div>
+
+      <div style={s.mt}><h3>Refunds</h3>
+        <p style={s.p}>After receiving your return and inspecting the condition of your item, we will process your return. Please allow at least <strong>seven (7) days</strong> from receipt of your item for processing. Refunds may take 1–2 billing cycles to appear on your credit card statement, depending on your credit card company. We will notify you by email when your return has been processed.</p>
+      </div>
+
+      <div style={s.mt}><h3>Exceptions</h3>
+        <p style={s.p}>The following items cannot be returned:</p>
+        <ul style={{paddingLeft:20, lineHeight:2, marginTop:8}}>
+          <li>Software</li>
+          <li>Digital files</li>
+          <li>Services</li>
+        </ul>
+        <p style={s.p}>For defective or damaged products, please contact us at the details below to arrange a refund or exchange.</p>
+        <p style={s.p}><strong>Please note:</strong> Custom jobs cannot be returned — only repaired.</p>
+      </div>
+
+      <div style={s.mt}><h3>Questions</h3>
+        <p style={s.p}>If you have any questions concerning our return policy, please contact us at:</p>
+        <p style={s.p}>Phone: <a href={`tel:${(phone||'').replace(/\s/g,'')}`}>{phone}</a><br/>Email: <a href={`mailto:${email}`}>{email}</a></p>
+      </div>
+
+      <hr className="thin" style={{marginTop:40}} />
+      <div className="notice" style={{marginTop:24}}>
+        <span className="tag tag-ink">QUESTIONS?</span>
+        <div style={{fontSize:13, color:'var(--ink-2)'}}>Email <strong><a href={`mailto:${email}`}>{email}</a></strong> — we'll get back to you as soon as we can.</div>
+      </div>
+    </div>
+  );
+}
+
 // POLICIES
 // ============================================================
 function PoliciesPage({ go, pageParams }) {
@@ -1180,6 +1233,7 @@ function PoliciesPage({ go, pageParams }) {
     'privacy-policy': { title: 'Privacy Policy', updated: 'September 18, 2024' },
     'shipping-and-delivery': { title: 'Shipping & Delivery', updated: 'September 18, 2024' },
     'cookie-policy': { title: 'Cookie Policy', updated: 'September 18, 2024' },
+    'return-policy': { title: 'Return Policy', updated: 'September 18, 2024' },
   };
   const activeDoc = DOCS[slug] ? slug : 'terms-and-conditions';
 
@@ -1196,7 +1250,7 @@ function PoliciesPage({ go, pageParams }) {
             ))}
           </aside>
           <div className="policy-content">
-            {activeDoc === 'terms-and-conditions' ? <TermsContent email={email} phone={phone} address={address} /> : activeDoc === 'privacy-policy' ? <PrivacyContent email={email} phone={phone} address={address} /> : activeDoc === 'shipping-and-delivery' ? <ShippingContent email={email} /> : <CookieContent email={email} />}
+            {activeDoc === 'terms-and-conditions' ? <TermsContent email={email} phone={phone} address={address} /> : activeDoc === 'privacy-policy' ? <PrivacyContent email={email} phone={phone} address={address} /> : activeDoc === 'shipping-and-delivery' ? <ShippingContent email={email} /> : activeDoc === 'cookie-policy' ? <CookieContent email={email} /> : <ReturnContent email={email} phone={phone} address={address} />}
 
           </div>
         </div>
