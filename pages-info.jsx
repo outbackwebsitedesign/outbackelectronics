@@ -381,7 +381,7 @@ function ContactPage({ go }) {
                 allowFullScreen
               />
               <div style={{position:'absolute', bottom:0, left:0, right:0, background:'var(--ink)', color:'var(--paper)', padding:'8px 12px', fontFamily:'JetBrains Mono, monospace', fontSize:10}}>
-                MAP · {[shop.streetAddress, shop.suburb, shop.state].filter(Boolean).join(', ').toUpperCase()}
+                MAP · {[shop.streetAddress, shop.suburb, shop.state, shop.postcode, 'Australia'].filter(Boolean).join(', ').toUpperCase()}
               </div>
             </div>
             <div className="card" style={{padding:18, marginTop:16}}>
