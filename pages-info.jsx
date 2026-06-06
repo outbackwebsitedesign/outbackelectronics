@@ -1017,6 +1017,65 @@ function PrivacyContent({ email, phone, address }) {
   );
 }
 
+function ShippingContent({ email }) {
+  const s = {mt: {marginTop:32}, p: {fontSize:15, lineHeight:1.75, marginTop:8}};
+  return (
+    <div>
+      <span className="eyebrow">LEGAL · SHIPPING & DELIVERY POLICY</span>
+      <h2 style={{marginTop:8}}>Shipping & Delivery Policy</h2>
+      <p style={s.p}>This Shipping & Delivery Policy is part of our Terms and Conditions and should be read alongside our main Terms at <a href="/policies/terms-and-conditions" onClick={e => { e.preventDefault(); window.history.pushState({}, '', '/policies/terms-and-conditions'); window.dispatchEvent(new PopStateEvent('popstate')); }}>outbackelectronics.com.au/policies/terms-and-conditions</a>.</p>
+      <p style={s.p}>Please carefully review our Shipping & Delivery Policy when purchasing our products. This policy will apply to any order you place with us.</p>
+
+      <div style={s.mt}><h3>What Are My Shipping & Delivery Options?</h3>
+        <p style={s.p}><strong>In-Store Pickup</strong></p>
+        <p style={s.p}>In-store pickup is available for physical products only. You may collect your order once notified by email or SMS.</p>
+        <p style={{...s.p, marginTop:16}}>We currently offer the following shipping options:</p>
+        <ul style={{paddingLeft:20, lineHeight:2, marginTop:8}}>
+          <li>Standard Shipping</li>
+          <li>Express Shipping</li>
+          <li>In-store Pickup</li>
+        </ul>
+        <p style={s.p}>All times and dates given for delivery are given in good faith but are estimates only.</p>
+        <p style={s.p}><em>For EU and UK consumers:</em> This does not affect your statutory rights. Unless specifically noted, estimated delivery times reflect the earliest available delivery, and deliveries will be made within 30 days after the day we accept your order.</p>
+      </div>
+
+      <div style={s.mt}><h3>Do You Deliver Internationally?</h3>
+        <p style={s.p}>We offer international shipping to the following countries:</p>
+        <ul style={{paddingLeft:20, lineHeight:2, marginTop:8}}>
+          <li>Australia</li>
+          <li>United Kingdom</li>
+          <li>United States</li>
+        </ul>
+        <p style={s.p}>Free shipping is not valid on international orders.</p>
+        <p style={s.p}>We may be subject to various rules and restrictions in relation to some international deliveries and you may be subject to additional taxes and duties over which we have no control. You are responsible for complying with the laws applicable to the country where you live and for any such additional costs or taxes.</p>
+      </div>
+
+      <div style={s.mt}><h3>Are There Other Shipping Restrictions?</h3>
+        <p style={s.p}>Batteries are not offered for air shipping.</p>
+      </div>
+
+      <div style={s.mt}><h3>What Happens If My Order Is Delayed?</h3>
+        <p style={s.p}>If delivery is delayed for any reason we will let you know as soon as possible and will advise you of a revised estimated delivery date.</p>
+        <p style={s.p}><em>For EU and UK consumers:</em> This does not affect your statutory rights.</p>
+      </div>
+
+      <div style={s.mt}><h3>Questions About Returns?</h3>
+        <p style={s.p}>If you have questions about returns, please review our Return Policy available on this site.</p>
+      </div>
+
+      <div style={s.mt}><h3>How Can You Contact Us?</h3>
+        <p style={s.p}>If you have any questions about this policy, please contact us at <a href={`mailto:${email}`}>{email}</a>.</p>
+      </div>
+
+      <hr className="thin" style={{marginTop:40}} />
+      <div className="notice" style={{marginTop:24}}>
+        <span className="tag tag-ink">QUESTIONS?</span>
+        <div style={{fontSize:13, color:'var(--ink-2)'}}>Email <strong>{email}</strong> — we'll get back to you as soon as we can.</div>
+      </div>
+    </div>
+  );
+}
+
 // POLICIES
 // ============================================================
 function PoliciesPage({ go, pageParams }) {
@@ -1031,6 +1090,7 @@ function PoliciesPage({ go, pageParams }) {
   const DOCS = {
     'terms-and-conditions': { title: 'Terms & Conditions', updated: 'June 6, 2026' },
     'privacy-policy': { title: 'Privacy Policy', updated: 'September 18, 2024' },
+    'shipping-and-delivery': { title: 'Shipping & Delivery', updated: 'September 18, 2024' },
   };
   const activeDoc = DOCS[slug] ? slug : 'terms-and-conditions';
 
@@ -1047,7 +1107,7 @@ function PoliciesPage({ go, pageParams }) {
             ))}
           </aside>
           <div className="policy-content">
-            {activeDoc === 'terms-and-conditions' ? <TermsContent email={email} phone={phone} address={address} /> : <PrivacyContent email={email} phone={phone} address={address} />}
+            {activeDoc === 'terms-and-conditions' ? <TermsContent email={email} phone={phone} address={address} /> : activeDoc === 'privacy-policy' ? <PrivacyContent email={email} phone={phone} address={address} /> : <ShippingContent email={email} />}
 
           </div>
         </div>
