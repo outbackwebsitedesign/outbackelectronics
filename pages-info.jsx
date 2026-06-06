@@ -278,8 +278,7 @@ function ContactPage({ go }) {
   React.useEffect(() => {
     const fullAddress = [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(', ');
     if (!fullAddress) return;
-    const q = /australia/i.test(fullAddress) ? fullAddress : fullAddress + ', Australia';
-    fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`, {
+    fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullAddress)}&limit=1`, {
       headers: { 'Accept-Language': 'en' },
     })
       .then(r => r.json())
@@ -375,13 +374,12 @@ function ContactPage({ go }) {
                 src={(() => {
                   const lat = mapCoords ? mapCoords.lat : parseFloat(shop.mapLat) || -35.9845;
                   const lng = mapCoords ? mapCoords.lng : parseFloat(shop.mapLng) || 144.7730;
-                  const z = mapCoords ? 0.005 : 0.02;
-                  return `https://www.openstreetmap.org/export/embed.html?bbox=${lng-z}%2C${lat-z}%2C${lng+z}%2C${lat+z}&layer=mapnik&marker=${lat}%2C${lng}`;
+                  return `https://www.openstreetmap.org/export/embed.html?bbox=${lng-0.02}%2C${lat-0.02}%2C${lng+0.02}%2C${lat+0.02}&layer=mapnik&marker=${lat}%2C${lng}`;
                 })()}
                 allowFullScreen
               />
               <div style={{position:'absolute', bottom:0, left:0, right:0, background:'var(--ink)', color:'var(--paper)', padding:'8px 12px', fontFamily:'JetBrains Mono, monospace', fontSize:10}}>
-                MAP · {[shop.streetAddress, shop.suburb, shop.state, shop.postcode, 'Australia'].filter(Boolean).join(', ').toUpperCase()}
+                MAP · {[shop.streetAddress, shop.suburb, shop.state].filter(Boolean).join(', ').toUpperCase()}
               </div>
             </div>
             <div className="card" style={{padding:18, marginTop:16}}>
