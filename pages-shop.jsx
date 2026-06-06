@@ -43,6 +43,16 @@ function HomePage({ go, addToCart, portalUser }) {
     for (const p of featuredProducts) { counts[p.category] = (counts[p.category] || 0) + 1; }
     return counts;
   }, [featuredProducts]);
+
+  const categoryImages = useMemo(() => {
+    const map = {};
+    for (const p of featuredProducts) {
+      if (!p.category || !p.images || p.images.length === 0) continue;
+      if (!map[p.category]) map[p.category] = [];
+      if (map[p.category].length < 4) map[p.category].push(p.images[0]);
+    }
+    return map;
+  }, [featuredProducts]);
   useEffect(() => {
     Promise.allSettled([
       fetch('/api/catalog/products').then(r => r.json()).then(d => setFeaturedProducts(d.items || [])).catch(() => setFeaturedProducts(window.CATALOG_DATA?.getPublicProducts?.() || [])),
@@ -160,11 +170,35 @@ function HomePage({ go, addToCart, portalUser }) {
           <a className="mono" href="/shop" style={{fontSize:12, color:'var(--rust)', cursor:'pointer'}} onClick={(e) => { e.preventDefault(); go('shop'); }}>VIEW ALL CATEGORIES →</a>
         </div>
         <div className="grid-4">
-          {(categories.length > 0 ? categories.slice(0, 4) : []).map((catName, i) => {
-            const slotColors = ['slot-rust', 'slot', 'slot', 'slot-dark'];
+          {(categories.length > 0 ? categories.slice(0, 4) : []).map((catName) => {
+            const imgs = categoryImages[catName] || [];
             return (
-              <div key={catName} className="product" onClick={() => go('shop', { initialCat: catName })}>
-                <div className={`slot ${slotColors[i % slotColors.length]}`} style={{aspectRatio:'1/1'}}>{catName.toUpperCase()}</div>
+              <div key={catName} className="product" onClick={() => go('shop', { initialCat: catName })} style={{cursor:'pointer'}}>
+                <div style={{aspectRatio:'1/1', overflow:'hidden', background:'var(--bg-deep)', position:'relative'}}>
+                  {imgs.length === 0 && (
+                    <div style={{width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', color:'var(--ink-3)', fontSize:13, fontFamily:'var(--mono)'}}>{catName.toUpperCase()}</div>
+                  )}
+                  {imgs.length === 1 && (
+                    <img src={imgs[0]} alt={catName} loading="lazy" style={{width:'100%', height:'100%', objectFit:'cover', display:'block'}} />
+                  )}
+                  {imgs.length === 2 && (
+                    <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', height:'100%', gap:2}}>
+                      {imgs.map((src, j) => <img key={j} src={src} alt="" loading="lazy" style={{width:'100%', height:'100%', objectFit:'cover', display:'block'}} />)}
+                    </div>
+                  )}
+                  {imgs.length === 3 && (
+                    <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gridTemplateRows:'1fr 1fr', height:'100%', gap:2}}>
+                      <img src={imgs[0]} alt="" loading="lazy" style={{width:'100%', height:'100%', objectFit:'cover', display:'block', gridRow:'1 / 3'}} />
+                      <img src={imgs[1]} alt="" loading="lazy" style={{width:'100%', height:'100%', objectFit:'cover', display:'block'}} />
+                      <img src={imgs[2]} alt="" loading="lazy" style={{width:'100%', height:'100%', objectFit:'cover', display:'block'}} />
+                    </div>
+                  )}
+                  {imgs.length >= 4 && (
+                    <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gridTemplateRows:'1fr 1fr', height:'100%', gap:2}}>
+                      {imgs.slice(0,4).map((src, j) => <img key={j} src={src} alt="" loading="lazy" style={{width:'100%', height:'100%', objectFit:'cover', display:'block'}} />)}
+                    </div>
+                  )}
+                </div>
                 <div className="body">
                   <div className="name serif" style={{fontSize:22}}>{catName}</div>
                   <div className="row-px"><span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>{skuCounts[catName] != null ? `${skuCounts[catName]} SKUs` : ''}</span><span className="mono" style={{fontSize:11, color:'var(--rust)'}}>SHOP →</span></div>
