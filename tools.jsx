@@ -904,7 +904,7 @@ function AccountDropdown({ onClose, user }) {
         </button>
         <button style={btnStyle(true)}
           onMouseEnter={hoverOn} onMouseLeave={hoverOff}
-          onClick={() => goPage('register')}>
+          onClick={() => { portal('/?tab=register'); onClose(); }}>
           Create an Account
         </button>
       </div>
