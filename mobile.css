@@ -162,6 +162,10 @@
   /* Buttons full-width in stacked contexts */
   .stack > .btn { width: 100%; justify-content: center; }
 
+  /* eWaste notice row — let button wrap below text instead of getting clipped */
+  .notice { flex-wrap: wrap; }
+  .notice .btn { flex-shrink: 0; }
+
   /* Membership tiers — stack to single column */
   .membership-tiers { grid-template-columns: 1fr !important; gap: 16px !important; }
 
