@@ -141,11 +141,12 @@ function useAuth() {
 // ── LoginModal ────────────────────────────────────────────────────────────────
 function LoginModal({ onClose, onLogin }) {
   const [tab, setTab] = useState('login'); // 'login' | 'signup' | 'forgot'
-  const [username, setUsername] = useState('');
+  const [loginEmail, setLoginEmail] = useState('');
   const [password, setPassword] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -164,11 +165,12 @@ function LoginModal({ onClose, onLogin }) {
     setTab(t);
     setError('');
     setForgotMsg(null);
-    setUsername('');
+    setLoginEmail('');
     setPassword('');
     setFirstName('');
     setLastName('');
     setEmail('');
+    setUsername('');
     setPhone('');
     setAddress('');
     setConfirmPassword('');
@@ -178,21 +180,22 @@ function LoginModal({ onClose, onLogin }) {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
-    if (!username.trim()) { setError('Please enter a username or email.'); return; }
-    if (!password) { setError('Please enter a password.'); return; }
-    if (tab === 'signup') {
+    if (tab === 'login') {
+      if (!loginEmail.trim()) { setError('Please enter your email address.'); return; }
+      if (!password) { setError('Please enter a password.'); return; }
+    } else {
       if (!firstName.trim()) { setError('Please enter your first name.'); return; }
       if (!lastName.trim()) { setError('Please enter your last name.'); return; }
       if (!email.trim()) { setError('Please enter your email address.'); return; }
+      if (!password) { setError('Please enter a password.'); return; }
       if (password !== confirmPassword) { setError('Passwords do not match.'); return; }
     }
     setSaving(true);
     try {
       const endpoint = tab === 'login' ? '/api/forum/auth/login' : '/api/forum/auth/register';
-      const loginValue = username.trim();
       const body = tab === 'login'
-        ? (loginValue.includes('@') ? { email: loginValue, password } : { username: loginValue, password })
-        : { username: username.trim(), password, firstName: firstName.trim(), lastName: lastName.trim(), email: email.trim(), phone: phone.trim(), address: address.trim() };
+        ? { email: loginEmail.trim(), password }
+        : { password, firstName: firstName.trim(), lastName: lastName.trim(), email: email.trim(), phone: phone.trim(), address: address.trim(), username: username.trim() };
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: csrfHeaders(),
@@ -216,10 +219,10 @@ function LoginModal({ onClose, onLogin }) {
       method: 'POST',
       headers: csrfHeaders(),
       credentials: 'include',
-      body: JSON.stringify({ username: username.trim(), email: forgotEmail.trim().toLowerCase() }),
+      body: JSON.stringify({ email: forgotEmail.trim().toLowerCase() }),
     });
     setSaving(false);
-    setForgotMsg('If that username and email match an account, you\'ll receive a reset link shortly.');
+    setForgotMsg('If that email matches an account, you\'ll receive a reset link shortly.');
   }
 
   const inputStyle = {
@@ -279,16 +282,11 @@ function LoginModal({ onClose, onLogin }) {
                     </button>
                   </>
                 : <>
-                    <p style={{ fontSize: 14, color: '#555', marginBottom: 16, marginTop: 0 }}>Enter your username and the email address on your account. We'll send you a link to reset your password.</p>
+                    <p style={{ fontSize: 14, color: '#555', marginBottom: 16, marginTop: 0 }}>Enter the email address on your account. We'll send you a link to reset your password.</p>
                     <form onSubmit={handleForgot}>
-                      <label style={labelStyle}>
-                        <span style={labelSpanStyle}>Username</span>
-                        <input autoFocus type="text" value={username} onChange={e => setUsername(e.target.value)} required style={inputStyle}
-                          onFocus={e => e.target.style.borderColor = '#0088cc'} onBlur={e => e.target.style.borderColor = '#d6d9dc'} />
-                      </label>
                       <label style={{ ...labelStyle, marginBottom: 20 }}>
                         <span style={labelSpanStyle}>Email address</span>
-                        <input type="email" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} required style={inputStyle}
+                        <input autoFocus type="email" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} required style={inputStyle}
                           onFocus={e => e.target.style.borderColor = '#0088cc'} onBlur={e => e.target.style.borderColor = '#d6d9dc'} />
                       </label>
                       <button type="submit" disabled={saving} style={{ width: '100%', padding: '10px', borderRadius: 4, border: 'none', background: saving ? '#80b8e6' : '#0088cc', color: '#fff', fontSize: 15, fontWeight: 600, cursor: saving ? 'default' : 'pointer' }}>
@@ -310,14 +308,14 @@ function LoginModal({ onClose, onLogin }) {
                 </div>
               )}
               <label style={labelStyle}>
-                <span style={labelSpanStyle}>Username or Email</span>
+                <span style={labelSpanStyle}>{tab === 'login' ? 'Email address' : 'Email address *'}</span>
                 <input
-                  autoFocus
-                  type="text"
-                  value={username}
-                  onChange={e => setUsername(e.target.value)}
+                  autoFocus={tab === 'login'}
+                  type="email"
+                  value={tab === 'login' ? loginEmail : email}
+                  onChange={e => tab === 'login' ? setLoginEmail(e.target.value) : setEmail(e.target.value)}
                   maxLength={200}
-                  placeholder="Username or email address"
+                  placeholder="you@example.com"
                   style={inputStyle}
                   onFocus={e => e.target.style.borderColor = '#0088cc'}
                   onBlur={e => e.target.style.borderColor = '#d6d9dc'}
@@ -340,10 +338,11 @@ function LoginModal({ onClose, onLogin }) {
                     </label>
                   </div>
                   <label style={labelStyle}>
-                    <span style={labelSpanStyle}>Email address *</span>
-                    <input type="email" value={email} onChange={e => setEmail(e.target.value)} required maxLength={200}
-                      placeholder="jane@example.com" style={inputStyle}
+                    <span style={labelSpanStyle}>Username *</span>
+                    <input type="text" value={username} onChange={e => setUsername(e.target.value)} required maxLength={30}
+                      placeholder="e.g. jsmith91" style={inputStyle}
                       onFocus={e => e.target.style.borderColor = '#0088cc'} onBlur={e => e.target.style.borderColor = '#d6d9dc'} />
+                    <span style={{fontSize:11, color:'#787878', marginTop:4}}>3–30 characters · letters, numbers, underscores</span>
                   </label>
                   <label style={labelStyle}>
                     <span style={labelSpanStyle}>Phone number</span>

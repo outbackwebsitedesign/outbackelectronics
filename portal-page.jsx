@@ -49,7 +49,7 @@ function StatusTag({ status }) {
 // ── Login ─────────────────────────────────────────────────────────────────────
 
 function LoginPage({ onLogin }) {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -60,10 +60,10 @@ function LoginPage({ onLogin }) {
   async function handleLogin(e) {
     e.preventDefault();
     setError(''); setBusy(true);
-    const r = await api('/api/portal/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) });
+    const r = await api('/api/portal/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
     setBusy(false);
     if (r.ok) { onLogin(r.user); }
-    else { setError(r.message || 'Invalid username or password.'); }
+    else { setError(r.message || 'Invalid email or password.'); }
   }
 
   return (
@@ -88,9 +88,9 @@ function LoginPage({ onLogin }) {
               {error && <div className="alert alert-error">{error}</div>}
               <form onSubmit={handleLogin}>
                 <label className="field">
-                  <span className="label">Username</span>
-                  <input className="input" type="text" value={username} autoComplete="username"
-                    onChange={e => setUsername(e.target.value)} required />
+                  <span className="label">Email address</span>
+                  <input className="input" type="email" value={email} autoComplete="email"
+                    onChange={e => setEmail(e.target.value)} required />
                 </label>
                 <label className="field">
                   <span className="label">Password</span>
@@ -194,7 +194,6 @@ function RegisterForm({ onLogin, onBack }) {
 }
 
 function ForgotPasswordForm({ onBack }) {
-  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -202,9 +201,9 @@ function ForgotPasswordForm({ onBack }) {
   async function handleSubmit(e) {
     e.preventDefault();
     setMsg(null); setBusy(true);
-    await api('/api/portal/auth/forgot-password', { method: 'POST', body: JSON.stringify({ username, email }) });
+    await api('/api/portal/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) });
     setBusy(false);
-    setMsg('If that username and email match an account, you\'ll receive a reset link shortly.');
+    setMsg('If that email matches an account, you\'ll receive a reset link shortly.');
   }
 
   return (
@@ -213,12 +212,8 @@ function ForgotPasswordForm({ onBack }) {
       {msg
         ? <div className="alert alert-success">{msg}</div>
         : <>
-            <p style={{color:'var(--ink-2)', fontSize:13, marginBottom:20}}>Enter your username and the email address on your account. We'll send you a link to reset your password.</p>
+            <p style={{color:'var(--ink-2)', fontSize:13, marginBottom:20}}>Enter the email address on your account. We'll send you a link to reset your password.</p>
             <form onSubmit={handleSubmit}>
-              <label className="field">
-                <span className="label">Username</span>
-                <input className="input" type="text" value={username} onChange={e => setUsername(e.target.value)} required />
-              </label>
               <label className="field">
                 <span className="label">Email address</span>
                 <input className="input" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
@@ -1973,16 +1968,15 @@ function QuoteTokenView({ token, onAccepted }) {
             <h3 style={{marginBottom:4}}>Create your account</h3>
             <p style={{color:'var(--ink-2)', fontSize:13, marginBottom:20}}>Your account email will be <strong>{quote.email}</strong> — the address we sent this quote to.</p>
             <form onSubmit={handleAccept}>
-              <div className="grid-2" style={{marginBottom:14}}>
-                <label className="field" style={{margin:0}}>
-                  <span className="label">Display name</span>
-                  <input className="input" placeholder={quote.name || 'Your name'} value={form.displayName} onChange={e => setForm(f => ({...f, displayName: e.target.value}))} />
-                </label>
-                <label className="field" style={{margin:0}}>
-                  <span className="label">Username</span>
-                  <input className="input" placeholder="e.g. jsmith91" value={form.username} onChange={e => setForm(f => ({...f, username: e.target.value}))} required pattern="[a-zA-Z0-9_]{3,30}" title="3–30 characters, letters, numbers and underscores" />
-                </label>
-              </div>
+              <label className="field" style={{marginBottom:14}}>
+                <span className="label">Display name <span style={{color:'var(--ink-3)'}}>(optional)</span></span>
+                <input className="input" placeholder={quote.name || 'Your name'} value={form.displayName} onChange={e => setForm(f => ({...f, displayName: e.target.value}))} />
+              </label>
+              <label className="field" style={{marginBottom:14}}>
+                <span className="label">Username</span>
+                <input className="input" placeholder="e.g. jsmith91" value={form.username} onChange={e => setForm(f => ({...f, username: e.target.value}))} required pattern="[a-zA-Z0-9_]{3,30}" title="3–30 characters, letters, numbers and underscores" />
+                <span style={{fontSize:11, color:'var(--ink-3)', marginTop:3, display:'block'}}>3–30 characters, letters, numbers and underscores</span>
+              </label>
               <label className="field" style={{marginBottom:20}}>
                 <span className="label">Password</span>
                 <input className="input" type="password" placeholder="At least 8 characters" value={form.password} onChange={e => setForm(f => ({...f, password: e.target.value}))} required minLength={8} />
