@@ -348,12 +348,12 @@ function ContactPage({ go }) {
               <div className="card-paper" style={{padding: 22}}>
                 <span className="eyebrow">UHF</span>
                 <div style={{fontSize: 18, marginTop:8, fontWeight:600}}>Channel 40, callsign OUTBACK-1</div>
-                <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:4}}>WEEKDAYS · MORNINGS, USUALLY</div>
+                <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:4}}>ONLY IF VEHICLE SPOTTED · WEEKDAYS · MORNINGS, USUALLY</div>
               </div>
               <div className="card-paper" style={{padding: 22}}>
                 <span className="eyebrow">SAT MSG</span>
                 <div style={{fontSize: 18, marginTop:8, fontWeight:600}}>Iridium SBD: 881693700212</div>
-                <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:4}}>SHORT MESSAGES ONLY · ASCII</div>
+                <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:4}}>NOT CURRENTLY AVAILABLE · NO SAT</div>
               </div>
             </div>
 
