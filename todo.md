@@ -116,8 +116,8 @@ BookingsTab now has a full create form (serviceName, date, time, notes) that POS
 ```
 Renders a dash when `shop.email` is not set. Looks incomplete to customers. Tied to item #1.
 
-### ❌ 26. Portal login requires username, not email (portal-page.jsx:84–87)
-Username required (not email). New users arriving from a warranty link or order confirmation email don't know their username. Password reset requires knowing username AND email — registration collects email so it should work, but the UX is non-obvious.
+### ✅ 26. Portal login requires username, not email — RESOLVED
+All logins (portal, forum, games) now use **email + password** only. Username is still collected at registration (required, 3–30 chars) but is never used to sign in. Forgot-password on both portal and forum now only requires email. Admin dashboard login uses **Name** (staff name) instead of email or username. Game high scores sync to the player's account via `GET/POST /api/portal/game-scores` (stored in `forum.db` on the user object); the lobby shows the max of local and server scores.
 
 ### ✅ 27. AI page content ready — NOT AN ISSUE (INVALID, duplicate of #11)
 The AI page is not disabled. See #11: `aiEnabled` only toggles the "NEW · 2026" badge, not the page. Page is live and reachable. Nothing to do.
@@ -162,7 +162,7 @@ Completing a purchase does not decrement the stock count on the purchased produc
 | 23 | pages-admin.jsx:5350 | No subscriptions yet | MEDIUM | ✅ DONE |
 | 24 | portal-page.jsx:1306 | Bookings — no create flow | LOW | ✅ DONE |
 | 25 | pages-info.jsx:342 | Contact email renders dash if empty | LOW | ✅ DONE |
-| 26 | portal-page.jsx:84 | Login requires username not email | LOW | ❌ OPEN |
+| 26 | portal-page.jsx:84 | Login requires username not email | LOW | ✅ DONE |
 | 27 | pages-shop.jsx:169 | AI page "disabled" — INVALID, duplicate of #11 | LOW | ✅ N/A |
 | 28 | server.js:274,278 | Integrations UI non-functional | LOW | ❌ OPEN |
 | 29 | README.md:45,57 / CLAUDE.md:66 | Stale docs describe settings.defaults.json pattern | LOW | ✅ DONE |
