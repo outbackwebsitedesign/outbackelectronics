@@ -276,7 +276,7 @@ function ContactPage({ go }) {
   const [mapCoords, setMapCoords] = useState(null);
 
   React.useEffect(() => {
-    const fullAddress = [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(', ') || shop.address || '';
+    const fullAddress = [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(', ');
     if (!fullAddress) return;
     fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullAddress)}&limit=1`, {
       headers: { 'Accept-Language': 'en' },
@@ -284,7 +284,7 @@ function ContactPage({ go }) {
       .then(r => r.json())
       .then(data => { if (data[0]) setMapCoords({ lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) }); })
       .catch(() => {});
-  }, [shop.streetAddress, shop.suburb, shop.state, shop.postcode, shop.address]);
+  }, [shop.streetAddress, shop.suburb, shop.state, shop.postcode]);
 
   const sendQuickMsg = async (e) => {
     e.preventDefault();
