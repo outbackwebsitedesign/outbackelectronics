@@ -867,7 +867,9 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null) {
   } else if (isAsset) {
     safePath = cleanPath;
   } else if (spaRoutes !== null) {
-    safePath = spaRoutes.has(cleanPath.replace(/^\/+/, '')) ? rootFile : cleanPath;
+    const stripped = cleanPath.replace(/^\/+/, '');
+    const isSpaRoute = spaRoutes.has(stripped) || [...spaRoutes].some(r => stripped.startsWith(r + '/'));
+    safePath = isSpaRoute ? rootFile : cleanPath;
   } else {
     safePath = rootFile;
   }
