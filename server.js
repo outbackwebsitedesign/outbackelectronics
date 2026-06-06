@@ -860,7 +860,7 @@ const ALLOWED_SERVE_ROOTS = [
 // Pass null to serve rootFile for all non-asset paths (forum/admin/portal).
 function serveStatic(req, res, urlPath, rootFile, spaRoutes = null) {
   const cleanPath = String(urlPath || '/').split('?')[0];
-  const isAsset = cleanPath.startsWith('/assets/') || /\.(jsx|js|css|png|ico|jpg|svg|woff2?)$/.test(cleanPath);
+  const isAsset = cleanPath.startsWith('/assets/') || /\.(jsx|js|css|png|ico|jpg|svg|woff2?|txt)$/.test(cleanPath);
   let safePath;
   if (cleanPath === '/') {
     safePath = rootFile;
