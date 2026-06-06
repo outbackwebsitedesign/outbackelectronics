@@ -439,6 +439,20 @@
     /* Hide hamburger on desktop — sidebar always visible */
     .hamburger-btn { display: none; }
 
+    /* Search icon button — mobile-only toggle, hidden on desktop */
+    .search-icon-btn { display: none; }
+
+    /* Categories grid */
+    .forum-cats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    /* Mobile search overlay — hidden on desktop */
+    .forum-search-overlay { display: none; }
+
     /* ── Responsive ── */
     @media (max-width: 768px) {
       .hamburger-btn { display: grid; }
@@ -463,7 +477,50 @@
       .topic-row > *:nth-child(3) { display: none; }
       .btn-new-topic span { display: none; }
       .site-logo .site-tagline { display: none; }
-      .search-bar { max-width: 200px; }
+      .site-logo .site-name { display: none; }
+
+      /* Hide search bar from header — replaced by icon toggle */
+      .search-bar { display: none; }
+      .search-icon-btn { display: grid; }
+
+      /* Full-width search overlay below header */
+      .forum-search-overlay {
+        display: flex;
+        position: fixed;
+        top: var(--header-height);
+        left: 0; right: 0;
+        padding: 10px 12px;
+        background: var(--header-bg);
+        border-bottom: 1px solid var(--header-border);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        z-index: 99;
+        gap: 8px;
+        align-items: center;
+      }
+      .forum-search-overlay input {
+        flex: 1;
+        padding: 9px 12px 9px 34px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        font-size: 15px;
+        font-family: inherit;
+        outline: none;
+        background: var(--highlight);
+      }
+      .forum-search-overlay input:focus { border-color: var(--accent); background: #fff; }
+      .forum-search-overlay .search-icon-pos {
+        position: absolute; left: 10px; color: var(--text-muted); pointer-events: none;
+      }
+
+      /* Categories — single column on mobile */
+      .forum-cats-grid { grid-template-columns: 1fr !important; }
+
+      /* Topic title wraps instead of truncating */
+      .topic-title { white-space: normal; }
+
+      /* Tighten topic rows */
+      .topic-row { padding: 10px 12px; }
+      #main-outlet { padding: 12px 10px; gap: 0; }
     }
   </style>
 <link rel="stylesheet" href="/mobile.css">

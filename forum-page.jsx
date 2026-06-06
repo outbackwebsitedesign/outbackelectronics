@@ -898,75 +898,110 @@ function NotificationsPanel({ onClose }) {
 function ForumHeader({ siteUrl, query, onQueryChange, onNewTopic, onMenuToggle, user, authLoading, onLoginClick, onLogout, onOpenSettings }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef(null);
 
   const displayName = user ? (user.displayName || user.display_name || user.username || 'User') : '';
   const initial = displayName ? displayName.slice(0, 1).toUpperCase() : '';
   const bgColor = user ? avatarColor(user.username || displayName) : '#aaa';
 
+  function toggleSearch() {
+    setSearchOpen(o => {
+      if (!o) setTimeout(() => searchInputRef.current?.focus(), 50);
+      else onQueryChange('');
+      return !o;
+    });
+  }
+
   return (
-    <div id="d-header">
-      <button className="header-btn hamburger-btn" aria-label="Menu" onClick={onMenuToggle}><IconBurger /></button>
-      <a className="site-logo" href={siteUrl || '/'}>
-        <img src="assets/logo.webp" alt="Outback Electronics" />
-        <div>
-          <div className="site-name">Outback Electronics</div>
-          <div className="site-tagline">Community Forum</div>
+    <>
+      <div id="d-header">
+        <button className="header-btn hamburger-btn" aria-label="Menu" onClick={onMenuToggle}><IconBurger /></button>
+        <a className="site-logo" href={siteUrl || '/'}>
+          <img src="assets/logo.webp" alt="Outback Electronics" />
+          <div>
+            <div className="site-name">Outback Electronics</div>
+            <div className="site-tagline">Community Forum</div>
+          </div>
+        </a>
+        <div className="header-spacer" />
+        <div className="search-bar">
+          <IconSearch />
+          <input
+            type="search"
+            placeholder="Search…"
+            value={query}
+            onChange={e => onQueryChange(e.target.value)}
+            aria-label="Search topics"
+          />
         </div>
-      </a>
-      <div className="header-spacer" />
-      <div className="search-bar">
-        <IconSearch />
-        <input
-          type="search"
-          placeholder="Search…"
-          value={query}
-          onChange={e => onQueryChange(e.target.value)}
-          aria-label="Search topics"
-        />
-      </div>
-      <div className="header-right">
-        <div style={{position:'relative'}}>
-          <button className="header-btn" aria-label="Notifications" onClick={() => setNotifOpen(o => !o)}><IconBell /></button>
-          {notifOpen && <NotificationsPanel onClose={() => setNotifOpen(false)} />}
-        </div>
-        {!authLoading && (
-          user ? (
-            <div style={{ position: 'relative' }}>
-              <div
-                className="user-avatar"
-                title={displayName}
-                style={{ background: bgColor, cursor: 'pointer' }}
-                onClick={() => setMenuOpen(o => !o)}
-              >
-                {initial}
+        <div className="header-right">
+          {/* Mobile search toggle — hidden on desktop via CSS */}
+          <button className="header-btn search-icon-btn" aria-label="Search" onClick={toggleSearch}>
+            <IconSearch />
+          </button>
+          <div style={{position:'relative'}}>
+            <button className="header-btn" aria-label="Notifications" onClick={() => setNotifOpen(o => !o)}><IconBell /></button>
+            {notifOpen && <NotificationsPanel onClose={() => setNotifOpen(false)} />}
+          </div>
+          {!authLoading && (
+            user ? (
+              <div style={{ position: 'relative' }}>
+                <div
+                  className="user-avatar"
+                  title={displayName}
+                  style={{ background: bgColor, cursor: 'pointer' }}
+                  onClick={() => setMenuOpen(o => !o)}
+                >
+                  {initial}
+                </div>
+                {menuOpen && (
+                  <UserMenu
+                    user={user}
+                    onClose={() => setMenuOpen(false)}
+                    onOpenSettings={onOpenSettings}
+                    onLogout={onLogout}
+                  />
+                )}
               </div>
-              {menuOpen && (
-                <UserMenu
-                  user={user}
-                  onClose={() => setMenuOpen(false)}
-                  onOpenSettings={onOpenSettings}
-                  onLogout={onLogout}
-                />
-              )}
-            </div>
-          ) : (
-            <button
-              onClick={onLoginClick}
-              style={{
-                padding: '6px 14px', borderRadius: 4, border: '1px solid #0088cc',
-                background: 'transparent', color: '#0088cc', fontSize: 14,
-                fontWeight: 600, cursor: 'pointer',
-              }}
-            >
-              Log in
-            </button>
-          )
-        )}
-        <button className="btn-new-topic" onClick={onNewTopic}>
-          <IconPlus /><span>New Topic</span>
-        </button>
+            ) : (
+              <button
+                onClick={onLoginClick}
+                style={{
+                  padding: '6px 12px', borderRadius: 4, border: '1px solid #0088cc',
+                  background: 'transparent', color: '#0088cc', fontSize: 13,
+                  fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+                }}
+              >
+                Log in
+              </button>
+            )
+          )}
+          <button className="btn-new-topic" onClick={onNewTopic}>
+            <IconPlus /><span>New Topic</span>
+          </button>
+        </div>
       </div>
-    </div>
+      {/* Mobile search overlay — rendered below header via position:fixed in CSS */}
+      {searchOpen && (
+        <div className="forum-search-overlay">
+          <div style={{flex:1, position:'relative', display:'flex', alignItems:'center'}}>
+            <span className="search-icon-pos"><IconSearch /></span>
+            <input
+              ref={searchInputRef}
+              type="search"
+              placeholder="Search topics…"
+              value={query}
+              onChange={e => onQueryChange(e.target.value)}
+              aria-label="Search topics"
+            />
+          </div>
+          <button className="header-btn" aria-label="Close search" onClick={toggleSearch}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -1059,7 +1094,7 @@ function CategoriesView({ cats, threads, onNewTopic }) {
   return (
     <div id="main-content">
       <h1 className="page-title">Categories</h1>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))',gap:16,marginBottom:24}}>
+      <div className="forum-cats-grid">
         {cats.map(c => {
           const color = catColor(c.id);
           const recent = recentByCat[c.id] || [];
