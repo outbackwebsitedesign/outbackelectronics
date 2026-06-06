@@ -834,8 +834,8 @@ function TermsContent({ email, phone, address }) {
       <h2 style={{marginTop:8}}>Terms and Conditions</h2>
       <div style={s.mt}>
         <p style={s.p}>We are Outback Electronics ('Company', 'we', 'us', or 'our'), a company registered in Australia at {address}. Our ABN is 99 496 591 295.</p>
-        <p style={s.p}>We operate the website https://www.outbackelectronics.com.au (the 'Site'), as well as any other related products and services that refer or link to these legal terms (collectively, the 'Legal Terms').</p>
-        <p style={s.p}>You can contact us by phone at {phone}, by email at {email}, or by mail to {address}, Australia.</p>
+        <p style={s.p}>We operate the website <a href="https://www.outbackelectronics.com.au">https://www.outbackelectronics.com.au</a> (the 'Site'), as well as any other related products and services that refer or link to these legal terms (collectively, the 'Legal Terms').</p>
+        <p style={s.p}>You can contact us by phone at <a href={`tel:${(phone||'').replace(/\s/g,'')}`}>{phone}</a>, by email at <a href={`mailto:${email}`}>{email}</a>, or by mail to {address}, Australia.</p>
         <p style={s.p}>These Legal Terms constitute a legally binding agreement between you and Outback Electronics concerning your access to and use of the Services. By accessing the Services, you have read, understood, and agreed to be bound by all of these Legal Terms. IF YOU DO NOT AGREE, YOU MUST DISCONTINUE USE IMMEDIATELY.</p>
         <p style={s.p}>The Services are intended for users who are at least 18 years old.</p>
       </div>
@@ -904,12 +904,12 @@ function TermsContent({ email, phone, address }) {
       <div style={s.mt}><h3>26. Electronic Communications</h3><p style={s.p}>Visiting the Services, sending emails, and completing online forms constitute electronic communications. You consent to receive electronic communications that satisfy any legal requirement for writing.</p></div>
       <div style={s.mt}><h3>27. Miscellaneous</h3><p style={s.p}>These Legal Terms constitute the entire agreement between you and us. If any provision is deemed unenforceable, the remainder stays in force. We may assign our rights and obligations at any time. No joint venture, partnership, or employment relationship is created by these terms.</p></div>
       <div style={s.mt}><h3>28. Contact Us</h3>
-        <p style={s.p}><strong>Outback Electronics</strong><br/>{address}, Australia<br/>Phone: {phone}<br/>Email: <a href={`mailto:${email}`}>{email}</a></p>
+        <p style={s.p}><strong>Outback Electronics</strong><br/>{address}, Australia<br/>Phone: <a href={`tel:${(phone||'').replace(/\s/g,'')}`}>{phone}</a><br/>Email: <a href={`mailto:${email}`}>{email}</a></p>
       </div>
       <hr className="thin" style={{marginTop:40}} />
       <div className="notice" style={{marginTop:24}}>
         <span className="tag tag-ink">QUESTIONS?</span>
-        <div style={{fontSize:13, color:'var(--ink-2)'}}>Email <strong>{email}</strong> — we'll get back to you as soon as we can.</div>
+        <div style={{fontSize:13, color:'var(--ink-2)'}}>Email <strong><a href={`mailto:${email}`}>{email}</a></strong> — we'll get back to you as soon as we can.</div>
       </div>
     </div>
   );
@@ -921,7 +921,7 @@ function PrivacyContent({ email, phone, address }) {
     <div>
       <span className="eyebrow">LEGAL · PRIVACY POLICY</span>
       <h2 style={{marginTop:8}}>Privacy Policy</h2>
-      <p style={s.p}>This Privacy Notice for Outback Electronics ('we', 'us', or 'our') describes how and why we might access, collect, store, use, and/or share ('process') your personal information when you use our services ('Services'), including when you visit https://www.outbackelectronics.com.au or engage with us in other related ways including sales, marketing, or events.</p>
+      <p style={s.p}>This Privacy Notice for Outback Electronics ('we', 'us', or 'our') describes how and why we might access, collect, store, use, and/or share ('process') your personal information when you use our services ('Services'), including when you visit <a href="https://www.outbackelectronics.com.au">https://www.outbackelectronics.com.au</a> or engage with us in other related ways including sales, marketing, or events.</p>
       <p style={s.p}>Questions or concerns? Contact us at <a href={`mailto:${email}`}>{email}</a>.</p>
 
       <div style={s.mt}><h3>Summary of Key Points</h3>
@@ -938,7 +938,7 @@ function PrivacyContent({ email, phone, address }) {
       <div style={s.mt}><h3>1. What Information Do We Collect?</h3>
         <p style={s.p}><strong>Personal information you disclose to us.</strong> We collect personal information that you voluntarily provide when you register, express an interest in our products or services, participate in activities, or contact us. This may include: names, phone numbers, email addresses, mailing addresses, usernames, passwords, contact preferences, and billing addresses.</p>
         <p style={s.p}><strong>Sensitive information.</strong> We do not process sensitive information.</p>
-        <p style={s.p}><strong>Payment data.</strong> Payment data necessary to process purchases is handled and stored by Stripe. See Stripe's privacy notice at https://stripe.com/au/privacy.</p>
+        <p style={s.p}><strong>Payment data.</strong> Payment data necessary to process purchases is handled and stored by Stripe. See Stripe's privacy notice at <a href="https://stripe.com/au/privacy" target="_blank" rel="noopener noreferrer">https://stripe.com/au/privacy</a>.</p>
         <p style={s.p}><strong>Information automatically collected.</strong> We automatically collect certain information when you visit the Services, including IP address, browser and device characteristics, operating system, language preferences, referring URLs, and usage data. We also collect information through cookies and similar technologies, including log data, device data, and approximate location data.</p>
       </div>
 
@@ -963,7 +963,7 @@ function PrivacyContent({ email, phone, address }) {
       </div>
 
       <div style={s.mt}><h3>5. Do We Use Cookies and Other Tracking Technologies?</h3>
-        <p style={s.p}>We may use cookies and similar tracking technologies (web beacons, pixels) to gather information, maintain security, save preferences, and assist with basic site functions. We also permit third parties such as Google Analytics to use tracking technologies for analytics purposes. You can opt out of Google Analytics at https://tools.google.com/dlpage/gaoptout.</p>
+        <p style={s.p}>We may use cookies and similar tracking technologies (web beacons, pixels) to gather information, maintain security, save preferences, and assist with basic site functions. We also permit third parties such as Google Analytics to use tracking technologies for analytics purposes. You can opt out of Google Analytics at <a href="https://tools.google.com/dlpage/gaoptout" target="_blank" rel="noopener noreferrer">https://tools.google.com/dlpage/gaoptout</a>.</p>
       </div>
 
       <div style={s.mt}><h3>6. How Long Do We Keep Your Information?</h3>
@@ -980,7 +980,7 @@ function PrivacyContent({ email, phone, address }) {
 
       <div style={s.mt}><h3>9. What Are Your Privacy Rights?</h3>
         <p style={s.p}>Depending on your location, you may have the right to: request access to and a copy of your personal information; request rectification or erasure; restrict processing; data portability; and object to processing. You can also opt out of marketing communications at any time via the unsubscribe link in our emails or by contacting us.</p>
-        <p style={s.p}>To review or change your account information, log in to your account settings at https://www.outbackelectronics.com.au/account/my-account. Questions? Email us at <a href={`mailto:${email}`}>{email}</a>.</p>
+        <p style={s.p}>To review or change your account information, log in to your account settings at <a href="https://www.outbackelectronics.com.au/account/my-account">https://www.outbackelectronics.com.au/account/my-account</a>. Questions? Email us at <a href={`mailto:${email}`}>{email}</a>.</p>
       </div>
 
       <div style={s.mt}><h3>10. Controls for Do-Not-Track Features</h3>
@@ -989,7 +989,7 @@ function PrivacyContent({ email, phone, address }) {
 
       <div style={s.mt}><h3>11. Do United States Residents Have Specific Privacy Rights?</h3>
         <p style={s.p}>Residents of certain US states may have additional rights regarding personal information. We have not collected, sold, or shared any personal information to third parties for commercial purposes in the preceding twelve months, and we do not intend to do so. US residents may have rights including: right to know, access, correct, delete, and obtain a copy of their data; right to non-discrimination; and right to opt out of targeted advertising or profiling.</p>
-        <p style={s.p}>To exercise these rights, visit https://www.outbackelectronics.com.au/account/my-account or email <a href={`mailto:${email}`}>{email}</a>.</p>
+        <p style={s.p}>To exercise these rights, visit <a href="https://www.outbackelectronics.com.au/account/my-account">https://www.outbackelectronics.com.au/account/my-account</a> or email <a href={`mailto:${email}`}>{email}</a>.</p>
       </div>
 
       <div style={s.mt}><h3>12. Do Other Regions Have Specific Privacy Rights?</h3>
@@ -1001,17 +1001,17 @@ function PrivacyContent({ email, phone, address }) {
       </div>
 
       <div style={s.mt}><h3>14. How Can You Review, Update, or Delete Your Data?</h3>
-        <p style={s.p}>To request to review, update, or delete your personal information, visit: https://www.outbackelectronics.com.au/account/my-account</p>
+        <p style={s.p}>To request to review, update, or delete your personal information, visit: <a href="https://www.outbackelectronics.com.au/account/my-account">https://www.outbackelectronics.com.au/account/my-account</a></p>
       </div>
 
       <div style={s.mt}><h3>15. How Can You Contact Us About This Notice?</h3>
-        <p style={s.p}><strong>Outback Electronics</strong><br/>{address}, Australia<br/>Phone: {phone}<br/>Email: <a href={`mailto:${email}`}>{email}</a></p>
+        <p style={s.p}><strong>Outback Electronics</strong><br/>{address}, Australia<br/>Phone: <a href={`tel:${(phone||'').replace(/\s/g,'')}`}>{phone}</a><br/>Email: <a href={`mailto:${email}`}>{email}</a></p>
       </div>
 
       <hr className="thin" style={{marginTop:40}} />
       <div className="notice" style={{marginTop:24}}>
         <span className="tag tag-ink">QUESTIONS?</span>
-        <div style={{fontSize:13, color:'var(--ink-2)'}}>Email <strong>{email}</strong> — we'll get back to you as soon as we can.</div>
+        <div style={{fontSize:13, color:'var(--ink-2)'}}>Email <strong><a href={`mailto:${email}`}>{email}</a></strong> — we'll get back to you as soon as we can.</div>
       </div>
     </div>
   );
@@ -1070,7 +1070,7 @@ function ShippingContent({ email }) {
       <hr className="thin" style={{marginTop:40}} />
       <div className="notice" style={{marginTop:24}}>
         <span className="tag tag-ink">QUESTIONS?</span>
-        <div style={{fontSize:13, color:'var(--ink-2)'}}>Email <strong>{email}</strong> — we'll get back to you as soon as we can.</div>
+        <div style={{fontSize:13, color:'var(--ink-2)'}}>Email <strong><a href={`mailto:${email}`}>{email}</a></strong> — we'll get back to you as soon as we can.</div>
       </div>
     </div>
   );
