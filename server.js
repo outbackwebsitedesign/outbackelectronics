@@ -1919,7 +1919,7 @@ async function handleCustomerRegister(req, res) {
   if (publicRateLimited(getIp(req), 'register')) return json(res, 429, { error: 'too_many_requests' });
   let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
   if (!body || typeof body !== 'object') return json(res, 422, { error: 'invalid_payload', message: 'Payload must be a JSON object.' });
-  const username = typeof body.username === 'string' ? body.username : '';
+  const username = typeof body.username === 'string' ? body.username.trim() : '';
   const password = typeof body.password === 'string' ? body.password : '';
   const firstName = typeof body.firstName === 'string' ? body.firstName.trim() : '';
   const lastName  = typeof body.lastName  === 'string' ? body.lastName.trim()  : '';
@@ -3335,15 +3335,11 @@ const forumServer = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/forum/auth/forgot-password') {
     if (publicRateLimited(getIp(req), 'forgot-password')) return json(res, 429, { error: 'too_many_requests' });
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
-    const username = typeof body?.username === 'string' ? body.username.trim() : '';
     const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
-    if (!username || !email) return json(res, 200, { ok: true }); // always 200 to avoid enumeration
+    if (!email) return json(res, 200, { ok: true }); // always 200 to avoid enumeration
     const forum = readForum();
     if (!Array.isArray(forum.users)) forum.users = [];
-    const user = forum.users.find(u =>
-      u.username && u.username.toLowerCase() === username.toLowerCase() &&
-      u.email && u.email.toLowerCase() === email
-    );
+    const user = forum.users.find(u => u.email && u.email.toLowerCase() === email);
     if (user) {
       const token = crypto.randomBytes(32).toString('hex');
       resetTokens.set(token, { userId: user.id, expiresAt: now() + RESET_TOKEN_TTL_MS });
@@ -3443,10 +3439,9 @@ const adminServer = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true });
     }
     const staffData = readStaff();
-    const member = staffData.members.find(m => m.status === 'active' && m.pinHash && (
-      (m.email && m.email.toLowerCase() === (body.username || '').toLowerCase()) ||
+    const member = staffData.members.find(m => m.status === 'active' && m.pinHash &&
       m.name.toLowerCase() === (body.username || '').toLowerCase()
-    ));
+    );
     if (!member || !verifyPassword(body.pin || '', member.pinHash)) {
       trackFailure(ip);
       return json(res, 401, { error: 'invalid_credentials' });
@@ -5248,7 +5243,7 @@ const portalServer = http.createServer(async (req, res) => {
     if (forum.users.find(u => u.username && u.username.toLowerCase() === username.toLowerCase())) {
       return json(res, 409, { error: 'username_taken', message: 'That username is already taken.' });
     }
-    const resolvedDisplayName = (typeof displayName === 'string' ? displayName.trim() : '') || username;
+    const resolvedDisplayName = (typeof displayName === 'string' ? displayName.trim() : '') || quote.name || username;
     const newUser = { id: 'U-' + Date.now(), username, displayName: resolvedDisplayName, email: quoteEmail, passwordHash: hashPassword(password), createdAt: new Date().toISOString() };
     forum.users.push(newUser);
     writeForum(forum);
@@ -5417,15 +5412,11 @@ const portalServer = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/portal/auth/forgot-password') {
     if (publicRateLimited(getIp(req), 'forgot-password')) return json(res, 429, { error: 'too_many_requests' });
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
-    const username = typeof body?.username === 'string' ? body.username.trim() : '';
     const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
-    if (!username || !email) return json(res, 200, { ok: true }); // always 200 to avoid enumeration
+    if (!email) return json(res, 200, { ok: true }); // always 200 to avoid enumeration
     const forum = readForum();
     if (!Array.isArray(forum.users)) forum.users = [];
-    const user = forum.users.find(u =>
-      u.username && u.username.toLowerCase() === username.toLowerCase() &&
-      u.email && u.email.toLowerCase() === email
-    );
+    const user = forum.users.find(u => u.email && u.email.toLowerCase() === email);
     if (user) {
       const token = crypto.randomBytes(32).toString('hex');
       resetTokens.set(token, { userId: user.id, expiresAt: now() + RESET_TOKEN_TTL_MS });
@@ -5453,6 +5444,32 @@ const portalServer = http.createServer(async (req, res) => {
     writeForum(forum);
     resetTokens.delete(token);
     saveResetTokens();
+    return json(res, 200, { ok: true });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/portal/game-scores') {
+    const session = getPortalSession(req);
+    if (!session) return json(res, 401, { error: 'login_required' });
+    const forum = readForum();
+    const user = Array.isArray(forum.users) ? forum.users.find(u => u.id === session.id) : null;
+    return json(res, 200, { scores: (user && user.gameScores) || {} });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/portal/game-scores') {
+    const session = getPortalSession(req);
+    if (!session) return json(res, 401, { error: 'login_required' });
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const { gameId, score } = body || {};
+    if (!gameId || typeof score !== 'number' || score < 0) return json(res, 422, { error: 'invalid_payload' });
+    const forum = readForum();
+    if (!Array.isArray(forum.users)) forum.users = [];
+    const idx = forum.users.findIndex(u => u.id === session.id);
+    if (idx < 0) return json(res, 404, { error: 'user_not_found' });
+    const existing = forum.users[idx].gameScores || {};
+    if (score > (existing[gameId] || 0)) {
+      forum.users[idx] = { ...forum.users[idx], gameScores: { ...existing, [gameId]: score } };
+      writeForum(forum);
+    }
     return json(res, 200, { ok: true });
   }
 

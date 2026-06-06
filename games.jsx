@@ -79,7 +79,7 @@ function AuthModal({ onClose, onLogin }) {
   const labelStyle = { fontSize:11, fontWeight:700, letterSpacing:'0.06em', color:T.ink2, textTransform:'uppercase' };
   const inputStyle = { padding:'9px 12px', border:`1px solid ${T.line}`, borderRadius:6, fontSize:14, fontFamily:'inherit', color:T.ink, background:T.bg, outline:'none', width:'100%', boxSizing:'border-box' };
 
-  const [loginUser, setLoginUser] = useState('');
+  const [loginEmail, setLoginEmail] = useState('');
   const [loginPass, setLoginPass] = useState('');
   const [loginError, setLoginError] = useState('');
   const [loginBusy, setLoginBusy] = useState(false);
@@ -97,10 +97,10 @@ function AuthModal({ onClose, onLogin }) {
   async function handleLogin(e) {
     e.preventDefault();
     setLoginError(''); setLoginBusy(true);
-    const r = await portalApi('/api/portal/auth/login', { method: 'POST', body: JSON.stringify({ username: loginUser, password: loginPass }) });
+    const r = await portalApi('/api/portal/auth/login', { method: 'POST', body: JSON.stringify({ email: loginEmail, password: loginPass }) });
     setLoginBusy(false);
     if (r.ok) { onLogin(r.user); onClose(); }
-    else { setLoginError(r.message || 'Invalid username or password.'); }
+    else { setLoginError(r.message || 'Invalid email or password.'); }
   }
 
   async function handleRegister(e) {
@@ -127,7 +127,7 @@ function AuthModal({ onClose, onLogin }) {
         {tab === 'login' && (
           <form onSubmit={handleLogin}>
             {loginError && <div style={{background:'#fee2e2', border:'1px solid #fca5a5', color:'#991b1b', borderRadius:6, padding:'8px 12px', marginBottom:14, fontSize:13}}>{loginError}</div>}
-            <label style={fieldStyle}><span style={labelStyle}>Username</span><input style={inputStyle} type="text" value={loginUser} autoComplete="username" onChange={e => setLoginUser(e.target.value)} required /></label>
+            <label style={fieldStyle}><span style={labelStyle}>Email address</span><input style={inputStyle} type="email" value={loginEmail} autoComplete="email" onChange={e => setLoginEmail(e.target.value)} required /></label>
             <label style={fieldStyle}><span style={labelStyle}>Password</span><input style={inputStyle} type="password" value={loginPass} autoComplete="current-password" onChange={e => setLoginPass(e.target.value)} required /></label>
             <button type="submit" disabled={loginBusy} style={{ ...css.btn, ...css.btnPrimary, width:'100%', marginTop:8 }}>{loginBusy ? 'Signing in…' : 'Sign in →'}</button>
           </form>
@@ -157,12 +157,22 @@ function AuthModal({ onClose, onLogin }) {
   );
 }
 
-// ── localStorage helpers ──────────────────────────────────────────────────────
+// ── localStorage + server score helpers ──────────────────────────────────────
 function getHS(key) {
   try { return parseInt(localStorage.getItem(key) || '0', 10) || 0; } catch { return 0; }
 }
+// gameId derived from hsKey: 'oe_games_hs_serpent' → 'serpent'
+function hsKeyToGameId(key) { return key.replace('oe_games_hs_', ''); }
 function saveHS(key, score) {
   try { if (score > getHS(key)) localStorage.setItem(key, String(score)); } catch {}
+  // Silently sync to server — succeeds if logged in, no-ops otherwise
+  portalApi('/api/portal/game-scores', { method: 'POST', body: JSON.stringify({ gameId: hsKeyToGameId(key), score }) }).catch(() => {});
+}
+async function fetchServerScores() {
+  try {
+    const r = await portalApi('/api/portal/game-scores');
+    return r.ok ? (r.scores || {}) : {};
+  } catch { return {}; }
 }
 
 // ── Framework: useKeys ────────────────────────────────────────────────────────
@@ -1952,7 +1962,17 @@ const GAME_REGISTRY = [
 function Lobby({ onPlay }) {
   const [scores, setScores] = useState({});
   useEffect(() => {
-    const s={}; GAME_REGISTRY.forEach(g=>{ s[g.id]=getHS(g.hsKey); }); setScores(s);
+    const local = {}; GAME_REGISTRY.forEach(g => { local[g.id] = getHS(g.hsKey); });
+    setScores(local);
+    fetchServerScores().then(server => {
+      setScores(prev => {
+        const merged = { ...prev };
+        for (const [id, score] of Object.entries(server)) {
+          if (score > (merged[id] || 0)) merged[id] = score;
+        }
+        return merged;
+      });
+    });
   }, []);
 
   return (
