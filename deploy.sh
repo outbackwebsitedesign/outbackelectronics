@@ -93,7 +93,7 @@ EXTRAS=()
 tar czf "\$DEST/db-\$STAMP.tar.gz" "\${DB_FILES[@]}" "\${EXTRAS[@]}"
 
 # Keep last 72 backups (~3 days of hourly)
-ls -t "\$DEST"/db-*.tar.gz 2>/dev/null | tail -n +73 | xargs -r rm
+ls -t "\$DEST"/db-*.tar.gz 2>/dev/null | tail -n +73 | xargs -r -d '\n' rm
 
 echo "\$(date): OK → \$DEST/db-\$STAMP.tar.gz (\$(du -h "\$DEST/db-\$STAMP.tar.gz" | cut -f1))" >> "\$LOG"
 BACKUP_EOF
