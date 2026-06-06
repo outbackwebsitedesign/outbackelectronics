@@ -847,10 +847,13 @@ function TermsContent({ email, phone, address }) {
       </div>
       <div style={s.mt}><h3>3. User Representations</h3><p style={s.p}>By using the Services you represent that: (1) all information you submit is true, accurate, and complete; (2) you have the legal capacity to agree to these terms; (3) you are not a minor; (4) you will not use automated means to access the Services; (5) you will not use the Services for illegal or unauthorised purposes.</p></div>
       <div style={s.mt}><h3>4. User Registration</h3><p style={s.p}>You agree to keep your password confidential and are responsible for all use of your account. We may remove usernames that are inappropriate or objectionable.</p></div>
-      <div style={s.mt}><h3>5. Products</h3><p style={s.p}>We endeavour to display products accurately but cannot guarantee colours, features, or specifications are error-free. All products are subject to availability. Prices are subject to change.</p></div>
+      <div style={s.mt}><h3>5. Products</h3>
+        <p style={s.p}>We endeavour to display products accurately but cannot guarantee colours, features, or specifications are error-free. All products are subject to availability. Prices are subject to change. Product descriptions are provided in good faith and do not constitute a warranty beyond what is required by the Australian Consumer Law.</p>
+        <p style={s.p}><strong>Australian Consumer Law — Consumer Guarantees:</strong> Our goods come with guarantees that cannot be excluded under the Australian Consumer Law. You are entitled to a replacement or refund for a major failure and compensation for any other reasonably foreseeable loss or damage. You are also entitled to have goods repaired or replaced if they fail to be of acceptable quality and the failure does not amount to a major failure. Nothing in these Legal Terms excludes, restricts, or modifies any right or remedy you have under the Australian Consumer Law.</p>
+      </div>
       <div style={s.mt}><h3>6. Purchases and Payment</h3>
-        <p style={s.p}>We accept Visa, Mastercard, and Afterpay. All payments are in Australian Dollars and include GST where applicable. Payment is processed securely via Stripe.</p>
-        <p style={s.p}>We reserve the right to refuse any order, correct pricing errors, or cancel orders placed by dealers or resellers.</p>
+        <p style={s.p}>We accept Visa, Mastercard, and Afterpay. All payments are in Australian Dollars and include GST where applicable. Payment is processed securely via Stripe. By completing a purchase, you agree to Stripe's terms of service and privacy policy.</p>
+        <p style={s.p}>We reserve the right to refuse any order, correct pricing errors, or cancel orders placed by dealers or resellers. If we cancel an order for which payment has been received, we will issue a full refund via your original payment method.</p>
       </div>
       <div style={s.mt}><h3>7. Subscriptions</h3>
         <p style={s.p}><strong>Billing and Renewal:</strong> Subscriptions auto-renew monthly unless cancelled.</p>
@@ -897,8 +900,14 @@ function TermsContent({ email, phone, address }) {
         <p style={s.p}><strong>Exceptions:</strong> Disputes involving intellectual property rights, theft, piracy, or claims for injunctive relief are not subject to arbitration.</p>
       </div>
       <div style={s.mt}><h3>21. Corrections</h3><p style={s.p}>We may correct typographical errors, inaccuracies, or omissions in our content at any time without prior notice.</p></div>
-      <div style={s.mt}><h3>22. Disclaimer</h3><p style={{...s.p, textTransform:'uppercase', fontSize:13}}>The Services are provided on an as-is and as-available basis. To the fullest extent permitted by law, we disclaim all warranties, express or implied. Nothing in these terms limits your rights under the Australian Consumer Law.</p></div>
-      <div style={s.mt}><h3>23. Limitations of Liability</h3><p style={{...s.p, textTransform:'uppercase', fontSize:13}}>In no event will we be liable for any indirect, consequential, or punitive damages. Our liability is limited to the amount paid by you in the one (1) month prior to any cause of action. Nothing herein excludes rights that cannot be excluded under the Australian Consumer Law.</p></div>
+      <div style={s.mt}><h3>22. Disclaimer</h3>
+        <p style={{...s.p, textTransform:'uppercase', fontSize:13}}>The Services are provided on an as-is and as-available basis. To the fullest extent permitted by law, we disclaim all warranties, express or implied, including implied warranties of merchantability, fitness for a particular purpose, and non-infringement.</p>
+        <p style={s.p}><strong>Nothing in these Legal Terms excludes, restricts, or modifies any consumer guarantee, right, or remedy conferred by the Australian Consumer Law (Schedule 2 of the Competition and Consumer Act 2010 (Cth)) or any other applicable mandatory legislation that cannot lawfully be excluded.</strong></p>
+      </div>
+      <div style={s.mt}><h3>23. Limitations of Liability</h3>
+        <p style={{...s.p, textTransform:'uppercase', fontSize:13}}>To the fullest extent permitted by applicable law, in no event will we be liable for any indirect, incidental, consequential, special, exemplary, or punitive damages, including but not limited to loss of profits, loss of data, or loss of goodwill. Where liability cannot be excluded, our total liability is limited to the amount paid by you in the one (1) month preceding the cause of action.</p>
+        <p style={s.p}><strong>These limitations do not apply to liability arising under the Australian Consumer Law or any other applicable mandatory law where such exclusion would be unlawful.</strong> Where our liability for failure to comply with a consumer guarantee cannot be excluded, it is limited (to the extent permitted by law) to supplying the services again or paying the cost of having the services supplied again.</p>
+      </div>
       <div style={s.mt}><h3>24. Indemnification</h3><p style={s.p}>You agree to defend, indemnify, and hold us harmless from any loss, damage, liability, or claim arising from: your Contributions; your use of the Services; your breach of these Legal Terms; or your violation of any third-party rights.</p></div>
       <div style={s.mt}><h3>25. User Data</h3><p style={s.p}>We maintain data you transmit for managing the Services. You are solely responsible for your data. We are not liable for any loss or corruption of your data.</p></div>
       <div style={s.mt}><h3>26. Electronic Communications</h3><p style={s.p}>Visiting the Services, sending emails, and completing online forms constitute electronic communications. You consent to receive electronic communications that satisfy any legal requirement for writing.</p></div>
@@ -993,11 +1002,14 @@ function PrivacyContent({ email, phone, address }) {
       </div>
 
       <div style={s.mt}><h3>12. Do Other Regions Have Specific Privacy Rights?</h3>
-        <p style={s.p}><strong>Australia:</strong> We collect and process your personal information under Australia's Privacy Act 1988. You have the right to request access to or correction of your personal information at any time. If you believe we are unlawfully processing your personal information, you may submit a complaint to the Office of the Australian Information Commissioner.</p>
+        <p style={s.p}><strong>Australia:</strong> We collect and process your personal information in accordance with Australia's <em>Privacy Act 1988</em> (Cth) and the Australian Privacy Principles (APPs) contained in that Act. You have the right to request access to or correction of your personal information at any time by contacting us. We will respond to access and correction requests within 30 days.</p>
+        <p style={s.p}><strong>Notifiable Data Breaches:</strong> We are subject to the Notifiable Data Breaches (NDB) scheme under Part IIIC of the <em>Privacy Act 1988</em>. If we experience a data breach that is likely to result in serious harm to you, we will notify the Office of the Australian Information Commissioner (OAIC) and affected individuals as required by law.</p>
+        <p style={s.p}>If you believe we are handling your personal information in breach of the Australian Privacy Principles, you may submit a complaint first to us (we will respond within 30 days), and thereafter to the OAIC at <a href="https://www.oaic.gov.au" target="_blank" rel="noopener noreferrer">www.oaic.gov.au</a>.</p>
+        <p style={s.p}><strong>Cross-Border Disclosure:</strong> We may disclose your personal information to overseas recipients (for example, Stripe for payment processing, and Google Analytics for analytics). Where we do so, we take reasonable steps to ensure the recipient handles your information consistently with the APPs. By using our Services, you consent to such cross-border disclosure in accordance with APP 8.</p>
       </div>
 
       <div style={s.mt}><h3>13. Do We Make Updates to This Notice?</h3>
-        <p style={s.p}>Yes. We may update this Privacy Notice from time to time. The updated version will be indicated by an updated date at the top of this page. We encourage you to review this notice frequently.</p>
+        <p style={s.p}>Yes. We may update this Privacy Notice from time to time to reflect changes in our practices, legal requirements, or for other operational reasons. The updated version will be indicated by an updated date at the top of this page. Material changes will be communicated to registered users via email where practicable. We encourage you to review this notice frequently.</p>
       </div>
 
       <div style={s.mt}><h3>14. How Can You Review, Update, or Delete Your Data?</h3>
@@ -1025,18 +1037,19 @@ function ShippingContent({ email }) {
       <h2 style={{marginTop:8}}>Shipping & Delivery Policy</h2>
       <p style={s.p}>This Shipping & Delivery Policy is part of our Terms and Conditions and should be read alongside our main Terms at <a href="/policies/terms-and-conditions" onClick={e => { e.preventDefault(); window.history.pushState({}, '', '/policies/terms-and-conditions'); window.dispatchEvent(new PopStateEvent('popstate')); }}>outbackelectronics.com.au/policies/terms-and-conditions</a>.</p>
       <p style={s.p}>Please carefully review our Shipping & Delivery Policy when purchasing our products. This policy will apply to any order you place with us.</p>
+      <p style={s.p}><strong>Australian Consumer Law:</strong> Nothing in this policy affects your rights as a consumer under the Australian Consumer Law. Our goods come with guarantees that cannot be excluded, including the guarantee that goods will be delivered within a reasonable time where no specific delivery date is agreed.</p>
 
       <div style={s.mt}><h3>What Are My Shipping & Delivery Options?</h3>
         <p style={s.p}><strong>In-Store Pickup</strong></p>
-        <p style={s.p}>In-store pickup is available for physical products only. You may collect your order once notified by email or SMS.</p>
+        <p style={s.p}>In-store pickup is available for physical products only. You may collect your order once notified by email or SMS that it is ready.</p>
         <p style={{...s.p, marginTop:16}}>We currently offer the following shipping options:</p>
         <ul style={{paddingLeft:20, lineHeight:2, marginTop:8}}>
-          <li>Standard Shipping</li>
-          <li>Express Shipping</li>
-          <li>In-store Pickup</li>
+          <li>Standard Shipping (Australia Post, typically 2–8 business days within Australia)</li>
+          <li>Express Shipping (Australia Post Express, typically 1–3 business days within Australia)</li>
+          <li>In-store Pickup (available once notified by email or SMS)</li>
         </ul>
-        <p style={s.p}>All times and dates given for delivery are given in good faith but are estimates only.</p>
-        <p style={s.p}><em>For EU and UK consumers:</em> This does not affect your statutory rights. Unless specifically noted, estimated delivery times reflect the earliest available delivery, and deliveries will be made within 30 days after the day we accept your order.</p>
+        <p style={s.p}>All times and dates given for delivery are estimates only and are given in good faith. We are not liable for delays caused by Australia Post, customs, or circumstances beyond our control, though we will keep you informed of any significant delay.</p>
+        <p style={s.p}><em>For EU and UK consumers:</em> This does not affect your statutory rights. Unless specifically noted, estimated delivery times reflect the earliest available delivery, and deliveries will be made within 30 days after the day we accept your order. If we are unable to deliver within that period, you are entitled to cancel your order and receive a full refund.</p>
       </div>
 
       <div style={s.mt}><h3>Do You Deliver Internationally?</h3>
@@ -1170,10 +1183,16 @@ function ReturnContent({ email, phone, address }) {
     <div>
       <span className="eyebrow">LEGAL · RETURN POLICY</span>
       <h2 style={{marginTop:8}}>Return Policy</h2>
-      <p style={s.p}>Thank you for your purchase. We hope you are happy with your purchase. However, if you are not completely satisfied for any reason, you may return it to us for a full refund. Please see below for more information.</p>
+      <p style={s.p}>Thank you for your purchase. We hope you are happy with your purchase. However, if you are not completely satisfied for any reason, you may return it to us for a full refund or exchange. Please see below for more information on your rights and our process.</p>
 
-      <div style={s.mt}><h3>Returns</h3>
-        <p style={s.p}>All returns must be postmarked within <strong>seven (7) days</strong> of the purchase date. All returned items must be in new and unused condition, with all original tags and labels attached.</p>
+      <div style={s.mt}><h3>Australian Consumer Law — Your Statutory Rights</h3>
+        <p style={s.p}>Our products come with guarantees that cannot be excluded under the Australian Consumer Law. You are entitled to a replacement or refund for a major failure and compensation for any other reasonably foreseeable loss or damage. You are also entitled to have the goods repaired or replaced if the goods fail to be of acceptable quality and the failure does not amount to a major failure.</p>
+        <p style={s.p}><strong>These rights apply regardless of — and are in addition to — our voluntary change-of-mind policy below.</strong> Nothing in this policy excludes, restricts, or modifies any right or remedy you have under the Australian Consumer Law.</p>
+        <p style={s.p}>For warranty claims or ACL issues (e.g. goods not of acceptable quality, not fit for purpose, or not matching description), contact us at <a href={`mailto:${email}`}>{email}</a>. There is no set time limit for statutory guarantee claims — they apply for a reasonable period depending on the nature of the goods.</p>
+      </div>
+
+      <div style={s.mt}><h3>Change-of-Mind Returns</h3>
+        <p style={s.p}>In addition to your statutory rights, we accept change-of-mind returns postmarked within <strong>seven (7) days</strong> of the purchase date. All returned items must be in new and unused condition, with all original tags and labels attached. We are not required by law to offer this and it does not affect your ACL rights.</p>
       </div>
 
       <div style={s.mt}><h3>Return Process</h3>
@@ -1185,27 +1204,29 @@ function ReturnContent({ email, phone, address }) {
           {address}<br/>
           Australia
         </div>
-        <p style={s.p}>You will be responsible for all return shipping charges. We strongly recommend using a trackable method to mail your return.</p>
+        <p style={s.p}>For <strong>change-of-mind returns</strong>, you are responsible for return shipping charges. We strongly recommend using a trackable method. For returns under your ACL statutory rights (e.g. faulty goods), we will cover reasonable return shipping costs.</p>
       </div>
 
       <div style={s.mt}><h3>Refunds</h3>
-        <p style={s.p}>After receiving your return and inspecting the condition of your item, we will process your return. Please allow at least <strong>seven (7) days</strong> from receipt of your item for processing. Refunds may take 1–2 billing cycles to appear on your credit card statement, depending on your credit card company. We will notify you by email when your return has been processed.</p>
+        <p style={s.p}>After receiving your return and inspecting the condition of your item, we will process your return. Please allow at least <strong>seven (7) days</strong> from receipt of your item for processing. Refunds will be issued via your original payment method. Card refunds may take 1–2 billing cycles to appear on your statement depending on your card issuer. We will notify you by email when your return has been processed.</p>
       </div>
 
-      <div style={s.mt}><h3>Exceptions</h3>
-        <p style={s.p}>The following items cannot be returned:</p>
+      <div style={s.mt}><h3>Exceptions (Change-of-Mind Returns Only)</h3>
+        <p style={s.p}>The following items are excluded from our voluntary change-of-mind return policy:</p>
         <ul style={{paddingLeft:20, lineHeight:2, marginTop:8}}>
-          <li>Software</li>
-          <li>Digital files</li>
-          <li>Services</li>
+          <li>Software (once opened or downloaded)</li>
+          <li>Digital files and downloadable content</li>
+          <li>Services (once performed)</li>
+          <li>Custom or bespoke jobs</li>
         </ul>
-        <p style={s.p}>For defective or damaged products, please contact us at the details below to arrange a refund or exchange.</p>
-        <p style={s.p}><strong>Please note:</strong> Custom jobs cannot be returned — only repaired.</p>
+        <p style={s.p}><strong>Please note:</strong> These exclusions do not affect your rights under the Australian Consumer Law. If any of these items are faulty, not as described, or not fit for purpose, your statutory rights still apply — contact us to arrange a remedy.</p>
+        <p style={s.p}>For defective or damaged products (any category), please contact us at the details below to arrange a repair, replacement, or refund as required by law.</p>
       </div>
 
       <div style={s.mt}><h3>Questions</h3>
-        <p style={s.p}>If you have any questions concerning our return policy, please contact us at:</p>
+        <p style={s.p}>If you have any questions concerning our return policy or your rights under the Australian Consumer Law, please contact us at:</p>
         <p style={s.p}>Phone: <a href={`tel:${(phone||'').replace(/\s/g,'')}`}>{phone}</a><br/>Email: <a href={`mailto:${email}`}>{email}</a></p>
+        <p style={s.p}>You can also obtain information about your consumer rights from the Australian Competition and Consumer Commission (ACCC) at <a href="https://www.accc.gov.au" target="_blank" rel="noopener noreferrer">www.accc.gov.au</a> or NSW Fair Trading at <a href="https://www.fairtrading.nsw.gov.au" target="_blank" rel="noopener noreferrer">www.fairtrading.nsw.gov.au</a>.</p>
       </div>
 
       <hr className="thin" style={{marginTop:40}} />
@@ -1227,6 +1248,7 @@ function DisclaimerContent() {
       <div style={s.mt}><h3>Website Disclaimer</h3>
         <p style={s.p}>The information provided by Outback Electronics ('we', 'us', or 'our') on <a href="https://www.outbackelectronics.com.au">https://www.outbackelectronics.com.au</a> (the 'Site') is for general informational purposes only. All information on the Site is provided in good faith, however we make no representation or warranty of any kind, express or implied, regarding the accuracy, adequacy, validity, reliability, availability, or completeness of any information on the Site.</p>
         <p style={{...s.p, textTransform:'uppercase', fontSize:13}}>Under no circumstance shall we have any liability to you for any loss or damage of any kind incurred as a result of the use of the Site or reliance on any information provided on the Site. Your use of the Site and your reliance on any information on the Site is solely at your own risk.</p>
+        <p style={s.p}><strong>Nothing in this Disclaimer excludes, restricts, or modifies any consumer guarantee, right, or remedy conferred by the Australian Consumer Law or any other applicable mandatory legislation that cannot lawfully be excluded or limited.</strong></p>
       </div>
 
       <div style={s.mt}><h3>External Links Disclaimer</h3>
@@ -1246,7 +1268,7 @@ function DisclaimerContent() {
   );
 }
 
-function AcceptableUseContent({ email }) {
+function AcceptableUseContent({ email, address }) {
   const s = {mt: {marginTop:32}, p: {fontSize:15, lineHeight:1.75, marginTop:8}};
   const li = (text) => <li style={{marginBottom:6}}>{text}</li>;
   return (
@@ -1257,7 +1279,7 @@ function AcceptableUseContent({ email }) {
       <p style={s.p}>This Policy applies to any and all: (a) uses of our Services; (b) forms, materials, consent tools, comments, posts, and all other content available on the Services ('Content'); and (c) material you contribute to the Services including uploads, posts, reviews, ratings, comments, chat, etc. ('Contribution').</p>
 
       <div style={s.mt}><h3>Who We Are</h3>
-        <p style={s.p}>We are Outback Electronics ('Company', 'we', 'us', or 'our'), a company registered in Australia at 38 Rosebery Street, Penshurst, New South Wales 2222. We operate the website <a href="https://www.outbackelectronics.com.au">https://www.outbackelectronics.com.au</a> (the 'Site'), as well as any other related products and services that refer or link to this Policy (collectively, the 'Services').</p>
+        <p style={s.p}>We are Outback Electronics ('Company', 'we', 'us', or 'our'), a company registered in Australia at {address}. Our ABN is 99 496 591 295. We operate the website <a href="https://www.outbackelectronics.com.au">https://www.outbackelectronics.com.au</a> (the 'Site'), as well as any other related products and services that refer or link to this Policy (collectively, the 'Services').</p>
       </div>
 
       <div style={s.mt}><h3>Use of the Services</h3>
@@ -1307,7 +1329,8 @@ function AcceptableUseContent({ email }) {
 
       <div style={s.mt}><h3>Reporting a Breach of This Policy</h3>
         <p style={s.p}>If you consider that any Service, Content, or Contribution breaches this Policy, please visit <a href="https://www.outbackelectronics.com.au/forum" target="_blank" rel="noopener noreferrer">https://www.outbackelectronics.com.au/forum</a> or contact us using the details below. For suspected intellectual property infringement, please review our <a href="/policies/terms-and-conditions">Terms and Conditions</a>.</p>
-        <p style={s.p}>We will reasonably determine whether a Service, Content, or Contribution breaches this Policy.</p>
+        <p style={s.p}>We will reasonably determine whether a Service, Content, or Contribution breaches this Policy and respond within a reasonable time.</p>
+        <p style={s.p}>Australian users may also report harmful online content (including cyberbullying and image-based abuse) to the eSafety Commissioner at <a href="https://www.esafety.gov.au" target="_blank" rel="noopener noreferrer">www.esafety.gov.au</a> under the <em>Online Safety Act 2021</em> (Cth).</p>
       </div>
 
       <div style={s.mt}><h3>Consequences of Breaching This Policy</h3>
@@ -1350,12 +1373,12 @@ function PoliciesPage({ go, pageParams }) {
 
   const DOCS = {
     'terms-and-conditions': { title: 'Terms & Conditions', updated: 'June 6, 2026' },
-    'privacy-policy': { title: 'Privacy Policy', updated: 'September 18, 2024' },
-    'shipping-and-delivery': { title: 'Shipping & Delivery', updated: 'September 18, 2024' },
-    'cookie-policy': { title: 'Cookie Policy', updated: 'September 18, 2024' },
-    'return-policy': { title: 'Return Policy', updated: 'September 18, 2024' },
-    'disclaimer': { title: 'Disclaimer', updated: 'September 18, 2024' },
-    'acceptable-use': { title: 'Acceptable Use Policy', updated: 'September 18, 2024' },
+    'privacy-policy': { title: 'Privacy Policy', updated: 'June 6, 2026' },
+    'shipping-and-delivery': { title: 'Shipping & Delivery', updated: 'June 6, 2026' },
+    'cookie-policy': { title: 'Cookie Policy', updated: 'June 6, 2026' },
+    'return-policy': { title: 'Return Policy', updated: 'June 6, 2026' },
+    'disclaimer': { title: 'Disclaimer', updated: 'June 6, 2026' },
+    'acceptable-use': { title: 'Acceptable Use Policy', updated: 'June 6, 2026' },
   };
   const activeDoc = DOCS[slug] ? slug : 'terms-and-conditions';
 
@@ -1372,7 +1395,7 @@ function PoliciesPage({ go, pageParams }) {
             ))}
           </aside>
           <div className="policy-content">
-            {activeDoc === 'terms-and-conditions' ? <TermsContent email={email} phone={phone} address={address} /> : activeDoc === 'privacy-policy' ? <PrivacyContent email={email} phone={phone} address={address} /> : activeDoc === 'shipping-and-delivery' ? <ShippingContent email={email} /> : activeDoc === 'cookie-policy' ? <CookieContent email={email} /> : activeDoc === 'return-policy' ? <ReturnContent email={email} phone={phone} address={address} /> : activeDoc === 'disclaimer' ? <DisclaimerContent /> : <AcceptableUseContent email={email} />}
+            {activeDoc === 'terms-and-conditions' ? <TermsContent email={email} phone={phone} address={address} /> : activeDoc === 'privacy-policy' ? <PrivacyContent email={email} phone={phone} address={address} /> : activeDoc === 'shipping-and-delivery' ? <ShippingContent email={email} /> : activeDoc === 'cookie-policy' ? <CookieContent email={email} /> : activeDoc === 'return-policy' ? <ReturnContent email={email} phone={phone} address={address} /> : activeDoc === 'disclaimer' ? <DisclaimerContent /> : <AcceptableUseContent email={email} address={address} />}
 
           </div>
         </div>
