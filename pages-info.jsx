@@ -352,7 +352,7 @@ function ContactPage({ go }) {
               </div>
               <div className="card-paper" style={{padding: 22}}>
                 <span className="eyebrow">SAT MSG</span>
-                <div style={{fontSize: 18, marginTop:8, fontWeight:600}}>Iridium SBD: 881693700212</div>
+                <div style={{fontSize: 18, marginTop:8, fontWeight:600}}>Iridium SBD</div>
                 <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:4}}>NOT CURRENTLY AVAILABLE · NO SAT</div>
               </div>
             </div>
