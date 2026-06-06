@@ -161,6 +161,29 @@
 
   /* Buttons full-width in stacked contexts */
   .stack > .btn { width: 100%; justify-content: center; }
+
+  /* Shop — 2-col product grid on mobile */
+  .shop-layout .grid-3 { grid-template-columns: repeat(2, 1fr) !important; gap: 12px !important; }
+
+  /* Shop — filters collapsed, full-width products by default */
+  .shop-layout { grid-template-columns: 1fr !important; gap: 0 !important; }
+  .shop-filters { display: none; }
+  .shop-filters.open {
+    display: block;
+    border-bottom: 2px solid var(--line);
+    padding-bottom: 20px;
+    margin-bottom: 16px;
+  }
+  /* Two-column price inputs on mobile */
+  .shop-filters .row-flex { flex-direction: row !important; }
+  .shop-filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 0 14px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 16px;
+  }
 }
 
 @media (max-width: 480px) {

@@ -354,6 +354,12 @@
   .hamburger { display: none; }
   .mobile-nav { display: none; }
 
+  /* Shop layout — sidebar + products */
+  .shop-layout { display: grid; grid-template-columns: 240px 1fr; gap: 36px; }
+  /* filter toggle bar is mobile-only */
+  .shop-filter-bar { display: none; }
+  .shop-filter-toggle { display: inline-flex; align-items: center; gap: 6px; }
+
   /* responsive niceties */
   @media (max-width: 1100px) {
     .mainlinks { gap: 0; flex-wrap: wrap; }

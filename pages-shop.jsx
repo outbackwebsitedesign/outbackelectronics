@@ -353,7 +353,10 @@ function ShopPage({ go, addToCart, pageParams }) {
   const [cond, setCond] = useState(pageParams?.initialCond || 'Any');
   const [sort, setSort] = useState('relevance');
   const [visibleCount, setVisibleCount] = useState(12);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const chunkSize = 12;
+  const activeFilterCount = [cat !== 'All', cond !== 'Any', selectedBrands.length > 0, priceMin !== '', priceMax !== ''].filter(Boolean).length;
+  const clearFilters = () => { setCat('All'); setCond('Any'); setSelectedBrands([]); setPriceMin(''); setPriceMax(''); };
   const filtered = useMemo(() => {
     let f = [...products];
     if (cat !== 'All') f = f.filter(p => p.category === cat);
@@ -389,79 +392,93 @@ function ShopPage({ go, addToCart, pageParams }) {
     <>
       <PageHead crumbs={['Outback','Shop']} title="Shop"
         lead={`${products.length} listings · new, refurbished & field-tested gear. Every refurb passes our 38-point bench check.`} />
-      <div className="container" style={{paddingTop: 32, paddingBottom: 32, display:'grid', gridTemplateColumns:'240px 1fr', gap: 36}}>
-        <aside>
-          {(cat !== 'All' || cond !== 'Any' || selectedBrands.length > 0 || priceMin !== '' || priceMax !== '') && (
-            <div style={{marginBottom:16, display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-              <span className="mono" style={{fontSize:10, color:'var(--rust)'}}>FILTERS ACTIVE</span>
-              <button className="btn btn-sm btn-ghost" style={{fontSize:10, padding:'4px 8px'}} onClick={() => { setCat('All'); setCond('Any'); setSelectedBrands([]); setPriceMin(''); setPriceMax(''); }}>
-                Clear all ×
-              </button>
-            </div>
+      <div className="container" style={{paddingTop: 32, paddingBottom: 32}}>
+        {/* Mobile filter toggle bar — hidden on desktop via CSS */}
+        <div className="shop-filter-bar">
+          <button className="btn btn-sm btn-ghost shop-filter-toggle" onClick={() => setFiltersOpen(o => !o)}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+            {filtersOpen ? 'Hide filters' : 'Filters'}
+            {activeFilterCount > 0 && <span style={{background:'var(--rust)', color:'#fff', borderRadius:999, fontSize:9, padding:'1px 5px', fontWeight:700, marginLeft:2}}>{activeFilterCount}</span>}
+          </button>
+          {activeFilterCount > 0 && (
+            <button className="btn btn-sm btn-ghost" style={{fontSize:11}} onClick={clearFilters}>Clear ×</button>
           )}
-          <div className="eyebrow" style={{marginBottom: 10}}>CATEGORY</div>
-          <div className="stack" style={{gap:4}}>
-            {['All', ...filterMeta.categories].map(c => (
-              <button key={c} onClick={() => setCat(c)} style={{padding:'6px 8px', cursor:'pointer', fontSize:14, color: cat===c ? 'var(--rust)' : 'var(--ink)', fontWeight: cat===c ? 600 : 400, background:'none', border:'none', borderLeft: cat===c ? '2px solid var(--rust)':'2px solid transparent', textAlign:'left', width:'100%'}}>{c}</button>
-            ))}
-          </div>
-          <hr className="thin" />
-          <div className="eyebrow" style={{marginBottom: 10}}>CONDITION</div>
-          {['Any', ...filterMeta.conditions].map(c => (
-            <label key={c} style={{display:'flex', alignItems:'center', gap:8, fontSize:14, padding:'4px 0', cursor:'pointer'}}>
-              <input type="radio" name="cond" checked={cond===c} onChange={() => setCond(c)} />
-              {c}
-            </label>
-          ))}
-          <hr className="thin" />
-          <div className="eyebrow" style={{marginBottom: 10}}>PRICE</div>
-          <div className="row-flex" style={{gap:8}}>
-            <input className="input" placeholder="$ min" style={{padding:'8px 10px'}} type="number" min="0" value={priceMin} onChange={e => setPriceMin(e.target.value)} />
-            <input className="input" placeholder="$ max" style={{padding:'8px 10px'}} type="number" min="0" value={priceMax} onChange={e => setPriceMax(e.target.value)} />
-          </div>
-          <hr className="thin" />
-          <div className="eyebrow" style={{marginBottom: 10}}>BRAND</div>
-          <div className="stack" style={{gap:4, fontSize:14}}>
-            {filterMeta.brands.map(b => (
-              <label key={b} style={{display:'flex', alignItems:'center', gap:8, cursor:'pointer'}}>
-                <input type="checkbox" checked={selectedBrands.includes(b)} onChange={e => setSelectedBrands(prev => e.target.checked ? [...prev, b] : prev.filter(x => x !== b))} /> {b}
-              </label>
-            ))}
-          </div>
-        </aside>
+        </div>
 
-        <div>
-          {catalogError && (
-            <div role="alert" style={{background:'#fff3f3', border:'1px solid #f5a5a5', borderRadius:6, padding:'12px 16px', marginBottom:18, color:'#c0392b', fontSize:14}}>
-              Unable to load products — {catalogError}. Please refresh the page or try again later.
-            </div>
-          )}
-          <div className="row-flex" style={{justifyContent:'space-between', marginBottom: 18}}>
-            <div className="mono" style={{fontSize:12, color:'var(--ink-2)'}}>SHOWING {visible.length} OF {totalResults} RESULTS · {cat.toUpperCase()}</div>
-            <div className="row-flex" style={{gap:10}}>
-              <select className="select" value={sort} onChange={e => setSort(e.target.value)} style={{padding:'6px 28px 6px 10px', fontSize:13}}>
-                <option value="relevance">Sort: Relevance</option>
-                <option value="price-asc">Price: low → high</option>
-                <option value="price-desc">Price: high → low</option>
-              </select>
-            </div>
-          </div>
-          {loading ? (
-            <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:20}}>
-              {Array.from({length:6}).map((_,i) => (
-                <div key={i} style={{background:'var(--bg-elev)', borderRadius:4, height:260, animation:'pulse 1.4s ease-in-out infinite', opacity: 0.6 + (i % 2) * 0.2}} />
+        <div className="shop-layout">
+          <aside className={`shop-filters${filtersOpen ? ' open' : ''}`}>
+            {activeFilterCount > 0 && (
+              <div style={{marginBottom:16, display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                <span className="mono" style={{fontSize:10, color:'var(--rust)'}}>FILTERS ACTIVE</span>
+                <button className="btn btn-sm btn-ghost" style={{fontSize:10, padding:'4px 8px'}} onClick={clearFilters}>
+                  Clear all ×
+                </button>
+              </div>
+            )}
+            <div className="eyebrow" style={{marginBottom: 10}}>CATEGORY</div>
+            <div className="stack" style={{gap:4}}>
+              {['All', ...filterMeta.categories].map(c => (
+                <button key={c} onClick={() => { setCat(c); setFiltersOpen(false); }} style={{padding:'6px 8px', cursor:'pointer', fontSize:14, color: cat===c ? 'var(--rust)' : 'var(--ink)', fontWeight: cat===c ? 600 : 400, background:'none', border:'none', borderLeft: cat===c ? '2px solid var(--rust)':'2px solid transparent', textAlign:'left', width:'100%'}}>{c}</button>
               ))}
             </div>
-          ) : (
-            <>
-              <div className="grid-3" style={{gridTemplateColumns:'repeat(3, 1fr)', gap: 20}}>
-                {visible.map((p, i) => (
-                  <ProductCard key={p.id || i} p={p} onClick={() => go('product', p)} />
+            <hr className="thin" />
+            <div className="eyebrow" style={{marginBottom: 10}}>CONDITION</div>
+            {['Any', ...filterMeta.conditions].map(c => (
+              <label key={c} style={{display:'flex', alignItems:'center', gap:8, fontSize:14, padding:'4px 0', cursor:'pointer'}}>
+                <input type="radio" name="cond" checked={cond===c} onChange={() => setCond(c)} />
+                {c}
+              </label>
+            ))}
+            <hr className="thin" />
+            <div className="eyebrow" style={{marginBottom: 10}}>PRICE</div>
+            <div className="row-flex" style={{gap:8}}>
+              <input className="input" placeholder="$ min" style={{padding:'8px 10px'}} type="number" min="0" value={priceMin} onChange={e => setPriceMin(e.target.value)} />
+              <input className="input" placeholder="$ max" style={{padding:'8px 10px'}} type="number" min="0" value={priceMax} onChange={e => setPriceMax(e.target.value)} />
+            </div>
+            <hr className="thin" />
+            <div className="eyebrow" style={{marginBottom: 10}}>BRAND</div>
+            <div className="stack" style={{gap:4, fontSize:14}}>
+              {filterMeta.brands.map(b => (
+                <label key={b} style={{display:'flex', alignItems:'center', gap:8, cursor:'pointer'}}>
+                  <input type="checkbox" checked={selectedBrands.includes(b)} onChange={e => setSelectedBrands(prev => e.target.checked ? [...prev, b] : prev.filter(x => x !== b))} /> {b}
+                </label>
+              ))}
+            </div>
+          </aside>
+
+          <div>
+            {catalogError && (
+              <div role="alert" style={{background:'#fff3f3', border:'1px solid #f5a5a5', borderRadius:6, padding:'12px 16px', marginBottom:18, color:'#c0392b', fontSize:14}}>
+                Unable to load products — {catalogError}. Please refresh the page or try again later.
+              </div>
+            )}
+            <div className="row-flex" style={{justifyContent:'space-between', marginBottom: 18}}>
+              <div className="mono" style={{fontSize:12, color:'var(--ink-2)'}}>SHOWING {visible.length} OF {totalResults} RESULTS · {cat.toUpperCase()}</div>
+              <div className="row-flex" style={{gap:10}}>
+                <select className="select" value={sort} onChange={e => setSort(e.target.value)} style={{padding:'6px 28px 6px 10px', fontSize:13}}>
+                  <option value="relevance">Sort: Relevance</option>
+                  <option value="price-asc">Price: low → high</option>
+                  <option value="price-desc">Price: high → low</option>
+                </select>
+              </div>
+            </div>
+            {loading ? (
+              <div className="grid-3" style={{gap:20}}>
+                {Array.from({length:6}).map((_,i) => (
+                  <div key={i} style={{background:'var(--bg-elev)', borderRadius:4, height:260, animation:'pulse 1.4s ease-in-out infinite', opacity: 0.6 + (i % 2) * 0.2}} />
                 ))}
               </div>
-              {visible.length < totalResults && <div className="mono" style={{fontSize:12, color:'var(--ink-2)', marginTop:18, textAlign:'center'}}>Scroll for more…</div>}
-            </>
-          )}
+            ) : (
+              <>
+                <div className="grid-3" style={{gap: 20}}>
+                  {visible.map((p, i) => (
+                    <ProductCard key={p.id || i} p={p} onClick={() => go('product', p)} />
+                  ))}
+                </div>
+                {visible.length < totalResults && <div className="mono" style={{fontSize:12, color:'var(--ink-2)', marginTop:18, textAlign:'center'}}>Scroll for more…</div>}
+              </>
+            )}
+          </div>
         </div>
       </div>
     </>
