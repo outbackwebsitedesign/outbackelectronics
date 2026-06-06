@@ -614,7 +614,14 @@ function SoftwarePage({ go }) {
         lead="Tools we wrote for ourselves, then cleaned up enough to share. Mostly open source, mostly Linux, all paid-back in pull requests." />
       <section className="container" style={{paddingTop: 40, paddingBottom: 32}}>
         <div className="grid-2" style={{gap: 24}}>
-          {products.length === 0 && <div className="mono" style={{fontSize:13, color:'var(--ink-2)', gridColumn:'1/-1'}}>No software listed yet.</div>}
+          {products.length === 0 && (
+            <div style={{gridColumn:'1/-1', padding:'48px 0'}}>
+              <p className="serif" style={{fontSize:28, marginBottom:12}}>Still in the workshop.</p>
+              <p style={{color:'var(--ink-2)', fontSize:15, maxWidth:520, lineHeight:1.7}}>
+                We're working on our first software release — internal tools we use every day that we think are worth sharing. Check back soon.
+              </p>
+            </div>
+          )}
           {products.map((p,i) => (
             <div key={p.id||i} className="card-paper" style={{padding: 28, display:'grid', gridTemplateColumns:'1fr', gap:14}}>
               <div className="row-flex" style={{justifyContent:'space-between'}}>

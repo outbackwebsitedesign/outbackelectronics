@@ -83,7 +83,7 @@ Footer now uses `getSiteUrl()` / `getForumUrl()` module helpers populated at sta
 ## MEDIUM — Empty states that masquerade as complete features
 
 ### ✅ 18. Software page — "No software listed yet." (pages-shop.jsx:604)
-`/api/shop-info` now includes `hasSoftware: readSoftware().filter(i => i.live).length > 0` in the `flags` payload. `TopNav` reads `shop._flags.hasSoftware` and omits the Software entry from both desktop and mobile nav when no live listings exist. The page itself remains reachable via direct URL for when listings are added via admin.
+Empty state replaced with a friendly message: "Still in the workshop. We're working on our first software release — internal tools we use every day that we think are worth sharing. Check back soon." Nav link stays visible.
 
 ### ❌ 19. Tutorials page — "No tutorials published yet." (pages-community.jsx:135)
 Real implementation — no data. Linked from footer and nav.
