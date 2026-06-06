@@ -348,7 +348,7 @@ function ContactPage({ go }) {
               <div className="card-paper" style={{padding: 22}}>
                 <span className="eyebrow">UHF</span>
                 <div style={{fontSize: 18, marginTop:8, fontWeight:600}}>Channel 40, callsign OUTBACK-1</div>
-                <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:4}}>ONLY IF VEHICLE SPOTTED · WEEKDAYS · MORNINGS, USUALLY</div>
+                <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:4}}>ONLY IF VEHICLE SPOTTED</div>
               </div>
               <div className="card-paper" style={{padding: 22}}>
                 <span className="eyebrow">SAT MSG</span>
