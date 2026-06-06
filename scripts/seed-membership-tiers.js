@@ -13,6 +13,9 @@ const DEFAULT_TIERS = [
     id: 'basic',
     name: 'Basic Member',
     price: 9,
+    priceAud: 9,
+    billingCycle: 'one-off',
+    status: 'published',
     description: 'Join the community and get access to member-only groups and the monthly newsletter.',
     features: [
       'Member-only forum groups',
@@ -26,6 +29,9 @@ const DEFAULT_TIERS = [
     id: 'pro',
     name: 'Pro Member',
     price: 19,
+    priceAud: 19,
+    billingCycle: 'one-off',
+    status: 'published',
     description: 'Everything in Basic plus exclusive deep-dive content, pro groups, and a 10% discount in the shop.',
     features: [
       'Everything in Basic',
@@ -34,6 +40,7 @@ const DEFAULT_TIERS = [
       '1% discount on all shop purchases',
       'Priority support queue',
     ],
+    discountPercent: 1,
     color: 'tag-rust',
     highlight: true,
   },
@@ -41,6 +48,9 @@ const DEFAULT_TIERS = [
     id: 'elite',
     name: 'Elite Member',
     price: 39,
+    priceAud: 39,
+    billingCycle: 'one-off',
+    status: 'published',
     description: 'Full access — every group, every post, workshop event invites, and the biggest shop discount we offer.',
     features: [
       'Everything in Pro',
@@ -50,6 +60,7 @@ const DEFAULT_TIERS = [
       'Workshop & field event invites',
       'Direct line to the tech team',
     ],
+    discountPercent: 2,
     color: 'tag-ochre',
   },
 ];

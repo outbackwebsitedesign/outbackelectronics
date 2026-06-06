@@ -1483,10 +1483,20 @@ function MembershipsPage({ go, portalUser }) {
           </div>
         )}
 
+        {tiersLoading ? (
+          <div style={{textAlign:'center', padding:'64px 0', color:'var(--ink-2)', fontSize:13}}>Loading…</div>
+        ) : displayTiers.length === 0 ? (
+          <div style={{textAlign:'center', padding:'64px 0', color:'var(--ink-2)', fontSize:14, lineHeight:1.7}}>
+            <div style={{fontSize:18, fontWeight:600, color:'var(--ink)', marginBottom:8}}>Memberships coming soon</div>
+            <p style={{maxWidth:400, margin:'0 auto'}}>We're putting the finishing touches on our membership tiers. Check back shortly.</p>
+          </div>
+        ) : null}
+
         <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:24}}>
           {displayTiers.map((tier, i) => {
             const displayPrice = Number(tier.priceAud || tier.price);
             const isProcessing = checkingOut === tier.id;
+            const billingLabel = tier.billingCycle === 'month' ? '/month' : tier.billingCycle === 'year' ? '/year' : 'one-off';
             return (
               <div key={tier.id || i}
                 style={{padding:32, background: tier.highlight ? 'var(--dark)' : 'var(--paper)', color: tier.highlight ? 'var(--paper)' : 'var(--ink)', border:'1px solid', borderColor: tier.highlight ? 'var(--dark)' : 'var(--line)', display:'flex', flexDirection:'column', gap:16, position:'relative'}}>
@@ -1495,7 +1505,7 @@ function MembershipsPage({ go, portalUser }) {
                   <span className={`tag ${tier.color || 'tag-outline'}`} style={{marginBottom:12, display:'inline-block'}}>{tier.name.toUpperCase()}</span>
                   <div style={{display:'flex', alignItems:'baseline', gap:6}}>
                     <span className="serif" style={{fontSize:52, lineHeight:1, color: tier.highlight ? 'var(--paper)' : 'var(--rust)'}}>${displayPrice}</span>
-                    <span style={{fontSize:13, color: tier.highlight ? 'var(--bg-deep)' : 'var(--ink-2)'}}>one-off</span>
+                    <span style={{fontSize:13, color: tier.highlight ? 'var(--bg-deep)' : 'var(--ink-2)'}}>{billingLabel}</span>
                   </div>
                 </div>
                 <p style={{fontSize:14, color: tier.highlight ? 'var(--bg-deep)' : 'var(--ink-2)', lineHeight:1.6}}>{tier.description}</p>

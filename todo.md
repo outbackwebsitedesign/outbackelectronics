@@ -94,11 +94,14 @@ Empty state replaced with: "First chapter forming. We're getting the first local
 ### ✅ 21. Admin overview "No activity yet" (pages-admin.jsx:458) — RESOLVED
 Empty state replaced with a 4-step onboarding checklist: Shop details → Integrations → Add products → Membership tiers. Each step shows a label, description, and nav hint. "Orders and quote requests will appear here…" retained as a sub-note.
 
-### ❌ 22. Admin → Memberships: tiers disconnected from public page (pages-admin.jsx:5325)
-Admin panel says "No tiers yet. Create one to enable memberships on the public site." — but public memberships page still shows hardcoded ghost tiers regardless. The two systems are not connected until real tiers are saved.
+### ✅ 22. Admin → Memberships: tiers disconnected from public page (RESOLVED)
+Three issues fixed end-to-end:
+- **Seed script** (`scripts/seed-membership-tiers.js`): Added `status: 'published'`, `priceAud`, and `billingCycle` to all `DEFAULT_TIERS`. Previously the seeded tiers had no `status`, so `/api/memberships` (which filters for `status === 'published'`) returned nothing and the public page appeared empty.
+- **Public page empty/loading state** (`pages-shop.jsx` MembershipsPage): Added a loading indicator and a "Memberships coming soon" empty-state message when no published tiers exist, so the page no longer shows a blank 3-column grid.
+- **Billing cycle display**: Fixed the hardcoded `one-off` label to use `tier.billingCycle` so monthly/yearly tiers render correctly.
 
-### ❌ 23. Admin → Memberships: "No subscriptions yet." (pages-admin.jsx:5350)
-Expected — but combined with the public page showing disabled default tiers and no working subscribe flow, the entire memberships system is a dead end.
+### ✅ 23. Admin → Memberships: "No subscriptions yet." (RESOLVED)
+The "No subscriptions yet." empty state is expected on a fresh install — no code change needed. The underlying dead-end issues that made this critical (disabled tiers on public page, no working subscribe flow) were resolved in items 7, 8, and 22. The subscribe flow now works end-to-end: public page shows published tiers → Stripe checkout → admin activates via the Pending tab.
 
 ---
 
@@ -155,8 +158,8 @@ Completing a purchase does not decrement the stock count on the purchased produc
 | 19 | pages-community.jsx:135 | Tutorials — no data | MEDIUM | ✅ DONE |
 | 20 | pages-community.jsx:231 | Groups — no data | MEDIUM | ✅ DONE |
 | 21 | pages-admin.jsx:458 | Overview "no activity yet" | MEDIUM | ✅ DONE |
-| 22 | pages-admin.jsx:5325 | Memberships tiers disconnected | MEDIUM | ❌ OPEN |
-| 23 | pages-admin.jsx:5350 | No subscriptions yet | MEDIUM | ❌ OPEN |
+| 22 | pages-admin.jsx:5325 | Memberships tiers disconnected | MEDIUM | ✅ DONE |
+| 23 | pages-admin.jsx:5350 | No subscriptions yet | MEDIUM | ✅ DONE |
 | 24 | portal-page.jsx:1306 | Bookings — no create flow | LOW | ✅ DONE |
 | 25 | pages-info.jsx:342 | Contact email renders dash if empty | LOW | ❌ OPEN |
 | 26 | portal-page.jsx:84 | Login requires username not email | LOW | ❌ OPEN |
