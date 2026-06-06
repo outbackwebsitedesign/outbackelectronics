@@ -2482,6 +2482,31 @@ const mainServer = http.createServer(async (req, res) => {
         if (pts > 0) deductRewardPoints(rewardsUserId, pts, `Order ${gcResult}`, `redeem-${gcResult}`);
         rewardsTokens.delete(validatedRewardsToken);
       }
+      // Decrement stock for gift-card-covered orders
+      const gcStockItems = lineItems.filter(li => li.productId && !li.productId.startsWith('gc-') && !membershipTiers.some(t => t.id === li.productId));
+      if (gcStockItems.length > 0) {
+        const prods = readProducts();
+        let stockChanged = false;
+        for (const si of gcStockItems) {
+          const idx = prods.findIndex(p => p.id === si.productId);
+          if (idx < 0) continue;
+          const prod = prods[idx];
+          if (prod.infiniteStock) continue;
+          const vsku = si.variantSku || null;
+          if (vsku && prod.variants && prod.variants.length > 0) {
+            const vi = prod.variants.findIndex(v => v.sku === vsku);
+            if (vi >= 0 && prod.variants[vi].stock != null) {
+              prod.variants[vi] = { ...prod.variants[vi], stock: Math.max(0, prod.variants[vi].stock - (si.quantity || 1)) };
+              prods[idx] = prod;
+              stockChanged = true;
+            }
+          } else if (prod.stock != null) {
+            prods[idx] = { ...prod, stock: Math.max(0, prod.stock - (si.quantity || 1)) };
+            stockChanged = true;
+          }
+        }
+        if (stockChanged) writeProducts(prods);
+      }
       return json(res, 200, { url: `${getSiteUrl()}/order-success?order_id=${gcResult}`, sessionId: null, fullyCoveredByGiftCard: true });
     }
 
@@ -2520,6 +2545,13 @@ const mainServer = http.createServer(async (req, res) => {
     }
     // Mirror productId and shipping onto session metadata for webhook access
     if (lineItems.length === 1) params['metadata[productId]'] = lineItems[0].productId || '';
+    // Encode all physical (non-gc, non-membership, non-discount) items for stock decrement in webhook
+    const stockableItems = lineItems.filter(li => li.productId && !li.productId.startsWith('gc-') && !li._isMemberDiscount && !membershipTiers.some(t => t.id === li.productId));
+    if (stockableItems.length > 0) {
+      const encoded = stockableItems.map(li => `${li.productId}:${li.variantSku || '_'}:${li.quantity || 1}`).join('|').slice(0, 500);
+      params['metadata[cartItems]'] = encoded;
+      params['payment_intent_data[metadata][cartItems]'] = encoded;
+    }
     if (validatedShipping > 0) params['metadata[shippingAmount]'] = String(validatedShipping);
     if (shippingService) params['metadata[shippingService]'] = String(shippingService).slice(0, 80);
     if (rewardsDiscount > 0 && rewardsUserId) {
@@ -2758,6 +2790,34 @@ const mainServer = http.createServer(async (req, res) => {
             });
             writeSellerLedger(txns);
           }
+        }
+
+        // Decrement stock for purchased products
+        const cartItemsMeta = meta.cartItems || '';
+        const stockItems = cartItemsMeta
+          ? cartItemsMeta.split('|').map(entry => { const [pid, vsku, qty] = entry.split(':'); return { productId: pid, variantSku: vsku === '_' ? null : vsku, quantity: Number(qty) || 1 }; })
+          : (productId && !productId.startsWith('gc-') ? [{ productId, variantSku: null, quantity: 1 }] : []);
+        if (stockItems.length > 0) {
+          const prods = readProducts();
+          let stockChanged = false;
+          for (const si of stockItems) {
+            const idx = prods.findIndex(p => p.id === si.productId);
+            if (idx < 0) continue;
+            const prod = prods[idx];
+            if (prod.infiniteStock) continue;
+            if (si.variantSku && prod.variants && prod.variants.length > 0) {
+              const vi = prod.variants.findIndex(v => v.sku === si.variantSku);
+              if (vi >= 0 && prod.variants[vi].stock != null) {
+                prod.variants[vi] = { ...prod.variants[vi], stock: Math.max(0, prod.variants[vi].stock - si.quantity) };
+                prods[idx] = prod;
+                stockChanged = true;
+              }
+            } else if (prod.stock != null) {
+              prods[idx] = { ...prod, stock: Math.max(0, prod.stock - si.quantity) };
+              stockChanged = true;
+            }
+          }
+          if (stockChanged) writeProducts(prods);
         }
 
         // Deduct rewards points if redeemed at checkout
