@@ -218,7 +218,6 @@ const ADMIN_SECTIONS = [
     { id:'store-credit', label:'Store Credit', minRole:'manager' },
     { id:'analytics', label:'Analytics',      minRole:'manager' },
     { id:'expenses',  label:'Expenses',      minRole:'manager' },
-    { id:'policies',  label:'Policies',      minRole:'manager' },
     { id:'seller-billing', label:'Seller Billing', minRole:'manager' },
     { id:'settings',  label:'Settings',      minRole:'seller' },
   ]},
@@ -4738,133 +4737,6 @@ function AdminExpenses() {
 // ============================================================
 // POLICIES — edit
 // ============================================================
-function AdminPolicies() {
-  const [docs, setDocs] = useState([]);
-  const [form, setForm] = useState({ id:'', title:'', slug:'', body:'', status:'draft' });
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [statusMsg, setStatusMsg] = useState('');
-  const [error, setError] = useState('');
-  const [active, setActive] = useState('');
-  const activeDoc = useMemo(() => docs.find(d => d.id === active) || null, [docs, active]);
-  const validate = () => {
-    if (!form.title.trim()) return 'Title is required.';
-    if (!form.slug.trim() || !/^[a-z0-9-]+$/.test(form.slug.trim().toLowerCase())) return 'Slug must use lowercase letters, numbers, and hyphens.';
-    if (!form.body.trim()) return 'Body is required.';
-    return '';
-  };
-  const hydrateForm = (doc) => setForm({
-    id: doc?.id || '',
-    title: doc?.title || '',
-    slug: doc?.slug || '',
-    body: doc?.body || '',
-    status: doc?.status || 'draft',
-    updatedAt: doc?.updatedAt || '',
-    updatedBy: doc?.updatedBy || '',
-    publishedAt: doc?.publishedAt || '',
-    publishedBy: doc?.publishedBy || '',
-  });
-  useEffect(() => {
-    fetch('/api/admin/policies', { credentials:'include' })
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then(d => {
-        const items = d.items || [];
-        setDocs(items);
-        if (items[0]?.id) {
-          setActive(items[0].id);
-          hydrateForm(items[0]);
-        } else {
-          const empty = { id:`policy-${Date.now()}`, title:'', slug:'', body:'', status:'draft' };
-          setActive(empty.id);
-          hydrateForm(empty);
-        }
-      })
-      .catch(() => setError('Failed to load policies.'))
-      .finally(() => setLoading(false));
-  }, []);
-  const selectDoc = (doc) => { setActive(doc.id); hydrateForm(doc); setStatusMsg(''); setError(''); };
-  const onSave = async (publish = false) => {
-    const validationError = validate();
-    if (validationError) { setError(validationError); return; }
-    setSaving(true); setError(''); setStatusMsg('');
-    try {
-      const payload = { ...form, slug: form.slug.trim().toLowerCase(), status: publish ? 'published' : form.status };
-      const res = await fetch('/api/admin/policies/save', { method:'POST', credentials:'include', headers:postHeaders(), body: JSON.stringify(payload) });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Failed to save policy.');
-      const updated = data.item;
-      setDocs(prev => {
-        const idx = prev.findIndex(d => d.id === updated.id);
-        if (idx >= 0) { const next = [...prev]; next[idx] = updated; return next; }
-        return [updated, ...prev];
-      });
-      setActive(updated.id);
-      hydrateForm(updated);
-      setStatusMsg(publish ? 'Saved and published.' : 'Saved.');
-    } catch (e) { setError(e.message || 'Failed to save policy.'); }
-    finally { setSaving(false); }
-  };
-  const onPublishToggle = async () => {
-    if (!activeDoc) return;
-    setSaving(true); setError(''); setStatusMsg('');
-    try {
-      const targetStatus = activeDoc.status === 'published' ? 'draft' : 'published';
-      const res = await fetch('/api/admin/policies/publish', { method:'POST', credentials:'include', headers:postHeaders(), body: JSON.stringify({ id: activeDoc.id, status: targetStatus }) });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Failed to update publish status.');
-      setDocs(prev => prev.map(d => d.id === data.item.id ? data.item : d));
-      hydrateForm(data.item);
-      setStatusMsg(targetStatus === 'published' ? 'Published.' : 'Moved to draft.');
-    } catch (e) { setError(e.message || 'Failed to update publish status.'); }
-    finally { setSaving(false); }
-  };
-  return (
-    <div style={{padding:32, display:'grid', gridTemplateColumns:'260px 1fr', gap:24}}>
-      {loading && <div className="mono" style={{fontSize:12, color:'var(--ink-2)'}}>Loading…</div>}
-      {error && <div style={{fontSize:12, color:'var(--rust)'}}>{error}</div>}
-      <aside>
-        <div className="row-flex" style={{justifyContent:'space-between', marginBottom: 12}}>
-          <span className="eyebrow">DOCUMENTS</span>
-          <a className="mono" style={{fontSize:11, color:'var(--rust)', cursor:'pointer'}} onClick={() => {
-            const next = { id:`policy-${Date.now()}`, title:'', slug:'', body:'', status:'draft' };
-            setActive(next.id); hydrateForm(next); setStatusMsg(''); setError('');
-          }}>+ NEW</a>
-        </div>
-        <div style={{display:'grid', gap:2}}>
-          {docs.map(d => (
-            <a key={d.id} onClick={()=>selectDoc(d)} style={{padding:'10px 12px', cursor:'pointer', fontSize:13, borderLeft: active===d.id?'2px solid var(--rust)':'2px solid transparent', background: active===d.id?'var(--bg-elev)':'transparent', color: active===d.id?'var(--rust)':'var(--ink)', fontWeight: active===d.id?600:400}}>
-              <div>{d.title || d.slug || 'Untitled policy'}</div>
-              <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginTop:2}}>UPDATED {(d.updatedAt || 'N/A').toUpperCase()}</div>
-            </a>
-          ))}
-        </div>
-      </aside>
-      <div style={{background:'var(--paper)', border:'1px solid var(--line)', padding:28}}>
-        <div className="row-flex" style={{justifyContent:'space-between'}}>
-          <h2 className="serif" style={{fontSize:28}}>{activeDoc?.title || 'Policy document'}</h2>
-          <div className="row-flex" style={{gap:8}}>
-            <span className={`tag ${activeDoc?.status === 'published' ? 'tag-euc' : 'tag-red'}`}>{(activeDoc?.status || 'draft').toUpperCase()}</span>
-            <button className="btn btn-ghost btn-sm" onClick={onPublishToggle} disabled={saving || !activeDoc?.id}>{activeDoc?.status === 'published' ? 'Unpublish' : 'Publish'}</button>
-            <button className="btn btn-rust btn-sm" onClick={() => onSave(true)} disabled={saving}>Save & publish</button>
-          </div>
-        </div>
-        <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:8}}>SLUG · /policies/{form.slug || 'new-policy'} · LAST EDITED BY {form.updatedBy || '—'} · {form.updatedAt || '—'}</div>
-        {statusMsg && <div style={{marginTop:8, fontSize:12, color:'var(--eucalyptus)'}}>{statusMsg}</div>}
-        {error && <div style={{marginTop:8, fontSize:12, color:'var(--rust)'}}>{error}</div>}
-        <hr className="thin"/>
-        <div className="grid-2" style={{gap:12, marginBottom:10}}>
-          <label className="field"><span className="label">Title</span><input className="input" value={form.title} onChange={e=>setForm({...form, title:e.target.value})}/></label>
-          <label className="field"><span className="label">Slug</span><input className="input" value={form.slug} onChange={e=>setForm({...form, slug:e.target.value.toLowerCase().replace(/[^a-z0-9-]/g,'-')})}/></label>
-        </div>
-        <textarea className="textarea" style={{minHeight:'calc(100vh - 360px)', height:'auto', fontSize:14, lineHeight:1.6}} value={form.body} onChange={e=>setForm({...form, body:e.target.value})}/>
-        <div style={{marginTop:12}}>
-          <button className="btn btn-ghost btn-sm" onClick={() => onSave(false)} disabled={saving}>Save draft</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ============================================================
 // SETTINGS
 // ============================================================
@@ -5991,7 +5863,6 @@ const ADMIN_VIEWS = {
   'store-credit': { c: AdminStoreCredit, t:'Store Credit',  staticSubtitle:'credit balances · history · manual adjustments' },
   analytics:  { c: AdminAnalytics,  t:'Analytics',        staticSubtitle:'page views · top pages · referrers · devices' },
   expenses:   { c: AdminExpenses,   t:'Expenses',         staticSubtitle:'track costs · receipt uploads' },
-  policies:   { c: AdminPolicies,   t:'Policies',         staticSubtitle:'edit public-facing policy docs' },
   settings:   { c: AdminSettings,   t:'Settings',         staticSubtitle:'shop · staff · integrations' },
   'seller-billing': { c: AdminSellerBilling, t:'Seller Billing', staticSubtitle:'listing fees · balances · card management' },
 };
@@ -6000,7 +5871,7 @@ const ADMIN_ALL_IDS = new Set([
   'overview','orders','repairs','quotes','ewaste',
   'products','services','software','tutorials','ai',
   'forum','groups','customers','sellers',
-  'memberships','gift-cards','rewards','analytics','expenses','policies','seller-billing','settings',
+  'memberships','gift-cards','rewards','analytics','expenses','seller-billing','settings',
 ]);
 
 function adminSectionFromPath() {

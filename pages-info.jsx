@@ -825,48 +825,232 @@ function SellersPage({ go }) {
 }
 
 // ============================================================
+// ============================================================
+function TermsContent({ email, phone, address }) {
+  const s = {mt: {marginTop:32}, p: {fontSize:15, lineHeight:1.75, marginTop:8}};
+  return (
+    <div>
+      <span className="eyebrow">LEGAL · TERMS AND CONDITIONS</span>
+      <h2 style={{marginTop:8}}>Terms and Conditions</h2>
+      <div style={s.mt}>
+        <p style={s.p}>We are Outback Electronics ('Company', 'we', 'us', or 'our'), a company registered in Australia at {address}. Our ABN is 99 496 591 295.</p>
+        <p style={s.p}>We operate the website https://www.outbackelectronics.com.au (the 'Site'), as well as any other related products and services that refer or link to these legal terms (collectively, the 'Legal Terms').</p>
+        <p style={s.p}>You can contact us by phone at {phone}, by email at {email}, or by mail to {address}, Australia.</p>
+        <p style={s.p}>These Legal Terms constitute a legally binding agreement between you and Outback Electronics concerning your access to and use of the Services. By accessing the Services, you have read, understood, and agreed to be bound by all of these Legal Terms. IF YOU DO NOT AGREE, YOU MUST DISCONTINUE USE IMMEDIATELY.</p>
+        <p style={s.p}>The Services are intended for users who are at least 18 years old.</p>
+      </div>
+      <div style={s.mt}><h3>1. Our Services</h3><p style={s.p}>The Services are not intended for distribution in jurisdictions where such use would be contrary to law. Users accessing the Services from other locations do so on their own initiative and are solely responsible for compliance with local laws.</p></div>
+      <div style={s.mt}><h3>2. Intellectual Property Rights</h3>
+        <p style={s.p}>We own or are the licensee of all intellectual property rights in our Services, including all source code, databases, functionality, software, website designs, audio, video, text, photographs, and graphics (collectively, the 'Content'), as well as the trademarks, service marks, and logos (the 'Marks'). These are protected by copyright and trademark laws in Australia and around the world.</p>
+        <p style={s.p}>We grant you a non-exclusive, non-transferable, revocable licence to access the Services and download or print Content solely for your personal, non-commercial use. No Content or Marks may be exploited for any commercial purpose without our express prior written permission. Requests may be directed to {email}.</p>
+        <p style={s.p}>By posting Contributions, you grant us an unrestricted, irrevocable, perpetual, royalty-free worldwide licence to use, reproduce, distribute, and exploit your Contributions for any purpose. You are solely responsible for your Contributions and may not post anything illegal, harassing, defamatory, obscene, or misleading.</p>
+      </div>
+      <div style={s.mt}><h3>3. User Representations</h3><p style={s.p}>By using the Services you represent that: (1) all information you submit is true, accurate, and complete; (2) you have the legal capacity to agree to these terms; (3) you are not a minor; (4) you will not use automated means to access the Services; (5) you will not use the Services for illegal or unauthorised purposes.</p></div>
+      <div style={s.mt}><h3>4. User Registration</h3><p style={s.p}>You agree to keep your password confidential and are responsible for all use of your account. We may remove usernames that are inappropriate or objectionable.</p></div>
+      <div style={s.mt}><h3>5. Products</h3><p style={s.p}>We endeavour to display products accurately but cannot guarantee colours, features, or specifications are error-free. All products are subject to availability. Prices are subject to change.</p></div>
+      <div style={s.mt}><h3>6. Purchases and Payment</h3>
+        <p style={s.p}>We accept Visa, Mastercard, and Afterpay. All payments are in Australian Dollars and include GST where applicable. Payment is processed securely via Stripe.</p>
+        <p style={s.p}>We reserve the right to refuse any order, correct pricing errors, or cancel orders placed by dealers or resellers.</p>
+      </div>
+      <div style={s.mt}><h3>7. Subscriptions</h3>
+        <p style={s.p}><strong>Billing and Renewal:</strong> Subscriptions auto-renew monthly unless cancelled.</p>
+        <p style={s.p}><strong>Free Trial:</strong> New users receive a 14-day free trial; your chosen subscription is charged at the end of the trial.</p>
+        <p style={s.p}><strong>Cancellation:</strong> Cancel anytime via your account; takes effect at end of the current paid period. Questions? Email {email}.</p>
+        <p style={s.p}><strong>Fee Changes:</strong> We will communicate price changes in accordance with applicable law.</p>
+      </div>
+      <div style={s.mt}><h3>8. Return / Refunds Policy</h3><p style={s.p}>Please review our Return Policy posted on the Services prior to making any purchases.</p></div>
+      <div style={s.mt}><h3>9. Software</h3><p style={s.p}>Any software provided is offered 'AS IS' without warranty. If a EULA accompanies the software, those terms govern. You may not reproduce or redistribute software except as permitted by the EULA or these Legal Terms.</p></div>
+      <div style={s.mt}><h3>10. Prohibited Activities</h3>
+        <p style={s.p}>You agree not to:</p>
+        <ul style={{paddingLeft:20, lineHeight:2, marginTop:8}}>
+          <li>Compile collections of our content without written permission.</li>
+          <li>Trick, defraud, or mislead us or other users.</li>
+          <li>Circumvent security features of the Services.</li>
+          <li>Harm, disparage, or tarnish us or the Services.</li>
+          <li>Harass, abuse, or harm any person using information from the Services.</li>
+          <li>Submit false reports of abuse or misconduct.</li>
+          <li>Use the Services in violation of any applicable law or regulation.</li>
+          <li>Upload viruses, Trojan horses, or other disruptive material.</li>
+          <li>Use bots, scrapers, or automated data-gathering tools.</li>
+          <li>Impersonate another user or person.</li>
+          <li>Interfere with or disrupt the Services or connected networks.</li>
+          <li>Copy or adapt the Services' source code.</li>
+          <li>Collect user email addresses for unsolicited communications.</li>
+          <li>Use the Services for commercial competition against us.</li>
+          <li>Sell or transfer your profile.</li>
+        </ul>
+      </div>
+      <div style={s.mt}><h3>11. User Generated Contributions</h3>
+        <p style={s.p}>You warrant that your Contributions: do not infringe third-party rights; are not false, misleading, or spam; are not obscene, violent, or harassing; do not violate any law; and do not include offensive comments about race, gender, sexual preference, or disability.</p>
+      </div>
+      <div style={s.mt}><h3>12. Contribution Licence</h3><p style={s.p}>By posting Contributions you grant us an irrevocable, royalty-free, worldwide licence to use, reproduce, distribute, and exploit them for any purpose. You retain ownership of your Contributions. We may edit, re-categorise, or delete Contributions at any time without notice.</p></div>
+      <div style={s.mt}><h3>13. Guidelines for Reviews</h3><p style={s.p}>Reviews must reflect firsthand experience and may not contain offensive language, discriminatory references, illegal activity, or false statements. We may remove reviews at our discretion. Reviews do not represent our views.</p></div>
+      <div style={s.mt}><h3>14. Third-Party Websites and Content</h3><p style={s.p}>We are not responsible for third-party websites or content linked from or available through the Services. Inclusion of any third-party link does not imply endorsement. You hold us blameless from any harm arising from your use of third-party websites or content.</p></div>
+      <div style={s.mt}><h3>15. Services Management</h3><p style={s.p}>We may monitor the Services for violations, take legal action against violators, restrict or disable Contributions, remove burdensome content, and otherwise manage the Services to protect our rights and ensure proper functioning.</p></div>
+      <div style={s.mt}><h3>16. Privacy Policy</h3><p style={s.p}>We care about data privacy. Please review our Privacy Policy available on this site. By using the Services you agree to be bound by our Privacy Policy. The Services are hosted in Australia.</p></div>
+      <div style={s.mt}><h3>17. Term and Termination</h3><p style={s.p}>These Legal Terms remain in effect while you use the Services. We may deny access, terminate your account, or remove your content at any time without warning. If terminated, you may not re-register under any name without our permission.</p></div>
+      <div style={s.mt}><h3>18. Modifications and Interruptions</h3><p style={s.p}>We may change, modify, or remove content from the Services at any time without notice. We are not liable for any modification, suspension, or discontinuance of the Services, nor for any downtime or service interruptions.</p></div>
+      <div style={s.mt}><h3>19. Governing Law</h3><p style={s.p}>These Legal Terms are governed by the laws of Australia. Both parties irrevocably consent to the exclusive jurisdiction of the courts of Australia.</p></div>
+      <div style={s.mt}><h3>20. Dispute Resolution</h3>
+        <p style={s.p}><strong>Informal Resolution:</strong> Contact us at {email} first. We will attempt to resolve the dispute within 30 days.</p>
+        <p style={s.p}><strong>Binding Arbitration:</strong> Unresolved disputes shall be referred to arbitration seated in Sydney, New South Wales, under the substantive law of Australia.</p>
+        <p style={s.p}><strong>Exceptions:</strong> Disputes involving intellectual property rights, theft, piracy, or claims for injunctive relief are not subject to arbitration.</p>
+      </div>
+      <div style={s.mt}><h3>21. Corrections</h3><p style={s.p}>We may correct typographical errors, inaccuracies, or omissions in our content at any time without prior notice.</p></div>
+      <div style={s.mt}><h3>22. Disclaimer</h3><p style={{...s.p, textTransform:'uppercase', fontSize:13}}>The Services are provided on an as-is and as-available basis. To the fullest extent permitted by law, we disclaim all warranties, express or implied. Nothing in these terms limits your rights under the Australian Consumer Law.</p></div>
+      <div style={s.mt}><h3>23. Limitations of Liability</h3><p style={{...s.p, textTransform:'uppercase', fontSize:13}}>In no event will we be liable for any indirect, consequential, or punitive damages. Our liability is limited to the amount paid by you in the one (1) month prior to any cause of action. Nothing herein excludes rights that cannot be excluded under the Australian Consumer Law.</p></div>
+      <div style={s.mt}><h3>24. Indemnification</h3><p style={s.p}>You agree to defend, indemnify, and hold us harmless from any loss, damage, liability, or claim arising from: your Contributions; your use of the Services; your breach of these Legal Terms; or your violation of any third-party rights.</p></div>
+      <div style={s.mt}><h3>25. User Data</h3><p style={s.p}>We maintain data you transmit for managing the Services. You are solely responsible for your data. We are not liable for any loss or corruption of your data.</p></div>
+      <div style={s.mt}><h3>26. Electronic Communications</h3><p style={s.p}>Visiting the Services, sending emails, and completing online forms constitute electronic communications. You consent to receive electronic communications that satisfy any legal requirement for writing.</p></div>
+      <div style={s.mt}><h3>27. Miscellaneous</h3><p style={s.p}>These Legal Terms constitute the entire agreement between you and us. If any provision is deemed unenforceable, the remainder stays in force. We may assign our rights and obligations at any time. No joint venture, partnership, or employment relationship is created by these terms.</p></div>
+      <div style={s.mt}><h3>28. Contact Us</h3>
+        <p style={s.p}><strong>Outback Electronics</strong><br/>{address}, Australia<br/>Phone: {phone}<br/>Email: <a href={`mailto:${email}`}>{email}</a></p>
+      </div>
+      <hr className="thin" style={{marginTop:40}} />
+      <div className="notice" style={{marginTop:24}}>
+        <span className="tag tag-ink">QUESTIONS?</span>
+        <div style={{fontSize:13, color:'var(--ink-2)'}}>Email <strong>{email}</strong> — we'll get back to you as soon as we can.</div>
+      </div>
+    </div>
+  );
+}
+
+function PrivacyContent({ email, phone, address }) {
+  const s = {mt: {marginTop:32}, p: {fontSize:15, lineHeight:1.75, marginTop:8}};
+  return (
+    <div>
+      <span className="eyebrow">LEGAL · PRIVACY POLICY</span>
+      <h2 style={{marginTop:8}}>Privacy Policy</h2>
+      <p style={s.p}>This Privacy Notice for Outback Electronics ('we', 'us', or 'our') describes how and why we might access, collect, store, use, and/or share ('process') your personal information when you use our services ('Services'), including when you visit https://www.outbackelectronics.com.au or engage with us in other related ways including sales, marketing, or events.</p>
+      <p style={s.p}>Questions or concerns? Contact us at <a href={`mailto:${email}`}>{email}</a>.</p>
+
+      <div style={s.mt}><h3>Summary of Key Points</h3>
+        <ul style={{paddingLeft:20, lineHeight:2, marginTop:8}}>
+          <li><strong>What personal information do we process?</strong> Information you provide when registering, making purchases, or contacting us.</li>
+          <li><strong>Do we process sensitive personal information?</strong> No.</li>
+          <li><strong>Do we collect information from third parties?</strong> No.</li>
+          <li><strong>How do we process your information?</strong> To provide, improve, and administer our Services, communicate with you, prevent fraud, and comply with law.</li>
+          <li><strong>How do we keep your information safe?</strong> We have appropriate organisational and technical measures in place, though no internet transmission is 100% secure.</li>
+          <li><strong>What are your rights?</strong> Depending on your location, you may have rights to access, correct, or delete your personal information.</li>
+        </ul>
+      </div>
+
+      <div style={s.mt}><h3>1. What Information Do We Collect?</h3>
+        <p style={s.p}><strong>Personal information you disclose to us.</strong> We collect personal information that you voluntarily provide when you register, express an interest in our products or services, participate in activities, or contact us. This may include: names, phone numbers, email addresses, mailing addresses, usernames, passwords, contact preferences, and billing addresses.</p>
+        <p style={s.p}><strong>Sensitive information.</strong> We do not process sensitive information.</p>
+        <p style={s.p}><strong>Payment data.</strong> Payment data necessary to process purchases is handled and stored by Stripe. See Stripe's privacy notice at https://stripe.com/au/privacy.</p>
+        <p style={s.p}><strong>Information automatically collected.</strong> We automatically collect certain information when you visit the Services, including IP address, browser and device characteristics, operating system, language preferences, referring URLs, and usage data. We also collect information through cookies and similar technologies, including log data, device data, and approximate location data.</p>
+      </div>
+
+      <div style={s.mt}><h3>2. How Do We Process Your Information?</h3>
+        <p style={s.p}>We process your personal information to:</p>
+        <ul style={{paddingLeft:20, lineHeight:2, marginTop:8}}>
+          <li>Facilitate account creation and authentication.</li>
+          <li>Deliver services and fulfil orders.</li>
+          <li>Respond to inquiries and offer support.</li>
+          <li>Send administrative information and policy updates.</li>
+          <li>Enable user-to-user communications.</li>
+          <li>Protect individuals' vital interests and prevent harm.</li>
+        </ul>
+      </div>
+
+      <div style={s.mt}><h3>3. What Legal Bases Do We Rely On?</h3>
+        <p style={s.p}>We process your personal information only when we have a valid legal reason to do so. Legal bases include: your consent; performance of a contract; compliance with legal obligations; and protection of vital interests. EU/UK residents have additional rights under GDPR.</p>
+      </div>
+
+      <div style={s.mt}><h3>4. When and With Whom Do We Share Your Personal Information?</h3>
+        <p style={s.p}>We may share your information in connection with: business transfers (e.g. merger or acquisition); use of Google Maps Platform APIs for location features; and with other users when you post public Contributions.</p>
+      </div>
+
+      <div style={s.mt}><h3>5. Do We Use Cookies and Other Tracking Technologies?</h3>
+        <p style={s.p}>We may use cookies and similar tracking technologies (web beacons, pixels) to gather information, maintain security, save preferences, and assist with basic site functions. We also permit third parties such as Google Analytics to use tracking technologies for analytics purposes. You can opt out of Google Analytics at https://tools.google.com/dlpage/gaoptout.</p>
+      </div>
+
+      <div style={s.mt}><h3>6. How Long Do We Keep Your Information?</h3>
+        <p style={s.p}>We keep personal information only as long as necessary for the purposes outlined in this notice, unless a longer retention period is required by law. When no longer needed, we delete or anonymise the information.</p>
+      </div>
+
+      <div style={s.mt}><h3>7. How Do We Keep Your Information Safe?</h3>
+        <p style={s.p}>We have implemented appropriate technical and organisational security measures. However, no electronic transmission over the internet is guaranteed 100% secure. Transmission of personal information to and from our Services is at your own risk.</p>
+      </div>
+
+      <div style={s.mt}><h3>8. Do We Collect Information from Minors?</h3>
+        <p style={s.p}>We do not knowingly collect data from or market to children under 18. If we learn such data has been collected, we will deactivate the account and delete the data. Contact us at <a href={`mailto:${email}`}>{email}</a> if you become aware of any such data.</p>
+      </div>
+
+      <div style={s.mt}><h3>9. What Are Your Privacy Rights?</h3>
+        <p style={s.p}>Depending on your location, you may have the right to: request access to and a copy of your personal information; request rectification or erasure; restrict processing; data portability; and object to processing. You can also opt out of marketing communications at any time via the unsubscribe link in our emails or by contacting us.</p>
+        <p style={s.p}>To review or change your account information, log in to your account settings at https://www.outbackelectronics.com.au/account/my-account. Questions? Email us at <a href={`mailto:${email}`}>{email}</a>.</p>
+      </div>
+
+      <div style={s.mt}><h3>10. Controls for Do-Not-Track Features</h3>
+        <p style={s.p}>We do not currently respond to DNT browser signals, as no uniform technology standard for DNT has been finalised. If a standard is adopted, we will update this notice accordingly.</p>
+      </div>
+
+      <div style={s.mt}><h3>11. Do United States Residents Have Specific Privacy Rights?</h3>
+        <p style={s.p}>Residents of certain US states may have additional rights regarding personal information. We have not collected, sold, or shared any personal information to third parties for commercial purposes in the preceding twelve months, and we do not intend to do so. US residents may have rights including: right to know, access, correct, delete, and obtain a copy of their data; right to non-discrimination; and right to opt out of targeted advertising or profiling.</p>
+        <p style={s.p}>To exercise these rights, visit https://www.outbackelectronics.com.au/account/my-account or email <a href={`mailto:${email}`}>{email}</a>.</p>
+      </div>
+
+      <div style={s.mt}><h3>12. Do Other Regions Have Specific Privacy Rights?</h3>
+        <p style={s.p}><strong>Australia:</strong> We collect and process your personal information under Australia's Privacy Act 1988. You have the right to request access to or correction of your personal information at any time. If you believe we are unlawfully processing your personal information, you may submit a complaint to the Office of the Australian Information Commissioner.</p>
+      </div>
+
+      <div style={s.mt}><h3>13. Do We Make Updates to This Notice?</h3>
+        <p style={s.p}>Yes. We may update this Privacy Notice from time to time. The updated version will be indicated by an updated date at the top of this page. We encourage you to review this notice frequently.</p>
+      </div>
+
+      <div style={s.mt}><h3>14. How Can You Review, Update, or Delete Your Data?</h3>
+        <p style={s.p}>To request to review, update, or delete your personal information, visit: https://www.outbackelectronics.com.au/account/my-account</p>
+      </div>
+
+      <div style={s.mt}><h3>15. How Can You Contact Us About This Notice?</h3>
+        <p style={s.p}><strong>Outback Electronics</strong><br/>{address}, Australia<br/>Phone: {phone}<br/>Email: <a href={`mailto:${email}`}>{email}</a></p>
+      </div>
+
+      <hr className="thin" style={{marginTop:40}} />
+      <div className="notice" style={{marginTop:24}}>
+        <span className="tag tag-ink">QUESTIONS?</span>
+        <div style={{fontSize:13, color:'var(--ink-2)'}}>Email <strong>{email}</strong> — we'll get back to you as soon as we can.</div>
+      </div>
+    </div>
+  );
+}
+
 // POLICIES
 // ============================================================
-function PoliciesPage() {
+function PoliciesPage({ go, pageParams }) {
   const shop = useShop();
-  const [policies, setPolicies] = useState([]);
-  const [active, setActive] = useState(null);
-  useEffect(() => {
-    fetch('/api/policies').then(r => r.ok ? r.json() : Promise.reject()).then(d => {
-      const items = d.items || [];
-      setPolicies(items);
-      if (items.length > 0) setActive(items[0].id);
-    }).catch(() => {});
-  }, []);
-  const current = policies.find(p => p.id === active);
+  const fullAddress = [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(', ');
+  const email = shop.email || 'outbackhutelectronics@gmail.com';
+  const phone = shop.phone || '0478 685 674';
+  const address = fullAddress || '38 Rosebery Street, Penshurst, New South Wales 2222';
+  const slug = pageParams?.slug || 'terms-and-conditions';
+  const goDoc = (s) => go('policies', { slug: s });
+
+  const DOCS = {
+    'terms-and-conditions': { title: 'Terms & Conditions', updated: 'June 6, 2026' },
+    'privacy-policy': { title: 'Privacy Policy', updated: 'September 18, 2024' },
+  };
+  const activeDoc = DOCS[slug] ? slug : 'terms-and-conditions';
+
   return (
     <>
-      <PageHead crumbs={['Outback','Policies']} title="Policies"
-        lead="The rules we run by — read them once, then never again unless something has gone sideways." />
+      <PageHead crumbs={['Outback', 'Policies', DOCS[activeDoc]?.title]} title={DOCS[activeDoc]?.title}
+        lead={`Last updated ${DOCS[activeDoc]?.updated}`} />
       <section className="container" style={{paddingTop: 32, paddingBottom: 60}}>
-        {policies.length === 0 ? (
-          <div className="mono" style={{fontSize:13, color:'var(--ink-2)'}}>No policies published yet.</div>
-        ) : (
-          <div className="policy-layout">
-            <aside className="policy-nav">
-              {policies.map(p => (
-                <a key={p.id} className={active===p.id?'active':''} onClick={() => setActive(p.id)}>{p.title}</a>
-              ))}
-            </aside>
-            {current && (
-              <div className="policy-content">
-                <span className="eyebrow">POLICY · {current.title.toUpperCase()}</span>
-                <h2 style={{marginTop:8}}>{current.title}</h2>
-                <div style={{marginTop:18, fontSize:15, lineHeight:1.75, whiteSpace:'pre-wrap'}}>{current.body}</div>
-                <hr className="thin" />
-                <div className="notice" style={{marginTop: 24}}>
-                  <span className="tag tag-ink">QUESTIONS?</span>
-                  <div style={{fontSize:13, color:'var(--ink-2)'}}>Email <strong>{shop.email || 'us'}</strong> — we'll route you to whoever wrote the policy.</div>
-                </div>
-              </div>
-            )}
+        <div className="policy-layout">
+          <aside className="policy-nav">
+            <div className="eyebrow" style={{padding:'0 0 8px 0', marginBottom:4}}>DOCUMENTS</div>
+            {Object.entries(DOCS).map(([s, d]) => (
+              <a key={s} className={activeDoc===s?'active':''} onClick={() => goDoc(s)}>{d.title}</a>
+            ))}
+          </aside>
+          <div className="policy-content">
+            {activeDoc === 'terms-and-conditions' ? <TermsContent email={email} phone={phone} address={address} /> : <PrivacyContent email={email} phone={phone} address={address} />}
+
           </div>
-        )}
+        </div>
       </section>
     </>
   );

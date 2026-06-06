@@ -1372,6 +1372,7 @@ function App() {
     const path = location.pathname.replace(/^\/+/, '');
     if (path.startsWith('product/')) return 'product';
     if (path.startsWith('service/')) return 'service';
+    if (path.startsWith('policies/')) return 'policies';
     const resolved = PAGE_ALIASES_INIT[path] || path;
     return KNOWN_PAGES.includes(resolved) ? resolved : 'home';
   });
@@ -1380,7 +1381,10 @@ function App() {
   // Resolve deep-linked product/service on first load
   useEffect(() => {
     const path = location.pathname.replace(/^\/+/, '');
-    if (path.startsWith('product/') && !pageParams) {
+    if (path.startsWith('policies/') && !pageParams) {
+      const slug = decodeURIComponent(path.slice('policies/'.length));
+      if (slug) setPageParams({ slug });
+    } else if (path.startsWith('product/') && !pageParams) {
       const id = decodeURIComponent(path.slice('product/'.length));
       fetch('/api/catalog/products').then(r => r.json()).then(d => {
         const p = (d.items || []).find(x => x.sku === id || String(x.id) === id || x.slug === id);
@@ -1415,6 +1419,9 @@ function App() {
     } else if (page === 'service' && pageParams) {
       const id = pageParams.id || pageParams.slug;
       if (id) target = `/service/${encodeURIComponent(id)}`;
+    } else if (page === 'policies') {
+      const slug = pageParams?.slug || 'terms-and-conditions';
+      target = `/policies/${slug}`;
     }
     if (location.pathname !== target) window.history.pushState({}, '', target);
     window.scrollTo({top:0});
@@ -1428,6 +1435,7 @@ function App() {
       const path = location.pathname.replace(/^\/+/, '');
       if (path.startsWith('product/')) { setPage('product'); setPageParams(null); return; }
       if (path.startsWith('service/')) { setPage('service'); setPageParams(null); return; }
+      if (path.startsWith('policies/')) { setPage('policies'); setPageParams({ slug: path.slice('policies/'.length) }); return; }
       if (KNOWN_PAGES.includes(path)) setPage(path);
     };
     window.addEventListener('popstate', onPop);
