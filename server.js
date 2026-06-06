@@ -5674,16 +5674,23 @@ function migrateEnvToSettings() {
   const s = readSettings();
   let changed = false;
 
-  if (STRIPE_SECRET_KEY && !s.integrations.find(r => r[0] === 'Stripe')) {
-    s.integrations = [['Stripe', 'api.stripe.com', true, {
-      secretKey: STRIPE_SECRET_KEY, publishableKey: STRIPE_PUBLISHABLE_KEY, webhookSecret: STRIPE_WEBHOOK_SECRET,
+  if (!s.integrations.find(r => r[0] === 'Stripe')) {
+    s.integrations = [['Stripe', 'api.stripe.com', !!(STRIPE_SECRET_KEY), {
+      secretKey: STRIPE_SECRET_KEY || '', publishableKey: STRIPE_PUBLISHABLE_KEY || '', webhookSecret: STRIPE_WEBHOOK_SECRET || '',
     }], ...s.integrations];
     changed = true;
   }
 
-  if ((SMTP_HOST || SMTP_USER) && !s.integrations.find(r => r[0] === 'Email')) {
+  if (!s.integrations.find(r => r[0] === 'Email')) {
     s.integrations.push(['Email', SMTP_HOST || 'smtp.gmail.com', !!(SMTP_HOST && SMTP_USER && SMTP_PASS), {
-      host: SMTP_HOST, port: String(SMTP_PORT), user: SMTP_USER, pass: SMTP_PASS, notifyEmail: NOTIFY_EMAIL,
+      host: SMTP_HOST || '', port: String(SMTP_PORT || ''), user: SMTP_USER || '', pass: SMTP_PASS || '', notifyEmail: NOTIFY_EMAIL || '',
+    }]);
+    changed = true;
+  }
+
+  if (!s.integrations.find(r => r[0] === 'AusPost')) {
+    s.integrations.push(['AusPost', 'digitalapi.auspost.com.au', !!(AUSPOST_API_KEY), {
+      apiKey: AUSPOST_API_KEY || '',
     }]);
     changed = true;
   }

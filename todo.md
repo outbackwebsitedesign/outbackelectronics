@@ -122,8 +122,11 @@ All logins (portal, forum, games) now use **email + password** only. Username is
 ### ✅ 27. AI page content ready — NOT AN ISSUE (INVALID, duplicate of #11)
 The AI page is not disabled. See #11: `aiEnabled` only toggles the "NEW · 2026" badge, not the page. Page is live and reachable. Nothing to do.
 
-### ❌ 28. Integrations UI non-functional for external services
-`readSettings()` always returns `integrations: []` as default (server.js:274, 278). Stripe, SMTP, AusPost must all be configured via environment variables — there is no working UI path for a non-technical operator to set these up.
+### ✅ 28. Integrations UI non-functional for external services — RESOLVED
+Three issues fixed:
+- **Always-present stubs:** `migrateEnvToSettings()` now seeds disconnected stubs for Stripe, Email, and AusPost on first startup even when no env vars are set, so the admin always sees all three rows and can configure them via UI.
+- **AusPost env-var seeding:** AusPost key from `AUSPOST_API_KEY` env var is now seeded into settings.db on startup (was omitted before).
+- **Add modal type-specific fields:** When adding a new integration named "Stripe" the modal shows secretKey/publishableKey/webhookSecret fields; "Email" shows SMTP fields; all others show generic API key/notes. Previously adding any service always showed the generic fields.
 
 ### ✅ 29. Stale docs describe a settings.defaults.json merge pattern that no longer exists — RESOLVED
 Both `CLAUDE.md` and `README.md` corrected to describe `settings.db` as the single source of truth with inline code fallbacks in `readSettings()`; `settings.defaults.json` is noted as non-existent and must never be created.
@@ -164,5 +167,5 @@ Completing a purchase does not decrement the stock count on the purchased produc
 | 25 | pages-info.jsx:342 | Contact email renders dash if empty | LOW | ✅ DONE |
 | 26 | portal-page.jsx:84 | Login requires username not email | LOW | ✅ DONE |
 | 27 | pages-shop.jsx:169 | AI page "disabled" — INVALID, duplicate of #11 | LOW | ✅ N/A |
-| 28 | server.js:274,278 | Integrations UI non-functional | LOW | ❌ OPEN |
+| 28 | server.js:274,278 | Integrations UI non-functional | LOW | ✅ DONE |
 | 29 | README.md:45,57 / CLAUDE.md:66 | Stale docs describe settings.defaults.json pattern | LOW | ✅ DONE |

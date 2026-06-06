@@ -5370,7 +5370,9 @@ function AdminSettingsFull({ sessionInfo = {} }) {
       : { apiKey: integrationForm.apiKey, notes: integrationForm.notes };
     if (mode === 'add') {
       if (!integrationForm.name.trim()) return;
-      setIntegrations([...integrations, [integrationForm.name.trim(), integrationForm.endpoint.trim(), true, config]]);
+      const defaultEndpoints = { Stripe: 'api.stripe.com', Email: integrationForm.host || 'smtp.gmail.com', AusPost: 'digitalapi.auspost.com.au' };
+      const endpoint = integrationForm.endpoint.trim() || defaultEndpoints[integrationForm.name] || '';
+      setIntegrations([...integrations, [integrationForm.name.trim(), endpoint, true, config]]);
     } else {
       setIntegrations(integrations.map((r, i) => i === idx ? [r[0], integrationForm.endpoint.trim(), true, config] : r));
     }
@@ -5650,9 +5652,25 @@ function AdminSettingsFull({ sessionInfo = {} }) {
             </div>
             {integrationModal.mode === 'add' && <>
               <label className="field"><span className="label">Name</span><input className="input" value={integrationForm.name} onChange={e => setIntegrationForm({...integrationForm, name: e.target.value})} placeholder="e.g. Mailchimp"/></label>
-              <label className="field"><span className="label">Endpoint</span><input className="input" value={integrationForm.endpoint} onChange={e => setIntegrationForm({...integrationForm, endpoint: e.target.value})} placeholder="e.g. api.mailchimp.com"/></label>
-              <label className="field"><span className="label">API Key</span><input className="input" value={integrationForm.apiKey} onChange={e => setIntegrationForm({...integrationForm, apiKey: e.target.value})}/></label>
-              <label className="field"><span className="label">Notes</span><input className="input" value={integrationForm.notes} onChange={e => setIntegrationForm({...integrationForm, notes: e.target.value})}/></label>
+              {integrationForm.name === 'Stripe' && <>
+                <label className="field"><span className="label">Secret Key</span><input className="input" value={integrationForm.secretKey} onChange={e => setIntegrationForm({...integrationForm, secretKey: e.target.value})} placeholder="sk_live_… or sk_test_…"/></label>
+                <label className="field"><span className="label">Publishable Key</span><input className="input" value={integrationForm.publishableKey} onChange={e => setIntegrationForm({...integrationForm, publishableKey: e.target.value})} placeholder="pk_live_…"/></label>
+                <label className="field"><span className="label">Webhook Secret</span><input className="input" value={integrationForm.webhookSecret} onChange={e => setIntegrationForm({...integrationForm, webhookSecret: e.target.value})} placeholder="whsec_…"/></label>
+                <p style={{fontSize:11, color:'var(--ink-3)', margin:'-4px 0 8px'}}>Find these in Stripe Dashboard → Developers → API keys / Webhooks</p>
+              </>}
+              {integrationForm.name === 'Email' && <>
+                <label className="field"><span className="label">SMTP Host</span><input className="input" value={integrationForm.host} onChange={e => setIntegrationForm({...integrationForm, host: e.target.value})} placeholder="smtp.gmail.com"/></label>
+                <label className="field"><span className="label">SMTP Port</span><input className="input" value={integrationForm.port} onChange={e => setIntegrationForm({...integrationForm, port: e.target.value})} placeholder="587"/></label>
+                <label className="field"><span className="label">Username</span><input className="input" value={integrationForm.user} onChange={e => setIntegrationForm({...integrationForm, user: e.target.value})} placeholder="you@gmail.com"/></label>
+                <label className="field"><span className="label">Password / App password</span><input className="input" type="password" value={integrationForm.pass} onChange={e => setIntegrationForm({...integrationForm, pass: e.target.value})}/></label>
+                <label className="field"><span className="label">Notification address</span><input className="input" value={integrationForm.notifyEmail} onChange={e => setIntegrationForm({...integrationForm, notifyEmail: e.target.value})} placeholder="orders@yourshop.com"/></label>
+                <p style={{fontSize:11, color:'var(--ink-3)', margin:'-4px 0 8px'}}>Use a Gmail app password (not your account password)</p>
+              </>}
+              {integrationForm.name !== 'Stripe' && integrationForm.name !== 'Email' && <>
+                <label className="field"><span className="label">Endpoint</span><input className="input" value={integrationForm.endpoint} onChange={e => setIntegrationForm({...integrationForm, endpoint: e.target.value})} placeholder="e.g. api.mailchimp.com"/></label>
+                <label className="field"><span className="label">API Key</span><input className="input" value={integrationForm.apiKey} onChange={e => setIntegrationForm({...integrationForm, apiKey: e.target.value})}/></label>
+                <label className="field"><span className="label">Notes</span><input className="input" value={integrationForm.notes} onChange={e => setIntegrationForm({...integrationForm, notes: e.target.value})}/></label>
+              </>}
             </>}
             {integrationModal.mode === 'edit' && integrationForm.name === 'Stripe' && <>
               <label className="field"><span className="label">Secret Key</span><input className="input" value={integrationForm.secretKey} onChange={e => setIntegrationForm({...integrationForm, secretKey: e.target.value})} placeholder="sk_live_… or sk_test_…"/></label>
