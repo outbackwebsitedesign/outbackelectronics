@@ -515,11 +515,10 @@ function TopNav({ page, go, cart, onSearchOpen, accountOpen, setAccountOpen, por
               {p.label}
             </a>
           ))}
-          <div style={{borderTop:'2px solid var(--line)', marginTop:8}}>
+          <div className="mobile-nav-utils">
             {UTILITY_PAGES.map(p => (
               <a key={p.id} href={`/${p.id}`} className={page === p.id ? 'active' : ''}
-                onClick={(e) => { e.preventDefault(); handleNavClick(p.id); }}
-                style={{fontSize:14, color:'var(--ink-2)'}}>
+                onClick={(e) => { e.preventDefault(); handleNavClick(p.id); }}>
                 {p.label}
               </a>
             ))}
