@@ -1217,6 +1217,35 @@ function ReturnContent({ email, phone, address }) {
   );
 }
 
+function DisclaimerContent() {
+  const s = {mt: {marginTop:32}, p: {fontSize:15, lineHeight:1.75, marginTop:8}};
+  return (
+    <div>
+      <span className="eyebrow">LEGAL · DISCLAIMER</span>
+      <h2 style={{marginTop:8}}>Disclaimer</h2>
+
+      <div style={s.mt}><h3>Website Disclaimer</h3>
+        <p style={s.p}>The information provided by Outback Electronics ('we', 'us', or 'our') on <a href="https://www.outbackelectronics.com.au">https://www.outbackelectronics.com.au</a> (the 'Site') is for general informational purposes only. All information on the Site is provided in good faith, however we make no representation or warranty of any kind, express or implied, regarding the accuracy, adequacy, validity, reliability, availability, or completeness of any information on the Site.</p>
+        <p style={{...s.p, textTransform:'uppercase', fontSize:13}}>Under no circumstance shall we have any liability to you for any loss or damage of any kind incurred as a result of the use of the Site or reliance on any information provided on the Site. Your use of the Site and your reliance on any information on the Site is solely at your own risk.</p>
+      </div>
+
+      <div style={s.mt}><h3>External Links Disclaimer</h3>
+        <p style={s.p}>The Site may contain (or you may be sent through the Site) links to other websites or content belonging to or originating from third parties, or links to websites and features in banners or other advertising. Such external links are not investigated, monitored, or checked for accuracy, adequacy, validity, reliability, availability, or completeness by us.</p>
+        <p style={{...s.p, textTransform:'uppercase', fontSize:13}}>We do not warrant, endorse, guarantee, or assume responsibility for the accuracy or reliability of any information offered by third-party websites linked through the Site or any website or feature linked in any banner or other advertising. We will not be a party to or in any way be responsible for monitoring any transaction between you and third-party providers of products or services.</p>
+      </div>
+
+      <div style={s.mt}><h3>Testimonials Disclaimer</h3>
+        <p style={s.p}>The Site may contain testimonials by users of our products and/or services. These testimonials reflect the real-life experiences and opinions of such users. However, the experiences are personal to those particular users and may not necessarily be representative of all users of our products and/or services. We do not claim, and you should not assume, that all users will have the same experiences.</p>
+        <p style={{...s.p, textTransform:'uppercase', fontSize:13}}>Your individual results may vary.</p>
+        <p style={s.p}>Testimonials on the Site are submitted in various forms such as text, audio, and/or video, and are reviewed by us before being posted. They appear verbatim as given by the users, except for the correction of grammar or typing errors. Some testimonials may have been shortened for brevity where the full testimonial contained extraneous information not relevant to the general public.</p>
+        <p style={s.p}>The views and opinions contained in the testimonials belong solely to the individual user and do not reflect our views and opinions. We are not affiliated with users who provide testimonials, and users are not paid or otherwise compensated for their testimonials.</p>
+      </div>
+
+      <hr className="thin" style={{marginTop:40}} />
+    </div>
+  );
+}
+
 // POLICIES
 // ============================================================
 function PoliciesPage({ go, pageParams }) {
@@ -1234,6 +1263,7 @@ function PoliciesPage({ go, pageParams }) {
     'shipping-and-delivery': { title: 'Shipping & Delivery', updated: 'September 18, 2024' },
     'cookie-policy': { title: 'Cookie Policy', updated: 'September 18, 2024' },
     'return-policy': { title: 'Return Policy', updated: 'September 18, 2024' },
+    'disclaimer': { title: 'Disclaimer', updated: 'September 18, 2024' },
   };
   const activeDoc = DOCS[slug] ? slug : 'terms-and-conditions';
 
@@ -1250,7 +1280,7 @@ function PoliciesPage({ go, pageParams }) {
             ))}
           </aside>
           <div className="policy-content">
-            {activeDoc === 'terms-and-conditions' ? <TermsContent email={email} phone={phone} address={address} /> : activeDoc === 'privacy-policy' ? <PrivacyContent email={email} phone={phone} address={address} /> : activeDoc === 'shipping-and-delivery' ? <ShippingContent email={email} /> : activeDoc === 'cookie-policy' ? <CookieContent email={email} /> : <ReturnContent email={email} phone={phone} address={address} />}
+            {activeDoc === 'terms-and-conditions' ? <TermsContent email={email} phone={phone} address={address} /> : activeDoc === 'privacy-policy' ? <PrivacyContent email={email} phone={phone} address={address} /> : activeDoc === 'shipping-and-delivery' ? <ShippingContent email={email} /> : activeDoc === 'cookie-policy' ? <CookieContent email={email} /> : activeDoc === 'return-policy' ? <ReturnContent email={email} phone={phone} address={address} /> : <DisclaimerContent />}
 
           </div>
         </div>
