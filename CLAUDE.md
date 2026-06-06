@@ -21,6 +21,8 @@ This mistake was made once and wiped the entire live database. Do not let it hap
 
 When running inside a Claude Code web session, the environment pre-creates a feature branch (e.g. `claude/next-todo-issue-*`). In that case: commit on the session branch, then fast-forward merge to `main` and push `main`. That is the accepted flow — the feature branch is just session scaffolding, not a real branch to review or merge via PR.
 
+**If the merge fails, DO NOT cherry-pick.** Fix the reason the merge failed (e.g. pull/rebase `main` so the histories are compatible, resolve conflicts), then merge again.
+
 ## Commands
 
 ```bash
