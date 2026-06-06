@@ -12,8 +12,8 @@ function getCsrf() {
 // ============================================================
 // REQUEST A QUOTE
 // ============================================================
-const _SHOP_LAT = -35.9845;
-const _SHOP_LNG = 144.7730;
+const _SHOP_LAT = -24.4235;
+const _SHOP_LNG = 145.4693;
 const _CALLOUT_FREE_KM = 10;
 const _CALLOUT_LOCAL_CAP_KM = 200;
 const _CALLOUT_HIVAL_THRESHOLD = 10000;
@@ -373,8 +373,8 @@ function ContactPage({ go }) {
                 style={{display:'block', border:0}}
                 loading="lazy"
                 src={(() => {
-                  const lat = mapCoords ? mapCoords.lat : parseFloat(shop.mapLat) || -35.9845;
-                  const lng = mapCoords ? mapCoords.lng : parseFloat(shop.mapLng) || 144.7730;
+                  const lat = mapCoords ? mapCoords.lat : parseFloat(shop.mapLat) || -24.4235;
+                  const lng = mapCoords ? mapCoords.lng : parseFloat(shop.mapLng) || 145.4693;
                   return `https://www.openstreetmap.org/export/embed.html?bbox=${lng-0.02}%2C${lat-0.02}%2C${lng+0.02}%2C${lat+0.02}&layer=mapnik&marker=${lat}%2C${lng}`;
                 })()}
                 allowFullScreen
