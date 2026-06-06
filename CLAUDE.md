@@ -46,10 +46,11 @@ To develop with a live backend, run `npm start` (requires `ADMIN_PASSWORD` env v
 | 8082 | `ADMIN_PORT` | Staff admin dashboard | `admin-login.html` |
 | 8083 | `PORTAL_PORT` | Customer portal | `portal.html` |
 | 8084 | `GAMES_PORT` | Games | `games.html` |
+| 8085 | `TOOLS_PORT` | Tools | `tools.html` |
 
 Each server parses requests with hand-written routing (string matching on `req.url`) — there is no router library. All API routes are defined inline in `server.js`.
 
-In production, subdomains map to ports: `forum.outbackelectronics.com.au` → 8081, `admin.*` → 8082, etc. Locally all services share `localhost` with different port numbers.
+In production, subdomains map to ports: `forum.outbackelectronics.com.au` → 8081, `admin.*` → 8082, `portal.*` → 8083, `games.*` → 8084, `tools.*` → 8085, etc. Locally all services share `localhost` with different port numbers.
 
 ### Frontend
 
@@ -62,6 +63,7 @@ JSX source files at the repo root map to services:
 - `forum-page.jsx` + `forum-standalone.jsx` → forum
 - `portal-page.jsx` → portal
 - `games.jsx` → games
+- `tools.jsx` → tools
 
 Each entry point in `src/` (e.g. `src/main.jsx`) imports the relevant page JSX and mounts to a DOM element.
 
