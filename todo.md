@@ -110,7 +110,7 @@ The "No subscriptions yet." empty state is expected on a fresh install — no co
 ### ✅ 24. Portal Bookings tab — ~~no online booking flow~~ (FIXED)
 BookingsTab now has a full create form (serviceName, date, time, notes) that POSTs to `/api/portal/bookings`. Server-side endpoint creates and persists the booking. (portal-page.jsx:1306–1392, server.js:4691–4700)
 
-### ❌ 25. Contact page email renders dash if empty (pages-info.jsx:342)
+### ✅ 25. Contact page email renders dash if empty (pages-info.jsx:342)
 ```jsx
 {shop.email || '—'}
 ```
@@ -161,7 +161,7 @@ Completing a purchase does not decrement the stock count on the purchased produc
 | 22 | pages-admin.jsx:5325 | Memberships tiers disconnected | MEDIUM | ✅ DONE |
 | 23 | pages-admin.jsx:5350 | No subscriptions yet | MEDIUM | ✅ DONE |
 | 24 | portal-page.jsx:1306 | Bookings — no create flow | LOW | ✅ DONE |
-| 25 | pages-info.jsx:342 | Contact email renders dash if empty | LOW | ❌ OPEN |
+| 25 | pages-info.jsx:342 | Contact email renders dash if empty | LOW | ✅ DONE |
 | 26 | portal-page.jsx:84 | Login requires username not email | LOW | ❌ OPEN |
 | 27 | pages-shop.jsx:169 | AI page "disabled" — INVALID, duplicate of #11 | LOW | ✅ N/A |
 | 28 | server.js:274,278 | Integrations UI non-functional | LOW | ❌ OPEN |
