@@ -203,14 +203,15 @@ async function portalApi(path, opts = {}) {
 }
 
 // ---------------- Portal auth state ----------------
-function usePortalUser() {
+function usePortalUser(portalUrl) {
   const [user, setUser] = useState(undefined);
   useEffect(() => {
-    fetch(getPortalUrl() + '/api/portal/auth/me', { credentials: 'include' })
+    if (!portalUrl) return;
+    fetch(portalUrl + '/api/portal/auth/me', { credentials: 'include' })
       .then(r => r.ok ? r.json() : null)
       .then(d => setUser(d?.user || null))
       .catch(() => setUser(null));
-  }, []);
+  }, [portalUrl]);
   return user;
 }
 
@@ -1400,7 +1401,7 @@ function App() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const { shop, flags, portalUrl, forumUrl } = useShopInfo();
-  const portalUser = usePortalUser();
+  const portalUser = usePortalUser(portalUrl);
   const resolvedFlags = useMemo(() => Object.assign({}, SITE_FLAGS, flags), [flags]);
   const siteUrls = useMemo(() => ({
     portal: portalUrl || 'https://portal.outbackelectronics.com.au',
