@@ -1557,7 +1557,7 @@ function WarrantyPage({ orderId: initialOrderId }) {
     setLookupErr('');
     const em = (email || form.email || '').trim();
     if (!em) { setLookupErr('Please enter your email address first.'); return; }
-    const d = await api(`/api/warranty/order-lookup?id=${encodeURIComponent(id)}&email=${encodeURIComponent(em)}`).catch(() => null);
+    const d = await api(`/api/warranty/order-lookup?token=${encodeURIComponent(id)}&email=${encodeURIComponent(em)}`).catch(() => null);
     if (!d || !d.found) { setLookupErr('Order not found. Check the ID and email in your confirmation email and try again.'); return; }
     setLookup(d);
   }
@@ -2002,7 +2002,7 @@ function PortalApp() {
   const resetToken = new URLSearchParams(window.location.search).get('reset');
   const quoteToken = new URLSearchParams(window.location.search).get('token');
   const orderToken = new URLSearchParams(window.location.search).get('order_token');
-  const warrantyOrderId = new URLSearchParams(window.location.search).get('warranty');
+  const warrantyOrderId = new URLSearchParams(window.location.search).get('warranty'); // may be token or legacy orderId
 
   useEffect(() => {
     ensureCsrf().then(() =>

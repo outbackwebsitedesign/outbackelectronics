@@ -1425,10 +1425,10 @@ function emailOrderRefunded({ orderId, customerName, amount, method }) {
   };
 }
 
-function emailOrderShipped({ orderId, customerName, trackingNumber }) {
+function emailOrderShipped({ orderId, warrantyToken, customerName, trackingNumber }) {
   const name = customerName ? customerName.split(' ')[0] : '';
   const trackingUrl = `https://auspost.com.au/mypost/track/#/details/${encodeURIComponent(trackingNumber)}`;
-  const registerUrl = `${getPortalUrl()}/?warranty=${encodeURIComponent(orderId)}`;
+  const registerUrl = `${getPortalUrl()}/?warranty=${encodeURIComponent(warrantyToken || orderId)}`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(registerUrl)}`;
   return {
     subject: `Your order has shipped — ${orderId}`,
@@ -2464,6 +2464,7 @@ const mainServer = http.createServer(async (req, res) => {
         writeGiftCards(gcList);
         const gcOnlyOrder = {
           id: newOrderId,
+          warrantyToken: crypto.randomBytes(16).toString('hex'),
           cust: customerEmail || 'Online customer',
           email: customerEmail || '',
           items: lineItems.map(li => li.name).join(', '),
@@ -2744,6 +2745,7 @@ const mainServer = http.createServer(async (req, res) => {
         const maxNum = orders.reduce((max, o) => { const m = String(o.id || '').match(/^OE-(\d+)$/); return m ? Math.max(max, parseInt(m[1])) : max; }, 1000);
         const order = {
           id: `OE-${maxNum + 1}`,
+          warrantyToken: crypto.randomBytes(16).toString('hex'),
           stripeSessionId: session.id,
           stripePaymentIntent: session.payment_intent || '',
           cust: details.name || details.email || 'Online customer',
@@ -3036,13 +3038,14 @@ const mainServer = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && url.pathname === '/api/warranty/order-lookup') {
     if (publicRateLimited(getIp(req), 'warranty/order-lookup')) return json(res, 429, { error: 'too_many_requests' });
-    const orderId = (url.searchParams.get('id') || '').trim();
+    const tokenParam = (url.searchParams.get('token') || '').trim();
     const emailParam = (url.searchParams.get('email') || '').trim().toLowerCase();
-    if (!orderId) return json(res, 400, { error: 'missing_id' });
+    if (!tokenParam) return json(res, 400, { error: 'missing_token' });
     if (!emailParam) return json(res, 400, { error: 'missing_email' });
     const orders = readOrders();
-    const order = orders.find(o => o.id === orderId);
-    // Always compare email to prevent timing-based order ID enumeration
+    // Primary: match by warrantyToken. Fallback: legacy orders that predate tokens use orderId.
+    const order = orders.find(o => o.warrantyToken ? o.warrantyToken === tokenParam : o.id === tokenParam);
+    // Always compare email regardless of whether order was found (constant-time guard).
     const orderEmail = order ? (order.email || '').toLowerCase() : '';
     const emailMatch = orderEmail && orderEmail === emailParam;
     if (!order || !emailMatch) return json(res, 404, { found: false });
@@ -3202,7 +3205,7 @@ const forumServer = http.createServer(async (req, res) => {
     return json(res, 200, { token });
   }
 
-  if (req.method === 'POST' || req.method === 'PATCH') {
+  if (['POST', 'PATCH', 'DELETE'].includes(req.method)) {
     if (!verifyCsrf(req, res)) return;
   }
 
@@ -3472,7 +3475,7 @@ const adminServer = http.createServer(async (req, res) => {
     return json(res, 200, { shop, flags: flags || {}, siteUrl: getSiteUrl(), portalUrl: getPortalUrl(), forumUrl: getForumUrl() });
   }
 
-  if (req.method === 'POST' || req.method === 'PATCH') {
+  if (['POST', 'PATCH', 'DELETE'].includes(req.method)) {
     if (!verifyCsrf(req, res)) return;
   }
 
@@ -4177,7 +4180,7 @@ const adminServer = http.createServer(async (req, res) => {
     }
     const justShipped = body.fulfilment === 'shipped' && existing && existing.fulfilment !== 'shipped';
     if (justShipped && body.trackingNumber && body.email) {
-      const tmpl = emailOrderShipped({ orderId: body.id, customerName: body.cust, trackingNumber: body.trackingNumber });
+      const tmpl = emailOrderShipped({ orderId: body.id, warrantyToken: body.warrantyToken, customerName: body.cust, trackingNumber: body.trackingNumber });
       sendEmail({ to: body.email, ...tmpl });
     }
     return json(res, 200, { ok: true, item: body });
@@ -5079,7 +5082,7 @@ const portalServer = http.createServer(async (req, res) => {
     return json(res, 200, { token });
   }
 
-  if (req.method === 'POST' || req.method === 'PATCH') {
+  if (['POST', 'PATCH', 'DELETE'].includes(req.method)) {
     if (!verifyCsrf(req, res)) return;
   }
 
@@ -5312,6 +5315,7 @@ const portalServer = http.createServer(async (req, res) => {
     const nowStr = new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
     const order = {
       id: 'OE-' + (readOrders().reduce((mx,o) => { const m=String(o.id||'').match(/^OE-(\d+)$/); return m?Math.max(mx,parseInt(m[1])):mx; }, 1000) + 1),
+      warrantyToken: crypto.randomBytes(16).toString('hex'),
       cust: quote.name,
       email: quote.email,
       items: quote.summary || quote.quoteRef || quote.description || 'Custom build',
@@ -5389,6 +5393,7 @@ const portalServer = http.createServer(async (req, res) => {
     const now = new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
     const order = {
       id: 'OE-' + (readOrders().reduce((mx,o) => { const m=String(o.id||'').match(/^OE-(\d+)$/); return m?Math.max(mx,parseInt(m[1])):mx; }, 1000) + 1),
+      warrantyToken: crypto.randomBytes(16).toString('hex'),
       cust: quote.name,
       email: quote.email,
       items: quote.summary || quote.quoteRef || quote.description || 'Custom build',
@@ -5678,7 +5683,7 @@ const gamesServer = http.createServer(async (req, res) => {
     return json(res, 200, { token });
   }
 
-  if ((req.method === 'POST' || req.method === 'PATCH') && url.pathname.startsWith('/api/')) {
+  if (['POST', 'PATCH', 'DELETE'].includes(req.method) && url.pathname.startsWith('/api/')) {
     if (!verifyCsrf(req, res)) return;
   }
 
