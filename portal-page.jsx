@@ -1269,8 +1269,7 @@ function AddressesTab() {
                     <div key={a.id} className="card-paper" style={{padding:20, display:'flex', justifyContent:'space-between', alignItems:'flex-start'}}>
                       <div>
                         <div style={{fontWeight:600}}>{a.name}</div>
-                        <div style={{color:'var(--ink-2)', fontSize:14, marginTop:4}}>{a.line1}{a.line2 ? `, ${a.line2}` : ''}</div>
-                        <div style={{color:'var(--ink-2)', fontSize:14}}>{a.city} {a.state} {a.postcode}</div>
+                        <div style={{color:'var(--ink-2)', fontSize:14, marginTop:4}}>{a.city} {a.state} {a.postcode}</div>
                       </div>
                       <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)', borderColor:'var(--rust)'}} onClick={() => deleteAddress(a.id)}>Remove</button>
                     </div>

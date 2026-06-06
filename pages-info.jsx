@@ -315,7 +315,7 @@ function ContactPage({ go }) {
           <div className="stack" style={{gap:18}}>
             <div className="card-paper" style={{padding: 28}}>
               <span className="eyebrow">THE SHOP</span>
-              <h3 className="serif" style={{fontSize: 36, marginTop: 8}}>{[shop.streetAddress, [shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ')].filter(Boolean).join(', ')}</h3>
+              <h3 className="serif" style={{fontSize: 36, marginTop: 8}}>{[shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ')}</h3>
               <p style={{marginTop: 12, color:'var(--ink-2)', fontSize:14}}>No public access, arrive by appointment only.</p>
               <table style={{width:'100%', marginTop: 18, borderCollapse:'collapse', fontSize:14}}>
                 <tbody>
@@ -1796,7 +1796,7 @@ function AboutPage({ go }) {
           <h2 className="serif" style={{ fontSize: 28, marginBottom: 16 }}>The workshop</h2>
           <p style={{ color: 'var(--ink-2)', lineHeight: 1.8, marginBottom: 24 }}>
             Outback Electronics is an independent electronics outpost{(() => {
-              const addr = [shop?.streetAddress, [shop?.suburb, shop?.state, shop?.postcode].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+              const addr = [shop?.suburb, shop?.state, shop?.postcode].filter(Boolean).join(' ');
               return addr ? ` based at ${addr}` : '';
             })()}.
             We repair rugged laptops, satellite uplinks and off-grid power systems — and we build custom rigs for people who live and work where the signal ends.
@@ -1812,7 +1812,7 @@ function AboutPage({ go }) {
           <div className="card-paper" style={{ padding: 28, background: 'var(--dark)', color: 'var(--paper)' }}>
             <div className="eyebrow" style={{ color: 'var(--ochre)', marginBottom: 12 }}>FIND US</div>
             <div style={{ fontSize: 15, lineHeight: 1.8 }}>
-              <div>{[shop?.streetAddress, [shop?.suburb, shop?.state, shop?.postcode].filter(Boolean).join(' ')].filter(Boolean).join(', ')}</div>
+              <div>{[shop?.suburb, shop?.state, shop?.postcode].filter(Boolean).join(' ')}</div>
               {shop?.phone && <div style={{ marginTop: 6 }}>{shop.phone}</div>}
               <div style={{ marginTop: 6, color: 'var(--ink-3)', fontSize: 13 }}>No public access — appointment only.</div>
             </div>
