@@ -85,11 +85,11 @@ Footer now uses `getSiteUrl()` / `getForumUrl()` module helpers populated at sta
 ### ✅ 18. Software page — "No software listed yet." (pages-shop.jsx:604)
 Empty state replaced with a friendly message: "Still in the workshop. We're working on our first software release — internal tools we use every day that we think are worth sharing. Check back soon." Nav link stays visible.
 
-### ❌ 19. Tutorials page — "No tutorials published yet." (pages-community.jsx:135)
-Real implementation — no data. Linked from footer and nav.
+### ✅ 19. Tutorials page — "No tutorials published yet." (pages-community.jsx:135)
+Empty state replaced with: "Writing up the first ones now. We have plenty of hard-won knowledge from years of field repairs — we're just getting it out of our heads and onto the page. Check back soon."
 
-### ❌ 20. Groups page — "No active groups yet — they're coming soon." (pages-community.jsx:231)
-Real implementation — no data. Linked from nav.
+### ✅ 20. Groups page — "No active groups yet — they're coming soon." (pages-community.jsx:231)
+Empty state replaced with: "First chapter forming. We're getting the first local group off the ground. If you'd like to start one in your area, hit the button above and we'll make it happen."
 
 ### ❌ 21. Admin overview "No activity yet" (pages-admin.jsx:458)
 ```
@@ -156,8 +156,8 @@ Completing a purchase does not decrement the stock count on the purchased produc
 | 16 | pages-admin.jsx:134 | Back-to-site URL hardcoded | MEDIUM | ✅ DONE |
 | 17 | portal-page.jsx:111,311,400,406,1399,1534 | CTA links hardcoded | MEDIUM | ✅ DONE |
 | 18 | pages-shop.jsx:604 | Software — no data | MEDIUM | ✅ DONE |
-| 19 | pages-community.jsx:135 | Tutorials — no data | MEDIUM | ❌ OPEN |
-| 20 | pages-community.jsx:231 | Groups — no data | MEDIUM | ❌ OPEN |
+| 19 | pages-community.jsx:135 | Tutorials — no data | MEDIUM | ✅ DONE |
+| 20 | pages-community.jsx:231 | Groups — no data | MEDIUM | ✅ DONE |
 | 21 | pages-admin.jsx:458 | Overview "no activity yet" | MEDIUM | ❌ OPEN |
 | 22 | pages-admin.jsx:5325 | Memberships tiers disconnected | MEDIUM | ❌ OPEN |
 | 23 | pages-admin.jsx:5350 | No subscriptions yet | MEDIUM | ❌ OPEN |

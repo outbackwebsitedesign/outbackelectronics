@@ -131,8 +131,11 @@ function TutorialsPage({ go }) {
 
         {/* Empty state */}
         {!loading && list.length === 0 && (
-          <div className="card-paper" style={{padding:40, textAlign:'center'}}>
-            <div className="mono" style={{fontSize:13, color:'var(--ink-2)'}}>No tutorials published yet — check back soon.</div>
+          <div style={{padding:'48px 0'}}>
+            <p className="serif" style={{fontSize:28, marginBottom:12}}>Writing up the first ones now.</p>
+            <p style={{color:'var(--ink-2)', fontSize:15, maxWidth:520, lineHeight:1.7}}>
+              We have plenty of hard-won knowledge from years of field repairs — we're just getting it out of our heads and onto the page. Check back soon.
+            </p>
           </div>
         )}
 
@@ -231,8 +234,11 @@ function GroupsPage({ go }) {
           </div>
         )}
         {!loading && groups.length === 0 && (
-          <div className="card-paper" style={{padding:40, textAlign:'center'}}>
-            <div className="mono" style={{fontSize:13, color:'var(--ink-2)'}}>No active groups yet — they're coming soon.</div>
+          <div style={{padding:'48px 0'}}>
+            <p className="serif" style={{fontSize:28, marginBottom:12}}>First chapter forming.</p>
+            <p style={{color:'var(--ink-2)', fontSize:15, maxWidth:520, lineHeight:1.7}}>
+              We're getting the first local group off the ground. If you'd like to start one in your area, hit the button above and we'll make it happen.
+            </p>
           </div>
         )}
         {!loading && groups.length > 0 && (
