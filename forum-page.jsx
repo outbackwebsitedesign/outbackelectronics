@@ -1038,13 +1038,16 @@ function ForumSidebar({ cats, threads, conduct, route, sidebarOpen, onCloseSideb
     return acc;
   }, {});
 
+  const totalPosts = threads.reduce((acc, t) => acc + (Number(t.replies) || 0) + 1, 0);
+  const totalViews = threads.reduce((acc, t) => acc + (Number(t.views) || 0), 0);
+
   return (
     <>
       <div className={`sidebar-overlay${sidebarOpen ? ' open' : ''}`} onClick={onCloseSidebar} />
       <nav id="sidebar">
         <div className="sidebar-section">
-          <div className="sidebar-section-title">Navigation</div>
-          {navLink('/categories', <IconHome />, 'Categories', isActive('categories'), null)}
+          <div className="sidebar-section-title">Menu</div>
+          {navLink('/categories', <IconHome />, 'Home', isActive('categories'), null)}
           {navLink('/latest', <IconLatest />, 'Latest', isActive('latest', null, null), threads.length)}
           {navLink('/latest?sort=top', <IconTop />, 'Top', isActive('latest', null, 'top'), null)}
           {navLink('/latest?sort=unanswered', <IconTag />, 'Unanswered', isActive('latest', null, 'unanswered'), null)}
@@ -1066,9 +1069,20 @@ function ForumSidebar({ cats, threads, conduct, route, sidebarOpen, onCloseSideb
             ))}
           </div>
         )}
+        <div className="sidebar-section">
+          <div className="sidebar-section-title">Forum Stats</div>
+          <div style={{padding:'8px',fontSize:13,color:'#555',lineHeight:1.8}}>
+            <div><strong>{threads.length}</strong> topics</div>
+            <div><strong>{totalPosts}</strong> posts</div>
+            <div><strong>{totalViews}</strong> views</div>
+          </div>
+        </div>
         {conduct && (
-          <div style={{fontSize:12,color:'var(--text-muted)',padding:'0 8px',lineHeight:1.6}}>
-            {conduct}
+          <div className="sidebar-section">
+            <div className="sidebar-section-title">Guidelines</div>
+            <div style={{fontSize:12,color:'var(--text-muted)',padding:'0 8px',lineHeight:1.6}}>
+              {conduct}
+            </div>
           </div>
         )}
       </nav>
@@ -1515,7 +1529,7 @@ function ThreadView({ threadId, cats, threads, onThreadUpdate, fromCategory, use
       </div>
 
       {/* Thread title */}
-      <div style={{marginBottom:20}}>
+      <div style={{marginBottom:24}}>
         {editingThread ? (
           <div style={{background:'#f9f9f9',border:'1px solid #d6d9dc',borderRadius:6,padding:16}}>
             {editError && (
@@ -1570,24 +1584,37 @@ function ThreadView({ threadId, cats, threads, onThreadUpdate, fromCategory, use
             </div>
           </div>
         ) : (
-          <h1 style={{fontSize:22,fontWeight:700,lineHeight:1.3,display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
-            {thread.pinned && <span title="Pinned" style={{fontSize:16}}>📌</span>}
-            {thread.title}
-            {thread.solved && <span className="solved-badge">✓ Solved</span>}
-            {thread.locked && (
-              <span style={{display:'inline-flex',alignItems:'center',gap:4,background:'#f5f5f5',color:'#787878',borderRadius:4,padding:'2px 8px',fontSize:13,fontWeight:600}}>
-                <IconLock />Locked
-              </span>
-            )}
-            {user && (
-              <button
-                onClick={startEditThread}
-                style={{padding:'4px 10px',borderRadius:4,border:'1px solid #d6d9dc',background:'#fff',fontSize:12,fontWeight:500,cursor:'pointer',color:'#555',marginLeft:8}}
-              >
-                Edit
-              </button>
-            )}
-          </h1>
+          <>
+            <div style={{display:'flex',alignItems:'flex-start',gap:12,marginBottom:12}}>
+              <h1 style={{fontSize:26,fontWeight:700,lineHeight:1.3,margin:0,flex:1}}>
+                {thread.pinned && <span title="Pinned" style={{fontSize:18,marginRight:8}}>📌</span>}
+                {thread.title}
+                {thread.solved && <span className="solved-badge" style={{marginLeft:8}}>✓ Solved</span>}
+                {thread.locked && (
+                  <span style={{display:'inline-flex',alignItems:'center',gap:4,background:'#f5f5f5',color:'#787878',borderRadius:4,padding:'2px 8px',fontSize:13,fontWeight:600,marginLeft:8}}>
+                    <IconLock />Locked
+                  </span>
+                )}
+              </h1>
+              {user && (
+                <button
+                  onClick={startEditThread}
+                  style={{padding:'6px 12px',borderRadius:4,border:'1px solid #d6d9dc',background:'#fff',fontSize:13,fontWeight:500,cursor:'pointer',color:'#555'}}
+                >
+                  Edit
+                </button>
+              )}
+            </div>
+            <div style={{display:'flex',alignItems:'center',gap:16,fontSize:13,color:'#787878',paddingBottom:16,borderBottom:'1px solid #ebebeb'}}>
+              <span>Started by <strong style={{color:'#222'}}>{thread.author}</strong></span>
+              <span>•</span>
+              <span>{fmtAge(Number(thread.activityHours) || 0)} ago</span>
+              <span>•</span>
+              <span>{Number(thread.views) || 0} views</span>
+              <span>•</span>
+              <span>{Number(thread.replies) || 0} replies</span>
+            </div>
+          </>
         )}
       </div>
 
@@ -1598,40 +1625,38 @@ function ThreadView({ threadId, cats, threads, onThreadUpdate, fromCategory, use
           const isLiked = !!liked[postKey];
           const isOP = idx === 0;
           return (
-            <div key={postKey} className="post-card">
-              <div className="post-avatar-col">
+            <div key={postKey} style={{display:'grid',gridTemplateColumns:'auto 1fr',borderBottom:idx < posts.length - 1 ? '1px solid #f0f0f0' : 'none',minHeight:'auto'}}>
+              <div style={{padding:'20px 16px',borderRight:'1px solid #f0f0f0',display:'flex',flexDirection:'column',alignItems:'center',gap:8,background:'#fafafa'}}>
                 <div style={{
-                  width:40, height:40, borderRadius:'50%',
+                  width:48, height:48, borderRadius:'50%',
                   background: avatarColor(post.author || 'Unknown'),
                   display:'grid', placeItems:'center',
-                  color:'#fff', fontWeight:700, fontSize:16, flexShrink:0,
+                  color:'#fff', fontWeight:700, fontSize:18, flexShrink:0,
                 }}>
                   {(post.author || '?').slice(0,1).toUpperCase()}
                 </div>
-                <div style={{fontSize:11,color:'var(--text-muted)',fontWeight:600}}>#{idx+1}</div>
+                <div style={{fontSize:12,fontWeight:600,color:'#222'}}>{post.author || 'Unknown'}</div>
+                <div style={{fontSize:11,color:'#787878'}}>#{idx+1}</div>
               </div>
-              <div className="post-body-col">
-                <div className="post-meta">
-                  <div style={{display:'flex',alignItems:'center',gap:8}}>
-                    <span className="post-author">{post.author || 'Unknown'}</span>
-                    {post.memberTier && (
-                      <span style={{fontSize:10,background:'var(--rust)',color:'var(--paper)',borderRadius:3,padding:'1px 6px',fontWeight:700,marginLeft:4}}>
-                        {post.memberTier.toUpperCase()}
-                      </span>
-                    )}
-                    {isOP && (
-                      <span style={{fontSize:11,background:'#e8f0f8',color:'#0066bb',borderRadius:3,padding:'1px 6px',fontWeight:600}}>
-                        Original Poster
-                      </span>
-                    )}
-                    {post.solution && <span className="solved-badge">✓ Solution</span>}
-                  </div>
-                  <span style={{fontSize:12,color:'var(--text-muted)'}}>
+              <div style={{padding:'20px',display:'flex',flexDirection:'column'}}>
+                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}>
+                  {post.memberTier && (
+                    <span style={{fontSize:10,background:'var(--rust)',color:'var(--paper)',borderRadius:3,padding:'1px 6px',fontWeight:700}}>
+                      {post.memberTier.toUpperCase()}
+                    </span>
+                  )}
+                  {isOP && (
+                    <span style={{fontSize:11,background:'#e8f0f8',color:'#0066bb',borderRadius:3,padding:'1px 6px',fontWeight:600}}>
+                      Original Poster
+                    </span>
+                  )}
+                  {post.solution && <span className="solved-badge">✓ Solution</span>}
+                  <span style={{fontSize:12,color:'#787878',marginLeft:'auto'}}>
                     {fmtAge(Number(post.createdHours) || 0)} ago
                   </span>
                 </div>
                 {editingPost === post.id ? (
-                  <div style={{marginTop:12}}>
+                  <div style={{marginTop:8}}>
                     {editError && (
                       <div style={{background:'#fde8e4',border:'1px solid #f5b5a8',borderRadius:4,padding:'10px 14px',marginBottom:12,fontSize:14,color:'#a02010'}}>
                         {editError}
@@ -1640,9 +1665,9 @@ function ThreadView({ threadId, cats, threads, onThreadUpdate, fromCategory, use
                     <textarea
                       value={editPostBody}
                       onChange={e => setEditPostBody(e.target.value)}
-                      rows={5}
+                      rows={6}
                       maxLength={10000}
-                      style={{width:'100%',padding:'9px 12px',border:'1px solid #d6d9dc',borderRadius:4,fontSize:14,fontFamily:'inherit',outline:'none',resize:'vertical',lineHeight:1.6,marginBottom:12,boxSizing:'border-box'}}
+                      style={{width:'100%',padding:'10px 12px',border:'1px solid #d6d9dc',borderRadius:4,fontSize:14,fontFamily:'inherit',outline:'none',resize:'vertical',lineHeight:1.6,marginBottom:12,boxSizing:'border-box'}}
                       onFocus={e => e.target.style.borderColor='#0088cc'}
                       onBlur={e => e.target.style.borderColor='#d6d9dc'}
                     />
@@ -1650,7 +1675,7 @@ function ThreadView({ threadId, cats, threads, onThreadUpdate, fromCategory, use
                       <button
                         type="button"
                         onClick={() => { setEditingPost(null); setEditPostBody(''); setEditError(''); }}
-                        style={{padding:'7px 14px',borderRadius:4,border:'1px solid #d6d9dc',background:'#fff',fontSize:13,fontWeight:500,cursor:'pointer',color:'#555'}}
+                        style={{padding:'8px 16px',borderRadius:4,border:'1px solid #d6d9dc',background:'#fff',fontSize:13,fontWeight:500,cursor:'pointer',color:'#555'}}
                       >
                         Cancel
                       </button>
@@ -1658,7 +1683,7 @@ function ThreadView({ threadId, cats, threads, onThreadUpdate, fromCategory, use
                         type="button"
                         onClick={() => handleEditPost(post.id)}
                         disabled={savingEdit}
-                        style={{padding:'7px 14px',borderRadius:4,border:'none',background:savingEdit?'#80b8e6':'#0088cc',color:'#fff',fontSize:13,fontWeight:600,cursor:savingEdit?'default':'pointer'}}
+                        style={{padding:'8px 16px',borderRadius:4,border:'none',background:savingEdit?'#80b8e6':'#0088cc',color:'#fff',fontSize:13,fontWeight:600,cursor:savingEdit?'default':'pointer'}}
                       >
                         {savingEdit ? 'Saving…' : 'Save'}
                       </button>
@@ -1666,17 +1691,17 @@ function ThreadView({ threadId, cats, threads, onThreadUpdate, fromCategory, use
                   </div>
                 ) : (
                   <>
-                    <div className="post-body">{post.body || ''}</div>
-                    <div className="post-actions">
+                    <div style={{fontSize:15,lineHeight:1.7,whiteSpace:'pre-wrap',wordBreak:'break-word',color:'#333',marginBottom:16}}>{post.body || ''}</div>
+                    <div style={{display:'flex',gap:16,alignItems:'center',paddingTop:12,borderTop:'1px solid #f0f0f0',flexWrap:'wrap'}}>
                       <button
-                        className={`action-btn${isLiked ? ' liked' : ''}`}
+                        style={{background:'none',border:'none',cursor:'pointer',fontSize:13,color:isLiked?'#e45735':'#787878',display:'flex',alignItems:'center',gap:4,fontFamily:'inherit'}}
                         onClick={() => toggleLike(post.id)}
                         title={isLiked ? 'Unlike' : 'Like'}
                       >
-                        ♥ {Number(post.likes) || 0}
+                        {isLiked ? '♥' : '♡'} {Number(post.likes) || 0}
                       </button>
                       <button
-                        className="action-btn"
+                        style={{background:'none',border:'none',cursor:'pointer',fontSize:13,color:'#787878',display:'flex',alignItems:'center',gap:4,fontFamily:'inherit'}}
                         onClick={() => handleQuote(post)}
                         title="Quote in reply"
                       >
@@ -1684,7 +1709,7 @@ function ThreadView({ threadId, cats, threads, onThreadUpdate, fromCategory, use
                       </button>
                       {user && (
                         <button
-                          className="action-btn"
+                          style={{background:'none',border:'none',cursor:'pointer',fontSize:13,color:'#787878',display:'flex',alignItems:'center',gap:4,fontFamily:'inherit'}}
                           onClick={() => startEditPost(post)}
                           title="Edit post"
                         >
@@ -1693,7 +1718,7 @@ function ThreadView({ threadId, cats, threads, onThreadUpdate, fromCategory, use
                       )}
                       {!isOP && !thread.solved && (
                         <button
-                          className="action-btn solved-btn"
+                          style={{background:'none',border:'none',cursor:'pointer',fontSize:13,color:'#3ab54a',display:'flex',alignItems:'center',gap:4,fontFamily:'inherit'}}
                           onClick={() => toggleSolution(post)}
                           title="Mark as solution"
                         >
@@ -1702,10 +1727,9 @@ function ThreadView({ threadId, cats, threads, onThreadUpdate, fromCategory, use
                       )}
                       {post.solution && thread.solved && (
                         <button
-                          className="action-btn"
+                          style={{background:'none',border:'none',cursor:'pointer',fontSize:13,color:'#3ab54a',display:'flex',alignItems:'center',gap:4,fontFamily:'inherit'}}
                           onClick={() => toggleSolution(post)}
                           title="Unmark solution"
-                          style={{color:'#3ab54a'}}
                         >
                           ✓ Unsolve
                         </button>
