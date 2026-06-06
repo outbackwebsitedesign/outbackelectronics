@@ -104,7 +104,7 @@ function AdminLogin({ onAuth }) {
       if (!r.ok) {
         if (r.status === 429) setErr(`Too many attempts. Try again in ${data.retryAfterSec || 60}s.`);
         else if (r.status === 404 || r.status === 405 || r.status === 501) setErr('Admin API unavailable. Start with `node server.js` (not `python -m http.server`).');
-        else setErr('Invalid username or password / PIN.');
+        else setErr('Invalid name or password / PIN.');
         return;
       }
       onAuth();
@@ -133,8 +133,8 @@ function AdminLogin({ onAuth }) {
         </div>
         <form onSubmit={submit} style={{background:'#181410', border:'1px solid #2a241c', padding: 28}}>
           <div className="mono" style={{fontSize:10, color:'rgba(244,237,225,0.5)', marginBottom: 14}}>// AUTH REQUIRED</div>
-          <label className="field"><span className="label" style={{color:'var(--paper)'}}>Username</span>
-            <input className="input" style={{background:'#0f0d0a', borderColor:'#2a241c', color:'var(--paper)'}} value={u} onChange={e => setU(e.target.value)} autoComplete="username" />
+          <label className="field"><span className="label" style={{color:'var(--paper)'}}>Name</span>
+            <input className="input" style={{background:'#0f0d0a', borderColor:'#2a241c', color:'var(--paper)'}} value={u} onChange={e => setU(e.target.value)} autoComplete="name" />
           </label>
           <label className="field"><span className="label" style={{color:'var(--paper)'}}>Password / PIN</span>
             <input className="input" type="password" style={{background:'#0f0d0a', borderColor:'#2a241c', color:'var(--paper)'}} value={p} onChange={e => setP(e.target.value)} autoComplete="current-password" />
