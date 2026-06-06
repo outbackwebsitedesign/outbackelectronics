@@ -455,18 +455,10 @@ function SellerTermsContent({ email, phone, address, abn }) {
         <p style={s.p}><strong>Ongoing Compliance.</strong> If a design or component changes materially after initial listing, the Seller must notify OE and provide updated documentation and, if requested, a new sample.</p>
       </div>
 
-      <div style={s.mt}><h3>5. Fulfillment Model and Stock</h3>
-        <p style={s.p}><strong>OE is a home-based mobile business and does not operate a warehouse or commercial premises.</strong> The primary and preferred fulfillment model is <strong>direct seller dispatch</strong> — the Seller ships Products directly to customers from the Seller's own location. This is the default arrangement unless OE expressly agrees otherwise in writing.</p>
-        <p style={s.p}><strong>Direct Seller Dispatch.</strong> Where the Seller dispatches Products directly to customers, the Seller bears all shipping and logistics responsibility and risk from dispatch until delivery. OE retains all shipping and handling fees collected from customers per OHD003.</p>
-        <p style={s.p}><strong>Sample and Prototype Holding.</strong> OE may agree to hold small quantities of sample or prototype stock for evaluation, photography, or demonstration purposes. Any such holding is subject to OE's available capacity and must be agreed in writing in advance. OE cannot commit to holding bulk inventory.</p>
-        <p style={s.p}>Where OE does hold Seller stock by written agreement ('Consigned Stock'), the following terms apply:</p>
-        <ul style={{paddingLeft:20, lineHeight:2, marginTop:8}}>
-          <li><strong>Title:</strong> Remains with the Seller until a customer completes a purchase.</li>
-          <li><strong>Bailment:</strong> OE holds Consigned Stock as bailee and will take reasonable care of it. OE is not liable for loss or damage caused by events beyond OE's reasonable control (e.g., theft, fire, flood, force majeure) provided OE has taken reasonable precautions.</li>
-          <li><strong>Delivery:</strong> Consigned Stock may be sent to OE by post or courier at any time without prior appointment. In-person delivery of large or heavy stock requires prior arrangement.</li>
-          <li><strong>Insurance:</strong> The Seller is responsible for insuring Consigned Stock against loss or damage while in OE's possession. OE does not insure third-party stock.</li>
-          <li><strong>Return of Stock:</strong> Unsold Consigned Stock will be returned to the Seller at the Seller's cost within 30 days of a written request, or within 30 days of termination of this Agreement.</li>
-        </ul>
+      <div style={s.mt}><h3>5. Fulfillment Model</h3>
+        <p style={s.p}><strong>OE operates as a pure digital marketplace and does not hold, handle, warehouse, or fulfill any seller inventory.</strong> All Products are dispatched directly by the Seller to the customer from the Seller's own location. The sender name and address on a parcel will be the Seller's, not Outback Electronics'.</p>
+        <p style={s.p}>The Seller bears sole responsibility for all shipping, packaging, logistics, and delivery of Products to customers. The Seller bears all risk of loss or damage in transit from dispatch until the Product is delivered. OE retains all shipping and handling fees collected from customers per OHD003; these cover platform costs and do not represent any logistics service provided by OE.</p>
+        <p style={s.p}>OE accepts no liability for delayed, damaged, or lost shipments arising from the Seller's fulfillment process. The Seller must have adequate processes in place to track orders, respond to delivery inquiries, and resolve delivery failures promptly.</p>
       </div>
 
       <div style={s.mt}><h3>6. Intellectual Property Licence</h3>
@@ -1147,15 +1139,13 @@ function ShippingContent({ email }) {
       <p style={s.p}>This Shipping & Delivery Policy is part of our Terms and Conditions and should be read alongside our main Terms at <a href="/policies/terms-and-conditions" onClick={e => { e.preventDefault(); window.history.pushState({}, '', '/policies/terms-and-conditions'); window.dispatchEvent(new PopStateEvent('popstate')); }}>outbackelectronics.com.au/policies/terms-and-conditions</a>.</p>
       <p style={s.p}>Please carefully review our Shipping & Delivery Policy when purchasing our products. This policy will apply to any order you place with us.</p>
       <p style={s.p}><strong>Australian Consumer Law:</strong> Nothing in this policy affects your rights as a consumer under the Australian Consumer Law. Our goods come with guarantees that cannot be excluded, including the guarantee that goods will be delivered within a reasonable time where no specific delivery date is agreed. For remote sales to consumers, the risk of loss of or damage to goods remains with us until the goods are delivered to you (or to a carrier nominated by you other than one we arranged).</p>
+      <p style={{...s.p, padding:'14px 18px', background:'var(--bg-elev)', border:'1px solid var(--line)', borderRadius:6}}><strong>Third-Party Seller Orders:</strong> Outback Electronics is a marketplace. Products sold by third-party sellers are dispatched directly by the seller from their own location. The sender name and address on the parcel will be the seller's — not Outback Electronics. If you are unsure who dispatched your order, check your order confirmation email. For any delivery issue with a third-party seller order, contact us at <a href={`mailto:${email}`}>{email}</a> and we will assist you in reaching the seller.</p>
 
       <div style={s.mt}><h3>What Are My Shipping & Delivery Options?</h3>
-        <p style={s.p}><strong>In-Store Pickup</strong></p>
-        <p style={s.p}>In-store pickup is available for physical products only. You may collect your order once notified by email or SMS that it is ready.</p>
-        <p style={{...s.p, marginTop:16}}>We currently offer the following shipping options:</p>
+        <p style={s.p}>We currently offer the following shipping options:</p>
         <ul style={{paddingLeft:20, lineHeight:2, marginTop:8}}>
           <li>Standard Shipping (Australia Post, typically 2–8 business days within Australia)</li>
           <li>Express Shipping (Australia Post Express, typically 1–3 business days within Australia)</li>
-          <li>In-store Pickup (available once notified by email or SMS)</li>
         </ul>
         <p style={s.p}>All times and dates given for delivery are estimates only and are given in good faith. We are not liable for delays caused by Australia Post, customs, or circumstances beyond our control, though we will keep you informed of any significant delay.</p>
         <p style={s.p}><em>For EU and UK consumers:</em> This does not affect your statutory rights. Unless specifically noted, estimated delivery times reflect the earliest available delivery, and deliveries will be made within 30 days after the day we accept your order. If we are unable to deliver within that period, you are entitled to cancel your order and receive a full refund.</p>
@@ -1301,7 +1291,8 @@ function ReturnContent({ email, phone, address }) {
     <div>
       <span className="eyebrow">LEGAL · RETURN POLICY</span>
       <h2 style={{marginTop:8}}>Return Policy</h2>
-      <p style={s.p}>Thank you for your purchase. We hope you are happy with your purchase. However, if you are not completely satisfied for any reason, you may return it to us for a full refund or exchange. Please see below for more information on your rights and our process.</p>
+      <p style={s.p}>Thank you for your purchase. We hope you are happy with it. However, if you are not completely satisfied for any reason, you may return it for a full refund or exchange. Please see below for more information on your rights and our process.</p>
+      <p style={{...s.p, padding:'14px 18px', background:'var(--bg-elev)', border:'1px solid var(--line)', borderRadius:6}}><strong>Third-Party Seller Products:</strong> Outback Electronics is a marketplace. If your product was sold by a third-party seller, your return must go back to that seller — not to Outback Electronics. Your order confirmation will identify the seller. Contact us at <a href={`mailto:${email}`}>{email}</a> if you need help identifying the seller or facilitating a return. The return address and process below applies only to products sold directly by Outback Electronics.</p>
 
       <div style={s.mt}><h3>Australian Consumer Law — Your Statutory Rights</h3>
         <p style={s.p}>Our products come with guarantees that cannot be excluded under the Australian Consumer Law. You are entitled to a replacement or refund for a major failure and compensation for any other reasonably foreseeable loss or damage. You are also entitled to have the goods repaired or replaced if the goods fail to be of acceptable quality and the failure does not amount to a major failure.</p>
