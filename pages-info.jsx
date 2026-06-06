@@ -931,7 +931,7 @@ function TermsContent({ email, phone, address }) {
         <p style={{...s.p, textTransform:'uppercase', fontSize:13}}>TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW: (A) IN NO EVENT WILL OUTBACK ELECTRONICS, ITS DIRECTORS, EMPLOYEES, AGENTS, CONTRACTORS, LICENSORS, OR SERVICE PROVIDERS BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES, INCLUDING WITHOUT LIMITATION LOSS OF PROFITS, LOSS OF REVENUE, LOSS OF DATA, LOSS OF GOODWILL, BUSINESS INTERRUPTION, OR COST OF SUBSTITUTE SERVICES, WHETHER ARISING IN CONTRACT, TORT (INCLUDING NEGLIGENCE), STATUTE, OR OTHERWISE, EVEN IF WE HAVE BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES; AND (B) OUR TOTAL AGGREGATE LIABILITY TO YOU FOR ALL CLAIMS ARISING OUT OF OR RELATING TO THE SERVICES OR THESE LEGAL TERMS, REGARDLESS OF THE FORM OF THE ACTION, SHALL NOT EXCEED THE GREATER OF: (I) THE TOTAL AMOUNT ACTUALLY PAID BY YOU TO US IN THE THREE (3) MONTHS IMMEDIATELY PRECEDING THE EVENT GIVING RISE TO THE CLAIM; OR (II) ONE HUNDRED AUSTRALIAN DOLLARS (AUD $100.00).</p>
         <p style={s.p}><strong>Exclusive Remedy.</strong> The remedies set out in these Legal Terms are your sole and exclusive remedies in respect of any matter covered by these Legal Terms, to the maximum extent permitted by law.</p>
         <p style={s.p}><strong>These limitations do not apply to liability arising under the Australian Consumer Law or any other applicable mandatory law where such limitation or exclusion would be unlawful.</strong> Where our liability for failure to comply with a consumer guarantee cannot be excluded, it is limited (to the extent permitted by law) to: in the case of goods — repair, replacement, or refund of the purchase price; in the case of services — resupplying the services or paying the cost of having them resupplied.</p>
-        <p style={s.p}><strong>Product Safety and Recalls.</strong> Nothing in these Legal Terms limits any obligation we may have under the <em>Competition and Consumer Act 2010</em> (Cth) or applicable product safety legislation in relation to product recalls, compulsory safety standards, or bans. If we become aware that a product we have supplied may be subject to a recall or poses a safety hazard, we will take steps to notify affected customers as required by law. You can check for current product recalls at the ACCC Product Safety website: <a href="https://productsafety.gov.au" target="_blank" rel="noopener noreferrer">productsafety.gov.au</a>.</p>
+        <p style={s.p}><strong>Product Safety and Recalls.</strong> Nothing in these Legal Terms limits any obligation we may have under the <em>Competition and Consumer Act 2010</em> (Cth) or applicable product safety legislation in relation to product recalls, compulsory safety standards, or bans. If we become aware that a product we have supplied may be subject to a recall or poses a safety hazard, we will take steps to notify affected customers as required by law. You can check for current product recalls at the ACCC Product Safety website: <a href="https://www.productsafety.gov.au" target="_blank" rel="noopener noreferrer">www.productsafety.gov.au</a>.</p>
       </div>
       <div style={s.mt}><h3>25. Indemnification</h3>
         <p style={s.p}>You agree, to the fullest extent permitted by law, to defend, indemnify, and hold harmless Outback Electronics and its officers, directors, employees, agents, contractors, licensors, suppliers, and successors from and against any and all claims, liabilities, damages, judgments, awards, losses, costs, expenses, and fees (including reasonable legal costs) arising out of or relating to: (a) your Contributions; (b) your access to or use of the Services; (c) your breach of any of these Legal Terms; (d) your violation of any applicable law or regulation; (e) your violation of any third-party right, including any intellectual property right, privacy right, or proprietary right; or (f) any claim by a third party that your Contributions caused damage to that third party. This indemnification obligation survives termination of these Legal Terms and your use of the Services.</p>
@@ -1051,7 +1051,7 @@ function PrivacyContent({ email, phone, address }) {
       <div style={s.mt}><h3>12. Do Other Regions Have Specific Privacy Rights?</h3>
         <p style={s.p}><strong>Australia:</strong> We collect and process your personal information in accordance with Australia's <em>Privacy Act 1988</em> (Cth) and the Australian Privacy Principles (APPs) contained in that Act. You have the right to request access to or correction of your personal information at any time by contacting us. We will respond to access and correction requests within 30 days.</p>
         <p style={s.p}><strong>Notifiable Data Breaches:</strong> We are subject to the Notifiable Data Breaches (NDB) scheme under Part IIIC of the <em>Privacy Act 1988</em>. If we experience a data breach that is likely to result in serious harm to you, we will notify the Office of the Australian Information Commissioner (OAIC) and affected individuals as required by law.</p>
-        <p style={s.p}>If you believe we are handling your personal information in breach of the Australian Privacy Principles, you may submit a complaint first to us (we will respond within 30 days), and thereafter to the OAIC at <a href="https://oaic.gov.au" target="_blank" rel="noopener noreferrer">oaic.gov.au</a>.</p>
+        <p style={s.p}>If you believe we are handling your personal information in breach of the Australian Privacy Principles, you may submit a complaint first to us (we will respond within 30 days), and thereafter to the OAIC at <a href="https://www.oaic.gov.au" target="_blank" rel="noopener noreferrer">www.oaic.gov.au</a>.</p>
         <p style={s.p}><strong>Cross-Border Disclosure:</strong> We may disclose your personal information to overseas recipients (for example, Stripe for payment processing, and Google Analytics for analytics). Where we do so, we take reasonable steps to ensure the recipient handles your information consistently with the APPs. By using our Services, you consent to such cross-border disclosure in accordance with APP 8.</p>
         <p style={s.p}><strong>Spam Act 2003 (Cth):</strong> All commercial electronic messages (including marketing emails and SMS messages) sent by us comply with the <em>Spam Act 2003</em> (Cth). Such messages will only be sent to recipients who have provided express or inferred consent, will clearly identify us as the sender, and will contain a functioning unsubscribe mechanism. We will honour all unsubscribe requests within 5 business days of receipt. You may unsubscribe at any time by clicking the unsubscribe link in any commercial message or by contacting us at <a href={`mailto:${email}`}>{email}</a>. Unsubscribing from marketing communications does not affect transactional communications related to orders or account activity.</p>
         <p style={s.p}><strong>Do Not Call Register:</strong> We respect the <em>Do Not Call Register Act 2006</em> (Cth). If you have registered your telephone number on the Australian Do Not Call Register, we will not make unsolicited telemarketing calls to that number.</p>
@@ -1206,7 +1206,7 @@ function CookieContent({ email }) {
         <ul style={{paddingLeft:20, lineHeight:2, marginTop:8}}>
           <li><a href="https://optout.aboutads.info/" target="_blank" rel="noopener noreferrer">Digital Advertising Alliance</a></li>
           <li><a href="https://youradchoices.ca/" target="_blank" rel="noopener noreferrer">Digital Advertising Alliance of Canada</a></li>
-          <li><a href="https://youronlinechoices.eu/" target="_blank" rel="noopener noreferrer">European Interactive Digital Advertising Alliance</a></li>
+          <li><a href="https://www.youronlinechoices.eu/" target="_blank" rel="noopener noreferrer">European Interactive Digital Advertising Alliance</a></li>
         </ul>
       </div>
 
@@ -1267,7 +1267,7 @@ function ReturnContent({ email, phone, address }) {
       <div style={s.mt}><h3>Products Posing a Safety Hazard</h3>
         <p style={{...s.p, fontWeight:600}}>If you receive a product that you believe poses an immediate safety hazard — including a product that is sparking, smoking, leaking fluid, swelling, emitting unusual heat, or emitting chemical odours — do not use it. Disconnect it from power immediately if it is safe to do so. Keep it away from flammable materials.</p>
         <p style={s.p}>Contact us immediately by phone at <a href={`tel:${(phone||'').replace(/\s/g,'')}`}>{phone}</a> or by email at <a href={`mailto:${email}`}>{email}</a>. We will arrange return or inspection as a priority, ahead of any standard returns process. If there is any immediate risk to life or property, call 000 first.</p>
-        <p style={s.p}>Your rights under the Australian Consumer Law in relation to unsafe goods are not limited by this policy. You may also report a dangerous product to the ACCC Product Safety website at <a href="https://productsafety.gov.au" target="_blank" rel="noopener noreferrer">productsafety.gov.au</a>.</p>
+        <p style={s.p}>Your rights under the Australian Consumer Law in relation to unsafe goods are not limited by this policy. You may also report a dangerous product to the ACCC Product Safety website at <a href="https://www.productsafety.gov.au" target="_blank" rel="noopener noreferrer">www.productsafety.gov.au</a>.</p>
       </div>
 
       <div style={s.mt}><h3>Change-of-Mind Returns</h3>
@@ -1312,7 +1312,7 @@ function ReturnContent({ email, phone, address }) {
       <div style={s.mt}><h3>Questions</h3>
         <p style={s.p}>If you have any questions concerning our return policy or your rights under the Australian Consumer Law, please contact us at:</p>
         <p style={s.p}>Phone: <a href={`tel:${(phone||'').replace(/\s/g,'')}`}>{phone}</a><br/>Email: <a href={`mailto:${email}`}>{email}</a></p>
-        <p style={s.p}>You can also obtain information about your consumer rights from the Australian Competition and Consumer Commission (ACCC) at <a href="https://accc.gov.au" target="_blank" rel="noopener noreferrer">accc.gov.au</a> or Queensland Office of Fair Trading at <a href="https://qld.gov.au/law/fair-trading" target="_blank" rel="noopener noreferrer">qld.gov.au/law/fair-trading</a>.</p>
+        <p style={s.p}>You can also obtain information about your consumer rights from the Australian Competition and Consumer Commission (ACCC) at <a href="https://www.accc.gov.au" target="_blank" rel="noopener noreferrer">www.accc.gov.au</a> or Queensland Office of Fair Trading at <a href="https://www.qld.gov.au/law/fair-trading" target="_blank" rel="noopener noreferrer">www.qld.gov.au/law/fair-trading</a>.</p>
       </div>
 
       <hr className="thin" style={{marginTop:40}} />
@@ -1456,7 +1456,7 @@ function AcceptableUseContent({ email, address }) {
       <div style={s.mt}><h3>Reporting a Breach of This Policy</h3>
         <p style={s.p}>If you consider that any Service, Content, or Contribution breaches this Policy, please visit <a href="https://forum.outbackelectronics.com.au" target="_blank" rel="noopener noreferrer">forum.outbackelectronics.com.au</a> or contact us using the details below. For suspected intellectual property infringement, please review our <a href="/policies/terms-and-conditions">Terms and Conditions</a>.</p>
         <p style={s.p}>We will reasonably determine whether a Service, Content, or Contribution breaches this Policy and respond within a reasonable time.</p>
-        <p style={s.p}>Australian users may also report harmful online content (including cyberbullying and image-based abuse) to the eSafety Commissioner at <a href="https://esafety.gov.au" target="_blank" rel="noopener noreferrer">esafety.gov.au</a> under the <em>Online Safety Act 2021</em> (Cth).</p>
+        <p style={s.p}>Australian users may also report harmful online content (including cyberbullying and image-based abuse) to the eSafety Commissioner at <a href="https://www.esafety.gov.au" target="_blank" rel="noopener noreferrer">www.esafety.gov.au</a> under the <em>Online Safety Act 2021</em> (Cth).</p>
       </div>
 
       <div style={s.mt}><h3>Consequences of Breaching This Policy</h3>
@@ -1492,9 +1492,9 @@ function AcceptableUseContent({ email, address }) {
 function PoliciesPage({ go, pageParams }) {
   const shop = useShop();
   const fullAddress = [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(', ');
-  const email = shop.email || 'outbackhutelectronics@gmail.com';
-  const phone = shop.phone || '0478 685 674';
-  const address = fullAddress || '38 Rosebery Street, Penshurst, New South Wales 2222';
+  const email = shop.email;
+  const phone = shop.phone;
+  const address = fullAddress;
   const slug = pageParams?.slug || 'terms-and-conditions';
   const goDoc = (s) => go('policies', { slug: s });
 
