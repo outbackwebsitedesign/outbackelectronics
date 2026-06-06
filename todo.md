@@ -131,8 +131,8 @@ Three issues fixed:
 ### ✅ 29. Stale docs describe a settings.defaults.json merge pattern that no longer exists — RESOLVED
 Both `CLAUDE.md` and `README.md` corrected to describe `settings.db` as the single source of truth with inline code fallbacks in `readSettings()`; `settings.defaults.json` is noted as non-existent and must never be created.
 
-### ❌ 30. Purchasing items does not update stock numbers
-Completing a purchase does not decrement the stock count on the purchased product(s) in `products.db`. Stock figures shown in admin and on product pages remain stale after orders are placed.
+### ✅ 30. Purchasing items does not update stock numbers (RESOLVED)
+Checkout now encodes all physical line items in `cartItems` session metadata (`productId:variantSku:qty`). The `checkout.session.completed` webhook and the gift-card-covers-full-order path both parse that metadata and decrement `stock` (or per-variant `stock`) in `products.db`, skipping `infiniteStock` products and gift cards.
 
 ---
 
@@ -169,3 +169,4 @@ Completing a purchase does not decrement the stock count on the purchased produc
 | 27 | pages-shop.jsx:169 | AI page "disabled" — INVALID, duplicate of #11 | LOW | ✅ N/A |
 | 28 | server.js:274,278 | Integrations UI non-functional | LOW | ✅ DONE |
 | 29 | README.md:45,57 / CLAUDE.md:66 | Stale docs describe settings.defaults.json pattern | LOW | ✅ DONE |
+| 30 | server.js webhook / checkout | Purchase does not decrement stock | LOW | ✅ DONE |
