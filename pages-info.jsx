@@ -366,17 +366,15 @@ function ContactPage({ go }) {
 
           <div>
             <div style={{aspectRatio: '4/5', position:'relative', overflow:'hidden', border:'2px solid var(--rust)'}}>
-              {mapCoords && (
               <iframe
                 title="Shop location"
                 width="100%"
                 height="100%"
                 style={{display:'block', border:0}}
                 loading="lazy"
-                src={`https://www.openstreetmap.org/export/embed.html?bbox=${mapCoords.lng-0.02}%2C${mapCoords.lat-0.02}%2C${mapCoords.lng+0.02}%2C${mapCoords.lat+0.02}&layer=mapnik&marker=${mapCoords.lat}%2C${mapCoords.lng}`}
+                src={`https://maps.google.com/maps?q=${encodeURIComponent([shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(', '))}&output=embed`}
                 allowFullScreen
               />
-              )}
               <div style={{position:'absolute', bottom:0, left:0, right:0, background:'var(--ink)', color:'var(--paper)', padding:'8px 12px', fontFamily:'JetBrains Mono, monospace', fontSize:10}}>
                 MAP · {[shop.streetAddress, shop.suburb, shop.state].filter(Boolean).join(', ').toUpperCase()}
               </div>
