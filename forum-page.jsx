@@ -1513,288 +1513,377 @@ function ThreadView({ threadId, cats, threads, onThreadUpdate, fromCategory, use
   }
 
   return (
-    <div id="main-content">
-      {/* Breadcrumb */}
-      <div className="breadcrumb">
-        <a href="/latest" style={{color:'var(--text-muted)'}} onClick={e => { e.preventDefault(); navigate('/latest'); }}>Forum</a>
-        <IconChevron />
-        {catObj
-          ? <a href={`/c/${catObj.id}`} style={{color:'var(--text-muted)'}} onClick={e => { e.preventDefault(); navigate(`/c/${catObj.id}`); }}>{catObj.label}</a>
-          : <span>General</span>
-        }
-        <IconChevron />
-        <span style={{color:'var(--text)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:300}}>
-          {thread.title}
-        </span>
-      </div>
+    <div style={{display:'flex',gap:20}}>
+      <div id="main-content" style={{flex:1,minWidth:0}}>
+        {/* Breadcrumb */}
+        <div className="breadcrumb">
+          <a href="/latest" style={{color:'var(--text-muted)'}} onClick={e => { e.preventDefault(); navigate('/latest'); }}>Forum</a>
+          <IconChevron />
+          {catObj
+            ? <a href={`/c/${catObj.id}`} style={{color:'var(--text-muted)'}} onClick={e => { e.preventDefault(); navigate(`/c/${catObj.id}`); }}>{catObj.label}</a>
+            : <span>General</span>
+          }
+          <IconChevron />
+          <span style={{color:'var(--text)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:300}}>
+            {thread.title}
+          </span>
+        </div>
 
-      {/* Thread title */}
-      <div style={{marginBottom:24}}>
-        {editingThread ? (
-          <div style={{background:'#f9f9f9',border:'1px solid #d6d9dc',borderRadius:6,padding:16}}>
-            {editError && (
-              <div style={{background:'#fde8e4',border:'1px solid #f5b5a8',borderRadius:4,padding:'10px 14px',marginBottom:14,fontSize:14,color:'#a02010'}}>
-                {editError}
-              </div>
-            )}
-            <div style={{marginBottom:12}}>
-              <label style={{display:'block',fontSize:12,fontWeight:700,letterSpacing:'0.05em',textTransform:'uppercase',color:'#787878',marginBottom:6}}>
-                Title
-              </label>
-              <input
-                type="text"
-                value={editThreadTitle}
-                onChange={e => setEditThreadTitle(e.target.value)}
-                maxLength={200}
-                style={{width:'100%',padding:'9px 12px',border:'1px solid #d6d9dc',borderRadius:4,fontSize:15,fontFamily:'inherit',outline:'none',boxSizing:'border-box'}}
-                onFocus={e => e.target.style.borderColor='#0088cc'}
-                onBlur={e => e.target.style.borderColor='#d6d9dc'}
-              />
-            </div>
-            <div style={{marginBottom:12}}>
-              <label style={{display:'block',fontSize:12,fontWeight:700,letterSpacing:'0.05em',textTransform:'uppercase',color:'#787878',marginBottom:6}}>
-                Body
-              </label>
-              <textarea
-                value={editThreadBody}
-                onChange={e => setEditThreadBody(e.target.value)}
-                rows={5}
-                maxLength={10000}
-                style={{width:'100%',padding:'9px 12px',border:'1px solid #d6d9dc',borderRadius:4,fontSize:14,fontFamily:'inherit',outline:'none',resize:'vertical',lineHeight:1.6,boxSizing:'border-box'}}
-                onFocus={e => e.target.style.borderColor='#0088cc'}
-                onBlur={e => e.target.style.borderColor='#d6d9dc'}
-              />
-            </div>
-            <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
-              <button
-                type="button"
-                onClick={() => { setEditingThread(false); setEditThreadTitle(''); setEditThreadBody(''); setEditError(''); }}
-                style={{padding:'9px 18px',borderRadius:4,border:'1px solid #d6d9dc',background:'#fff',fontSize:14,fontWeight:500,cursor:'pointer',color:'#555'}}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleEditThread}
-                disabled={savingEdit}
-                style={{padding:'9px 18px',borderRadius:4,border:'none',background:savingEdit?'#80b8e6':'#0088cc',color:'#fff',fontSize:14,fontWeight:600,cursor:savingEdit?'default':'pointer'}}
-              >
-                {savingEdit ? 'Saving…' : 'Save'}
-              </button>
-            </div>
-          </div>
-        ) : (
-          <>
-            <div style={{display:'flex',alignItems:'flex-start',gap:12,marginBottom:12}}>
-              <h1 style={{fontSize:26,fontWeight:700,lineHeight:1.3,margin:0,flex:1}}>
-                {thread.pinned && <span title="Pinned" style={{fontSize:18,marginRight:8}}>📌</span>}
-                {thread.title}
-                {thread.solved && <span className="solved-badge" style={{marginLeft:8}}>✓ Solved</span>}
-                {thread.locked && (
-                  <span style={{display:'inline-flex',alignItems:'center',gap:4,background:'#f5f5f5',color:'#787878',borderRadius:4,padding:'2px 8px',fontSize:13,fontWeight:600,marginLeft:8}}>
-                    <IconLock />Locked
-                  </span>
-                )}
-              </h1>
-              {user && (
-                <button
-                  onClick={startEditThread}
-                  style={{padding:'6px 12px',borderRadius:4,border:'1px solid #d6d9dc',background:'#fff',fontSize:13,fontWeight:500,cursor:'pointer',color:'#555'}}
-                >
-                  Edit
-                </button>
+        {/* Thread title */}
+        <div style={{marginBottom:24}}>
+          {editingThread ? (
+            <div style={{background:'#f9f9f9',border:'1px solid #d6d9dc',borderRadius:6,padding:16}}>
+              {editError && (
+                <div style={{background:'#fde8e4',border:'1px solid #f5b5a8',borderRadius:4,padding:'10px 14px',marginBottom:14,fontSize:14,color:'#a02010'}}>
+                  {editError}
+                </div>
               )}
-            </div>
-            <div style={{display:'flex',alignItems:'center',gap:16,fontSize:13,color:'#787878',paddingBottom:16,borderBottom:'1px solid #ebebeb'}}>
-              <span>Started by <strong style={{color:'#222'}}>{thread.author}</strong></span>
-              <span>•</span>
-              <span>{fmtAge(Number(thread.activityHours) || 0)} ago</span>
-              <span>•</span>
-              <span>{Number(thread.views) || 0} views</span>
-              <span>•</span>
-              <span>{Number(thread.replies) || 0} replies</span>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Posts */}
-      <div style={{border:'1px solid #ebebeb',borderRadius:6,overflow:'hidden',marginBottom:8}}>
-        {posts.map((post, idx) => {
-          const postKey = String(post.id || idx);
-          const isLiked = !!liked[postKey];
-          const isOP = idx === 0;
-          return (
-            <div key={postKey} style={{display:'grid',gridTemplateColumns:'auto 1fr',borderBottom:idx < posts.length - 1 ? '1px solid #f0f0f0' : 'none',minHeight:'auto'}}>
-              <div style={{padding:'20px 16px',borderRight:'1px solid #f0f0f0',display:'flex',flexDirection:'column',alignItems:'center',gap:8,background:'#fafafa'}}>
-                <div style={{
-                  width:48, height:48, borderRadius:'50%',
-                  background: avatarColor(post.author || 'Unknown'),
-                  display:'grid', placeItems:'center',
-                  color:'#fff', fontWeight:700, fontSize:18, flexShrink:0,
-                }}>
-                  {(post.author || '?').slice(0,1).toUpperCase()}
-                </div>
-                <div style={{fontSize:12,fontWeight:600,color:'#222'}}>{post.author || 'Unknown'}</div>
-                <div style={{fontSize:11,color:'#787878'}}>#{idx+1}</div>
+              <div style={{marginBottom:12}}>
+                <label style={{display:'block',fontSize:12,fontWeight:700,letterSpacing:'0.05em',textTransform:'uppercase',color:'#787878',marginBottom:6}}>
+                  Title
+                </label>
+                <input
+                  type="text"
+                  value={editThreadTitle}
+                  onChange={e => setEditThreadTitle(e.target.value)}
+                  maxLength={200}
+                  style={{width:'100%',padding:'9px 12px',border:'1px solid #d6d9dc',borderRadius:4,fontSize:15,fontFamily:'inherit',outline:'none',boxSizing:'border-box'}}
+                  onFocus={e => e.target.style.borderColor='#0088cc'}
+                  onBlur={e => e.target.style.borderColor='#d6d9dc'}
+                />
               </div>
-              <div style={{padding:'20px',display:'flex',flexDirection:'column'}}>
-                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}>
-                  {post.memberTier && (
-                    <span style={{fontSize:10,background:'var(--rust)',color:'var(--paper)',borderRadius:3,padding:'1px 6px',fontWeight:700}}>
-                      {post.memberTier.toUpperCase()}
+              <div style={{marginBottom:12}}>
+                <label style={{display:'block',fontSize:12,fontWeight:700,letterSpacing:'0.05em',textTransform:'uppercase',color:'#787878',marginBottom:6}}>
+                  Body
+                </label>
+                <textarea
+                  value={editThreadBody}
+                  onChange={e => setEditThreadBody(e.target.value)}
+                  rows={5}
+                  maxLength={10000}
+                  style={{width:'100%',padding:'9px 12px',border:'1px solid #d6d9dc',borderRadius:4,fontSize:14,fontFamily:'inherit',outline:'none',resize:'vertical',lineHeight:1.6,boxSizing:'border-box'}}
+                  onFocus={e => e.target.style.borderColor='#0088cc'}
+                  onBlur={e => e.target.style.borderColor='#d6d9dc'}
+                />
+              </div>
+              <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
+                <button
+                  type="button"
+                  onClick={() => { setEditingThread(false); setEditThreadTitle(''); setEditThreadBody(''); setEditError(''); }}
+                  style={{padding:'9px 18px',borderRadius:4,border:'1px solid #d6d9dc',background:'#fff',fontSize:14,fontWeight:500,cursor:'pointer',color:'#555'}}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleEditThread}
+                  disabled={savingEdit}
+                  style={{padding:'9px 18px',borderRadius:4,border:'none',background:savingEdit?'#80b8e6':'#0088cc',color:'#fff',fontSize:14,fontWeight:600,cursor:savingEdit?'default':'pointer'}}
+                >
+                  {savingEdit ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div style={{display:'flex',alignItems:'flex-start',gap:12,marginBottom:12}}>
+                <h1 style={{fontSize:26,fontWeight:700,lineHeight:1.3,margin:0,flex:1}}>
+                  {thread.pinned && <span title="Pinned" style={{fontSize:18,marginRight:8}}>📌</span>}
+                  {thread.title}
+                  {thread.solved && <span className="solved-badge" style={{marginLeft:8}}>✓ Solved</span>}
+                  {thread.locked && (
+                    <span style={{display:'inline-flex',alignItems:'center',gap:4,background:'#f5f5f5',color:'#787878',borderRadius:4,padding:'2px 8px',fontSize:13,fontWeight:600,marginLeft:8}}>
+                      <IconLock />Locked
                     </span>
                   )}
-                  {isOP && (
-                    <span style={{fontSize:11,background:'#e8f0f8',color:'#0066bb',borderRadius:3,padding:'1px 6px',fontWeight:600}}>
-                      Original Poster
-                    </span>
-                  )}
-                  {post.solution && <span className="solved-badge">✓ Solution</span>}
-                  <span style={{fontSize:12,color:'#787878',marginLeft:'auto'}}>
-                    {fmtAge(Number(post.createdHours) || 0)} ago
-                  </span>
-                </div>
-                {editingPost === post.id ? (
-                  <div style={{marginTop:8}}>
-                    {editError && (
-                      <div style={{background:'#fde8e4',border:'1px solid #f5b5a8',borderRadius:4,padding:'10px 14px',marginBottom:12,fontSize:14,color:'#a02010'}}>
-                        {editError}
-                      </div>
-                    )}
-                    <textarea
-                      value={editPostBody}
-                      onChange={e => setEditPostBody(e.target.value)}
-                      rows={6}
-                      maxLength={10000}
-                      style={{width:'100%',padding:'10px 12px',border:'1px solid #d6d9dc',borderRadius:4,fontSize:14,fontFamily:'inherit',outline:'none',resize:'vertical',lineHeight:1.6,marginBottom:12,boxSizing:'border-box'}}
-                      onFocus={e => e.target.style.borderColor='#0088cc'}
-                      onBlur={e => e.target.style.borderColor='#d6d9dc'}
-                    />
-                    <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
-                      <button
-                        type="button"
-                        onClick={() => { setEditingPost(null); setEditPostBody(''); setEditError(''); }}
-                        style={{padding:'8px 16px',borderRadius:4,border:'1px solid #d6d9dc',background:'#fff',fontSize:13,fontWeight:500,cursor:'pointer',color:'#555'}}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleEditPost(post.id)}
-                        disabled={savingEdit}
-                        style={{padding:'8px 16px',borderRadius:4,border:'none',background:savingEdit?'#80b8e6':'#0088cc',color:'#fff',fontSize:13,fontWeight:600,cursor:savingEdit?'default':'pointer'}}
-                      >
-                        {savingEdit ? 'Saving…' : 'Save'}
-                      </button>
-                    </div>
+                </h1>
+                {user && (
+                  <button
+                    onClick={startEditThread}
+                    style={{padding:'6px 12px',borderRadius:4,border:'1px solid #d6d9dc',background:'#fff',fontSize:13,fontWeight:500,cursor:'pointer',color:'#555'}}
+                  >
+                    Edit
+                  </button>
+                )}
+              </div>
+              <div style={{display:'flex',alignItems:'center',gap:16,fontSize:13,color:'#787878',paddingBottom:16,borderBottom:'1px solid #ebebeb'}}>
+                <span>Started by <strong style={{color:'#222'}}>{thread.author}</strong></span>
+                <span>•</span>
+                <span>{fmtAge(Number(thread.activityHours) || 0)} ago</span>
+                <span>•</span>
+                <span>{Number(thread.views) || 0} views</span>
+                <span>•</span>
+                <span>{Number(thread.replies) || 0} replies</span>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Posts */}
+        <div style={{border:'1px solid #ebebeb',borderRadius:6,overflow:'hidden',marginBottom:8}}>
+          {posts.map((post, idx) => {
+            const postKey = String(post.id || idx);
+            const isLiked = !!liked[postKey];
+            const isOP = idx === 0;
+            return (
+              <div key={postKey} style={{display:'grid',gridTemplateColumns:'auto 1fr',borderBottom:idx < posts.length - 1 ? '1px solid #f0f0f0' : 'none',minHeight:'auto'}}>
+                <div style={{padding:'20px 16px',borderRight:'1px solid #f0f0f0',display:'flex',flexDirection:'column',alignItems:'center',gap:8,background:'#fafafa'}}>
+                  <div style={{
+                    width:48, height:48, borderRadius:'50%',
+                    background: avatarColor(post.author || 'Unknown'),
+                    display:'grid', placeItems:'center',
+                    color:'#fff', fontWeight:700, fontSize:18, flexShrink:0,
+                  }}>
+                    {(post.author || '?').slice(0,1).toUpperCase()}
                   </div>
-                ) : (
-                  <>
-                    <div style={{fontSize:15,lineHeight:1.7,whiteSpace:'pre-wrap',wordBreak:'break-word',color:'#333',marginBottom:16}}>{post.body || ''}</div>
-                    <div style={{display:'flex',gap:16,alignItems:'center',paddingTop:12,borderTop:'1px solid #f0f0f0',flexWrap:'wrap'}}>
-                      <button
-                        style={{background:'none',border:'none',cursor:'pointer',fontSize:13,color:isLiked?'#e45735':'#787878',display:'flex',alignItems:'center',gap:4,fontFamily:'inherit'}}
-                        onClick={() => toggleLike(post.id)}
-                        title={isLiked ? 'Unlike' : 'Like'}
-                      >
-                        {isLiked ? '♥' : '♡'} {Number(post.likes) || 0}
-                      </button>
-                      <button
-                        style={{background:'none',border:'none',cursor:'pointer',fontSize:13,color:'#787878',display:'flex',alignItems:'center',gap:4,fontFamily:'inherit'}}
-                        onClick={() => handleQuote(post)}
-                        title="Quote in reply"
-                      >
-                        ❝ Quote
-                      </button>
-                      {user && (
+                  <div style={{fontSize:12,fontWeight:600,color:'#222'}}>{post.author || 'Unknown'}</div>
+                  <div style={{fontSize:11,color:'#787878'}}>#{idx+1}</div>
+                </div>
+                <div style={{padding:'20px',display:'flex',flexDirection:'column'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}>
+                    {post.memberTier && (
+                      <span style={{fontSize:10,background:'var(--rust)',color:'var(--paper)',borderRadius:3,padding:'1px 6px',fontWeight:700}}>
+                        {post.memberTier.toUpperCase()}
+                      </span>
+                    )}
+                    {isOP && (
+                      <span style={{fontSize:11,background:'#e8f0f8',color:'#0066bb',borderRadius:3,padding:'1px 6px',fontWeight:600}}>
+                        Original Poster
+                      </span>
+                    )}
+                    {post.solution && <span className="solved-badge">✓ Solution</span>}
+                    <span style={{fontSize:12,color:'#787878',marginLeft:'auto'}}>
+                      {fmtAge(Number(post.createdHours) || 0)} ago
+                    </span>
+                  </div>
+                  {editingPost === post.id ? (
+                    <div style={{marginTop:8}}>
+                      {editError && (
+                        <div style={{background:'#fde8e4',border:'1px solid #f5b5a8',borderRadius:4,padding:'10px 14px',marginBottom:12,fontSize:14,color:'#a02010'}}>
+                          {editError}
+                        </div>
+                      )}
+                      <textarea
+                        value={editPostBody}
+                        onChange={e => setEditPostBody(e.target.value)}
+                        rows={6}
+                        maxLength={10000}
+                        style={{width:'100%',padding:'10px 12px',border:'1px solid #d6d9dc',borderRadius:4,fontSize:14,fontFamily:'inherit',outline:'none',resize:'vertical',lineHeight:1.6,marginBottom:12,boxSizing:'border-box'}}
+                        onFocus={e => e.target.style.borderColor='#0088cc'}
+                        onBlur={e => e.target.style.borderColor='#d6d9dc'}
+                      />
+                      <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
+                        <button
+                          type="button"
+                          onClick={() => { setEditingPost(null); setEditPostBody(''); setEditError(''); }}
+                          style={{padding:'8px 16px',borderRadius:4,border:'1px solid #d6d9dc',background:'#fff',fontSize:13,fontWeight:500,cursor:'pointer',color:'#555'}}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleEditPost(post.id)}
+                          disabled={savingEdit}
+                          style={{padding:'8px 16px',borderRadius:4,border:'none',background:savingEdit?'#80b8e6':'#0088cc',color:'#fff',fontSize:13,fontWeight:600,cursor:savingEdit?'default':'pointer'}}
+                        >
+                          {savingEdit ? 'Saving…' : 'Save'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{fontSize:15,lineHeight:1.7,whiteSpace:'pre-wrap',wordBreak:'break-word',color:'#333',marginBottom:16}}>{post.body || ''}</div>
+                      <div style={{display:'flex',gap:12,alignItems:'center',paddingTop:12,borderTop:'1px solid #f0f0f0',flexWrap:'wrap'}}>
+                        <button
+                          style={{background:'none',border:'none',cursor:'pointer',fontSize:13,color:isLiked?'#e45735':'#787878',display:'flex',alignItems:'center',gap:4,fontFamily:'inherit'}}
+                          onClick={() => toggleLike(post.id)}
+                          title={isLiked ? 'Unlike' : 'Like'}
+                        >
+                          {isLiked ? '♥' : '♡'} {Number(post.likes) || 0}
+                        </button>
                         <button
                           style={{background:'none',border:'none',cursor:'pointer',fontSize:13,color:'#787878',display:'flex',alignItems:'center',gap:4,fontFamily:'inherit'}}
-                          onClick={() => startEditPost(post)}
-                          title="Edit post"
+                          onClick={() => handleQuote(post)}
+                          title="Quote in reply"
                         >
-                          ✎ Edit
+                          ❝ Quote
                         </button>
-                      )}
-                      {!isOP && !thread.solved && (
                         <button
-                          style={{background:'none',border:'none',cursor:'pointer',fontSize:13,color:'#3ab54a',display:'flex',alignItems:'center',gap:4,fontFamily:'inherit'}}
-                          onClick={() => toggleSolution(post)}
-                          title="Mark as solution"
+                          style={{background:'none',border:'none',cursor:'pointer',fontSize:13,color:'#787878',display:'flex',alignItems:'center',gap:4,fontFamily:'inherit'}}
+                          title="Copy link"
                         >
-                          ✓ Mark as Solution
+                          🔗
                         </button>
-                      )}
-                      {post.solution && thread.solved && (
                         <button
-                          style={{background:'none',border:'none',cursor:'pointer',fontSize:13,color:'#3ab54a',display:'flex',alignItems:'center',gap:4,fontFamily:'inherit'}}
-                          onClick={() => toggleSolution(post)}
-                          title="Unmark solution"
+                          style={{background:'none',border:'none',cursor:'pointer',fontSize:13,color:'#787878',display:'flex',alignItems:'center',gap:4,fontFamily:'inherit'}}
+                          title="Flag"
                         >
-                          ✓ Unsolve
+                          🏳
                         </button>
-                      )}
-                    </div>
-                  </>
-                )}
+                        {user && (
+                          <button
+                            style={{background:'none',border:'none',cursor:'pointer',fontSize:13,color:'#787878',display:'flex',alignItems:'center',gap:4,fontFamily:'inherit'}}
+                            onClick={() => startEditPost(post)}
+                            title="Edit post"
+                          >
+                            ✎ Edit
+                          </button>
+                        )}
+                        <button
+                          style={{background:'none',border:'none',cursor:'pointer',fontSize:13,color:'#787878',display:'flex',alignItems:'center',gap:4,fontFamily:'inherit'}}
+                          title="Bookmark"
+                        >
+                          🔖
+                        </button>
+                        {user && (post.author === user.username || post.author === user.displayName) && (
+                          <button
+                            style={{background:'none',border:'none',cursor:'pointer',fontSize:13,color:'#e45735',display:'flex',alignItems:'center',gap:4,fontFamily:'inherit'}}
+                            title="Delete post"
+                          >
+                            🗑
+                          </button>
+                        )}
+                        {!isOP && !thread.solved && (
+                          <button
+                            style={{background:'none',border:'none',cursor:'pointer',fontSize:13,color:'#3ab54a',display:'flex',alignItems:'center',gap:4,fontFamily:'inherit'}}
+                            onClick={() => toggleSolution(post)}
+                            title="Mark as solution"
+                          >
+                            ✓ Mark as Solution
+                          </button>
+                        )}
+                        {post.solution && thread.solved && (
+                          <button
+                            style={{background:'none',border:'none',cursor:'pointer',fontSize:13,color:'#3ab54a',display:'flex',alignItems:'center',gap:4,fontFamily:'inherit'}}
+                            onClick={() => toggleSolution(post)}
+                            title="Unmark solution"
+                          >
+                            ✓ Unsolve
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
-          );
-        })}
-        {posts.length === 0 && (
-          <div style={{padding:'40px 20px',textAlign:'center',color:'var(--text-muted)'}}>No posts yet.</div>
+            );
+          })}
+          {posts.length === 0 && (
+            <div style={{padding:'40px 20px',textAlign:'center',color:'var(--text-muted)'}}>No posts yet.</div>
+          )}
+        </div>
+
+        {/* Reply / locked / login gate */}
+        {thread.locked ? (
+          <div className="locked-notice">
+            <strong><IconLock /> This topic is locked.</strong> No new replies can be posted.
+          </div>
+        ) : user ? (
+          <div className="reply-box">
+            <h3 style={{fontSize:15,fontWeight:700,marginBottom:16}}>Reply to this topic</h3>
+            {replyError && (
+              <div style={{background:'#fde8e4',border:'1px solid #f5b5a8',borderRadius:4,padding:'10px 14px',marginBottom:14,fontSize:14,color:'#a02010'}}>
+                {replyError}
+              </div>
+            )}
+            <form onSubmit={handleReply}>
+              <textarea
+                ref={replyRef}
+                placeholder="Write your reply…"
+                value={replyBody}
+                onChange={e => setReplyBody(e.target.value)}
+                rows={5}
+                style={{width:'100%',padding:'8px 12px',border:'1px solid #d6d9dc',borderRadius:4,fontSize:14,fontFamily:'inherit',outline:'none',resize:'vertical',lineHeight:1.6,marginBottom:12,boxSizing:'border-box'}}
+                onFocus={e => e.target.style.borderColor='#0088cc'}
+                onBlur={e => e.target.style.borderColor='#d6d9dc'}
+              />
+              <div style={{display:'flex',justifyContent:'flex-end'}}>
+                <button
+                  type="submit"
+                  disabled={replying}
+                  style={{padding:'9px 22px',borderRadius:4,border:'none',background:replying?'#80b8e6':'#0088cc',color:'#fff',fontSize:14,fontWeight:600,cursor:replying?'default':'pointer'}}
+                >
+                  {replying ? 'Posting…' : 'Post Reply'}
+                </button>
+              </div>
+            </form>
+          </div>
+        ) : (
+          <div className="reply-box" style={{textAlign:'center',padding:'24px 20px'}}>
+            <p style={{marginBottom:12,color:'var(--text-muted)',fontSize:14}}>You must be logged in to reply.</p>
+            <button
+              onClick={onLoginPrompt}
+              style={{padding:'8px 20px',borderRadius:4,border:'none',background:'#0088cc',color:'#fff',fontSize:14,fontWeight:600,cursor:'pointer'}}
+            >
+              Log in to reply
+            </button>
+          </div>
         )}
+
+        <div style={{marginTop:16}}>
+          <a href={backHref} style={{fontSize:13,color:'var(--text-muted)'}}>← Back</a>
+        </div>
+
+        {/* Bottom summary bar */}
+        <div style={{marginTop:24,padding:'16px',background:'#f9f9f9',border:'1px solid #ebebeb',borderRadius:6,display:'flex',alignItems:'center',gap:16,flexWrap:'wrap'}}>
+          <div style={{display:'flex',gap:16,fontSize:13,color:'#555'}}>
+            <span><strong>{Number(thread.views) || 0}</strong> views</span>
+            <span><strong>{posts.reduce((acc, p) => acc + (Number(p.likes) || 0), 0)}</strong> likes</span>
+            <span><strong>{posts.length}</strong> posts</span>
+            <span><strong>{new Set(posts.map(p => p.author)).size}</strong> users</span>
+          </div>
+          <div style={{display:'flex',alignItems:'center',gap:8,marginLeft:'auto'}}>
+            <div style={{display:'flex',gap:-4}}>
+              {Array.from(new Set(posts.map(p => p.author))).slice(0, 5).map((author, i) => (
+                <div key={author} style={{
+                  width:24, height:24, borderRadius:'50%',
+                  background: avatarColor(author),
+                  display:'grid', placeItems:'center',
+                  color:'#fff', fontWeight:600, fontSize:11,
+                  border:'2px solid #fff', marginLeft: i > 0 ? -8 : 0,
+                }}>
+                  {author.slice(0,1).toUpperCase()}
+                </div>
+              ))}
+            </div>
+            <span style={{fontSize:12,color:'#787878'}}>
+              {Math.ceil(posts.reduce((acc, p) => acc + (p.body || '').length, 0) / 200)} min read
+            </span>
+            <button style={{padding:'6px 12px',borderRadius:4,border:'1px solid #d6d9dc',background:'#fff',fontSize:12,fontWeight:500,cursor:'pointer',color:'#555'}}>
+              Top replies
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Reply / locked / login gate */}
-      {thread.locked ? (
-        <div className="locked-notice">
-          <strong><IconLock /> This topic is locked.</strong> No new replies can be posted.
+      {/* Right sidebar with timeline */}
+      <div style={{width:200,flexShrink:0,display:'flex',flexDirection:'column',gap:16}}>
+        <div style={{position:'sticky',top:74}}>
+          <div style={{display:'flex',flexDirection:'column',gap:12,position:'relative',paddingLeft:20}}>
+            <div style={{position:'absolute',left:0,top:0,bottom:0,width:2,background:'#9b59b6'}} />
+            {posts.map((post, idx) => {
+              const date = new Date(Date.now() - (Number(post.createdHours) || 0) * 60 * 60 * 1000);
+              const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+              return (
+                <div key={post.id || idx} style={{position:'relative',paddingLeft:12}}>
+                  <div style={{position:'absolute',left:-18,top:6,width:8,height:8,background:'#9b59b6',borderRadius:'50%',border:'2px solid #fff'}} />
+                  <div style={{fontSize:12,color:'#555',fontWeight:500}}>{dateStr}</div>
+                  <div style={{fontSize:11,color:'#787878'}}>{idx + 1} / {posts.length}</div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{display:'flex',gap:8,marginTop:16}}>
+            <button style={{width:36,height:36,borderRadius:6,border:'1px solid #d6d9dc',background:'#fff',cursor:'pointer',display:'grid',placeItems:'center'}}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="15 18 9 12 15 6"/>
+              </svg>
+            </button>
+            <button style={{width:36,height:36,borderRadius:6,border:'1px solid #d6d9dc',background:'#fff',cursor:'pointer',display:'grid',placeItems:'center'}}>
+              <IconBell />
+            </button>
+          </div>
         </div>
-      ) : user ? (
-        <div className="reply-box">
-          <h3 style={{fontSize:15,fontWeight:700,marginBottom:16}}>Reply to this topic</h3>
-          {replyError && (
-            <div style={{background:'#fde8e4',border:'1px solid #f5b5a8',borderRadius:4,padding:'10px 14px',marginBottom:14,fontSize:14,color:'#a02010'}}>
-              {replyError}
-            </div>
-          )}
-          <form onSubmit={handleReply}>
-            <textarea
-              ref={replyRef}
-              placeholder="Write your reply…"
-              value={replyBody}
-              onChange={e => setReplyBody(e.target.value)}
-              rows={5}
-              style={{width:'100%',padding:'8px 12px',border:'1px solid #d6d9dc',borderRadius:4,fontSize:14,fontFamily:'inherit',outline:'none',resize:'vertical',lineHeight:1.6,marginBottom:12,boxSizing:'border-box'}}
-              onFocus={e => e.target.style.borderColor='#0088cc'}
-              onBlur={e => e.target.style.borderColor='#d6d9dc'}
-            />
-            <div style={{display:'flex',justifyContent:'flex-end'}}>
-              <button
-                type="submit"
-                disabled={replying}
-                style={{padding:'9px 22px',borderRadius:4,border:'none',background:replying?'#80b8e6':'#0088cc',color:'#fff',fontSize:14,fontWeight:600,cursor:replying?'default':'pointer'}}
-              >
-                {replying ? 'Posting…' : 'Post Reply'}
-              </button>
-            </div>
-          </form>
-        </div>
-      ) : (
-        <div className="reply-box" style={{textAlign:'center',padding:'24px 20px'}}>
-          <p style={{marginBottom:12,color:'var(--text-muted)',fontSize:14}}>You must be logged in to reply.</p>
-          <button
-            onClick={onLoginPrompt}
-            style={{padding:'8px 20px',borderRadius:4,border:'none',background:'#0088cc',color:'#fff',fontSize:14,fontWeight:600,cursor:'pointer'}}
-          >
-            Log in to reply
-          </button>
-        </div>
-      )}
-
-      <div style={{marginTop:16}}>
-        <a href={backHref} style={{fontSize:13,color:'var(--text-muted)'}}>← Back</a>
       </div>
     </div>
   );
