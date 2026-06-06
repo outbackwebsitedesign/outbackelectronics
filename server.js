@@ -3348,6 +3348,56 @@ const forumServer = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true, solved: thread.solved, solvedPostId: thread.solvedPostId });
   }
 
+  if (req.method === 'PATCH' && url.pathname.startsWith('/api/forum/posts/') && url.pathname.split('/').length === 5) {
+    const forumSession = getForumSession(req);
+    if (!forumSession) return json(res, 401, { error: 'login_required' });
+    const postId = url.pathname.split('/')[4];
+    const body = await parseForumPayload(res, req, (value) => {
+      if (!value || typeof value !== 'object') return 'Payload must be a JSON object.';
+      if (!value.body || typeof value.body !== 'string' || !value.body.trim()) return 'Field "body" is required.';
+      if (value.body.trim().length > 10000) return 'Body must be 10000 characters or fewer.';
+      return null;
+    });
+    if (!body) return;
+    const forum = readForum();
+    if (!Array.isArray(forum.posts)) forum.posts = [];
+    const post = forum.posts.find(p => p.id === postId);
+    if (!post) return json(res, 404, { error: 'Post not found.' });
+    post.body = body.body.trim();
+    writeForum(forum);
+    return json(res, 200, { ok: true, post });
+  }
+
+  if (req.method === 'PATCH' && url.pathname.startsWith('/api/forum/threads/') && url.pathname.split('/').length === 5) {
+    const forumSession = getForumSession(req);
+    if (!forumSession) return json(res, 401, { error: 'login_required' });
+    const threadId = url.pathname.split('/')[4];
+    const body = await parseForumPayload(res, req, (value) => {
+      if (!value || typeof value !== 'object') return 'Payload must be a JSON object.';
+      if (value.title !== undefined) {
+        if (typeof value.title !== 'string' || !value.title.trim()) return 'Field "title" must be a non-empty string.';
+        if (value.title.trim().length > 200) return 'Title must be 200 characters or fewer.';
+      }
+      if (value.body !== undefined) {
+        if (typeof value.body !== 'string' || !value.body.trim()) return 'Field "body" must be a non-empty string.';
+        if (value.body.trim().length > 10000) return 'Body must be 10000 characters or fewer.';
+      }
+      if (value.title === undefined && value.body === undefined) return 'At least one of "title" or "body" must be provided.';
+      return null;
+    });
+    if (!body) return;
+    const forum = readForum();
+    const thread = (forum.threads || []).find(t => t.id === threadId);
+    if (!thread) return json(res, 404, { error: 'Thread not found.' });
+    if (body.title !== undefined) thread.title = body.title.trim();
+    if (body.body !== undefined) {
+      const firstPost = forum.posts.find(p => p.threadId === threadId && p.number === 1);
+      if (firstPost) firstPost.body = body.body.trim();
+    }
+    writeForum(forum);
+    return json(res, 200, { ok: true, thread });
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/forum/auth/me') {
     const forumSession = getForumSession(req);
     if (!forumSession) return json(res, 200, { user: null });

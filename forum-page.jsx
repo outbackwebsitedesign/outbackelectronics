@@ -1299,6 +1299,14 @@ function ThreadView({ threadId, cats, threads, onThreadUpdate, fromCategory, use
     try { return JSON.parse(localStorage.getItem('oe_liked') || '{}'); } catch { return {}; }
   });
 
+  const [editingPost, setEditingPost] = useState(null);
+  const [editPostBody, setEditPostBody] = useState('');
+  const [editingThread, setEditingThread] = useState(false);
+  const [editThreadTitle, setEditThreadTitle] = useState('');
+  const [editThreadBody, setEditThreadBody] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState('');
+
   useEffect(() => {
     setLoading(true);
     setThread(null);
@@ -1397,6 +1405,69 @@ function ThreadView({ threadId, cats, threads, onThreadUpdate, fromCategory, use
     }
   }
 
+  async function handleEditPost(postId) {
+    if (!editPostBody.trim()) { setEditError('Please enter content.'); return; }
+    setSavingEdit(true); setEditError('');
+    try {
+      const res = await fetch(`/api/forum/posts/${postId}`, {
+        method: 'PATCH',
+        headers: csrfHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({ body: editPostBody.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setEditError(data.message || 'Something went wrong.'); return; }
+      setPosts(prev => prev.map(p => String(p.id) === String(postId) ? { ...p, body: editPostBody.trim() } : p));
+      setEditingPost(null);
+      setEditPostBody('');
+    } catch {
+      setEditError('Network error — please try again.');
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  async function handleEditThread() {
+    if (!editThreadTitle.trim() && !editThreadBody.trim()) { setEditError('Please enter a title or body.'); return; }
+    setSavingEdit(true); setEditError('');
+    try {
+      const body = {};
+      if (editThreadTitle.trim()) body.title = editThreadTitle.trim();
+      if (editThreadBody.trim()) body.body = editThreadBody.trim();
+      const res = await fetch(`/api/forum/threads/${threadId}`, {
+        method: 'PATCH',
+        headers: csrfHeaders(),
+        credentials: 'include',
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) { setEditError(data.message || 'Something went wrong.'); return; }
+      setThread(prev => ({ ...prev, title: data.thread.title }));
+      setPosts(prev => prev.map(p => p.number === 1 ? { ...p, body: editThreadBody.trim() } : p));
+      setEditingThread(false);
+      setEditThreadTitle('');
+      setEditThreadBody('');
+    } catch {
+      setEditError('Network error — please try again.');
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  function startEditPost(post) {
+    setEditingPost(post.id);
+    setEditPostBody(post.body || '');
+    setEditError('');
+  }
+
+  function startEditThread() {
+    setEditingThread(true);
+    setEditThreadTitle(thread.title || '');
+    const firstPost = posts.find(p => p.number === 1);
+    setEditThreadBody(firstPost ? (firstPost.body || '') : '');
+    setEditError('');
+  }
+
   const backHref = fromCategory ? `/c/${fromCategory}` : '/latest';
   const catObj = thread ? cats.find(c => c.id === thread.cat) : null;
 
@@ -1445,16 +1516,79 @@ function ThreadView({ threadId, cats, threads, onThreadUpdate, fromCategory, use
 
       {/* Thread title */}
       <div style={{marginBottom:20}}>
-        <h1 style={{fontSize:22,fontWeight:700,lineHeight:1.3,display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
-          {thread.pinned && <span title="Pinned" style={{fontSize:16}}>📌</span>}
-          {thread.title}
-          {thread.solved && <span className="solved-badge">✓ Solved</span>}
-          {thread.locked && (
-            <span style={{display:'inline-flex',alignItems:'center',gap:4,background:'#f5f5f5',color:'#787878',borderRadius:4,padding:'2px 8px',fontSize:13,fontWeight:600}}>
-              <IconLock />Locked
-            </span>
-          )}
-        </h1>
+        {editingThread ? (
+          <div style={{background:'#f9f9f9',border:'1px solid #d6d9dc',borderRadius:6,padding:16}}>
+            {editError && (
+              <div style={{background:'#fde8e4',border:'1px solid #f5b5a8',borderRadius:4,padding:'10px 14px',marginBottom:14,fontSize:14,color:'#a02010'}}>
+                {editError}
+              </div>
+            )}
+            <div style={{marginBottom:12}}>
+              <label style={{display:'block',fontSize:12,fontWeight:700,letterSpacing:'0.05em',textTransform:'uppercase',color:'#787878',marginBottom:6}}>
+                Title
+              </label>
+              <input
+                type="text"
+                value={editThreadTitle}
+                onChange={e => setEditThreadTitle(e.target.value)}
+                maxLength={200}
+                style={{width:'100%',padding:'9px 12px',border:'1px solid #d6d9dc',borderRadius:4,fontSize:15,fontFamily:'inherit',outline:'none',boxSizing:'border-box'}}
+                onFocus={e => e.target.style.borderColor='#0088cc'}
+                onBlur={e => e.target.style.borderColor='#d6d9dc'}
+              />
+            </div>
+            <div style={{marginBottom:12}}>
+              <label style={{display:'block',fontSize:12,fontWeight:700,letterSpacing:'0.05em',textTransform:'uppercase',color:'#787878',marginBottom:6}}>
+                Body
+              </label>
+              <textarea
+                value={editThreadBody}
+                onChange={e => setEditThreadBody(e.target.value)}
+                rows={5}
+                maxLength={10000}
+                style={{width:'100%',padding:'9px 12px',border:'1px solid #d6d9dc',borderRadius:4,fontSize:14,fontFamily:'inherit',outline:'none',resize:'vertical',lineHeight:1.6,boxSizing:'border-box'}}
+                onFocus={e => e.target.style.borderColor='#0088cc'}
+                onBlur={e => e.target.style.borderColor='#d6d9dc'}
+              />
+            </div>
+            <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
+              <button
+                type="button"
+                onClick={() => { setEditingThread(false); setEditThreadTitle(''); setEditThreadBody(''); setEditError(''); }}
+                style={{padding:'9px 18px',borderRadius:4,border:'1px solid #d6d9dc',background:'#fff',fontSize:14,fontWeight:500,cursor:'pointer',color:'#555'}}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleEditThread}
+                disabled={savingEdit}
+                style={{padding:'9px 18px',borderRadius:4,border:'none',background:savingEdit?'#80b8e6':'#0088cc',color:'#fff',fontSize:14,fontWeight:600,cursor:savingEdit?'default':'pointer'}}
+              >
+                {savingEdit ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <h1 style={{fontSize:22,fontWeight:700,lineHeight:1.3,display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
+            {thread.pinned && <span title="Pinned" style={{fontSize:16}}>📌</span>}
+            {thread.title}
+            {thread.solved && <span className="solved-badge">✓ Solved</span>}
+            {thread.locked && (
+              <span style={{display:'inline-flex',alignItems:'center',gap:4,background:'#f5f5f5',color:'#787878',borderRadius:4,padding:'2px 8px',fontSize:13,fontWeight:600}}>
+                <IconLock />Locked
+              </span>
+            )}
+            {user && (
+              <button
+                onClick={startEditThread}
+                style={{padding:'4px 10px',borderRadius:4,border:'1px solid #d6d9dc',background:'#fff',fontSize:12,fontWeight:500,cursor:'pointer',color:'#555',marginLeft:8}}
+              >
+                Edit
+              </button>
+            )}
+          </h1>
+        )}
       </div>
 
       {/* Posts */}
@@ -1496,42 +1630,89 @@ function ThreadView({ threadId, cats, threads, onThreadUpdate, fromCategory, use
                     {fmtAge(Number(post.createdHours) || 0)} ago
                   </span>
                 </div>
-                <div className="post-body">{post.body || ''}</div>
-                <div className="post-actions">
-                  <button
-                    className={`action-btn${isLiked ? ' liked' : ''}`}
-                    onClick={() => toggleLike(post.id)}
-                    title={isLiked ? 'Unlike' : 'Like'}
-                  >
-                    ♥ {Number(post.likes) || 0}
-                  </button>
-                  <button
-                    className="action-btn"
-                    onClick={() => handleQuote(post)}
-                    title="Quote in reply"
-                  >
-                    ❝ Quote
-                  </button>
-                  {!isOP && !thread.solved && (
-                    <button
-                      className="action-btn solved-btn"
-                      onClick={() => toggleSolution(post)}
-                      title="Mark as solution"
-                    >
-                      ✓ Mark as Solution
-                    </button>
-                  )}
-                  {post.solution && thread.solved && (
-                    <button
-                      className="action-btn"
-                      onClick={() => toggleSolution(post)}
-                      title="Unmark solution"
-                      style={{color:'#3ab54a'}}
-                    >
-                      ✓ Unsolve
-                    </button>
-                  )}
-                </div>
+                {editingPost === post.id ? (
+                  <div style={{marginTop:12}}>
+                    {editError && (
+                      <div style={{background:'#fde8e4',border:'1px solid #f5b5a8',borderRadius:4,padding:'10px 14px',marginBottom:12,fontSize:14,color:'#a02010'}}>
+                        {editError}
+                      </div>
+                    )}
+                    <textarea
+                      value={editPostBody}
+                      onChange={e => setEditPostBody(e.target.value)}
+                      rows={5}
+                      maxLength={10000}
+                      style={{width:'100%',padding:'9px 12px',border:'1px solid #d6d9dc',borderRadius:4,fontSize:14,fontFamily:'inherit',outline:'none',resize:'vertical',lineHeight:1.6,marginBottom:12,boxSizing:'border-box'}}
+                      onFocus={e => e.target.style.borderColor='#0088cc'}
+                      onBlur={e => e.target.style.borderColor='#d6d9dc'}
+                    />
+                    <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
+                      <button
+                        type="button"
+                        onClick={() => { setEditingPost(null); setEditPostBody(''); setEditError(''); }}
+                        style={{padding:'7px 14px',borderRadius:4,border:'1px solid #d6d9dc',background:'#fff',fontSize:13,fontWeight:500,cursor:'pointer',color:'#555'}}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleEditPost(post.id)}
+                        disabled={savingEdit}
+                        style={{padding:'7px 14px',borderRadius:4,border:'none',background:savingEdit?'#80b8e6':'#0088cc',color:'#fff',fontSize:13,fontWeight:600,cursor:savingEdit?'default':'pointer'}}
+                      >
+                        {savingEdit ? 'Saving…' : 'Save'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="post-body">{post.body || ''}</div>
+                    <div className="post-actions">
+                      <button
+                        className={`action-btn${isLiked ? ' liked' : ''}`}
+                        onClick={() => toggleLike(post.id)}
+                        title={isLiked ? 'Unlike' : 'Like'}
+                      >
+                        ♥ {Number(post.likes) || 0}
+                      </button>
+                      <button
+                        className="action-btn"
+                        onClick={() => handleQuote(post)}
+                        title="Quote in reply"
+                      >
+                        ❝ Quote
+                      </button>
+                      {user && (
+                        <button
+                          className="action-btn"
+                          onClick={() => startEditPost(post)}
+                          title="Edit post"
+                        >
+                          ✎ Edit
+                        </button>
+                      )}
+                      {!isOP && !thread.solved && (
+                        <button
+                          className="action-btn solved-btn"
+                          onClick={() => toggleSolution(post)}
+                          title="Mark as solution"
+                        >
+                          ✓ Mark as Solution
+                        </button>
+                      )}
+                      {post.solution && thread.solved && (
+                        <button
+                          className="action-btn"
+                          onClick={() => toggleSolution(post)}
+                          title="Unmark solution"
+                          style={{color:'#3ab54a'}}
+                        >
+                          ✓ Unsolve
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           );
