@@ -826,14 +826,14 @@ function SellersPage({ go }) {
 
 // ============================================================
 // ============================================================
-function TermsContent({ email, phone, address }) {
+function TermsContent({ email, phone, address, abn }) {
   const s = {mt: {marginTop:32}, p: {fontSize:15, lineHeight:1.75, marginTop:8}};
   return (
     <div>
       <span className="eyebrow">LEGAL · TERMS AND CONDITIONS</span>
       <h2 style={{marginTop:8}}>Terms and Conditions</h2>
       <div style={s.mt}>
-        <p style={s.p}>We are Outback Electronics ('Company', 'we', 'us', or 'our'), a company registered in Australia at {address}. Our ABN is 99 496 591 295.</p>
+        <p style={s.p}>We are Outback Electronics ('Company', 'we', 'us', or 'our'), a company registered in Australia at {address}.{abn ? ` Our ABN is ${abn}.` : ''}</p>
         <p style={s.p}>We operate the website <a href="https://outbackelectronics.com.au">outbackelectronics.com.au</a> (the 'Site'), as well as any other related products and services that refer or link to these legal terms (collectively, the 'Legal Terms').</p>
         <p style={s.p}>You can contact us by phone at <a href={`tel:${(phone||'').replace(/\s/g,'')}`}>{phone}</a>, by email at <a href={`mailto:${email}`}>{email}</a>, or by mail to {address}, Australia.</p>
         <p style={{...s.p, fontWeight:600}}>PLEASE READ THESE LEGAL TERMS CAREFULLY BEFORE USING THE SERVICES. BY ACCESSING, BROWSING, REGISTERING ON, PURCHASING FROM, SUBMITTING A FORM ON, OR OTHERWISE USING THE SERVICES IN ANY WAY, YOU ACKNOWLEDGE THAT YOU HAVE READ, UNDERSTOOD, AND UNCONDITIONALLY AGREE TO BE BOUND BY ALL OF THESE LEGAL TERMS AND ALL POLICIES INCORPORATED HEREIN BY REFERENCE. IF YOU DO NOT AGREE, YOU MUST IMMEDIATELY CEASE ALL USE OF THE SERVICES. YOUR CONTINUED USE OF THE SERVICES FOLLOWING THE POSTING OF ANY UPDATED LEGAL TERMS CONSTITUTES ACCEPTANCE OF THOSE CHANGES.</p>
@@ -1392,7 +1392,7 @@ function DisclaimerContent() {
   );
 }
 
-function AcceptableUseContent({ email, address }) {
+function AcceptableUseContent({ email, address, abn }) {
   const s = {mt: {marginTop:32}, p: {fontSize:15, lineHeight:1.75, marginTop:8}};
   const li = (text) => <li style={{marginBottom:6}}>{text}</li>;
   return (
@@ -1403,7 +1403,7 @@ function AcceptableUseContent({ email, address }) {
       <p style={s.p}>This Policy applies to any and all: (a) uses of our Services; (b) forms, materials, consent tools, comments, posts, and all other content available on the Services ('Content'); and (c) material you contribute to the Services including uploads, posts, reviews, ratings, comments, chat, etc. ('Contribution').</p>
 
       <div style={s.mt}><h3>Who We Are</h3>
-        <p style={s.p}>We are Outback Electronics ('Company', 'we', 'us', or 'our'), a company registered in Australia at {address}. Our ABN is 99 496 591 295. We operate the website <a href="https://outbackelectronics.com.au">outbackelectronics.com.au</a> (the 'Site'), as well as any other related products and services that refer or link to this Policy (collectively, the 'Services').</p>
+        <p style={s.p}>We are Outback Electronics ('Company', 'we', 'us', or 'our'), a company registered in Australia at {address}.{abn ? ` Our ABN is ${abn}.` : ''} We operate the website <a href="https://outbackelectronics.com.au">outbackelectronics.com.au</a> (the 'Site'), as well as any other related products and services that refer or link to this Policy (collectively, the 'Services').</p>
       </div>
 
       <div style={s.mt}><h3>Use of the Services</h3>
@@ -1495,6 +1495,7 @@ function PoliciesPage({ go, pageParams }) {
   const email = shop.email;
   const phone = shop.phone;
   const address = fullAddress;
+  const abn = shop.abn;
   const slug = pageParams?.slug || 'terms-and-conditions';
   const goDoc = (s) => go('policies', { slug: s });
 
@@ -1522,7 +1523,7 @@ function PoliciesPage({ go, pageParams }) {
             ))}
           </aside>
           <div className="policy-content">
-            {activeDoc === 'terms-and-conditions' ? <TermsContent email={email} phone={phone} address={address} /> : activeDoc === 'privacy-policy' ? <PrivacyContent email={email} phone={phone} address={address} /> : activeDoc === 'shipping-and-delivery' ? <ShippingContent email={email} /> : activeDoc === 'cookie-policy' ? <CookieContent email={email} /> : activeDoc === 'return-policy' ? <ReturnContent email={email} phone={phone} address={address} /> : activeDoc === 'disclaimer' ? <DisclaimerContent /> : <AcceptableUseContent email={email} address={address} />}
+            {activeDoc === 'terms-and-conditions' ? <TermsContent email={email} phone={phone} address={address} abn={abn} /> : activeDoc === 'privacy-policy' ? <PrivacyContent email={email} phone={phone} address={address} /> : activeDoc === 'shipping-and-delivery' ? <ShippingContent email={email} /> : activeDoc === 'cookie-policy' ? <CookieContent email={email} /> : activeDoc === 'return-policy' ? <ReturnContent email={email} phone={phone} address={address} /> : activeDoc === 'disclaimer' ? <DisclaimerContent /> : <AcceptableUseContent email={email} address={address} abn={abn} />}
 
           </div>
         </div>
