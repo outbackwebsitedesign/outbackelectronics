@@ -82,8 +82,8 @@ Footer now uses `getSiteUrl()` / `getForumUrl()` module helpers populated at sta
 
 ## MEDIUM — Empty states that masquerade as complete features
 
-### ❌ 18. Software page — "No software listed yet." (pages-shop.jsx:604)
-Real implementation, real API endpoint — but no data. Customers see a blank page. Add at least one listing or remove from nav until populated.
+### ✅ 18. Software page — "No software listed yet." (pages-shop.jsx:604)
+`/api/shop-info` now includes `hasSoftware: readSoftware().filter(i => i.live).length > 0` in the `flags` payload. `TopNav` reads `shop._flags.hasSoftware` and omits the Software entry from both desktop and mobile nav when no live listings exist. The page itself remains reachable via direct URL for when listings are added via admin.
 
 ### ❌ 19. Tutorials page — "No tutorials published yet." (pages-community.jsx:135)
 Real implementation — no data. Linked from footer and nav.
@@ -155,7 +155,7 @@ Completing a purchase does not decrement the stock count on the purchased produc
 | 15 | portal-page.jsx:1686 | Footer links hardcoded | MEDIUM | ✅ DONE |
 | 16 | pages-admin.jsx:134 | Back-to-site URL hardcoded | MEDIUM | ✅ DONE |
 | 17 | portal-page.jsx:111,311,400,406,1399,1534 | CTA links hardcoded | MEDIUM | ✅ DONE |
-| 18 | pages-shop.jsx:604 | Software — no data | MEDIUM | ❌ OPEN |
+| 18 | pages-shop.jsx:604 | Software — no data | MEDIUM | ✅ DONE |
 | 19 | pages-community.jsx:135 | Tutorials — no data | MEDIUM | ❌ OPEN |
 | 20 | pages-community.jsx:231 | Groups — no data | MEDIUM | ❌ OPEN |
 | 21 | pages-admin.jsx:458 | Overview "no activity yet" | MEDIUM | ❌ OPEN |

@@ -419,6 +419,8 @@ function useAnnouncement() {
 
 function TopNav({ page, go, cart, onSearchOpen, accountOpen, setAccountOpen, portalUser }) {
   const announcement = useAnnouncement();
+  const shop = useShop();
+  const navPages = PRIMARY_PAGES.filter(p => p.id !== 'software' || shop._flags?.hasSoftware !== false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const signedOut = portalUser === null;
   const [scrolled, setScrolled] = useState(false);
@@ -454,7 +456,7 @@ function TopNav({ page, go, cart, onSearchOpen, accountOpen, setAccountOpen, por
         <div className="container row">
           <Logo onClick={() => go('home')} />
           <nav className="mainlinks">
-            {PRIMARY_PAGES.map(p => (
+            {navPages.map(p => (
               <a
                 key={p.id}
                 href={isExternalLink(p.id) ? externalHref(p.id) : `/${p.id}`}
@@ -506,7 +508,7 @@ function TopNav({ page, go, cart, onSearchOpen, accountOpen, setAccountOpen, por
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
             </button>
           </div>
-          {PRIMARY_PAGES.map(p => (
+          {navPages.map(p => (
             <a key={p.id}
               href={isExternalLink(p.id) ? externalHref(p.id) : `/${p.id}`}
               className={page === p.id ? 'active' : ''}

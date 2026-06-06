@@ -2115,7 +2115,7 @@ const mainServer = http.createServer(async (req, res) => {
     const { shop, flags } = readSettings();
     return json(res, 200, {
       shop,
-      flags: flags || {},
+      flags: { ...(flags || {}), hasSoftware: readSoftware().filter(i => i.live).length > 0 },
       portalUrl: getPortalUrl(),
       forumUrl: getForumUrl(),
       gamesUrl: getGamesUrl(),
