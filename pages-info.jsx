@@ -834,7 +834,7 @@ function TermsContent({ email, phone, address }) {
       <h2 style={{marginTop:8}}>Terms and Conditions</h2>
       <div style={s.mt}>
         <p style={s.p}>We are Outback Electronics ('Company', 'we', 'us', or 'our'), a company registered in Australia at {address}. Our ABN is 99 496 591 295.</p>
-        <p style={s.p}>We operate the website <a href="https://www.outbackelectronics.com.au">https://www.outbackelectronics.com.au</a> (the 'Site'), as well as any other related products and services that refer or link to these legal terms (collectively, the 'Legal Terms').</p>
+        <p style={s.p}>We operate the website <a href="https://outbackelectronics.com.au">outbackelectronics.com.au</a> (the 'Site'), as well as any other related products and services that refer or link to these legal terms (collectively, the 'Legal Terms').</p>
         <p style={s.p}>You can contact us by phone at <a href={`tel:${(phone||'').replace(/\s/g,'')}`}>{phone}</a>, by email at <a href={`mailto:${email}`}>{email}</a>, or by mail to {address}, Australia.</p>
         <p style={{...s.p, fontWeight:600}}>PLEASE READ THESE LEGAL TERMS CAREFULLY BEFORE USING THE SERVICES. BY ACCESSING, BROWSING, REGISTERING ON, PURCHASING FROM, SUBMITTING A FORM ON, OR OTHERWISE USING THE SERVICES IN ANY WAY, YOU ACKNOWLEDGE THAT YOU HAVE READ, UNDERSTOOD, AND UNCONDITIONALLY AGREE TO BE BOUND BY ALL OF THESE LEGAL TERMS AND ALL POLICIES INCORPORATED HEREIN BY REFERENCE. IF YOU DO NOT AGREE, YOU MUST IMMEDIATELY CEASE ALL USE OF THE SERVICES. YOUR CONTINUED USE OF THE SERVICES FOLLOWING THE POSTING OF ANY UPDATED LEGAL TERMS CONSTITUTES ACCEPTANCE OF THOSE CHANGES.</p>
         <p style={s.p}>The Services are intended for users who are at least 18 years old. By using the Services you represent that you are 18 years of age or older.</p>
@@ -931,7 +931,7 @@ function TermsContent({ email, phone, address }) {
         <p style={{...s.p, textTransform:'uppercase', fontSize:13}}>TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW: (A) IN NO EVENT WILL OUTBACK ELECTRONICS, ITS DIRECTORS, EMPLOYEES, AGENTS, CONTRACTORS, LICENSORS, OR SERVICE PROVIDERS BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES, INCLUDING WITHOUT LIMITATION LOSS OF PROFITS, LOSS OF REVENUE, LOSS OF DATA, LOSS OF GOODWILL, BUSINESS INTERRUPTION, OR COST OF SUBSTITUTE SERVICES, WHETHER ARISING IN CONTRACT, TORT (INCLUDING NEGLIGENCE), STATUTE, OR OTHERWISE, EVEN IF WE HAVE BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES; AND (B) OUR TOTAL AGGREGATE LIABILITY TO YOU FOR ALL CLAIMS ARISING OUT OF OR RELATING TO THE SERVICES OR THESE LEGAL TERMS, REGARDLESS OF THE FORM OF THE ACTION, SHALL NOT EXCEED THE GREATER OF: (I) THE TOTAL AMOUNT ACTUALLY PAID BY YOU TO US IN THE THREE (3) MONTHS IMMEDIATELY PRECEDING THE EVENT GIVING RISE TO THE CLAIM; OR (II) ONE HUNDRED AUSTRALIAN DOLLARS (AUD $100.00).</p>
         <p style={s.p}><strong>Exclusive Remedy.</strong> The remedies set out in these Legal Terms are your sole and exclusive remedies in respect of any matter covered by these Legal Terms, to the maximum extent permitted by law.</p>
         <p style={s.p}><strong>These limitations do not apply to liability arising under the Australian Consumer Law or any other applicable mandatory law where such limitation or exclusion would be unlawful.</strong> Where our liability for failure to comply with a consumer guarantee cannot be excluded, it is limited (to the extent permitted by law) to: in the case of goods — repair, replacement, or refund of the purchase price; in the case of services — resupplying the services or paying the cost of having them resupplied.</p>
-        <p style={s.p}><strong>Product Safety and Recalls.</strong> Nothing in these Legal Terms limits any obligation we may have under the <em>Competition and Consumer Act 2010</em> (Cth) or applicable product safety legislation in relation to product recalls, compulsory safety standards, or bans. If we become aware that a product we have supplied may be subject to a recall or poses a safety hazard, we will take steps to notify affected customers as required by law. You can check for current product recalls at the ACCC Product Safety website: <a href="https://www.productsafety.gov.au" target="_blank" rel="noopener noreferrer">www.productsafety.gov.au</a>.</p>
+        <p style={s.p}><strong>Product Safety and Recalls.</strong> Nothing in these Legal Terms limits any obligation we may have under the <em>Competition and Consumer Act 2010</em> (Cth) or applicable product safety legislation in relation to product recalls, compulsory safety standards, or bans. If we become aware that a product we have supplied may be subject to a recall or poses a safety hazard, we will take steps to notify affected customers as required by law. You can check for current product recalls at the ACCC Product Safety website: <a href="https://productsafety.gov.au" target="_blank" rel="noopener noreferrer">productsafety.gov.au</a>.</p>
       </div>
       <div style={s.mt}><h3>25. Indemnification</h3>
         <p style={s.p}>You agree, to the fullest extent permitted by law, to defend, indemnify, and hold harmless Outback Electronics and its officers, directors, employees, agents, contractors, licensors, suppliers, and successors from and against any and all claims, liabilities, damages, judgments, awards, losses, costs, expenses, and fees (including reasonable legal costs) arising out of or relating to: (a) your Contributions; (b) your access to or use of the Services; (c) your breach of any of these Legal Terms; (d) your violation of any applicable law or regulation; (e) your violation of any third-party right, including any intellectual property right, privacy right, or proprietary right; or (f) any claim by a third party that your Contributions caused damage to that third party. This indemnification obligation survives termination of these Legal Terms and your use of the Services.</p>
@@ -967,7 +967,7 @@ function PrivacyContent({ email, phone, address }) {
     <div>
       <span className="eyebrow">LEGAL · PRIVACY POLICY</span>
       <h2 style={{marginTop:8}}>Privacy Policy</h2>
-      <p style={s.p}>This Privacy Notice for Outback Electronics ('we', 'us', or 'our') describes how and why we might access, collect, store, use, and/or share ('process') your personal information when you use our services ('Services'), including when you visit <a href="https://www.outbackelectronics.com.au">https://www.outbackelectronics.com.au</a> or engage with us in other related ways including sales, marketing, or events.</p>
+      <p style={s.p}>This Privacy Notice for Outback Electronics ('we', 'us', or 'our') describes how and why we might access, collect, store, use, and/or share ('process') your personal information when you use our services ('Services'), including when you visit <a href="https://outbackelectronics.com.au">outbackelectronics.com.au</a> or engage with us in other related ways including sales, marketing, or events.</p>
       <p style={s.p}>Questions or concerns? Contact us at <a href={`mailto:${email}`}>{email}</a>.</p>
 
       <div style={s.mt}><h3>Summary of Key Points</h3>
@@ -984,7 +984,7 @@ function PrivacyContent({ email, phone, address }) {
       <div style={s.mt}><h3>1. What Information Do We Collect?</h3>
         <p style={s.p}><strong>Personal information you disclose to us.</strong> We collect personal information that you voluntarily provide when you register, express an interest in our products or services, participate in activities, or contact us. This may include: names, phone numbers, email addresses, mailing addresses, usernames, passwords, contact preferences, and billing addresses.</p>
         <p style={s.p}><strong>Sensitive information.</strong> We do not process sensitive information.</p>
-        <p style={s.p}><strong>Payment data.</strong> Payment data necessary to process purchases is handled and stored by Stripe. See Stripe's privacy notice at <a href="https://stripe.com/au/privacy" target="_blank" rel="noopener noreferrer">https://stripe.com/au/privacy</a>.</p>
+        <p style={s.p}><strong>Payment data.</strong> Payment data necessary to process purchases is handled and stored by Stripe. See Stripe's privacy notice at <a href="https://stripe.com/au/privacy" target="_blank" rel="noopener noreferrer">stripe.com/au/privacy</a>.</p>
         <p style={s.p}><strong>Information automatically collected.</strong> We automatically collect certain information when you visit the Services, including IP address, browser and device characteristics, operating system, language preferences, referring URLs, and usage data. We also collect information through cookies and similar technologies, including log data, device data, and approximate location data.</p>
       </div>
 
@@ -1010,7 +1010,7 @@ function PrivacyContent({ email, phone, address }) {
       </div>
 
       <div style={s.mt}><h3>5. Do We Use Cookies and Other Tracking Technologies?</h3>
-        <p style={s.p}>We may use cookies and similar tracking technologies (web beacons, pixels) to gather information, maintain security, save preferences, and assist with basic site functions. We also permit third parties such as Google Analytics to use tracking technologies for analytics purposes. You can opt out of Google Analytics at <a href="https://tools.google.com/dlpage/gaoptout" target="_blank" rel="noopener noreferrer">https://tools.google.com/dlpage/gaoptout</a>.</p>
+        <p style={s.p}>We may use cookies and similar tracking technologies (web beacons, pixels) to gather information, maintain security, save preferences, and assist with basic site functions. We also permit third parties such as Google Analytics to use tracking technologies for analytics purposes. You can opt out of Google Analytics at <a href="https://tools.google.com/dlpage/gaoptout" target="_blank" rel="noopener noreferrer">tools.google.com/dlpage/gaoptout</a>.</p>
       </div>
 
       <div style={s.mt}><h3>6. How Long Do We Keep Your Information?</h3>
@@ -1036,7 +1036,7 @@ function PrivacyContent({ email, phone, address }) {
 
       <div style={s.mt}><h3>9. What Are Your Privacy Rights?</h3>
         <p style={s.p}>Depending on your location, you may have the right to: request access to and a copy of your personal information; request rectification or erasure; restrict processing; data portability; and object to processing. You can also opt out of marketing communications at any time via the unsubscribe link in our emails or by contacting us.</p>
-        <p style={s.p}>To review or change your account information, log in to your account settings at <a href="https://www.outbackelectronics.com.au/account/my-account">https://www.outbackelectronics.com.au/account/my-account</a>. Questions? Email us at <a href={`mailto:${email}`}>{email}</a>.</p>
+        <p style={s.p}>To review or change your account information, log in to your account settings at <a href="/account/my-account">outbackelectronics.com.au/account/my-account</a>. Questions? Email us at <a href={`mailto:${email}`}>{email}</a>.</p>
       </div>
 
       <div style={s.mt}><h3>10. Controls for Do-Not-Track Features</h3>
@@ -1045,13 +1045,13 @@ function PrivacyContent({ email, phone, address }) {
 
       <div style={s.mt}><h3>11. Do United States Residents Have Specific Privacy Rights?</h3>
         <p style={s.p}>Residents of certain US states may have additional rights regarding personal information. We have not collected, sold, or shared any personal information to third parties for commercial purposes in the preceding twelve months, and we do not intend to do so. US residents may have rights including: right to know, access, correct, delete, and obtain a copy of their data; right to non-discrimination; and right to opt out of targeted advertising or profiling.</p>
-        <p style={s.p}>To exercise these rights, visit <a href="https://www.outbackelectronics.com.au/account/my-account">https://www.outbackelectronics.com.au/account/my-account</a> or email <a href={`mailto:${email}`}>{email}</a>.</p>
+        <p style={s.p}>To exercise these rights, visit <a href="/account/my-account">outbackelectronics.com.au/account/my-account</a> or email <a href={`mailto:${email}`}>{email}</a>.</p>
       </div>
 
       <div style={s.mt}><h3>12. Do Other Regions Have Specific Privacy Rights?</h3>
         <p style={s.p}><strong>Australia:</strong> We collect and process your personal information in accordance with Australia's <em>Privacy Act 1988</em> (Cth) and the Australian Privacy Principles (APPs) contained in that Act. You have the right to request access to or correction of your personal information at any time by contacting us. We will respond to access and correction requests within 30 days.</p>
         <p style={s.p}><strong>Notifiable Data Breaches:</strong> We are subject to the Notifiable Data Breaches (NDB) scheme under Part IIIC of the <em>Privacy Act 1988</em>. If we experience a data breach that is likely to result in serious harm to you, we will notify the Office of the Australian Information Commissioner (OAIC) and affected individuals as required by law.</p>
-        <p style={s.p}>If you believe we are handling your personal information in breach of the Australian Privacy Principles, you may submit a complaint first to us (we will respond within 30 days), and thereafter to the OAIC at <a href="https://www.oaic.gov.au" target="_blank" rel="noopener noreferrer">www.oaic.gov.au</a>.</p>
+        <p style={s.p}>If you believe we are handling your personal information in breach of the Australian Privacy Principles, you may submit a complaint first to us (we will respond within 30 days), and thereafter to the OAIC at <a href="https://oaic.gov.au" target="_blank" rel="noopener noreferrer">oaic.gov.au</a>.</p>
         <p style={s.p}><strong>Cross-Border Disclosure:</strong> We may disclose your personal information to overseas recipients (for example, Stripe for payment processing, and Google Analytics for analytics). Where we do so, we take reasonable steps to ensure the recipient handles your information consistently with the APPs. By using our Services, you consent to such cross-border disclosure in accordance with APP 8.</p>
         <p style={s.p}><strong>Spam Act 2003 (Cth):</strong> All commercial electronic messages (including marketing emails and SMS messages) sent by us comply with the <em>Spam Act 2003</em> (Cth). Such messages will only be sent to recipients who have provided express or inferred consent, will clearly identify us as the sender, and will contain a functioning unsubscribe mechanism. We will honour all unsubscribe requests within 5 business days of receipt. You may unsubscribe at any time by clicking the unsubscribe link in any commercial message or by contacting us at <a href={`mailto:${email}`}>{email}</a>. Unsubscribing from marketing communications does not affect transactional communications related to orders or account activity.</p>
         <p style={s.p}><strong>Do Not Call Register:</strong> We respect the <em>Do Not Call Register Act 2006</em> (Cth). If you have registered your telephone number on the Australian Do Not Call Register, we will not make unsolicited telemarketing calls to that number.</p>
@@ -1062,7 +1062,7 @@ function PrivacyContent({ email, phone, address }) {
       </div>
 
       <div style={s.mt}><h3>14. How Can You Review, Update, or Delete Your Data?</h3>
-        <p style={s.p}>To request to review, update, or delete your personal information, visit: <a href="https://www.outbackelectronics.com.au/account/my-account">https://www.outbackelectronics.com.au/account/my-account</a></p>
+        <p style={s.p}>To request to review, update, or delete your personal information, visit: <a href="/account/my-account">outbackelectronics.com.au/account/my-account</a></p>
       </div>
 
       <div style={s.mt}><h3>15. How Can You Contact Us About This Notice?</h3>
@@ -1161,7 +1161,7 @@ function CookieContent({ email }) {
     <div>
       <span className="eyebrow">LEGAL · COOKIE POLICY</span>
       <h2 style={{marginTop:8}}>Cookie Policy</h2>
-      <p style={s.p}>This Cookie Policy explains how Outback Electronics ('Company', 'we', 'us', and 'our') uses cookies and similar technologies to recognise you when you visit our website at <a href="https://www.outbackelectronics.com.au">https://www.outbackelectronics.com.au</a> ('Website'). It explains what these technologies are and why we use them, as well as your rights to control our use of them.</p>
+      <p style={s.p}>This Cookie Policy explains how Outback Electronics ('Company', 'we', 'us', and 'our') uses cookies and similar technologies to recognise you when you visit our website at <a href="https://outbackelectronics.com.au">outbackelectronics.com.au</a> ('Website'). It explains what these technologies are and why we use them, as well as your rights to control our use of them.</p>
       <p style={s.p}>In some cases we may use cookies to collect personal information, or that becomes personal information if we combine it with other information.</p>
 
       <div style={s.mt}><h3>What Are Cookies?</h3>
@@ -1190,7 +1190,7 @@ function CookieContent({ email }) {
       </div>
 
       <div style={s.mt}><h3>Analytics Cookies</h3>
-        <p style={s.p}>We may use Google Analytics to understand how visitors interact with our Website. Google Analytics uses cookies to collect information such as how often users visit the site, what pages they visit, and what other sites they used prior to coming to our site. You can opt out of Google Analytics tracking at <a href="https://tools.google.com/dlpage/gaoptout" target="_blank" rel="noopener noreferrer">https://tools.google.com/dlpage/gaoptout</a>.</p>
+        <p style={s.p}>We may use Google Analytics to understand how visitors interact with our Website. Google Analytics uses cookies to collect information such as how often users visit the site, what pages they visit, and what other sites they used prior to coming to our site. You can opt out of Google Analytics tracking at <a href="https://tools.google.com/dlpage/gaoptout" target="_blank" rel="noopener noreferrer">tools.google.com/dlpage/gaoptout</a>.</p>
       </div>
 
       <div style={s.mt}><h3>How Can I Control Cookies on My Browser?</h3>
@@ -1206,7 +1206,7 @@ function CookieContent({ email }) {
         <ul style={{paddingLeft:20, lineHeight:2, marginTop:8}}>
           <li><a href="https://optout.aboutads.info/" target="_blank" rel="noopener noreferrer">Digital Advertising Alliance</a></li>
           <li><a href="https://youradchoices.ca/" target="_blank" rel="noopener noreferrer">Digital Advertising Alliance of Canada</a></li>
-          <li><a href="https://www.youronlinechoices.eu/" target="_blank" rel="noopener noreferrer">European Interactive Digital Advertising Alliance</a></li>
+          <li><a href="https://youronlinechoices.eu/" target="_blank" rel="noopener noreferrer">European Interactive Digital Advertising Alliance</a></li>
         </ul>
       </div>
 
@@ -1267,7 +1267,7 @@ function ReturnContent({ email, phone, address }) {
       <div style={s.mt}><h3>Products Posing a Safety Hazard</h3>
         <p style={{...s.p, fontWeight:600}}>If you receive a product that you believe poses an immediate safety hazard — including a product that is sparking, smoking, leaking fluid, swelling, emitting unusual heat, or emitting chemical odours — do not use it. Disconnect it from power immediately if it is safe to do so. Keep it away from flammable materials.</p>
         <p style={s.p}>Contact us immediately by phone at <a href={`tel:${(phone||'').replace(/\s/g,'')}`}>{phone}</a> or by email at <a href={`mailto:${email}`}>{email}</a>. We will arrange return or inspection as a priority, ahead of any standard returns process. If there is any immediate risk to life or property, call 000 first.</p>
-        <p style={s.p}>Your rights under the Australian Consumer Law in relation to unsafe goods are not limited by this policy. You may also report a dangerous product to the ACCC Product Safety website at <a href="https://www.productsafety.gov.au" target="_blank" rel="noopener noreferrer">www.productsafety.gov.au</a>.</p>
+        <p style={s.p}>Your rights under the Australian Consumer Law in relation to unsafe goods are not limited by this policy. You may also report a dangerous product to the ACCC Product Safety website at <a href="https://productsafety.gov.au" target="_blank" rel="noopener noreferrer">productsafety.gov.au</a>.</p>
       </div>
 
       <div style={s.mt}><h3>Change-of-Mind Returns</h3>
@@ -1312,7 +1312,7 @@ function ReturnContent({ email, phone, address }) {
       <div style={s.mt}><h3>Questions</h3>
         <p style={s.p}>If you have any questions concerning our return policy or your rights under the Australian Consumer Law, please contact us at:</p>
         <p style={s.p}>Phone: <a href={`tel:${(phone||'').replace(/\s/g,'')}`}>{phone}</a><br/>Email: <a href={`mailto:${email}`}>{email}</a></p>
-        <p style={s.p}>You can also obtain information about your consumer rights from the Australian Competition and Consumer Commission (ACCC) at <a href="https://www.accc.gov.au" target="_blank" rel="noopener noreferrer">www.accc.gov.au</a> or Queensland Office of Fair Trading at <a href="https://www.qld.gov.au/law/fair-trading" target="_blank" rel="noopener noreferrer">www.qld.gov.au/law/fair-trading</a>.</p>
+        <p style={s.p}>You can also obtain information about your consumer rights from the Australian Competition and Consumer Commission (ACCC) at <a href="https://accc.gov.au" target="_blank" rel="noopener noreferrer">accc.gov.au</a> or Queensland Office of Fair Trading at <a href="https://qld.gov.au/law/fair-trading" target="_blank" rel="noopener noreferrer">qld.gov.au/law/fair-trading</a>.</p>
       </div>
 
       <hr className="thin" style={{marginTop:40}} />
@@ -1333,7 +1333,7 @@ function DisclaimerContent() {
       <p style={s.p}>This Disclaimer forms part of our Terms and Conditions. By accessing or using this Site in any way, you accept this Disclaimer in full. If you do not accept this Disclaimer, you must immediately cease using this Site.</p>
 
       <div style={s.mt}><h3>General Website Disclaimer</h3>
-        <p style={s.p}>The information provided by Outback Electronics ('we', 'us', or 'our') on <a href="https://www.outbackelectronics.com.au">https://www.outbackelectronics.com.au</a> (the 'Site') is for general informational purposes only. All information on the Site is provided in good faith; however, we make no representation or warranty of any kind, express or implied, regarding the accuracy, adequacy, validity, reliability, availability, or completeness of any information on the Site.</p>
+        <p style={s.p}>The information provided by Outback Electronics ('we', 'us', or 'our') on <a href="https://outbackelectronics.com.au">outbackelectronics.com.au</a> (the 'Site') is for general informational purposes only. All information on the Site is provided in good faith; however, we make no representation or warranty of any kind, express or implied, regarding the accuracy, adequacy, validity, reliability, availability, or completeness of any information on the Site.</p>
         <p style={{...s.p, textTransform:'uppercase', fontSize:13}}>TO THE FULLEST EXTENT PERMITTED BY LAW, WE SHALL NOT BE LIABLE TO YOU OR ANY THIRD PARTY FOR ANY LOSS OR DAMAGE OF ANY KIND WHATSOEVER — INCLUDING BUT NOT LIMITED TO INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES — INCURRED AS A RESULT OF: (A) YOUR USE OF OR INABILITY TO USE THE SITE; (B) YOUR RELIANCE ON ANY INFORMATION OBTAINED FROM THE SITE; OR (C) ANY ERROR, OMISSION, INTERRUPTION, DELETION, DEFECT, DELAY IN OPERATION, COMPUTER VIRUS, UNAUTHORISED ACCESS, OR OTHER TECHNICAL FAILURE. YOUR USE OF THE SITE AND YOUR RELIANCE ON ANY INFORMATION ON THE SITE IS SOLELY AT YOUR OWN RISK.</p>
         <p style={s.p}><strong>Nothing in this Disclaimer excludes, restricts, or modifies any consumer guarantee, right, or remedy conferred by the Australian Consumer Law (Schedule 2 of the Competition and Consumer Act 2010 (Cth)) or any other applicable mandatory legislation that cannot lawfully be excluded or limited.</strong></p>
       </div>
@@ -1403,7 +1403,7 @@ function AcceptableUseContent({ email, address }) {
       <p style={s.p}>This Policy applies to any and all: (a) uses of our Services; (b) forms, materials, consent tools, comments, posts, and all other content available on the Services ('Content'); and (c) material you contribute to the Services including uploads, posts, reviews, ratings, comments, chat, etc. ('Contribution').</p>
 
       <div style={s.mt}><h3>Who We Are</h3>
-        <p style={s.p}>We are Outback Electronics ('Company', 'we', 'us', or 'our'), a company registered in Australia at {address}. Our ABN is 99 496 591 295. We operate the website <a href="https://www.outbackelectronics.com.au">https://www.outbackelectronics.com.au</a> (the 'Site'), as well as any other related products and services that refer or link to this Policy (collectively, the 'Services').</p>
+        <p style={s.p}>We are Outback Electronics ('Company', 'we', 'us', or 'our'), a company registered in Australia at {address}. Our ABN is 99 496 591 295. We operate the website <a href="https://outbackelectronics.com.au">outbackelectronics.com.au</a> (the 'Site'), as well as any other related products and services that refer or link to this Policy (collectively, the 'Services').</p>
       </div>
 
       <div style={s.mt}><h3>Use of the Services</h3>
@@ -1436,7 +1436,7 @@ function AcceptableUseContent({ email, address }) {
       </div>
 
       <div style={s.mt}><h3>Community / Forum Guidelines</h3>
-        <p style={s.p}>Please review our forum rules at <a href="https://www.outbackelectronics.com.au/forum/general-discussion/forum-rules-1" target="_blank" rel="noopener noreferrer">https://www.outbackelectronics.com.au/forum/general-discussion/forum-rules-1</a>.</p>
+        <p style={s.p}>Please review our forum rules at <a href="https://forum.outbackelectronics.com.au/general-discussion/forum-rules-1" target="_blank" rel="noopener noreferrer">forum.outbackelectronics.com.au/general-discussion/forum-rules-1</a>.</p>
       </div>
 
       <div style={s.mt}><h3>Contributions</h3>
@@ -1454,9 +1454,9 @@ function AcceptableUseContent({ email, address }) {
       </div>
 
       <div style={s.mt}><h3>Reporting a Breach of This Policy</h3>
-        <p style={s.p}>If you consider that any Service, Content, or Contribution breaches this Policy, please visit <a href="https://www.outbackelectronics.com.au/forum" target="_blank" rel="noopener noreferrer">https://www.outbackelectronics.com.au/forum</a> or contact us using the details below. For suspected intellectual property infringement, please review our <a href="/policies/terms-and-conditions">Terms and Conditions</a>.</p>
+        <p style={s.p}>If you consider that any Service, Content, or Contribution breaches this Policy, please visit <a href="https://forum.outbackelectronics.com.au" target="_blank" rel="noopener noreferrer">forum.outbackelectronics.com.au</a> or contact us using the details below. For suspected intellectual property infringement, please review our <a href="/policies/terms-and-conditions">Terms and Conditions</a>.</p>
         <p style={s.p}>We will reasonably determine whether a Service, Content, or Contribution breaches this Policy and respond within a reasonable time.</p>
-        <p style={s.p}>Australian users may also report harmful online content (including cyberbullying and image-based abuse) to the eSafety Commissioner at <a href="https://www.esafety.gov.au" target="_blank" rel="noopener noreferrer">www.esafety.gov.au</a> under the <em>Online Safety Act 2021</em> (Cth).</p>
+        <p style={s.p}>Australian users may also report harmful online content (including cyberbullying and image-based abuse) to the eSafety Commissioner at <a href="https://esafety.gov.au" target="_blank" rel="noopener noreferrer">esafety.gov.au</a> under the <em>Online Safety Act 2021</em> (Cth).</p>
       </div>
 
       <div style={s.mt}><h3>Consequences of Breaching This Policy</h3>
@@ -1465,7 +1465,7 @@ function AcceptableUseContent({ email, address }) {
       </div>
 
       <div style={s.mt}><h3>Complaints and Removal of Legitimate Content</h3>
-        <p style={s.p}>If you consider that Content or a Contribution has been mistakenly removed or blocked, please contact us using the details below and we will promptly review our decision. The Content or Contribution may stay 'down' whilst we conduct the review. For more information, visit <a href="https://www.outbackelectronics.com.au/forum/general-discussion/forum-rules-1" target="_blank" rel="noopener noreferrer">https://www.outbackelectronics.com.au/forum/general-discussion/forum-rules-1</a>.</p>
+        <p style={s.p}>If you consider that Content or a Contribution has been mistakenly removed or blocked, please contact us using the details below and we will promptly review our decision. The Content or Contribution may stay 'down' whilst we conduct the review. For more information, visit <a href="https://forum.outbackelectronics.com.au/general-discussion/forum-rules-1" target="_blank" rel="noopener noreferrer">forum.outbackelectronics.com.au/general-discussion/forum-rules-1</a>.</p>
       </div>
 
       <div style={s.mt}><h3>Disclaimer</h3>
