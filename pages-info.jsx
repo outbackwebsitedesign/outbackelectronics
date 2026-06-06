@@ -276,7 +276,7 @@ function ContactPage({ go }) {
   const [mapCoords, setMapCoords] = useState(null);
 
   React.useEffect(() => {
-    const fullAddress = [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(', ');
+    const fullAddress = [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(', ') || shop.address || '';
     if (!fullAddress) return;
     fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullAddress)}&limit=1`, {
       headers: { 'Accept-Language': 'en' },
@@ -284,7 +284,7 @@ function ContactPage({ go }) {
       .then(r => r.json())
       .then(data => { if (data[0]) setMapCoords({ lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) }); })
       .catch(() => {});
-  }, [shop.streetAddress, shop.suburb, shop.state, shop.postcode]);
+  }, [shop.streetAddress, shop.suburb, shop.state, shop.postcode, shop.address]);
 
   const sendQuickMsg = async (e) => {
     e.preventDefault();
@@ -366,19 +366,17 @@ function ContactPage({ go }) {
 
           <div>
             <div style={{aspectRatio: '4/5', position:'relative', overflow:'hidden', border:'2px solid var(--rust)'}}>
+              {mapCoords && (
               <iframe
                 title="Shop location"
                 width="100%"
                 height="100%"
                 style={{display:'block', border:0}}
                 loading="lazy"
-                src={(() => {
-                  const lat = mapCoords ? mapCoords.lat : parseFloat(shop.mapLat) || -24.4235;
-                  const lng = mapCoords ? mapCoords.lng : parseFloat(shop.mapLng) || 145.4693;
-                  return `https://www.openstreetmap.org/export/embed.html?bbox=${lng-0.02}%2C${lat-0.02}%2C${lng+0.02}%2C${lat+0.02}&layer=mapnik&marker=${lat}%2C${lng}`;
-                })()}
+                src={`https://www.openstreetmap.org/export/embed.html?bbox=${mapCoords.lng-0.02}%2C${mapCoords.lat-0.02}%2C${mapCoords.lng+0.02}%2C${mapCoords.lat+0.02}&layer=mapnik&marker=${mapCoords.lat}%2C${mapCoords.lng}`}
                 allowFullScreen
               />
+              )}
               <div style={{position:'absolute', bottom:0, left:0, right:0, background:'var(--ink)', color:'var(--paper)', padding:'8px 12px', fontFamily:'JetBrains Mono, monospace', fontSize:10}}>
                 MAP · {[shop.streetAddress, shop.suburb, shop.state].filter(Boolean).join(', ').toUpperCase()}
               </div>
