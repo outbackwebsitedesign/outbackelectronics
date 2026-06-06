@@ -126,7 +126,7 @@ The AI page is not disabled. See #11: `aiEnabled` only toggles the "NEW · 2026"
 `readSettings()` always returns `integrations: []` as default (server.js:274, 278). Stripe, SMTP, AusPost must all be configured via environment variables — there is no working UI path for a non-technical operator to set these up.
 
 ### ✅ 29. Stale docs describe a settings.defaults.json merge pattern that no longer exists — RESOLVED
-`CLAUDE.md` corrected to describe `settings.db` as the single source of truth with inline code fallbacks; `settings.defaults.json` is noted as non-existent. `README.md` still references the old pattern and should be updated separately.
+Both `CLAUDE.md` and `README.md` corrected to describe `settings.db` as the single source of truth with inline code fallbacks in `readSettings()`; `settings.defaults.json` is noted as non-existent and must never be created.
 
 ### ❌ 30. Purchasing items does not update stock numbers
 Completing a purchase does not decrement the stock count on the purchased product(s) in `products.db`. Stock figures shown in admin and on product pages remain stale after orders are placed.
@@ -165,4 +165,4 @@ Completing a purchase does not decrement the stock count on the purchased produc
 | 26 | portal-page.jsx:84 | Login requires username not email | LOW | ❌ OPEN |
 | 27 | pages-shop.jsx:169 | AI page "disabled" — INVALID, duplicate of #11 | LOW | ✅ N/A |
 | 28 | server.js:274,278 | Integrations UI non-functional | LOW | ❌ OPEN |
-| 29 | README.md:45,57 / CLAUDE.md:66 | Stale docs describe settings.defaults.json pattern | LOW | ⚠️ PARTIAL (CLAUDE.md fixed; README.md still stale) |
+| 29 | README.md:45,57 / CLAUDE.md:66 | Stale docs describe settings.defaults.json pattern | LOW | ✅ DONE |
