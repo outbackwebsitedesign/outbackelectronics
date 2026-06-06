@@ -199,7 +199,7 @@ function QuotePage({ go, pageParams }) {
             <span className="eyebrow">04 · YOUR DETAILS</span>
             <div className="grid-2" style={{gap:16, marginTop: 12}}>
               <label className="field"><span className="label">Name</span><input required className="input" value={form.name} onChange={e => update('name', e.target.value)} placeholder="Your name" /></label>
-              <label className="field"><span className="label">Email or sat number</span><input required className="input" value={form.email} onChange={e => update('email', e.target.value)} placeholder="your@email.com" /></label>
+              <label className="field"><span className="label">Email</span><input required className="input" value={form.email} onChange={e => update('email', e.target.value)} placeholder="your@email.com" /></label>
             </div>
             <label className="field"><span className="label">Location / nearest town</span><input className="input" value={form.loc} onChange={e => update('loc', e.target.value)} placeholder="Newman, WA" /></label>
             {locGeocoding && <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:4, marginBottom:4}}>Checking distance…</div>}
