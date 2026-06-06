@@ -188,9 +188,9 @@ function HomePage({ go, addToCart, portalUser }) {
                   )}
                   {imgs.length === 3 && (
                     <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gridTemplateRows:'1fr 1fr', height:'100%', gap:2}}>
-                      <img src={imgs[0]} alt="" loading="lazy" style={{width:'100%', height:'100%', objectFit:'cover', display:'block', gridRow:'1 / 3'}} />
-                      <img src={imgs[1]} alt="" loading="lazy" style={{width:'100%', height:'100%', objectFit:'cover', display:'block'}} />
-                      <img src={imgs[2]} alt="" loading="lazy" style={{width:'100%', height:'100%', objectFit:'cover', display:'block'}} />
+                      <img src={imgs[0]} alt="" loading="lazy" style={{width:'100%', height:'100%', minHeight:0, objectFit:'cover', display:'block', gridRow:'1 / 3'}} />
+                      <img src={imgs[1]} alt="" loading="lazy" style={{width:'100%', height:'100%', minHeight:0, objectFit:'cover', display:'block'}} />
+                      <img src={imgs[2]} alt="" loading="lazy" style={{width:'100%', height:'100%', minHeight:0, objectFit:'cover', display:'block'}} />
                     </div>
                   )}
                   {imgs.length >= 4 && (
@@ -201,7 +201,7 @@ function HomePage({ go, addToCart, portalUser }) {
                 </div>
                 <div className="body">
                   <div className="name serif" style={{fontSize:22}}>{catName}</div>
-                  <div className="row-px"><span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>{skuCounts[catName] != null ? `${skuCounts[catName]} SKUs` : ''}</span><span className="mono" style={{fontSize:11, color:'var(--rust)'}}>SHOP →</span></div>
+                  <div className="row-px"><span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>{skuCounts[catName] != null ? `${skuCounts[catName]} ${skuCounts[catName] === 1 ? 'SKU' : 'SKUs'}` : ''}</span><span className="mono" style={{fontSize:11, color:'var(--rust)'}}>SHOP →</span></div>
                 </div>
               </div>
             );
