@@ -5447,6 +5447,32 @@ const portalServer = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true });
   }
 
+  if (req.method === 'GET' && url.pathname === '/api/portal/game-scores') {
+    const session = getPortalSession(req);
+    if (!session) return json(res, 401, { error: 'login_required' });
+    const forum = readForum();
+    const user = Array.isArray(forum.users) ? forum.users.find(u => u.id === session.id) : null;
+    return json(res, 200, { scores: (user && user.gameScores) || {} });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/portal/game-scores') {
+    const session = getPortalSession(req);
+    if (!session) return json(res, 401, { error: 'login_required' });
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const { gameId, score } = body || {};
+    if (!gameId || typeof score !== 'number' || score < 0) return json(res, 422, { error: 'invalid_payload' });
+    const forum = readForum();
+    if (!Array.isArray(forum.users)) forum.users = [];
+    const idx = forum.users.findIndex(u => u.id === session.id);
+    if (idx < 0) return json(res, 404, { error: 'user_not_found' });
+    const existing = forum.users[idx].gameScores || {};
+    if (score > (existing[gameId] || 0)) {
+      forum.users[idx] = { ...forum.users[idx], gameScores: { ...existing, [gameId]: score } };
+      writeForum(forum);
+    }
+    return json(res, 200, { ok: true });
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/portal/rewards') {
     const session = getPortalSession(req);
     if (!session) return json(res, 401, { error: 'login_required' });

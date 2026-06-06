@@ -157,12 +157,22 @@ function AuthModal({ onClose, onLogin }) {
   );
 }
 
-// ── localStorage helpers ──────────────────────────────────────────────────────
+// ── localStorage + server score helpers ──────────────────────────────────────
 function getHS(key) {
   try { return parseInt(localStorage.getItem(key) || '0', 10) || 0; } catch { return 0; }
 }
+// gameId derived from hsKey: 'oe_games_hs_serpent' → 'serpent'
+function hsKeyToGameId(key) { return key.replace('oe_games_hs_', ''); }
 function saveHS(key, score) {
   try { if (score > getHS(key)) localStorage.setItem(key, String(score)); } catch {}
+  // Silently sync to server — succeeds if logged in, no-ops otherwise
+  portalApi('/api/portal/game-scores', { method: 'POST', body: JSON.stringify({ gameId: hsKeyToGameId(key), score }) }).catch(() => {});
+}
+async function fetchServerScores() {
+  try {
+    const r = await portalApi('/api/portal/game-scores');
+    return r.ok ? (r.scores || {}) : {};
+  } catch { return {}; }
 }
 
 // ── Framework: useKeys ────────────────────────────────────────────────────────
@@ -1952,7 +1962,17 @@ const GAME_REGISTRY = [
 function Lobby({ onPlay }) {
   const [scores, setScores] = useState({});
   useEffect(() => {
-    const s={}; GAME_REGISTRY.forEach(g=>{ s[g.id]=getHS(g.hsKey); }); setScores(s);
+    const local = {}; GAME_REGISTRY.forEach(g => { local[g.id] = getHS(g.hsKey); });
+    setScores(local);
+    fetchServerScores().then(server => {
+      setScores(prev => {
+        const merged = { ...prev };
+        for (const [id, score] of Object.entries(server)) {
+          if (score > (merged[id] || 0)) merged[id] = score;
+        }
+        return merged;
+      });
+    });
   }, []);
 
   return (
