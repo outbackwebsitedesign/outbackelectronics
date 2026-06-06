@@ -1489,7 +1489,7 @@ function AcceptableUseContent({ email, address, abn }) {
       </div>
 
       <div style={s.mt}><h3>Community / Forum Guidelines</h3>
-        <p style={s.p}>Please review our forum rules, posted in the General Discussion section of the forum at <a href="https://forum.outbackelectronics.com.au" target="_blank" rel="noopener noreferrer">forum.outbackelectronics.com.au</a>.</p>
+        <p style={s.p}>Please review our <a href="https://forum.outbackelectronics.com.au/t/T-1780786200697" target="_blank" rel="noopener noreferrer">forum rules</a>, posted in the General Discussion section of the forum.</p>
       </div>
 
       <div style={s.mt}><h3>Contributions</h3>
