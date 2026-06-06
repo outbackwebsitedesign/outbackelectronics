@@ -222,8 +222,8 @@ function GroupsPage({ go }) {
   return (
     <>
       <PageHead crumbs={['Outback','Groups']} title="Community Groups"
-        lead="Connect with other electronics enthusiasts in remote Australia. Local chapters, topic clubs, and fix-it circles — mostly in sheds."
-        kicker={<button className="btn btn-rust" onClick={() => go('contact')}>+ Start a chapter</button>} />
+        lead="Online groups for electronics enthusiasts. Topic clubs, tinkerers, and fixers — connect and chat from wherever you are."
+        kicker={<button className="btn btn-rust" onClick={() => go('contact')}>+ Start a group</button>} />
 
       <section className="container" style={{paddingTop: 32, paddingBottom: 40}}>
         {loading && (
@@ -235,9 +235,9 @@ function GroupsPage({ go }) {
         )}
         {!loading && groups.length === 0 && (
           <div style={{padding:'48px 0'}}>
-            <p className="serif" style={{fontSize:28, marginBottom:12}}>First chapter forming.</p>
+            <p className="serif" style={{fontSize:28, marginBottom:12}}>No groups yet.</p>
             <p style={{color:'var(--ink-2)', fontSize:15, maxWidth:520, lineHeight:1.7}}>
-              We're getting the first local group off the ground. If you'd like to start one in your area, hit the button above and we'll make it happen.
+              Be the first to start one. Hit the button above and we'll get it set up.
             </p>
           </div>
         )}
@@ -247,16 +247,10 @@ function GroupsPage({ go }) {
               <div key={g.id||i} className="card-paper" style={{padding:24, display:'flex', flexDirection:'column', gap:12, opacity: g.locked ? 0.8 : 1}}>
                 <div>
                   {g.locked && <span className="tag tag-rust" style={{marginBottom:8, display:'inline-block'}}>MEMBERS ONLY</span>}
-                  {!g.locked && g.location && (
-                    <span className="tag tag-outline" style={{marginBottom:8, display:'inline-block'}}>{g.location.toUpperCase()}</span>
-                  )}
                   <h3 className="serif" style={{fontSize:24, lineHeight:1.1, marginTop:6}}>{g.name}</h3>
                   <p style={{marginTop:8, fontSize:13, color:'var(--ink-2)', lineHeight:1.6}}>{g.description}</p>
                 </div>
                 <div style={{borderTop:'1px solid var(--line)', paddingTop:12, display:'grid', gap:4}}>
-                  {g.meetupFrequency && (
-                    <div className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>MEETS: {g.meetupFrequency.toUpperCase()}</div>
-                  )}
                   {g.organizer && (
                     <div className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>ORGANISER: {g.organizer.toUpperCase()}</div>
                   )}
