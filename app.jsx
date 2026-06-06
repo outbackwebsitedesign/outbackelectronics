@@ -476,10 +476,9 @@ function TopNav({ page, go, cart, onSearchOpen, accountOpen, setAccountOpen, por
                 title={signedOut ? 'Sign In / Create Account' : 'Account'}
                 aria-label={signedOut ? 'Sign In / Create Account' : 'Account'}
                 onClick={() => setAccountOpen(o => !o)}
-                style={signedOut ? {display:'flex', alignItems:'center', gap:6, padding:'6px 10px', border:'1px solid var(--line)', fontSize:13} : {}}
+                style={signedOut ? {color:'var(--rust)', borderColor:'var(--rust)'} : {}}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>
-                {signedOut && <span className="sign-in-text" style={{whiteSpace:'nowrap'}}>Sign In</span>}
               </button>
               {accountOpen && <AccountDropdown go={go} onClose={() => setAccountOpen(false)} user={portalUser} />}
             </div>
