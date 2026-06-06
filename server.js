@@ -5043,6 +5043,7 @@ const PORTAL_CORS_ORIGINS = new Set([
   process.env.SITE_URL || `http://localhost:${MAIN_PORT}`,
   FORUM_URL,
   GAMES_URL,
+  TOOLS_URL,
 ].filter(Boolean));
 
 const portalServer = http.createServer(async (req, res) => {
