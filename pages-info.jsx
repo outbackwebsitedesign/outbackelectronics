@@ -338,11 +338,13 @@ function ContactPage({ go }) {
                 <a href={`tel:${(shop.phone||'').replace(/\s/g,'')}`} className="serif" style={{fontSize:28, marginTop:8, color:'var(--rust)', textDecoration:'none', display:'block'}}>{shop.phone}</a>
                 <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:4}}>CALL OR SMS TO BOOK AN APPOINTMENT</div>
               </div>
+              {shop.email && (
               <div className="card-paper" style={{padding: 22}}>
                 <span className="eyebrow">EMAIL</span>
-                <a href={shop.email ? `mailto:${shop.email}` : undefined} style={{fontSize:18, marginTop:8, fontWeight:600, color:'inherit', display:'block'}}>{shop.email || '—'}</a>
+                <a href={`mailto:${shop.email}`} style={{fontSize:18, marginTop:8, fontWeight:600, color:'inherit', display:'block'}}>{shop.email}</a>
                 <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:4}}>APPOINTMENTS ONLY</div>
               </div>
+              )}
               <div className="card-paper" style={{padding: 22}}>
                 <span className="eyebrow">UHF</span>
                 <div style={{fontSize: 18, marginTop:8, fontWeight:600}}>Channel 18, callsign OUTBACK-1</div>
