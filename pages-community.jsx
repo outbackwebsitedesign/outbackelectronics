@@ -270,15 +270,6 @@ function GroupsPage({ go }) {
           </div>
         )}
 
-        <div className="card-paper" style={{padding: 32, marginTop: 40, display:'grid', gridTemplateColumns:'1fr 280px', gap:32, alignItems:'center'}}>
-          <div>
-            <span className="eyebrow">STARTING A CHAPTER</span>
-            <h3 className="serif" style={{fontSize: 32, marginTop: 8, lineHeight:1.05}}>We'll send a starter kit. Stickers, a soldering iron, and a kettle.</h3>
-            <p style={{marginTop: 10, color:'var(--ink-2)', fontSize:14, maxWidth: 540}}>If you've got a town, a shed, and at least three people who want to fix things together, we'll back you. Apply below and we'll be in touch within a week.</p>
-            <button className="btn btn-rust" style={{marginTop: 18}} onClick={() => go('contact')}>Apply for a starter kit →</button>
-          </div>
-          <div className="slot slot-rust" style={{aspectRatio:'1/1'}}>STARTER KIT · CRATE</div>
-        </div>
       </section>
     </>
   );
