@@ -455,15 +455,18 @@ function SellerTermsContent({ email, phone, address, abn }) {
         <p style={s.p}><strong>Ongoing Compliance.</strong> If a design or component changes materially after initial listing, the Seller must notify OE and provide updated documentation and, if requested, a new sample.</p>
       </div>
 
-      <div style={s.mt}><h3>5. Stock, Consignment, and Bailment</h3>
-        <p style={s.p}>Where the Seller delivers stock to OE for storage and order fulfillment ('Consigned Stock'):</p>
+      <div style={s.mt}><h3>5. Fulfillment Model and Stock</h3>
+        <p style={s.p}><strong>OE is a home-based mobile business and does not operate a warehouse or commercial premises.</strong> The primary and preferred fulfillment model is <strong>direct seller dispatch</strong> — the Seller ships Products directly to customers from the Seller's own location. This is the default arrangement unless OE expressly agrees otherwise in writing.</p>
+        <p style={s.p}><strong>Direct Seller Dispatch.</strong> Where the Seller dispatches Products directly to customers, the Seller bears all shipping and logistics responsibility and risk from dispatch until delivery. OE retains all shipping and handling fees collected from customers per OHD003.</p>
+        <p style={s.p}><strong>Sample and Prototype Holding.</strong> OE may agree to hold small quantities of sample or prototype stock for evaluation, photography, or demonstration purposes. Any such holding is subject to OE's available capacity and must be agreed in writing in advance. OE cannot commit to holding bulk inventory.</p>
+        <p style={s.p}>Where OE does hold Seller stock by written agreement ('Consigned Stock'), the following terms apply:</p>
         <ul style={{paddingLeft:20, lineHeight:2, marginTop:8}}>
           <li><strong>Title:</strong> Remains with the Seller until a customer completes a purchase.</li>
           <li><strong>Bailment:</strong> OE holds Consigned Stock as bailee and will take reasonable care of it. OE is not liable for loss or damage caused by events beyond OE's reasonable control (e.g., theft, fire, flood, force majeure) provided OE has taken reasonable precautions.</li>
+          <li><strong>Delivery:</strong> Consigned Stock may be sent to OE by post or courier at any time without prior appointment. In-person delivery of large or heavy stock requires prior arrangement.</li>
           <li><strong>Insurance:</strong> The Seller is responsible for insuring Consigned Stock against loss or damage while in OE's possession. OE does not insure third-party stock.</li>
-          <li><strong>Return of Stock:</strong> Unsold stock will be returned to the Seller at the Seller's cost within 30 days of a request, or within 30 days of termination.</li>
+          <li><strong>Return of Stock:</strong> Unsold Consigned Stock will be returned to the Seller at the Seller's cost within 30 days of a written request, or within 30 days of termination of this Agreement.</li>
         </ul>
-        <p style={s.p}><strong>Direct Seller Dispatch.</strong> Where the Seller dispatches Products directly to customers, the Seller bears all shipping and logistics responsibility and risk from dispatch until delivery. OE retains all shipping and handling fees collected from customers per OHD003.</p>
       </div>
 
       <div style={s.mt}><h3>6. Intellectual Property Licence</h3>
@@ -889,9 +892,9 @@ function TermsContent({ email, phone, address, abn }) {
       <span className="eyebrow">LEGAL · TERMS AND CONDITIONS</span>
       <h2 style={{marginTop:8}}>Terms and Conditions</h2>
       <div style={s.mt}>
-        <p style={s.p}>We are Outback Electronics ('Company', 'we', 'us', or 'our'), a company registered in Australia at {address}.{abn ? ` Our ABN is ${abn}.` : ''}</p>
+        <p style={s.p}>We are Outback Electronics ('Company', 'we', 'us', or 'our'), a mobile electronics services provider registered in Australia.{abn ? ` Our ABN is ${abn}.` : ''} Our correspondence and returns address is {address}, Australia. <strong>We do not operate a public shopfront.</strong> All in-person visits are by prior appointment only; mail-in correspondence and returns are accepted at any time without appointment.</p>
         <p style={s.p}>We operate the website <a href="https://outbackelectronics.com.au">outbackelectronics.com.au</a> (the 'Site'), as well as any other related products and services that refer or link to these legal terms (collectively, the 'Legal Terms').</p>
-        <p style={s.p}>You can contact us by phone at <a href={`tel:${(phone||'').replace(/\s/g,'')}`}>{phone}</a>, by email at <a href={`mailto:${email}`}>{email}</a>, or by mail to {address}, Australia.</p>
+        <p style={s.p}>You can contact us by phone at <a href={`tel:${(phone||'').replace(/\s/g,'')}`}>{phone}</a>, by email at <a href={`mailto:${email}`}>{email}</a>, or by mail to {address}, Australia. Please contact us before visiting in person.</p>
         <p style={{...s.p, fontWeight:600}}>PLEASE READ THESE LEGAL TERMS CAREFULLY BEFORE USING THE SERVICES. BY ACCESSING, BROWSING, REGISTERING ON, PURCHASING FROM, SUBMITTING A FORM ON, OR OTHERWISE USING THE SERVICES IN ANY WAY, YOU ACKNOWLEDGE THAT YOU HAVE READ, UNDERSTOOD, AND UNCONDITIONALLY AGREE TO BE BOUND BY ALL OF THESE LEGAL TERMS AND ALL POLICIES INCORPORATED HEREIN BY REFERENCE. IF YOU DO NOT AGREE, YOU MUST IMMEDIATELY CEASE ALL USE OF THE SERVICES. YOUR CONTINUED USE OF THE SERVICES FOLLOWING THE POSTING OF ANY UPDATED LEGAL TERMS CONSTITUTES ACCEPTANCE OF THOSE CHANGES.</p>
         <p style={s.p}>The Services are intended for users who are at least 18 years old. By using the Services you represent that you are 18 years of age or older.</p>
       </div>
@@ -927,6 +930,7 @@ function TermsContent({ email, phone, address, abn }) {
       </div>
       <div style={s.mt}><h3>10. Repair and Technical Services</h3>
         <p style={s.p}><strong>Scope — ELV/LV Equipment Only.</strong> Our Repair Services are limited to Extra Low Voltage (ELV, ≤50 V AC / ≤120 V DC) and Low Voltage (LV) equipment. We do not perform repairs on mains-connected (240 V AC) devices and we are not licensed to do so. Any device submitted for repair that is found to contain mains-voltage components beyond our scope will not be worked on; we will advise you and return the device. Where we provide repair, diagnostic, or technical services within our scope ('Repair Services'), the following additional terms apply alongside your rights under the Australian Consumer Law. By submitting a device for Repair Services, you agree to these terms.</p>
+        <p style={s.p}><strong>How to Submit a Device.</strong> We operate as a mobile service — we do not have a public shopfront. Devices may be submitted in one of three ways: (a) <strong>mail-in</strong> — you may post your device to our returns address at any time without prior arrangement (please include your name, contact details, and a description of the fault); (b) <strong>on-site service</strong> — we can attend your location by appointment; or (c) <strong>drop-off by appointment</strong> — contact us first to arrange a time. Devices sent by post should be packed securely; we are not liable for damage caused by inadequate packaging in transit to us.</p>
         <p style={s.p}><strong>Pre-Repair Quote.</strong> We will conduct an initial assessment of your device and provide a written quote before commencing any chargeable repair. Quotes are valid for 14 days from the date of issue unless otherwise stated. We reserve the right to vary a quote if additional faults are discovered during repair that were not apparent at the time of assessment; we will notify you and obtain your approval before proceeding with any work beyond the agreed scope.</p>
         <p style={s.p}><strong>Pre-Existing Conditions and Undisclosed Damage.</strong> You warrant that, to the best of your knowledge, you have disclosed all known damage, faults, modifications, liquid exposure, and relevant history at the time of submission. We are not liable for any damage, deterioration, or failure caused by pre-existing conditions, undisclosed damage, prior unauthorised repairs, manufacturing defects, or latent faults that were present before submission. Where a pre-existing condition is discovered during repair, we will advise you before proceeding.</p>
         <p style={s.p}><strong>No Liability for Consequential Failure.</strong> Electronic devices may contain multiple faults not apparent during or immediately after repair. To the fullest extent permitted by applicable law, we are not liable for any loss, damage, fire, personal injury, or adverse outcome caused by: (a) a fault that was not the subject of the agreed repair; (b) faults that manifest after repair as a result of pre-existing conditions; or (c) the customer's subsequent use of the device inconsistently with our repair instructions or manufacturer specifications. These limitations do not limit your rights under the Australian Consumer Law in respect of our Repair Services.</p>
@@ -1327,18 +1331,20 @@ function ReturnContent({ email, phone, address }) {
       </div>
 
       <div style={s.mt}><h3>Change-of-Mind Returns</h3>
-        <p style={s.p}>In addition to your statutory rights, we accept change-of-mind returns postmarked within <strong>seven (7) days</strong> of the date of delivery (or, for in-store purchases, the date of purchase). All returned items must be in new and unused condition, with all original packaging, tags, seals, and labels intact and undamaged. We are not required by law to offer this voluntary policy and it does not affect or limit your ACL rights in any way.</p>
+        <p style={s.p}>In addition to your statutory rights, we accept change-of-mind returns postmarked within <strong>seven (7) days</strong> of the date of delivery. All returned items must be in new and unused condition, with all original packaging, tags, seals, and labels intact and undamaged. We are not required by law to offer this voluntary policy and it does not affect or limit your ACL rights in any way.</p>
       </div>
 
       <div style={s.mt}><h3>Return Process</h3>
-        <p style={s.p}>To return an item, please email customer service at <a href={`mailto:${email}`}>{email}</a> to obtain a Return Merchandise Authorisation (RMA) number. After receiving an RMA number, place the item securely in its original packaging and include proof of purchase, then mail your return to:</p>
-        <div style={{margin:'16px 0', padding:'16px 20px', background:'var(--bg-elev)', border:'1px solid var(--line)', fontSize:14, lineHeight:2}}>
-          <strong>Outback Electronics</strong><br/>
-          Attn: Returns<br/>
-          RMA # [your number]<br/>
-          {address}<br/>
-          Australia
-        </div>
+        <p style={s.p}>To return an item, please email customer service at <a href={`mailto:${email}`}>{email}</a> to obtain a Return Merchandise Authorisation (RMA) number. After receiving your RMA number you have two options:</p>
+        <ul style={{paddingLeft:20, lineHeight:2, marginTop:8}}>
+          <li><strong>Mail-in (accepted any time, no appointment needed):</strong> Pack the item securely in its original packaging, include proof of purchase and your RMA number, and post to:<br/><br/>
+            <span style={{display:'block', margin:'8px 0 8px 0', padding:'14px 18px', background:'var(--bg-elev)', border:'1px solid var(--line)', fontSize:14, lineHeight:2}}>
+              <strong>Outback Electronics</strong> — Attn: Returns (RMA # [your number])<br/>
+              {address}, Australia
+            </span>
+          </li>
+          <li><strong>In-person drop-off (by prior appointment only):</strong> Contact us to arrange a suitable time before attending. We do not accept unannounced walk-in returns.</li>
+        </ul>
         <p style={s.p}>For <strong>change-of-mind returns</strong>, you are responsible for return shipping charges. We strongly recommend using a trackable method. For returns under your ACL statutory rights (e.g. faulty goods), we will cover reasonable return shipping costs.</p>
       </div>
 
@@ -1459,7 +1465,7 @@ function AcceptableUseContent({ email, address, abn }) {
       <p style={s.p}>This Policy applies to any and all: (a) uses of our Services; (b) forms, materials, consent tools, comments, posts, and all other content available on the Services ('Content'); and (c) material you contribute to the Services including uploads, posts, reviews, ratings, comments, chat, etc. ('Contribution').</p>
 
       <div style={s.mt}><h3>Who We Are</h3>
-        <p style={s.p}>We are Outback Electronics ('Company', 'we', 'us', or 'our'), a company registered in Australia at {address}.{abn ? ` Our ABN is ${abn}.` : ''} We operate the website <a href="https://outbackelectronics.com.au">outbackelectronics.com.au</a> (the 'Site'), as well as any other related products and services that refer or link to this Policy (collectively, the 'Services').</p>
+        <p style={s.p}>We are Outback Electronics ('Company', 'we', 'us', or 'our'), a mobile electronics services provider registered in Australia.{abn ? ` Our ABN is ${abn}.` : ''} Our correspondence address is {address}, Australia. We operate the website <a href="https://outbackelectronics.com.au">outbackelectronics.com.au</a> (the 'Site'), as well as any other related products and services that refer or link to this Policy (collectively, the 'Services').</p>
       </div>
 
       <div style={s.mt}><h3>Use of the Services</h3>
