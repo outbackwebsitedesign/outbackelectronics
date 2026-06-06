@@ -146,6 +146,7 @@ function LoginModal({ onClose, onLogin }) {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -169,6 +170,7 @@ function LoginModal({ onClose, onLogin }) {
     setFirstName('');
     setLastName('');
     setEmail('');
+    setUsername('');
     setPhone('');
     setAddress('');
     setConfirmPassword('');
@@ -193,7 +195,7 @@ function LoginModal({ onClose, onLogin }) {
       const endpoint = tab === 'login' ? '/api/forum/auth/login' : '/api/forum/auth/register';
       const body = tab === 'login'
         ? { email: loginEmail.trim(), password }
-        : { password, firstName: firstName.trim(), lastName: lastName.trim(), email: email.trim(), phone: phone.trim(), address: address.trim() };
+        : { password, firstName: firstName.trim(), lastName: lastName.trim(), email: email.trim(), phone: phone.trim(), address: address.trim(), username: username.trim() };
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: csrfHeaders(),
@@ -335,6 +337,13 @@ function LoginModal({ onClose, onLogin }) {
                         onFocus={e => e.target.style.borderColor = '#0088cc'} onBlur={e => e.target.style.borderColor = '#d6d9dc'} />
                     </label>
                   </div>
+                  <label style={labelStyle}>
+                    <span style={labelSpanStyle}>Username *</span>
+                    <input type="text" value={username} onChange={e => setUsername(e.target.value)} required maxLength={30}
+                      placeholder="e.g. jsmith91" style={inputStyle}
+                      onFocus={e => e.target.style.borderColor = '#0088cc'} onBlur={e => e.target.style.borderColor = '#d6d9dc'} />
+                    <span style={{fontSize:11, color:'#787878', marginTop:4}}>3–30 characters · letters, numbers, underscores</span>
+                  </label>
                   <label style={labelStyle}>
                     <span style={labelSpanStyle}>Phone number</span>
                     <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} maxLength={30}

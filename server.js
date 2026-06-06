@@ -1919,6 +1919,7 @@ async function handleCustomerRegister(req, res) {
   if (publicRateLimited(getIp(req), 'register')) return json(res, 429, { error: 'too_many_requests' });
   let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
   if (!body || typeof body !== 'object') return json(res, 422, { error: 'invalid_payload', message: 'Payload must be a JSON object.' });
+  const username = typeof body.username === 'string' ? body.username.trim() : '';
   const password = typeof body.password === 'string' ? body.password : '';
   const firstName = typeof body.firstName === 'string' ? body.firstName.trim() : '';
   const lastName  = typeof body.lastName  === 'string' ? body.lastName.trim()  : '';
@@ -1929,19 +1930,15 @@ async function handleCustomerRegister(req, res) {
   if (!lastName)  return json(res, 422, { error: 'invalid_payload', message: 'Last name is required.' });
   if (!email)     return json(res, 422, { error: 'invalid_payload', message: 'Email address is required.' });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json(res, 422, { error: 'invalid_payload', message: 'Email address is invalid.' });
+  if (!/^[a-zA-Z0-9_]{3,30}$/.test(username)) return json(res, 422, { error: 'invalid_payload', message: 'Username must be 3–30 characters, letters, numbers and underscores only.' });
   if (password.length < 8) return json(res, 422, { error: 'invalid_payload', message: 'Password must be at least 8 characters.' });
   const displayName = `${firstName} ${lastName}`.trim();
   const forum = readForum();
   if (!Array.isArray(forum.users)) forum.users = [];
+  if (forum.users.find(u => u.username && u.username.toLowerCase() === username.toLowerCase()))
+    return json(res, 409, { error: 'username_taken', message: 'That username is already taken.' });
   if (forum.users.find(u => u.email && u.email === email))
     return json(res, 409, { error: 'email_taken', message: 'An account with that email address already exists.' });
-  // Auto-generate a unique username from the email prefix
-  const baseUsername = email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 25);
-  let username = baseUsername;
-  let suffix = 2;
-  while (forum.users.find(u => u.username && u.username.toLowerCase() === username.toLowerCase())) {
-    username = baseUsername + suffix++;
-  }
   const user = { id: 'U-' + Date.now(), username, firstName, lastName, displayName, email, phone, address, passwordHash: hashPassword(password), createdAt: new Date().toISOString() };
   forum.users.push(user);
   writeForum(forum);
@@ -5227,7 +5224,7 @@ const portalServer = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/quote/accept-token') {
     if (publicRateLimited(getIp(req), 'register')) return json(res, 429, { error: 'too_many_requests' });
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
-    const { token, password, displayName } = body || {};
+    const { token, username, password, displayName } = body || {};
     if (!token) return json(res, 400, { error: 'token_required' });
     const quotes = readQuotes();
     const qIdx = quotes.findIndex(q => q.quoteToken === token);
@@ -5241,12 +5238,10 @@ const portalServer = http.createServer(async (req, res) => {
     if (existingUser) {
       return json(res, 409, { error: 'email_exists', message: 'An account already exists for this email. Please log in to accept the quote.' });
     }
+    if (!username || !/^[a-zA-Z0-9_]{3,30}$/.test(username)) return json(res, 422, { error: 'invalid_payload', message: 'Username must be 3–30 characters, letters, numbers and underscores only.' });
     if (!password || password.length < 8) return json(res, 422, { error: 'invalid_payload', message: 'Password must be at least 8 characters.' });
-    const baseUsername = quoteEmail.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 25);
-    let username = baseUsername;
-    let uSuffix = 2;
-    while (forum.users.find(u => u.username && u.username.toLowerCase() === username.toLowerCase())) {
-      username = baseUsername + uSuffix++;
+    if (forum.users.find(u => u.username && u.username.toLowerCase() === username.toLowerCase())) {
+      return json(res, 409, { error: 'username_taken', message: 'That username is already taken.' });
     }
     const resolvedDisplayName = (typeof displayName === 'string' ? displayName.trim() : '') || quote.name || username;
     const newUser = { id: 'U-' + Date.now(), username, displayName: resolvedDisplayName, email: quoteEmail, passwordHash: hashPassword(password), createdAt: new Date().toISOString() };

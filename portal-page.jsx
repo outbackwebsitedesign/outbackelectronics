@@ -129,6 +129,7 @@ function RegisterForm({ onLogin, onBack }) {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -136,7 +137,7 @@ function RegisterForm({ onLogin, onBack }) {
   async function handleRegister(e) {
     e.preventDefault();
     setError(''); setBusy(true);
-    const r = await api('/api/portal/auth/register', { method: 'POST', body: JSON.stringify({ firstName, lastName, email, phone, address, password }) });
+    const r = await api('/api/portal/auth/register', { method: 'POST', body: JSON.stringify({ firstName, lastName, email, phone, address, username, password }) });
     setBusy(false);
     if (r.ok) { onLogin(r.user); }
     else { setError(r.message || 'Registration failed.'); }
@@ -168,6 +169,11 @@ function RegisterForm({ onLogin, onBack }) {
         <label className="field">
           <span className="label">Address</span>
           <input className="input" type="text" value={address} autoComplete="street-address" onChange={e => setAddress(e.target.value)} />
+        </label>
+        <label className="field">
+          <span className="label">Username</span>
+          <input className="input" type="text" value={username} autoComplete="username" onChange={e => setUsername(e.target.value)} required />
+          <span style={{fontSize:11, color:'var(--ink-3)', marginTop:3, display:'block'}}>3–30 characters, letters, numbers and underscores</span>
         </label>
         <label className="field">
           <span className="label">Password</span>
@@ -1707,6 +1713,7 @@ function OrderTokenView({ token, onLogin }) {
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [formErr, setFormErr] = useState('');
   const [busy, setBusy] = useState(false);
@@ -1738,7 +1745,7 @@ function OrderTokenView({ token, onLogin }) {
     setFormErr(''); setBusy(true);
     const r = await api('/api/portal/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ firstName, lastName, email: info.email, phone, address, password }),
+      body: JSON.stringify({ firstName, lastName, email: info.email, phone, address, username, password }),
     });
     setBusy(false);
     if (r.ok) {
@@ -1815,6 +1822,11 @@ function OrderTokenView({ token, onLogin }) {
               </label>
             </div>
             <label className="field">
+              <span className="label">Username</span>
+              <input className="input" type="text" value={username} autoComplete="username" onChange={e => setUsername(e.target.value)} required />
+              <span style={{fontSize:11, color:'var(--ink-3)', marginTop:3, display:'block'}}>3–30 characters, letters, numbers and underscores</span>
+            </label>
+            <label className="field">
               <span className="label">Password</span>
               <input className="input" type="password" value={password} autoComplete="new-password" onChange={e => setPassword(e.target.value)} required />
               <span style={{fontSize:11, color:'var(--ink-3)', marginTop:3, display:'block'}}>Minimum 8 characters</span>
@@ -1838,7 +1850,7 @@ function QuoteTokenView({ token, onAccepted }) {
   const [quote, setQuote] = useState(null);
   const [err, setErr] = useState('');
   const [step, setStep] = useState('view'); // 'view' | 'create-account' | 'login-required' | 'done'
-  const [form, setForm] = useState({ password: '', displayName: '' });
+  const [form, setForm] = useState({ username: '', password: '', displayName: '' });
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
 
@@ -1959,6 +1971,11 @@ function QuoteTokenView({ token, onAccepted }) {
               <label className="field" style={{marginBottom:14}}>
                 <span className="label">Display name <span style={{color:'var(--ink-3)'}}>(optional)</span></span>
                 <input className="input" placeholder={quote.name || 'Your name'} value={form.displayName} onChange={e => setForm(f => ({...f, displayName: e.target.value}))} />
+              </label>
+              <label className="field" style={{marginBottom:14}}>
+                <span className="label">Username</span>
+                <input className="input" placeholder="e.g. jsmith91" value={form.username} onChange={e => setForm(f => ({...f, username: e.target.value}))} required pattern="[a-zA-Z0-9_]{3,30}" title="3–30 characters, letters, numbers and underscores" />
+                <span style={{fontSize:11, color:'var(--ink-3)', marginTop:3, display:'block'}}>3–30 characters, letters, numbers and underscores</span>
               </label>
               <label className="field" style={{marginBottom:20}}>
                 <span className="label">Password</span>
