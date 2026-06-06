@@ -927,7 +927,7 @@ function AIPage({ go }) {
             src="/assets/ai-video.html"
             title="What It's Like to Be an AI"
             style={{position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none'}}
-            allow="autoplay"
+            allow="autoplay; encrypted-media"
           />
         </div>
       </section>
