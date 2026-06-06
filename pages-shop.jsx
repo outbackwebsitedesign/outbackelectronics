@@ -1509,7 +1509,7 @@ function MembershipsPage({ go, portalUser }) {
           </div>
         ) : null}
 
-        <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:24}}>
+        <div className="membership-tiers">
           {displayTiers.map((tier, i) => {
             const displayPrice = Number(tier.priceAud || tier.price);
             const isProcessing = checkingOut === tier.id;

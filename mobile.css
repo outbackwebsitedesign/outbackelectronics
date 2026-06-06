@@ -162,6 +162,9 @@
   /* Buttons full-width in stacked contexts */
   .stack > .btn { width: 100%; justify-content: center; }
 
+  /* Membership tiers — stack to single column */
+  .membership-tiers { grid-template-columns: 1fr !important; gap: 16px !important; }
+
   /* Shop — 2-col product grid on mobile */
   .shop-layout .grid-3 { grid-template-columns: repeat(2, 1fr) !important; gap: 12px !important; }
 
