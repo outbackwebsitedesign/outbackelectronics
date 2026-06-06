@@ -402,358 +402,415 @@ function ContactPage({ go }) {
 }
 
 // ============================================================
-// INFO FOR SELLERS
+// INFO FOR SELLERS — COMPONENTS
+// ============================================================
+function SellerTermsContent({ email, phone, address, abn }) {
+  const s = {mt: {marginTop:32}, p: {fontSize:15, lineHeight:1.75, marginTop:8}};
+  return (
+    <div>
+      <span className="eyebrow">SELLER AGREEMENT · OHD001</span>
+      <h2 style={{marginTop:8}}>Terms and Conditions for Sellers</h2>
+      <div style={s.mt}>
+        <p style={s.p}>This Agreement is between Outback Electronics ('OE', 'we', 'us', or 'our'){address ? `, located at ${address}` : ''}{abn ? `, ABN ${abn}` : ''}, and the individual or entity approved to list products on the Platform ('Seller', 'you', or 'your').</p>
+        <p style={s.p}>This Agreement incorporates the following documents by reference, together forming the entire seller agreement:</p>
+        <ul style={{paddingLeft:20, lineHeight:2, marginTop:8}}>
+          <li><strong>OHD001</strong> — Terms and Conditions for Sellers (this document)</li>
+          <li><strong>OHD002</strong> — Design Quality Standards</li>
+          <li><strong>OHD003</strong> — Fees Schedule</li>
+          <li><strong>OHD004</strong> — Listing Requirements</li>
+        </ul>
+        <p style={s.p}>By submitting an application to list on the Platform, by listing a product, or by continuing to use the Platform after receiving notice of updated terms, you agree to be bound by this Agreement. We recommend that all prospective Sellers obtain independent legal advice before entering into this Agreement.</p>
+      </div>
+
+      <div style={s.mt}><h3>1. Definitions</h3>
+        <ul style={{paddingLeft:20, lineHeight:2, marginTop:8}}>
+          <li><strong>"Agreement"</strong> means OHD001–OHD004 collectively.</li>
+          <li><strong>"ACL"</strong> means the Australian Consumer Law (Schedule 2 of the <em>Competition and Consumer Act 2010</em> (Cth)).</li>
+          <li><strong>"Commission"</strong> means the percentage fee applied by OE to the Seller's listed price, per OHD003.</li>
+          <li><strong>"ELV"</strong> means Extra Low Voltage — circuits or systems operating at or below 50 V AC or 120 V DC.</li>
+          <li><strong>"Listing Fee"</strong> means the monthly subscription fee charged per OHD003.</li>
+          <li><strong>"Platform"</strong> means the Outback Electronics website at <a href="https://outbackelectronics.com.au">outbackelectronics.com.au</a> and any related services.</li>
+          <li><strong>"Products"</strong> means items listed by the Seller on the Platform.</li>
+          <li><strong>"Sale Proceeds"</strong> means the price paid by a customer for a Product, inclusive of Commission.</li>
+          <li><strong>"Seller Content"</strong> means all images, descriptions, schematics, branding, videos, and other materials submitted by the Seller for listing purposes.</li>
+        </ul>
+      </div>
+
+      <div style={s.mt}><h3>2. Nature of the Relationship</h3>
+        <p style={s.p}>OE operates the Platform as a marketplace. The Seller is an independent business; nothing in this Agreement creates a partnership, joint venture, franchise, employment, or general agency relationship, except as expressly stated below.</p>
+        <p style={s.p}>OE acts as a <strong>disclosed payment collection agent</strong> for the Seller. When a customer purchases a Product, OE collects the Sale Proceeds on the Seller's behalf and remits the net amount (after Commission, Listing Fees, and any other deductions) to the Seller per Section 9.</p>
+        <p style={s.p}><strong>ACL Supplier Status.</strong> The Seller acknowledges that under the ACL, OE may be treated as a 'supplier' of Products in respect of customers and therefore shares in the consumer guarantee obligations attaching to Products sold through the Platform. The Seller's obligation to indemnify OE under Section 12 reflects that any ACL liability OE incurs in respect of a Seller's Product originates with that Seller's product or conduct, not OE's own default.</p>
+      </div>
+
+      <div style={s.mt}><h3>3. ELV/LV Platform Scope</h3>
+        <p style={s.p}>The Platform accepts <strong>only Extra Low Voltage (ELV, ≤50 V AC / ≤120 V DC) and Low Voltage (LV) products.</strong> Mains-voltage (240 V AC) products, components, or designs are strictly prohibited — there are no exceptions. This includes any product that connects directly to a mains supply, any mains-rated power supply unit, or any circuit designed to operate at mains voltages even if it includes a step-down stage.</p>
+        <p style={s.p}>Acceptable categories include: 12 V / 24 V / 48 V automotive, caravan, marine, and off-grid electronics; battery management systems; DC-DC converters; ELV sensor and control modules; and other circuits operating entirely within ELV limits.</p>
+        <p style={s.p}>By listing a Product, the Seller warrants the Product operates exclusively within ELV/LV limits. If OE identifies or receives a credible complaint that a listed Product operates at mains voltage, OE may immediately remove the listing without notice and may terminate this Agreement under Section 14.</p>
+      </div>
+
+      <div style={s.mt}><h3>4. Product Quality and Safety</h3>
+        <p style={s.p}>All Products must comply with the Design Quality Standards in OHD002. The Seller is solely responsible for ensuring Products are safe, comply with all applicable Australian Standards (including <em>AS/NZS 3820</em> and any other relevant standard for the product category), and are fit for the purpose represented in the listing.</p>
+        <p style={s.p}>The Seller must not list Products containing counterfeit, substandard, or materially misrepresented components. Specifications, capabilities, limitations, and intended use must be accurately represented.</p>
+        <p style={s.p}><strong>Pre-Listing Samples.</strong> OE may request a sample of any Product before or after listing. Samples must be provided within 14 days of request at the Seller's cost. If a sample fails OE's quality assessment, the listing is suspended until the Seller demonstrates compliance.</p>
+        <p style={s.p}><strong>Ongoing Compliance.</strong> If a design or component changes materially after initial listing, the Seller must notify OE and provide updated documentation and, if requested, a new sample.</p>
+      </div>
+
+      <div style={s.mt}><h3>5. Stock, Consignment, and Bailment</h3>
+        <p style={s.p}>Where the Seller delivers stock to OE for storage and order fulfillment ('Consigned Stock'):</p>
+        <ul style={{paddingLeft:20, lineHeight:2, marginTop:8}}>
+          <li><strong>Title:</strong> Remains with the Seller until a customer completes a purchase.</li>
+          <li><strong>Bailment:</strong> OE holds Consigned Stock as bailee and will take reasonable care of it. OE is not liable for loss or damage caused by events beyond OE's reasonable control (e.g., theft, fire, flood, force majeure) provided OE has taken reasonable precautions.</li>
+          <li><strong>Insurance:</strong> The Seller is responsible for insuring Consigned Stock against loss or damage while in OE's possession. OE does not insure third-party stock.</li>
+          <li><strong>Return of Stock:</strong> Unsold stock will be returned to the Seller at the Seller's cost within 30 days of a request, or within 30 days of termination.</li>
+        </ul>
+        <p style={s.p}><strong>Direct Seller Dispatch.</strong> Where the Seller dispatches Products directly to customers, the Seller bears all shipping and logistics responsibility and risk from dispatch until delivery. OE retains all shipping and handling fees collected from customers per OHD003.</p>
+      </div>
+
+      <div style={s.mt}><h3>6. Intellectual Property Licence</h3>
+        <p style={s.p}>By submitting Seller Content to OE, the Seller grants OE a <strong>non-exclusive, royalty-free, worldwide, sub-licensable licence</strong> to use, reproduce, adapt, display, publish, and distribute Seller Content for the purpose of operating and promoting the Platform and the Seller's listings.</p>
+        <p style={s.p}>This licence continues for 90 days after termination to allow OE to complete outstanding orders and wind down listings in an orderly manner. After 90 days, OE will remove Seller Content from active listings. OE may retain archival copies for legal, audit, and dispute-resolution purposes.</p>
+        <p style={s.p}>The Seller warrants that: (a) it owns or holds a sufficient licence over all Seller Content; (b) OE's authorised use of Seller Content will not infringe any third party's intellectual property rights; and (c) no Seller Content is defamatory, obscene, misleading, or unlawful.</p>
+        <p style={s.p}>OE retains all intellectual property rights in the Platform, its design, branding, and infrastructure. Nothing in this Agreement transfers any OE IP to the Seller.</p>
+      </div>
+
+      <div style={s.mt}><h3>7. Listing Fees and Commission</h3>
+        <p style={s.p}>Fees and commission rates are set out in the Fees Schedule (OHD003).</p>
+        <p style={s.p}><strong>Commission Mechanics.</strong> OE adds the applicable Commission percentage to the Seller's nominated price to determine the customer price. Example at 20%: Seller nominates $50 → customer price is $60 → OE remits $50 to the Seller and retains $10 as Commission. The customer is aware they are purchasing from a third-party seller on the Outback Electronics platform.</p>
+        <p style={s.p}><strong>Listing Fee.</strong> Monthly Listing Fees are charged per OHD003 regardless of whether any Products are sold. Failure to pay within 14 days of the invoice date results in suspension of all listings; reinstatement occurs within 2 business days of full payment.</p>
+        <p style={s.p}><strong>Listing Fees are non-refundable.</strong> Commission is refunded to the Seller if the corresponding sale is subsequently refunded to the customer. <strong>OE retains all shipping and handling fees</strong> collected from customers.</p>
+      </div>
+
+      <div style={s.mt}><h3>8. GST</h3>
+        <p style={s.p}>Unless otherwise stated, all fees and Commission amounts are exclusive of GST. Where GST applies, it will be added and OE will provide a valid tax invoice.</p>
+        <p style={s.p}>The Seller warrants that it holds a valid ABN and complies with all GST obligations under the <em>A New Tax System (Goods and Services Tax) Act 1999</em> (Cth). The Seller must provide its ABN to OE before listing. OE may withhold tax from payments under the ATO's no-ABN withholding rules if the Seller fails to provide a valid ABN.</p>
+        <p style={s.p}>Where OE collects payment from customers as a disclosed agent, the Seller is the entity making the taxable supply for GST purposes. The Seller is responsible for accounting for GST on its supplies.</p>
+      </div>
+
+      <div style={s.mt}><h3>9. Payment Terms</h3>
+        <p style={s.p}>OE will remit Sale Proceeds to the Seller within <strong>14 days of customer payment clearing</strong> to OE's payment processor, by electronic funds transfer to the Seller's nominated Australian bank account.</p>
+        <p style={s.p}>Each remittance will be accompanied by a payment statement itemising sales, Commission deducted, Listing Fees deducted, refunds processed, and the net amount paid.</p>
+        <p style={s.p}>OE may withhold or set off against any remittance: outstanding Listing Fees, refunds issued to customers, amounts owed under any indemnity in this Agreement, or any other amount the Seller owes OE.</p>
+        <p style={s.p}>If a customer initiates a chargeback, OE will notify the Seller promptly. The Seller must provide reasonable assistance to contest chargebacks it believes are unwarranted. If a chargeback is upheld, the corresponding amount will be debited against the next remittance.</p>
+      </div>
+
+      <div style={s.mt}><h3>10. Customer Support and Complaint Response</h3>
+        <p style={s.p}>The Seller is primarily responsible for customer support in relation to its Products. The Seller must:</p>
+        <ul style={{paddingLeft:20, lineHeight:2, marginTop:8}}>
+          <li>Respond to all customer inquiries within <strong>5 business days</strong>;</li>
+          <li>Process ACL-compliant refunds, replacements, or repairs within <strong>10 business days</strong> of a valid customer request;</li>
+          <li>Notify OE of any product safety issue, recall, or regulatory investigation within <strong>2 business days</strong> of becoming aware of it.</li>
+        </ul>
+        <p style={s.p}>If the Seller fails to meet these timeframes, OE may at its discretion: (a) issue a refund to the customer and debit the amount from the next Seller remittance; (b) remove or suspend the affected listing; or (c) refer the matter to the ACCC, Consumer Affairs, or another relevant authority. Repeated or serious failures are grounds for immediate termination under Section 14.</p>
+      </div>
+
+      <div style={s.mt}><h3>11. Australian Consumer Law Compliance</h3>
+        <p style={s.p}><strong>Nothing in this Agreement overrides, excludes, or limits any right a consumer has under the ACL,</strong> including consumer guarantee rights under Part 3-2, Division 1 (acceptable quality, fitness for purpose, match description, and other guarantees).</p>
+        <p style={s.p}>The Seller must not represent to customers that ACL guarantees are excluded or that the Seller's return policy is more restrictive than ACL minimum entitlements. Phrases such as 'no refunds' or 'all sales final' must not appear in Seller communications or listings.</p>
+        <p style={s.p}><strong>Unfair Contract Terms.</strong> The Seller acknowledges the operation of the unfair contract terms provisions of the ACL (ss.23–28, as extended to small business contracts from November 2023). Any term of this Agreement found to be an unfair contract term is void to the extent of the unfairness; the remainder of the Agreement continues in force.</p>
+      </div>
+
+      <div style={s.mt}><h3>12. Product Liability Indemnity</h3>
+        <p style={s.p}>The Seller indemnifies OE and its officers, employees, agents, and contractors against all claims, losses, damages, liabilities, penalties, costs (including reasonable legal costs), and expenses arising from or in connection with:</p>
+        <ul style={{paddingLeft:20, lineHeight:2, marginTop:8}}>
+          <li>Any personal injury, death, or property damage (including fire, explosion, or electrical damage) caused or allegedly caused by a Product listed or sold by the Seller;</li>
+          <li>Any breach by the Seller of this Agreement, including OHD002 and OHD004;</li>
+          <li>Any ACL consumer guarantee liability that OE incurs as a result of a defect, misdescription, or non-compliance in a Seller's Product;</li>
+          <li>Any infringement by the Seller of a third party's intellectual property rights;</li>
+          <li>Any misleading or deceptive conduct by the Seller in connection with its Products or listings;</li>
+          <li>Any claim by a regulatory body (including the ACCC, Consumer Affairs, or an electrical safety regulator) arising from a Seller's Product.</li>
+        </ul>
+        <p style={s.p}><strong>Insurance.</strong> The Seller must maintain, at its own expense, adequate public liability and product liability insurance with a minimum cover of <strong>$5,000,000 per occurrence</strong> from a reputable insurer. The Seller must provide OE with a certificate of currency on request and within 7 days of any renewal.</p>
+      </div>
+
+      <div style={s.mt}><h3>13. Copyright and IP Compliance</h3>
+        <p style={s.p}>The Seller must hold all necessary rights to list, sell, and grant OE a licence over all Products and Seller Content. The Seller must not list: counterfeit, replica, or unauthorised goods; products that infringe any patent, registered design, trade mark, or copyright; or products that incorporate third-party open-source hardware or software in violation of the applicable licence terms.</p>
+        <p style={s.p}>If OE receives a credible intellectual property complaint from a rights-holder, OE may immediately remove the listing and suspend the Seller's account pending investigation. If the complaint is upheld, OE may terminate this Agreement under Section 14 without liability to the Seller.</p>
+      </div>
+
+      <div style={s.mt}><h3>14. Termination</h3>
+        <p style={s.p}><strong>Termination by Notice.</strong> Either party may terminate this Agreement by providing <strong>30 days' written notice</strong> by email.</p>
+        <p style={s.p}><strong>Immediate Termination by OE.</strong> OE may terminate immediately by written notice if the Seller: lists or sells a mains-voltage product; causes or is subject to a confirmed product safety incident (fire, personal injury, or serious property damage); commits an ACL offence or faces regulatory enforcement action; infringes third-party intellectual property rights; fails to pay fees within 30 days of the due date; becomes insolvent, enters administration, receivership, or liquidation; or engages in misleading, deceptive, or fraudulent conduct.</p>
+        <p style={s.p}><strong>Effect of Termination.</strong> On termination: listings are removed within 7 days (immediately for termination for cause); outstanding customer orders placed before termination are completed or refunded; Consigned Stock is returned at the Seller's cost within 30 days; final payment is made within 30 days after all outstanding customer transactions are resolved and all amounts owed to OE are deducted.</p>
+        <p style={s.p}>Sections 6 (IP Licence — 90-day tail), 11 (ACL), 12 (Indemnity), 13 (IP Compliance), 17 (Governing Law), and any accrued payment obligations survive termination.</p>
+      </div>
+
+      <div style={s.mt}><h3>15. Dispute Resolution</h3>
+        <p style={s.p}>If a dispute arises in connection with this Agreement, the parties agree to the following process before commencing litigation (except for urgent interlocutory relief):</p>
+        <ol style={{paddingLeft:20, lineHeight:2, marginTop:8}}>
+          <li><strong>Internal Resolution:</strong> The aggrieved party sends a written notice of dispute. The other party must respond within 15 business days; both parties attempt good-faith resolution.</li>
+          <li><strong>Mediation:</strong> If unresolved within 30 days of the notice, either party may refer the dispute to mediation through a mediator agreed by both parties or appointed by a recognised mediation provider. Mediation costs are shared equally.</li>
+          <li><strong>Litigation:</strong> If mediation is unsuccessful, either party may commence proceedings in the courts of Queensland.</li>
+        </ol>
+      </div>
+
+      <div style={s.mt}><h3>16. Variation</h3>
+        <p style={s.p}>OE may vary this Agreement by providing <strong>30 days' written notice</strong> by email. The Seller may terminate within the notice period if it does not accept the changes. Continued use of the Platform after the notice period constitutes acceptance of the updated terms.</p>
+        <p style={s.p}>OE may vary this Agreement with immediate effect where variation is required to comply with applicable law, with written notice given as soon as reasonably practicable.</p>
+      </div>
+
+      <div style={s.mt}><h3>17. General</h3>
+        <p style={s.p}><strong>Governing Law.</strong> This Agreement is governed by the laws of Queensland, Australia. Each party submits to the non-exclusive jurisdiction of the courts of Queensland and, where applicable, the Federal Court of Australia.</p>
+        <p style={s.p}><strong>Entire Agreement.</strong> This Agreement (OHD001–OHD004) constitutes the entire agreement between the parties and supersedes all prior representations, negotiations, and understandings.</p>
+        <p style={s.p}><strong>Severability.</strong> If any provision is found to be void, unlawful, or unenforceable, that provision is severed and the remaining provisions continue in full force.</p>
+        <p style={s.p}><strong>Notices.</strong> Notices under this Agreement must be given by email. Notices to OE must be sent to {email ? <a href={`mailto:${email}`}>{email}</a> : 'our support email address'}. Notices to the Seller will be sent to the email address on the Seller's account.</p>
+        <p style={s.p}><strong>Waiver.</strong> Failure to enforce any provision is not a waiver of the right to enforce it in future.</p>
+      </div>
+    </div>
+  );
+}
+
+function SellerQualityContent({ email }) {
+  const s = {mt: {marginTop:32}, p: {fontSize:15, lineHeight:1.75, marginTop:8}};
+  return (
+    <div>
+      <span className="eyebrow">SELLER AGREEMENT · OHD002</span>
+      <h2 style={{marginTop:8}}>Design Quality Standards</h2>
+      <div style={s.mt}>
+        <p style={s.p}>This document sets out the minimum quality, safety, and presentation standards that all products listed on the Outback Electronics Platform must meet. It forms part of the Seller Agreement (OHD001–OHD004). Sellers are responsible for ongoing compliance, not only at initial listing.</p>
+        <p style={s.p}>If you have questions about whether your product meets these standards, contact us before listing: {email ? <a href={`mailto:${email}`}>{email}</a> : 'our support team'}.</p>
+      </div>
+
+      <div style={s.mt}><h3>1. Professional Construction</h3>
+        <p style={s.p}>Products must exhibit a professional standard of construction. The following will not be accepted: permanent breadboard or veroboard assemblies (these are prototyping mediums, not finished products); exposed, uninsulated wiring presenting a contact or short-circuit risk; loose components not secured within an enclosure or on a PCB; and hand-written or missing labelling on boards and enclosures.</p>
+        <p style={s.p}>Acceptable construction includes: custom PCBs (through-hole or SMD), commercially manufactured enclosures, and 3D-printed enclosures of appropriate rigidity and thermal resistance for the application.</p>
+      </div>
+
+      <div style={s.mt}><h3>2. ELV/LV Compliance (Mandatory)</h3>
+        <p style={s.p}>All products must operate exclusively at Extra Low Voltage (ELV: ≤50 V AC / ≤120 V DC) or within Low Voltage (LV) limits. No mains-voltage (240 V AC) products or components are accepted. This requirement is absolute.</p>
+        <p style={s.p}><strong>Applicable standards</strong> (as relevant to the product category):</p>
+        <ul style={{paddingLeft:20, lineHeight:2, marginTop:8}}>
+          <li><em>AS/NZS 3820</em> — Essential requirements for electrical equipment;</li>
+          <li><em>AS/NZS 62368-1</em> — Audio/video, IT, and communications technology equipment;</li>
+          <li><em>AS/NZS 4268</em> — Radio communications equipment;</li>
+          <li>Relevant IEC standards for the specific product type.</li>
+        </ul>
+        <p style={s.p}>Sellers do not need formal certification for all products, but designs must be assessed against the relevant standard and documentation must demonstrate how the design meets its requirements.</p>
+      </div>
+
+      <div style={s.mt}><h3>3. Functionality and Performance</h3>
+        <p style={s.p}>Products must perform all functions and meet all specifications as advertised. Known limitations must be clearly disclosed in the listing — non-disclosure constitutes a misdescription under the ACL. Sellers must test products thoroughly before listing. OE may request evidence of testing at any time.</p>
+      </div>
+
+      <div style={s.mt}><h3>4. Documentation Requirements</h3>
+        <p style={s.p}>For each listed product, the Seller must provide OE with (or make available to customers as applicable):</p>
+        <ul style={{paddingLeft:20, lineHeight:2, marginTop:8}}>
+          <li><strong>Schematic diagram</strong> — clearly annotated with component values and part numbers;</li>
+          <li><strong>Assembly or connection instructions</strong> — step-by-step with clear diagrams;</li>
+          <li><strong>Usage and safety guidelines</strong> — operating voltage/current ranges, maximum ratings, and specific precautions;</li>
+          <li><strong>Specification sheet</strong> — key electrical parameters, dimensions, and environmental ratings;</li>
+          <li><strong>Bill of Materials (BOM)</strong> — key components and sources for quality audit purposes.</li>
+        </ul>
+        <p style={s.p}>Documentation must be accurate, current, and written in clear English. Outdated or inaccurate documentation is a listing breach.</p>
+      </div>
+
+      <div style={s.mt}><h3>5. Component Quality</h3>
+        <p style={s.p}>All components must be genuine, specification-grade parts from reputable manufacturers or authorised distributors. The use of counterfeit, salvaged, out-of-specification, or remarked components is prohibited and constitutes a serious breach of the Seller Agreement. Sellers should be able to provide sourcing information for key components on request — particularly safety-critical parts such as MOSFETs, gate drivers, voltage regulators, and battery protection ICs.</p>
+      </div>
+
+      <div style={s.mt}><h3>6. Lithium Battery Products</h3>
+        <p style={s.p}>Products incorporating lithium cells or designed for use with lithium-based batteries are subject to additional requirements:</p>
+        <ul style={{paddingLeft:20, lineHeight:2, marginTop:8}}>
+          <li>Battery protection circuits (overcharge, over-discharge, overcurrent, short circuit) must be present and correctly rated;</li>
+          <li>Cell specifications (chemistry, capacity, maximum charge/discharge current, operating temperature range) must be disclosed;</li>
+          <li>Charging parameters must be clearly documented and must not exceed cell manufacturer's specifications;</li>
+          <li>Enclosures must provide adequate thermal ventilation;</li>
+          <li>Shipping must comply with IATA Dangerous Goods Regulations (DGR) and CASA requirements for lithium battery transport.</li>
+        </ul>
+        <p style={s.p}>Products failing lithium battery safety requirements pose a risk of fire, explosion, and toxic gas release. Such products will not be accepted and any listed product found to be non-compliant will be immediately removed.</p>
+      </div>
+
+      <div style={s.mt}><h3>7. Reliability and Durability</h3>
+        <p style={s.p}>Products should be designed for a reasonable lifespan appropriate to their application and price point. Key considerations: component derating (operating below maximum rated values); thermal management (heat sinks, thermal pads, or adequate PCB copper); environmental protection (conformal coating or appropriate IP rating for outdoor or automotive applications); and mechanical robustness (secure PCB mounting and strain relief on wiring harnesses).</p>
+      </div>
+
+      <div style={s.mt}><h3>8. Packaging</h3>
+        <p style={s.p}>Products must be packaged to withstand postal and courier shipping without damage. Packaging must include: adequate cushioning; clear external labelling including product name, Seller's name or brand, and required safety warnings; required dangerous goods labelling for lithium batteries or other regulated substances; and instructions inside the package.</p>
+      </div>
+
+      <div style={s.mt}><h3>9. Compatibility Claims</h3>
+        <p style={s.p}>Any compatibility claim (e.g., "compatible with Toyota Land Cruiser 200 Series" or "works with ESP32") must be based on actual testing, not assumptions. If compatibility has not been tested, it must not be claimed. Sellers are liable under the ACL for misdescriptions arising from untested compatibility claims.</p>
+      </div>
+
+      <div style={s.mt}><h3>10. Customer Support</h3>
+        <p style={s.p}>Post-sale technical support is a quality obligation. Sellers must assist customers with reasonable technical questions about product integration and troubleshooting. OHD001 Section 10 sets response time requirements. A Seller that is unresponsive to legitimate customer support requests is in breach of these Quality Standards.</p>
+      </div>
+
+      <div style={s.mt}><h3>11. Incident Reporting and Continuous Improvement</h3>
+        <p style={s.p}>Sellers should actively monitor field performance, review customer feedback, and update designs or documentation where issues are identified. If a significant quality or safety issue is identified post-listing, the Seller must notify OE within 2 business days and take appropriate remedial action (listing update, recall, or withdrawal).</p>
+      </div>
+    </div>
+  );
+}
+
+function SellerFeesContent({ email }) {
+  const s = {mt: {marginTop:32}, p: {fontSize:15, lineHeight:1.75, marginTop:8}};
+  return (
+    <div>
+      <span className="eyebrow">SELLER AGREEMENT · OHD003</span>
+      <h2 style={{marginTop:8}}>Fees Schedule</h2>
+      <div style={s.mt}>
+        <p style={s.p}>This document sets out the fees payable by Sellers for listing products on the Outback Electronics Platform. It forms part of the Seller Agreement (OHD001–OHD004). All amounts are in Australian Dollars (AUD). Unless otherwise stated, fees are <strong>exclusive of GST</strong>; GST will be added where applicable.</p>
+        <p style={s.p}>For questions about fees, contact us at {email ? <a href={`mailto:${email}`}>{email}</a> : 'our support team'}.</p>
+      </div>
+
+      <div style={s.mt}><h3>1. Monthly Listing Fee</h3>
+        <p style={s.p}>A monthly listing fee applies based on the number of active product listings, counted at the beginning of each billing month.</p>
+        <div style={{overflowX:'auto', marginTop:12}}>
+          <table style={{width:'100%', borderCollapse:'collapse', fontSize:14}}>
+            <thead>
+              <tr style={{background:'var(--bg-2,#f5f5f5)'}}>
+                <th style={{padding:'10px 14px', textAlign:'left', borderBottom:'1px solid var(--line)'}}>Number of Active Listings</th>
+                <th style={{padding:'10px 14px', textAlign:'left', borderBottom:'1px solid var(--line)'}}>Rate (per listing / month, excl. GST)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td style={{padding:'10px 14px', borderBottom:'1px solid var(--line)'}}>1 – 10</td><td style={{padding:'10px 14px', borderBottom:'1px solid var(--line)'}}>$0.75</td></tr>
+              <tr><td style={{padding:'10px 14px', borderBottom:'1px solid var(--line)'}}>11 – 50</td><td style={{padding:'10px 14px', borderBottom:'1px solid var(--line)'}}>$0.50</td></tr>
+              <tr><td style={{padding:'10px 14px', borderBottom:'1px solid var(--line)'}}>51 – 100</td><td style={{padding:'10px 14px', borderBottom:'1px solid var(--line)'}}>$0.30</td></tr>
+              <tr><td style={{padding:'10px 14px'}}>Over 100</td><td style={{padding:'10px 14px'}}>Contact us for a custom arrangement</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p style={s.p}><strong>Example:</strong> A Seller with 15 active listings pays 15 × $0.50 = $7.50 per month (+ GST if applicable).</p>
+        <p style={s.p}>Listing Fees are <strong>non-refundable</strong> and payable regardless of whether any Products are sold during the month. If a Seller reduces their listing count mid-month, the reduced rate applies from the following month.</p>
+      </div>
+
+      <div style={s.mt}><h3>2. Commission</h3>
+        <p style={s.p}>A commission fee applies to every product sold through the Platform. The commission is <strong>added to the Seller's nominated price</strong> to determine the price displayed to customers. The Seller receives their full nominated price on every completed sale.</p>
+        <p style={s.p}><strong>Current commission rate: up to 20% of the Seller's nominated price.</strong> The actual rate applicable to each Seller will be confirmed in their onboarding agreement or account settings.</p>
+        <p style={s.p}><strong>Worked example at 20%:</strong></p>
+        <ul style={{paddingLeft:20, lineHeight:2, marginTop:8}}>
+          <li>Seller nominates a price of $50.00</li>
+          <li>OE adds 20% → customer price displayed is $60.00</li>
+          <li>Customer pays $60.00</li>
+          <li>OE deducts $10.00 commission and remits $50.00 to the Seller (less any Listing Fee deductions)</li>
+        </ul>
+        <p style={s.p}><strong>Commission on refunds:</strong> If a sale is refunded to the customer, the Commission for that sale is also refunded to the Seller. Listing Fees are not affected by refunds.</p>
+      </div>
+
+      <div style={s.mt}><h3>3. Payment of Listing Fees</h3>
+        <p style={s.p}>Listing Fees are invoiced at the beginning of each calendar month and are due within <strong>14 days</strong> of the invoice date. OE may deduct outstanding Listing Fees from the Seller's remittance before paying Sale Proceeds. If Listing Fees remain unpaid after 30 days, all Seller listings will be paused until full payment is received.</p>
+      </div>
+
+      <div style={s.mt}><h3>4. Payment of Sale Proceeds</h3>
+        <p style={s.p}>OE remits Sale Proceeds to the Seller within <strong>14 days</strong> of customer payment clearing, by electronic funds transfer to the Seller's nominated Australian bank account. Each remittance is accompanied by a payment statement itemising: gross sales, Commission deducted, Listing Fees deducted, refunds processed, and the net amount paid.</p>
+        <p style={s.p}><strong>OE retains all shipping and handling fees</strong> collected from customers. These are not remitted to Sellers.</p>
+      </div>
+
+      <div style={s.mt}><h3>5. GST Treatment</h3>
+        <p style={s.p}>All fees in this document are exclusive of GST. Where a fee is subject to GST, the GST-inclusive amount will be charged and OE will provide a valid tax invoice. Sellers are responsible for their own GST obligations on their product sales. Sellers must provide a valid ABN to OE; failure to do so may result in OE withholding tax from remittances under the ATO's no-ABN withholding rules.</p>
+      </div>
+
+      <div style={s.mt}><h3>6. Refunds and Chargebacks</h3>
+        <p style={s.p}><strong>Customer refunds:</strong> Where OE processes a customer refund, the corresponding Sale Proceeds are reversed in the next remittance and the Commission for that sale is also reversed. Listing Fees are not affected.</p>
+        <p style={s.p}><strong>Chargebacks:</strong> If a customer-initiated chargeback is upheld by the payment processor, the charged-back amount is debited from the Seller's next remittance. OE will notify the Seller and provide an opportunity to contest the chargeback if the Seller believes it is unwarranted.</p>
+      </div>
+
+      <div style={s.mt}><h3>7. Optional Advertising Services</h3>
+        <p style={s.p}>Optional advertising services (featured placements, promotional campaigns, targeted advertisements) are available for an additional fee at the Seller's sole discretion. Pricing is provided upon request and a separate written agreement is required. To enquire, contact us at {email ? <a href={`mailto:${email}`}>{email}</a> : 'our support team'}.</p>
+      </div>
+
+      <div style={s.mt}><h3>8. Fee Changes</h3>
+        <p style={s.p}>OE may change Listing Fees or the Commission rate by providing <strong>30 days' written notice</strong> by email. Updated rates apply to the first billing period commencing after the notice period expires. If a Seller does not accept a fee change, they may terminate the Agreement per OHD001 Section 14 within the notice period.</p>
+      </div>
+
+      <div style={s.mt}><h3>9. Pricing Integrity</h3>
+        <p style={s.p}>Sellers must not manipulate their nominated prices to artificially distort the commission calculation. OE reserves the right to audit listed prices and, if manipulation is detected, to apply corrective measures or terminate the Agreement for cause.</p>
+      </div>
+    </div>
+  );
+}
+
+function SellerListingContent({ email }) {
+  const s = {mt: {marginTop:32}, p: {fontSize:15, lineHeight:1.75, marginTop:8}};
+  return (
+    <div>
+      <span className="eyebrow">SELLER AGREEMENT · OHD004</span>
+      <h2 style={{marginTop:8}}>Listing Requirements</h2>
+      <div style={s.mt}>
+        <p style={s.p}>This document sets out the requirements that all product listings on the Outback Electronics Platform must satisfy. It forms part of the Seller Agreement (OHD001–OHD004). By listing a product, the Seller warrants compliance with these requirements at the time of submission and on an ongoing basis.</p>
+        <p style={s.p}>Listings that do not meet these requirements may be suspended, corrected by OE, or removed. Repeated or serious non-compliance is a breach of OHD001 and may result in termination. Questions: {email ? <a href={`mailto:${email}`}>{email}</a> : 'contact our support team'}.</p>
+      </div>
+
+      <div style={s.mt}><h3>1. Product Photographs</h3>
+        <p style={s.p}>Photographs must: be well-lit, in focus, and accurately represent the product; include at least one shot on a plain white or neutral background; show multiple angles where features are not visible from a single perspective; be of sufficient resolution for customers to zoom in on detail (minimum 1000 × 1000 px recommended); not contain watermarks, unrelated branding, or promotional text overlays; and be of the actual product — not renders, stock images, or competitor products.</p>
+        <p style={s.p}><strong>IP in photographs:</strong> By submitting photographs, the Seller warrants it owns the copyright or holds a licence to use them, and grants OE the licence in OHD001 Section 6 to display them in connection with the listing.</p>
+      </div>
+
+      <div style={s.mt}><h3>2. Product Title</h3>
+        <p style={s.p}>Titles must: accurately describe the product (misleading titles breach the ACL); be concise — preferred format is [Brand / Seller Name] [Product Name] [Key Spec or Variant]; use title case only (not ALL CAPS); not contain promotional language in the title field; and not include competitor brand names for search optimisation purposes.</p>
+      </div>
+
+      <div style={s.mt}><h3>3. Product Description</h3>
+        <p style={s.p}><strong>Required information:</strong> full and accurate specifications (voltage, current, power, dimensions, weight, operating temperature, etc.); intended purpose and application; condition (new, refurbished, or open-box); known limitations or incompatibilities (non-disclosure is a misdescription under the ACL); what is included in the package; any tools, skills, or additional components required; and relevant safety warnings.</p>
+        <p style={s.p}><strong>Language:</strong> Descriptions must be written in clear, correct English. Automated translations without human review are not acceptable.</p>
+        <p style={s.p}><strong>Price:</strong> All prices in Australian Dollars (AUD) inclusive of GST where applicable. No foreign-currency prices may be displayed.</p>
+        <p style={s.p}><strong>Stock availability:</strong> Listings must reflect actual available stock and must be updated promptly. Selling products that cannot be fulfilled within the stated timeframe is a breach of the ACL and this Agreement.</p>
+      </div>
+
+      <div style={s.mt}><h3>4. Keywords and Search Terms</h3>
+        <p style={s.p}>Keywords must be genuinely relevant to the product. Prohibited: competitor brand names used as keywords; irrelevant or misleading search terms; and keyword stuffing (repeating the same word or phrase to game search rankings).</p>
+      </div>
+
+      <div style={s.mt}><h3>5. Pricing Compliance</h3>
+        <p style={s.p}>Sellers must comply with all price representation requirements under the ACL. In particular: the customer price (Seller price + OE Commission) is the total price — no hidden extras; any "was price" or "RRP" shown must reflect a genuine prior selling price or manufacturer's RRP (false RRPs are misleading under ACL s.18 and may constitute a false representation under ACL s.29(1)(i)); and Sellers must not create artificial urgency through false countdown timers or fabricated stock level warnings.</p>
+      </div>
+
+      <div style={s.mt}><h3>6. Refund and Return Policy Disclosure</h3>
+        <p style={s.p}>Sellers must clearly communicate their refund and return policy in the listing or seller profile. The policy must not be less generous than ACL minimum consumer guarantee entitlements. Phrases such as "no refunds" or "all sales final" that purport to exclude ACL rights must not appear in listings or Seller communications.</p>
+      </div>
+
+      <div style={s.mt}><h3>7. Contact Information</h3>
+        <p style={s.p}>Sellers must maintain accurate, monitored contact information in their seller profile. An email address monitored within 5 business days is the minimum requirement. Failure to maintain contact information or to respond to OE or customer communications is a breach of this Agreement.</p>
+      </div>
+
+      <div style={s.mt}><h3>8. Intellectual Property and Authenticity</h3>
+        <p style={s.p}>All listed products must be genuine and the Seller's own work, or legitimately licensed or authorised for sale. Sellers must not list: counterfeit, cloned, or unauthorised reproductions of another party's product; products that infringe a patent, registered design, trade mark, or copyright; or open-source hardware or software projects listed in violation of the applicable open-source licence terms.</p>
+        <p style={s.p}>The Seller grants OE the IP licence set out in OHD001 Section 6 for all content submitted with a listing — including photographs, descriptions, schematics, and videos. The Seller warrants it has the right to grant this licence.</p>
+      </div>
+
+      <div style={s.mt}><h3>9. Legal and Regulatory Compliance</h3>
+        <p style={s.p}>Listings must comply with all applicable Australian laws and regulations, including: the Australian Consumer Law (accurate descriptions, no misleading claims); electrical safety regulations (ELV/LV products only — see OHD002 Section 2); dangerous goods regulations (correct labelling for lithium batteries and other regulated items); trade marks (no unauthorised use of third-party trade marks); and ACCC product safety standards applicable to the product category.</p>
+      </div>
+
+      <div style={s.mt}><h3>10. Videos (Optional)</h3>
+        <p style={s.p}>Videos included in listings must: be no longer than 5 minutes; be of professional quality (stable footage, clear audio or subtitles, good lighting); include the Seller's business name or brand for attribution; relate to the product (demonstrations, assembly instructions, and feature overviews encouraged); not contain misleading claims or unsubstantiated comparative advertising; and be owned or appropriately licensed by the Seller. OE may require removal of any video that does not meet these standards or that contravenes applicable law.</p>
+      </div>
+
+      <div style={s.mt}><h3>11. Listing Accuracy and Maintenance</h3>
+        <p style={s.p}>The Seller is responsible for keeping listings accurate and up-to-date, including: updating specifications if the product design changes materially; updating stock availability promptly; removing listings for products the Seller can no longer fulfil; and notifying OE within 2 business days if a product is subject to a recall or safety issue. OE may suspend or remove listings found to be inaccurate, out of date, or non-compliant.</p>
+      </div>
+
+      <div style={s.mt}><h3>12. Platform Policy Compliance</h3>
+        <p style={s.p}>All listings must comply with the Seller Agreement (OHD001–OHD004) and the consumer-facing policies published on the Platform (Terms and Conditions, Return Policy, and Disclaimer). In the event of any conflict between these Listing Requirements and OHD001, OHD001 prevails.</p>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// INFO FOR SELLERS — INDEX
 // ============================================================
 const SELLER_DOCS = [
-  {
-    id: 'OHD001',
-    title: 'Terms and Conditions for Prospective Sellers',
-    content: `In this agreement:
-
-"Seller" refers to the individual or entity seeking to list and sell products on our platform.
-
-"We" or "Our" refers to Outback Electronics, the platform provider.
-
-
-1. Circuit Quality Standards
-
-We will only accept designs and circuits that are designed, produced, and presented in a professional appearance. Designs or circuits utilizing permanent breadboard or veroboard setups will not meet our quality standards. Please see document OHD002 for further information.
-
-
-2. Mains Voltage Circuits
-
-We do not accept mains voltage circuits or circuits not classified as ELV (Extra Low Voltage <50V). The Designer/Manufacturer will retain all responsibility for compliance, injury, loss, or damage arising from use and/or misuse of any design or circuit and retains all responsibility for any potential issues arising from any design and/or circuits.
-
-
-3. Customer Support and Liability
-
-In the event that a customer encounters any issues with a product, the seller is expected to handle customer inquiries and process refunds, bearing full responsibility for customer satisfaction.
-
-
-4. Payment Terms
-
-Sellers will use our platform to market their products, with payment for these products being made upon a successful customer purchase.
-
-Stock held by the seller remains the seller's responsibility until sold. Costs related to stock maintenance, including product packaging, and storage are also the seller's responsibility.
-
-Payment for sales will be made according to the agreed-upon terms, typically upon successful customer purchase.
-
-
-5. Sales Expectations
-
-Our startup is still in its initial stages, and sellers should not anticipate rapid sales. We are working towards establishing our presence in the market.
-
-All products will be marketed equally, without preference or favor. No commitment will be accepted for sold quantities or sales expectations and/or quotas.
-
-
-6. Business Registration
-
-Sellers are required to provide a registered business name and possess a valid tax identification number (ABN or equivalent for their respective country) as part of our partnership.
-
-Sellers should maintain public liability insurance if applicable to their business activities.
-
-
-7. Product Claims and Customer Complaints
-
-If a product is advertised to perform specific functions but fails to do so, and the seller does not respond within a reasonable timeframe to address the issue, we, and/or the purchaser, reserve the right to contact relevant fair trade authorities.
-
-We reserve the right to cease all future business, implied or actual, in response to serious and/or repeated failures, either in product or response.
-
-
-8. Quality Assurance
-
-To ensure that products meet our stringent quality standards, we request samples of all items that will be listed for sale on our platform.
-
-
-9. Shipping and Payment
-
-Products will be shipped from the seller's location to our address. Payment for these products will be issued once a customer completes the purchase, as per the agreed-upon terms.
-
-We shall retain all/any shipping and/or handling fees and charges.
-
-
-10. Product Packaging
-
-The responsibility for product packaging rests with the seller. It is the seller's responsibility to ensure that products are packaged securely and professionally.
-
-
-11. Copyright Infringement
-
-We reserve the right to cease all future business with a seller if they infringe on copyright laws. This includes instances where we are contacted by a company complaining about a product listed by the seller that violates copyright laws.
-
-
-12. Listing Fees and Commission
-
-A monthly listing fee will be applied, the cost of which will vary depending on the number of different product listings a seller wishes to post. Please refer to our fee structure document OHD003 for specific details.
-
-In addition to the listing fees, we reserve the right to apply up to a 20% commission price raise to all products sold through our platform. This commission will be calculated based on the final sale price of the product. Please see document OHD003 for further information.
-
-
-Changes to Terms and Conditions
-
-We reserve the right to change, amend, add, or remove any term or condition as needed.
-
-These terms and conditions are provided to ensure transparency and professionalism in our partnership. We recommend a thorough review of these terms, and if necessary, legal counsel to ensure mutual understanding and compliance. We look forward to the opportunity to collaborate with you as a valued seller on our platform.`,
-  },
-  {
-    id: 'OHD002',
-    title: 'Design Quality Standards',
-    content: `At Outback Electronics, we are committed to maintaining high-quality standards for the products listed on our platform. To ensure consistency and excellence in the products offered to our customers, we have established the following design quality standards for all prospective sellers. We kindly request that you review and adhere to these guidelines when developing and presenting your products on our platform.
-
-
-1. Professional Appearance
-
-Designs and circuits must exhibit a professional appearance, both in physical construction and documentation.
-
-Avoid the use of permanent breadboard or veroboard setups, as they do not meet our quality standards.
-
-
-2. Compliance with Safety Regulations
-
-We do not accept mains voltage circuits or circuits that are not classified as ELV (Extra Low Voltage <50V).
-
-Designers and manufacturers are responsible for ensuring compliance with all relevant safety regulations, including but not limited to electrical safety standards.
-
-
-3. Functionality and Performance
-
-Products must perform the functions and meet the specifications as advertised.
-
-Sellers should thoroughly test their products to ensure they meet the expected performance criteria.
-
-
-4. Documentation
-
-Provide clear and comprehensive documentation for your product, including schematics, assembly instructions, and any necessary usage guidelines.
-
-Ensure that documentation is accurate, up-to-date, and user-friendly.
-
-
-5. Materials and Components
-
-Use high-quality materials and components in the construction of your products.
-
-Clearly specify the materials and components used, and ensure they meet industry standards.
-
-
-6. Reliability and Durability
-
-Products should be designed to be reliable and durable, with a reasonable lifespan.
-
-Consider factors such as component quality, heat management, and long-term performance.
-
-
-7. Compatibility and Interoperability
-
-Ensure that your products are compatible with commonly used components and interfaces as specified in the product description.
-
-Provide compatibility information to help customers integrate your products into their systems.
-
-
-8. Packaging
-
-Packaging should be sturdy and protective to prevent damage during shipping.
-
-Include clear labeling and instructions on the packaging, as well as any necessary safety warnings.
-
-
-9. Customer Support
-
-Sellers should be responsive to customer inquiries and provide timely support to address any issues or questions related to their products.
-
-Be prepared to assist with troubleshooting and technical support when needed.
-
-
-10. Continuous Improvement
-
-Strive for continuous improvement in the quality and performance of your products.
-
-Listen to customer feedback and consider it for product enhancements.
-
-
-By adhering to these design quality standards, you will contribute to the overall excellence of our platform and enhance the trust and satisfaction of our customers. We appreciate your commitment to maintaining these standards and look forward to collaborating with you as a valued seller on Outback Electronics.
-
-If you have any questions or need further clarification on any of these standards, please do not hesitate to contact us. We are here to support your success as a seller on our platform.`,
-  },
-  {
-    id: 'OHD003',
-    title: 'Fees',
-    content: `At Outback Electronics, we strive to maintain a transparent and fair fee structure for our valued sellers. This document outlines the listing fees that may apply when you choose to list your products on our platform. Please review these fees carefully to understand the cost associated with selling on our platform.
-
-
-1. Monthly Listing Fee
-
-A monthly listing fee will be applied to all sellers based on the number of different product listings you wish to post. The fee structure is as follows:
-
-  • 1 to 10 product listings: $0.75 per listing per month.
-  • 11 to 50 product listings: $0.50 per listing per month.
-  • 51 to 100 product listings: $0.30 per listing per month.
-  • Over 100 product listings: Please contact us for a custom fee arrangement.
-
-These monthly listing fees must be paid for each product listing, regardless of whether any of the listed products are sold during that month.
-
-Please note that these fees are subject to change, and we will notify you in advance of any fee adjustments.
-
-
-2. Commission Fee
-
-In addition to the monthly listing fee, a commission fee will be applied to each product listed on our platform. The commission fee will be automatically added to the price set by the seller at the time of listing. The price displayed to customers will include both the seller's listed price and the commission fee.
-
-For example, if a seller lists a product for $50, the product will be listed on our platform for $60 ($50 + 20% commission). When a customer purchases the product at $60, the commission fee will be automatically subtracted, and the seller will receive $50.
-
-This commission fee is calculated based on the final sale price of the product and is due upon a successful customer purchase.
-
-
-3. Purpose of Fees
-
-The listing fees and commission serve a vital purpose in ensuring the continued operation and growth of Outback Electronics. The listing fees help cover the cost of running the website, including server maintenance, security measures, and ongoing platform enhancements.
-
-The commission fees play a crucial role in our ability to run sales, marketing campaigns, and provide customer support. They also contribute to compensating our dedicated staff who work tirelessly to support our sellers and maintain the platform's functionality.
-
-
-4. Payment of Listing Fees
-
-Monthly listing fees are billed at the beginning of each month.
-
-If payment is not made, the listings will be paused or removed until all outstanding payments are made.
-
-
-5. Changing Your Subscription
-
-You can adjust the number of product listings you wish to post at any time to fit your needs. Your monthly listing fee will be adjusted accordingly based on your chosen subscription tier.
-
-
-6. Refunds
-
-Listing fees are non-refundable. In the event of a refund to a customer, any commission fees associated with that sale will also be refunded.
-
-
-7. Extra Advertising Services
-
-In addition to our standard listing fees and commission structure, we offer optional advertising services to help boost the visibility of your products on our platform. These advertising services are available upon request and for an additional fee.
-
-Should you wish to enhance the visibility of your products and increase your reach to potential customers, you can request extra advertising services. These services may include featured product placements, promotional campaigns, or targeted advertisements.
-
-The costs associated with extra advertising services will vary depending on the specific service and the extent of the advertising campaign. Detailed information on available advertising services and their associated fees can be provided upon request.
-
-
-8. Requesting Extra Advertising
-
-To inquire about and request extra advertising services, please contact our support team or your account manager. We will be happy to discuss your advertising needs and provide you with options tailored to your products and goals.
-
-Please note that extra advertising services are entirely optional and come with additional fees. Participation in these services is at the discretion of the seller.
-
-
-9. Fee Changes
-
-Outback Electronics reserves the right to change the listing fees and commission structure. We will provide advance notice of any fee changes, and such changes will only apply to new listings or renewals.
-
-
-10. Questions
-
-If you have any questions or require clarification regarding our listing fees, commission structure, or advertising services, please do not hesitate to contact our support team. We are here to assist you and ensure a transparent and mutually beneficial partnership.
-
-Thank you for choosing Outback Electronics as your platform for selling electronic products. We look forward to your successful presence on our platform.`,
-  },
-  {
-    id: 'OHD004',
-    title: 'Listing Requirements',
-    content: `At Outback Electronics, we are committed to maintaining a high standard of quality and professionalism across all product listings on our platform. This document outlines the listing requirements that must be adhered to by all sellers. Please review these requirements carefully to ensure your product listings meet our standards.
-
-
-1. Product Photographs
-
-The responsibility for providing clear and accurate photographs of the product lies with the seller.
-
-Photograph Quality: Photographs must be well lit, clear, and accurately represent the product being offered for sale.
-
-All product photographs should be taken on a white background to ensure clarity and consistency.
-
-Multiple Angles: Whenever possible, include multiple photographs showing different angles and perspectives of the product.
-
-Ensure that photographs are of high resolution to enable customers to zoom in and examine product details.
-
-No Watermarks: Product photographs should not contain watermarks, logos, or any other promotional material that is not part of the product itself.
-
-
-2. Product Description
-
-Provide a detailed and accurate product description that includes essential information such as specifications, dimensions, features, and any other relevant details.
-
-Clearly indicate the condition of the product, whether it is new, refurbished, or used.
-
-Clearly state the price of the product in Australian Dollars (AUD), including any applicable taxes or fees.
-
-Ensure that the product's availability is up-to-date. Listings for products that are out of stock or unavailable should be promptly updated.
-
-
-3. Title and Keywords
-
-Create a clear and concise product title that accurately describes the item. Avoid using excessive capitalization, special characters, or promotional language.
-
-Include relevant keywords in your product listing to improve its discoverability in search results.
-
-
-4. Contact Information
-
-Be responsive to customer inquiries and provide reliable contact information in your seller profile.
-
-
-5. Compliance with Laws and Regulations
-
-Legal Compliance: Ensure that your product listings adhere to all relevant laws, regulations, and safety standards, including any required certifications or documentation for certain product categories.
-
-
-6. Intellectual Property and Copyright
-
-Sellers must have the legal right to sell the products listed and should not infringe on intellectual property or copyright rights of others.
-
-List only genuine and authentic products. Do not offer counterfeit, replica, or unauthorized items.
-
-
-7. Customer Service
-
-Be prompt in responding to customer inquiries and addressing any concerns or issues related to your products.
-
-Refunds and Returns: Clearly communicate your refund and return policies to customers.
-
-
-8. Compliance with Outback Electronics Policies
-
-Platform Policies: Sellers must adhere to Outback Electronics' policies, terms, and conditions, as outlined in our Terms and Conditions for Prospective Sellers.
-
-
-9. Videos (If Applicable)
-
-If videos are included in your product listing, they must be of good quality and professionalism.
-
-Business Branding: Videos should contain the seller's business name and logo for branding purposes.
-
-Videos must be shorter than five minutes in duration.
-
-Content: Videos can showcase the product or provide instructions on how to use it. They should enhance the overall customer experience.
-
-
-10. Language and Presentation
-
-Spelling, Capitalization, and Punctuation: All listings must have proper spelling, capitalization, and punctuation. Ensure that product descriptions are written in clear and correct English.
-
-
-By listing your products on the Outback Electronics platform, you agree to adhere to these listing requirements. All prices should be listed in Australian Dollars (AUD). Failure to meet these requirements may result in the rejection or removal of your listings from our platform.
-
-We value your commitment to maintaining the quality and professionalism of our platform and look forward to a successful partnership.
-
-If you have any questions or require clarification regarding these listing requirements, please do not hesitate to contact our support team. We are here to assist you and ensure a transparent and mutually beneficial partnership.
-
-Thank you for choosing Outback Electronics as your platform for selling electronic products.`,
-  },
+  { id: 'OHD001', title: 'Terms and Conditions for Sellers', Component: SellerTermsContent },
+  { id: 'OHD002', title: 'Design Quality Standards', Component: SellerQualityContent },
+  { id: 'OHD003', title: 'Fees Schedule', Component: SellerFeesContent },
+  { id: 'OHD004', title: 'Listing Requirements', Component: SellerListingContent },
 ];
 
 function SellersPage({ go }) {
+  const shop = useShop();
   const [activeDoc, setActiveDoc] = useState(null);
   const current = SELLER_DOCS.find(d => d.id === activeDoc);
 
+  const fullAddress = [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(', ');
+  const email = shop.email;
+  const phone = shop.phone;
+  const address = fullAddress;
+  const abn = shop.abn;
+
   if (current) {
+    const DocComponent = current.Component;
     return (
       <>
         <PageHead
@@ -772,10 +829,9 @@ function SellersPage({ go }) {
             <div className="row-flex" style={{alignItems:'center', gap: 12, marginBottom: 24}}>
               <span className="tag tag-ochre">{current.id}</span>
             </div>
-            <h2 className="serif" style={{fontSize: 32, lineHeight: 1.1}}>{current.title}</h2>
             <hr className="thin" style={{margin: '24px 0'}} />
-            <div style={{fontSize: 14.5, lineHeight: 1.8, color: 'var(--ink-2)', whiteSpace: 'pre-wrap'}}>
-              {current.content}
+            <div className="policy-content" style={{fontSize: 14.5, lineHeight: 1.8, color: 'var(--ink-2)'}}>
+              <DocComponent email={email} phone={phone} address={address} abn={abn} />
             </div>
           </div>
         </section>
