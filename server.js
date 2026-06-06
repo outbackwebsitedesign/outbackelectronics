@@ -45,7 +45,7 @@ const PUBLIC_CSP = "default-src 'self'; " +
     "https://*.googlesyndication.com https://*.doubleclick.net https://securepubads.g.doubleclick.net " +
     "https://adservice.google.com https://adservice.google.com.au " +
     "https://*.adtrafficquality.google; " +
-  "frame-src https://www.openstreetmap.org https://*.tawk.to " +
+  "frame-src 'self' https://www.openstreetmap.org https://*.tawk.to " +
     "https://pagead2.googlesyndication.com https://*.googlesyndication.com " +
     "https://googleads.g.doubleclick.net https://tpc.googlesyndication.com " +
     "https://www.google.com https://ep2.adtrafficquality.google; " +
@@ -896,7 +896,7 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null) {
         ? 'public, max-age=31536000, immutable'
         : 'no-cache, must-revalidate';
       const isHtml = ext === '.html';
-      const isEmbeddable = isHtml && filePath.endsWith('ai-video.html');
+      const isEmbeddable = isHtml && cleanPath.startsWith('/assets/') && !cleanPath.startsWith('/assets/uploads/');
       const securityHeaders = isHtml ? {
         'X-Frame-Options': isEmbeddable ? 'SAMEORIGIN' : 'DENY',
         'X-Content-Type-Options': 'nosniff',
