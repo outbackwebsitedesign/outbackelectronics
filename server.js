@@ -9,7 +9,6 @@ const sharp = require('sharp');
 const gzipCache = new Map();
 
 const MAIN_PORT  = process.env.MAIN_PORT  || 8080;
-const DISCOURSE_REDIRECT_PORT = process.env.DISCOURSE_REDIRECT_PORT || 8081;
 const ADMIN_PORT = process.env.ADMIN_PORT || 8082;
 const PORTAL_PORT = process.env.PORTAL_PORT || 8083;
 const GAMES_PORT  = process.env.GAMES_PORT  || 8084;
@@ -38,7 +37,7 @@ const PUBLIC_CSP = "default-src 'self'; " +
   "img-src 'self' data: https:; " +
   "font-src 'self' data: https://fonts.gstatic.com https://*.tawk.to; " +
   "connect-src 'self' " +
-    "https://portal.outbackelectronics.com.au https://forum.outbackelectronics.com.au " +
+    "https://portal.outbackelectronics.com.au " +
     "https://nominatim.openstreetmap.org " +
     "wss://*.tawk.to https://*.tawk.to https://va.tawk.to " +
     "https://cloudflareinsights.com " +
@@ -344,15 +343,6 @@ function readUsers() {
 }
 function writeUsers(users) { atomicWriteFile(USERS_DB_PATH, JSON.stringify({ users }, null, 2)); }
 
-// readForum/writeForum: portal and admin features that need the full users object.
-// Backed by users.db (same file as readUsers/writeUsers).
-function readForum() {
-  try { const d = JSON.parse(cachedReadFile(USERS_DB_PATH)); return { users: Array.isArray(d.users) ? d.users : [] }; }
-  catch { return { users: [] }; }
-}
-function writeForum(forum) {
-  atomicWriteFile(USERS_DB_PATH, JSON.stringify({ users: Array.isArray(forum.users) ? forum.users : [] }, null, 2));
-}
 
 function readSoftware() { try { return JSON.parse(cachedReadFile(SOFTWARE_DB_PATH)).items || []; } catch { return []; } }
 function writeSoftware(items) { atomicWriteFile(SOFTWARE_DB_PATH, JSON.stringify({ items }, null, 2)); }
@@ -488,8 +478,7 @@ function roundCents(n) { return Math.round((Number(n) || 0) * 100) / 100; }
 function grantStoreCredit(email, amount, type, description, refId) {
   const amt = roundCents(amount);
   if (!email || !Number.isFinite(amt) || amt <= 0) return false;
-  const forum = readForum();
-  const user = Array.isArray(forum.users) ? forum.users.find(u => String(u.email || '').toLowerCase() === String(email).toLowerCase()) : null;
+  const user = readUsers().find(u => String(u.email || '').toLowerCase() === String(email).toLowerCase());
   if (!user) return false;
   const db = readStoreCredits();
   let entry = db.entries.find(e => e.userId === user.id);
@@ -2117,29 +2106,6 @@ const mainServer = http.createServer(async (req, res) => {
     return json(res, 200, { repairCount, ewasteTonnes, resalePercent });
   }
 
-  if (req.method === 'GET' && url.pathname === '/api/forum/recent') {
-    try {
-      const httpsM = require('https');
-      const data = await new Promise((resolve, reject) => {
-        const r2 = httpsM.get('https://forum.outbackelectronics.com.au/latest.json?order=created', {
-          headers: { 'Accept': 'application/json', 'User-Agent': 'OutbackElectronics/1.0' },
-        }, r => {
-          let buf = '';
-          r.on('data', c => buf += c);
-          r.on('end', () => { try { resolve(JSON.parse(buf)); } catch { reject(new Error('parse')); } });
-        });
-        r2.on('error', reject);
-        r2.setTimeout(5000, () => { r2.destroy(); reject(new Error('timeout')); });
-      });
-      const topics = (data?.topic_list?.topics || [])
-        .filter(t => !t.pinned)
-        .slice(0, 5)
-        .map(t => ({ id: t.id, title: t.title, slug: t.slug, reply_count: t.reply_count || 0, views: t.views || 0, created_at: t.created_at }));
-      return json(res, 200, { topics });
-    } catch {
-      return json(res, 200, { topics: [] });
-    }
-  }
 
   if (req.method === 'GET' && url.pathname === '/api/catalog/products') {
     return json(res, 200, { items: readProducts().filter(p => p.status === 'published') });
@@ -3281,17 +3247,6 @@ const mainServer = http.createServer(async (req, res) => {
     console.error('[mainServer] unhandled error:', err);
     if (!res.headersSent) json(res, 500, { error: 'server_error', message: 'An unexpected error occurred.' });
   }
-});
-
-// ── Discourse redirect server (8081) ─────────────────────────────────────────
-// Redirects discourse.outbackelectronics.com.au → forum.outbackelectronics.com.au
-
-const FORUM_PUBLIC_URL = process.env.FORUM_PUBLIC_URL || 'https://forum.outbackelectronics.com.au';
-
-const discourseRedirectServer = http.createServer((req, res) => {
-  const target = FORUM_PUBLIC_URL + (req.url || '/');
-  res.writeHead(301, { Location: target });
-  res.end();
 });
 
 // ── Admin server (8082) ───────────────────────────────────────────────────────
@@ -4654,9 +4609,9 @@ const adminServer = http.createServer(async (req, res) => {
   if (req.method === 'GET' && url.pathname === '/api/admin/store-credit') {
     const session = requireRole(req, res, 'manager'); if (!session) return;
     const db = readStoreCredits();
-    const forum = readForum();
+    const users = readUsers();
     const entries = db.entries.map(e => {
-      const user = Array.isArray(forum.users) ? forum.users.find(u => u.id === e.userId) : null;
+      const user = users.find(u => u.id === e.userId);
       return { ...e, displayName: user?.displayName || '', username: user?.username || '', email: user?.email || e.email || '' };
     });
     return json(res, 200, { entries });
@@ -4672,8 +4627,7 @@ const adminServer = http.createServer(async (req, res) => {
     const db = readStoreCredits();
     let entry = db.entries.find(e => e.userId === userId);
     if (!entry) {
-      const forum = readForum();
-      const user = Array.isArray(forum.users) ? forum.users.find(u => u.id === userId) : null;
+      const user = readUsers().find(u => u.id === userId);
       entry = { userId, email: user ? String(user.email || '').toLowerCase() : '', balance: 0, history: [] };
       db.entries.push(entry);
     }
@@ -5178,8 +5132,7 @@ const portalServer = http.createServer(async (req, res) => {
   if (req.method === 'GET' && url.pathname === '/api/portal/game-scores') {
     const session = getPortalSession(req);
     if (!session) return json(res, 401, { error: 'login_required' });
-    const forum = readForum();
-    const user = Array.isArray(forum.users) ? forum.users.find(u => u.id === session.id) : null;
+    const user = readUsers().find(u => u.id === session.id);
     return json(res, 200, { scores: (user && user.gameScores) || {} });
   }
 
@@ -5189,14 +5142,13 @@ const portalServer = http.createServer(async (req, res) => {
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     const { gameId, score } = body || {};
     if (!gameId || typeof score !== 'number' || score < 0) return json(res, 422, { error: 'invalid_payload' });
-    const forum = readForum();
-    if (!Array.isArray(forum.users)) forum.users = [];
-    const idx = forum.users.findIndex(u => u.id === session.id);
+    const users = readUsers();
+    const idx = users.findIndex(u => u.id === session.id);
     if (idx < 0) return json(res, 404, { error: 'user_not_found' });
-    const existing = forum.users[idx].gameScores || {};
+    const existing = users[idx].gameScores || {};
     if (score > (existing[gameId] || 0)) {
-      forum.users[idx] = { ...forum.users[idx], gameScores: { ...existing, [gameId]: score } };
-      writeForum(forum);
+      users[idx] = { ...users[idx], gameScores: { ...existing, [gameId]: score } };
+      writeUsers(users);
     }
     return json(res, 200, { ok: true });
   }
@@ -5594,7 +5546,6 @@ backfillJobEmails();
 })();
 
 startServer(mainServer,   MAIN_PORT,   'main  ');
-startServer(discourseRedirectServer, DISCOURSE_REDIRECT_PORT, 'redirect');
 startServer(adminServer,  ADMIN_PORT,  'admin ');
 startServer(portalServer, PORTAL_PORT, 'portal');
 startServer(gamesServer,  GAMES_PORT,  'games ');
