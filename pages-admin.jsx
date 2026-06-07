@@ -549,42 +549,67 @@ function AdminOverview({ go }) {
 }
 
 // ============================================================
-// ORDERS
+// ORDER helpers — shared by AdminOrders and OrderDrawer
 // ============================================================
-function AdminOrders({ search }) {
-  const [rows, setRows] = useState([]);
-  const [expenses, setExpenses] = useState([]);
-  const [edit, setEdit] = useState(null);
-  const [form, setForm] = useState({});
+const ORDER_PAYMENT_MAP = {
+  paid:       { bg:'#d8e7d0', fg:'#345526' },
+  'part-paid':{ bg:'#fff4d6', fg:'#7a5d10' },
+  unpaid:     { bg:'#f3d5c5', fg:'#7a3a18' },
+};
+const ORDER_FULFILMENT_MAP = {
+  pending:   { bg:'var(--bg-deep)', fg:'var(--ink-2)' },
+  ordering:  { bg:'#f0e6d3', fg:'#7a5010' },
+  building:  { bg:'#fff4d6', fg:'#7a5d10' },
+  testing:   { bg:'#dceaf5', fg:'#1668c8' },
+  packed:    { bg:'#c8dff5', fg:'#0e4a8c' },
+  shipped:   { bg:'var(--ink)', fg:'var(--paper)' },
+  fulfilled: { bg:'#d8e7d0', fg:'#345526' },
+  refunded:  { bg:'#f3d5c5', fg:'#7a3a18' },
+};
+function orderAmountPaid(f) {
+  return Math.round((f.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0) * 100) / 100;
+}
+function orderEffectiveTotal(f) {
+  const payments = f.payments || [];
+  const lastMethod = payments.length ? (payments[payments.length - 1].method || 'Card') : 'Card';
+  return lastMethod === 'Cash' ? cashRound(Number(f.total) || 0) : Math.round((Number(f.total) || 0) * 100) / 100;
+}
+function orderBalance(f) { return Math.round((orderEffectiveTotal(f) - orderAmountPaid(f)) * 100) / 100; }
+function orderPaymentStatus(f) {
+  if ((f.payments || []).length > 0) {
+    if (orderAmountPaid(f) >= orderEffectiveTotal(f)) return 'paid';
+    return 'part-paid';
+  }
+  if (f.status === 'paid' || f.status === 'part-paid') return f.status;
+  return 'unpaid';
+}
+
+// ============================================================
+// OrderDrawer — edit panel for a single order
+// ============================================================
+function OrderDrawer({ edit, expenses, onClose, onRowUpdate, onSave, onExpensesChange }) {
+  const [form, setForm] = useState({...edit});
   const [payEntry, setPayEntry] = useState({ amount:'', method:'Cash', note:'' });
   const [updateEntry, setUpdateEntry] = useState({ text:'', type:'note' });
-  const [expenseEdit, setExpenseEdit] = useState(null); // id of expense being edited inline, or 'new'
+  const [expenseEdit, setExpenseEdit] = useState(null);
   const [expenseForm, setExpenseForm] = useState({});
-  const [trackingEmailStatus, setTrackingEmailStatus] = useState(null); // null | 'sending' | 'sent' | 'error'
-  useEffect(() => {
-    fetch('/api/admin/orders', { credentials:'include' })
-      .then(r => r.ok ? r.json() : Promise.reject()).then(d => setRows(d.items || [])).catch(() => setRows([]));
-    fetch('/api/admin/expenses', { credentials:'include' })
-      .then(r => r.ok ? r.json() : Promise.reject()).then(d => setExpenses(d.items || [])).catch(() => {});
-  }, []);
+  const [trackingEmailStatus, setTrackingEmailStatus] = useState(null);
   const [trackingBusy, setTrackingBusy] = useState(false);
   const [trackingResult, setTrackingResult] = useState(null);
   const [refundEntry, setRefundEntry] = useState({ method:'stripe', amount:'' });
   const [refundBusy, setRefundBusy] = useState(false);
   const [refundError, setRefundError] = useState(null);
 
-  const openRow = (r) => { setEdit(r); setForm({...r}); setPayEntry({ amount:'', method:'Cash', note:'' }); setExpenseEdit(null); setExpenseForm({}); setTrackingResult(null); setTrackingEmailStatus(null); };
-
   const saveNow = async (patch) => {
     const updated = { ...form, ...patch };
     const prevForm = form;
     const rowId = edit?.id || updated.id;
     setForm(updated);
-    setRows(rs => rs.map(r => r.id === rowId ? updated : r));
+    onRowUpdate(updated);
     const r = await fetch('/api/admin/orders/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ ...updated, _originalId: rowId }) }).catch(()=>null);
     if (!r || !r.ok) {
       setForm(prevForm);
-      setRows(rs => rs.map(r => r.id === rowId ? prevForm : r));
+      onRowUpdate(prevForm);
       adminToast('Save failed — change not persisted. Please try again.');
     }
   };
@@ -601,7 +626,7 @@ function AdminOrders({ search }) {
     const d = await r.json().catch(()=>({}));
     if (!r.ok) { setRefundError(d.message || 'Refund failed.'); return; }
     setForm(d.order);
-    setRows(rs => rs.map(row => row.id === form.id ? d.order : row));
+    onRowUpdate(d.order);
     setRefundEntry({ method:'stripe', amount:'' });
   };
 
@@ -614,8 +639,9 @@ function AdminOrders({ search }) {
     if (!r.ok) { setTrackingResult({ error: d.message || 'Could not fetch tracking.' }); return; }
     setTrackingResult(d.tracking);
     if (d.fulfilment && d.fulfilment !== form.fulfilment) {
-      setForm(f => ({ ...f, fulfilment: d.fulfilment }));
-      setRows(rs => rs.map(r => r.id === form.id ? { ...r, fulfilment: d.fulfilment } : r));
+      const updated = { ...form, fulfilment: d.fulfilment };
+      setForm(updated);
+      onRowUpdate(updated);
     }
   };
 
@@ -627,7 +653,10 @@ function AdminOrders({ search }) {
     const r = await fetch('/api/admin/expenses/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(payload) }).catch(()=>null);
     if (r && r.ok) {
       const d = await r.json();
-      setExpenses(es => es.find(e => e.id === payload.id) ? es.map(e => e.id === payload.id ? d.item : e) : [...es, d.item]);
+      const newExpenses = expenses.find(e => e.id === payload.id)
+        ? expenses.map(e => e.id === payload.id ? d.item : e)
+        : [...expenses, d.item];
+      onExpensesChange(newExpenses);
     }
     setExpenseEdit(null); setExpenseForm({});
   };
@@ -636,44 +665,8 @@ function AdminOrders({ search }) {
     if (!confirm('Delete this expense?')) return;
     const r = await fetch('/api/admin/expenses/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id }) }).catch(()=>null);
     if (!r || !r.ok) { adminToast('Failed to delete expense.'); return; }
-    setExpenses(es => es.filter(e => e.id !== id));
+    onExpensesChange(expenses.filter(e => e.id !== id));
     setExpenseEdit(null); setExpenseForm({});
-  };
-
-  const paymentMap = {
-    paid:       { bg:'#d8e7d0', fg:'#345526' },
-    'part-paid':{ bg:'#fff4d6', fg:'#7a5d10' },
-    unpaid:     { bg:'#f3d5c5', fg:'#7a3a18' },
-  };
-  const fulfilmentMap = {
-    pending:   { bg:'var(--bg-deep)', fg:'var(--ink-2)' },
-    ordering:  { bg:'#f0e6d3', fg:'#7a5010' },
-    building:  { bg:'#fff4d6', fg:'#7a5d10' },
-    testing:   { bg:'#dceaf5', fg:'#1668c8' },
-    packed:    { bg:'#c8dff5', fg:'#0e4a8c' },
-    shipped:   { bg:'var(--ink)', fg:'var(--paper)' },
-    fulfilled: { bg:'#d8e7d0', fg:'#345526' },
-    refunded:  { bg:'#f3d5c5', fg:'#7a3a18' },
-  };
-
-  const amountPaid = (f) => Math.round((f.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0) * 100) / 100;
-  const effectiveTotal = (f) => {
-    // If the last payment was cash, the "expected" total is cash-rounded
-    const payments = f.payments || [];
-    const lastMethod = payments.length ? (payments[payments.length - 1].method || 'Card') : 'Card';
-    const isCash = lastMethod === 'Cash';
-    return isCash ? cashRound(Number(f.total) || 0) : Math.round((Number(f.total) || 0) * 100) / 100;
-  };
-  const balance = (f) => Math.round((effectiveTotal(f) - amountPaid(f)) * 100) / 100;
-  const paymentStatus = (f) => {
-    if ((f.payments || []).length > 0) {
-      const paid = amountPaid(f);
-      const total = effectiveTotal(f);
-      if (paid >= total) return 'paid';
-      return 'part-paid';
-    }
-    if (f.status === 'paid' || f.status === 'part-paid') return f.status;
-    return 'unpaid';
   };
 
   const addPayment = () => {
@@ -685,50 +678,406 @@ function AdminOrders({ search }) {
     setForm(f => ({ ...f, payments: [...(f.payments || []), payment] }));
     setPayEntry({ amount:'', method:'Cash', note:'' });
   };
-  const removePayment = (i) => {
-    setForm(f => ({ ...f, payments: (f.payments || []).filter((_,idx) => idx !== i) }));
-  };
+  const removePayment = (i) => setForm(f => ({ ...f, payments: (f.payments || []).filter((_,idx) => idx !== i) }));
   const addUpdate = () => {
     if (!updateEntry.text.trim()) return;
     const u = { text: updateEntry.text.trim(), type: updateEntry.type, date: todayOrderDate(), ts: new Date().toISOString() };
     setForm(f => ({ ...f, updates: [...(f.updates || []), u] }));
     setUpdateEntry({ text:'', type:'note' });
   };
-  const removeUpdate = (i) => {
-    setForm(f => ({ ...f, updates: (f.updates || []).filter((_,idx) => idx !== i) }));
+  const removeUpdate = (i) => setForm(f => ({ ...f, updates: (f.updates || []).filter((_,idx) => idx !== i) }));
+
+  const linkedExpenses = expenses.filter(e => e.jobId && e.jobId === form.id);
+  const partsCost = linkedExpenses.reduce((s, e) => s + (e.partStatus === 'returned' ? 0 : (Number(e.amount) || 0)), 0);
+  const returnedCost = linkedExpenses.reduce((s, e) => s + (e.partStatus === 'returned' ? (Number(e.amount) || 0) : 0), 0);
+  const profit = (partsCost || returnedCost) ? (Number(form.total) || 0) - partsCost : null;
+
+  const partStatusColors = { ordered:{bg:'#dceaf5',fg:'#1668c8'}, arrived:{bg:'#fff4d6',fg:'#7a5d10'}, installed:{bg:'#d8e7d0',fg:'#345526'}, returned:{bg:'#f3d5c5',fg:'#7a3a18'} };
+
+  const ExpenseRow = ({ e }) => {
+    const isEditing = expenseEdit === e.id;
+    const ef = isEditing ? expenseForm : e;
+    if (isEditing) return (
+      <div style={{padding:'12px', background:'var(--paper)', border:'1px solid var(--ochre)', marginBottom:6}}>
+        <div className="grid-2" style={{gap:10, marginBottom:10}}>
+          <label className="field" style={{margin:0}}><span className="label">Description</span><input className="input" value={ef.description||''} onChange={ev=>setExpenseForm(f=>({...f,description:ev.target.value}))}/></label>
+          <label className="field" style={{margin:0}}><span className="label">Amount (AUD)</span><input className="input" type="number" step="0.01" value={ef.amount||''} onChange={ev=>setExpenseForm(f=>({...f,amount:ev.target.value}))}/></label>
+        </div>
+        <div className="grid-2" style={{gap:10, marginBottom:10}}>
+          <label className="field" style={{margin:0}}><span className="label">Category</span>
+            <select className="select" value={ef.category||'parts'} onChange={ev=>setExpenseForm(f=>({...f,category:ev.target.value}))}>
+              {['tools','equipment','parts','software','other'].map(c=><option key={c}>{c}</option>)}
+            </select>
+          </label>
+          <label className="field" style={{margin:0}}><span className="label">Part status</span>
+            <select className="select" value={ef.partStatus||''} onChange={ev=>setExpenseForm(f=>({...f,partStatus:ev.target.value}))}>
+              <option value="">— N/A —</option>
+              {['ordered','arrived','installed','returned'].map(s=><option key={s}>{s}</option>)}
+            </select>
+          </label>
+        </div>
+        <div className="grid-2" style={{gap:10, marginBottom:10}}>
+          <label className="field" style={{margin:0}}><span className="label">Date</span><input className="input" value={ef.date||''} onChange={ev=>setExpenseForm(f=>({...f,date:ev.target.value}))}/></label>
+          <label className="field" style={{margin:0}}><span className="label">Notes</span><input className="input" value={ef.notes||''} onChange={ev=>setExpenseForm(f=>({...f,notes:ev.target.value}))}/></label>
+        </div>
+        <label style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',marginBottom:12,fontSize:13}}>
+          <input type="checkbox" checked={!!ef.isSecondHand} onChange={ev=>setExpenseForm(f=>({...f,isSecondHand:ev.target.checked}))} style={{width:15,height:15}}/>
+          Second-hand
+        </label>
+        <div style={{display:'flex', gap:8}}>
+          <button className="btn btn-sm" onClick={() => saveExpense(ef)}>Save</button>
+          <button className="btn btn-ghost btn-sm" onClick={() => { setExpenseEdit(null); setExpenseForm({}); }}>Cancel</button>
+          <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)', marginLeft:'auto'}} onClick={() => deleteExpense(e.id)}>Delete</button>
+        </div>
+      </div>
+    );
+    return (
+      <div key={e.id} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 12px', background:'var(--bg-elev)', border:'1px solid var(--line)', marginBottom:6, cursor:'pointer', gap:10}}
+        onClick={() => { setExpenseEdit(e.id); setExpenseForm({...e}); }}>
+        <div style={{flex:1, minWidth:0}}>
+          <span style={{fontSize:13, fontWeight:500}}>{e.description}</span>
+          {e.category && <span className="mono" style={{fontSize:10, color:'var(--ink-3)', marginLeft:8}}>{e.category.toUpperCase()}</span>}
+          {e.partStatus && (() => { const s = partStatusColors[e.partStatus]; return <span className="tag" style={{background:s?.bg,color:s?.fg,borderColor:s?.bg,marginLeft:8,fontSize:10}}>{e.partStatus.toUpperCase()}</span>; })()}
+          {e.notes && <div style={{fontSize:11, color:'var(--ink-3)', marginTop:2}}>{e.notes}</div>}
+        </div>
+        <div style={{display:'flex', gap:12, alignItems:'center', flexShrink:0}}>
+          <span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>{e.date}</span>
+          {e.partStatus === 'returned'
+            ? <span className="mono" style={{fontWeight:600}}>
+                <span style={{textDecoration:'line-through', color:'var(--ink-3)', marginRight:6}}>-${(Number(e.amount)||0).toLocaleString('en-AU',{minimumFractionDigits:2})}</span>
+                <span style={{color:'#345526'}}>$0.00</span>
+              </span>
+            : <span className="mono" style={{fontWeight:600, color:'var(--rust)'}}>-${(Number(e.amount)||0).toLocaleString('en-AU',{minimumFractionDigits:2})}</span>
+          }
+          <span style={{fontSize:12, color:'var(--ink-3)'}}>✎</span>
+        </div>
+      </div>
+    );
   };
 
-  const linkedExpenses = (f) => expenses.filter(e => e.jobId && e.jobId === f.id);
-  const partsCost = (f) => linkedExpenses(f).reduce((s, e) => s + (e.partStatus === 'returned' ? 0 : (Number(e.amount) || 0)), 0);
-  const returnedCost = (f) => linkedExpenses(f).reduce((s, e) => s + (e.partStatus === 'returned' ? (Number(e.amount) || 0) : 0), 0);
-  const profit = (f) => {
-    const cost = partsCost(f);
-    const returned = returnedCost(f);
-    if (!cost && !returned) return null;
-    return (Number(f.total) || 0) - cost;
-  };
+  return (
+    <Drawer open={true} onClose={onClose} title={edit.id ? `Order ${edit.id}` : 'New order'}
+      footer={<div className="row-flex" style={{gap:8, justifyContent:'space-between'}}>
+        {edit.id
+          ? <button className="btn btn-ghost btn-sm" style={{fontSize:12}}
+              disabled={trackingEmailStatus === 'sending' || !form.email}
+              title={!form.email ? 'Order has no customer email' : 'Send order tracking email to customer'}
+              onClick={async () => {
+                setTrackingEmailStatus('sending');
+                try {
+                  const r = await fetch('/api/admin/orders/send-tracking-email', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: form.id }) });
+                  setTrackingEmailStatus(r.ok ? 'sent' : 'error');
+                } catch { setTrackingEmailStatus('error'); }
+                setTimeout(() => setTrackingEmailStatus(null), 4000);
+              }}>
+              {trackingEmailStatus === 'sending' ? '⏳ Sending…' : trackingEmailStatus === 'sent' ? '✓ Email sent' : trackingEmailStatus === 'error' ? '✗ Failed' : '✉ Send tracking email'}
+            </button>
+          : <span/>
+        }
+        <div className="row-flex" style={{gap:8}}>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
+          <button className="btn btn-sm" onClick={async () => {
+            const payload = { ...form, _originalId: edit.id || form.id };
+            const r = await fetch('/api/admin/orders/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(payload) }).catch(()=>null);
+            if (r && r.ok) {
+              const d = await r.json();
+              if (d.error) { alert(d.message || 'Save failed'); return; }
+              onSave(d.item || form, !edit.id);
+            }
+          }}>{edit.id ? 'Save' : 'Create order'}</button>
+        </div>
+      </div>}
+    >
+      <label className="field"><span className="label">Order Number</span><input className="input" style={{fontFamily:'monospace', fontWeight:700}} value={form.id||''} onChange={e=>setForm({...form,id:e.target.value})} placeholder="e.g. OE-1001"/></label>
+      <label className="field"><span className="label">Customer</span><input className="input" value={form.cust||''} onChange={e=>setForm({...form,cust:e.target.value})}/></label>
+      <label className="field"><span className="label">Email</span><input className="input" type="email" value={form.email||''} onChange={e=>setForm({...form,email:e.target.value})}/></label>
+      <label className="field"><span className="label">Phone</span><input className="input" type="tel" value={form.phone||''} onChange={e=>setForm({...form,phone:e.target.value})}/></label>
+      <label className="field"><span className="label">Shipping Address</span><input className="input" value={form.shippingAddress||''} onChange={e=>setForm({...form,shippingAddress:e.target.value})} placeholder="Street, City, State, Postcode"/></label>
+      <label className="field"><span className="label">Location</span><input className="input" value={form.loc||''} onChange={e=>setForm({...form,loc:e.target.value})}/></label>
+      <label className="field"><span className="label">Items</span><input className="input" value={form.items||''} onChange={e=>setForm({...form,items:e.target.value})}/></label>
+      <label className="field"><span className="label">Date</span><input className="input" value={form.date||''} onChange={e=>setForm({...form,date:e.target.value})}/></label>
+
+      <label className="field"><span className="label">Fulfilment</span>
+        <select className="select" value={form.fulfilment||'pending'} onChange={e=>setForm({...form,fulfilment:e.target.value})}>
+          {['pending','ordering','building','testing','packed','shipped','fulfilled','refunded'].map(s => <option key={s}>{s}</option>)}
+        </select>
+      </label>
+      <label className="field">
+        <span className="label">Australia Post Tracking Number</span>
+        <input className="input" value={form.trackingNumber||''} onChange={e=>setForm({...form,trackingNumber:e.target.value})} placeholder="e.g. 7ABC1234567890" />
+      </label>
+      {form.trackingNumber && (
+        <div style={{marginBottom:14}}>
+          <a href={`https://auspost.com.au/mypost/track/#/details/${form.trackingNumber}`} target="_blank" rel="noreferrer" style={{fontSize:13, color:'var(--rust)'}}>Preview tracking link ↗</a>
+        </div>
+      )}
+
+      {(() => {
+        const f = form.fulfilment || 'pending';
+        if (f === 'testing') return (
+          <div style={{padding:'14px', background:'#fff4d6', border:'1px solid #e6cc88', marginBottom:14}}>
+            <div className="mono" style={{fontSize:10, color:'#7a5d10', marginBottom:8}}>TESTING COMPLETE?</div>
+            <button className="btn btn-sm" style={{background:'#0e4a8c', color:'#fff', border:'none'}} onClick={() => saveNow({ fulfilment:'packed' })}>Mark as Packed →</button>
+          </div>
+        );
+        if (f === 'packed') return (
+          <div style={{padding:'14px', background:'#dceaf5', border:'1px solid #9ec4e8', marginBottom:14}}>
+            <div className="mono" style={{fontSize:10, color:'#1668c8', marginBottom:8}}>READY TO SHIP?</div>
+            {!form.trackingNumber && <div style={{fontSize:12, color:'var(--rust)', marginBottom:8}}>⚠ Add a tracking number above before marking as shipped.</div>}
+            <button className="btn btn-sm" style={{background:'var(--ink)', color:'var(--paper)', border:'none', opacity: form.trackingNumber ? 1 : 0.5}} disabled={!form.trackingNumber} onClick={() => saveNow({ fulfilment:'shipped' })}>Mark as Shipped →</button>
+          </div>
+        );
+        if (f === 'shipped') return (
+          <div style={{padding:'14px', background:'var(--bg-elev)', border:'1px solid var(--line)', marginBottom:14}}>
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8}}>
+              <div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>AUSPOST TRACKING</div>
+              <button className="btn btn-ghost btn-sm" style={{fontSize:11}} onClick={checkTracking} disabled={trackingBusy}>{trackingBusy ? 'Checking…' : 'Check now'}</button>
+            </div>
+            {trackingResult && !trackingResult.error && (
+              <div style={{marginBottom:8}}>
+                <div style={{fontSize:13, fontWeight:600, marginBottom:4}}>{trackingResult.raw}</div>
+                {(trackingResult.events || []).slice(0,3).map((e,i) => (
+                  <div key={i} style={{fontSize:11, color:'var(--ink-2)', padding:'3px 0', borderTop: i > 0 ? '1px solid var(--line)' : 'none'}}>
+                    {e.date && <span className="mono" style={{color:'var(--ink-3)', marginRight:8}}>{e.date}</span>}
+                    {e.description}{e.location ? ` — ${e.location}` : ''}
+                  </div>
+                ))}
+              </div>
+            )}
+            {trackingResult?.error && <div style={{fontSize:12, color:'var(--rust)', marginBottom:8}}>{trackingResult.error}</div>}
+            {form.lastTrackingStatus && !trackingResult && <div style={{fontSize:12, color:'var(--ink-2)', marginBottom:8}}>Last known: <strong>{form.lastTrackingStatus}</strong></div>}
+            <button className="btn btn-sm" style={{background:'#345526', color:'#fff', border:'none'}} onClick={() => saveNow({ fulfilment:'fulfilled' })}>Mark as Delivered manually →</button>
+          </div>
+        );
+        return null;
+      })()}
+
+      {(form.parts || []).length > 0 && <>
+        <div style={{borderTop:'1px solid var(--line)', margin:'12px 0 16px'}}/>
+        <div className="mono" style={{fontSize:10, letterSpacing:'.1em', color:'var(--ink-2)', marginBottom:10}}>PARTS TRACKING</div>
+        {(form.parts || []).map((part, i) => {
+          const PART_STATUSES = ['pending','ordered','delivered','installed'];
+          const statusColors = { pending:'var(--ink-3)', ordered:'#1668c8', delivered:'#7a5d10', installed:'#345526' };
+          return (
+            <div key={part.id || i} style={{padding:'10px 14px', background:'var(--bg-elev)', border:'1px solid var(--line)', marginBottom:6}}>
+              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, flexWrap:'wrap'}}>
+                <div style={{flex:1, minWidth:0}}>
+                  <div style={{fontWeight:500, fontSize:13}}>{part.name}{part.qty > 1 ? <span style={{color:'var(--ink-3)', fontWeight:400}}> × {part.qty}</span> : ''}</div>
+                  {part.orderedAt && <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginTop:2}}>Ordered {part.orderedAt}{part.deliveredAt ? ` · Delivered ${part.deliveredAt}` : ''}{part.installedAt ? ` · Installed ${part.installedAt}` : ''}</div>}
+                </div>
+                <div style={{display:'flex', gap:4, flexWrap:'wrap'}}>
+                  {PART_STATUSES.map(s => {
+                    const active = part.status === s;
+                    return (
+                      <button key={s} className="btn btn-sm" style={{fontSize:10, padding:'2px 8px', background: active ? statusColors[s] : 'transparent', color: active ? '#fff' : statusColors[s], border:`1px solid ${statusColors[s]}`, cursor: active ? 'default' : 'pointer'}}
+                        onClick={() => {
+                          if (active) return;
+                          const dateStr = new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
+                          const patch = { status: s };
+                          if (s === 'ordered' && !part.orderedAt) patch.orderedAt = dateStr;
+                          if (s === 'delivered' && !part.deliveredAt) patch.deliveredAt = dateStr;
+                          if (s === 'installed' && !part.installedAt) patch.installedAt = dateStr;
+                          setForm(f => {
+                            const newParts = f.parts.map((p, pi) => pi === i ? { ...p, ...patch } : p);
+                            const STAGE_ORDER = ['pending','ordering','building','testing','packed','shipped','fulfilled','refunded'];
+                            const currentStage = STAGE_ORDER.indexOf(f.fulfilment || 'pending');
+                            let derived = f.fulfilment || 'pending';
+                            if (newParts.some(p => ['ordered','delivered','installed'].includes(p.status))) derived = 'ordering';
+                            if (newParts.every(p => ['delivered','installed'].includes(p.status))) derived = 'building';
+                            if (newParts.every(p => p.status === 'installed')) derived = 'testing';
+                            const derivedStage = STAGE_ORDER.indexOf(derived);
+                            const fulfilment = derivedStage > currentStage ? derived : f.fulfilment;
+                            const updated = { ...f, parts: newParts, fulfilment };
+                            saveNow({ parts: newParts, fulfilment });
+                            return updated;
+                          });
+                        }}
+                      >{s}</button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </>}
+
+      <div style={{borderTop:'1px solid var(--line)', margin:'12px 0 16px'}}/>
+      <label className="field"><span className="label">Order Total (AUD)</span><input className="input" type="number" min="0" step="0.01" value={form.total||''} onChange={e=>setForm({...form,total:Number(e.target.value)})}/></label>
+
+      <div style={{marginBottom:12}}>
+        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8}}>
+          <div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>LINKED EXPENSES ({linkedExpenses.length})</div>
+          {expenseEdit !== 'new' && <button className="btn btn-ghost btn-sm" style={{fontSize:11}} onClick={() => { setExpenseEdit('new'); setExpenseForm(blankExpense(form.id)); }}>+ Add expense</button>}
+        </div>
+        {linkedExpenses.length === 0 && expenseEdit !== 'new' && <div className="mono" style={{fontSize:11, color:'var(--ink-3)', marginBottom:8}}>No expenses linked.</div>}
+        {linkedExpenses.map(e => <ExpenseRow key={e.id} e={e} />)}
+        {expenseEdit === 'new' && (
+          <div style={{padding:'12px', background:'var(--paper)', border:'1px solid var(--ochre)', marginBottom:6}}>
+            <div className="grid-2" style={{gap:10, marginBottom:10}}>
+              <label className="field" style={{margin:0}}><span className="label">Description</span><input className="input" value={expenseForm.description||''} onChange={e=>setExpenseForm(f=>({...f,description:e.target.value}))} autoFocus/></label>
+              <label className="field" style={{margin:0}}><span className="label">Amount (AUD)</span><input className="input" type="number" step="0.01" value={expenseForm.amount||''} onChange={e=>setExpenseForm(f=>({...f,amount:e.target.value}))}/></label>
+            </div>
+            <div className="grid-2" style={{gap:10, marginBottom:10}}>
+              <label className="field" style={{margin:0}}><span className="label">Category</span>
+                <select className="select" value={expenseForm.category||'parts'} onChange={e=>setExpenseForm(f=>({...f,category:e.target.value}))}>
+                  {['tools','equipment','parts','software','other'].map(c=><option key={c}>{c}</option>)}
+                </select>
+              </label>
+              <label className="field" style={{margin:0}}><span className="label">Part status</span>
+                <select className="select" value={expenseForm.partStatus||''} onChange={e=>setExpenseForm(f=>({...f,partStatus:e.target.value}))}>
+                  <option value="">— N/A —</option>
+                  {['ordered','arrived','installed','returned'].map(s=><option key={s}>{s}</option>)}
+                </select>
+              </label>
+            </div>
+            <div className="grid-2" style={{gap:10, marginBottom:10}}>
+              <label className="field" style={{margin:0}}><span className="label">Date</span><input className="input" value={expenseForm.date||''} onChange={e=>setExpenseForm(f=>({...f,date:e.target.value}))}/></label>
+              <label className="field" style={{margin:0}}><span className="label">Notes</span><input className="input" value={expenseForm.notes||''} onChange={e=>setExpenseForm(f=>({...f,notes:e.target.value}))}/></label>
+            </div>
+            <label style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',marginBottom:12,fontSize:13}}>
+              <input type="checkbox" checked={!!expenseForm.isSecondHand} onChange={e=>setExpenseForm(f=>({...f,isSecondHand:e.target.checked}))} style={{width:15,height:15}}/>
+              Second-hand
+            </label>
+            <div style={{display:'flex', gap:8}}>
+              <button className="btn btn-sm" onClick={() => saveExpense(expenseForm)}>Save expense</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => { setExpenseEdit(null); setExpenseForm({}); }}>Cancel</button>
+            </div>
+          </div>
+        )}
+        {linkedExpenses.length > 0 && (
+          <div style={{display:'flex', gap:24, padding:'10px 14px', background: profit >= 0 ? '#d8e7d0' : '#f3d5c5', marginTop:4, flexWrap:'wrap'}}>
+            <div><div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>PARTS COST</div><div className="mono" style={{fontSize:14, fontWeight:600, color:'var(--rust)'}}>-${partsCost.toLocaleString('en-AU',{minimumFractionDigits:2})}</div></div>
+            {returnedCost > 0 && <div><div className="mono" style={{fontSize:10, color:'#345526'}}>RETURNED</div><div className="mono" style={{fontSize:14, fontWeight:600, color:'#345526'}}>+${returnedCost.toLocaleString('en-AU',{minimumFractionDigits:2})}</div></div>}
+            <div><div className="mono" style={{fontSize:10, color: profit >= 0 ? '#345526' : '#7a3a18'}}>PROFIT</div><div className="mono" style={{fontSize:14, fontWeight:600, color: profit >= 0 ? '#345526' : '#7a3a18'}}>${profit.toLocaleString('en-AU',{minimumFractionDigits:2})}</div></div>
+            <div><div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>MARGIN</div><div className="mono" style={{fontSize:14, fontWeight:600, color:'var(--ink-2)'}}>{form.total ? Math.round(profit / Number(form.total) * 100) : 0}%</div></div>
+          </div>
+        )}
+      </div>
+
+      <div style={{borderTop:'1px solid var(--line)', margin:'12px 0 16px'}}/>
+      <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:10}}>
+        <div className="mono" style={{fontSize:10, letterSpacing:'.1em', color:'var(--ink-2)'}}>PAYMENT LOG</div>
+        <div style={{display:'flex', gap:8, alignItems:'center'}}>
+          <StatusPill value={orderPaymentStatus(form)} map={ORDER_PAYMENT_MAP} />
+          <span className="mono" style={{fontSize:11}}>
+            <span style={{color:'var(--eucalyptus)'}}>paid ${orderAmountPaid(form).toLocaleString()}</span>
+            {orderBalance(form) > 0 && <span style={{color:'var(--rust)'}}> · owing ${orderBalance(form).toLocaleString()}</span>}
+          </span>
+        </div>
+      </div>
+      {(form.payments || []).length === 0 && <div className="mono" style={{fontSize:11, color:'var(--ink-3)', marginBottom:12}}>No payments recorded.</div>}
+      {(form.payments || []).map((p, i) => (
+        <div key={i} style={{display:'flex', alignItems:'center', gap:10, padding:'8px 12px', background:'var(--bg-elev)', border:'1px solid var(--line)', marginBottom:6}}>
+          <div style={{flex:1}}>
+            <span className="mono" style={{fontWeight:600}}>${Number(p.amount).toLocaleString()}</span>
+            <span className="mono" style={{fontSize:11, color:'var(--ink-2)', marginLeft:10}}>{p.method}</span>
+            {p.note && <span style={{fontSize:12, color:'var(--ink-2)', marginLeft:10}}>— {p.note}</span>}
+          </div>
+          <span className="mono" style={{fontSize:10, color:'var(--ink-3)'}}>{p.date}</span>
+          <button className="icon-btn" style={{width:22, height:22, fontSize:14, color:'var(--ink-3)'}} onClick={() => removePayment(i)}>×</button>
+        </div>
+      ))}
+      <div style={{display:'grid', gridTemplateColumns:'100px 100px 1fr auto', gap:8, alignItems:'end', marginTop:8}}>
+        <label className="field" style={{margin:0}}><span className="label">Amount</span><input className="input" type="number" min="0" step="0.01" placeholder="0.00" value={payEntry.amount} onChange={e=>setPayEntry(v=>({...v,amount:e.target.value}))}/></label>
+        <label className="field" style={{margin:0}}><span className="label">Method</span>
+          <select className="select" value={payEntry.method} onChange={e=>setPayEntry(v=>({...v,method:e.target.value}))}>
+            {['Cash','Card','Bank Transfer','Crypto','Other'].map(m => <option key={m}>{m}</option>)}
+          </select>
+        </label>
+        <label className="field" style={{margin:0}}><span className="label">Note (optional)</span><input className="input" placeholder="e.g. deposit, part payment" value={payEntry.note} onChange={e=>setPayEntry(v=>({...v,note:e.target.value}))}/></label>
+        <button className="btn btn-sm" style={{marginBottom:1}} onClick={addPayment}>Log</button>
+      </div>
+
+      {form.id && (
+        <div style={{marginTop:16, padding:'14px', background:'#fbeae1', border:'1px solid #e3b9a3'}}>
+          <div className="mono" style={{fontSize:10, letterSpacing:'.1em', color:'#7a3a18', marginBottom:10}}>REFUND</div>
+          {form.refund ? (
+            <div style={{fontSize:13, color:'#7a3a18'}}>
+              Refunded <strong>${Number(form.refund.amount).toLocaleString('en-AU',{minimumFractionDigits:2})}</strong> via {form.refund.method === 'stripe' ? 'Stripe (original payment)' : 'store credit'} on {new Date(form.refund.date).toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'})}.
+            </div>
+          ) : (
+            <>
+              <div style={{fontSize:12, color:'var(--ink-2)', marginBottom:10}}>Ask the customer whether they want their money back or store credit, then choose below. The customer is emailed automatically and the order is marked refunded.</div>
+              <div style={{display:'grid', gridTemplateColumns:'1fr 120px auto', gap:8, alignItems:'end'}}>
+                <label className="field" style={{margin:0}}><span className="label">Method</span>
+                  <select className="select" value={refundEntry.method} onChange={e=>setRefundEntry(v=>({...v,method:e.target.value}))}>
+                    <option value="stripe">Money back (Stripe)</option>
+                    <option value="store-credit">Store credit</option>
+                  </select>
+                </label>
+                <label className="field" style={{margin:0}}><span className="label">Amount</span><input className="input" type="number" min="0" step="0.01" placeholder={Number(form.total||0).toFixed(2)} value={refundEntry.amount} onChange={e=>setRefundEntry(v=>({...v,amount:e.target.value}))}/></label>
+                <button className="btn btn-sm" style={{background:'#7a3a18', color:'#fff', border:'none', marginBottom:1}} onClick={doRefund} disabled={refundBusy}>{refundBusy ? 'Processing…' : 'Issue Refund'}</button>
+              </div>
+              {refundEntry.method === 'store-credit' && <div style={{fontSize:11, color:'var(--ink-3)', marginTop:6}}>Store credit requires the customer to have an account with email {form.email || '(none set)'}.</div>}
+              {refundError && <div style={{fontSize:12, color:'#b91c1c', marginTop:8}}>{refundError}</div>}
+            </>
+          )}
+        </div>
+      )}
+
+      <div style={{borderTop:'1px solid var(--line)', margin:'16px 0 16px'}}/>
+      <div className="mono" style={{fontSize:10, letterSpacing:'.1em', color:'var(--ink-2)', marginBottom:10}}>ORDER UPDATES (VISIBLE TO CUSTOMER)</div>
+      {(form.updates || []).length === 0 && <div className="mono" style={{fontSize:11, color:'var(--ink-3)', marginBottom:12}}>No updates posted.</div>}
+      {(form.updates || []).map((u, i) => (
+        <div key={i} style={{display:'flex', alignItems:'flex-start', gap:10, padding:'8px 12px', background:'var(--bg-elev)', border:'1px solid var(--line)', marginBottom:6}}>
+          <div style={{flex:1}}>
+            <span className="tag tag-outline" style={{fontSize:10, marginRight:8}}>{u.type}</span>
+            <span style={{fontSize:13}}>{u.text}</span>
+          </div>
+          <span className="mono" style={{fontSize:10, color:'var(--ink-3)', whiteSpace:'nowrap'}}>{u.date}</span>
+          <button className="icon-btn" style={{width:22, height:22, fontSize:14, color:'var(--ink-3)'}} onClick={() => removeUpdate(i)}>×</button>
+        </div>
+      ))}
+      <div style={{display:'grid', gridTemplateColumns:'130px 1fr auto', gap:8, alignItems:'end', marginTop:8}}>
+        <label className="field" style={{margin:0}}><span className="label">Type</span>
+          <select className="select" value={updateEntry.type} onChange={e=>setUpdateEntry(v=>({...v,type:e.target.value}))}>
+            {['note','parts_arrived','parts_ordered','build_started','ready_for_pickup','dispatched'].map(t => <option key={t} value={t}>{t.replace(/_/g,' ')}</option>)}
+          </select>
+        </label>
+        <label className="field" style={{margin:0}}><span className="label">Message</span><input className="input" placeholder="e.g. RAM and SSD have arrived, waiting on GPU" value={updateEntry.text} onChange={e=>setUpdateEntry(v=>({...v,text:e.target.value}))} onKeyDown={e=>e.key==='Enter'&&addUpdate()}/></label>
+        <button className="btn btn-sm" style={{marginBottom:1}} onClick={addUpdate}>Post</button>
+      </div>
+    </Drawer>
+  );
+}
+
+// ============================================================
+// ORDERS
+// ============================================================
+function AdminOrders({ search }) {
+  const [rows, setRows] = useState([]);
+  const [expenses, setExpenses] = useState([]);
+  const [edit, setEdit] = useState(null);
+  useEffect(() => {
+    fetch('/api/admin/orders', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject()).then(d => setRows(d.items || [])).catch(() => setRows([]));
+    fetch('/api/admin/expenses', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject()).then(d => setExpenses(d.items || [])).catch(() => {});
+  }, []);
 
   const q = (search || '').toLowerCase().trim();
-  const visibleRows = q
+  const visibleRows = useMemo(() => q
     ? rows.filter(r =>
         (r.id || '').toLowerCase().includes(q) ||
         (r.cust || '').toLowerCase().includes(q) ||
         (r.items || '').toLowerCase().includes(q) ||
         (r.loc || '').toLowerCase().includes(q)
       )
-    : rows;
+    : rows, [rows, q]);
 
-  const tabCounts = {
+  const tabCounts = useMemo(() => ({
     all: rows.length,
-    unpaid: rows.filter(r => paymentStatus(r) === 'unpaid').length,
-    'part-paid': rows.filter(r => paymentStatus(r) === 'part-paid').length,
-    paid: rows.filter(r => paymentStatus(r) === 'paid').length,
+    unpaid: rows.filter(r => orderPaymentStatus(r) === 'unpaid').length,
+    'part-paid': rows.filter(r => orderPaymentStatus(r) === 'part-paid').length,
+    paid: rows.filter(r => orderPaymentStatus(r) === 'paid').length,
     shipped: rows.filter(r => (r.fulfilment||'pending') === 'shipped').length,
     refunded: rows.filter(r => (r.fulfilment||'pending') === 'refunded').length,
-  };
+  }), [rows]);
 
   const blankOrder = () => ({ id:'', cust:'', email:'', phone:'', loc:'', items:'', date: todayOrderDate(), total:0, fulfilment:'pending', payments:[], parts:[], updates:[] });
-  const openNew = () => { const b = blankOrder(); setEdit(b); setForm(b); setPayEntry({ amount:'', method:'Cash', note:'' }); setExpenseEdit(null); setExpenseForm({}); setTrackingResult(null); setTrackingEmailStatus(null); };
+
+  const openRow = (r) => { setEdit(r); };
 
   return (
     <div style={{padding:32}}>
@@ -738,7 +1087,7 @@ function AdminOrders({ search }) {
             <div key={k} className={`tab ${i===0?'active':''}`}>{l} ({tabCounts[k]})</div>
           ))}
         </div>
-        <button className="btn btn-rust btn-sm" onClick={openNew}>+ New order</button>
+        <button className="btn btn-rust btn-sm" onClick={() => setEdit(blankOrder())}>+ New order</button>
       </div>
       <Table
         columns={[
@@ -747,384 +1096,36 @@ function AdminOrders({ search }) {
           { key:'items', label:'Items', w:'2fr', render:r => <span style={{fontSize:13}}>{r.items}</span> },
           { key:'total', label:'Total', w:'90px', render:r => <span className="mono" style={{fontWeight:600}}>${(Number(r.total)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}</span> },
           { key:'balance', label:'Balance', w:'90px', render:r => {
-            const b = balance(r);
+            const b = orderBalance(r);
             return b <= 0.005
               ? <span className="mono" style={{fontSize:11, color:'var(--eucalyptus)'}}>CLEAR</span>
               : <span className="mono" style={{fontSize:12, color:'var(--rust)', fontWeight:600}}>${b.toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>;
           }},
-          { key:'payment', label:'Payment', w:'100px', render:r => <StatusPill value={paymentStatus(r)} map={paymentMap} /> },
-          { key:'fulfilment', label:'Fulfilment', w:'110px', render:r => { const legacyFul = ['packed','shipped','fulfilled','refunded'].includes(r.status) ? r.status : null; return <StatusPill value={r.fulfilment || legacyFul || 'pending'} map={fulfilmentMap} />; } },
+          { key:'payment', label:'Payment', w:'100px', render:r => <StatusPill value={orderPaymentStatus(r)} map={ORDER_PAYMENT_MAP} /> },
+          { key:'fulfilment', label:'Fulfilment', w:'110px', render:r => { const legacyFul = ['packed','shipped','fulfilled','refunded'].includes(r.status) ? r.status : null; return <StatusPill value={r.fulfilment || legacyFul || 'pending'} map={ORDER_FULFILMENT_MAP} />; } },
           { key:'date', label:'When', w:'110px', render:r => <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{fmtOrderDate(r.date).toUpperCase()}</span> },
         ]}
         rows={visibleRows}
-        onRowClick={(r) => openRow(r)}
+        onRowClick={openRow}
       />
       {edit !== null && (
-        <Drawer open={true} onClose={() => setEdit(null)} title={edit.id ? `Order ${edit.id}` : 'New order'}
-          footer={<div className="row-flex" style={{gap:8, justifyContent:'space-between'}}>
-            {edit.id
-              ? <button className="btn btn-ghost btn-sm" style={{fontSize:12}}
-                  disabled={trackingEmailStatus === 'sending' || !form.email}
-                  title={!form.email ? 'Order has no customer email' : 'Send order tracking email to customer'}
-                  onClick={async () => {
-                    setTrackingEmailStatus('sending');
-                    try {
-                      const r = await fetch('/api/admin/orders/send-tracking-email', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: form.id }) });
-                      setTrackingEmailStatus(r.ok ? 'sent' : 'error');
-                    } catch { setTrackingEmailStatus('error'); }
-                    setTimeout(() => setTrackingEmailStatus(null), 4000);
-                  }}>
-                  {trackingEmailStatus === 'sending' ? '⏳ Sending…' : trackingEmailStatus === 'sent' ? '✓ Email sent' : trackingEmailStatus === 'error' ? '✗ Failed' : '✉ Send tracking email'}
-                </button>
-              : <span/>
-            }
-            <div className="row-flex" style={{gap:8}}>
-              <button className="btn btn-ghost btn-sm" onClick={() => setEdit(null)}>Cancel</button>
-              <button className="btn btn-sm" onClick={async () => {
-                const payload = { ...form, _originalId: edit.id || form.id };
-                const r = await fetch('/api/admin/orders/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(payload) }).catch(()=>null);
-                if (r && r.ok) {
-                  const d = await r.json();
-                  if (!r.ok || d.error) { alert(d.message || 'Save failed'); return; }
-                  const saved = d.item || form;
-                  if (edit.id) { setRows(rs => rs.map(row => row.id === edit.id ? saved : row)); }
-                  else { setRows(rs => [saved, ...rs]); }
-                }
-                setEdit(null);
-              }}>{edit.id ? 'Save' : 'Create order'}</button>
-            </div>
-          </div>}
-        >
-          <label className="field"><span className="label">Order Number</span><input className="input" style={{fontFamily:'monospace', fontWeight:700}} value={form.id||''} onChange={e=>setForm({...form,id:e.target.value})} placeholder="e.g. OE-1001"/></label>
-          <label className="field"><span className="label">Customer</span><input className="input" value={form.cust||''} onChange={e=>setForm({...form,cust:e.target.value})}/></label>
-          <label className="field"><span className="label">Email</span><input className="input" type="email" value={form.email||''} onChange={e=>setForm({...form,email:e.target.value})}/></label>
-          <label className="field"><span className="label">Phone</span><input className="input" type="tel" value={form.phone||''} onChange={e=>setForm({...form,phone:e.target.value})}/></label>
-          <label className="field"><span className="label">Shipping Address</span><input className="input" value={form.shippingAddress||''} onChange={e=>setForm({...form,shippingAddress:e.target.value})} placeholder="Street, City, State, Postcode"/></label>
-          <label className="field"><span className="label">Location</span><input className="input" value={form.loc||''} onChange={e=>setForm({...form,loc:e.target.value})}/></label>
-          <label className="field"><span className="label">Items</span><input className="input" value={form.items||''} onChange={e=>setForm({...form,items:e.target.value})}/></label>
-          <label className="field"><span className="label">Date</span><input className="input" value={form.date||''} onChange={e=>setForm({...form,date:e.target.value})}/></label>
-
-          {/* Fulfilment — only manual status */}
-          <label className="field"><span className="label">Fulfilment</span>
-            <select className="select" value={form.fulfilment||'pending'} onChange={e=>setForm({...form,fulfilment:e.target.value})}>
-              {['pending','ordering','building','testing','packed','shipped','fulfilled','refunded'].map(s => <option key={s}>{s}</option>)}
-            </select>
-          </label>
-          <label className="field">
-            <span className="label">Australia Post Tracking Number</span>
-            <input className="input" value={form.trackingNumber||''} onChange={e=>setForm({...form,trackingNumber:e.target.value})} placeholder="e.g. 7ABC1234567890" />
-          </label>
-          {form.trackingNumber && (
-            <div style={{marginBottom:14}}>
-              <a href={`https://auspost.com.au/mypost/track/#/details/${form.trackingNumber}`} target="_blank" rel="noreferrer" style={{fontSize:13, color:'var(--rust)'}}>Preview tracking link ↗</a>
-            </div>
-          )}
-
-          {/* Stage-advance actions */}
-          {(() => {
-            const f = form.fulfilment || 'pending';
-            if (f === 'testing') return (
-              <div style={{padding:'14px', background:'#fff4d6', border:'1px solid #e6cc88', marginBottom:14}}>
-                <div className="mono" style={{fontSize:10, color:'#7a5d10', marginBottom:8}}>TESTING COMPLETE?</div>
-                <button className="btn btn-sm" style={{background:'#0e4a8c', color:'#fff', border:'none'}} onClick={() => saveNow({ fulfilment:'packed' })}>Mark as Packed →</button>
-              </div>
-            );
-            if (f === 'packed') return (
-              <div style={{padding:'14px', background:'#dceaf5', border:'1px solid #9ec4e8', marginBottom:14}}>
-                <div className="mono" style={{fontSize:10, color:'#1668c8', marginBottom:8}}>READY TO SHIP?</div>
-                {!form.trackingNumber && <div style={{fontSize:12, color:'var(--rust)', marginBottom:8}}>⚠ Add a tracking number above before marking as shipped.</div>}
-                <button className="btn btn-sm" style={{background:'var(--ink)', color:'var(--paper)', border:'none', opacity: form.trackingNumber ? 1 : 0.5}} disabled={!form.trackingNumber} onClick={() => saveNow({ fulfilment:'shipped' })}>Mark as Shipped →</button>
-              </div>
-            );
-            if (f === 'shipped') return (
-              <div style={{padding:'14px', background:'var(--bg-elev)', border:'1px solid var(--line)', marginBottom:14}}>
-                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8}}>
-                  <div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>AUSPOST TRACKING</div>
-                  <button className="btn btn-ghost btn-sm" style={{fontSize:11}} onClick={checkTracking} disabled={trackingBusy}>{trackingBusy ? 'Checking…' : 'Check now'}</button>
-                </div>
-                {trackingResult && !trackingResult.error && (
-                  <div style={{marginBottom:8}}>
-                    <div style={{fontSize:13, fontWeight:600, marginBottom:4}}>{trackingResult.raw}</div>
-                    {(trackingResult.events || []).slice(0,3).map((e,i) => (
-                      <div key={i} style={{fontSize:11, color:'var(--ink-2)', padding:'3px 0', borderTop: i > 0 ? '1px solid var(--line)' : 'none'}}>
-                        {e.date && <span className="mono" style={{color:'var(--ink-3)', marginRight:8}}>{e.date}</span>}
-                        {e.description}{e.location ? ` — ${e.location}` : ''}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {trackingResult?.error && <div style={{fontSize:12, color:'var(--rust)', marginBottom:8}}>{trackingResult.error}</div>}
-                {form.lastTrackingStatus && !trackingResult && <div style={{fontSize:12, color:'var(--ink-2)', marginBottom:8}}>Last known: <strong>{form.lastTrackingStatus}</strong></div>}
-                <button className="btn btn-sm" style={{background:'#345526', color:'#fff', border:'none'}} onClick={() => saveNow({ fulfilment:'fulfilled' })}>Mark as Delivered manually →</button>
-              </div>
-            );
-            return null;
-          })()}
-
-          {/* Parts tracking */}
-          {(form.parts || []).length > 0 && <>
-            <div style={{borderTop:'1px solid var(--line)', margin:'12px 0 16px'}}/>
-            <div className="mono" style={{fontSize:10, letterSpacing:'.1em', color:'var(--ink-2)', marginBottom:10}}>PARTS TRACKING</div>
-            {(form.parts || []).map((part, i) => {
-              const PART_STATUSES = ['pending','ordered','delivered','installed'];
-              const statusColors = { pending:'var(--ink-3)', ordered:'#1668c8', delivered:'#7a5d10', installed:'#345526' };
-              return (
-                <div key={part.id || i} style={{padding:'10px 14px', background:'var(--bg-elev)', border:'1px solid var(--line)', marginBottom:6}}>
-                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, flexWrap:'wrap'}}>
-                    <div style={{flex:1, minWidth:0}}>
-                      <div style={{fontWeight:500, fontSize:13}}>{part.name}{part.qty > 1 ? <span style={{color:'var(--ink-3)', fontWeight:400}}> × {part.qty}</span> : ''}</div>
-                      {part.orderedAt && <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginTop:2}}>Ordered {part.orderedAt}{part.deliveredAt ? ` · Delivered ${part.deliveredAt}` : ''}{part.installedAt ? ` · Installed ${part.installedAt}` : ''}</div>}
-                    </div>
-                    <div style={{display:'flex', gap:4, flexWrap:'wrap'}}>
-                      {PART_STATUSES.map(s => {
-                        const active = part.status === s;
-                        return (
-                          <button key={s} className="btn btn-sm" style={{fontSize:10, padding:'2px 8px', background: active ? statusColors[s] : 'transparent', color: active ? '#fff' : statusColors[s], border:`1px solid ${statusColors[s]}`, cursor: active ? 'default' : 'pointer'}}
-                            onClick={() => {
-                              if (active) return;
-                              const dateStr = new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
-                              const patch = { status: s };
-                              if (s === 'ordered' && !part.orderedAt) patch.orderedAt = dateStr;
-                              if (s === 'delivered' && !part.deliveredAt) patch.deliveredAt = dateStr;
-                              if (s === 'installed' && !part.installedAt) patch.installedAt = dateStr;
-                              setForm(f => {
-                                const newParts = f.parts.map((p, pi) => pi === i ? { ...p, ...patch } : p);
-                                const STAGE_ORDER = ['pending','ordering','building','testing','packed','shipped','fulfilled','refunded'];
-                                const currentStage = STAGE_ORDER.indexOf(f.fulfilment || 'pending');
-                                let derived = f.fulfilment || 'pending';
-                                if (newParts.some(p => ['ordered','delivered','installed'].includes(p.status))) derived = 'ordering';
-                                if (newParts.every(p => ['delivered','installed'].includes(p.status))) derived = 'building';
-                                if (newParts.every(p => p.status === 'installed')) derived = 'testing';
-                                const derivedStage = STAGE_ORDER.indexOf(derived);
-                                const fulfilment = derivedStage > currentStage ? derived : f.fulfilment;
-                                const updated = { ...f, parts: newParts, fulfilment };
-                                saveNow({ parts: newParts, fulfilment });
-                                return updated;
-                              });
-                            }}
-                          >{s}</button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </>}
-
-          {/* Financials */}
-          <div style={{borderTop:'1px solid var(--line)', margin:'12px 0 16px'}}/>
-          <label className="field"><span className="label">Order Total (AUD)</span><input className="input" type="number" min="0" step="0.01" value={form.total||''} onChange={e=>setForm({...form,total:Number(e.target.value)})}/></label>
-          {(() => {
-            const linked = linkedExpenses(form);
-            const cost = partsCost(form);
-            const p = profit(form);
-            const partStatusColors = { ordered:{bg:'#dceaf5',fg:'#1668c8'}, arrived:{bg:'#fff4d6',fg:'#7a5d10'}, installed:{bg:'#d8e7d0',fg:'#345526'}, returned:{bg:'#f3d5c5',fg:'#7a3a18'} };
-            const ExpenseRow = ({ e }) => {
-              const isEditing = expenseEdit === e.id;
-              const ef = isEditing ? expenseForm : e;
-              if (isEditing) return (
-                <div style={{padding:'12px', background:'var(--paper)', border:'1px solid var(--ochre)', marginBottom:6}}>
-                  <div className="grid-2" style={{gap:10, marginBottom:10}}>
-                    <label className="field" style={{margin:0}}><span className="label">Description</span><input className="input" value={ef.description||''} onChange={ev=>setExpenseForm(f=>({...f,description:ev.target.value}))}/></label>
-                    <label className="field" style={{margin:0}}><span className="label">Amount (AUD)</span><input className="input" type="number" step="0.01" value={ef.amount||''} onChange={ev=>setExpenseForm(f=>({...f,amount:ev.target.value}))}/></label>
-                  </div>
-                  <div className="grid-2" style={{gap:10, marginBottom:10}}>
-                    <label className="field" style={{margin:0}}><span className="label">Category</span>
-                      <select className="select" value={ef.category||'parts'} onChange={ev=>setExpenseForm(f=>({...f,category:ev.target.value}))}>
-                        {['tools','equipment','parts','software','other'].map(c=><option key={c}>{c}</option>)}
-                      </select>
-                    </label>
-                    <label className="field" style={{margin:0}}><span className="label">Part status</span>
-                      <select className="select" value={ef.partStatus||''} onChange={ev=>setExpenseForm(f=>({...f,partStatus:ev.target.value}))}>
-                        <option value="">— N/A —</option>
-                        {['ordered','arrived','installed','returned'].map(s=><option key={s}>{s}</option>)}
-                      </select>
-                    </label>
-                  </div>
-                  <div className="grid-2" style={{gap:10, marginBottom:10}}>
-                    <label className="field" style={{margin:0}}><span className="label">Date</span><input className="input" value={ef.date||''} onChange={ev=>setExpenseForm(f=>({...f,date:ev.target.value}))}/></label>
-                    <label className="field" style={{margin:0}}><span className="label">Notes</span><input className="input" value={ef.notes||''} onChange={ev=>setExpenseForm(f=>({...f,notes:ev.target.value}))}/></label>
-                  </div>
-                  <label style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',marginBottom:12,fontSize:13}}>
-                    <input type="checkbox" checked={!!ef.isSecondHand} onChange={ev=>setExpenseForm(f=>({...f,isSecondHand:ev.target.checked}))} style={{width:15,height:15}}/>
-                    Second-hand
-                  </label>
-                  <div style={{display:'flex', gap:8}}>
-                    <button className="btn btn-sm" onClick={() => saveExpense(ef)}>Save</button>
-                    <button className="btn btn-ghost btn-sm" onClick={() => { setExpenseEdit(null); setExpenseForm({}); }}>Cancel</button>
-                    <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)', marginLeft:'auto'}} onClick={() => deleteExpense(e.id)}>Delete</button>
-                  </div>
-                </div>
-              );
-              return (
-                <div key={e.id} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 12px', background:'var(--bg-elev)', border:'1px solid var(--line)', marginBottom:6, cursor:'pointer', gap:10}}
-                  onClick={() => { setExpenseEdit(e.id); setExpenseForm({...e}); }}>
-                  <div style={{flex:1, minWidth:0}}>
-                    <span style={{fontSize:13, fontWeight:500}}>{e.description}</span>
-                    {e.category && <span className="mono" style={{fontSize:10, color:'var(--ink-3)', marginLeft:8}}>{e.category.toUpperCase()}</span>}
-                    {e.partStatus && (() => { const s = partStatusColors[e.partStatus]; return <span className="tag" style={{background:s?.bg,color:s?.fg,borderColor:s?.bg,marginLeft:8,fontSize:10}}>{e.partStatus.toUpperCase()}</span>; })()}
-                    {e.notes && <div style={{fontSize:11, color:'var(--ink-3)', marginTop:2}}>{e.notes}</div>}
-                  </div>
-                  <div style={{display:'flex', gap:12, alignItems:'center', flexShrink:0}}>
-                    <span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>{e.date}</span>
-                    {e.partStatus === 'returned'
-                      ? <span className="mono" style={{fontWeight:600}}>
-                          <span style={{textDecoration:'line-through', color:'var(--ink-3)', marginRight:6}}>-${(Number(e.amount)||0).toLocaleString('en-AU',{minimumFractionDigits:2})}</span>
-                          <span style={{color:'#345526'}}>$0.00</span>
-                        </span>
-                      : <span className="mono" style={{fontWeight:600, color:'var(--rust)'}}>-${(Number(e.amount)||0).toLocaleString('en-AU',{minimumFractionDigits:2})}</span>
-                    }
-                    <span style={{fontSize:12, color:'var(--ink-3)'}}>✎</span>
-                  </div>
-                </div>
-              );
-            };
-            const showNewExpense = expenseEdit === 'new';
-            return (
-              <div style={{marginBottom:12}}>
-                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8}}>
-                  <div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>LINKED EXPENSES ({linked.length})</div>
-                  {!showNewExpense && <button className="btn btn-ghost btn-sm" style={{fontSize:11}} onClick={() => { setExpenseEdit('new'); setExpenseForm(blankExpense(form.id)); }}>+ Add expense</button>}
-                </div>
-                {linked.length === 0 && !showNewExpense && <div className="mono" style={{fontSize:11, color:'var(--ink-3)', marginBottom:8}}>No expenses linked.</div>}
-                {linked.map(e => <ExpenseRow key={e.id} e={e} />)}
-                {showNewExpense && (
-                  <div style={{padding:'12px', background:'var(--paper)', border:'1px solid var(--ochre)', marginBottom:6}}>
-                    <div className="grid-2" style={{gap:10, marginBottom:10}}>
-                      <label className="field" style={{margin:0}}><span className="label">Description</span><input className="input" value={expenseForm.description||''} onChange={e=>setExpenseForm(f=>({...f,description:e.target.value}))} autoFocus/></label>
-                      <label className="field" style={{margin:0}}><span className="label">Amount (AUD)</span><input className="input" type="number" step="0.01" value={expenseForm.amount||''} onChange={e=>setExpenseForm(f=>({...f,amount:e.target.value}))}/></label>
-                    </div>
-                    <div className="grid-2" style={{gap:10, marginBottom:10}}>
-                      <label className="field" style={{margin:0}}><span className="label">Category</span>
-                        <select className="select" value={expenseForm.category||'parts'} onChange={e=>setExpenseForm(f=>({...f,category:e.target.value}))}>
-                          {['tools','equipment','parts','software','other'].map(c=><option key={c}>{c}</option>)}
-                        </select>
-                      </label>
-                      <label className="field" style={{margin:0}}><span className="label">Part status</span>
-                        <select className="select" value={expenseForm.partStatus||''} onChange={e=>setExpenseForm(f=>({...f,partStatus:e.target.value}))}>
-                          <option value="">— N/A —</option>
-                          {['ordered','arrived','installed','returned'].map(s=><option key={s}>{s}</option>)}
-                        </select>
-                      </label>
-                    </div>
-                    <div className="grid-2" style={{gap:10, marginBottom:10}}>
-                      <label className="field" style={{margin:0}}><span className="label">Date</span><input className="input" value={expenseForm.date||''} onChange={e=>setExpenseForm(f=>({...f,date:e.target.value}))}/></label>
-                      <label className="field" style={{margin:0}}><span className="label">Notes</span><input className="input" value={expenseForm.notes||''} onChange={e=>setExpenseForm(f=>({...f,notes:e.target.value}))}/></label>
-                    </div>
-                    <label style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',marginBottom:12,fontSize:13}}>
-                      <input type="checkbox" checked={!!expenseForm.isSecondHand} onChange={e=>setExpenseForm(f=>({...f,isSecondHand:e.target.checked}))} style={{width:15,height:15}}/>
-                      Second-hand
-                    </label>
-                    <div style={{display:'flex', gap:8}}>
-                      <button className="btn btn-sm" onClick={() => saveExpense(expenseForm)}>Save expense</button>
-                      <button className="btn btn-ghost btn-sm" onClick={() => { setExpenseEdit(null); setExpenseForm({}); }}>Cancel</button>
-                    </div>
-                  </div>
-                )}
-                {linked.length > 0 && (
-                  <div style={{display:'flex', gap:24, padding:'10px 14px', background: p >= 0 ? '#d8e7d0' : '#f3d5c5', marginTop:4, flexWrap:'wrap'}}>
-                    <div><div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>PARTS COST</div><div className="mono" style={{fontSize:14, fontWeight:600, color:'var(--rust)'}}>-${cost.toLocaleString('en-AU',{minimumFractionDigits:2})}</div></div>
-                    {returnedCost(form) > 0 && <div><div className="mono" style={{fontSize:10, color:'#345526'}}>RETURNED</div><div className="mono" style={{fontSize:14, fontWeight:600, color:'#345526'}}>+${returnedCost(form).toLocaleString('en-AU',{minimumFractionDigits:2})}</div></div>}
-                    <div><div className="mono" style={{fontSize:10, color: p >= 0 ? '#345526' : '#7a3a18'}}>PROFIT</div><div className="mono" style={{fontSize:14, fontWeight:600, color: p >= 0 ? '#345526' : '#7a3a18'}}>${p.toLocaleString('en-AU',{minimumFractionDigits:2})}</div></div>
-                    <div><div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>MARGIN</div><div className="mono" style={{fontSize:14, fontWeight:600, color:'var(--ink-2)'}}>{form.total ? Math.round(p / Number(form.total) * 100) : 0}%</div></div>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-
-          {/* Payment log */}
-          <div style={{borderTop:'1px solid var(--line)', margin:'12px 0 16px'}}/>
-          <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:10}}>
-            <div className="mono" style={{fontSize:10, letterSpacing:'.1em', color:'var(--ink-2)'}}>PAYMENT LOG</div>
-            <div style={{display:'flex', gap:8, alignItems:'center'}}>
-              <StatusPill value={paymentStatus(form)} map={paymentMap} />
-              <span className="mono" style={{fontSize:11}}>
-                <span style={{color:'var(--eucalyptus)'}}>paid ${amountPaid(form).toLocaleString()}</span>
-                {balance(form) > 0 && <span style={{color:'var(--rust)'}}> · owing ${balance(form).toLocaleString()}</span>}
-              </span>
-            </div>
-          </div>
-          {(form.payments || []).length === 0 && <div className="mono" style={{fontSize:11, color:'var(--ink-3)', marginBottom:12}}>No payments recorded.</div>}
-          {(form.payments || []).map((p, i) => (
-            <div key={i} style={{display:'flex', alignItems:'center', gap:10, padding:'8px 12px', background:'var(--bg-elev)', border:'1px solid var(--line)', marginBottom:6}}>
-              <div style={{flex:1}}>
-                <span className="mono" style={{fontWeight:600}}>${Number(p.amount).toLocaleString()}</span>
-                <span className="mono" style={{fontSize:11, color:'var(--ink-2)', marginLeft:10}}>{p.method}</span>
-                {p.note && <span style={{fontSize:12, color:'var(--ink-2)', marginLeft:10}}>— {p.note}</span>}
-              </div>
-              <span className="mono" style={{fontSize:10, color:'var(--ink-3)'}}>{p.date}</span>
-              <button className="icon-btn" style={{width:22, height:22, fontSize:14, color:'var(--ink-3)'}} onClick={() => removePayment(i)}>×</button>
-            </div>
-          ))}
-          <div style={{display:'grid', gridTemplateColumns:'100px 100px 1fr auto', gap:8, alignItems:'end', marginTop:8}}>
-            <label className="field" style={{margin:0}}><span className="label">Amount</span><input className="input" type="number" min="0" step="0.01" placeholder="0.00" value={payEntry.amount} onChange={e=>setPayEntry(v=>({...v,amount:e.target.value}))}/></label>
-            <label className="field" style={{margin:0}}><span className="label">Method</span>
-              <select className="select" value={payEntry.method} onChange={e=>setPayEntry(v=>({...v,method:e.target.value}))}>
-                {['Cash','Card','Bank Transfer','Crypto','Other'].map(m => <option key={m}>{m}</option>)}
-              </select>
-            </label>
-            <label className="field" style={{margin:0}}><span className="label">Note (optional)</span><input className="input" placeholder="e.g. deposit, part payment" value={payEntry.note} onChange={e=>setPayEntry(v=>({...v,note:e.target.value}))}/></label>
-            <button className="btn btn-sm" style={{marginBottom:1}} onClick={addPayment}>Log</button>
-          </div>
-
-          {/* Refund */}
-          {form.id && (
-            <div style={{marginTop:16, padding:'14px', background:'#fbeae1', border:'1px solid #e3b9a3'}}>
-              <div className="mono" style={{fontSize:10, letterSpacing:'.1em', color:'#7a3a18', marginBottom:10}}>REFUND</div>
-              {form.refund ? (
-                <div style={{fontSize:13, color:'#7a3a18'}}>
-                  Refunded <strong>${Number(form.refund.amount).toLocaleString('en-AU',{minimumFractionDigits:2})}</strong> via {form.refund.method === 'stripe' ? 'Stripe (original payment)' : 'store credit'} on {new Date(form.refund.date).toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'})}.
-                </div>
-              ) : (
-                <>
-                  <div style={{fontSize:12, color:'var(--ink-2)', marginBottom:10}}>Ask the customer whether they want their money back or store credit, then choose below. The customer is emailed automatically and the order is marked refunded.</div>
-                  <div style={{display:'grid', gridTemplateColumns:'1fr 120px auto', gap:8, alignItems:'end'}}>
-                    <label className="field" style={{margin:0}}><span className="label">Method</span>
-                      <select className="select" value={refundEntry.method} onChange={e=>setRefundEntry(v=>({...v,method:e.target.value}))}>
-                        <option value="stripe">Money back (Stripe)</option>
-                        <option value="store-credit">Store credit</option>
-                      </select>
-                    </label>
-                    <label className="field" style={{margin:0}}><span className="label">Amount</span><input className="input" type="number" min="0" step="0.01" placeholder={Number(form.total||0).toFixed(2)} value={refundEntry.amount} onChange={e=>setRefundEntry(v=>({...v,amount:e.target.value}))}/></label>
-                    <button className="btn btn-sm" style={{background:'#7a3a18', color:'#fff', border:'none', marginBottom:1}} onClick={doRefund} disabled={refundBusy}>{refundBusy ? 'Processing…' : 'Issue Refund'}</button>
-                  </div>
-                  {refundEntry.method === 'store-credit' && <div style={{fontSize:11, color:'var(--ink-3)', marginTop:6}}>Store credit requires the customer to have an account with email {form.email || '(none set)'}.</div>}
-                  {refundError && <div style={{fontSize:12, color:'#b91c1c', marginTop:8}}>{refundError}</div>}
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Customer-visible updates */}
-          <div style={{borderTop:'1px solid var(--line)', margin:'16px 0 16px'}}/>
-          <div className="mono" style={{fontSize:10, letterSpacing:'.1em', color:'var(--ink-2)', marginBottom:10}}>ORDER UPDATES (VISIBLE TO CUSTOMER)</div>
-          {(form.updates || []).length === 0 && <div className="mono" style={{fontSize:11, color:'var(--ink-3)', marginBottom:12}}>No updates posted.</div>}
-          {(form.updates || []).map((u, i) => (
-            <div key={i} style={{display:'flex', alignItems:'flex-start', gap:10, padding:'8px 12px', background:'var(--bg-elev)', border:'1px solid var(--line)', marginBottom:6}}>
-              <div style={{flex:1}}>
-                <span className="tag tag-outline" style={{fontSize:10, marginRight:8}}>{u.type}</span>
-                <span style={{fontSize:13}}>{u.text}</span>
-              </div>
-              <span className="mono" style={{fontSize:10, color:'var(--ink-3)', whiteSpace:'nowrap'}}>{u.date}</span>
-              <button className="icon-btn" style={{width:22, height:22, fontSize:14, color:'var(--ink-3)'}} onClick={() => removeUpdate(i)}>×</button>
-            </div>
-          ))}
-          <div style={{display:'grid', gridTemplateColumns:'130px 1fr auto', gap:8, alignItems:'end', marginTop:8}}>
-            <label className="field" style={{margin:0}}><span className="label">Type</span>
-              <select className="select" value={updateEntry.type} onChange={e=>setUpdateEntry(v=>({...v,type:e.target.value}))}>
-                {['note','parts_arrived','parts_ordered','build_started','ready_for_pickup','dispatched'].map(t => <option key={t} value={t}>{t.replace(/_/g,' ')}</option>)}
-              </select>
-            </label>
-            <label className="field" style={{margin:0}}><span className="label">Message</span><input className="input" placeholder="e.g. RAM and SSD have arrived, waiting on GPU" value={updateEntry.text} onChange={e=>setUpdateEntry(v=>({...v,text:e.target.value}))} onKeyDown={e=>e.key==='Enter'&&addUpdate()}/></label>
-            <button className="btn btn-sm" style={{marginBottom:1}} onClick={addUpdate}>Post</button>
-          </div>
-        </Drawer>
+        <OrderDrawer
+          edit={edit}
+          expenses={expenses}
+          onClose={() => setEdit(null)}
+          onRowUpdate={(updated) => setRows(rs => rs.map(r => r.id === (edit.id || updated.id) ? updated : r))}
+          onSave={(saved, isNew) => {
+            if (isNew) setRows(rs => [saved, ...rs]);
+            else setRows(rs => rs.map(r => r.id === edit.id ? saved : r));
+            setEdit(null);
+          }}
+          onExpensesChange={setExpenses}
+        />
       )}
     </div>
   );
 }
+
 
 // ============================================================
 // REPAIRS — Kanban
@@ -4740,451 +4741,159 @@ function AdminSellerBilling({ sessionInfo = {} }) {
   );
 }
 
-function AdminSettingsFull({ sessionInfo = {} }) {
-  const defaultShop = useMemo(() => ({
-    tradingName: '',
-    abn: '',
-    streetAddress: '',
-    suburb: '',
-    state: '',
-    postcode: '',
-    mapLat: '',
-    mapLng: '',
-    phone: '',
-    email: '',
-    tagline: '',
-    description: '',
-    siteUrl: '',
-    acknowledgmentPeople: '',
-    acknowledgmentCountry: '',
-  }), []);
-  const defaultAnnouncement = useMemo(() => ({ text: '', enabled: false, expiresAt: '' }), []);
-  const defaultSiteContent = useMemo(() => ({ aiHeading: '', aiBody: '', aiEnabled: false, workshopBlurb: '' }), []);
-  const [shop, setShop] = useState(defaultShop);
-  const [savedShop, setSavedShop] = useState(defaultShop);
-  const [announcement, setAnnouncement] = useState(defaultAnnouncement);
-  const [savedAnnouncement, setSavedAnnouncement] = useState(defaultAnnouncement);
-  const [siteContent, setSiteContent] = useState(defaultSiteContent);
-  const [savedSiteContent, setSavedSiteContent] = useState(defaultSiteContent);
-  const [integrations, setIntegrations] = useState([]);
-  const [savedIntegrations, setSavedIntegrations] = useState([]);
-  const defaultSecurity = useMemo(() => ({ adminUsername: '', adminPassword: '', confirmPassword: '' }), []);
-  const [security, setSecurity] = useState(defaultSecurity);
-  const [savedSecurity, setSavedSecurity] = useState(defaultSecurity);
-  const [integrationModal, setIntegrationModal] = useState(null);
-  const [integrationForm, setIntegrationForm] = useState({ name: '', endpoint: '', secretKey: '', publishableKey: '', webhookSecret: '', host: '', port: '', user: '', pass: '', notifyEmail: '', apiKey: '', notes: '' });
-  const [staffMembers, setStaffMembers] = useState([]);
-  const [staffForm, setStaffForm] = useState(null);
-  const [staffBusy, setStaffBusy] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [statusMsg, setStatusMsg] = useState('');
-  const [sectionBusy, setSectionBusy] = useState('');
-  const [dangerMsg, setDangerMsg] = useState({});
-  const [maintConfirm, setMaintConfirm] = useState(false);
-  const [maintenanceEnabled, setMaintenanceEnabled] = useState(false);
-  const shopDirty = JSON.stringify(shop) !== JSON.stringify(savedShop);
-  const announcementDirty = JSON.stringify(announcement) !== JSON.stringify(savedAnnouncement);
-  const integrationsDirty = JSON.stringify(integrations) !== JSON.stringify(savedIntegrations);
-  const siteContentDirty = JSON.stringify(siteContent) !== JSON.stringify(savedSiteContent);
-  const securityDirty = security.adminUsername !== savedSecurity.adminUsername || !!security.adminPassword;
-  const hasUnsavedChanges = shopDirty || announcementDirty || integrationsDirty || siteContentDirty || securityDirty;
-  const loadStaff = () => fetch('/api/admin/staff', { credentials:'include' })
-    .then(r => r.ok ? r.json() : Promise.reject()).then(d => setStaffMembers(d.members || [])).catch(() => {});
-  useEffect(() => {
-    fetch('/api/admin/settings', { credentials:'include' })
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then(d => {
-        const nextShop = { ...defaultShop, ...(d.shop || {}) };
-        const nextAnnouncement = { ...defaultAnnouncement, ...(d.announcement || {}) };
-        const nextIntegrations = d.integrations || [];
-        const nextSiteContent = { ...defaultSiteContent, ...(d.siteContent || {}) };
-        const nextSecurity = { ...defaultSecurity, adminUsername: d.security?.adminUsername || '' };
-        setShop(nextShop);
-        setSavedShop(nextShop);
-        setAnnouncement(nextAnnouncement);
-        setSavedAnnouncement(nextAnnouncement);
-        setIntegrations(nextIntegrations);
-        setSavedIntegrations(nextIntegrations);
-        setSiteContent(nextSiteContent);
-        setSavedSiteContent(nextSiteContent);
-        setSecurity(nextSecurity);
-        setSavedSecurity(nextSecurity);
-        setMaintenanceEnabled(!!(d.maintenance && d.maintenance.enabled));
-      })
-      .catch(() => setError('Failed to load settings.'))
-      .finally(() => setLoading(false));
-    loadStaff();
-  }, [defaultShop]);
-  useEffect(() => {
-    const onBeforeUnload = (event) => {
-      if (!hasUnsavedChanges) return;
-      event.preventDefault();
-      event.returnValue = '';
-    };
-    window.addEventListener('beforeunload', onBeforeUnload);
-    return () => window.removeEventListener('beforeunload', onBeforeUnload);
-  }, [hasUnsavedChanges]);
-  const persistSettings = async (payload, key) => {
-    setSectionBusy(key);
-    setStatusMsg('');
-    const normalized = {
-      shop: {
-        tradingName: (payload.shop?.tradingName || '').trim(),
-        abn: (payload.shop?.abn || '').trim(),
-        streetAddress: (payload.shop?.streetAddress || '').trim(),
-        suburb: (payload.shop?.suburb || '').trim(),
-        state: (payload.shop?.state || '').trim(),
-        postcode: (payload.shop?.postcode || '').trim(),
-        mapLat: (payload.shop?.mapLat || '').trim(),
-        mapLng: (payload.shop?.mapLng || '').trim(),
-        phone: (payload.shop?.phone || '').trim(),
-        email: (payload.shop?.email || '').trim(),
-        tagline: (payload.shop?.tagline || '').trim(),
-        description: (payload.shop?.description || '').trim(),
-        siteUrl: (payload.shop?.siteUrl || '').trim(),
-        acknowledgmentPeople: (payload.shop?.acknowledgmentPeople || '').trim(),
-        acknowledgmentCountry: (payload.shop?.acknowledgmentCountry || '').trim(),
-      },
-      announcement: {
-        text: (payload.announcement?.text || '').trim(),
-        enabled: !!payload.announcement?.enabled,
-        expiresAt: (payload.announcement?.expiresAt || '').trim(),
-      },
-      integrations: (payload.integrations || []).map(r => [r[0], r[1], !!r[2], r[3] || {}]),
-      siteContent: {
-        aiHeading: (payload.siteContent?.aiHeading || '').trim(),
-        aiBody: (payload.siteContent?.aiBody || '').trim(),
-        aiEnabled: !!payload.siteContent?.aiEnabled,
-        workshopBlurb: (payload.siteContent?.workshopBlurb || '').trim(),
-      },
-      security: {
-        adminUsername: (payload.security?.adminUsername || '').trim(),
-        adminPassword: payload.security?.adminPassword || '',
-      },
-    };
-    const r = await fetch('/api/admin/settings/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(normalized) }).catch(()=>null);
-    setSectionBusy('');
-    if (r && r.ok) {
-      const d = await r.json();
-      const reconciledShop = { ...defaultShop, ...(d.shop || {}) };
-      const reconciledAnnouncement = { ...defaultAnnouncement, ...(d.announcement || {}) };
-      const reconciledIntegrations = d.integrations || [];
-      const reconciledSiteContent = { ...defaultSiteContent, ...(d.siteContent || {}) };
-      const reconciledSecurity = { ...defaultSecurity, adminUsername: d.security?.adminUsername || '' };
-      setShop(reconciledShop);
-      setSavedShop(reconciledShop);
-      setAnnouncement(reconciledAnnouncement);
-      setSavedAnnouncement(reconciledAnnouncement);
-      setIntegrations(reconciledIntegrations);
-      setSavedIntegrations(reconciledIntegrations);
-      setSiteContent(reconciledSiteContent);
-      setSavedSiteContent(reconciledSiteContent);
-      setSecurity(reconciledSecurity);
-      setSavedSecurity(reconciledSecurity);
-      setStatusMsg('Settings updated successfully.');
-    } else setStatusMsg('Failed to update settings.');
-  };
-  const onShopSubmit = (e) => { e.preventDefault(); persistSettings({ shop, announcement: savedAnnouncement, integrations: savedIntegrations, siteContent: savedSiteContent, security: savedSecurity }, 'shop'); };
-  const onAnnouncementSubmit = (e) => { e.preventDefault(); persistSettings({ shop: savedShop, announcement, integrations: savedIntegrations, siteContent: savedSiteContent, security: savedSecurity }, 'announcement'); };
-  const onIntegrationsSubmit = (e) => { e.preventDefault(); persistSettings({ shop: savedShop, announcement: savedAnnouncement, integrations, siteContent: savedSiteContent, security: savedSecurity }, 'integrations'); };
-  const onSiteContentSubmit = (e) => { e.preventDefault(); persistSettings({ shop: savedShop, announcement: savedAnnouncement, integrations: savedIntegrations, siteContent, security: savedSecurity }, 'siteContent'); };
-  const onSecuritySubmit = (e) => { e.preventDefault(); persistSettings({ shop: savedShop, announcement: savedAnnouncement, integrations: savedIntegrations, siteContent: savedSiteContent, security }, 'security'); };
-  const openIntegrationModal = (idx) => {
-    const r = integrations[idx];
-    const cfg = r[3] || {};
-    setIntegrationForm({ name: r[0], endpoint: r[1], secretKey: cfg.secretKey || '', publishableKey: cfg.publishableKey || '', webhookSecret: cfg.webhookSecret || '', host: cfg.host || '', port: cfg.port || '', user: cfg.user || '', pass: cfg.pass || '', notifyEmail: cfg.notifyEmail || '', apiKey: cfg.apiKey || '', notes: cfg.notes || '' });
-    setIntegrationModal({ mode: 'edit', idx });
-  };
-  const openAddIntegrationModal = () => {
-    setIntegrationForm({ name: '', endpoint: '', secretKey: '', webhookSecret: '', apiKey: '', notes: '' });
-    setIntegrationModal({ mode: 'add', idx: null });
-  };
-  const saveIntegrationModal = () => {
-    const { mode, idx } = integrationModal;
-    const isStripe = integrationForm.name === 'Stripe';
-    const isEmail = integrationForm.name === 'Email';
-    const config = isStripe
-      ? { secretKey: integrationForm.secretKey, publishableKey: integrationForm.publishableKey, webhookSecret: integrationForm.webhookSecret }
-      : isEmail
-      ? { host: integrationForm.host, port: integrationForm.port, user: integrationForm.user, pass: integrationForm.pass, notifyEmail: integrationForm.notifyEmail }
-      : { apiKey: integrationForm.apiKey, notes: integrationForm.notes };
-    if (mode === 'add') {
-      if (!integrationForm.name.trim()) return;
-      const defaultEndpoints = { Stripe: 'api.stripe.com', Email: integrationForm.host || 'smtp.gmail.com', AusPost: 'digitalapi.auspost.com.au' };
-      const endpoint = integrationForm.endpoint.trim() || defaultEndpoints[integrationForm.name] || '';
-      setIntegrations([...integrations, [integrationForm.name.trim(), endpoint, true, config]]);
-    } else {
-      setIntegrations(integrations.map((r, i) => i === idx ? [r[0], integrationForm.endpoint.trim(), true, config] : r));
-    }
-    setIntegrationModal(null);
-  };
-  const disconnectIntegration = () => {
-    const { idx } = integrationModal;
-    setIntegrations(integrations.map((r, i) => i === idx ? [r[0], r[1], false, {}] : r));
-    setIntegrationModal(null);
-  };
-  const removeIntegration = () => {
-    const { idx } = integrationModal;
-    setIntegrations(integrations.filter((_, i) => i !== idx));
-    setIntegrationModal(null);
-  };
-  const openStaffForm = (member) => setStaffForm(member ? { ...member, pin:'' } : { name:'', role:'staff', color:'#d7c7a6', email:'', phone:'', status:'active', pin:'' });
-  const saveStaffMember = async () => {
-    if (!staffForm.name.trim()) return;
-    if (!staffForm.id && !/^\d{4,6}$/.test(staffForm.pin || '')) { alert('PIN must be 4–6 digits.'); return; }
-    if (staffForm.pin && !/^\d{4,6}$/.test(staffForm.pin)) { alert('PIN must be 4–6 digits.'); return; }
-    setStaffBusy(true);
-    const r = await fetch('/api/admin/staff/members/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ ...staffForm, name: staffForm.name.trim() }) }).catch(()=>null);
-    setStaffBusy(false);
-    if (!r || !r.ok) { adminToast('Failed to save staff member.'); return; }
-    setStaffForm(null);
-    loadStaff();
-  };
-  const deleteStaffMember = async (id) => {
-    const r = await fetch('/api/admin/staff/members/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id }) }).catch(()=>null);
-    if (!r || !r.ok) { adminToast('Failed to delete staff member.'); return; }
-    loadStaff();
-  };
-  const [settingsTab, setSettingsTab] = useState('general');
+// ============================================================
+// SETTINGS TAB SUB-COMPONENTS
+// ============================================================
+
+function SettingsGeneralTab({ shop, setShop, savedShop, announcement, setAnnouncement, savedAnnouncement, siteContent, setSiteContent, savedSiteContent, shopDirty, announcementDirty, siteContentDirty, sectionBusy, onShopSubmit, onAnnouncementSubmit, onSiteContentSubmit }) {
   return (
-    <div style={{padding:32, maxWidth:960}}>
-      {loading && <div className="mono" style={{fontSize:12, color:'var(--ink-2)', marginBottom:16}}>Loading…</div>}
-      {error && <div style={{fontSize:12, color:'var(--rust)', marginBottom:12}}>{error}</div>}
-      {statusMsg && <div style={{fontSize:12, color:statusMsg.includes('Failed') || statusMsg.includes('must') ? 'var(--rust)' : 'var(--eucalyptus)', marginBottom:12}}>{statusMsg}</div>}
-
-      <div className="tabs" style={{marginBottom:28}}>
-        {[['general','General'],['staff','Staff'],['integrations','Integrations'],['security','Security'],['advanced','Advanced']].map(([k,l]) => (
-          <div key={k} className={`tab ${settingsTab===k?'active':''}`} style={{cursor:'pointer'}} onClick={() => setSettingsTab(k)}>{l}</div>
-        ))}
-      </div>
-
-      {settingsTab === 'general' && <div style={{display:'grid', gap:24}}>
-        <form onSubmit={onShopSubmit} style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24}}>
-          <span className="eyebrow">Shop Details</span>
-          <label className="field" style={{marginTop:12}}><span className="label">Trading name</span><input className="input" value={shop.tradingName} onChange={(e) => setShop({ ...shop, tradingName: e.target.value })}/></label>
-          <label className="field"><span className="label">ABN</span><input className="input" value={shop.abn} onChange={(e) => setShop({ ...shop, abn: e.target.value })}/></label>
-          <label className="field"><span className="label">Street address</span><input className="input" value={shop.streetAddress||''} onChange={(e) => setShop({ ...shop, streetAddress: e.target.value })} placeholder="e.g. 12 Station St"/></label>
-          <div style={{display:'grid', gridTemplateColumns:'2fr 1fr 1fr', gap:8}}>
-            <label className="field"><span className="label">Suburb / Town</span><input className="input" value={shop.suburb||''} onChange={(e) => setShop({ ...shop, suburb: e.target.value })} placeholder="e.g. Blackall"/></label>
-            <label className="field"><span className="label">State</span><input className="input" value={shop.state||''} onChange={(e) => setShop({ ...shop, state: e.target.value })} placeholder="QLD"/></label>
-            <label className="field"><span className="label">Postcode</span><input className="input" value={shop.postcode||''} onChange={(e) => setShop({ ...shop, postcode: e.target.value })} placeholder="4472"/></label>
-          </div>
-          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:8}}>
-            <label className="field"><span className="label">Map latitude</span><input className="input" value={shop.mapLat||''} onChange={(e) => setShop({ ...shop, mapLat: e.target.value })} placeholder="-35.9833"/></label>
-            <label className="field"><span className="label">Map longitude</span><input className="input" value={shop.mapLng||''} onChange={(e) => setShop({ ...shop, mapLng: e.target.value })} placeholder="144.7500"/></label>
-          </div>
-          <label className="field"><span className="label">Phone</span><input className="input" value={shop.phone} onChange={(e) => setShop({ ...shop, phone: e.target.value })}/></label>
-          <label className="field"><span className="label">Contact email</span><input className="input" type="email" value={shop.email||''} onChange={(e) => setShop({ ...shop, email: e.target.value })}/></label>
-          <label className="field"><span className="label">Tagline</span><input className="input" value={shop.tagline} onChange={(e) => setShop({ ...shop, tagline: e.target.value })}/></label>
-          <label className="field"><span className="label">Description (footer)</span><textarea className="textarea" value={shop.description||''} onChange={(e) => setShop({ ...shop, description: e.target.value })} style={{minHeight:80}} placeholder="e.g. An independent electronics outpost..."/></label>
-          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:8}}>
-            <label className="field"><span className="label">Acknowledgment — People</span><input className="input" value={shop.acknowledgmentPeople||''} onChange={(e) => setShop({ ...shop, acknowledgmentPeople: e.target.value })} placeholder="e.g. Bidjara People"/></label>
-            <label className="field"><span className="label">Acknowledgment — Country</span><input className="input" value={shop.acknowledgmentCountry||''} onChange={(e) => setShop({ ...shop, acknowledgmentCountry: e.target.value })} placeholder="e.g. Bidjara Country"/></label>
-          </div>
-          <label className="field">
-            <span className="label">Site URL</span>
-            <input className="input" value={shop.siteUrl||''} onChange={(e) => setShop({ ...shop, siteUrl: e.target.value })} placeholder="https://outbackelectronics.com.au"/>
-            {(shop.siteUrl||'').startsWith('http://localhost') && (
-              <div style={{fontSize:11, color:'var(--ochre)', marginTop:4, display:'flex', alignItems:'center', gap:6}}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                This is a local development URL — update it to your live domain before publishing.
-              </div>
-            )}
-          </label>
-          <div className="row-flex" style={{gap:8, marginTop:12}}>
-            <button className="btn btn-rust btn-sm" disabled={!shopDirty || sectionBusy==='shop'}>{sectionBusy==='shop'?'Saving…':'Save'}</button>
-            <button type="button" className="btn btn-ghost btn-sm" disabled={!shopDirty || sectionBusy==='shop'} onClick={() => setShop(savedShop)}>Cancel</button>
-          </div>
-        </form>
-        <form onSubmit={onAnnouncementSubmit} style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24}}>
-          <span className="eyebrow">Announcement Bar</span>
-          <label className="field" style={{marginTop:12}}><span className="label">Message</span><input className="input" value={announcement.text} onChange={e => setAnnouncement({...announcement, text: e.target.value})} placeholder="e.g. SUMMER SALE — 15% OFF · ENDS 30 JUN"/></label>
-          <label className="field" style={{flexDirection:'row', alignItems:'center', gap:8}}><input type="checkbox" checked={!!announcement.enabled} onChange={e => setAnnouncement({...announcement, enabled: e.target.checked})}/><span className="label" style={{margin:0}}>Show announcement bar</span></label>
-          <label className="field"><span className="label">Expires on (optional)</span><input className="input" type="date" value={announcement.expiresAt || ''} onChange={e => setAnnouncement({...announcement, expiresAt: e.target.value})}/></label>
-          <div className="row-flex" style={{gap:8, marginTop:12}}>
-            <button className="btn btn-rust btn-sm" disabled={!announcementDirty || sectionBusy==='announcement'}>{sectionBusy==='announcement'?'Saving…':'Save'}</button>
-            <button type="button" className="btn btn-ghost btn-sm" disabled={!announcementDirty || sectionBusy==='announcement'} onClick={() => setAnnouncement(savedAnnouncement)}>Cancel</button>
-          </div>
-        </form>
-        <form onSubmit={onSiteContentSubmit} style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24}}>
-          <span className="eyebrow">Site Content</span>
-          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginTop:12}}>
-            <div>
-              <label className="field"><span className="label">Workshop blurb (home page &amp; services)</span><textarea className="input" style={{minHeight:64}} value={siteContent.workshopBlurb} onChange={e => setSiteContent({...siteContent, workshopBlurb: e.target.value})} placeholder="e.g. One desk, one tech, one ute…"/></label>
-            </div>
-            <div>
-              <label className="field"><span className="label">AI section heading (use newline to split lines)</span><input className="input" value={siteContent.aiHeading} onChange={e => setSiteContent({...siteContent, aiHeading: e.target.value})} placeholder="e.g. Edge AI\nfor the long paddock."/></label>
-              <label className="field"><span className="label">AI section body</span><textarea className="input" style={{minHeight:64}} value={siteContent.aiBody} onChange={e => setSiteContent({...siteContent, aiBody: e.target.value})}/></label>
-              <label className="field" style={{flexDirection:'row', alignItems:'center', gap:8}}><input type="checkbox" checked={!!siteContent.aiEnabled} onChange={e => setSiteContent({...siteContent, aiEnabled: e.target.checked})}/><span className="label" style={{margin:0}}>Show "NEW · 2026" badge on AI section</span></label>
-            </div>
-          </div>
-          <div className="row-flex" style={{gap:8, marginTop:12}}>
-            <button className="btn btn-rust btn-sm" disabled={!siteContentDirty || sectionBusy==='siteContent'}>{sectionBusy==='siteContent'?'Saving…':'Save'}</button>
-            <button type="button" className="btn btn-ghost btn-sm" disabled={!siteContentDirty || sectionBusy==='siteContent'} onClick={() => setSiteContent(savedSiteContent)}>Cancel</button>
-          </div>
-        </form>
-      </div>}
-
-      {settingsTab === 'staff' && <div style={{display:'grid', gap:24}}>
-        <div style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24}}>
-          <span className="eyebrow">Staff &amp; Roles</span>
-          <div style={{display:'grid', gap:8, marginTop:12}}>
-            {staffMembers.map(s => (
-              <div key={s.id} style={{display:'flex', alignItems:'center', gap:10, padding:'8px 10px', background:'var(--bg-elev)'}}>
-                <div className="avatar" style={{width:32, height:32, background:s.color||'#d7c7a6', fontSize:14}}>{(s.name||'?').split(' ').map(w=>w[0]).join('')}</div>
-                <div style={{flex:1}}>
-                  <div style={{fontSize:13, fontWeight:600}}>{s.name}</div>
-                  <div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>{(s.role||'staff').toUpperCase()}{s.email ? ` · ${s.email}` : ''}</div>
-                </div>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => openStaffForm(s)}>Edit</button>
-                <button type="button" className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={() => deleteStaffMember(s.id)}>Remove</button>
-              </div>
-            ))}
-            {staffMembers.length === 0 && <div className="mono" style={{fontSize:12, color:'var(--ink-3)'}}>No staff members yet.</div>}
-          </div>
-          <div className="row-flex" style={{gap:8, marginTop:12}}>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => openStaffForm(null)}>+ Add staff member</button>
-          </div>
-          {staffForm !== null && (
-            <div style={{marginTop:16, padding:16, background:'var(--bg-elev)', display:'grid', gap:8}}>
-              <div style={{fontSize:13, fontWeight:600, marginBottom:4}}>{staffForm.id ? 'Edit member' : 'New member'}</div>
-              <label className="field"><span className="label">Name</span><input className="input" value={staffForm.name} onChange={e=>setStaffForm({...staffForm,name:e.target.value})}/></label>
-              <label className="field"><span className="label">Role</span>
-                <select className="select" value={staffForm.role||'staff'} onChange={e=>setStaffForm({...staffForm,role:e.target.value})}>
-                  {['owner','manager','technician','staff','seller','pending'].map(r=><option key={r}>{r}</option>)}
-                </select>
-              </label>
-              <label className="field"><span className="label">Email</span><input className="input" type="email" value={staffForm.email||''} onChange={e=>setStaffForm({...staffForm,email:e.target.value})}/></label>
-              <label className="field"><span className="label">Phone</span><input className="input" value={staffForm.phone||''} onChange={e=>setStaffForm({...staffForm,phone:e.target.value})}/></label>
-              <label className="field"><span className="label">Status</span>
-                <select className="select" value={staffForm.status||'active'} onChange={e=>setStaffForm({...staffForm,status:e.target.value})}>
-                  {['active','inactive'].map(s=><option key={s}>{s}</option>)}
-                </select>
-              </label>
-              <label className="field"><span className="label">PIN{staffForm.id ? ' (leave blank to keep current)' : ''}</span><input className="input" type="password" inputMode="numeric" maxLength={6} value={staffForm.pin||''} onChange={e=>setStaffForm({...staffForm,pin:e.target.value.replace(/\D/g,'').slice(0,6)})} placeholder={staffForm.id ? '4–6 digits' : '4–6 digits (required)'}/></label>
-              <label className="field"><span className="label">Avatar colour</span><input type="color" value={staffForm.color||'#d7c7a6'} onChange={e=>setStaffForm({...staffForm,color:e.target.value})} style={{width:48,height:32,padding:2,border:'1px solid var(--line)',borderRadius:4,cursor:'pointer'}}/></label>
-              <div className="row-flex" style={{gap:8, marginTop:4}}>
-                <button className="btn btn-rust btn-sm" disabled={!staffForm.name.trim()||staffBusy} onClick={saveStaffMember}>{staffBusy?'Saving…':'Save'}</button>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={()=>setStaffForm(null)}>Cancel</button>
-              </div>
+    <div style={{display:'grid', gap:24}}>
+      <form onSubmit={onShopSubmit} style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24}}>
+        <span className="eyebrow">Shop Details</span>
+        <label className="field" style={{marginTop:12}}><span className="label">Trading name</span><input className="input" value={shop.tradingName} onChange={(e) => setShop({ ...shop, tradingName: e.target.value })}/></label>
+        <label className="field"><span className="label">ABN</span><input className="input" value={shop.abn} onChange={(e) => setShop({ ...shop, abn: e.target.value })}/></label>
+        <label className="field"><span className="label">Street address</span><input className="input" value={shop.streetAddress||''} onChange={(e) => setShop({ ...shop, streetAddress: e.target.value })} placeholder="e.g. 12 Station St"/></label>
+        <div style={{display:'grid', gridTemplateColumns:'2fr 1fr 1fr', gap:8}}>
+          <label className="field"><span className="label">Suburb / Town</span><input className="input" value={shop.suburb||''} onChange={(e) => setShop({ ...shop, suburb: e.target.value })} placeholder="e.g. Blackall"/></label>
+          <label className="field"><span className="label">State</span><input className="input" value={shop.state||''} onChange={(e) => setShop({ ...shop, state: e.target.value })} placeholder="QLD"/></label>
+          <label className="field"><span className="label">Postcode</span><input className="input" value={shop.postcode||''} onChange={(e) => setShop({ ...shop, postcode: e.target.value })} placeholder="4472"/></label>
+        </div>
+        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:8}}>
+          <label className="field"><span className="label">Map latitude</span><input className="input" value={shop.mapLat||''} onChange={(e) => setShop({ ...shop, mapLat: e.target.value })} placeholder="-35.9833"/></label>
+          <label className="field"><span className="label">Map longitude</span><input className="input" value={shop.mapLng||''} onChange={(e) => setShop({ ...shop, mapLng: e.target.value })} placeholder="144.7500"/></label>
+        </div>
+        <label className="field"><span className="label">Phone</span><input className="input" value={shop.phone} onChange={(e) => setShop({ ...shop, phone: e.target.value })}/></label>
+        <label className="field"><span className="label">Contact email</span><input className="input" type="email" value={shop.email||''} onChange={(e) => setShop({ ...shop, email: e.target.value })}/></label>
+        <label className="field"><span className="label">Tagline</span><input className="input" value={shop.tagline} onChange={(e) => setShop({ ...shop, tagline: e.target.value })}/></label>
+        <label className="field"><span className="label">Description (footer)</span><textarea className="textarea" value={shop.description||''} onChange={(e) => setShop({ ...shop, description: e.target.value })} style={{minHeight:80}} placeholder="e.g. An independent electronics outpost..."/></label>
+        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:8}}>
+          <label className="field"><span className="label">Acknowledgment — People</span><input className="input" value={shop.acknowledgmentPeople||''} onChange={(e) => setShop({ ...shop, acknowledgmentPeople: e.target.value })} placeholder="e.g. Bidjara People"/></label>
+          <label className="field"><span className="label">Acknowledgment — Country</span><input className="input" value={shop.acknowledgmentCountry||''} onChange={(e) => setShop({ ...shop, acknowledgmentCountry: e.target.value })} placeholder="e.g. Bidjara Country"/></label>
+        </div>
+        <label className="field">
+          <span className="label">Site URL</span>
+          <input className="input" value={shop.siteUrl||''} onChange={(e) => setShop({ ...shop, siteUrl: e.target.value })} placeholder="https://outbackelectronics.com.au"/>
+          {(shop.siteUrl||'').startsWith('http://localhost') && (
+            <div style={{fontSize:11, color:'var(--ochre)', marginTop:4, display:'flex', alignItems:'center', gap:6}}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              This is a local development URL — update it to your live domain before publishing.
             </div>
           )}
+        </label>
+        <div className="row-flex" style={{gap:8, marginTop:12}}>
+          <button className="btn btn-rust btn-sm" disabled={!shopDirty || sectionBusy==='shop'}>{sectionBusy==='shop'?'Saving…':'Save'}</button>
+          <button type="button" className="btn btn-ghost btn-sm" disabled={!shopDirty || sectionBusy==='shop'} onClick={() => setShop(savedShop)}>Cancel</button>
         </div>
-      </div>}
-
-      {settingsTab === 'integrations' && <div style={{display:'grid', gap:24}}>
-        <form onSubmit={onIntegrationsSubmit} style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24}}>
-          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-            <span className="eyebrow">Integrations</span>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={openAddIntegrationModal}>+ Add</button>
+      </form>
+      <form onSubmit={onAnnouncementSubmit} style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24}}>
+        <span className="eyebrow">Announcement Bar</span>
+        <label className="field" style={{marginTop:12}}><span className="label">Message</span><input className="input" value={announcement.text} onChange={e => setAnnouncement({...announcement, text: e.target.value})} placeholder="e.g. SUMMER SALE — 15% OFF · ENDS 30 JUN"/></label>
+        <label className="field" style={{flexDirection:'row', alignItems:'center', gap:8}}><input type="checkbox" checked={!!announcement.enabled} onChange={e => setAnnouncement({...announcement, enabled: e.target.checked})}/><span className="label" style={{margin:0}}>Show announcement bar</span></label>
+        <label className="field"><span className="label">Expires on (optional)</span><input className="input" type="date" value={announcement.expiresAt || ''} onChange={e => setAnnouncement({...announcement, expiresAt: e.target.value})}/></label>
+        <div className="row-flex" style={{gap:8, marginTop:12}}>
+          <button className="btn btn-rust btn-sm" disabled={!announcementDirty || sectionBusy==='announcement'}>{sectionBusy==='announcement'?'Saving…':'Save'}</button>
+          <button type="button" className="btn btn-ghost btn-sm" disabled={!announcementDirty || sectionBusy==='announcement'} onClick={() => setAnnouncement(savedAnnouncement)}>Cancel</button>
+        </div>
+      </form>
+      <form onSubmit={onSiteContentSubmit} style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24}}>
+        <span className="eyebrow">Site Content</span>
+        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginTop:12}}>
+          <div>
+            <label className="field"><span className="label">Workshop blurb (home page &amp; services)</span><textarea className="input" style={{minHeight:64}} value={siteContent.workshopBlurb} onChange={e => setSiteContent({...siteContent, workshopBlurb: e.target.value})} placeholder="e.g. One desk, one tech, one ute…"/></label>
           </div>
-          {integrations.length === 0 && <div style={{marginTop:12, fontSize:13, color:'var(--ink-3)'}}>No integrations configured.</div>}
-          <div style={{display:'grid', gap:10, marginTop:12, fontSize:14}}>
-            {integrations.map((r,i) => (
-              <div key={i} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 0', borderBottom: i < integrations.length - 1 ? '1px solid var(--line)' : 'none'}}>
-                <div>
-                  <div style={{fontWeight:600}}>{r[0]}</div>
-                  <div className="mono" style={{fontSize:11, color:r[2]?'var(--eucalyptus)':'var(--ink-3)', marginTop:2}}>{r[1] ? r[1].toUpperCase() : '—'} · {r[2] ? 'CONNECTED' : 'DISCONNECTED'}</div>
-                </div>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => openIntegrationModal(i)}>{r[2]?'Configure':'Connect'}</button>
+          <div>
+            <label className="field"><span className="label">AI section heading (use newline to split lines)</span><input className="input" value={siteContent.aiHeading} onChange={e => setSiteContent({...siteContent, aiHeading: e.target.value})} placeholder="e.g. Edge AI\nfor the long paddock."/></label>
+            <label className="field"><span className="label">AI section body</span><textarea className="input" style={{minHeight:64}} value={siteContent.aiBody} onChange={e => setSiteContent({...siteContent, aiBody: e.target.value})}/></label>
+            <label className="field" style={{flexDirection:'row', alignItems:'center', gap:8}}><input type="checkbox" checked={!!siteContent.aiEnabled} onChange={e => setSiteContent({...siteContent, aiEnabled: e.target.checked})}/><span className="label" style={{margin:0}}>Show "NEW · 2026" badge on AI section</span></label>
+          </div>
+        </div>
+        <div className="row-flex" style={{gap:8, marginTop:12}}>
+          <button className="btn btn-rust btn-sm" disabled={!siteContentDirty || sectionBusy==='siteContent'}>{sectionBusy==='siteContent'?'Saving…':'Save'}</button>
+          <button type="button" className="btn btn-ghost btn-sm" disabled={!siteContentDirty || sectionBusy==='siteContent'} onClick={() => setSiteContent(savedSiteContent)}>Cancel</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+SettingsGeneralTab = React.memo(SettingsGeneralTab);
+
+function SettingsStaffTab({ staffMembers, staffForm, setStaffForm, staffBusy, onSave, onDelete, onOpenForm }) {
+  return (
+    <div style={{display:'grid', gap:24}}>
+      <div style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24}}>
+        <span className="eyebrow">Staff &amp; Roles</span>
+        <div style={{display:'grid', gap:8, marginTop:12}}>
+          {staffMembers.map(s => (
+            <div key={s.id} style={{display:'flex', alignItems:'center', gap:10, padding:'8px 10px', background:'var(--bg-elev)'}}>
+              <div className="avatar" style={{width:32, height:32, background:s.color||'#d7c7a6', fontSize:14}}>{(s.name||'?').split(' ').map(w=>w[0]).join('')}</div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:13, fontWeight:600}}>{s.name}</div>
+                <div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>{(s.role||'staff').toUpperCase()}{s.email ? ` · ${s.email}` : ''}</div>
               </div>
-            ))}
-          </div>
-          <div className="row-flex" style={{gap:8, marginTop:12}}>
-            <button className="btn btn-rust btn-sm" disabled={!integrationsDirty || sectionBusy==='integrations'}>{sectionBusy==='integrations'?'Saving…':'Save'}</button>
-            <button type="button" className="btn btn-ghost btn-sm" disabled={!integrationsDirty || sectionBusy==='integrations'} onClick={() => setIntegrations(savedIntegrations)}>Cancel</button>
-          </div>
-        </form>
-      </div>}
-
-      {settingsTab === 'security' && <div style={{display:'grid', gap:24}}>
-        <form onSubmit={onSecuritySubmit} style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24, maxWidth:480}}>
-          <span className="eyebrow">Admin credentials</span>
-          <label className="field" style={{marginTop:12}}><span className="label">Admin username</span><input className="input" value={security.adminUsername} onChange={e => setSecurity({...security, adminUsername: e.target.value})}/></label>
-          <label className="field"><span className="label">New password <span style={{fontWeight:400, color:'var(--ink-3)'}}>(leave blank to keep current)</span></span><input className="input" type="password" value={security.adminPassword} onChange={e => setSecurity({...security, adminPassword: e.target.value})}/></label>
-          <label className="field"><span className="label">Confirm password</span><input className="input" type="password" value={security.confirmPassword} onChange={e => setSecurity({...security, confirmPassword: e.target.value})}/></label>
-          {security.adminPassword && security.adminPassword !== security.confirmPassword && <div style={{fontSize:11, color:'var(--rust)', marginBottom:4}}>Passwords do not match</div>}
-          <div className="row-flex" style={{gap:8, marginTop:12}}>
-            <button className="btn btn-rust btn-sm" disabled={!securityDirty || sectionBusy==='security' || !!(security.adminPassword && security.adminPassword !== security.confirmPassword)}>{sectionBusy==='security'?'Saving…':'Save'}</button>
-            <button type="button" className="btn btn-ghost btn-sm" disabled={!securityDirty || sectionBusy==='security'} onClick={() => setSecurity(savedSecurity)}>Cancel</button>
-          </div>
-        </form>
-      </div>}
-
-      {settingsTab === 'advanced' && <div style={{display:'grid', gap:24}}>
-        <div style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24}}>
-          <span className="eyebrow">Maintenance &amp; Data</span>
-          <div style={{marginTop:14, display:'grid', gap:10}}>
-            <div style={{padding:'14px', background:'var(--bg-elev)', border:'1px solid var(--line)'}}>
-              <div style={{fontWeight:600}}>Rebuild search index</div>
-              <p style={{fontSize:13, color:'var(--ink-2)', margin:'4px 0 8px'}}>Re-indexes products and tutorials.</p>
-              {dangerMsg.rebuild && <div style={{fontSize:12, marginBottom:6, color:dangerMsg.rebuild.includes('✓')?'var(--eucalyptus)':'var(--rust)'}}>{dangerMsg.rebuild}</div>}
-              <button className="btn btn-ghost btn-sm" disabled={sectionBusy==='rebuild'} onClick={async () => {
-                setSectionBusy('rebuild');
-                setDangerMsg(m => ({...m, rebuild:'Rebuilding…'}));
-                await fetch('/api/admin/rebuild', { method:'POST', headers:postHeaders(), credentials:'include' }).catch(()=>null);
-                setSectionBusy('');
-                setDangerMsg(m => ({...m, rebuild:'✓ Index rebuilt.'}));
-                setTimeout(() => setDangerMsg(m => ({...m, rebuild:''})), 4000);
-              }}>{sectionBusy==='rebuild' ? 'Rebuilding…' : 'Run rebuild'}</button>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => onOpenForm(s)}>Edit</button>
+              <button type="button" className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={() => onDelete(s.id)}>Remove</button>
             </div>
-            <div style={{padding:'14px', background:'var(--bg-elev)', border:'1px solid var(--line)'}}>
-              <div style={{fontWeight:600}}>Export all data</div>
-              <p style={{fontSize:13, color:'var(--ink-2)', margin:'4px 0 8px'}}>JSON dump of everything — products, orders, customers, content.</p>
-              {dangerMsg.export && <div style={{fontSize:12, marginBottom:6, color:dangerMsg.export.includes('✓')?'var(--eucalyptus)':'var(--rust)'}}>{dangerMsg.export}</div>}
-              <button className="btn btn-ghost btn-sm" disabled={sectionBusy==='export'} onClick={async () => {
-                setSectionBusy('export');
-                setDangerMsg(m => ({...m, export:'Generating…'}));
-                const r = await fetch('/api/admin/export', { credentials:'include' }).catch(()=>null);
-                setSectionBusy('');
-                if (r && r.ok) {
-                  const blob = await r.blob();
-                  const a = document.createElement('a');
-                  a.href = URL.createObjectURL(blob);
-                  a.download = `outback-export-${new Date().toISOString().slice(0,10)}.json`;
-                  a.click();
-                  setDangerMsg(m => ({...m, export:'✓ Export downloaded.'}));
-                } else {
-                  setDangerMsg(m => ({...m, export:'Export failed — check server logs.'}));
-                }
-                setTimeout(() => setDangerMsg(m => ({...m, export:''})), 5000);
-              }}>{sectionBusy==='export' ? 'Generating…' : 'Generate export'}</button>
-            </div>
-            <div style={{padding:'14px', background:'#3a1a14', color:'var(--paper)', border:'1px solid #7a3a18'}}>
-              <div style={{fontWeight:600, color:'#ffb59c'}}>Maintenance mode</div>
-              <p style={{fontSize:13, margin:'4px 0 8px', color:'var(--bg-deep)'}}>Shows a holding page to non-staff visitors.</p>
-              {maintenanceEnabled && <div style={{fontSize:12, marginBottom:6, color:'#ffb59c', fontWeight:600}}>⚠ Maintenance mode is currently ON</div>}
-              {dangerMsg.maint && <div style={{fontSize:12, marginBottom:6, color:'#ffb59c'}}>{dangerMsg.maint}</div>}
-              {maintenanceEnabled ? (
-                <button className="btn btn-ghost btn-sm" disabled={sectionBusy==='maint'} onClick={async () => {
-                  setSectionBusy('maint');
-                  const r = await fetch('/api/admin/maintenance', { method:'POST', credentials:'include', headers:postHeaders(), body: JSON.stringify({ enabled: false }) }).catch(()=>null);
-                  setSectionBusy('');
-                  if (r && r.ok) { setMaintenanceEnabled(false); setDangerMsg(m => ({...m, maint:'✓ Maintenance mode disabled.'})); }
-                  else { setDangerMsg(m => ({...m, maint:'Error disabling maintenance mode.'})); }
-                }}>{sectionBusy==='maint' ? 'Disabling…' : 'Disable maintenance'}</button>
-              ) : !maintConfirm ? (
-                <button className="btn btn-rust btn-sm" onClick={() => setMaintConfirm(true)}>Enable maintenance</button>
-              ) : (
-                <div className="row-flex" style={{gap:8, alignItems:'center'}}>
-                  <span style={{fontSize:12, color:'#ffb59c'}}>Are you sure? This will hide the site from visitors.</span>
-                  <button className="btn btn-ghost btn-sm" onClick={() => setMaintConfirm(false)}>Cancel</button>
-                  <button className="btn btn-rust btn-sm" disabled={sectionBusy==='maint'} onClick={async () => {
-                    setSectionBusy('maint');
-                    const r = await fetch('/api/admin/maintenance', { method:'POST', credentials:'include', headers:postHeaders(), body: JSON.stringify({ enabled: true }) }).catch(()=>null);
-                    setSectionBusy('');
-                    setMaintConfirm(false);
-                    if (r && r.ok) { setMaintenanceEnabled(true); setDangerMsg(m => ({...m, maint:'✓ Maintenance mode enabled.'})); }
-                    else { setDangerMsg(m => ({...m, maint:'Error enabling maintenance mode.'})); }
-                  }}>{sectionBusy==='maint' ? 'Enabling…' : 'Yes, enable'}</button>
-                </div>
-              )}
-            </div>
-          </div>
+          ))}
+          {staffMembers.length === 0 && <div className="mono" style={{fontSize:12, color:'var(--ink-3)'}}>No staff members yet.</div>}
         </div>
-      </div>}
+        <div className="row-flex" style={{gap:8, marginTop:12}}>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => onOpenForm(null)}>+ Add staff member</button>
+        </div>
+        {staffForm !== null && (
+          <div style={{marginTop:16, padding:16, background:'var(--bg-elev)', display:'grid', gap:8}}>
+            <div style={{fontSize:13, fontWeight:600, marginBottom:4}}>{staffForm.id ? 'Edit member' : 'New member'}</div>
+            <label className="field"><span className="label">Name</span><input className="input" value={staffForm.name} onChange={e=>setStaffForm({...staffForm,name:e.target.value})}/></label>
+            <label className="field"><span className="label">Role</span>
+              <select className="select" value={staffForm.role||'staff'} onChange={e=>setStaffForm({...staffForm,role:e.target.value})}>
+                {['owner','manager','technician','staff','seller','pending'].map(r=><option key={r}>{r}</option>)}
+              </select>
+            </label>
+            <label className="field"><span className="label">Email</span><input className="input" type="email" value={staffForm.email||''} onChange={e=>setStaffForm({...staffForm,email:e.target.value})}/></label>
+            <label className="field"><span className="label">Phone</span><input className="input" value={staffForm.phone||''} onChange={e=>setStaffForm({...staffForm,phone:e.target.value})}/></label>
+            <label className="field"><span className="label">Status</span>
+              <select className="select" value={staffForm.status||'active'} onChange={e=>setStaffForm({...staffForm,status:e.target.value})}>
+                {['active','inactive'].map(s=><option key={s}>{s}</option>)}
+              </select>
+            </label>
+            <label className="field"><span className="label">PIN{staffForm.id ? ' (leave blank to keep current)' : ''}</span><input className="input" type="password" inputMode="numeric" maxLength={6} value={staffForm.pin||''} onChange={e=>setStaffForm({...staffForm,pin:e.target.value.replace(/\D/g,'').slice(0,6)})} placeholder={staffForm.id ? '4–6 digits' : '4–6 digits (required)'}/></label>
+            <label className="field"><span className="label">Avatar colour</span><input type="color" value={staffForm.color||'#d7c7a6'} onChange={e=>setStaffForm({...staffForm,color:e.target.value})} style={{width:48,height:32,padding:2,border:'1px solid var(--line)',borderRadius:4,cursor:'pointer'}}/></label>
+            <div className="row-flex" style={{gap:8, marginTop:4}}>
+              <button className="btn btn-rust btn-sm" disabled={!staffForm.name.trim()||staffBusy} onClick={onSave}>{staffBusy?'Saving…':'Save'}</button>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={()=>setStaffForm(null)}>Cancel</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+SettingsStaffTab = React.memo(SettingsStaffTab);
 
+function SettingsIntegrationsTab({ integrations, setIntegrations, savedIntegrations, integrationModal, setIntegrationModal, integrationForm, setIntegrationForm, integrationsDirty, sectionBusy, onSubmit, onOpenModal, onOpenAddModal, onSaveModal, onDisconnect, onRemove }) {
+  return (
+    <div style={{display:'grid', gap:24}}>
+      <form onSubmit={onSubmit} style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24}}>
+        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+          <span className="eyebrow">Integrations</span>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onOpenAddModal}>+ Add</button>
+        </div>
+        {integrations.length === 0 && <div style={{marginTop:12, fontSize:13, color:'var(--ink-3)'}}>No integrations configured.</div>}
+        <div style={{display:'grid', gap:10, marginTop:12, fontSize:14}}>
+          {integrations.map((r,i) => (
+            <div key={i} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 0', borderBottom: i < integrations.length - 1 ? '1px solid var(--line)' : 'none'}}>
+              <div>
+                <div style={{fontWeight:600}}>{r[0]}</div>
+                <div className="mono" style={{fontSize:11, color:r[2]?'var(--eucalyptus)':'var(--ink-3)', marginTop:2}}>{r[1] ? r[1].toUpperCase() : '—'} · {r[2] ? 'CONNECTED' : 'DISCONNECTED'}</div>
+              </div>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => onOpenModal(i)}>{r[2]?'Configure':'Connect'}</button>
+            </div>
+          ))}
+        </div>
+        <div className="row-flex" style={{gap:8, marginTop:12}}>
+          <button className="btn btn-rust btn-sm" disabled={!integrationsDirty || sectionBusy==='integrations'}>{sectionBusy==='integrations'?'Saving…':'Save'}</button>
+          <button type="button" className="btn btn-ghost btn-sm" disabled={!integrationsDirty || sectionBusy==='integrations'} onClick={() => setIntegrations(savedIntegrations)}>Cancel</button>
+        </div>
+      </form>
       {integrationModal && (
         <div style={{position:'fixed', inset:0, zIndex:500, background:'rgba(15,13,10,0.75)', display:'flex', flexDirection:'column', alignItems:'center', padding:'40px 16px', overflowY:'auto'}} onClick={() => setIntegrationModal(null)}>
           <div style={{width:'100%', maxWidth:480, background:'var(--paper)', padding:32, boxShadow:'0 16px 48px rgba(0,0,0,.35)'}} onClick={e => e.stopPropagation()}>
@@ -5234,13 +4943,13 @@ function AdminSettingsFull({ sessionInfo = {} }) {
             </>}
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:16}}>
               <div className="row-flex" style={{gap:8}}>
-                <button type="button" className="btn btn-rust btn-sm" onClick={saveIntegrationModal}>{integrationModal.mode === 'add' ? 'Add' : 'Save'}</button>
+                <button type="button" className="btn btn-rust btn-sm" onClick={onSaveModal}>{integrationModal.mode === 'add' ? 'Add' : 'Save'}</button>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setIntegrationModal(null)}>Cancel</button>
               </div>
               {integrationModal.mode === 'edit' && (
                 <div className="row-flex" style={{gap:8}}>
-                  {integrations[integrationModal.idx]?.[2] && <button type="button" className="btn btn-ghost btn-sm" style={{color:'var(--ink-3)'}} onClick={disconnectIntegration}>Disconnect</button>}
-                  <button type="button" className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={removeIntegration}>Remove</button>
+                  {integrations[integrationModal.idx]?.[2] && <button type="button" className="btn btn-ghost btn-sm" style={{color:'var(--ink-3)'}} onClick={onDisconnect}>Disconnect</button>}
+                  <button type="button" className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={onRemove}>Remove</button>
                 </div>
               )}
             </div>
@@ -5250,6 +4959,377 @@ function AdminSettingsFull({ sessionInfo = {} }) {
     </div>
   );
 }
+SettingsIntegrationsTab = React.memo(SettingsIntegrationsTab);
+
+function SettingsSecurityTab({ security, setSecurity, savedSecurity, securityDirty, sectionBusy, onSubmit }) {
+  return (
+    <div style={{display:'grid', gap:24}}>
+      <form onSubmit={onSubmit} style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24, maxWidth:480}}>
+        <span className="eyebrow">Admin credentials</span>
+        <label className="field" style={{marginTop:12}}><span className="label">Admin username</span><input className="input" value={security.adminUsername} onChange={e => setSecurity({...security, adminUsername: e.target.value})}/></label>
+        <label className="field"><span className="label">New password <span style={{fontWeight:400, color:'var(--ink-3)'}}>(leave blank to keep current)</span></span><input className="input" type="password" value={security.adminPassword} onChange={e => setSecurity({...security, adminPassword: e.target.value})}/></label>
+        <label className="field"><span className="label">Confirm password</span><input className="input" type="password" value={security.confirmPassword} onChange={e => setSecurity({...security, confirmPassword: e.target.value})}/></label>
+        {security.adminPassword && security.adminPassword !== security.confirmPassword && <div style={{fontSize:11, color:'var(--rust)', marginBottom:4}}>Passwords do not match</div>}
+        <div className="row-flex" style={{gap:8, marginTop:12}}>
+          <button className="btn btn-rust btn-sm" disabled={!securityDirty || sectionBusy==='security' || !!(security.adminPassword && security.adminPassword !== security.confirmPassword)}>{sectionBusy==='security'?'Saving…':'Save'}</button>
+          <button type="button" className="btn btn-ghost btn-sm" disabled={!securityDirty || sectionBusy==='security'} onClick={() => setSecurity(savedSecurity)}>Cancel</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+SettingsSecurityTab = React.memo(SettingsSecurityTab);
+
+function SettingsAdvancedTab({ maintenanceEnabled, setMaintenanceEnabled, maintConfirm, setMaintConfirm, dangerMsg, setDangerMsg, sectionBusy, setSectionBusy }) {
+  return (
+    <div style={{display:'grid', gap:24}}>
+      <div style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24}}>
+        <span className="eyebrow">Maintenance &amp; Data</span>
+        <div style={{marginTop:14, display:'grid', gap:10}}>
+          <div style={{padding:'14px', background:'var(--bg-elev)', border:'1px solid var(--line)'}}>
+            <div style={{fontWeight:600}}>Rebuild search index</div>
+            <p style={{fontSize:13, color:'var(--ink-2)', margin:'4px 0 8px'}}>Re-indexes products and tutorials.</p>
+            {dangerMsg.rebuild && <div style={{fontSize:12, marginBottom:6, color:dangerMsg.rebuild.includes('✓')?'var(--eucalyptus)':'var(--rust)'}}>{dangerMsg.rebuild}</div>}
+            <button className="btn btn-ghost btn-sm" disabled={sectionBusy==='rebuild'} onClick={async () => {
+              setSectionBusy('rebuild');
+              setDangerMsg(m => ({...m, rebuild:'Rebuilding…'}));
+              await fetch('/api/admin/rebuild', { method:'POST', headers:postHeaders(), credentials:'include' }).catch(()=>null);
+              setSectionBusy('');
+              setDangerMsg(m => ({...m, rebuild:'✓ Index rebuilt.'}));
+              setTimeout(() => setDangerMsg(m => ({...m, rebuild:''})), 4000);
+            }}>{sectionBusy==='rebuild' ? 'Rebuilding…' : 'Run rebuild'}</button>
+          </div>
+          <div style={{padding:'14px', background:'var(--bg-elev)', border:'1px solid var(--line)'}}>
+            <div style={{fontWeight:600}}>Export all data</div>
+            <p style={{fontSize:13, color:'var(--ink-2)', margin:'4px 0 8px'}}>JSON dump of everything — products, orders, customers, content.</p>
+            {dangerMsg.export && <div style={{fontSize:12, marginBottom:6, color:dangerMsg.export.includes('✓')?'var(--eucalyptus)':'var(--rust)'}}>{dangerMsg.export}</div>}
+            <button className="btn btn-ghost btn-sm" disabled={sectionBusy==='export'} onClick={async () => {
+              setSectionBusy('export');
+              setDangerMsg(m => ({...m, export:'Generating…'}));
+              const r = await fetch('/api/admin/export', { credentials:'include' }).catch(()=>null);
+              setSectionBusy('');
+              if (r && r.ok) {
+                const blob = await r.blob();
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `outback-export-${new Date().toISOString().slice(0,10)}.json`;
+                a.click();
+                setDangerMsg(m => ({...m, export:'✓ Export downloaded.'}));
+              } else {
+                setDangerMsg(m => ({...m, export:'Export failed — check server logs.'}));
+              }
+              setTimeout(() => setDangerMsg(m => ({...m, export:''})), 5000);
+            }}>{sectionBusy==='export' ? 'Generating…' : 'Generate export'}</button>
+          </div>
+          <div style={{padding:'14px', background:'#3a1a14', color:'var(--paper)', border:'1px solid #7a3a18'}}>
+            <div style={{fontWeight:600, color:'#ffb59c'}}>Maintenance mode</div>
+            <p style={{fontSize:13, margin:'4px 0 8px', color:'var(--bg-deep)'}}>Shows a holding page to non-staff visitors.</p>
+            {maintenanceEnabled && <div style={{fontSize:12, marginBottom:6, color:'#ffb59c', fontWeight:600}}>⚠ Maintenance mode is currently ON</div>}
+            {dangerMsg.maint && <div style={{fontSize:12, marginBottom:6, color:'#ffb59c'}}>{dangerMsg.maint}</div>}
+            {maintenanceEnabled ? (
+              <button className="btn btn-ghost btn-sm" disabled={sectionBusy==='maint'} onClick={async () => {
+                setSectionBusy('maint');
+                const r = await fetch('/api/admin/maintenance', { method:'POST', credentials:'include', headers:postHeaders(), body: JSON.stringify({ enabled: false }) }).catch(()=>null);
+                setSectionBusy('');
+                if (r && r.ok) { setMaintenanceEnabled(false); setDangerMsg(m => ({...m, maint:'✓ Maintenance mode disabled.'})); }
+                else { setDangerMsg(m => ({...m, maint:'Error disabling maintenance mode.'})); }
+              }}>{sectionBusy==='maint' ? 'Disabling…' : 'Disable maintenance'}</button>
+            ) : !maintConfirm ? (
+              <button className="btn btn-rust btn-sm" onClick={() => setMaintConfirm(true)}>Enable maintenance</button>
+            ) : (
+              <div className="row-flex" style={{gap:8, alignItems:'center'}}>
+                <span style={{fontSize:12, color:'#ffb59c'}}>Are you sure? This will hide the site from visitors.</span>
+                <button className="btn btn-ghost btn-sm" onClick={() => setMaintConfirm(false)}>Cancel</button>
+                <button className="btn btn-rust btn-sm" disabled={sectionBusy==='maint'} onClick={async () => {
+                  setSectionBusy('maint');
+                  const r = await fetch('/api/admin/maintenance', { method:'POST', credentials:'include', headers:postHeaders(), body: JSON.stringify({ enabled: true }) }).catch(()=>null);
+                  setSectionBusy('');
+                  setMaintConfirm(false);
+                  if (r && r.ok) { setMaintenanceEnabled(true); setDangerMsg(m => ({...m, maint:'✓ Maintenance mode enabled.'})); }
+                  else { setDangerMsg(m => ({...m, maint:'Error enabling maintenance mode.'})); }
+                }}>{sectionBusy==='maint' ? 'Enabling…' : 'Yes, enable'}</button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+SettingsAdvancedTab = React.memo(SettingsAdvancedTab);
+
+// ============================================================
+// SETTINGS FULL
+// ============================================================
+function AdminSettingsFull({ sessionInfo = {} }) {
+  const defaultShop = useMemo(() => ({
+    tradingName: '',
+    abn: '',
+    streetAddress: '',
+    suburb: '',
+    state: '',
+    postcode: '',
+    mapLat: '',
+    mapLng: '',
+    phone: '',
+    email: '',
+    tagline: '',
+    description: '',
+    siteUrl: '',
+    acknowledgmentPeople: '',
+    acknowledgmentCountry: '',
+  }), []);
+  const defaultAnnouncement = useMemo(() => ({ text: '', enabled: false, expiresAt: '' }), []);
+  const defaultSiteContent = useMemo(() => ({ aiHeading: '', aiBody: '', aiEnabled: false, workshopBlurb: '' }), []);
+  const [shop, setShop] = useState(defaultShop);
+  const [savedShop, setSavedShop] = useState(defaultShop);
+  const [announcement, setAnnouncement] = useState(defaultAnnouncement);
+  const [savedAnnouncement, setSavedAnnouncement] = useState(defaultAnnouncement);
+  const [siteContent, setSiteContent] = useState(defaultSiteContent);
+  const [savedSiteContent, setSavedSiteContent] = useState(defaultSiteContent);
+  const [integrations, setIntegrations] = useState([]);
+  const [savedIntegrations, setSavedIntegrations] = useState([]);
+  const defaultSecurity = useMemo(() => ({ adminUsername: '', adminPassword: '', confirmPassword: '' }), []);
+  const [security, setSecurity] = useState(defaultSecurity);
+  const [savedSecurity, setSavedSecurity] = useState(defaultSecurity);
+  const [integrationModal, setIntegrationModal] = useState(null);
+  const [integrationForm, setIntegrationForm] = useState({ name: '', endpoint: '', secretKey: '', publishableKey: '', webhookSecret: '', host: '', port: '', user: '', pass: '', notifyEmail: '', apiKey: '', notes: '' });
+  const [staffMembers, setStaffMembers] = useState([]);
+  const [staffForm, setStaffForm] = useState(null);
+  const [staffBusy, setStaffBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [statusMsg, setStatusMsg] = useState('');
+  const [sectionBusy, setSectionBusy] = useState('');
+  const [dangerMsg, setDangerMsg] = useState({});
+  const [maintConfirm, setMaintConfirm] = useState(false);
+  const [maintenanceEnabled, setMaintenanceEnabled] = useState(false);
+  const [settingsTab, setSettingsTab] = useState('general');
+
+  const shopDirty = JSON.stringify(shop) !== JSON.stringify(savedShop);
+  const announcementDirty = JSON.stringify(announcement) !== JSON.stringify(savedAnnouncement);
+  const integrationsDirty = JSON.stringify(integrations) !== JSON.stringify(savedIntegrations);
+  const siteContentDirty = JSON.stringify(siteContent) !== JSON.stringify(savedSiteContent);
+  const securityDirty = security.adminUsername !== savedSecurity.adminUsername || !!security.adminPassword;
+  const hasUnsavedChanges = shopDirty || announcementDirty || integrationsDirty || siteContentDirty || securityDirty;
+
+  const loadStaff = () => fetch('/api/admin/staff', { credentials:'include' })
+    .then(r => r.ok ? r.json() : Promise.reject()).then(d => setStaffMembers(d.members || [])).catch(() => {});
+
+  useEffect(() => {
+    fetch('/api/admin/settings', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => {
+        const nextShop = { ...defaultShop, ...(d.shop || {}) };
+        const nextAnnouncement = { ...defaultAnnouncement, ...(d.announcement || {}) };
+        const nextIntegrations = d.integrations || [];
+        const nextSiteContent = { ...defaultSiteContent, ...(d.siteContent || {}) };
+        const nextSecurity = { ...defaultSecurity, adminUsername: d.security?.adminUsername || '' };
+        setShop(nextShop); setSavedShop(nextShop);
+        setAnnouncement(nextAnnouncement); setSavedAnnouncement(nextAnnouncement);
+        setIntegrations(nextIntegrations); setSavedIntegrations(nextIntegrations);
+        setSiteContent(nextSiteContent); setSavedSiteContent(nextSiteContent);
+        setSecurity(nextSecurity); setSavedSecurity(nextSecurity);
+        setMaintenanceEnabled(!!(d.maintenance && d.maintenance.enabled));
+      })
+      .catch(() => setError('Failed to load settings.'))
+      .finally(() => setLoading(false));
+    loadStaff();
+  }, [defaultShop]);
+
+  useEffect(() => {
+    const onBeforeUnload = (event) => {
+      if (!hasUnsavedChanges) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [hasUnsavedChanges]);
+
+  const persistSettings = async (payload, key) => {
+    setSectionBusy(key);
+    setStatusMsg('');
+    const normalized = {
+      shop: {
+        tradingName: (payload.shop?.tradingName || '').trim(),
+        abn: (payload.shop?.abn || '').trim(),
+        streetAddress: (payload.shop?.streetAddress || '').trim(),
+        suburb: (payload.shop?.suburb || '').trim(),
+        state: (payload.shop?.state || '').trim(),
+        postcode: (payload.shop?.postcode || '').trim(),
+        mapLat: (payload.shop?.mapLat || '').trim(),
+        mapLng: (payload.shop?.mapLng || '').trim(),
+        phone: (payload.shop?.phone || '').trim(),
+        email: (payload.shop?.email || '').trim(),
+        tagline: (payload.shop?.tagline || '').trim(),
+        description: (payload.shop?.description || '').trim(),
+        siteUrl: (payload.shop?.siteUrl || '').trim(),
+        acknowledgmentPeople: (payload.shop?.acknowledgmentPeople || '').trim(),
+        acknowledgmentCountry: (payload.shop?.acknowledgmentCountry || '').trim(),
+      },
+      announcement: {
+        text: (payload.announcement?.text || '').trim(),
+        enabled: !!payload.announcement?.enabled,
+        expiresAt: (payload.announcement?.expiresAt || '').trim(),
+      },
+      integrations: (payload.integrations || []).map(r => [r[0], r[1], !!r[2], r[3] || {}]),
+      siteContent: {
+        aiHeading: (payload.siteContent?.aiHeading || '').trim(),
+        aiBody: (payload.siteContent?.aiBody || '').trim(),
+        aiEnabled: !!payload.siteContent?.aiEnabled,
+        workshopBlurb: (payload.siteContent?.workshopBlurb || '').trim(),
+      },
+      security: {
+        adminUsername: (payload.security?.adminUsername || '').trim(),
+        adminPassword: payload.security?.adminPassword || '',
+      },
+    };
+    const r = await fetch('/api/admin/settings/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(normalized) }).catch(()=>null);
+    setSectionBusy('');
+    if (r && r.ok) {
+      const d = await r.json();
+      const reconciledShop = { ...defaultShop, ...(d.shop || {}) };
+      const reconciledAnnouncement = { ...defaultAnnouncement, ...(d.announcement || {}) };
+      const reconciledIntegrations = d.integrations || [];
+      const reconciledSiteContent = { ...defaultSiteContent, ...(d.siteContent || {}) };
+      const reconciledSecurity = { ...defaultSecurity, adminUsername: d.security?.adminUsername || '' };
+      setShop(reconciledShop); setSavedShop(reconciledShop);
+      setAnnouncement(reconciledAnnouncement); setSavedAnnouncement(reconciledAnnouncement);
+      setIntegrations(reconciledIntegrations); setSavedIntegrations(reconciledIntegrations);
+      setSiteContent(reconciledSiteContent); setSavedSiteContent(reconciledSiteContent);
+      setSecurity(reconciledSecurity); setSavedSecurity(reconciledSecurity);
+      setStatusMsg('Settings updated successfully.');
+    } else setStatusMsg('Failed to update settings.');
+  };
+
+  const onShopSubmit = (e) => { e.preventDefault(); persistSettings({ shop, announcement: savedAnnouncement, integrations: savedIntegrations, siteContent: savedSiteContent, security: savedSecurity }, 'shop'); };
+  const onAnnouncementSubmit = (e) => { e.preventDefault(); persistSettings({ shop: savedShop, announcement, integrations: savedIntegrations, siteContent: savedSiteContent, security: savedSecurity }, 'announcement'); };
+  const onIntegrationsSubmit = (e) => { e.preventDefault(); persistSettings({ shop: savedShop, announcement: savedAnnouncement, integrations, siteContent: savedSiteContent, security: savedSecurity }, 'integrations'); };
+  const onSiteContentSubmit = (e) => { e.preventDefault(); persistSettings({ shop: savedShop, announcement: savedAnnouncement, integrations: savedIntegrations, siteContent, security: savedSecurity }, 'siteContent'); };
+  const onSecuritySubmit = (e) => { e.preventDefault(); persistSettings({ shop: savedShop, announcement: savedAnnouncement, integrations: savedIntegrations, siteContent: savedSiteContent, security }, 'security'); };
+
+  const openIntegrationModal = (idx) => {
+    const r = integrations[idx];
+    const cfg = r[3] || {};
+    setIntegrationForm({ name: r[0], endpoint: r[1], secretKey: cfg.secretKey || '', publishableKey: cfg.publishableKey || '', webhookSecret: cfg.webhookSecret || '', host: cfg.host || '', port: cfg.port || '', user: cfg.user || '', pass: cfg.pass || '', notifyEmail: cfg.notifyEmail || '', apiKey: cfg.apiKey || '', notes: cfg.notes || '' });
+    setIntegrationModal({ mode: 'edit', idx });
+  };
+  const openAddIntegrationModal = () => {
+    setIntegrationForm({ name: '', endpoint: '', secretKey: '', webhookSecret: '', apiKey: '', notes: '' });
+    setIntegrationModal({ mode: 'add', idx: null });
+  };
+  const saveIntegrationModal = () => {
+    const { mode, idx } = integrationModal;
+    const isStripe = integrationForm.name === 'Stripe';
+    const isEmail = integrationForm.name === 'Email';
+    const config = isStripe
+      ? { secretKey: integrationForm.secretKey, publishableKey: integrationForm.publishableKey, webhookSecret: integrationForm.webhookSecret }
+      : isEmail
+      ? { host: integrationForm.host, port: integrationForm.port, user: integrationForm.user, pass: integrationForm.pass, notifyEmail: integrationForm.notifyEmail }
+      : { apiKey: integrationForm.apiKey, notes: integrationForm.notes };
+    if (mode === 'add') {
+      if (!integrationForm.name.trim()) return;
+      const defaultEndpoints = { Stripe: 'api.stripe.com', Email: integrationForm.host || 'smtp.gmail.com', AusPost: 'digitalapi.auspost.com.au' };
+      const endpoint = integrationForm.endpoint.trim() || defaultEndpoints[integrationForm.name] || '';
+      setIntegrations([...integrations, [integrationForm.name.trim(), endpoint, true, config]]);
+    } else {
+      setIntegrations(integrations.map((r, i) => i === idx ? [r[0], integrationForm.endpoint.trim(), true, config] : r));
+    }
+    setIntegrationModal(null);
+  };
+  const disconnectIntegration = () => {
+    const { idx } = integrationModal;
+    setIntegrations(integrations.map((r, i) => i === idx ? [r[0], r[1], false, {}] : r));
+    setIntegrationModal(null);
+  };
+  const removeIntegration = () => {
+    const { idx } = integrationModal;
+    setIntegrations(integrations.filter((_, i) => i !== idx));
+    setIntegrationModal(null);
+  };
+
+  const openStaffForm = (member) => setStaffForm(member ? { ...member, pin:'' } : { name:'', role:'staff', color:'#d7c7a6', email:'', phone:'', status:'active', pin:'' });
+  const saveStaffMember = async () => {
+    if (!staffForm.name.trim()) return;
+    if (!staffForm.id && !/^\d{4,6}$/.test(staffForm.pin || '')) { alert('PIN must be 4–6 digits.'); return; }
+    if (staffForm.pin && !/^\d{4,6}$/.test(staffForm.pin)) { alert('PIN must be 4–6 digits.'); return; }
+    setStaffBusy(true);
+    const r = await fetch('/api/admin/staff/members/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ ...staffForm, name: staffForm.name.trim() }) }).catch(()=>null);
+    setStaffBusy(false);
+    if (!r || !r.ok) { adminToast('Failed to save staff member.'); return; }
+    setStaffForm(null);
+    loadStaff();
+  };
+  const deleteStaffMember = async (id) => {
+    const r = await fetch('/api/admin/staff/members/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id }) }).catch(()=>null);
+    if (!r || !r.ok) { adminToast('Failed to delete staff member.'); return; }
+    loadStaff();
+  };
+
+  return (
+    <div style={{padding:32, maxWidth:960}}>
+      {loading && <div className="mono" style={{fontSize:12, color:'var(--ink-2)', marginBottom:16}}>Loading…</div>}
+      {error && <div style={{fontSize:12, color:'var(--rust)', marginBottom:12}}>{error}</div>}
+      {statusMsg && <div style={{fontSize:12, color:statusMsg.includes('Failed') || statusMsg.includes('must') ? 'var(--rust)' : 'var(--eucalyptus)', marginBottom:12}}>{statusMsg}</div>}
+
+      <div className="tabs" style={{marginBottom:28}}>
+        {[['general','General'],['staff','Staff'],['integrations','Integrations'],['security','Security'],['advanced','Advanced']].map(([k,l]) => (
+          <div key={k} className={`tab ${settingsTab===k?'active':''}`} style={{cursor:'pointer'}} onClick={() => setSettingsTab(k)}>{l}</div>
+        ))}
+      </div>
+
+      {settingsTab === 'general' && (
+        <SettingsGeneralTab
+          shop={shop} setShop={setShop} savedShop={savedShop}
+          announcement={announcement} setAnnouncement={setAnnouncement} savedAnnouncement={savedAnnouncement}
+          siteContent={siteContent} setSiteContent={setSiteContent} savedSiteContent={savedSiteContent}
+          shopDirty={shopDirty} announcementDirty={announcementDirty} siteContentDirty={siteContentDirty}
+          sectionBusy={sectionBusy}
+          onShopSubmit={onShopSubmit} onAnnouncementSubmit={onAnnouncementSubmit} onSiteContentSubmit={onSiteContentSubmit}
+        />
+      )}
+
+      {settingsTab === 'staff' && (
+        <SettingsStaffTab
+          staffMembers={staffMembers}
+          staffForm={staffForm} setStaffForm={setStaffForm} staffBusy={staffBusy}
+          onSave={saveStaffMember} onDelete={deleteStaffMember} onOpenForm={openStaffForm}
+        />
+      )}
+
+      {settingsTab === 'integrations' && (
+        <SettingsIntegrationsTab
+          integrations={integrations} setIntegrations={setIntegrations} savedIntegrations={savedIntegrations}
+          integrationModal={integrationModal} setIntegrationModal={setIntegrationModal}
+          integrationForm={integrationForm} setIntegrationForm={setIntegrationForm}
+          integrationsDirty={integrationsDirty} sectionBusy={sectionBusy}
+          onSubmit={onIntegrationsSubmit}
+          onOpenModal={openIntegrationModal} onOpenAddModal={openAddIntegrationModal}
+          onSaveModal={saveIntegrationModal} onDisconnect={disconnectIntegration} onRemove={removeIntegration}
+        />
+      )}
+
+      {settingsTab === 'security' && (
+        <SettingsSecurityTab
+          security={security} setSecurity={setSecurity} savedSecurity={savedSecurity}
+          securityDirty={securityDirty} sectionBusy={sectionBusy}
+          onSubmit={onSecuritySubmit}
+        />
+      )}
+
+      {settingsTab === 'advanced' && (
+        <SettingsAdvancedTab
+          maintenanceEnabled={maintenanceEnabled} setMaintenanceEnabled={setMaintenanceEnabled}
+          maintConfirm={maintConfirm} setMaintConfirm={setMaintConfirm}
+          dangerMsg={dangerMsg} setDangerMsg={setDangerMsg}
+          sectionBusy={sectionBusy} setSectionBusy={setSectionBusy}
+        />
+      )}
+    </div>
+  );
+}
+
 
 // ============================================================
 // MEMBERSHIPS
