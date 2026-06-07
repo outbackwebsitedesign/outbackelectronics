@@ -1366,6 +1366,26 @@ function App() {
     portal: portalUrl || 'https://portal.outbackelectronics.com.au',
   }), [portalUrl]);
 
+  const PAGE_TITLES = {
+    home:         'Outback Electronics — Built for where the signal ends',
+    shop:         'Shop — Outback Electronics',
+    services:     'Services — Outback Electronics',
+    memberships:  'Memberships — Outback Electronics',
+    software:     'Software Library — Outback Electronics',
+    ewaste:       'eWaste Take-Back — Outback Electronics',
+    ai:           'Edge AI — Outback Electronics',
+    tutorials:    'Tutorials — Outback Electronics',
+    groups:       'Community Groups — Outback Electronics',
+    quote:        'Request a Quote — Outback Electronics',
+    'gift-cards': 'Gift Cards — Outback Electronics',
+    sellers:      'Info for Sellers — Outback Electronics',
+    contact:      'Contact — Outback Electronics',
+    policies:     'Policies — Outback Electronics',
+    about:        'About — Outback Electronics',
+    repairs:      'Repairs — Outback Electronics',
+    cart:         'Cart — Outback Electronics',
+  };
+
   useEffect(() => {
     let target = `/${page}`;
     if (page === 'product' && pageParams) {
@@ -1380,6 +1400,11 @@ function App() {
     }
     if (location.pathname !== target) window.history.pushState({}, '', target);
     window.scrollTo({top:0});
+    // Update the browser tab title on every SPA navigation
+    let title = PAGE_TITLES[page] || 'Outback Electronics';
+    if (page === 'product' && pageParams?.name) title = `${pageParams.name} — Outback Electronics`;
+    else if (page === 'service' && pageParams?.name) title = `${pageParams.name} — Outback Electronics`;
+    document.title = title;
     // Observe newly mounted reveal elements after a short delay (wait for render)
     const t = setTimeout(observeReveal, 80);
     return () => clearTimeout(t);

@@ -177,11 +177,11 @@ Note: path traversal *out* of `__dirname` is correctly blocked (Node's `new URL`
 
 ## 9. SEO Recommendations
 
-- **Create `assets/og-image.webp`** — it's referenced by *every* share preview (`server.js:802` + all `STATIC_OG`) but **does not exist** → every link preview shows a 404 image. (Quick win, high visibility.)
-- **Add `robots.txt` and `sitemap.xml`** and serve them in `server.js` (neither exists; no route serves them).
-- **Set `document.title`/meta on client‑side navigation** in the route effect (`app.jsx:1408`) — today `document.title` is *never* set in JS, so the tab title never updates during a session. Add the uncovered routes (`/`, `/about`, `/repairs`, `/policies`, `/sellers`, `/gift-cards`, `/memberships`) to `STATIC_OG` (`server.js:804`) so crawlers get unique titles.
-- **Add JSON‑LD structured data:** `LocalBusiness` on home (address/hours/geo already known) and `Product` on product pages (price/SKU already available at `server.js:832`). None exists today.
-- **Add `twitter:card`, `og:site_name`, `og:locale`, `rel="canonical"`**; add a meta description + OG tags to `forum.html`/`portal.html`/`games.html` (currently none).
+- ✅ **Create `assets/og-image.webp`** — **FIXED** — `assets/og-image.webp` created (placeholder from logo; replace with a properly branded 1200×630 image when design assets are ready). Every share preview now resolves a valid image instead of a 404.
+- ✅ **Add `robots.txt` and `sitemap.xml`** — **FIXED** — `GET /robots.txt` now returns a proper crawl policy (disallowing `/api/` and `/assets/uploads/`, advertising the sitemap). `GET /sitemap.xml` dynamically generates an XML sitemap from all `STATIC_OG` routes plus published products.
+- ✅ **Set `document.title`/meta on client‑side navigation** — **FIXED** — `PAGE_TITLES` map added to `app.jsx`; `document.title` is updated on every SPA route change (including product/service deep links using the item name). Added the missing routes (`/about`, `/repairs`, `/policies`, `/sellers`, `/gift-cards`) to `STATIC_OG` so crawlers receive unique titles and descriptions for each page.
+- ✅ **Add JSON‑LD structured data** — **FIXED** — `buildJsonLd()` injects a `LocalBusiness` schema (name, URL, logo, description, address, phone, email from shop settings) into the `<head>` of the home page on every server render.
+- ✅ **Add `twitter:card`, `og:site_name`, `og:locale`, `rel="canonical"`** — **FIXED** — added to `index.html` template and dynamically replaced by `serveIndexWithOg` on every route. `og:image` is now always an absolute URL (prefixed with `OG_BASE_URL`). Added meta description + OG/twitter tags to `portal.html`, `games.html`, and `tools.html`.
 - **Wire analytics:** Cloudflare Web Analytics is whitelisted in CSP but no beacon is injected; add it (privacy‑friendly, no cookie banner needed).
 - **Finish the PWA:** add `apple-touch-icon`, `theme-color`, and a `manifest.json` (a service worker + `offline.html` already exist but only `index.html` registers the SW, and it's an offline shim, not a true precaching PWA).
 

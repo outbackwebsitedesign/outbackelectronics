@@ -1004,6 +1004,11 @@ const STATIC_OG = {
   '/ewaste':      { title: 'eWaste Take-Back — Outback Electronics', description: 'Responsible eWaste recycling and take-back for old electronics. Drop in or arrange a pickup.',                        image: '/assets/og-image.webp' },
   '/contact':     { title: 'Contact — Outback Electronics',        description: null, image: '/assets/og-image.webp' },
   '/quote':       { title: 'Request a Quote — Outback Electronics', description: 'Need a custom kit or bulk order? Request a quote from Outback Electronics.',                                          image: '/assets/og-image.webp' },
+  '/about':       { title: 'About — Outback Electronics',           description: 'Learn about Outback Electronics — our mission, team, and commitment to remote Australia.',                           image: '/assets/og-image.webp' },
+  '/repairs':     { title: 'Repairs — Outback Electronics',         description: 'Expert device repairs for rugged electronics, laptops, phones and off-grid gear. Drop in or book online.',          image: '/assets/og-image.webp' },
+  '/policies':    { title: 'Policies — Outback Electronics',        description: 'Shipping, returns, warranty and privacy policies for Outback Electronics.',                                          image: '/assets/og-image.webp' },
+  '/sellers':     { title: 'Info for Sellers — Outback Electronics', description: 'Sell your surplus electronics through Outback Electronics. Consignment and trade-in options available.',           image: '/assets/og-image.webp' },
+  '/gift-cards':  { title: 'Gift Cards — Outback Electronics',      description: 'Give the gift of rugged gear. Outback Electronics gift cards — perfect for the remote tech enthusiast.',            image: '/assets/og-image.webp' },
 };
 
 function stripHtml(s) { return String(s || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim(); }
@@ -1112,22 +1117,56 @@ function readIndexTemplate(distPath, cb) {
   });
 }
 
+function buildJsonLd(og, pathname) {
+  const isHome = pathname === '/' || pathname === '/home';
+  if (!isHome) return '';
+  let shopData = {};
+  try { shopData = readSettings().shop || {}; } catch {}
+  const address = {
+    '@type': 'PostalAddress',
+    addressCountry: 'AU',
+    ...(shopData.suburb  ? { addressLocality: shopData.suburb }  : {}),
+    ...(shopData.state   ? { addressRegion:   shopData.state   } : {}),
+    ...(shopData.postcode ? { postalCode:     shopData.postcode } : {}),
+  };
+  const ld = {
+    '@context': 'https://schema.org',
+    '@type': 'LocalBusiness',
+    name: 'Outback Electronics',
+    url: OG_BASE_URL,
+    logo: `${OG_BASE_URL}/assets/logo.webp`,
+    image: `${OG_BASE_URL}/assets/og-image.webp`,
+    description: og.description,
+    address,
+    ...(shopData.phone ? { telephone: shopData.phone } : {}),
+    ...(shopData.email ? { email: shopData.email }     : {}),
+  };
+  return `<script type="application/ld+json">${JSON.stringify(ld)}</script>`;
+}
+
 function serveIndexWithOg(res, og, pathname) {
   const distPath = path.join(__dirname, 'dist', 'index.html');
   readIndexTemplate(distPath, (err, template) => {
     if (err) return sendErrorPage(res, 404, 'Not found', ERROR_404_HTML);
     const ogType = og.type === 'product' ? 'product' : 'website';
-    const isHome = pathname === '/' || pathname === '/shop';
-    const extraHead = isHome ? getHeroImagePreload() : '';
+    const isHome = pathname === '/' || pathname === '/home';
+    const heroPreload = isHome ? getHeroImagePreload() : '';
+    const absoluteImage = og.image && og.image.startsWith('/') ? OG_BASE_URL + og.image : og.image;
+    const jsonLd = buildJsonLd(og, pathname);
+    const extraHead = [heroPreload, jsonLd].filter(Boolean).join('\n');
     const html = template
       .replace(/<\/head>/, `${extraHead}\n</head>`)
       .replace(/<title>[^<]*<\/title>/, `<title>${escOg(og.title)}</title>`)
       .replace(/<meta name="description"[^>]*\/?>/, `<meta name="description" content="${escOg(og.description)}" />`)
       .replace(/<meta property="og:title"[^>]*\/?>/, `<meta property="og:title" content="${escOg(og.title)}" />`)
       .replace(/<meta property="og:description"[^>]*\/?>/, `<meta property="og:description" content="${escOg(og.description)}" />`)
-      .replace(/<meta property="og:image"[^>]*\/?>/, `<meta property="og:image" content="${escOg(og.image)}" />`)
+      .replace(/<meta property="og:image"[^>]*\/?>/, `<meta property="og:image" content="${escOg(absoluteImage)}" />`)
       .replace(/<meta property="og:url"[^>]*\/?>/, `<meta property="og:url" content="${escOg(og.url)}" />`)
-      .replace(/<meta property="og:type"[^>]*\/?>/, `<meta property="og:type" content="${ogType}" />`);
+      .replace(/<meta property="og:type"[^>]*\/?>/, `<meta property="og:type" content="${ogType}" />`)
+      .replace(/<meta name="twitter:title"[^>]*\/?>/, `<meta name="twitter:title" content="${escOg(og.title)}" />`)
+      .replace(/<meta name="twitter:description"[^>]*\/?>/, `<meta name="twitter:description" content="${escOg(og.description)}" />`)
+      .replace(/<meta name="twitter:image"[^>]*\/?>/, `<meta name="twitter:image" content="${escOg(absoluteImage)}" />`)
+      .replace(/<link rel="canonical"[^>]*\/?>/, `<link rel="canonical" href="${escOg(og.url)}" />`);
     res.writeHead(200, {
       'Content-Type': 'text/html; charset=utf-8',
       'Cache-Control': 'no-cache, must-revalidate',
@@ -2069,6 +2108,40 @@ const mainServer = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
   if (checkMaintenance(req, res, url)) return;
+
+  if (req.method === 'GET' && url.pathname === '/robots.txt') {
+    const txt = [
+      'User-agent: *',
+      'Disallow: /api/',
+      'Disallow: /assets/uploads/',
+      `Sitemap: ${OG_BASE_URL}/sitemap.xml`,
+    ].join('\n') + '\n';
+    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600' });
+    return res.end(txt);
+  }
+
+  if (req.method === 'GET' && url.pathname === '/sitemap.xml') {
+    const now = new Date().toISOString().slice(0, 10);
+    const staticUrls = Object.keys(STATIC_OG).map(p => `  <url><loc>${escOg(OG_BASE_URL + p)}</loc><lastmod>${now}</lastmod><changefreq>weekly</changefreq><priority>${p === '/' || p === '/home' ? '1.0' : '0.8'}</priority></url>`);
+    let productUrls = [];
+    try {
+      productUrls = readProducts()
+        .filter(p => p.status === 'published' && (p.sku || p.id))
+        .map(p => {
+          const id = encodeURIComponent(p.sku || p.id);
+          return `  <url><loc>${escOg(OG_BASE_URL + '/product/' + id)}</loc><lastmod>${now}</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>`;
+        });
+    } catch {}
+    const xml = [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+      ...staticUrls,
+      ...productUrls,
+      '</urlset>',
+    ].join('\n');
+    res.writeHead(200, { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=3600' });
+    return res.end(xml);
+  }
 
   if (req.method === 'GET' && url.pathname === '/api/csrf-token') {
     const token = ensureCsrfCookie(req, res);
