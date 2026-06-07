@@ -165,6 +165,40 @@ setInterval(() => {
   saveResetTokens();
 }, 10 * 60 * 1000).unref();
 
+// Security: sanitize tutorial HTML content and validate video URLs.
+const TRUSTED_VIDEO_DOMAINS = ['youtube.com', 'www.youtube.com', 'youtu.be', 'www.youtu.be', 'youtube-nocookie.com', 'www.youtube-nocookie.com', 'vimeo.com', 'www.vimeo.com'];
+
+function sanitizeTutorialHTML(html) {
+  if (!html || typeof html !== 'string') return '';
+  let result = html;
+  // Remove script, iframe, object, embed, style tags and their content
+  result = result.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+  result = result.replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '');
+  result = result.replace(/<(object|embed|style|form|input|button|textarea)\b[^<]*(?:(?!<\/(object|embed|style|form|input|button|textarea)>)<[^<]*)*<\/(object|embed|style|form|input|button|textarea)>/gi, '');
+  // Remove event handlers (onclick, onload, etc.)
+  result = result.replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, '');
+  result = result.replace(/\s+on\w+\s*=\s*[^\s>]*/gi, '');
+  // Remove javascript: protocol
+  result = result.replace(/href\s*=\s*["']javascript:[^"']*["']/gi, 'href="#"');
+  result = result.replace(/src\s*=\s*["']javascript:[^"']*["']/gi, '');
+  return result;
+}
+
+function validateVideoUrl(url) {
+  if (!url || typeof url !== 'string') return '';
+  try {
+    const u = new URL(url);
+    const hostname = u.hostname.toLowerCase();
+    // Check if URL is from a trusted video hosting service
+    if (TRUSTED_VIDEO_DOMAINS.some(domain => hostname === domain || hostname.endsWith('.' + domain))) {
+      return url;
+    }
+  } catch {
+    // Invalid URL
+  }
+  return '';
+}
+
 // ── DB helpers ────────────────────────────────────────────────────────────────
 
 // Atomic write: write to a temp file then rename so a crash mid-write never
@@ -4234,6 +4268,9 @@ const adminServer = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/admin/tutorials/save') {
     const session = requireRole(req, res, 'manager'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    // Sanitize HTML content and validate video URL
+    if (body.content) body.content = sanitizeTutorialHTML(body.content);
+    if (body.videoUrl) body.videoUrl = validateVideoUrl(body.videoUrl);
     const items = readTutorials(); const idx = items.findIndex(x => x.id && x.id === body.id);
     if (idx >= 0) items[idx] = body; else { body.id = 'tut-' + Date.now(); items.push(body); }
     writeTutorials(items); return json(res, 200, { ok: true, item: body });
