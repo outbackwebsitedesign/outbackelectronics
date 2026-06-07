@@ -2108,6 +2108,30 @@ const mainServer = http.createServer(async (req, res) => {
   }
 
 
+  if (req.method === 'GET' && url.pathname === '/api/forum/recent') {
+    try {
+      const httpsM = require('https');
+      const data = await new Promise((resolve, reject) => {
+        const r2 = httpsM.get('https://forum.outbackelectronics.com.au/latest.json?order=created', {
+          headers: { 'Accept': 'application/json', 'User-Agent': 'OutbackElectronics/1.0' },
+        }, r => {
+          let buf = '';
+          r.on('data', c => buf += c);
+          r.on('end', () => { try { resolve(JSON.parse(buf)); } catch { reject(new Error('parse')); } });
+        });
+        r2.on('error', reject);
+        r2.setTimeout(5000, () => { r2.destroy(); reject(new Error('timeout')); });
+      });
+      const topics = (data?.topic_list?.topics || [])
+        .filter(t => !t.pinned)
+        .slice(0, 5)
+        .map(t => ({ id: t.id, title: t.title, slug: t.slug, reply_count: t.reply_count || 0, views: t.views || 0, created_at: t.created_at }));
+      return json(res, 200, { topics });
+    } catch {
+      return json(res, 200, { topics: [] });
+    }
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/catalog/products') {
     return json(res, 200, { items: readProducts().filter(p => p.status === 'published') });
   }
