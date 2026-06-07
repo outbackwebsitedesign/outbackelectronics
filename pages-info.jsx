@@ -96,7 +96,7 @@ function QuotePage({ go, pageParams }) {
   if (submitted) {
     return (
       <>
-        <PageHead crumbs={['Outback','Request a Quote']} title="Quote received." lead="A real human will get back to you within 24 hours — usually sooner if you're east of the Stuart Highway." />
+        <PageHead crumbs={['Outback','Request a Quote']} title="Quote received." lead="A real human will get back to you within 24 hours — usually sooner for urgent jobs." />
         <section className="container" style={{paddingTop: 32, paddingBottom: 60}}>
           <div className="card-paper" style={{padding: 40, maxWidth: 640}}>
             <div className="row-flex"><span className="tag tag-euc">TICKET · {ticketId ? `#${ticketId}` : 'SUBMITTED'}</span></div>
@@ -444,7 +444,7 @@ function SellerTermsContent({ email, phone, address, abn }) {
 
       <div style={s.mt}><h3>3. ELV/LV Platform Scope</h3>
         <p style={s.p}>The Platform accepts <strong>only Extra Low Voltage (ELV, ≤50 V AC / ≤120 V DC) and Low Voltage (LV) products.</strong> Mains-voltage (240 V AC) products, components, or designs are strictly prohibited — there are no exceptions. This includes any product that connects directly to a mains supply, any mains-rated power supply unit, or any circuit designed to operate at mains voltages even if it includes a step-down stage.</p>
-        <p style={s.p}>Acceptable categories include: 12 V / 24 V / 48 V automotive, caravan, marine, and off-grid electronics; battery management systems; DC-DC converters; ELV sensor and control modules; and other circuits operating entirely within ELV limits.</p>
+        <p style={s.p}>Acceptable categories include: Arduino, Raspberry Pi, and custom microcontroller boards and shields; embedded systems and ELV sensor/control modules; 12 V / 24 V / 48 V automotive, caravan, marine, and off-grid electronics; battery management systems; DC-DC converters; and other circuits operating entirely within ELV limits. Software, firmware, and digital products related to the above hardware are also accepted.</p>
         <p style={s.p}>By listing a Product, the Seller warrants the Product operates exclusively within ELV/LV limits. If OE identifies or receives a credible complaint that a listed Product operates at mains voltage, OE may immediately remove the listing without notice and may terminate this Agreement under Section 14.</p>
       </div>
 
@@ -1344,7 +1344,7 @@ function ReturnContent({ email, phone, address }) {
       </div>
 
       <div style={s.mt}><h3>Repair Services — Warranty Returns</h3>
-        <p style={s.p}><em>Our repair services cover ELV (Extra Low Voltage, ≤50 V AC / ≤120 V DC) and LV equipment only. We do not repair mains-connected devices.</em></p>
+        <p style={s.p}><em>Our repair services cover consumer electronics (PCs, phones, tablets), microcontroller and embedded systems, and ELV/LV equipment. We do not perform mains wiring or work on mains-connected appliances.</em></p>
         <p style={s.p}><strong>Repair Warranty Period.</strong> Our repair work is warranted for <strong>90 days from the date of completion</strong>. If the same fault that was repaired reoccurs within the Repair Warranty Period, contact us at <a href={`mailto:${email}`}>{email}</a> and we will re-examine and re-repair at no charge, or provide an alternative remedy as required by the Australian Consumer Law.</p>
         <p style={s.p}><strong>What the Repair Warranty Covers.</strong> The Repair Warranty covers the specific fault addressed in the agreed repair. It does not cover: (a) faults unrelated to the repair performed; (b) damage caused by misuse, accidental damage, liquid ingress, or physical impact after collection; (c) damage caused by a pre-existing condition separate from the agreed repair; or (d) further modification or repair by the customer or a third party after collection from us.</p>
         <p style={s.p}><strong>Your ACL Rights for Repair Services.</strong> If our Repair Services fail to comply with a consumer guarantee under the Australian Consumer Law (e.g., not carried out with due care and skill), you are entitled to a remedy under the ACL, which may include re-performance of the service or compensation for foreseeable loss. These rights apply regardless of, and in addition to, our Repair Warranty.</p>
@@ -1397,8 +1397,8 @@ function DisclaimerContent() {
         <p style={s.p}><strong>Nothing in this Technical Information Disclaimer excludes, restricts, or modifies any consumer guarantee, right, or remedy conferred by the Australian Consumer Law or any other applicable mandatory legislation that cannot lawfully be excluded.</strong></p>
       </div>
 
-      <div style={s.mt}><h3>Scope of Our Work — ELV/LV Equipment Only</h3>
-        <p style={{...s.p, fontWeight:600, borderLeft:'3px solid var(--rust)', paddingLeft:14}}>⚠ IMPORTANT: Outback Electronics works exclusively with Extra Low Voltage (ELV, ≤50 V AC / ≤120 V DC) and Low Voltage (LV) equipment. We are not licensed electrical contractors and we do not perform, advise on, or accept any responsibility for mains-voltage (240 V AC) work. Nothing on this Site, in our tutorials, forum, or in our repair or technical services constitutes advice, instruction, or authorisation for any mains-voltage electrical work.</p>
+      <div style={s.mt}><h3>Scope of Our Work</h3>
+        <p style={{...s.p, fontWeight:600, borderLeft:'3px solid var(--rust)', paddingLeft:14}}>⚠ IMPORTANT: Outback Electronics works with consumer electronics (PCs, phones, tablets), microcontroller and embedded systems, and ELV/LV equipment. We are not licensed electrical contractors and we do not perform, advise on, or accept any responsibility for mains-voltage (240 V AC) wiring or appliance work. Nothing on this Site, in our tutorials, forum, or in our repair or technical services constitutes advice, instruction, or authorisation for any mains-voltage electrical work.</p>
         <p style={s.p}><strong>Mains Voltage Hazard:</strong> Mains-voltage electricity (240 V AC in Australia) can cause electrocution, cardiac arrest, severe burns, and death. All work on mains-connected equipment or infrastructure must only be performed by a licensed electrician under applicable state or territory legislation. Even after disconnection from mains supply, capacitors within mains-powered devices may retain lethal stored charge for extended periods. If your project involves mains voltage at any point, engage a licensed electrician — do not rely on this Site.</p>
         <p style={s.p}><strong>Nothing in this section limits your rights under the Australian Consumer Law where a product we have supplied is defective.</strong></p>
       </div>
@@ -1843,7 +1843,7 @@ function AboutPage({ go }) {
   return (
     <>
       <PageHead crumbs={['Outback', 'About']} title="About Outback Electronics"
-        lead={shop?.workshopBlurb || 'One desk, one tech, one ute. Free callout in Moama/Echuca; we travel anywhere in Australia. Ship anywhere in the world.'} />
+        lead={shop?.workshopBlurb || 'One desk, one tech, one ute. Arduino &amp; microcontroller builds, PC &amp; phone repairs, software, AI, and off-grid electronics. We travel, we ship worldwide.'} />
       <section className="container" style={{ paddingTop: 32, paddingBottom: 64 }}>
         <div style={{ maxWidth: 720 }}>
           <h2 className="serif" style={{ fontSize: 28, marginBottom: 16 }}>The workshop</h2>
@@ -1852,10 +1852,10 @@ function AboutPage({ go }) {
               const addr = [shop?.suburb, shop?.state, shop?.postcode].filter(Boolean).join(' ');
               return addr ? ` based at ${addr}` : '';
             })()}.
-            We repair rugged laptops, satellite uplinks and off-grid power systems — and we build custom rigs for people who live and work where the signal ends.
+            We build Arduino and microcontroller projects, repair PCs and phones, write software and AI solutions, and handle off-grid and automotive electronics — for people who live and work where the signal ends.
           </p>
           <p style={{ color: 'var(--ink-2)', lineHeight: 1.8, marginBottom: 24 }}>
-            No public walk-in. Every visit is by appointment — call, email, or book online. We travel the full length of the Stuart Highway and ship worldwide.
+            No public walk-in. Every visit is by appointment — call, email, or book online. We travel across remote Australia and ship worldwide.
           </p>
           <div className="row-flex" style={{ gap: 12, flexWrap: 'wrap', marginBottom: 32 }}>
             <button className="btn btn-rust" onClick={() => go('quote')}>Get a Quote</button>

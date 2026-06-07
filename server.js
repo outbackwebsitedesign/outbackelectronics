@@ -928,8 +928,8 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null) {
 const OG_BASE_URL = 'https://outbackelectronics.com.au';
 
 const STATIC_OG = {
-  '/':          { title: 'Outback Electronics — Built for where the signal ends', description: 'Rugged gear, solar kits, comms, and tools built for remote Australia. Shop online or visit us for expert off-grid advice.', image: '/assets/og-image.webp' },
-  '/home':      { title: 'Outback Electronics — Built for where the signal ends', description: 'Rugged gear, solar kits, comms, and tools built for remote Australia. Shop online or visit us for expert off-grid advice.', image: '/assets/og-image.webp' },
+  '/':          { title: 'Outback Electronics — Built for where the signal ends', description: 'Arduino & microcontroller builds, PC & phone repairs, software and AI solutions, and off-grid electronics — serving remote Australia by appointment.', image: '/assets/og-image.webp' },
+  '/home':      { title: 'Outback Electronics — Built for where the signal ends', description: 'Arduino & microcontroller builds, PC & phone repairs, software and AI solutions, and off-grid electronics — serving remote Australia by appointment.', image: '/assets/og-image.webp' },
   '/shop':        { title: 'Shop — Outback Electronics',           description: 'Browse rugged laptops, solar gear, satellite comms, UHF radios and off-grid tools built for remote Australia.',           image: '/assets/og-image.webp' },
   '/services':    { title: 'Services — Outback Electronics',       description: 'Expert repairs, field service and bench diagnostics for rugged devices. Book a repair or drop in.',                       image: '/assets/og-image.webp' },
   '/groups':      { title: 'Community Groups — Outback Electronics', description: 'Connect with community chapters across remote Australia. Find your local Outback Electronics group.',                  image: '/assets/og-image.webp' },
@@ -938,7 +938,7 @@ const STATIC_OG = {
   '/software':    { title: 'Software Library — Outback Electronics', description: 'Download firmware, drivers and utilities for rugged devices and off-grid hardware.',                                  image: '/assets/og-image.webp' },
   '/ai':          { title: 'Edge AI — Outback Electronics',        description: 'Offline-capable AI models and inference hardware for remote deployments. No cloud required.',                           image: '/assets/og-image.webp' },
   '/ewaste':      { title: 'eWaste Take-Back — Outback Electronics', description: 'Responsible eWaste recycling and take-back for old electronics. Drop in or arrange a pickup.',                        image: '/assets/og-image.webp' },
-  '/contact':     { title: 'Contact — Outback Electronics',        description: "Get in touch with the Outback Electronics team. We're based in Moama NSW and serve remote Australia.",                 image: '/assets/og-image.webp' },
+  '/contact':     { title: 'Contact — Outback Electronics',        description: 'Get in touch with the Outback Electronics team. Based in Central Queensland, serving remote Australia by appointment.',  image: '/assets/og-image.webp' },
   '/quote':       { title: 'Request a Quote — Outback Electronics', description: 'Need a custom kit or bulk order? Request a quote from Outback Electronics.',                                          image: '/assets/og-image.webp' },
 };
 
@@ -1215,7 +1215,7 @@ function escHtml(str) {
 // Shared HTML wrapper
 function emailHtml(title, bodyHtml) {
   const { shop } = readSettings();
-  const address = shop.address || '183 Peericoota Forest Rd, Moama NSW 2731';
+  const address = shop.address || '';
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
 <style>
   body{margin:0;padding:0;background:#f4ede1;font-family:Arial,sans-serif;color:#1f1a14}
