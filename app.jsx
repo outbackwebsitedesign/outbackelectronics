@@ -24,6 +24,7 @@ const SITE_FLAGS = Object.assign(
 // Cross-site URLs — populated from /api/shop-info at runtime.
 let _PORTAL_URL = 'https://portal.outbackelectronics.com.au';
 let _GAMES_URL  = 'https://games.outbackelectronics.com.au';
+let _TOOLS_URL  = 'https://tools.outbackelectronics.com.au';
 function getPortalUrl() { return _PORTAL_URL; }
 function getGamesUrl()  { return _GAMES_URL; }
 function getToolsUrl()  { return _TOOLS_URL; }
