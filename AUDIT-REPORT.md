@@ -122,8 +122,8 @@ Note: path traversal *out* of `__dirname` is correctly blocked (Node's `new URL`
 ### ✅ M9 — Contradictory build strategy (committed `dist/` *and* rebuild on deploy) — **FIXED**
 **Where:** `dist/` is now gitignored (`.gitignore:7`) and not tracked in the repository (`git ls-files dist/` returns empty). `deploy.sh` builds on deploy, which is the single canonical strategy. **CLAUDE.md** has been updated to document `dist/` as gitignored and rebuilt by `deploy.sh`.
 
-### 🟡 M10 — Unhandled promise rejections in portal fetches
-**Where:** `portal-page.jsx:611, 686, 744, 755, 767` use bare `.then()` with no `.catch`; the `api()` wrapper (`:21`) only catches `r.json()`, not network errors. On offline/server‑down the tab throws uncaught and can stick on its loading state. **Fix:** add `.catch` / use the wrapper consistently. **Impact:** Med. **Effort:** S.
+### ✅ M10 — Unhandled promise rejections in portal fetches — **FIXED**
+**Where:** `portal-page.jsx:611, 686, 744, 755, 767` use bare `.then()` with no `.catch`; the `api()` wrapper (`:21`) only catches `r.json()`, not network errors. On offline/server‑down the tab throws uncaught and can stick on its loading state. **Fix applied:** `api()` now has a top-level `.catch(() => ({ ok: false, message: 'Network error...' }))` so network failures never propagate as unhandled rejections. All three `useEffect` data-loaders (orders, repairs, quotes) now have `.catch(() => setItems([]))` — on network failure the component renders with an empty list instead of being stuck on the loading spinner forever. The two fire-and-forget refresh calls after quote submit/accept now have `.catch(() => {})`. **Impact:** Med. **Effort:** S.
 
 ---
 

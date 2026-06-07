@@ -14,7 +14,8 @@ function api(path, opts = {}) {
     .then(async r => {
       const body = await r.json().catch(() => ({}));
       return { ok: r.ok, status: r.status, ...body };
-    });
+    })
+    .catch(() => ({ ok: false, message: 'Network error. Please check your connection and try again.' }));
 }
 
 function fmtDate(iso) {
@@ -604,7 +605,7 @@ function OrdersTab({ highlightId }) {
       } else if (highlightId) {
         setExpanded(highlightId);
       }
-    });
+    }).catch(() => setItems([]));
   }, []);
 
   async function handlePay(orderId) {
@@ -670,7 +671,7 @@ function RepairsTab() {
   const [items, setItems] = useState(null);
 
   useEffect(() => {
-    api('/api/portal/repairs').then(r => setItems(r.items || []));
+    api('/api/portal/repairs').then(r => setItems(r.items || [])).catch(() => setItems([]));
   }, []);
 
   if (!items) return <LoadingSection />;
@@ -728,7 +729,7 @@ function QuotesTab({ user, onOrderCreated, highlightRef }) {
   const [acceptedOrders, setAcceptedOrders] = useState({});
 
   useEffect(() => {
-    api('/api/portal/quotes').then(r => setItems(r.items || []));
+    api('/api/portal/quotes').then(r => setItems(r.items || [])).catch(() => setItems([]));
   }, []);
 
   async function handleSubmit(e) {
@@ -739,7 +740,7 @@ function QuotesTab({ user, onOrderCreated, highlightRef }) {
     if (r.ok) {
       setSubmitMsg('Quote request sent. We\'ll be in touch within 24 hours.');
       setShowForm(false);
-      api('/api/portal/quotes').then(r2 => setItems(r2.items || []));
+      api('/api/portal/quotes').then(r2 => setItems(r2.items || [])).catch(() => {});
     } else {
       setSubmitMsg(r.message || 'Failed to submit. Please try again.');
     }
@@ -751,7 +752,7 @@ function QuotesTab({ user, onOrderCreated, highlightRef }) {
     setAccepting(null);
     if (r.ok) {
       setAcceptedOrders(prev => ({ ...prev, [quoteId]: r.orderId }));
-      api('/api/portal/quotes').then(r2 => setItems(r2.items || []));
+      api('/api/portal/quotes').then(r2 => setItems(r2.items || [])).catch(() => {});
       if (onOrderCreated) onOrderCreated(r.orderId);
     } else {
       alert(r.message || 'Could not accept quote. Please try again or contact us.');
