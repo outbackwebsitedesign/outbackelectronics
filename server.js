@@ -5192,6 +5192,10 @@ const toolsServer = http.createServer(async (req, res) => {
     return json(res, 200, { token });
   }
 
+  if (['POST', 'PATCH', 'DELETE'].includes(req.method) && url.pathname.startsWith('/api/')) {
+    if (!verifyCsrf(req, res)) return;
+  }
+
   if (req.method === 'POST' && url.pathname === '/api/analytics/event') {
     if (publicRateLimited(getIp(req), 'analytics')) return json(res, 429, { error: 'rate_limited' });
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'bad_request' }); }

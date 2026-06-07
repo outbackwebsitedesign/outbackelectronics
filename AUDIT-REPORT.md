@@ -95,8 +95,8 @@ Note: path traversal *out* of `__dirname` is correctly blocked (Node's `new URL`
 
 ## 4. Medium‑Priority Issues
 
-### ⚠️ M1 — CSRF not enforced on `DELETE`/`PUT` for forum/admin/portal servers — **PARTIAL**
-**Where:** Main server (`:2008`) now correctly covers `['POST', 'PATCH', 'DELETE']`. However forum (`:3145`), admin (`:3414`), portal (`:5021`), and tools (`:5593`) still check only `POST`/`PATCH` — `DELETE` mutations on those four servers remain unprotected by the double‑submit check. `SameSite=Strict` mitigates in modern browsers but this should be fully closed. **Fix:** extend the `['POST', 'PATCH', 'DELETE']` check to all four remaining server handlers. **Impact:** Med. **Effort:** S.
+### ✅ M1 — CSRF not enforced on `DELETE`/`PUT` for forum/admin/portal servers — **FIXED**
+**Where:** All active API-serving servers now enforce `verifyCsrf` on `['POST', 'PATCH', 'DELETE']`. Main (`:1995`), admin (`:3228`), portal (`:4662`), and games (`:5251`) already covered `DELETE`; tools server (`:5195`) now also has the check. The forum server was replaced by a redirect-only server with no API routes. The one `DELETE` route that was previously unprotected (`DELETE /api/admin/seller/payment-method`, admin server) is now covered. **Impact:** Med. **Effort:** S.
 
 ### 🟡 M2 — Stored XSS via tutorial content + unvalidated iframe
 **Where:** `pages-community.jsx:191‑192` renders `dangerouslySetInnerHTML={{__html: activeTutorial.content}}` (the only such sink in the app); adjacent `<iframe src={activeTutorial.videoUrl}>` (`:182`) has no URL allowlist. Tutorial content is saved by the admin endpoint with **no sanitization**, then injected raw on the public site. A malicious/compromised manager — or any seller via H1 — can plant persistent JS for every visitor. **Fix:** sanitize HTML server‑side (allowlist) or render markdown as React; validate the iframe URL host. **Impact:** Med. **Effort:** S–M.
