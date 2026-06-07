@@ -107,25 +107,22 @@ Note: path traversal *out* of `__dirname` is correctly blocked (Node's `new URL`
 ### ✅ M4 — Stripe webhook: no body‑size cap, no replay/timestamp check — **FIXED**
 **Where:** `server.js:1919‑1934` (`readRawBody` and `verifyStripeSignature`), webhook handler `:2727‑2740`. `readRawBody` buffers the full request with no cap (unauthenticated memory‑exhaustion DoS); `verifyStripeSignature` checks the HMAC but ignores the timestamp `t`, so a captured signed body can be replayed indefinitely (duplicate orders / re‑fulfilment). **Fix applied:** `readRawBody` now enforces a 10 MB size cap and rejects oversized payloads; `verifyStripeSignature` now validates that the signed timestamp is within 5 minutes of the current time, preventing replay attacks. The webhook handler wraps `readRawBody` in try/catch and returns 413 Payload Too Large on size violations. **Impact:** Med. **Effort:** S.
 
-### 🟡 M5 — Live secrets persisted in plaintext to `settings.db`
-**Where:** `server.js:5019‑5052` (`migrateEnvToSettings`), `:4161‑4178` (settings save). `STRIPE_SECRET_KEY`, webhook secret, SMTP pass, and admin password hash are copied from env into `settings.db`. Combined with **C1** (`/settings.db` is web‑served), this directly leaks the Stripe secret key. **Fix:** keep live secrets in env/secret store; never persist to a flat file. **Impact:** Med (High in combination with C1). **Effort:** M.
-
-### 🟡 M6 — Missing/inconsistent security headers
+### 🟡 M5 — Missing/inconsistent security headers
 **Where:** `server.js:776‑783`. Present: `X‑Content‑Type‑Options`, `X‑Frame‑Options`, `Referrer‑Policy`, CSP (HTML only). **Missing:** `Strict‑Transport‑Security` (HSTS), `Permissions‑Policy`; headers aren't applied to JSON/API responses. **CSP inconsistency:** `script-src` has no `'unsafe-inline'`/nonce/hash, yet `dist/index.html` ships 3 inline `<script>` blocks (SW registration, Tawk.to) — as written the CSP **blocks them**, so either the CSP is stripped upstream (not actually enforced) or those features silently break with console CSP errors. **Fix:** add HSTS + `Permissions‑Policy`; add nonces/hashes for the legitimate inline scripts (or externalize them); confirm the effective CSP at the proxy. **Impact:** Med. **Effort:** S–M.
 
-### 🟡 M7 — Synchronous, blocking file I/O on the shared event loop
+### 🟡 M6 — Synchronous, blocking file I/O on the shared event loop
 **Where:** all `read*/write*` helpers (`server.js:149‑280`) use `readFileSync`/`writeFileSync`/`appendFileSync`; `readSettings` deep‑merges defaults on **every** call; no read caching. **What:** Every API call re‑reads and re‑parses whole `.db` files synchronously on the single event loop shared by all 5 services. As `orders.db`/`forum.db` grow, each parse blocks *every* service. `scryptSync` on login also blocks. **Fix:** cache parsed files in memory with write‑through; move to async I/O or a worker; longer term consider SQLite. **Impact:** Med (grows with data). **Effort:** M–L.
 
-### 🟡 M8 — Pervasive frontend duplication (security fixes must land in 6+ places)
+### 🟡 M7 — Pervasive frontend duplication (security fixes must land in 6+ places)
 **Where:** `getCsrf()` is byte‑identical in 6 files (`app.jsx:3`, `pages-shop.jsx:6`, `pages-info.jsx:5`, `pages-admin.jsx:28`, `forum-page.jsx:108`, `portal-page.jsx:5`); `ensureCsrf()` in 3; the cross‑origin `portalApi`/`usePortalUser` stack duplicated between `app.jsx:185‑213` and `games.jsx:43‑71`. No shared utils module. **Fix:** extract one `src/lib/api.js`. **Impact:** Med (maintainability/security‑consistency). **Effort:** M.
 
-### 🟡 M9 — God‑components
+### 🟡 M8 — God‑components
 **Where:** `AdminOrders` (`pages-admin.jsx:527`, 531 lines, 11 `useState`), `AdminSettingsFull` (`:4868`, 475 lines, 23 `useState`), plus several 250–310‑line components. They mix fetching, form state, and sub‑forms; re‑render wholesale on every keystroke; hard to test. (Portal, by contrast, is well‑decomposed with reusable `LoadingSection`/`EmptyState`.) **Fix:** split by concern; memoize heavy lists. **Impact:** Med. **Effort:** L.
 
-### ✅ M10 — Contradictory build strategy (committed `dist/` *and* rebuild on deploy) — **FIXED**
+### ✅ M9 — Contradictory build strategy (committed `dist/` *and* rebuild on deploy) — **FIXED**
 **Where:** `dist/` is now gitignored (`.gitignore:7`) and not tracked in the repository (`git ls-files dist/` returns empty). `deploy.sh` builds on deploy, which is the single canonical strategy. **CLAUDE.md** has been updated to document `dist/` as gitignored and rebuilt by `deploy.sh`.
 
-### 🟡 M11 — Unhandled promise rejections in portal fetches
+### 🟡 M10 — Unhandled promise rejections in portal fetches
 **Where:** `portal-page.jsx:611, 686, 744, 755, 767` use bare `.then()` with no `.catch`; the `api()` wrapper (`:21`) only catches `r.json()`, not network errors. On offline/server‑down the tab throws uncaught and can stick on its loading state. **Fix:** add `.catch` / use the wrapper consistently. **Impact:** Med. **Effort:** S.
 
 ---
