@@ -311,7 +311,6 @@ const PRIMARY_PAGES = [
 // Pages served from their own subdomain (tools./forum./games.) — clicking these
 // navigates the browser to the external service rather than SPA-routing.
 const EXTERNAL_LINKS = {
-  'forum-link': getForumUrl,
   'games-link': getGamesUrl,
   'tools-link': getToolsUrl,
 };

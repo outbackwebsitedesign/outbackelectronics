@@ -664,11 +664,9 @@ const useShop = () => useContext(ShopContext);
 
 // Cross-site URLs — populated from /api/shop-info at runtime (mirrors app.jsx).
 let _PORTAL_URL = 'https://portal.outbackelectronics.com.au';
-let _FORUM_URL  = 'https://forum.outbackelectronics.com.au';
 let _GAMES_URL  = 'https://games.outbackelectronics.com.au';
 let _TOOLS_URL  = 'https://tools.outbackelectronics.com.au';
 function getPortalUrl() { return _PORTAL_URL; }
-function getForumUrl()  { return _FORUM_URL; }
 function getGamesUrl()  { return _GAMES_URL; }
 function getToolsUrl()  { return _TOOLS_URL; }
 
@@ -683,13 +681,11 @@ const PRIMARY_PAGES = [
   { id: 'ai', label: 'AI' },
   { id: 'tutorials', label: 'Tutorials' },
   { id: 'tools-link', label: 'Tools' },
-  { id: 'forum-link', label: 'Forum' },
   { id: 'games-link', label: 'Games' },
   { id: 'groups', label: 'Groups' },
 ];
 // Pages served from their own subdomain (tools./forum./games.) — mirrors app.jsx.
 const EXTERNAL_LINKS = {
-  'forum-link': getForumUrl,
   'games-link': getGamesUrl,
   'tools-link': getToolsUrl,
 };
@@ -1204,7 +1200,6 @@ function useShopInfo() {
       .then(d => {
         if (!d) return;
         if (d.portalUrl) _PORTAL_URL = d.portalUrl;
-        if (d.forumUrl)  _FORUM_URL  = d.forumUrl;
         if (d.gamesUrl)  _GAMES_URL  = d.gamesUrl;
         setInfo({ shop: d.shop || {} });
       })

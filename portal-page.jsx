@@ -2,9 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 
 // Cross-site URLs — populated from /api/shop-info at startup. No hardcoded fallbacks.
 let _SITE_URL  = '';
-let _FORUM_URL = '';
 function getSiteUrl()  { return _SITE_URL; }
-function getForumUrl() { return _FORUM_URL; }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1690,7 +1688,7 @@ function Dashboard({ user, setUser, onLogout }) {
             <span>© {new Date().getFullYear()} Outback Electronics</span>
             <div style={{display:'flex', gap:20}}>
               <a href={getSiteUrl()}>Main site</a>
-              <a href={getForumUrl()}>Forum</a>
+              <a href="https://forum.outbackelectronics.com.au" target="_blank" rel="noopener noreferrer">Forum</a>
               <a href={getSiteUrl() + '/contact'}>Contact</a>
               <a href={getSiteUrl() + '/policies'}>Policies</a>
             </div>
@@ -2010,7 +2008,6 @@ function PortalApp() {
         fetch('/api/shop-info').then(r => r.json()).catch(() => ({})),
       ]).then(([d, shopInfo]) => {
         if (shopInfo.shop?.siteUrl) _SITE_URL  = shopInfo.shop.siteUrl;
-        if (shopInfo.forumUrl)      _FORUM_URL = shopInfo.forumUrl;
         setUser(d.user || null);
         setLoading(false);
       }).catch(() => setLoading(false))
