@@ -102,6 +102,7 @@ const SETTINGS_DB_PATH  = path.join(__dirname, 'settings.db');
 const MEMBERSHIPS_DB_PATH = path.join(__dirname, 'memberships.db');
 const STAFF_DB_PATH       = path.join(__dirname, 'staff.db');
 const SELLER_LEDGER_DB_PATH = path.join(__dirname, 'seller-ledger.db');
+const EXPENSES_DB_PATH    = path.join(__dirname, 'expenses.db');
 const ADMIN_AUDIT_LOG_PATH   = path.join(__dirname, 'admin-audit.log');
 const SESSIONS_DB_PATH        = path.join(__dirname, 'sessions.db');
 const PORTAL_SESSIONS_DB_PATH = path.join(__dirname, 'portal-sessions.db');
@@ -203,12 +204,27 @@ function validateVideoUrl(url) {
 
 // ── DB helpers ────────────────────────────────────────────────────────────────
 
+// In-memory read cache: filePath → raw JSON string.
+// Populated on first disk read; invalidated/updated by atomicWriteFile on every write.
+// Eliminates repeated synchronous disk reads and JSON re-parses for hot paths like readSettings().
+const _fileReadCache = new Map();
+
+function cachedReadFile(filePath) {
+  if (_fileReadCache.has(filePath)) return _fileReadCache.get(filePath);
+  try {
+    const data = fs.readFileSync(filePath, 'utf8');
+    _fileReadCache.set(filePath, data);
+    return data;
+  } catch { return null; }
+}
+
 // Atomic write: write to a temp file then rename so a crash mid-write never
-// leaves a partially-written (corrupt) JSON file.
+// leaves a partially-written (corrupt) JSON file. Also keeps the read cache in sync.
 function atomicWriteFile(filePath, data) {
   const tmp = filePath + '.tmp';
   fs.writeFileSync(tmp, data);
   fs.renameSync(tmp, filePath);
+  _fileReadCache.set(filePath, data);
 }
 
 // Per-key async mutex — serialises concurrent read-modify-write operations on
@@ -227,17 +243,17 @@ async function withFileLock(key, fn) {
 const CHECKOUT_LOCK = 'checkout';
 
 function readCarts() {
-  try { const p = JSON.parse(fs.readFileSync(CARTS_DB_PATH, 'utf8')); return Array.isArray(p.carts) ? p.carts : []; } catch { return []; }
+  try { const p = JSON.parse(cachedReadFile(CARTS_DB_PATH)); return Array.isArray(p.carts) ? p.carts : []; } catch { return []; }
 }
 function writeCarts(carts) { atomicWriteFile(CARTS_DB_PATH, JSON.stringify({ carts }, null, 2)); }
 
 function readProducts() {
-  try { const p = JSON.parse(fs.readFileSync(PRODUCTS_DB_PATH, 'utf8')); return Array.isArray(p.products) ? p.products : []; } catch { return []; }
+  try { const p = JSON.parse(cachedReadFile(PRODUCTS_DB_PATH)); return Array.isArray(p.products) ? p.products : []; } catch { return []; }
 }
 function writeProducts(products) { atomicWriteFile(PRODUCTS_DB_PATH, JSON.stringify({ products }, null, 2)); }
 
 function readServices() {
-  try { const p = JSON.parse(fs.readFileSync(SERVICES_DB_PATH, 'utf8')); return Array.isArray(p.services) ? p.services : []; } catch { return []; }
+  try { const p = JSON.parse(cachedReadFile(SERVICES_DB_PATH)); return Array.isArray(p.services) ? p.services : []; } catch { return []; }
 }
 function writeServices(services) { atomicWriteFile(SERVICES_DB_PATH, JSON.stringify({ services }, null, 2)); }
 
@@ -246,13 +262,13 @@ function readCatalog() { return { products: readProducts(), services: readServic
 function normalisePhone(p) { return (p||'').replace(/[\s\-().+]/g, '').toLowerCase(); }
 
 function readOrders() {
-  try { const p = JSON.parse(fs.readFileSync(ORDERS_DB_PATH, 'utf8')); return Array.isArray(p.orders) ? p.orders : []; } catch { return []; }
+  try { const p = JSON.parse(cachedReadFile(ORDERS_DB_PATH)); return Array.isArray(p.orders) ? p.orders : []; } catch { return []; }
 }
 function writeOrders(orders) { atomicWriteFile(ORDERS_DB_PATH, JSON.stringify({ orders }, null, 2)); }
 
 function readCustomers() {
   try {
-    const p = JSON.parse(fs.readFileSync(CUSTOMERS_DB_PATH, 'utf8'));
+    const p = JSON.parse(cachedReadFile(CUSTOMERS_DB_PATH));
     const customers = Array.isArray(p.customers) ? p.customers : [];
     let dirty = false;
     for (const c of customers) { if (!c.id) { c.id = 'cust-' + Date.now() + '-' + Math.random().toString(36).slice(2); dirty = true; } }
@@ -271,7 +287,7 @@ const DEFAULT_REPAIR_COLUMNS = [
 ];
 function readRepairs() {
   try {
-    const p = JSON.parse(fs.readFileSync(REPAIRS_DB_PATH, 'utf8'));
+    const p = JSON.parse(cachedReadFile(REPAIRS_DB_PATH));
     if (p && Array.isArray(p.columns) && p.columns.length) return p;
   } catch { /* fall through */ }
   return { columns: DEFAULT_REPAIR_COLUMNS.map(c => ({ ...c, cards: [] })) };
@@ -283,22 +299,22 @@ function flatRepairs() {
 }
 
 function readQuotes() {
-  try { const p = JSON.parse(fs.readFileSync(QUOTES_DB_PATH, 'utf8')); return Array.isArray(p.quotes) ? p.quotes : []; } catch { return []; }
+  try { const p = JSON.parse(cachedReadFile(QUOTES_DB_PATH)); return Array.isArray(p.quotes) ? p.quotes : []; } catch { return []; }
 }
 function writeQuotes(quotes) { atomicWriteFile(QUOTES_DB_PATH, JSON.stringify({ quotes }, null, 2)); }
 
 function readEwaste() {
-  try { const p = JSON.parse(fs.readFileSync(EWASTE_DB_PATH, 'utf8')); return Array.isArray(p.intakes) ? p.intakes : []; } catch { return []; }
+  try { const p = JSON.parse(cachedReadFile(EWASTE_DB_PATH)); return Array.isArray(p.intakes) ? p.intakes : []; } catch { return []; }
 }
 function writeEwaste(intakes) { atomicWriteFile(EWASTE_DB_PATH, JSON.stringify({ intakes }, null, 2)); }
 
 function readSellers() {
-  try { const p = JSON.parse(fs.readFileSync(SELLERS_DB_PATH, 'utf8')); return Array.isArray(p.consignments) ? p.consignments : []; } catch { return []; }
+  try { const p = JSON.parse(cachedReadFile(SELLERS_DB_PATH)); return Array.isArray(p.consignments) ? p.consignments : []; } catch { return []; }
 }
 function writeSellers(consignments) { atomicWriteFile(SELLERS_DB_PATH, JSON.stringify({ consignments }, null, 2)); }
 
 function readSellerLedger() {
-  try { const d = JSON.parse(fs.readFileSync(SELLER_LEDGER_DB_PATH, 'utf8')); return d.transactions || []; } catch { return []; }
+  try { const d = JSON.parse(cachedReadFile(SELLER_LEDGER_DB_PATH)); return d.transactions || []; } catch { return []; }
 }
 function writeSellerLedger(txns) { atomicWriteFile(SELLER_LEDGER_DB_PATH, JSON.stringify({ transactions: txns }, null, 2)); }
 
@@ -318,34 +334,44 @@ function getSellerBalance(sellerId) {
 }
 
 function readGroups() {
-  try { const p = JSON.parse(fs.readFileSync(GROUPS_DB_PATH, 'utf8')); return Array.isArray(p.groups) ? p.groups : []; } catch { return []; }
+  try { const p = JSON.parse(cachedReadFile(GROUPS_DB_PATH)); return Array.isArray(p.groups) ? p.groups : []; } catch { return []; }
 }
 function writeGroups(groups) { atomicWriteFile(GROUPS_DB_PATH, JSON.stringify({ groups }, null, 2)); }
 
 function readUsers() {
-  try { const d = JSON.parse(fs.readFileSync(USERS_DB_PATH, 'utf8')); return Array.isArray(d.users) ? d.users : []; }
+  try { const d = JSON.parse(cachedReadFile(USERS_DB_PATH)); return Array.isArray(d.users) ? d.users : []; }
   catch { return []; }
 }
 function writeUsers(users) { atomicWriteFile(USERS_DB_PATH, JSON.stringify({ users }, null, 2)); }
 
-function readSoftware() { try { return JSON.parse(fs.readFileSync(SOFTWARE_DB_PATH, 'utf8')).items || []; } catch { return []; } }
+// readForum/writeForum: portal and admin features that need the full users object.
+// Backed by users.db (same file as readUsers/writeUsers).
+function readForum() {
+  try { const d = JSON.parse(cachedReadFile(USERS_DB_PATH)); return { users: Array.isArray(d.users) ? d.users : [] }; }
+  catch { return { users: [] }; }
+}
+function writeForum(forum) {
+  atomicWriteFile(USERS_DB_PATH, JSON.stringify({ users: Array.isArray(forum.users) ? forum.users : [] }, null, 2));
+}
+
+function readSoftware() { try { return JSON.parse(cachedReadFile(SOFTWARE_DB_PATH)).items || []; } catch { return []; } }
 function writeSoftware(items) { atomicWriteFile(SOFTWARE_DB_PATH, JSON.stringify({ items }, null, 2)); }
-function readTutorials() { try { return JSON.parse(fs.readFileSync(TUTORIALS_DB_PATH, 'utf8')).items || []; } catch { return []; } }
+function readTutorials() { try { return JSON.parse(cachedReadFile(TUTORIALS_DB_PATH)).items || []; } catch { return []; } }
 function writeTutorials(items) { atomicWriteFile(TUTORIALS_DB_PATH, JSON.stringify({ items }, null, 2)); }
-function readAI() { try { const d = JSON.parse(fs.readFileSync(AI_DB_PATH, 'utf8')); return { models: d.models || [], boxes: d.boxes || [] }; } catch { return { models: [], boxes: [] }; } }
+function readAI() { try { const d = JSON.parse(cachedReadFile(AI_DB_PATH)); return { models: d.models || [], boxes: d.boxes || [] }; } catch { return { models: [], boxes: [] }; } }
 function writeAI(data) { atomicWriteFile(AI_DB_PATH, JSON.stringify(data, null, 2)); }
-function readPolicies() { try { return JSON.parse(fs.readFileSync(POLICIES_DB_PATH, 'utf8')).items || []; } catch { return []; } }
+function readPolicies() { try { return JSON.parse(cachedReadFile(POLICIES_DB_PATH)).items || []; } catch { return []; } }
 function writePolicies(items) { atomicWriteFile(POLICIES_DB_PATH, JSON.stringify({ items }, null, 2)); }
 
 function readMemberships() {
-  try { const d = JSON.parse(fs.readFileSync(MEMBERSHIPS_DB_PATH, 'utf8')); return { tiers: d.tiers || [], subscriptions: d.subscriptions || [] }; }
+  try { const d = JSON.parse(cachedReadFile(MEMBERSHIPS_DB_PATH)); return { tiers: d.tiers || [], subscriptions: d.subscriptions || [] }; }
   catch { return { tiers: [], subscriptions: [] }; }
 }
 function writeMemberships(data) { atomicWriteFile(MEMBERSHIPS_DB_PATH, JSON.stringify(data, null, 2)); }
 
 function readSettings() {
   try {
-    const d = JSON.parse(fs.readFileSync(SETTINGS_DB_PATH, 'utf8'));
+    const d = JSON.parse(cachedReadFile(SETTINGS_DB_PATH));
     return {
       shop: d.shop || {},
       announcement: d.announcement || {},
@@ -379,8 +405,8 @@ function maskIntegrationConfig(name, config) {
   return result;
 }
 
-function readExpenses() { try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'expenses.db'), 'utf8')).expenses || []; } catch { return []; } }
-function writeExpenses(e) { atomicWriteFile(path.join(__dirname, 'expenses.db'), JSON.stringify({ expenses: e }, null, 2)); }
+function readExpenses() { try { return JSON.parse(cachedReadFile(EXPENSES_DB_PATH)).expenses || []; } catch { return []; } }
+function writeExpenses(e) { atomicWriteFile(EXPENSES_DB_PATH, JSON.stringify({ expenses: e }, null, 2)); }
 
 // Analytics — append-only event log. Kept in memory for fast aggregation;
 // flushed to disk on a 30-second timer and on each new event batch.
@@ -406,18 +432,18 @@ function appendAnalyticsEvent(ev) {
 }
 
 function readGiftCards() {
-  try { const d = JSON.parse(fs.readFileSync(GIFTCARDS_DB_PATH, 'utf8')); return Array.isArray(d.giftCards) ? d.giftCards : []; }
+  try { const d = JSON.parse(cachedReadFile(GIFTCARDS_DB_PATH)); return Array.isArray(d.giftCards) ? d.giftCards : []; }
   catch { return []; }
 }
 function writeGiftCards(giftCards) { atomicWriteFile(GIFTCARDS_DB_PATH, JSON.stringify({ giftCards }, null, 2)); }
 
 function readDenominations() {
-  try { const d = JSON.parse(fs.readFileSync(DENOMINATIONS_DB_PATH, 'utf8')); return Array.isArray(d) ? d : []; } catch { return []; }
+  try { const d = JSON.parse(cachedReadFile(DENOMINATIONS_DB_PATH)); return Array.isArray(d) ? d : []; } catch { return []; }
 }
 function writeDenominations(denominations) { atomicWriteFile(DENOMINATIONS_DB_PATH, JSON.stringify(denominations, null, 2)); }
 
 function readRewards() {
-  try { const d = JSON.parse(fs.readFileSync(REWARDS_DB_PATH, 'utf8')); return { entries: Array.isArray(d.entries) ? d.entries : [] }; } catch { return { entries: [] }; }
+  try { const d = JSON.parse(cachedReadFile(REWARDS_DB_PATH)); return { entries: Array.isArray(d.entries) ? d.entries : [] }; } catch { return { entries: [] }; }
 }
 function writeRewards(data) { atomicWriteFile(REWARDS_DB_PATH, JSON.stringify(data, null, 2)); }
 
@@ -452,7 +478,7 @@ function deductRewardPoints(userId, points, description, refId) {
 
 // ── Store credit (dollar balances) — mirrors the rewards system but in AUD ──
 function readStoreCredits() {
-  try { const d = JSON.parse(fs.readFileSync(STORE_CREDIT_DB_PATH, 'utf8')); return { entries: Array.isArray(d.entries) ? d.entries : [] }; } catch { return { entries: [] }; }
+  try { const d = JSON.parse(cachedReadFile(STORE_CREDIT_DB_PATH)); return { entries: Array.isArray(d.entries) ? d.entries : [] }; } catch { return { entries: [] }; }
 }
 function writeStoreCredits(data) { atomicWriteFile(STORE_CREDIT_DB_PATH, JSON.stringify(data, null, 2)); }
 
@@ -489,7 +515,7 @@ function deductStoreCredit(userId, amount, description, refId) {
 }
 
 function readBookings() {
-  try { const d = JSON.parse(fs.readFileSync(BOOKINGS_DB_PATH, 'utf8')); return { bookings: Array.isArray(d.bookings) ? d.bookings : [] }; } catch { return { bookings: [] }; }
+  try { const d = JSON.parse(cachedReadFile(BOOKINGS_DB_PATH)); return { bookings: Array.isArray(d.bookings) ? d.bookings : [] }; } catch { return { bookings: [] }; }
 }
 function writeBookings(data) { atomicWriteFile(BOOKINGS_DB_PATH, JSON.stringify(data, null, 2)); }
 
@@ -534,7 +560,7 @@ function issueGiftCards(lineItems, orderId, customerEmail, customerName) {
 
 function readStaff() {
   try {
-    const d = JSON.parse(fs.readFileSync(STAFF_DB_PATH, 'utf8'));
+    const d = JSON.parse(cachedReadFile(STAFF_DB_PATH));
     return { members: d.members || [], activeJobs: d.activeJobs || [], completedJobs: d.completedJobs || [] };
   } catch { return { members: [], activeJobs: [], completedJobs: [] }; }
 }
