@@ -163,6 +163,12 @@ setInterval(() => {
   for (const [k, v] of sessions) if (v.expiresAt <= t) sessions.delete(k);
   for (const [k, v] of portalSessions) if (v.expiresAt <= t) portalSessions.delete(k);
   for (const [k, v] of resetTokens) if (v.expiresAt <= t) resetTokens.delete(k);
+  for (const [k, v] of loginAttempts) {
+    if (v.lockedUntil <= t && v.attempts.every(ts => ts <= t - RATE_WINDOW_MS)) loginAttempts.delete(k);
+  }
+  for (const [k, v] of publicRateCounts) {
+    if (v.every(ts => ts <= t - PUBLIC_RATE_WINDOW_MS)) publicRateCounts.delete(k);
+  }
   saveSessionsToDisk(SESSIONS_DB_PATH, sessions);
   saveSessionsToDisk(PORTAL_SESSIONS_DB_PATH, portalSessions);
   saveResetTokens();
