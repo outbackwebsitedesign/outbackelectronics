@@ -306,12 +306,15 @@ const PRIMARY_PAGES = [
   { id: 'ai', label: 'AI' },
   { id: 'tutorials', label: 'Tutorials' },
   { id: 'tools-link', label: 'Tools' },
+  { id: 'forum-link', label: 'Forum' },
   { id: 'games-link', label: 'Games' },
   { id: 'groups', label: 'Groups' },
 ];
 // Pages served from their own subdomain (tools./forum./games.) — clicking these
 // navigates the browser to the external service rather than SPA-routing.
+const FORUM_URL = 'https://forum.outbackelectronics.com.au';
 const EXTERNAL_LINKS = {
+  'forum-link': () => FORUM_URL,
   'games-link': getGamesUrl,
   'tools-link': getToolsUrl,
 };
