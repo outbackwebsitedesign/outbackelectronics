@@ -9,6 +9,7 @@ const sharp = require('sharp');
 const gzipCache = new Map();
 
 const MAIN_PORT  = process.env.MAIN_PORT  || 8080;
+const DISCOURSE_REDIRECT_PORT = process.env.DISCOURSE_REDIRECT_PORT || 8081;
 const ADMIN_PORT = process.env.ADMIN_PORT || 8082;
 const PORTAL_PORT = process.env.PORTAL_PORT || 8083;
 const GAMES_PORT  = process.env.GAMES_PORT  || 8084;
@@ -3249,6 +3250,17 @@ const mainServer = http.createServer(async (req, res) => {
   }
 });
 
+// ── Discourse redirect server (8081) ─────────────────────────────────────────
+// Redirects discourse.outbackelectronics.com.au → forum.outbackelectronics.com.au
+
+const FORUM_PUBLIC_URL = process.env.FORUM_PUBLIC_URL || 'https://forum.outbackelectronics.com.au';
+
+const discourseRedirectServer = http.createServer((req, res) => {
+  const target = FORUM_PUBLIC_URL + (req.url || '/');
+  res.writeHead(301, { Location: target });
+  res.end();
+});
+
 // ── Admin server (8082) ───────────────────────────────────────────────────────
 
 const adminServer = http.createServer(async (req, res) => {
@@ -5546,6 +5558,7 @@ backfillJobEmails();
 })();
 
 startServer(mainServer,   MAIN_PORT,   'main  ');
+startServer(discourseRedirectServer, DISCOURSE_REDIRECT_PORT, 'redirect');
 startServer(adminServer,  ADMIN_PORT,  'admin ');
 startServer(portalServer, PORTAL_PORT, 'portal');
 startServer(gamesServer,  GAMES_PORT,  'games ');
