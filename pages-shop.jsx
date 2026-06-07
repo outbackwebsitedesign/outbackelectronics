@@ -1366,7 +1366,10 @@ function GiftCardsPage({ go, addToCart }) {
             ))}
           </div>
         ) : denominations.length === 0 ? (
-          <div style={{marginBottom:24, fontSize:14, color:'var(--ink-2)'}}>Gift cards coming soon — check back shortly.</div>
+          <div style={{textAlign:'center', padding:'48px 0', color:'var(--ink-2)', fontSize:14, lineHeight:1.7}}>
+            <div style={{fontSize:18, fontWeight:600, color:'var(--ink)', marginBottom:8}}>No gift cards available right now</div>
+            <p style={{maxWidth:400, margin:'0 auto'}}>Check back soon, or <button style={{background:'none',border:'none',padding:0,color:'var(--rust)',cursor:'pointer',textDecoration:'underline',fontSize:'inherit'}} onClick={() => go('contact')}>contact us</button> if you'd like to purchase a custom amount.</p>
+          </div>
         ) : (
           <div className="grid-4" style={{gap:24, marginBottom:24}}>
             {denominations.map((denom, i) => (
@@ -1529,8 +1532,8 @@ function MembershipsPage({ go, portalUser }) {
           <div style={{textAlign:'center', padding:'64px 0', color:'var(--ink-2)', fontSize:13}}>Loading…</div>
         ) : displayTiers.length === 0 ? (
           <div style={{textAlign:'center', padding:'64px 0', color:'var(--ink-2)', fontSize:14, lineHeight:1.7}}>
-            <div style={{fontSize:18, fontWeight:600, color:'var(--ink)', marginBottom:8}}>Memberships coming soon</div>
-            <p style={{maxWidth:400, margin:'0 auto'}}>We're putting the finishing touches on our membership tiers. Check back shortly.</p>
+            <div style={{fontSize:18, fontWeight:600, color:'var(--ink)', marginBottom:8}}>No membership tiers available right now</div>
+            <p style={{maxWidth:400, margin:'0 auto'}}>Check back soon, or <button style={{background:'none',border:'none',padding:0,color:'var(--rust)',cursor:'pointer',textDecoration:'underline',fontSize:'inherit'}} onClick={() => go('contact')}>contact us</button> with any questions.</p>
           </div>
         ) : null}
 
