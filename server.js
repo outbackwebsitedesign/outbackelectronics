@@ -50,6 +50,8 @@ const PUBLIC_CSP = "default-src 'self'; " +
     "https://googleads.g.doubleclick.net https://tpc.googlesyndication.com " +
     "https://www.google.com https://maps.google.com https://ep2.adtrafficquality.google; " +
   "frame-ancestors 'none';";
+const HSTS_VALUE = 'max-age=31536000; includeSubDomains';
+const PERMISSIONS_POLICY = 'camera=(), microphone=(), geolocation=(), payment=(), usb=()';
 const PUBLIC_RATE_WINDOW_MS = 1000 * 60 * 10;
 const PUBLIC_RATE_LIMITS = { analytics: 120, checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10, 'forgot-password': 5, 'reset-password': 10, 'gift-card/apply': 10, 'gift-card/balance': 5, 'warranty/order-lookup': 10, 'cart/get': 20 };
 
@@ -625,7 +627,11 @@ function parseCookies(req) {
 }
 
 function json(res, code, body) {
-  res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' });
+  res.writeHead(code, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'X-Content-Type-Options': 'nosniff',
+    'Strict-Transport-Security': HSTS_VALUE,
+  });
   res.end(JSON.stringify(body));
 }
 
@@ -919,10 +925,12 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null) {
         'X-Frame-Options': isEmbeddable ? 'SAMEORIGIN' : 'DENY',
         'X-Content-Type-Options': 'nosniff',
         'Referrer-Policy': 'strict-origin-when-cross-origin',
+        'Strict-Transport-Security': HSTS_VALUE,
+        'Permissions-Policy': PERMISSIONS_POLICY,
         'Content-Security-Policy': isEmbeddable
           ? "default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://nominatim.openstreetmap.org; frame-src https://www.openstreetmap.org; frame-ancestors 'self';"
           : PUBLIC_CSP,
-      } : { 'X-Content-Type-Options': 'nosniff' };
+      } : { 'X-Content-Type-Options': 'nosniff', 'Strict-Transport-Security': HSTS_VALUE };
       const isPdf = ext === '.pdf';
       const extraHeaders = (isSoftwareDownload || isPdf)
         ? { 'Content-Disposition': `attachment; filename="${path.basename(filePath)}"` }
@@ -1104,6 +1112,8 @@ function serveIndexWithOg(res, og, pathname) {
       'X-Frame-Options': 'DENY',
       'X-Content-Type-Options': 'nosniff',
       'Referrer-Policy': 'strict-origin-when-cross-origin',
+      'Strict-Transport-Security': HSTS_VALUE,
+      'Permissions-Policy': PERMISSIONS_POLICY,
       'Content-Security-Policy': PUBLIC_CSP,
     });
     res.end(html);
@@ -1141,6 +1151,7 @@ function sendErrorPage(res, status, fallback, html) {
     'Cache-Control': 'no-cache, must-revalidate',
     'X-Frame-Options': 'SAMEORIGIN',
     'X-Content-Type-Options': 'nosniff',
+    'Strict-Transport-Security': HSTS_VALUE,
   });
   res.end(body);
 }
@@ -1158,6 +1169,7 @@ function sendMaintenance(res) {
     'Cache-Control': 'no-cache, must-revalidate',
     'X-Frame-Options': 'SAMEORIGIN',
     'X-Content-Type-Options': 'nosniff',
+    'Strict-Transport-Security': HSTS_VALUE,
   });
   res.end(html);
 }
