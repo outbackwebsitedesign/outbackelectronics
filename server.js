@@ -1916,18 +1916,33 @@ function stripeRequest(method, path, params) {
   });
 }
 
-function readRawBody(req) {
+function readRawBody(req, maxSize = 10 * 1024 * 1024) {
   return new Promise((resolve, reject) => {
     const chunks = [];
-    req.on('data', c => chunks.push(c));
+    let totalSize = 0;
+    req.on('data', c => {
+      totalSize += c.length;
+      if (totalSize > maxSize) {
+        req.destroy();
+        return reject(new Error('request_body_too_large'));
+      }
+      chunks.push(c);
+    });
     req.on('end', () => resolve(Buffer.concat(chunks)));
     req.on('error', reject);
   });
 }
 
-function verifyStripeSignature(rawBody, sigHeader, secret) {
+function verifyStripeSignature(rawBody, sigHeader, secret, toleranceSeconds = 300) {
   const parts = Object.fromEntries(sigHeader.split(',').map(p => p.split('=')));
   if (!parts.t || !parts.v1) return false;
+
+  const signedTime = parseInt(parts.t, 10);
+  const now = Math.floor(Date.now() / 1000);
+  if (isNaN(signedTime) || Math.abs(now - signedTime) > toleranceSeconds) {
+    return false;
+  }
+
   const expected = crypto.createHmac('sha256', secret).update(`${parts.t}.${rawBody}`).digest('hex');
   const actualBuf = Buffer.from(parts.v1, 'hex');
   const expectedBuf = Buffer.from(expected, 'hex');
@@ -2714,7 +2729,13 @@ const mainServer = http.createServer(async (req, res) => {
     const sig = req.headers['stripe-signature'];
     if (!sig || !stripeWebhookSecret) return json(res, 400, { error: 'missing_signature' });
 
-    const rawBody = await readRawBody(req);
+    let rawBody;
+    try { rawBody = await readRawBody(req); }
+    catch (err) {
+      console.error('Stripe webhook body read error:', err);
+      return json(res, 413, { error: 'payload_too_large' });
+    }
+
     let valid = false;
     try { valid = verifyStripeSignature(rawBody, sig, stripeWebhookSecret); } catch (err) {
       console.error('Stripe signature verification error:', err);
