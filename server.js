@@ -3391,6 +3391,7 @@ const adminServer = http.createServer(async (req, res) => {
     if (!gc) return json(res, 404, { error: 'not_found' });
     gc.isVoid = true;
     writeGiftCards(gcList);
+    auditAdminAction({ req, session, action: 'gift-card.void', result: { status: 'ok', changed: { code } } });
     return json(res, 200, { ok: true });
   }
 
@@ -3418,6 +3419,7 @@ const adminServer = http.createServer(async (req, res) => {
       const tmpl = emailGiftCard({ code: card.code, balance: card.originalBalance, customerName: '' });
       sendEmail({ to: recipientEmail, ...tmpl });
     }
+    auditAdminAction({ req, session, action: 'gift-card.issue', result: { status: 'ok', changed: { code: card.code, balance, recipientEmail } } });
     return json(res, 201, { ok: true, card });
   }
 
@@ -3813,6 +3815,7 @@ const adminServer = http.createServer(async (req, res) => {
       orders.push(bodyToStore);
     }
     writeOrders(orders);
+    auditAdminAction({ req, session, action: existing ? 'order.update' : 'order.create', result: { status: 'ok', changed: { id: bodyToStore.id } } });
     const justFulfilled = body.fulfilment === 'fulfilled' && existing && existing.fulfilment !== 'fulfilled';
     if (justFulfilled && body.email) {
       const pts = Math.floor(Number(body.total) || 0);
@@ -3870,6 +3873,7 @@ const adminServer = http.createServer(async (req, res) => {
     order.payments = [...(order.payments || []), { amount: -requested, method: method === 'stripe' ? 'Stripe Refund' : 'Store Credit', note: `Refund for ${id}`, date: nowStr }];
     orders[idx] = order;
     writeOrders(orders);
+    auditAdminAction({ req, session, action: 'order.refund', result: { status: 'ok', changed: { id, method, amount: requested } } });
     if (order.email) {
       const tmpl = emailOrderRefunded({ orderId: id, customerName: order.cust, amount: requested, method: method === 'stripe' ? 'your original payment method' : 'store credit' });
       sendEmail({ to: order.email, ...tmpl }).catch(() => {});
@@ -3906,6 +3910,7 @@ const adminServer = http.createServer(async (req, res) => {
     const session = requireRole(req, res, 'manager'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     writeOrders(readOrders().filter(o => o.id !== body.id));
+    auditAdminAction({ req, session, action: 'order.delete', result: { status: 'ok', changed: { id: body.id } } });
     return json(res, 200, { ok: true });
   }
 
@@ -3976,6 +3981,7 @@ const adminServer = http.createServer(async (req, res) => {
     const session = requireRole(req, res, 'manager'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     writeCustomers(readCustomers().filter(c => c.id !== body.id));
+    auditAdminAction({ req, session, action: 'customer.delete', result: { status: 'ok', changed: { id: body.id } } });
     return json(res, 200, { ok: true });
   }
   if (req.method === 'POST' && url.pathname === '/api/admin/customers/backfill') {
@@ -4051,6 +4057,7 @@ const adminServer = http.createServer(async (req, res) => {
     customers[keepIdx] = { ...customers[keepIdx], ...merged, id: keepId, manualLinks: combinedManualLinks };
     customers = customers.filter(c => c.id !== deleteId);
     writeCustomers(customers);
+    auditAdminAction({ req, session, action: 'customer.merge', result: { status: 'ok', changed: { keepId, deleteId } } });
     return json(res, 200, { ok: true, item: customers[customers.findIndex(c => c.id === keepId)] });
   }
 
@@ -4371,6 +4378,7 @@ const adminServer = http.createServer(async (req, res) => {
     const payload = { shop: body.shop || {}, announcement: body.announcement || { text: '', enabled: false, expiresAt: '' }, maintenance: body.maintenance || { enabled: false }, staff: body.staff || [], integrations: mergedIntegrations, siteContent: body.siteContent || {}, security };
     writeSettings(payload);
     pushMaintenanceEvent(!!(payload.maintenance && payload.maintenance.enabled));
+    auditAdminAction({ req, session, action: 'settings.save', result: { status: 'ok', changed: { passwordChanged: !!(newPass && newPass !== '***'), usernameChanged: !!(body.security?.adminUsername || '').trim() } } });
     const maskedPayload = {
       ...payload,
       integrations: payload.integrations.map(r => [r[0], r[1], r[2], maskIntegrationConfig(r[0], r[3])]),
@@ -4386,6 +4394,7 @@ const adminServer = http.createServer(async (req, res) => {
     const s = readSettings();
     writeSettings({ ...s, maintenance: { enabled } });
     pushMaintenanceEvent(enabled);
+    auditAdminAction({ req, session, action: 'maintenance.toggle', result: { status: 'ok', changed: { enabled } } });
     return json(res, 200, { ok: true, enabled });
   }
 
@@ -4493,6 +4502,7 @@ const adminServer = http.createServer(async (req, res) => {
     const idx = data.members.findIndex(m => m.id && m.id === body.id);
     if (idx >= 0) { data.members[idx] = { ...data.members[idx], ...body }; } else { body.id = 'staff-' + Date.now(); data.members.push(body); }
     writeStaff(data);
+    auditAdminAction({ req, session, action: idx >= 0 ? 'staff.update' : 'staff.create', result: { status: 'ok', changed: { id: body.id, name: body.name, role: body.role } } });
     return json(res, 200, { ok: true, item: data.members[idx >= 0 ? idx : data.members.length - 1] });
   }
   if (req.method === 'POST' && url.pathname === '/api/admin/staff/members/delete') {
@@ -4501,6 +4511,7 @@ const adminServer = http.createServer(async (req, res) => {
     const data = readStaff();
     data.members = data.members.filter(m => m.id !== body.id);
     writeStaff(data);
+    auditAdminAction({ req, session, action: 'staff.delete', result: { status: 'ok', changed: { id: body.id } } });
     return json(res, 200, { ok: true });
   }
   if (req.method === 'POST' && url.pathname === '/api/admin/staff/active-jobs/save') {
@@ -4599,6 +4610,7 @@ const adminServer = http.createServer(async (req, res) => {
     entry.points += pts;
     entry.history.push({ id: 'rh-' + Date.now(), type: 'grant', points: pts, description: description || '', date: new Date().toISOString() });
     writeRewards(db);
+    auditAdminAction({ req, session, action: 'rewards.grant', result: { status: 'ok', changed: { userId, points: pts, description } } });
     return json(res, 200, { ok: true, entry });
   }
 
@@ -4615,6 +4627,7 @@ const adminServer = http.createServer(async (req, res) => {
     entry.points = Math.max(0, entry.points + pts);
     entry.history.push({ id: 'rh-' + Date.now(), type: pts > 0 ? 'grant' : 'adjust', points: pts, description: description || '', date: new Date().toISOString() });
     writeRewards(db);
+    auditAdminAction({ req, session, action: 'rewards.adjust', result: { status: 'ok', changed: { userId, points: pts, description } } });
     return json(res, 200, { ok: true, entry });
   }
 
@@ -4646,6 +4659,7 @@ const adminServer = http.createServer(async (req, res) => {
     entry.balance = roundCents(Math.max(0, entry.balance + amt));
     entry.history.push({ id: 'sc-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6), type: amt > 0 ? 'grant' : 'adjust', amount: amt, description: description || '', refId: null, date: new Date().toISOString() });
     writeStoreCredits(db);
+    auditAdminAction({ req, session, action: 'store-credit.adjust', result: { status: 'ok', changed: { userId, amount: amt, description } } });
     return json(res, 200, { ok: true, entry });
   }
 
