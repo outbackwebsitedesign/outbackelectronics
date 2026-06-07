@@ -42,9 +42,16 @@ const css = {
 };
 
 // ── Portal auth helpers ───────────────────────────────────────────────────────
-let PORTAL_URL = 'https://portal.outbackelectronics.com.au';
-fetch('/api/config').then(r => r.ok ? r.json() : null).then(d => { if (d?.portalUrl) PORTAL_URL = d.portalUrl; }).catch(() => {});
-
+function derivePortalUrl() {
+  try {
+    const u = new URL(window.location.href);
+    if (u.hostname.startsWith('games.')) u.hostname = u.hostname.replace('games.', 'portal.');
+    else if (u.port === '8084') u.port = '8083';
+    else return 'https://portal.outbackelectronics.com.au';
+    return u.origin;
+  } catch { return 'https://portal.outbackelectronics.com.au'; }
+}
+const PORTAL_URL = derivePortalUrl();
 const { portalApi, usePortalUser } = makePortalHelpers(() => PORTAL_URL);
 
 // ── Auth Modal ────────────────────────────────────────────────────────────────
