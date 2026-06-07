@@ -938,7 +938,7 @@ const STATIC_OG = {
   '/software':    { title: 'Software Library — Outback Electronics', description: 'Download firmware, drivers and utilities for rugged devices and off-grid hardware.',                                  image: '/assets/og-image.webp' },
   '/ai':          { title: 'Edge AI — Outback Electronics',        description: 'Offline-capable AI models and inference hardware for remote deployments. No cloud required.',                           image: '/assets/og-image.webp' },
   '/ewaste':      { title: 'eWaste Take-Back — Outback Electronics', description: 'Responsible eWaste recycling and take-back for old electronics. Drop in or arrange a pickup.',                        image: '/assets/og-image.webp' },
-  '/contact':     { title: 'Contact — Outback Electronics',        description: 'Get in touch with the Outback Electronics team. Based in Central Queensland, serving remote Australia by appointment.',  image: '/assets/og-image.webp' },
+  '/contact':     { title: 'Contact — Outback Electronics',        description: null, image: '/assets/og-image.webp' },
   '/quote':       { title: 'Request a Quote — Outback Electronics', description: 'Need a custom kit or bulk order? Request a quote from Outback Electronics.',                                          image: '/assets/og-image.webp' },
 };
 
@@ -948,7 +948,16 @@ function resolveOgTags(pathname) {
   // Static routes
   if (STATIC_OG[pathname]) {
     const s = STATIC_OG[pathname];
-    return { title: s.title, description: s.description, image: s.image, url: OG_BASE_URL + pathname };
+    let description = s.description;
+    if (description === null) {
+      // Build from live settings
+      try {
+        const { shop } = readSettings();
+        const loc = [shop.suburb, shop.state].filter(Boolean).join(' ');
+        description = `Get in touch with the Outback Electronics team.${loc ? ` Based in ${loc},` : ''} Serving remote Australia by appointment.`;
+      } catch { description = 'Get in touch with the Outback Electronics team. Serving remote Australia by appointment.'; }
+    }
+    return { title: s.title, description, image: s.image, url: OG_BASE_URL + pathname };
   }
   // Product deep link: /product/<sku-or-id>
   if (pathname.startsWith('/product/')) {
@@ -1087,13 +1096,19 @@ const OFFLINE_HTML   = loadErrorPage('offline.html');
 
 function sendErrorPage(res, status, fallback, html) {
   if (!html) { res.writeHead(status); return res.end(fallback); }
+  let body = html;
+  try {
+    const { shop } = readSettings();
+    const loc = [shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ') || 'Central Queensland, Australia';
+    body = body.replace(/<!--SHOP_LOCATION-->[^<]*/g, `<!--SHOP_LOCATION-->${loc}`);
+  } catch {}
   res.writeHead(status, {
     'Content-Type': 'text/html; charset=utf-8',
     'Cache-Control': 'no-cache, must-revalidate',
     'X-Frame-Options': 'SAMEORIGIN',
     'X-Content-Type-Options': 'nosniff',
   });
-  res.end(html);
+  res.end(body);
 }
 
 function sendMaintenance(res) {
