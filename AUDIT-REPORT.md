@@ -131,7 +131,7 @@ Note: path traversal *out* of `__dirname` is correctly blocked (Node's `new URL`
 
 | ID | Issue | Where | Fix |
 |---|---|---|---|
-| L1 | `.gitignore` gaps: `*.tmp` (atomic‑write orphans contain **live data**), `.env*` variants, generic `*.log` | `.gitignore` | add `*.tmp`, `.env*`, `*.log` |
+| ~~L1~~ | ~~`.gitignore` gaps: `*.tmp` (atomic‑write orphans contain **live data**), `.env*` variants, generic `*.log`~~ | ~~`.gitignore`~~ | **FIXED** — added `*.tmp`, `.env*` (replaces bare `.env`), and `*.log` to `.gitignore`. Atomic-write orphans, all `.env` variants, and log files are now gitignored. |
 | L2 | Audit log barely used — `auditAdminAction` called for only 2 actions; no trail for order edits, deletes, gift‑card issue/void, role/settings changes | `server.js:499‑510` | log all privileged mutations |
 | L3 | Unbounded in‑memory maps (`loginAttempts`, `publicRateCounts`) never swept | `server.js:46‑47` | add to the periodic sweep (`:127`) |
 | ~~L4~~ | ~~`readJson` overflow calls `req.destroy()` but never resolves/rejects the promise~~ | ~~`server.js:512‑519`~~ | **FIXED** — `req.destroy()` triggers the `error` event which correctly calls `reject` at the `on('error')` handler. |
