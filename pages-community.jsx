@@ -63,8 +63,14 @@ function renderMarkdown(md) {
 
 function TutorialModal({ tutorial, onClose }) {
   const body = tutorial.body;
+  useEffect(() => {
+    const h = e => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', h);
+    return () => document.removeEventListener('keydown', h);
+  }, [onClose]);
   return (
     <div style={{position:'fixed', inset:0, zIndex:500, background:'rgba(15,13,10,0.75)', display:'flex', flexDirection:'column', alignItems:'center', padding:'48px 16px', overflowY:'auto'}}
+      aria-modal="true" role="dialog" aria-label={tutorial.title || 'Tutorial'}
       onClick={onClose}>
       <div style={{width:'100%', maxWidth:720, background:'var(--paper)', padding:'40px 48px', boxShadow:'0 16px 48px rgba(0,0,0,.3)'}}
         onClick={e => e.stopPropagation()}>
@@ -95,6 +101,12 @@ function TutorialsPage({ go }) {
   const [activeTutorial, setActiveTutorial] = useState(null);
   const [tutorials, setTutorials] = useState([]);
   const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    if (!activeTutorial) return;
+    const h = e => { if (e.key === 'Escape') setActiveTutorial(null); };
+    document.addEventListener('keydown', h);
+    return () => document.removeEventListener('keydown', h);
+  }, [activeTutorial]);
   useEffect(() => {
     fetch('/api/tutorials').then(r => r.ok ? r.json() : Promise.reject()).then(d => {
       const all = d.items || [];
@@ -167,7 +179,7 @@ function TutorialsPage({ go }) {
 
       {/* Expanded tutorial modal */}
       {activeTutorial && (
-        <div style={{position:'fixed', inset:0, zIndex:500, background:'rgba(15,13,10,0.75)', display:'flex', flexDirection:'column', alignItems:'center', padding:'48px 16px', overflowY:'auto'}}
+        <div role="dialog" aria-modal="true" aria-label={activeTutorial.title} style={{position:'fixed', inset:0, zIndex:500, background:'rgba(15,13,10,0.75)', display:'flex', flexDirection:'column', alignItems:'center', padding:'48px 16px', overflowY:'auto'}}
           onClick={() => setActiveTutorial(null)}>
           <div style={{width:'100%', maxWidth:760, background:'var(--paper)', padding:'40px 48px', boxShadow:'0 16px 48px rgba(0,0,0,.3)'}}
             onClick={e => e.stopPropagation()}>

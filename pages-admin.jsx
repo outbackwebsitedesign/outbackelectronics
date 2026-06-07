@@ -384,7 +384,10 @@ function Table({ columns, rows, onRowClick, emptyMessage }) {
         </div>
       ) : rows.map((r,i) => (
         <div key={i}
+          role={onRowClick ? 'button' : undefined}
+          tabIndex={onRowClick ? 0 : undefined}
           onClick={() => onRowClick && onRowClick(r,i)}
+          onKeyDown={e => { if (onRowClick && (e.key==='Enter'||e.key===' ')) { e.preventDefault(); onRowClick(r,i); } }}
           style={{display:'grid', gridTemplateColumns:tpl, padding:'14px 18px', borderTop:'1px solid var(--line)', fontSize:13, alignItems:'center', cursor: onRowClick?'pointer':'default'}}
           onMouseEnter={e => { if (onRowClick) e.currentTarget.style.background='var(--bg-elev)'; }}
           onMouseLeave={e => { e.currentTarget.style.background='transparent'; }}>
@@ -401,10 +404,16 @@ function StatusPill({ value, map }) {
 }
 
 function Drawer({ open, onClose, title, children, footer }) {
+  useEffect(() => {
+    if (!open) return;
+    const h = e => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', h);
+    return () => document.removeEventListener('keydown', h);
+  }, [open, onClose]);
   if (!open) return null;
   return (
     <div style={{position:'fixed', inset:0, zIndex:200}}>
-      <div onClick={onClose} style={{position:'absolute', inset:0, background:'rgba(15,13,10,0.5)'}}></div>
+      <div aria-hidden="true" onClick={onClose} style={{position:'absolute', inset:0, background:'rgba(15,13,10,0.5)'}}></div>
       <div style={{position:'absolute', top:0, right:0, bottom:0, width:540, background:'var(--bg)', borderLeft:'1px solid var(--line)', boxShadow:'-8px 0 24px rgba(0,0,0,.15)', display:'flex', flexDirection:'column'}}>
         <div style={{padding:'16px 24px', borderBottom:'1px solid var(--line)', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12}}>
           <h3 style={{fontSize:16, fontWeight:600, margin:0}}>{title}</h3>
@@ -732,8 +741,9 @@ function OrderDrawer({ edit, expenses, onClose, onRowUpdate, onSave, onExpensesC
       </div>
     );
     return (
-      <div key={e.id} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 12px', background:'var(--bg-elev)', border:'1px solid var(--line)', marginBottom:6, cursor:'pointer', gap:10}}
-        onClick={() => { setExpenseEdit(e.id); setExpenseForm({...e}); }}>
+      <div key={e.id} role="button" tabIndex={0} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 12px', background:'var(--bg-elev)', border:'1px solid var(--line)', marginBottom:6, cursor:'pointer', gap:10}}
+        onClick={() => { setExpenseEdit(e.id); setExpenseForm({...e}); }}
+        onKeyDown={e2 => { if (e2.key==='Enter'||e2.key===' ') { e2.preventDefault(); setExpenseEdit(e.id); setExpenseForm({...e}); } }}>
         <div style={{flex:1, minWidth:0}}>
           <span style={{fontSize:13, fontWeight:500}}>{e.description}</span>
           {e.category && <span className="mono" style={{fontSize:10, color:'var(--ink-3)', marginLeft:8}}>{e.category.toUpperCase()}</span>}
@@ -1599,7 +1609,7 @@ function AdminQuotes() {
               { key:'won',       label:`Won (${quotes.filter(q=>q.status==='won').length})` },
               { key:'closed',    label:'Closed' },
             ].map(t => (
-              <div key={t.key} className={`tab ${activeTab===t.key?'active':''}`} onClick={() => setActiveTab(t.key)} style={{cursor:'pointer'}}>{t.label}</div>
+              <div key={t.key} role="button" tabIndex={0} className={`tab ${activeTab===t.key?'active':''}`} onClick={() => setActiveTab(t.key)} onKeyDown={e => { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); setActiveTab(t.key); } }} style={{cursor:'pointer'}}>{t.label}</div>
             ))}
           </div>
           <button className="btn btn-rust btn-sm" onClick={() => openQuoteCreator(null)}>+ New quote</button>
@@ -2005,7 +2015,7 @@ function AdminProducts({ sessionInfo = {} }) {
             <div style={{display:'flex', flexWrap:'wrap', gap:8, marginBottom:8}}>
               {(form.images||[]).map((url,i) => (
                 <div key={i} style={{position:'relative', width:80, height:80}}>
-                  <img src={url} loading="lazy" style={{width:80, height:80, objectFit:'cover', border:'1px solid var(--line)'}} />
+                  <img src={url} loading="lazy" alt="Product image" style={{width:80, height:80, objectFit:'cover', border:'1px solid var(--line)'}} />
                   <button onClick={() => setForm({...form, images:(form.images||[]).filter((_,j)=>j!==i)})}
                     style={{position:'absolute',top:2,right:2,background:'rgba(0,0,0,0.6)',color:'#fff',border:'none',borderRadius:2,width:18,height:18,cursor:'pointer',fontSize:12,lineHeight:'18px',padding:0}}>×</button>
                 </div>
@@ -2137,12 +2147,12 @@ function AdminProducts({ sessionInfo = {} }) {
                     {(form.images||[]).map((url, imgIdx) => {
                       const linked = (v.images||[]).includes(url);
                       return (
-                        <div key={imgIdx} onClick={() => {
+                        <div key={imgIdx} role="button" tabIndex={0} onClick={() => {
                           const vs = [...(form.variants||[])];
                           const cur = vs[i].images || [];
                           vs[i] = {...vs[i], images: linked ? cur.filter(u => u !== url) : [...cur, url]};
                           setForm({...form, variants: vs});
-                        }} style={{width:48, height:48, cursor:'pointer', position:'relative', flexShrink:0}}>
+                        }} onKeyDown={e2 => { if (e2.key==='Enter'||e2.key===' ') { e2.preventDefault(); const vs=[...(form.variants||[])]; const cur=vs[i].images||[]; vs[i]={...vs[i],images:linked?cur.filter(u=>u!==url):[...cur,url]}; setForm({...form,variants:vs}); } }} style={{width:48, height:48, cursor:'pointer', position:'relative', flexShrink:0}} aria-label={linked?'Unlink image from variant':'Link image to variant'}>
                           <img src={url} alt="" style={{width:'100%', height:'100%', objectFit:'cover', display:'block', opacity: linked ? 1 : 0.35}} />
                           {linked && <div style={{position:'absolute', bottom:2, right:2, width:14, height:14, background:'var(--rust)', borderRadius:2, display:'grid', placeItems:'center'}}>
                             <svg width="8" height="8" viewBox="0 0 10 10"><polyline points="1,5 4,8 9,2" fill="none" stroke="#fff" strokeWidth="2"/></svg>
@@ -3169,7 +3179,7 @@ function AdminGroups() {
         >
           <div className="tabs" style={{marginBottom:20}}>
             {['details','members','access'].map(t => (
-              <div key={t} className={`tab ${drawerTab===t?'active':''}`} onClick={()=>setDrawerTab(t)} style={{textTransform:'capitalize'}}>{t}</div>
+              <div key={t} role="button" tabIndex={0} className={`tab ${drawerTab===t?'active':''}`} onClick={()=>setDrawerTab(t)} onKeyDown={e => { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); setDrawerTab(t); } }} style={{textTransform:'capitalize'}}>{t}</div>
             ))}
           </div>
 
@@ -3784,8 +3794,8 @@ function AdminGiftCards() {
   return (
     <div style={{padding:32}}>
       <div className="tabs" style={{marginBottom:24}}>
-        <div className={`tab ${mainTab==='issued'?'active':''}`} onClick={() => setMainTab('issued')}>Issued Cards ({rows.length})</div>
-        <div className={`tab ${mainTab==='denominations'?'active':''}`} onClick={() => setMainTab('denominations')}>Denominations ({denoms.length})</div>
+        <div role="button" tabIndex={0} className={`tab ${mainTab==='issued'?'active':''}`} onClick={() => setMainTab('issued')} onKeyDown={e => { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); setMainTab('issued'); } }}>Issued Cards ({rows.length})</div>
+        <div role="button" tabIndex={0} className={`tab ${mainTab==='denominations'?'active':''}`} onClick={() => setMainTab('denominations')} onKeyDown={e => { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); setMainTab('denominations'); } }}>Denominations ({denoms.length})</div>
       </div>
 
       {mainTab === 'issued' && (
@@ -3793,7 +3803,7 @@ function AdminGiftCards() {
           <div>
             <div className="tabs" style={{marginBottom:18}}>
               {[['all','All'], ['active','Active'], ['used','Used up'], ['void','Voided']].map(([v,l]) => (
-                <div key={v} className={`tab ${filter===v?'active':''}`} onClick={() => setFilter(v)}>{l} ({(v==='all'?rows:rows.filter(r=>v==='active'?!r.isVoid&&r.balance>0:v==='used'?!r.isVoid&&r.balance===0:r.isVoid)).length})</div>
+                <div key={v} role="button" tabIndex={0} className={`tab ${filter===v?'active':''}`} onClick={() => setFilter(v)} onKeyDown={e => { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); setFilter(v); } }}>{l} ({(v==='all'?rows:rows.filter(r=>v==='active'?!r.isVoid&&r.balance>0:v==='used'?!r.isVoid&&r.balance===0:r.isVoid)).length})</div>
               ))}
             </div>
             <Table
@@ -3896,7 +3906,7 @@ function AdminGiftCards() {
                   <span className="label">Status</span>
                   <div className="tabs" style={{marginTop:4}}>
                     {[['draft','Draft'], ['published','Published']].map(([v, l]) => (
-                      <div key={v} className={`tab ${(denomForm.status || 'draft') === v ? 'active' : ''}`} style={{cursor:'pointer'}} onClick={() => setDenomForm(f => ({...f, status: v}))}>{l}</div>
+                      <div key={v} role="button" tabIndex={0} className={`tab ${(denomForm.status || 'draft') === v ? 'active' : ''}`} style={{cursor:'pointer'}} onClick={() => setDenomForm(f => ({...f, status: v}))} onKeyDown={e => { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); setDenomForm(f => ({...f, status: v})); } }}>{l}</div>
                     ))}
                   </div>
                 </label>
@@ -3966,7 +3976,8 @@ function AdminRewards() {
         <div className="card-paper" style={{overflow:'auto', maxHeight:520}}>
           {filtered.length === 0 && <div style={{padding:20, color:'var(--ink-3)', fontSize:13}}>No reward accounts yet.</div>}
           {filtered.map(e => (
-            <div key={e.userId} onClick={() => { setSelected(e); setGrantError(null); setGrantForm({ points: '', description: '' }); }}
+            <div key={e.userId} role="button" tabIndex={0} onClick={() => { setSelected(e); setGrantError(null); setGrantForm({ points: '', description: '' }); }}
+              onKeyDown={e2 => { if (e2.key==='Enter'||e2.key===' ') { e2.preventDefault(); setSelected(e); setGrantError(null); setGrantForm({ points: '', description: '' }); } }}
               style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 16px', borderBottom:'1px solid var(--line)', cursor:'pointer', background: selected?.userId === e.userId ? 'var(--bg-elev)' : 'transparent'}}>
               <div>
                 <div style={{fontWeight:500, fontSize:13}}>{e.displayName || e.username || e.userId}</div>
@@ -4069,7 +4080,8 @@ function AdminStoreCredit() {
         <div className="card-paper" style={{overflow:'auto', maxHeight:520}}>
           {filtered.length === 0 && <div style={{padding:20, color:'var(--ink-3)', fontSize:13}}>No store credit accounts yet.</div>}
           {filtered.map(e => (
-            <div key={e.userId} onClick={() => { setSelected(e); setGrantError(null); setGrantForm({ amount: '', description: '' }); }}
+            <div key={e.userId} role="button" tabIndex={0} onClick={() => { setSelected(e); setGrantError(null); setGrantForm({ amount: '', description: '' }); }}
+              onKeyDown={e2 => { if (e2.key==='Enter'||e2.key===' ') { e2.preventDefault(); setSelected(e); setGrantError(null); setGrantForm({ amount: '', description: '' }); } }}
               style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 16px', borderBottom:'1px solid var(--line)', cursor:'pointer', background: selected?.userId === e.userId ? 'var(--bg-elev)' : 'transparent'}}>
               <div>
                 <div style={{fontWeight:500, fontSize:13}}>{e.displayName || e.username || e.userId}</div>
@@ -4315,7 +4327,7 @@ function AdminExpenses() {
         <div className="row-flex" style={{gap:16, alignItems:'center'}}>
           <div className="tabs">
             {cats.map(c => (
-              <div key={c} className={`tab${catFilter===c?' active':''}`} onClick={() => setCatFilter(c)} style={{cursor:'pointer'}}>
+              <div key={c} role="button" tabIndex={0} className={`tab${catFilter===c?' active':''}`} onClick={() => setCatFilter(c)} onKeyDown={e => { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); setCatFilter(c); } }} style={{cursor:'pointer'}}>
                 {c === 'all' ? `All (${rows.length})` : c.charAt(0).toUpperCase() + c.slice(1)}
               </div>
             ))}
@@ -4338,7 +4350,7 @@ function AdminExpenses() {
           { key:'amount', label:'Amount', w:'110px', render:r => <span className="mono" style={{fontWeight:600,color:'var(--rust)'}}>-${(r.amount||0).toLocaleString('en-AU',{minimumFractionDigits:2})}</span> },
           { key:'date', label:'Date', w:'120px', render:r => <span className="mono" style={{fontSize:11,color:'var(--ink-2)'}}>{r.date||'—'}</span> },
           { key:'jobId', label:'Linked job', w:'140px', render:r => r.jobId ? <span className="mono" style={{fontSize:11,color:'var(--rust)'}}>{r.jobId}</span> : <span style={{color:'var(--ink-3)'}}>—</span> },
-          { key:'receipt', label:'Receipt', w:'90px', render:r => r.receipt ? <a href={r.receipt} target="_blank" style={{color:'var(--rust)',fontSize:12}}>View ↗</a> : <span style={{color:'var(--ink-3)'}}>—</span> },
+          { key:'receipt', label:'Receipt', w:'90px', render:r => r.receipt ? <a href={r.receipt} target="_blank" rel="noopener noreferrer" style={{color:'var(--rust)',fontSize:12}}>View ↗</a> : <span style={{color:'var(--ink-3)'}}>—</span> },
           { key:'notes', label:'Notes', w:'1fr', render:r => <span style={{fontSize:12,color:'var(--ink-2)'}}>{r.notes||''}</span> },
         ]}
         rows={visible}
@@ -4389,7 +4401,7 @@ function AdminExpenses() {
             <span className="label">Receipt</span>
             {form.receipt && (
               <div style={{marginBottom:8,display:'flex',gap:8,alignItems:'center'}}>
-                <a href={form.receipt} target="_blank" style={{color:'var(--rust)',fontSize:13}}>View current receipt ↗</a>
+                <a href={form.receipt} target="_blank" rel="noopener noreferrer" style={{color:'var(--rust)',fontSize:13}}>View current receipt ↗</a>
                 <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={() => setForm(f=>({...f,receipt:null}))}>Remove</button>
               </div>
             )}
@@ -4870,6 +4882,12 @@ function SettingsStaffTab({ staffMembers, staffForm, setStaffForm, staffBusy, on
 SettingsStaffTab = React.memo(SettingsStaffTab);
 
 function SettingsIntegrationsTab({ integrations, setIntegrations, savedIntegrations, integrationModal, setIntegrationModal, integrationForm, setIntegrationForm, integrationsDirty, sectionBusy, onSubmit, onOpenModal, onOpenAddModal, onSaveModal, onDisconnect, onRemove }) {
+  useEffect(() => {
+    if (!integrationModal) return;
+    const h = e => { if (e.key === 'Escape') setIntegrationModal(null); };
+    document.addEventListener('keydown', h);
+    return () => document.removeEventListener('keydown', h);
+  }, [integrationModal, setIntegrationModal]);
   return (
     <div style={{display:'grid', gap:24}}>
       <form onSubmit={onSubmit} style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24}}>
@@ -5275,7 +5293,7 @@ function AdminSettingsFull({ sessionInfo = {} }) {
 
       <div className="tabs" style={{marginBottom:28}}>
         {[['general','General'],['staff','Staff'],['integrations','Integrations'],['security','Security'],['advanced','Advanced']].map(([k,l]) => (
-          <div key={k} className={`tab ${settingsTab===k?'active':''}`} style={{cursor:'pointer'}} onClick={() => setSettingsTab(k)}>{l}</div>
+          <div key={k} role="button" tabIndex={0} className={`tab ${settingsTab===k?'active':''}`} style={{cursor:'pointer'}} onClick={() => setSettingsTab(k)} onKeyDown={e => { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); setSettingsTab(k); } }}>{l}</div>
         ))}
       </div>
 
@@ -5436,14 +5454,14 @@ function AdminMemberships() {
       </div>
 
       <div className="tabs" style={{ marginBottom: 20 }}>
-        <div className={`tab ${tab === 'tiers' ? 'active' : ''}`} onClick={() => setTab('tiers')}>
+        <div role="button" tabIndex={0} className={`tab ${tab === 'tiers' ? 'active' : ''}`} onClick={() => setTab('tiers')} onKeyDown={e => { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); setTab('tiers'); } }}>
           Tiers ({tiers.length})
         </div>
-        <div className={`tab ${tab === 'subs' ? 'active' : ''}`} onClick={() => setTab('subs')}>
+        <div role="button" tabIndex={0} className={`tab ${tab === 'subs' ? 'active' : ''}`} onClick={() => setTab('subs')} onKeyDown={e => { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); setTab('subs'); } }}>
           Subscriptions ({subs.length})
         </div>
         {pendingOrders.length > 0 && (
-          <div className={`tab ${tab === 'pending' ? 'active' : ''}`} onClick={() => setTab('pending')}>
+          <div role="button" tabIndex={0} className={`tab ${tab === 'pending' ? 'active' : ''}`} onClick={() => setTab('pending')} onKeyDown={e => { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); setTab('pending'); } }}>
             Pending activation ({pendingOrders.length})
           </div>
         )}
@@ -5696,7 +5714,7 @@ function AdminPage({ go }) {
         <AdminTopbar title={view.t} subtitle={subtitle} search={search} onSearch={setSearch}
           actions={
             <div className="row-flex" style={{gap:8}}>
-              <a className="btn btn-ghost btn-sm" href="#home" target="_blank" rel="noreferrer" style={{textDecoration:'none'}} title="Open public site in a new tab">View public site ↗</a>
+              <a className="btn btn-ghost btn-sm" href={siteUrl ? siteUrl + '/home' : '/'} target="_blank" rel="noreferrer" style={{textDecoration:'none'}} title="Open public site in a new tab">View public site ↗</a>
             </div>
           }
         />
