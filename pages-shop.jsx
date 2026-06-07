@@ -33,6 +33,7 @@ function HomePage({ go, addToCart, portalUser }) {
   const [metrics, setMetrics] = useState({ repairCount: null, ewasteTonnes: null });
   const [testimonial, setTestimonial] = useState(null);
   const heroProduct = useMemo(() => featuredProducts.find(p => p.infiniteStock || p.stock > 0) || featuredProducts[0] || null, [featuredProducts]);
+  const [recentThreads, setRecentThreads] = useState([]);
   const [aiData, setAiData] = useState(null);
   const [repairServices, setRepairServices] = useState([]);
   const [siteContent, setSiteContent] = useState({});
@@ -61,6 +62,7 @@ function HomePage({ go, addToCart, portalUser }) {
       fetch('/api/ai').then(r => r.ok ? r.json() : Promise.reject()).then(d => setAiData(d)).catch(() => {}),
       fetch('/api/catalog/services').then(r => r.ok ? r.json() : Promise.reject()).then(d => setRepairServices(d.items || [])).catch(() => {}),
       fetch('/api/settings').then(r => r.ok ? r.json() : Promise.reject()).then(d => setSiteContent(d.siteContent || {})).catch(() => {}),
+      fetch('/api/forum/recent').then(r => r.ok ? r.json() : Promise.reject()).then(d => setRecentThreads(d.topics || [])).catch(() => {}),
     ]).finally(() => { setLoading(false); setTimeout(() => window.observeReveal && window.observeReveal(), 80); });
   }, []);
   if (loading) {
@@ -284,7 +286,21 @@ function HomePage({ go, addToCart, portalUser }) {
           </div>
           <div style={{padding: 36, border:'1px solid var(--line)', background:'var(--bg-elev)'}}>
             <span className="eyebrow">COMMUNITY FORUM</span>
-            <p style={{marginTop: 14, color:'var(--ink-2)', fontSize:14}}>Join the discussion on our community forum — repairs, builds, troubleshooting, and more.</p>
+            {recentThreads.length > 0 ? (
+              <ul style={{margin:'14px 0 0', padding:0, listStyle:'none', display:'flex', flexDirection:'column', gap:10}}>
+                {recentThreads.map(t => (
+                  <li key={t.id} style={{borderBottom:'1px solid var(--line)', paddingBottom:10}}>
+                    <a href={`https://forum.outbackelectronics.com.au/t/${t.slug}/${t.id}`} target="_blank" rel="noopener noreferrer"
+                       style={{color:'var(--ink)', fontSize:14, fontWeight:500, textDecoration:'none', display:'block', lineHeight:1.3}}>
+                      {t.title}
+                    </a>
+                    <span style={{fontSize:12, color:'var(--ink-3)'}}>{t.reply_count} {t.reply_count === 1 ? 'reply' : 'replies'} · {t.views} views</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p style={{marginTop: 14, color:'var(--ink-2)', fontSize:14}}>Join the discussion — repairs, builds, troubleshooting, and more.</p>
+            )}
             <a href="https://forum.outbackelectronics.com.au" target="_blank" rel="noopener noreferrer" className="btn btn-outline" style={{marginTop: 18, display:'inline-block'}}>Visit the Forum →</a>
           </div>
         </div>
