@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef, createContext, useContext } from 'react';
+import { makePortalHelpers } from './src/lib/api.js';
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 // Mapped to the shared site palette (see tools.html / index.html :root vars) so
@@ -1580,32 +1581,7 @@ function go(id, params = null) {
 }
 
 // ---------------- Cross-origin portal API helpers ----------------
-let _portalCsrfPromise = null;
-async function getPortalCsrf() {
-  if (!_portalCsrfPromise) {
-    _portalCsrfPromise = fetch(getPortalUrl() + '/api/csrf-token', { credentials: 'include' })
-      .then(r => r.json()).then(d => d.token || '').catch(() => { _portalCsrfPromise = null; return ''; });
-  }
-  return _portalCsrfPromise;
-}
-async function portalApi(path, opts = {}) {
-  const isPost = opts.method && opts.method.toUpperCase() !== 'GET';
-  const csrfToken = isPost ? await getPortalCsrf() : '';
-  const headers = { 'Content-Type': 'application/json', ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}) };
-  return fetch(getPortalUrl() + path, { headers, credentials: 'include', ...opts })
-    .then(async r => { const body = await r.json().catch(() => ({})); return { ok: r.ok, status: r.status, ...body }; });
-}
-
-function usePortalUser() {
-  const [user, setUser] = useState(undefined);
-  useEffect(() => {
-    fetch(getPortalUrl() + '/api/portal/auth/me', { credentials: 'include' })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => setUser(d?.user || null))
-      .catch(() => setUser(null));
-  }, []);
-  return user;
-}
+const { portalApi, usePortalUser } = makePortalHelpers(getPortalUrl);
 
 // ---------------- Search Overlay ----------------
 function SearchOverlay({ onClose }) {
@@ -2073,7 +2049,7 @@ export default function App() {
   const { shop } = useShopInfo();
   const [searchOpen, setSearchOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
-  const portalUser = usePortalUser();
+  const [portalUser] = usePortalUser();
   const cart = useCartCount();
 
   const section = SECTIONS.find(s => s.id === activeSection);

@@ -1,13 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
+import { getCsrf } from './src/lib/api.js';
 const _fallbackShopCtx = React.createContext({});
 const useShop = () => useContext(window.__ShopContext__ || _fallbackShopCtx);
-
-function getCsrf() {
-  return document.cookie.split(';').reduce((v, c) => {
-    const [k, val] = c.trim().split('=');
-    return k === '_csrf' ? decodeURIComponent(val || '') : v;
-  }, '');
-}
 
 // ============================================================
 // REQUEST A QUOTE

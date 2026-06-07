@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useContext } from 'react';
+import { getCsrf } from './src/lib/api.js';
 
 const _fallbackShopCtx = React.createContext({});
 const useShop = () => useContext(window.__ShopContext__ || _fallbackShopCtx);
@@ -14,13 +15,6 @@ function thumbUrl(src, w, q) {
 function thumbSrcSet(src, widths, q) {
   if (!src || !src.startsWith('/assets/uploads/')) return undefined;
   return widths.map(w => `${thumbUrl(src, w, q)} ${w}w`).join(', ');
-}
-
-function getCsrf() {
-  return document.cookie.split(';').reduce((v, c) => {
-    const [k, val] = c.trim().split('=');
-    return k === '_csrf' ? decodeURIComponent(val || '') : v;
-  }, '');
 }
 
 // ============================================================

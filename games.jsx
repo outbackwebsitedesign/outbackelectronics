@@ -1,5 +1,6 @@
 // games.jsx — Outback Electronics Games Hub
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { makePortalHelpers } from './src/lib/api.js';
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const T = {
@@ -41,34 +42,10 @@ const css = {
 };
 
 // ── Portal auth helpers ───────────────────────────────────────────────────────
-let PORTAL_URL = 'http://localhost:8083';
+let PORTAL_URL = 'https://portal.outbackelectronics.com.au';
 fetch('/api/config').then(r => r.ok ? r.json() : null).then(d => { if (d?.portalUrl) PORTAL_URL = d.portalUrl; }).catch(() => {});
 
-let _portalCsrfPromise = null;
-async function getPortalCsrf() {
-  if (!_portalCsrfPromise) {
-    _portalCsrfPromise = fetch(PORTAL_URL + '/api/csrf-token', { credentials: 'include' })
-      .then(r => r.json()).then(d => d.token || '').catch(() => { _portalCsrfPromise = null; return ''; });
-  }
-  return _portalCsrfPromise;
-}
-
-async function portalApi(path, opts = {}) {
-  const isPost = opts.method && opts.method.toUpperCase() !== 'GET';
-  const csrfToken = isPost ? await getPortalCsrf() : '';
-  const headers = { 'Content-Type': 'application/json', ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}) };
-  return fetch(PORTAL_URL + path, { headers, credentials: 'include', ...opts })
-    .then(async r => { const body = await r.json().catch(() => ({})); return { ok: r.ok, status: r.status, ...body }; });
-}
-
-function usePortalUser() {
-  const [user, setUser] = useState(undefined);
-  useEffect(() => {
-    fetch(PORTAL_URL + '/api/portal/auth/me', { credentials: 'include' })
-      .then(r => r.ok ? r.json() : null).then(d => setUser(d?.user || null)).catch(() => setUser(null));
-  }, []);
-  return [user, setUser];
-}
+const { portalApi, usePortalUser } = makePortalHelpers(() => PORTAL_URL);
 
 // ── Auth Modal ────────────────────────────────────────────────────────────────
 function AuthModal({ onClose, onLogin }) {

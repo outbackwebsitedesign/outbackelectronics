@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { getCsrf, ensureCsrf } from './src/lib/api.js';
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 // Canonical date format for all order dates: "27 May 2026"
@@ -25,17 +26,6 @@ function cashRound(amount) {
   return Math.round(amount * 20) / 20;
 }
 
-function getCsrf() {
-  return document.cookie.split(';').reduce((v, c) => {
-    const [k, val] = c.trim().split('=');
-    return k === '_csrf' ? decodeURIComponent(val || '') : v;
-  }, '');
-}
-let _csrfReady = null;
-function ensureCsrf() {
-  if (!_csrfReady) _csrfReady = fetch('/api/csrf-token', { credentials: 'include' }).catch(() => {});
-  return _csrfReady;
-}
 function postHeaders() { return { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() }; }
 
 function adminToast(msg, type = 'error') {

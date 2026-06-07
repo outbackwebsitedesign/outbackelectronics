@@ -1,23 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { getCsrf, ensureCsrf } from './src/lib/api.js';
 
 // Cross-site URLs — populated from /api/shop-info at startup. No hardcoded fallbacks.
 let _SITE_URL  = '';
 function getSiteUrl()  { return _SITE_URL; }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-function getCsrf() {
-  return document.cookie.split(';').reduce((v, c) => {
-    const [k, val] = c.trim().split('=');
-    return k === '_csrf' ? decodeURIComponent(val || '') : v;
-  }, '');
-}
-
-let _csrfReady = null;
-function ensureCsrf() {
-  if (!_csrfReady) _csrfReady = fetch('/api/csrf-token', { credentials: 'include' }).catch(() => {});
-  return _csrfReady;
-}
 
 function api(path, opts = {}) {
   const isPost = opts.method && opts.method.toUpperCase() !== 'GET';

@@ -1,16 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback, createContext, useContext } from 'react';
-
-function getCsrf() {
-  return document.cookie.split(';').reduce((v, c) => {
-    const [k, val] = c.trim().split('=');
-    return k === '_csrf' ? decodeURIComponent(val || '') : v;
-  }, '');
-}
-let _csrfReady = null;
-function ensureCsrf() {
-  if (!_csrfReady) _csrfReady = fetch('/api/csrf-token', { credentials: 'include' }).catch(() => {});
-  return _csrfReady;
-}
+import { getCsrf, ensureCsrf, makePortalHelpers } from './src/lib/api.js';
 
 const ShopContext = createContext({});
 const useShop = () => useContext(ShopContext);
@@ -28,6 +17,8 @@ let _TOOLS_URL  = 'https://tools.outbackelectronics.com.au';
 function getPortalUrl() { return _PORTAL_URL; }
 function getGamesUrl()  { return _GAMES_URL; }
 function getToolsUrl()  { return _TOOLS_URL; }
+
+const { portalApi, usePortalUser } = makePortalHelpers(getPortalUrl);
 
 // ---------------- Scroll Reveal Hook ----------------
 function useReveal(options = {}) {
@@ -179,37 +170,6 @@ function SearchOverlay({ go, onClose }) {
       </div>
     </div>
   );
-}
-
-// ---------------- Cross-origin portal API helpers ----------------
-let _portalCsrfPromise = null;
-async function getPortalCsrf() {
-  if (!_portalCsrfPromise) {
-    _portalCsrfPromise = fetch(getPortalUrl() + '/api/csrf-token', { credentials: 'include' })
-      .then(r => r.json()).then(d => d.token || '').catch(() => { _portalCsrfPromise = null; return ''; });
-  }
-  return _portalCsrfPromise;
-}
-
-async function portalApi(path, opts = {}) {
-  const isPost = opts.method && opts.method.toUpperCase() !== 'GET';
-  const csrfToken = isPost ? await getPortalCsrf() : '';
-  const headers = { 'Content-Type': 'application/json', ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}) };
-  return fetch(getPortalUrl() + path, { headers, credentials: 'include', ...opts })
-    .then(async r => { const body = await r.json().catch(() => ({})); return { ok: r.ok, status: r.status, ...body }; });
-}
-
-// ---------------- Portal auth state ----------------
-function usePortalUser(portalUrl) {
-  const [user, setUser] = useState(undefined);
-  useEffect(() => {
-    if (!portalUrl) return;
-    fetch(portalUrl + '/api/portal/auth/me', { credentials: 'include' })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => setUser(d?.user || null))
-      .catch(() => setUser(null));
-  }, [portalUrl]);
-  return user;
 }
 
 // ---------------- Account Dropdown ----------------
@@ -1400,7 +1360,7 @@ function App() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const { shop, flags, portalUrl } = useShopInfo();
-  const portalUser = usePortalUser();
+  const [portalUser] = usePortalUser();
   const resolvedFlags = useMemo(() => Object.assign({}, SITE_FLAGS, flags), [flags]);
   const siteUrls = useMemo(() => ({
     portal: portalUrl || 'https://portal.outbackelectronics.com.au',
