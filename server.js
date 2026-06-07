@@ -3084,8 +3084,8 @@ const mainServer = http.createServer(async (req, res) => {
     if (!tokenParam) return json(res, 400, { error: 'missing_token' });
     if (!emailParam) return json(res, 400, { error: 'missing_email' });
     const orders = readOrders();
-    // Primary: match by warrantyToken. Fallback: legacy orders that predate tokens use orderId.
-    const order = orders.find(o => o.warrantyToken ? o.warrantyToken === tokenParam : o.id === tokenParam);
+    // Only match by warrantyToken to prevent enumeration of sequential order IDs.
+    const order = orders.find(o => o.warrantyToken === tokenParam);
     // Always compare email regardless of whether order was found (constant-time guard).
     const orderEmail = order ? (order.email || '').toLowerCase() : '';
     const emailMatch = orderEmail && orderEmail === emailParam;
