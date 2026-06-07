@@ -1489,7 +1489,7 @@ function AcceptableUseContent({ email, address, abn }) {
       </div>
 
       <div style={s.mt}><h3>Community / Forum Guidelines</h3>
-        <p style={s.p}>Please review our <a href="https://forum.outbackelectronics.com.au/t/T-1780786200697" target="_blank" rel="noopener noreferrer">forum rules</a>, posted in the General Discussion section of the forum.</p>
+        <p style={s.p}>Please review our forum rules at <a href="https://forum.outbackelectronics.com.au/t/forum-rules/7" target="_blank" rel="noopener noreferrer">forum.outbackelectronics.com.au/t/forum-rules/7</a>.</p>
       </div>
 
       <div style={s.mt}><h3>Contributions</h3>
@@ -1518,7 +1518,7 @@ function AcceptableUseContent({ email, address, abn }) {
       </div>
 
       <div style={s.mt}><h3>Complaints and Removal of Legitimate Content</h3>
-        <p style={s.p}>If you consider that Content or a Contribution has been mistakenly removed or blocked, please contact us using the details below and we will promptly review our decision. The Content or Contribution may stay 'down' whilst we conduct the review. For more information, visit our forum at <a href="https://forum.outbackelectronics.com.au" target="_blank" rel="noopener noreferrer">forum.outbackelectronics.com.au</a>.</p>
+        <p style={s.p}>If you consider that Content or a Contribution has been mistakenly removed or blocked, please contact us using the details below and we will promptly review our decision. The Content or Contribution may stay 'down' whilst we conduct the review. For more information, visit our <a href="https://forum.outbackelectronics.com.au/t/forum-rules/7" target="_blank" rel="noopener noreferrer">forum rules</a>.</p>
       </div>
 
       <div style={s.mt}><h3>Disclaimer</h3>
