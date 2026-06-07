@@ -7,8 +7,6 @@ fi
 
 # Sync local main to origin/main so every session starts with the real SSOT
 git fetch origin
-git branch -f main origin/main
-
-# Install dependencies
-cd "${CLAUDE_PROJECT_DIR:-.}"
-npm install
+if [ "$(git rev-parse --abbrev-ref HEAD)" != "main" ]; then
+  git branch -f main origin/main
+fi
