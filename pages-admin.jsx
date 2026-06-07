@@ -177,7 +177,6 @@ const NAV_ICONS = {
   software:     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>,
   tutorials:    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>,
   ai:           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="4" y="8" width="16" height="10" rx="2"/><path d="M8 8V6a2 2 0 012-2h4a2 2 0 012 2v2"/><line x1="12" y1="13" x2="12" y2="15"/><line x1="9" y1="13" x2="9" y2="15"/><line x1="15" y1="13" x2="15" y2="15"/></svg>,
-  forum:        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>,
   groups:       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>,
   customers:    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
   sellers:      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
@@ -206,7 +205,6 @@ const ADMIN_SECTIONS = [
     { id:'ai',        label:'AI Models & Boxes', minRole:'manager' },
   ]},
   { group:'COMMUNITY', items: [
-    { id:'forum',     label:'Forum',     minRole:'manager' },
     { id:'groups',    label:'Groups',    minRole:'manager' },
     { id:'customers', label:'Customers', minRole:'technician' },
     { id:'sellers',   label:'Sellers',   minRole:'manager' },
@@ -3047,323 +3045,6 @@ function AdminAI() {
 }
 
 // ============================================================
-// FORUM
-// ============================================================
-function AdminForumCategoryEditor({ cat, onSave, onCancel }) {
-  const isNew = !cat;
-  const [label, setLabel] = useState(cat?.label || cat?.name || '');
-  const [desc, setDesc]   = useState(cat?.desc || cat?.description || '');
-  const [id, setId]       = useState(cat?.id || '');
-  const [idTouched, setIdTouched] = useState(!isNew);
-  const [error, setError] = useState('');
-
-  function slugify(s) {
-    return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-  }
-
-  function handleLabelChange(v) {
-    setLabel(v);
-    if (!idTouched) setId(slugify(v));
-  }
-
-  function handleIdChange(v) {
-    setIdTouched(true);
-    setId(slugify(v));
-  }
-
-  function handleSubmit(e) {
-    e.preventDefault();
-    if (!label.trim()) { setError('Name is required.'); return; }
-    if (!id.trim())    { setError('Slug is required.'); return; }
-    onSave({ ...(cat || {}), id: id.trim(), label: label.trim(), desc: desc.trim() });
-  }
-
-  const inputStyle = { width:'100%', padding:'8px 10px', border:'1px solid var(--line-strong)', fontFamily:'inherit', fontSize:14, background:'var(--paper)', color:'var(--ink)' };
-
-  return (
-    <form onSubmit={handleSubmit} style={{background:'var(--bg-elev)', border:'1px solid var(--line)', padding:20, display:'grid', gap:14, marginBottom:8}}>
-      <div style={{fontWeight:600, fontSize:13, marginBottom:4}}>{isNew ? 'New category' : `Edit — ${cat.label || cat.name}`}</div>
-      {error && <div style={{fontSize:12, color:'var(--rust)'}}>{error}</div>}
-      <label className="field">
-        <span className="label">Name</span>
-        <input style={inputStyle} value={label} onChange={e=>handleLabelChange(e.target.value)} placeholder="e.g. Repairs & Troubleshooting" autoFocus />
-      </label>
-      <label className="field">
-        <span className="label">Slug / ID</span>
-        <input style={{...inputStyle, fontFamily:'monospace'}} value={id} onChange={e=>handleIdChange(e.target.value)} placeholder="e.g. repairs" />
-      </label>
-      <label className="field">
-        <span className="label">Description <span style={{fontWeight:400, color:'var(--ink-3)'}}>(optional)</span></span>
-        <input style={inputStyle} value={desc} onChange={e=>setDesc(e.target.value)} placeholder="One-line summary shown in the sidebar" />
-      </label>
-      <div className="row-flex" style={{justifyContent:'flex-end', gap:8}}>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={onCancel}>Cancel</button>
-        <button type="submit" className="btn btn-rust btn-sm">{isNew ? 'Create category' : 'Save changes'}</button>
-      </div>
-    </form>
-  );
-}
-
-function AdminForum() {
-  const [tab, setTab] = useState('queue');
-  const [queue, setQueue] = useState([]);
-  const [threads, setThreads] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [conduct, setConduct] = useState('');
-  const [queueError, setQueueError] = useState('');
-  const [catEditor, setCatEditor] = useState(null); // null | 'new' | index
-  const [catSaving, setCatSaving] = useState(false);
-  const [catError, setCatError] = useState('');
-  const [conductSaving, setConductSaving] = useState(false);
-  const [conductNotice, setConductNotice] = useState(null);
-
-  useEffect(() => {
-    fetch('/api/admin/forum', { credentials: 'include' })
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then(d => {
-        setQueue(d.queue || []);
-        setThreads(d.threads || []);
-        setUsers(d.users || []);
-        setCategories(d.categories || []);
-        setConduct(d.conduct || '');
-      })
-      .catch(() => {});
-  }, []);
-
-  function dismissQueueItem(id, action) {
-    setQueueError('');
-    fetch('/api/admin/forum/queue/resolve', {
-      method: 'POST', credentials: 'include',
-      headers: postHeaders(),
-      body: JSON.stringify({ id, action }),
-    })
-      .then(async (r) => {
-        const payload = await r.json().catch(() => ({}));
-        if (!r.ok || !payload?.ok) {
-          const reason = payload?.result?.reason || payload?.error || 'unknown_error';
-          throw new Error(reason);
-        }
-        setQueue(q => q.filter(item => item.id !== id));
-      })
-      .catch((err) => {
-        setQueueError(`Failed to resolve moderation item: ${err.message}`);
-      });
-  }
-
-  async function toggleThreadFlag(id, flag, currentValue) {
-    const r = await fetch(`/api/admin/forum/threads/${id}/${flag}`, {
-      method: 'POST', credentials: 'include',
-      headers: postHeaders(),
-      body: JSON.stringify({ [flag]: !currentValue }),
-    });
-    if (r.ok) setThreads(ts => ts.map(t => t.id === id ? { ...t, [flag]: !currentValue } : t));
-  }
-
-  async function saveConductText() {
-    setConductSaving(true); setConductNotice(null);
-    try {
-      const r = await fetch('/api/admin/forum/conduct/save', {
-        method: 'POST', credentials: 'include',
-        headers: postHeaders(),
-        body: JSON.stringify({ conduct }),
-      });
-      if (!r.ok) throw new Error('Save failed');
-      setConductNotice({ type: 'success', msg: 'Code of conduct saved.' });
-    } catch {
-      setConductNotice({ type: 'error', msg: 'Failed to save. Please try again.' });
-    } finally {
-      setConductSaving(false);
-    }
-  }
-
-  async function persistCategories(updated) {
-    setCatSaving(true); setCatError('');
-    try {
-      const r = await fetch('/api/admin/forum/categories/save', {
-        method: 'POST', credentials: 'include',
-        headers: postHeaders(),
-        body: JSON.stringify({ categories: updated }),
-      });
-      if (!r.ok) throw new Error('Save failed');
-      setCategories(updated);
-      setCatEditor(null);
-    } catch {
-      setCatError('Failed to save categories. Please try again.');
-    } finally {
-      setCatSaving(false);
-    }
-  }
-
-  function handleCatSave(saved) {
-    let updated;
-    if (catEditor === 'new') {
-      updated = [...categories, saved];
-    } else {
-      updated = categories.map((c, i) => i === catEditor ? saved : c);
-    }
-    persistCategories(updated);
-  }
-
-  function handleCatDelete(index) {
-    if (!confirm(`Delete category "${categories[index].label || categories[index].name}"? Threads in this category will become uncategorised.`)) return;
-    persistCategories(categories.filter((_, i) => i !== index));
-  }
-
-  function moveCat(index, dir) {
-    const updated = [...categories];
-    const swap = index + dir;
-    if (swap < 0 || swap >= updated.length) return;
-    [updated[index], updated[swap]] = [updated[swap], updated[index]];
-    persistCategories(updated);
-  }
-
-  return (
-    <div style={{padding:32}}>
-      <div className="tabs" style={{marginBottom:18}}>
-        <div className={`tab ${tab==='queue'?'active':''}`} onClick={()=>setTab('queue')}>Moderation queue ({queue.length})</div>
-        <div className={`tab ${tab==='threads'?'active':''}`} onClick={()=>setTab('threads')}>Threads</div>
-        <div className={`tab ${tab==='users'?'active':''}`} onClick={()=>setTab('users')}>Members</div>
-        <div className={`tab ${tab==='cats'?'active':''}`} onClick={()=>setTab('cats')}>Categories</div>
-        <div className={`tab ${tab==='rules'?'active':''}`} onClick={()=>setTab('rules')}>Code of conduct</div>
-      </div>
-
-      {tab==='queue' && (
-        <div style={{display:'grid', gap:12}}>
-          {queueError && <div style={{fontSize:12, color:'var(--rust)'}}>{queueError}</div>}
-          {queue.length === 0 && <div style={{fontSize:14, color:'var(--ink-2)'}}>No items in the moderation queue.</div>}
-          {queue.map((q,i) => (
-            <div key={i} style={{padding:18, background:'var(--paper)', border:'1px solid var(--line)', borderLeft:'3px solid var(--rust)'}}>
-              <div className="row-flex" style={{justifyContent:'space-between'}}>
-                <div className="row-flex" style={{gap:10}}>
-                  <span className="mono" style={{fontSize:11, color:'var(--rust)'}}>{q.id}</span>
-                  <span className="tag tag-outline">{q.cat.toUpperCase()}</span>
-                  <span className="tag tag-rust">{q.reports} REPORTS</span>
-                  <span className="tag" style={{fontSize:9}}>{q.reason.toUpperCase()}</span>
-                </div>
-                <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{q.age.toUpperCase()} AGO · BY {q.who.toUpperCase()}</span>
-              </div>
-              <p style={{marginTop:12, fontSize:14, color:'var(--ink)', background:'var(--bg-elev)', padding:'12px 14px'}}>{q.body}</p>
-              <div className="row-flex" style={{marginTop:12, justifyContent:'flex-end', gap:8}}>
-                <button className="btn btn-ghost btn-sm" onClick={() => window.open(`/t/${q.id}`, '_blank')}>View thread</button>
-                <button className="btn btn-ghost btn-sm" style={{color:'var(--ink-2)'}} onClick={()=>dismissQueueItem(q.id,'approve')}>Approve</button>
-                <button className="btn btn-ghost btn-sm" style={{color:'var(--ochre)'}} onClick={()=>dismissQueueItem(q.id,'edit-approve')}>Edit & approve</button>
-                <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={()=>dismissQueueItem(q.id,'reject')}>Hide</button>
-                <button className="btn btn-sm" style={{background:'var(--rust)', borderColor:'var(--rust)'}} onClick={()=>dismissQueueItem(q.id,'hide-warn')}>Hide + warn user</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {tab==='threads' && (
-        <Table
-          columns={[
-            { key:'id', label:'#', w:'90px', render:r => <span className="mono" style={{fontSize:11, color:'var(--rust)'}}>{r.id}</span> },
-            { key:'title', label:'Thread', w:'3fr', render:r => <span style={{fontWeight:600}}>{r.title}</span> },
-            { key:'cat', label:'Category', w:'1.2fr', render:r => <span className="tag tag-outline">{(r.cat||'—').toUpperCase()}</span> },
-            { key:'replies', label:'Replies', w:'80px' },
-            { key:'views', label:'Views', w:'80px' },
-            { key:'pinned', label:'State', w:'240px', render:r => (
-              <div className="row-flex" style={{gap:6}}>
-                {r.solved && <span className="tag tag-euc">SOLVED</span>}
-                <button className={`btn btn-sm ${r.pinned ? 'btn-rust' : 'btn-ghost'}`} onClick={e=>{e.stopPropagation();toggleThreadFlag(r.id,'pinned',r.pinned);}}>
-                  {r.pinned ? '📌 Unpin' : 'Pin'}
-                </button>
-                <button className={`btn btn-sm ${r.locked ? 'btn-rust' : 'btn-ghost'}`} onClick={e=>{e.stopPropagation();toggleThreadFlag(r.id,'locked',r.locked);}}>
-                  {r.locked ? '🔒 Unlock' : 'Lock'}
-                </button>
-              </div>
-            )},
-          ]}
-          rows={threads}
-          onRowClick={()=>{}}
-        />
-      )}
-
-      {tab==='users' && (
-        <Table
-          columns={[
-            { key:'name', label:'Member', w:'1.5fr', render:r => <span style={{fontWeight:600}}>{r.name}</span> },
-            { key:'joined', label:'Joined', w:'100px' },
-            { key:'posts', label:'Posts', w:'80px' },
-            { key:'rep', label:'Rep', w:'80px' },
-            { key:'role', label:'Role', w:'120px', render:r => <span className={`tag ${r.role==='Staff'?'tag-ink':r.role==='Trusted'?'tag-euc':'tag-outline'}`}>{(r.role||'Member').toUpperCase()}</span> },
-            { key:'flags', label:'Flags', w:'80px', render:r => <span className="mono" style={{color: r.flags>0?'var(--rust)':'var(--ink-3)'}}>{r.flags||0}</span> },
-          ]}
-          rows={users}
-        />
-      )}
-
-      {tab==='cats' && (
-        <div style={{maxWidth:720}}>
-          <div className="row-flex" style={{justifyContent:'space-between', marginBottom:16}}>
-            <p style={{fontSize:14, color:'var(--ink-2)'}}>Only admins can create or modify categories. Users choose from these when posting.</p>
-            <button className="btn btn-rust btn-sm" onClick={()=>setCatEditor('new')} disabled={catEditor !== null}>+ New category</button>
-          </div>
-          {catError && <div style={{fontSize:12, color:'var(--rust)', marginBottom:12}}>{catError}</div>}
-
-          {catEditor === 'new' && (
-            <AdminForumCategoryEditor
-              cat={null}
-              onSave={handleCatSave}
-              onCancel={() => setCatEditor(null)}
-            />
-          )}
-
-          <div style={{display:'grid', gap:8}}>
-            {categories.length === 0 && catEditor !== 'new' && (
-              <div style={{padding:'32px 0', textAlign:'center', color:'var(--ink-2)', fontSize:14}}>
-                No categories yet. Create one above and it will appear in the forum sidebar.
-              </div>
-            )}
-            {categories.map((c, i) => (
-              <React.Fragment key={c.id || i}>
-                {catEditor === i ? (
-                  <AdminForumCategoryEditor
-                    cat={c}
-                    onSave={handleCatSave}
-                    onCancel={() => setCatEditor(null)}
-                  />
-                ) : (
-                  <div style={{display:'flex', alignItems:'center', gap:12, padding:'12px 16px', background:'var(--paper)', border:'1px solid var(--line)'}}>
-                    <div style={{display:'flex', flexDirection:'column', gap:2}}>
-                      <button onClick={()=>moveCat(i,-1)} disabled={i===0||catSaving} style={{background:'none',border:'none',cursor:'pointer',fontSize:10,color:'var(--ink-3)',lineHeight:1,padding:'1px 3px'}}>▲</button>
-                      <button onClick={()=>moveCat(i,1)} disabled={i===categories.length-1||catSaving} style={{background:'none',border:'none',cursor:'pointer',fontSize:10,color:'var(--ink-3)',lineHeight:1,padding:'1px 3px'}}>▼</button>
-                    </div>
-                    <div style={{flex:1}}>
-                      <div style={{fontWeight:600, fontSize:14}}>{c.label || c.name}</div>
-                      {(c.desc || c.description) && <div style={{fontSize:12, color:'var(--ink-2)', marginTop:2}}>{c.desc || c.description}</div>}
-                      <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginTop:4}}>slug: {c.id}</div>
-                    </div>
-                    <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>
-                      {threads.filter(t => t.cat === c.id).length} threads
-                    </span>
-                    <button className="btn btn-ghost btn-sm" onClick={()=>setCatEditor(i)} disabled={catEditor !== null || catSaving}>Edit</button>
-                    <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={()=>handleCatDelete(i)} disabled={catSaving}>Delete</button>
-                  </div>
-                )}
-              </React.Fragment>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {tab==='rules' && (
-        <div style={{maxWidth:720}}>
-          <p style={{fontSize:14, color:'var(--ink-2)', marginBottom:14}}>Shown to every new member on signup, and at the bottom of every Forum page.</p>
-          <textarea className="textarea" style={{minHeight: 280}} value={conduct} onChange={e=>{ setConduct(e.target.value); setConductNotice(null); }}/>
-          <div className="row-flex" style={{marginTop:12, alignItems:'center', gap:12}}>
-            <button className="btn btn-rust" disabled={conductSaving} onClick={saveConductText}>{conductSaving ? 'Saving…' : 'Save & publish'}</button>
-            {conductNotice && <span style={{fontSize:13, color: conductNotice.type === 'error' ? 'var(--rust)' : 'var(--green, #2a7a4b)'}}>{conductNotice.msg}</span>}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ============================================================
 // GROUPS
 function newGroup() {
   return { name:'', description:'', slug:'', loc:'', meets:'', focus:'', badge:'tag-outline', host:false, joinType:'invite', price:'', members:[], access:{ forumCategories:[], tutorials:[], software:[] } };
@@ -3414,14 +3095,13 @@ function AdminGroups() {
     let mounted = true;
     setOptionsLoading(true);
     Promise.all([
-      fetch('/api/admin/forum/categories', { credentials:'include' }).then(r => r.ok ? r.json() : Promise.reject()),
       fetch('/api/admin/tutorials/list', { credentials:'include' }).then(r => r.ok ? r.json() : Promise.reject()),
       fetch('/api/admin/software/list', { credentials:'include' }).then(r => r.ok ? r.json() : Promise.reject()),
     ])
-      .then(([forumData, tutorialsData, softwareData]) => {
+      .then(([tutorialsData, softwareData]) => {
         if (!mounted) return;
         setAccessOptions({
-          forumCategories: forumData.items || [],
+          forumCategories: [],
           tutorials: tutorialsData.items || [],
           software: softwareData.items || [],
         });
@@ -3561,7 +3241,6 @@ function AdminGroups() {
 
           {drawerTab==='access' && (<>
             <p style={{fontSize:13, color:'var(--ink-2)', marginBottom:16}}>Members of this group can access the selected content.</p>
-            <GroupAccessPicker label="Forum categories" options={accessOptions.forumCategories} loading={optionsLoading} emptyMessage="No forum categories found." selected={form.access.forumCategories} onChange={v=>setForm(f=>({...f,access:{...f.access,forumCategories:v}}))}/>
             <GroupAccessPicker label="Tutorials" options={accessOptions.tutorials} loading={optionsLoading} emptyMessage="No tutorials found." selected={form.access.tutorials} onChange={v=>setForm(f=>({...f,access:{...f.access,tutorials:v}}))}/>
             <GroupAccessPicker label="Software" options={accessOptions.software} loading={optionsLoading} emptyMessage="No software entries found." selected={form.access.software} onChange={v=>setForm(f=>({...f,access:{...f.access,software:v}}))}/>
           </>)}
@@ -5449,7 +5128,7 @@ function AdminSettingsFull({ sessionInfo = {} }) {
           <div style={{marginTop:14, display:'grid', gap:10}}>
             <div style={{padding:'14px', background:'var(--bg-elev)', border:'1px solid var(--line)'}}>
               <div style={{fontWeight:600}}>Rebuild search index</div>
-              <p style={{fontSize:13, color:'var(--ink-2)', margin:'4px 0 8px'}}>Re-indexes products, tutorials, and forum threads.</p>
+              <p style={{fontSize:13, color:'var(--ink-2)', margin:'4px 0 8px'}}>Re-indexes products and tutorials.</p>
               {dangerMsg.rebuild && <div style={{fontSize:12, marginBottom:6, color:dangerMsg.rebuild.includes('✓')?'var(--eucalyptus)':'var(--rust)'}}>{dangerMsg.rebuild}</div>}
               <button className="btn btn-ghost btn-sm" disabled={sectionBusy==='rebuild'} onClick={async () => {
                 setSectionBusy('rebuild');
@@ -5853,7 +5532,6 @@ const ADMIN_VIEWS = {
   software:   { c: AdminSoftware,   t:'Software' },
   tutorials:  { c: AdminTutorials,  t:'Tutorials' },
   ai:         { c: AdminAI,         t:'AI Models & Boxes' },
-  forum:      { c: AdminForum,      t:'Forum',            staticSubtitle:'Forum moderation' },
   groups:     { c: AdminGroups,     t:'Groups' },
   customers:  { c: AdminCustomers,  t:'Customers' },
   sellers:    { c: AdminSellers,    t:'Sellers' },
@@ -5870,8 +5548,8 @@ const ADMIN_VIEWS = {
 const ADMIN_ALL_IDS = new Set([
   'overview','orders','repairs','quotes','ewaste',
   'products','services','software','tutorials','ai',
-  'forum','groups','customers','sellers',
-  'memberships','gift-cards','rewards','analytics','expenses','seller-billing','settings',
+  'groups','customers','sellers',
+  'memberships','gift-cards','rewards','expenses','policies','seller-billing','settings',
 ]);
 
 function adminSectionFromPath() {

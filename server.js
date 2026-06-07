@@ -9,7 +9,7 @@ const sharp = require('sharp');
 const gzipCache = new Map();
 
 const MAIN_PORT  = process.env.MAIN_PORT  || 8080;
-const FORUM_PORT = process.env.FORUM_PORT || 8081;
+const DISCOURSE_REDIRECT_PORT = process.env.DISCOURSE_REDIRECT_PORT || 8081;
 const ADMIN_PORT = process.env.ADMIN_PORT || 8082;
 const PORTAL_PORT = process.env.PORTAL_PORT || 8083;
 const GAMES_PORT  = process.env.GAMES_PORT  || 8084;
@@ -73,7 +73,6 @@ const FROM_ADDRESS = `Outback Electronics <${SMTP_USER || 'noreply@outbackelectr
 
 const ROLE_LEVELS = { owner: 4, manager: 3, technician: 2, staff: 1, seller: 1, pending: 0 };
 
-const FORUM_SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
 const PORTAL_SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
 const loginAttempts = new Map();
 const publicRateCounts = new Map();
@@ -86,7 +85,7 @@ const QUOTES_DB_PATH    = path.join(__dirname, 'quotes.db');
 const EWASTE_DB_PATH    = path.join(__dirname, 'ewaste.db');
 const SELLERS_DB_PATH   = path.join(__dirname, 'sellers.db');
 const GROUPS_DB_PATH    = path.join(__dirname, 'groups.db');
-const FORUM_DB_PATH     = path.join(__dirname, 'forum.db');
+const USERS_DB_PATH     = path.join(__dirname, 'users.db');
 const SOFTWARE_DB_PATH  = path.join(__dirname, 'software.db');
 const GIFTCARDS_DB_PATH = path.join(__dirname, 'gift-cards.db');
 const DENOMINATIONS_DB_PATH = path.join(__dirname, 'gift-card-denominations.db');
@@ -103,7 +102,6 @@ const STAFF_DB_PATH       = path.join(__dirname, 'staff.db');
 const SELLER_LEDGER_DB_PATH = path.join(__dirname, 'seller-ledger.db');
 const ADMIN_AUDIT_LOG_PATH   = path.join(__dirname, 'admin-audit.log');
 const SESSIONS_DB_PATH        = path.join(__dirname, 'sessions.db');
-const FORUM_SESSIONS_DB_PATH  = path.join(__dirname, 'forum-sessions.db');
 const PORTAL_SESSIONS_DB_PATH = path.join(__dirname, 'portal-sessions.db');
 const RESET_TOKENS_DB_PATH = path.join(__dirname, 'password-reset-tokens.db');
 const CARTS_DB_PATH = path.join(__dirname, 'carts.db');
@@ -113,7 +111,6 @@ function _defaultSubUrl(base, port, sub) {
     return base.replace(/(:\d+)?(\/|$)/, `:${port}$2`);
   return base.replace(/^(https?:\/\/)/, `$1${sub}.`);
 }
-const FORUM_URL  = process.env.FORUM_URL  || _defaultSubUrl(SITE_URL, 8081, 'forum');
 const PORTAL_URL = process.env.PORTAL_URL || _defaultSubUrl(SITE_URL, 8083, 'portal');
 const GAMES_URL  = process.env.GAMES_URL  || _defaultSubUrl(SITE_URL, 8084, 'games');
 const TOOLS_URL  = process.env.TOOLS_URL  || _defaultSubUrl(SITE_URL, 8085, 'tools');
@@ -137,7 +134,6 @@ function saveSessionsToDisk(filePath, map) {
 }
 
 const sessions = loadSessionsFromDisk(SESSIONS_DB_PATH);
-const forumSessions = loadSessionsFromDisk(FORUM_SESSIONS_DB_PATH);
 const portalSessions = loadSessionsFromDisk(PORTAL_SESSIONS_DB_PATH);
 
 const resetTokens = (() => {
@@ -162,11 +158,9 @@ function saveResetTokens() {
 setInterval(() => {
   const t = now();
   for (const [k, v] of sessions) if (v.expiresAt <= t) sessions.delete(k);
-  for (const [k, v] of forumSessions) if (v.expiresAt <= t) forumSessions.delete(k);
   for (const [k, v] of portalSessions) if (v.expiresAt <= t) portalSessions.delete(k);
   for (const [k, v] of resetTokens) if (v.expiresAt <= t) resetTokens.delete(k);
   saveSessionsToDisk(SESSIONS_DB_PATH, sessions);
-  saveSessionsToDisk(FORUM_SESSIONS_DB_PATH, forumSessions);
   saveSessionsToDisk(PORTAL_SESSIONS_DB_PATH, portalSessions);
   saveResetTokens();
 }, 10 * 60 * 1000).unref();
@@ -292,11 +286,11 @@ function readGroups() {
 }
 function writeGroups(groups) { atomicWriteFile(GROUPS_DB_PATH, JSON.stringify({ groups }, null, 2)); }
 
-function readForum() {
-  try { return JSON.parse(fs.readFileSync(FORUM_DB_PATH, 'utf8')); }
-  catch { return { queue: [], threads: [], users: [], categories: [], conduct: '' }; }
+function readUsers() {
+  try { const d = JSON.parse(fs.readFileSync(USERS_DB_PATH, 'utf8')); return Array.isArray(d.users) ? d.users : []; }
+  catch { return []; }
 }
-function writeForum(data) { atomicWriteFile(FORUM_DB_PATH, JSON.stringify(data, null, 2)); }
+function writeUsers(users) { atomicWriteFile(USERS_DB_PATH, JSON.stringify({ users }, null, 2)); }
 
 function readSoftware() { try { return JSON.parse(fs.readFileSync(SOFTWARE_DB_PATH, 'utf8')).items || []; } catch { return []; } }
 function writeSoftware(items) { atomicWriteFile(SOFTWARE_DB_PATH, JSON.stringify({ items }, null, 2)); }
@@ -396,8 +390,8 @@ const rewardsTokens = new Map(); // token -> { email, userId, points, storeCredi
 
 function grantRewardPoints(email, points, type, description, refId) {
   if (!email || !Number.isFinite(points) || points <= 0) return;
-  const forum = readForum();
-  const user = Array.isArray(forum.users) ? forum.users.find(u => String(u.email || '').toLowerCase() === String(email).toLowerCase()) : null;
+  const users = readUsers();
+  const user = users.find(u => String(u.email || '').toLowerCase() === String(email).toLowerCase());
   if (!user) return;
   const db = readRewards();
   let entry = db.entries.find(e => e.userId === user.id);
@@ -680,21 +674,16 @@ function isSecureRequest(req) {
 function setCustomerSessionCookies(res, user, req) {
   const sid = randomId();
   const sessionData = { id: user.id, username: user.username, displayName: user.displayName, createdAt: user.createdAt, expiresAt: now() + PORTAL_SESSION_TTL_MS };
-  forumSessions.set(sid, { ...sessionData, expiresAt: now() + FORUM_SESSION_TTL_MS });
   portalSessions.set(sid, sessionData);
-  saveSessionsToDisk(FORUM_SESSIONS_DB_PATH, forumSessions);
   saveSessionsToDisk(PORTAL_SESSIONS_DB_PATH, portalSessions);
   res.setHeader('Set-Cookie', [
-    customerSessionCookie('oe_forum_session',  sid, Math.floor(FORUM_SESSION_TTL_MS  / 1000), req),
     customerSessionCookie('oe_portal_session', sid, Math.floor(PORTAL_SESSION_TTL_MS / 1000), req),
   ]);
   return sid;
 }
-function clearCustomerSessionCookies(res, req, forumSid, portalSid) {
-  if (forumSid)  { forumSessions.delete(forumSid);  saveSessionsToDisk(FORUM_SESSIONS_DB_PATH,  forumSessions); }
+function clearCustomerSessionCookies(res, req, portalSid) {
   if (portalSid) { portalSessions.delete(portalSid); saveSessionsToDisk(PORTAL_SESSIONS_DB_PATH, portalSessions); }
   res.setHeader('Set-Cookie', [
-    customerSessionCookie('oe_forum_session',  '', 0, req),
     customerSessionCookie('oe_portal_session', '', 0, req),
   ]);
 }
@@ -809,13 +798,6 @@ function publicRateLimited(ip, bucket) {
   return false;
 }
 
-function getForumSession(req) {
-  const sid = parseCookies(req).oe_forum_session;
-  if (!sid) return null;
-  const session = forumSessions.get(sid);
-  if (!session || session.expiresAt < now()) { if (sid) { forumSessions.delete(sid); saveSessionsToDisk(FORUM_SESSIONS_DB_PATH, forumSessions); } return null; }
-  return { sid, ...session };
-}
 
 function getPortalSession(req) {
   const sid = parseCookies(req).oe_portal_session;
@@ -1807,15 +1789,6 @@ function getAdminUrl() {
     return base.replace(/(:\d+)?(\/|$)/, ':8082$2');
   return base.replace(/^(https?:\/\/)/, '$1admin.');
 }
-function getForumUrl() {
-  if (FORUM_URL) return FORUM_URL;
-  const base = getSiteUrl();
-  // Only use port-substitution for localhost/IP dev URLs; for real domains use subdomain
-  if (/^https?:\/\/(localhost|127\.|0\.0\.0\.0)(:\d+)?/.test(base)) {
-    return base.replace(/(:\d+)?(\/|$)/, ':8081$2');
-  }
-  return base.replace(/^(https?:\/\/)/, '$1forum.');
-}
 function hydrateOrder(o, quotes) {
   const srcQuote = o.sourceQuoteId ? quotes.find(q => q.id === o.sourceQuoteId) : null;
   const dq = srcQuote?.draftQuote || null;
@@ -1935,15 +1908,14 @@ async function handleCustomerRegister(req, res) {
   if (!/^[a-zA-Z0-9_]{3,30}$/.test(username)) return json(res, 422, { error: 'invalid_payload', message: 'Username must be 3–30 characters, letters, numbers and underscores only.' });
   if (password.length < 8) return json(res, 422, { error: 'invalid_payload', message: 'Password must be at least 8 characters.' });
   const displayName = `${firstName} ${lastName}`.trim();
-  const forum = readForum();
-  if (!Array.isArray(forum.users)) forum.users = [];
-  if (forum.users.find(u => u.username && u.username.toLowerCase() === username.toLowerCase()))
+  const users = readUsers();
+  if (users.find(u => u.username && u.username.toLowerCase() === username.toLowerCase()))
     return json(res, 409, { error: 'username_taken', message: 'That username is already taken.' });
-  if (forum.users.find(u => u.email && u.email === email))
+  if (users.find(u => u.email && u.email === email))
     return json(res, 409, { error: 'email_taken', message: 'An account with that email address already exists.' });
   const user = { id: 'U-' + Date.now(), username, firstName, lastName, displayName, email, phone, address, passwordHash: hashPassword(password), createdAt: new Date().toISOString() };
-  forum.users.push(user);
-  writeForum(forum);
+  users.push(user);
+  writeUsers(users);
   grantRewardPoints(email, 50, 'bonus', 'Welcome bonus', `signup-${user.id}`);
   setCustomerSessionCookies(res, user, req);
   sendEmail({ to: email, ...emailPortalWelcome({ username: user.username, displayName: user.displayName }) });
@@ -1966,12 +1938,11 @@ async function handleCustomerLogin(req, res) {
     : (typeof body?.username === 'string' ? body.username.trim() : ''));
   const password = typeof body?.password === 'string' ? body.password : '';
   if (!credential) return json(res, 422, { error: 'missing_fields', message: 'Username or email is required.' });
-  const forum = readForum();
-  if (!Array.isArray(forum.users)) forum.users = [];
+  const users = readUsers();
   const isEmail = credential.includes('@');
   const user = isEmail
-    ? forum.users.find(u => u.email && u.email.toLowerCase() === credential.toLowerCase())
-    : forum.users.find(u => u.username && u.username.toLowerCase() === credential.toLowerCase());
+    ? users.find(u => u.email && u.email.toLowerCase() === credential.toLowerCase())
+    : users.find(u => u.username && u.username.toLowerCase() === credential.toLowerCase());
   if (!user || !user.passwordHash || !verifyPassword(password, user.passwordHash)) {
     trackFailure(loginKey);
     return json(res, 401, { ok: false, message: 'Invalid username/email or password.' });
@@ -1982,14 +1953,13 @@ async function handleCustomerLogin(req, res) {
 }
 
 function handleCustomerLogout(req, res) {
-  const forumSession  = getForumSession(req);
   const portalSession = getPortalSession(req);
-  clearCustomerSessionCookies(res, req, forumSession?.sid, portalSession?.sid);
+  clearCustomerSessionCookies(res, req, portalSession?.sid);
   return json(res, 200, { ok: true });
 }
 
 function handleCustomerMe(req, res) {
-  const session = getPortalSession(req) || getForumSession(req);
+  const session = getPortalSession(req);
   if (!session) return json(res, 200, { user: null });
   return json(res, 200, { user: { id: session.id, username: session.username, displayName: session.displayName, createdAt: session.createdAt } });
 }
@@ -2038,13 +2008,11 @@ const mainServer = http.createServer(async (req, res) => {
   if (req.method === 'GET' && url.pathname === '/api/metrics') {
     const repairs = readRepairs();
     const ewaste = readEwaste();
-    const forum = readForum();
     const repairCount = (repairs.columns || []).reduce((sum, col) => sum + ((col.cards || []).length), 0);
     const ewasteTonnes = ewaste.reduce((sum, item) => sum + (Number(item.weightKg) || Number(item.kg) || 0), 0) / 1000;
-    const forumMembers = Array.isArray(forum.users) ? forum.users.length : 0;
     const resaleable = ewaste.filter(item => item.tier && item.tier !== 'D').length;
     const resalePercent = ewaste.length > 0 ? Math.round((resaleable / ewaste.length) * 100) : null;
-    return json(res, 200, { repairCount, ewasteTonnes, forumMembers, resalePercent });
+    return json(res, 200, { repairCount, ewasteTonnes, resalePercent });
   }
 
   if (req.method === 'GET' && url.pathname === '/api/catalog/products') {
@@ -2119,7 +2087,6 @@ const mainServer = http.createServer(async (req, res) => {
       shop,
       flags: flags || {},
       portalUrl: getPortalUrl(),
-      forumUrl: getForumUrl(),
       gamesUrl: getGamesUrl(),
       toolsUrl: getToolsUrl(),
     });
@@ -2867,8 +2834,7 @@ const mainServer = http.createServer(async (req, res) => {
           const mb = readMemberships();
           const tier = mb.tiers.find(t => t.id === membershipTierId);
           if (tier) {
-            const forum = readForum();
-            const user = (forum.users || []).find(u => u.email && u.email.toLowerCase() === details.email.toLowerCase());
+            const user = readUsers().find(u => u.email && u.email.toLowerCase() === details.email.toLowerCase());
             if (user) {
               mb.subscriptions = mb.subscriptions.map(s =>
                 s.username === user.username && s.status === 'active'
@@ -3093,15 +3059,6 @@ const mainServer = http.createServer(async (req, res) => {
     return json(res, 200, { siteContent: s.siteContent, stripePublishableKey });
   }
 
-  if (req.method === 'GET' && url.pathname === '/api/forum/recent') {
-    const forum = readForum();
-    const threads = Array.isArray(forum.threads) ? forum.threads : [];
-    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-    let recent = threads.filter(t => new Date(t.createdAt).getTime() >= cutoff);
-    if (recent.length === 0) recent = threads.slice(0, 4);
-    else recent = recent.slice(0, 4);
-    return json(res, 200, { threads: recent.map(t => ({ id: t.id, title: t.title, cat: t.cat, replies: t.replies || 0 })) });
-  }
 
   // Inject per-route OG tags for social crawlers (Facebook, Slack, iMessage, etc.)
   if (req.method === 'GET') {
@@ -3137,8 +3094,8 @@ const mainServer = http.createServer(async (req, res) => {
     const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
     const password = typeof body.password === 'string' ? body.password : '';
     if (!email || !password) return json(res, 422, { error: 'missing_fields', message: 'Email and password are required.' });
-    const forum = readForum();
-    const user = Array.isArray(forum.users) ? forum.users.find(u => String(u.email || '').toLowerCase() === email) : null;
+    const usersDb = readUsers();
+    const user = usersDb.find(u => String(u.email || '').toLowerCase() === email);
     if (!user || !user.passwordHash || !verifyPassword(password, user.passwordHash)) {
       return json(res, 401, { error: 'invalid_credentials', message: 'Email or password is incorrect.' });
     }
@@ -3194,313 +3151,15 @@ const mainServer = http.createServer(async (req, res) => {
   }
 });
 
-// ── Forum server (8081) ───────────────────────────────────────────────────────
+// ── Discourse redirect server (8081) ─────────────────────────────────────────
+// Redirects discourse.outbackelectronics.com.au → forum.outbackelectronics.com.au
 
-const forumServer = http.createServer(async (req, res) => {
-  try {
-  const url = new URL(req.url, `http://${req.headers.host}`);
+const FORUM_PUBLIC_URL = process.env.FORUM_PUBLIC_URL || 'https://forum.outbackelectronics.com.au';
 
-  if (checkMaintenance(req, res, url)) return;
-
-  if (req.method === 'GET' && url.pathname === '/api/csrf-token') {
-    const token = ensureCsrfCookie(req, res);
-    return json(res, 200, { token });
-  }
-
-  if (['POST', 'PATCH', 'DELETE'].includes(req.method)) {
-    if (!verifyCsrf(req, res)) return;
-  }
-
-  if (req.method === 'GET' && url.pathname === '/api/forum') {
-    const forum = readForum();
-    return json(res, 200, {
-      threads: Array.isArray(forum.threads) ? forum.threads : [],
-      categories: Array.isArray(forum.categories) ? forum.categories : [],
-      conduct: typeof forum.conduct === 'string' ? forum.conduct : '',
-    });
-  }
-
-  if (req.method === 'POST' && url.pathname === '/api/forum/threads') {
-    const forumSession = getForumSession(req);
-    if (!forumSession) return json(res, 401, { error: 'login_required' });
-    const body = await parseForumPayload(res, req, (value) => {
-      if (!value || typeof value !== 'object') return 'Payload must be a JSON object.';
-      if (!value.title || typeof value.title !== 'string' || !value.title.trim()) return 'Field "title" is required.';
-      if (!value.body || typeof value.body !== 'string' || !value.body.trim()) return 'Field "body" is required.';
-      if (value.title.trim().length > 200) return 'Title must be 200 characters or fewer.';
-      if (value.body.trim().length > 10000) return 'Body must be 10,000 characters or fewer.';
-      return null;
-    });
-    if (!body) return;
-    const forum = readForum();
-    if (!Array.isArray(forum.posts)) forum.posts = [];
-    const threadId = 'T-' + Date.now();
-    const thread = {
-      id: threadId,
-      title: body.title.trim(),
-      cat: typeof body.cat === 'string' ? body.cat.trim() : '',
-      author: forumSession.username,
-      replies: 0, views: 0, likes: 0, activityHours: 0,
-      pinned: false, hot: false, staff: false, locked: false, solved: false, solvedPostId: null,
-      createdAt: new Date().toISOString(),
-    };
-    const firstPost = {
-      id: 'P-' + Date.now(), threadId, author: forumSession.username,
-      body: body.body.trim(), createdAt: new Date().toISOString(), likes: 0, likedBy: [], number: 1,
-    };
-    forum.threads.unshift(thread);
-    forum.posts.push(firstPost);
-    writeForum(forum);
-    return json(res, 201, { ok: true, thread });
-  }
-
-  if (req.method === 'GET' && url.pathname.startsWith('/api/forum/threads/') && url.pathname.split('/').length === 5) {
-    const threadId = url.pathname.split('/')[4];
-    const forum = readForum();
-    if (!Array.isArray(forum.posts)) forum.posts = [];
-    const thread = (forum.threads || []).find(t => t.id === threadId);
-    if (!thread) return json(res, 404, { error: 'Thread not found.' });
-    thread.views = (thread.views || 0) + 1;
-    writeForum(forum);
-    // Enrich posts with member tier badge
-    const { tiers: mbTiers, subscriptions: mbSubs } = readMemberships();
-    const memberTierMap = {};
-    for (const sub of mbSubs) {
-      if (sub.status === 'active') {
-        const t = mbTiers.find(t => t.id === sub.tierId);
-        if (t) memberTierMap[sub.username] = t.name;
-      }
-    }
-    const enrichedPosts = forum.posts.filter(p => p.threadId === threadId).map(p => ({
-      ...p,
-      memberTier: memberTierMap[p.author] || null,
-    }));
-    return json(res, 200, { thread, posts: enrichedPosts });
-  }
-
-  if (req.method === 'POST' && url.pathname.startsWith('/api/forum/threads/') && url.pathname.split('/').length === 6 && url.pathname.split('/')[5] === 'posts') {
-    const forumSession = getForumSession(req);
-    if (!forumSession) return json(res, 401, { error: 'login_required' });
-    const threadId = url.pathname.split('/')[4];
-    const body = await parseForumPayload(res, req, (value) => {
-      if (!value || typeof value !== 'object') return 'Payload must be a JSON object.';
-      if (!value.body || typeof value.body !== 'string' || !value.body.trim()) return 'Field "body" is required.';
-      if (value.body.trim().length > 10000) return 'Body must be 10000 characters or fewer.';
-      return null;
-    });
-    if (!body) return;
-    const forum = readForum();
-    if (!Array.isArray(forum.posts)) forum.posts = [];
-    const thread = (forum.threads || []).find(t => t.id === threadId);
-    if (!thread) return json(res, 404, { error: 'Thread not found.' });
-    if (thread.locked) return json(res, 404, { error: 'Thread is locked.' });
-    const threadPosts = forum.posts.filter(p => p.threadId === threadId);
-    const post = {
-      id: 'P-' + Date.now(), threadId, author: forumSession.username,
-      body: body.body.trim(), createdAt: new Date().toISOString(), likes: 0, likedBy: [],
-      number: threadPosts.length + 1,
-    };
-    thread.replies = (thread.replies || 0) + 1;
-    thread.activityHours = 0;
-    forum.posts.push(post);
-    writeForum(forum);
-    return json(res, 201, { ok: true, post });
-  }
-
-  if (req.method === 'POST' && url.pathname.startsWith('/api/forum/posts/') && url.pathname.split('/').length === 6 && url.pathname.split('/')[5] === 'like') {
-    const forumSession = getForumSession(req);
-    if (!forumSession) return json(res, 401, { error: 'login_required' });
-    const postId = url.pathname.split('/')[4];
-    const forum = readForum();
-    if (!Array.isArray(forum.posts)) forum.posts = [];
-    const post = forum.posts.find(p => p.id === postId);
-    if (!post) return json(res, 404, { error: 'Post not found.' });
-    if (!Array.isArray(post.likedBy)) post.likedBy = [];
-    const author = forumSession.username;
-    let liked;
-    if (post.likedBy.includes(author)) {
-      post.likedBy = post.likedBy.filter(a => a !== author);
-      post.likes = Math.max(0, (post.likes || 0) - 1); liked = false;
-    } else {
-      post.likedBy.push(author); post.likes = (post.likes || 0) + 1; liked = true;
-    }
-    writeForum(forum);
-    return json(res, 200, { ok: true, likes: post.likes, liked });
-  }
-
-  if (req.method === 'POST' && url.pathname.startsWith('/api/forum/threads/') && url.pathname.split('/').length === 6 && url.pathname.split('/')[5] === 'solve') {
-    const forumSession = getForumSession(req);
-    if (!forumSession) return json(res, 401, { error: 'login_required' });
-    const threadId = url.pathname.split('/')[4];
-    const body = await parseForumPayload(res, req, (value) => {
-      if (!value || typeof value !== 'object') return 'Payload must be a JSON object.';
-      if (!value.postId || typeof value.postId !== 'string') return 'Field "postId" is required.';
-      return null;
-    });
-    if (!body) return;
-    const forum = readForum();
-    const thread = (forum.threads || []).find(t => t.id === threadId);
-    if (!thread) return json(res, 404, { error: 'Thread not found.' });
-    if (thread.author !== forumSession.username) return json(res, 403, { error: 'forbidden' });
-    if (thread.solvedPostId === body.postId) { thread.solvedPostId = null; thread.solved = false; }
-    else { thread.solvedPostId = body.postId; thread.solved = true; }
-    writeForum(forum);
-    return json(res, 200, { ok: true, solved: thread.solved, solvedPostId: thread.solvedPostId });
-  }
-
-  if (req.method === 'PATCH' && url.pathname.startsWith('/api/forum/posts/') && url.pathname.split('/').length === 5) {
-    const forumSession = getForumSession(req);
-    if (!forumSession) return json(res, 401, { error: 'login_required' });
-    const postId = url.pathname.split('/')[4];
-    const body = await parseForumPayload(res, req, (value) => {
-      if (!value || typeof value !== 'object') return 'Payload must be a JSON object.';
-      if (!value.body || typeof value.body !== 'string' || !value.body.trim()) return 'Field "body" is required.';
-      if (value.body.trim().length > 10000) return 'Body must be 10000 characters or fewer.';
-      return null;
-    });
-    if (!body) return;
-    const forum = readForum();
-    if (!Array.isArray(forum.posts)) forum.posts = [];
-    const post = forum.posts.find(p => p.id === postId);
-    if (!post) return json(res, 404, { error: 'Post not found.' });
-    post.body = body.body.trim();
-    writeForum(forum);
-    return json(res, 200, { ok: true, post });
-  }
-
-  if (req.method === 'PATCH' && url.pathname.startsWith('/api/forum/threads/') && url.pathname.split('/').length === 5) {
-    const forumSession = getForumSession(req);
-    if (!forumSession) return json(res, 401, { error: 'login_required' });
-    const threadId = url.pathname.split('/')[4];
-    const body = await parseForumPayload(res, req, (value) => {
-      if (!value || typeof value !== 'object') return 'Payload must be a JSON object.';
-      if (value.title !== undefined) {
-        if (typeof value.title !== 'string' || !value.title.trim()) return 'Field "title" must be a non-empty string.';
-        if (value.title.trim().length > 200) return 'Title must be 200 characters or fewer.';
-      }
-      if (value.body !== undefined) {
-        if (typeof value.body !== 'string' || !value.body.trim()) return 'Field "body" must be a non-empty string.';
-        if (value.body.trim().length > 10000) return 'Body must be 10000 characters or fewer.';
-      }
-      if (value.title === undefined && value.body === undefined) return 'At least one of "title" or "body" must be provided.';
-      return null;
-    });
-    if (!body) return;
-    const forum = readForum();
-    const thread = (forum.threads || []).find(t => t.id === threadId);
-    if (!thread) return json(res, 404, { error: 'Thread not found.' });
-    if (body.title !== undefined) thread.title = body.title.trim();
-    if (body.body !== undefined) {
-      const firstPost = forum.posts.find(p => p.threadId === threadId && p.number === 1);
-      if (firstPost) firstPost.body = body.body.trim();
-    }
-    writeForum(forum);
-    return json(res, 200, { ok: true, thread });
-  }
-
-  if (req.method === 'GET' && url.pathname === '/api/forum/auth/me') {
-    const forumSession = getForumSession(req);
-    if (!forumSession) return json(res, 200, { user: null });
-    const forumDb = readForum();
-    const dbUser = Array.isArray(forumDb.users) ? forumDb.users.find(u => u.id === forumSession.id) : null;
-    return json(res, 200, { user: { id: forumSession.id, username: forumSession.username, displayName: forumSession.displayName, email: dbUser ? (dbUser.email || '') : '', createdAt: forumSession.createdAt } });
-  }
-
-  // Universal auth aliases (same handlers as all other servers)
-  if (req.method === 'GET'  && url.pathname === '/api/auth/me')       return handleCustomerMe(req, res);
-  if (req.method === 'POST' && url.pathname === '/api/auth/register') return handleCustomerRegister(req, res);
-  if (req.method === 'POST' && url.pathname === '/api/auth/login')    return handleCustomerLogin(req, res);
-  if (req.method === 'POST' && url.pathname === '/api/auth/logout')   return handleCustomerLogout(req, res);
-  // Legacy forum-prefixed paths — delegate to shared handlers
-  if (req.method === 'POST' && url.pathname === '/api/forum/auth/register') return handleCustomerRegister(req, res);
-  if (req.method === 'POST' && url.pathname === '/api/forum/auth/login')    return handleCustomerLogin(req, res);
-  if (req.method === 'POST' && url.pathname === '/api/forum/auth/logout')   return handleCustomerLogout(req, res);
-
-  if (req.method === 'PATCH' && url.pathname === '/api/forum/auth/me') {
-    const forumSession = getForumSession(req);
-    if (!forumSession) return json(res, 401, { error: 'login_required' });
-    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
-    const forum = readForum();
-    if (!Array.isArray(forum.users)) forum.users = [];
-    const userIdx = forum.users.findIndex(u => u.id === forumSession.id);
-    if (userIdx < 0) return json(res, 404, { error: 'user_not_found' });
-    const user = { ...forum.users[userIdx] };
-    if (typeof body.displayName === 'string') {
-      const dn = body.displayName.trim();
-      if (dn.length > 50) return json(res, 422, { error: 'invalid_payload', message: 'Display name must be 50 characters or fewer.' });
-      user.displayName = dn;
-    }
-    if (typeof body.email === 'string') {
-      user.email = body.email.trim().toLowerCase();
-    }
-    if (typeof body.newPassword === 'string') {
-      if (typeof body.currentPassword !== 'string' || !verifyPassword(body.currentPassword, user.passwordHash)) {
-        return json(res, 401, { error: 'invalid_password', message: 'Current password is incorrect.' });
-      }
-      if (body.newPassword.length < 8) return json(res, 422, { error: 'invalid_payload', message: 'New password must be at least 8 characters.' });
-      user.passwordHash = hashPassword(body.newPassword);
-    }
-    forum.users[userIdx] = user;
-    writeForum(forum);
-    forumSessions.set(forumSession.sid, { ...forumSessions.get(forumSession.sid), displayName: user.displayName });
-    saveSessionsToDisk(FORUM_SESSIONS_DB_PATH, forumSessions);
-    return json(res, 200, { ok: true, user: { id: user.id, username: user.username, displayName: user.displayName, createdAt: user.createdAt } });
-  }
-
-  if (req.method === 'POST' && url.pathname === '/api/forum/auth/forgot-password') {
-    if (publicRateLimited(getIp(req), 'forgot-password')) return json(res, 429, { error: 'too_many_requests' });
-    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
-    const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
-    if (!email) return json(res, 200, { ok: true }); // always 200 to avoid enumeration
-    const forum = readForum();
-    if (!Array.isArray(forum.users)) forum.users = [];
-    const user = forum.users.find(u => u.email && u.email.toLowerCase() === email);
-    if (user) {
-      const token = crypto.randomBytes(32).toString('hex');
-      resetTokens.set(token, { userId: user.id, expiresAt: now() + RESET_TOKEN_TTL_MS });
-      saveResetTokens();
-      const resetUrl = `${getForumUrl()}?reset=${token}`;
-      const tmpl = emailPasswordReset({ displayName: user.displayName || user.username, resetUrl });
-      sendEmail({ to: user.email, ...tmpl });
-    }
-    return json(res, 200, { ok: true });
-  }
-
-  if (req.method === 'POST' && url.pathname === '/api/forum/auth/reset-password') {
-    if (publicRateLimited(getIp(req), 'reset-password')) return json(res, 429, { error: 'too_many_requests' });
-    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
-    const token = typeof body?.token === 'string' ? body.token : '';
-    const password = typeof body?.password === 'string' ? body.password : '';
-    if (!token || password.length < 8) return json(res, 422, { error: 'invalid_payload', message: 'Token and a password of at least 8 characters are required.' });
-    const entry = resetTokens.get(token);
-    if (!entry || entry.expiresAt < now()) return json(res, 400, { error: 'invalid_token', message: 'This reset link has expired or is invalid.' });
-    const forum = readForum();
-    if (!Array.isArray(forum.users)) forum.users = [];
-    const idx = forum.users.findIndex(u => u.id === entry.userId);
-    if (idx < 0) return json(res, 400, { error: 'invalid_token', message: 'This reset link has expired or is invalid.' });
-    forum.users[idx] = { ...forum.users[idx], passwordHash: hashPassword(password) };
-    writeForum(forum);
-    resetTokens.delete(token);
-    saveResetTokens();
-    return json(res, 200, { ok: true });
-  }
-
-  if (req.method === 'POST' && url.pathname === '/api/analytics/event') {
-    if (publicRateLimited(getIp(req), 'analytics')) return json(res, 429, { error: 'rate_limited' });
-    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'bad_request' }); }
-    const type = typeof body.type === 'string' ? body.type.slice(0, 64) : null;
-    if (!type) return json(res, 400, { error: 'missing_type' });
-    const ua = (req.headers['user-agent'] || '').slice(0, 256);
-    if (/bot|crawl|spider|slurp|headless/i.test(ua)) return json(res, 204, {});
-    appendAnalyticsEvent({ ts: Date.now(), type, page: (body.page || '').slice(0, 256), referrer: (body.referrer || '').slice(0, 256), ua, ip: getIp(req) });
-    return json(res, 204, {});
-  }
-
-  return serveStatic(req, res, url.pathname, '/dist/forum.html', null);
-  } catch (err) {
-    console.error('[forumServer] unhandled error:', err);
-    if (!res.headersSent) json(res, 500, { error: 'server_error', message: 'An unexpected error occurred.' });
-  }
+const discourseRedirectServer = http.createServer((req, res) => {
+  const target = FORUM_PUBLIC_URL + (req.url || '/');
+  res.writeHead(301, { Location: target });
+  res.end();
 });
 
 // ── Admin server (8082) ───────────────────────────────────────────────────────
@@ -3799,176 +3458,6 @@ const adminServer = http.createServer(async (req, res) => {
   if (req.method === 'GET' && url.pathname === '/api/admin/groups') {
     const session = requireRole(req, res, 'staff'); if (!session) return;
     return json(res, 200, { items: readGroups() });
-  }
-
-  if (req.method === 'GET' && url.pathname === '/api/admin/forum') {
-    const session = requireRole(req, res, 'staff'); if (!session) return;
-    const forumData = readForum();
-    const sanitised = { ...forumData, users: (forumData.users || []).map(({ passwordHash: _p, ...u }) => u) };
-    return json(res, 200, sanitised);
-  }
-  if (req.method === 'GET' && url.pathname === '/api/admin/forum/categories') {
-    const session = requireRole(req, res, 'staff'); if (!session) return;
-    return json(res, 200, { items: (readForum().categories || []).map((category, index) => ({
-      id: category.id || `forum-cat-${index}`,
-      label: category.name || category.label || String(category),
-    })) });
-  }
-  if (req.method === 'GET' && url.pathname === '/api/admin/software') {
-    const session = requireRole(req, res, 'staff'); if (!session) return;
-    return json(res, 200, { items: readSoftware() });
-  }
-  if (req.method === 'GET' && url.pathname === '/api/admin/software/list') {
-    const session = requireRole(req, res, 'staff'); if (!session) return;
-    return json(res, 200, { items: readSoftware().map((item, index) => ({
-      id: item.id || `software-${index}`,
-      label: item.name || item.title || item.slug || `Software ${index + 1}`,
-    })) });
-  }
-  if (req.method === 'GET' && url.pathname === '/api/admin/tutorials') {
-    const session = requireRole(req, res, 'staff'); if (!session) return;
-    return json(res, 200, { items: readTutorials() });
-  }
-  if (req.method === 'GET' && url.pathname === '/api/admin/tutorials/list') {
-    const session = requireRole(req, res, 'staff'); if (!session) return;
-    return json(res, 200, { items: readTutorials().map((item, index) => ({
-      id: item.id || `tutorial-${index}`,
-      label: item.title || item.name || item.slug || `Tutorial ${index + 1}`,
-    })) });
-  }
-  if (req.method === 'GET' && url.pathname === '/api/admin/ai') {
-    const session = requireRole(req, res, 'staff'); if (!session) return;
-    return json(res, 200, readAI());
-  }
-  if (req.method === 'GET' && url.pathname === '/api/admin/policies') {
-    const session = requireRole(req, res, 'staff'); if (!session) return;
-    return json(res, 200, { items: readPolicies() });
-  }
-  if (req.method === 'GET' && url.pathname === '/api/admin/policies/list') {
-    const session = requireRole(req, res, 'staff'); if (!session) return;
-    return json(res, 200, { items: readPolicies().map((item, index) => ({
-      id: item.id || `policy-${index}`,
-      label: item.title || item.slug || `Policy ${index + 1}`,
-      slug: item.slug || '',
-      status: item.status === 'published' ? 'published' : 'draft',
-      updatedAt: item.updatedAt || null,
-      updatedBy: item.updatedBy || null,
-    })) });
-  }
-  if (req.method === 'GET' && (url.pathname.startsWith('/api/admin/policies/') || url.pathname.startsWith('/api/policies/'))) {
-    const isAdminRoute = url.pathname.startsWith('/api/admin/policies/');
-    if (isAdminRoute) { const session = requireRole(req, res, 'staff'); if (!session) return; }
-    const key = decodeURIComponent(url.pathname.split('/').pop() || '').trim();
-    const policy = readPolicies().find(p => p.id === key || normalizePolicySlug(p.slug) === normalizePolicySlug(key));
-    if (!policy) return json(res, 404, { error: 'policy_not_found' });
-    if (!isAdminRoute && policy.status !== 'published') return json(res, 404, { error: 'policy_not_found' });
-    return json(res, 200, { item: policy });
-  }
-  if (req.method === 'GET' && url.pathname === '/api/settings') {
-    const s = readSettings();
-    const stripeIntegration2 = (s.integrations || []).find(r => r[0] === 'Stripe');
-    const stripePublishableKey2 = (stripeIntegration2 && stripeIntegration2[3] && stripeIntegration2[3].publishableKey) || STRIPE_PUBLISHABLE_KEY || '';
-    return json(res, 200, { siteContent: s.siteContent, stripePublishableKey: stripePublishableKey2 });
-  }
-  if (req.method === 'GET' && url.pathname === '/api/admin/settings') {
-    const session = requireRole(req, res, 'staff'); if (!session) return;
-    const s = readSettings();
-    const masked = {
-      ...s,
-      integrations: s.integrations.map(r => [r[0], r[1], r[2], maskIntegrationConfig(r[0], r[3])]),
-      security: { adminUsername: s.security?.adminUsername || '' },
-    };
-    return json(res, 200, masked);
-  }
-
-  if (req.method === 'POST' && (url.pathname === '/api/admin/forum/queue/resolve' || url.pathname === '/api/admin/forum/queue/action')) {
-    const session = requireRole(req, res, 'manager'); if (!session) return;
-    const legacyQueueAction = url.pathname === '/api/admin/forum/queue/action';
-    const body = await parseForumPayload(res, req, (value) => {
-      if (!value || typeof value.id !== 'string' || !value.id.trim()) return 'Field "id" is required.';
-      if (!legacyQueueAction && !['approve', 'edit-approve', 'reject'].includes(value.action)) return 'Field "action" must be one of approve, edit-approve, or reject.';
-      if (legacyQueueAction && value.action != null && !['approve', 'edit-approve', 'reject'].includes(value.action)) return 'Field "action" must be one of approve, edit-approve, or reject.';
-      return null;
-    });
-    if (!body) return;
-    const forum = readForum();
-    const exists = forum.queue.some(q => q.id === body.id);
-    if (!exists) {
-      const meta = operationMeta({ session, action: 'forum.queue.resolve', status: 'error', changed: { queueItemRemoved: false, queueId: body.id, moderationAction: body.action || 'approve' }, reason: 'queue_item_not_found' });
-      auditAdminAction({ req, session, action: 'forum.queue.resolve', result: meta });
-      return json(res, 404, { ok: false, result: meta });
-    }
-    forum.queue = forum.queue.filter(q => q.id !== body.id);
-    writeForum(forum);
-    const meta = operationMeta({ session, action: 'forum.queue.resolve', status: 'ok', changed: { queueItemRemoved: true, queueId: body.id, moderationAction: body.action || 'approve', queueCount: forum.queue.length } });
-    auditAdminAction({ req, session, action: 'forum.queue.resolve', result: meta });
-    return json(res, 200, { ok: true, result: meta });
-  }
-
-  if (req.method === 'POST' && url.pathname === '/api/admin/forum/threads/save') {
-    const session = requireRole(req, res, 'manager'); if (!session) return;
-    const body = await parseForumPayload(res, req, (value) => (value && typeof value === 'object' && !Array.isArray(value) ? null : 'Thread payload must be a JSON object.'));
-    if (!body) return;
-    const forum = readForum();
-    const idx = forum.threads.findIndex(t => t.id === body.id);
-    if (idx >= 0) { forum.threads[idx] = body; } else { body.id = 'T-' + Date.now(); forum.threads.push(body); }
-    writeForum(forum);
-    return json(res, 200, { ok: true });
-  }
-
-  if (req.method === 'POST' && url.pathname === '/api/admin/forum/users/save') {
-    const session = requireRole(req, res, 'manager'); if (!session) return;
-    const body = await parseForumPayload(res, req, (value) => (value && typeof value.name === 'string' && value.name.trim() ? null : 'Field "name" is required.'));
-    if (!body) return;
-    const forum = readForum();
-    const idx = forum.users.findIndex(u => u.name === body.name);
-    if (idx >= 0) { forum.users[idx] = body; } else { forum.users.push(body); }
-    writeForum(forum);
-    return json(res, 200, { ok: true });
-  }
-
-  if (req.method === 'POST' && url.pathname === '/api/admin/forum/categories/save') {
-    const session = requireRole(req, res, 'manager'); if (!session) return;
-    const body = await parseForumPayload(res, req, (value) => (value && Array.isArray(value.categories) ? null : 'Field "categories" must be an array.'));
-    if (!body) return;
-    const forum = readForum();
-    forum.categories = body.categories;
-    writeForum(forum);
-    return json(res, 200, { ok: true });
-  }
-
-  if (req.method === 'POST' && url.pathname === '/api/admin/forum/conduct/save') {
-    const session = requireRole(req, res, 'manager'); if (!session) return;
-    const body = await parseForumPayload(res, req, (value) => (value && typeof value.conduct === 'string' ? null : 'Field "conduct" must be a string.'));
-    if (!body) return;
-    const forum = readForum();
-    forum.conduct = body.conduct;
-    writeForum(forum);
-    return json(res, 200, { ok: true });
-  }
-
-  if (req.method === 'POST' && url.pathname.startsWith('/api/admin/forum/threads/') && url.pathname.split('/').length === 7 && url.pathname.split('/')[6] === 'pin') {
-    const session = requireRole(req, res, 'manager'); if (!session) return;
-    const threadId = url.pathname.split('/')[5];
-    const body = await parseForumPayload(res, req, () => null); if (!body) return;
-    const forum = readForum();
-    const thread = (forum.threads || []).find(t => t.id === threadId);
-    if (!thread) return json(res, 404, { error: 'Thread not found.' });
-    thread.pinned = typeof body.pinned === 'boolean' ? body.pinned : !thread.pinned;
-    writeForum(forum);
-    return json(res, 200, { ok: true });
-  }
-
-  if (req.method === 'POST' && url.pathname.startsWith('/api/admin/forum/threads/') && url.pathname.split('/').length === 7 && url.pathname.split('/')[6] === 'lock') {
-    const session = requireRole(req, res, 'manager'); if (!session) return;
-    const threadId = url.pathname.split('/')[5];
-    const body = await parseForumPayload(res, req, () => null); if (!body) return;
-    const forum = readForum();
-    const thread = (forum.threads || []).find(t => t.id === threadId);
-    if (!thread) return json(res, 404, { error: 'Thread not found.' });
-    thread.locked = typeof body.locked === 'boolean' ? body.locked : !thread.locked;
-    writeForum(forum);
-    return json(res, 200, { ok: true });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/admin/upload') {
@@ -4346,8 +3835,7 @@ const adminServer = http.createServer(async (req, res) => {
     const orders = readOrders();
     const order = orders.find(o => o.trackingToken === token && o.trackingTokenExpiry > Date.now());
     if (!order) return json(res, 404, { error: 'invalid_or_expired', message: 'This link is invalid or has expired.' });
-    const forum = readForum();
-    const hasAccount = !!(forum.users || []).find(u => u.email && u.email.toLowerCase() === order.email.toLowerCase());
+    const hasAccount = !!readUsers().find(u => u.email && u.email.toLowerCase() === order.email.toLowerCase());
     return json(res, 200, { ok: true, orderId: order.id, customerName: order.cust, email: order.email, hasAccount });
   }
 
@@ -4862,8 +4350,7 @@ const adminServer = http.createServer(async (req, res) => {
     const mb = readMemberships();
     const tier = mb.tiers.find(t => t.id === tierId);
     if (!tier) return json(res, 404, { error: 'tier_not_found' });
-    const forumData = readForum();
-    const user = (forumData.users || []).find(u => u.email === email);
+    const user = readUsers().find(u => u.email === email);
     if (!user) return json(res, 404, { error: 'user_not_found', message: 'No portal account found for ' + email });
     mb.subscriptions = (mb.subscriptions || []).map(s => s.userId === user.id && s.status === 'active'
       ? { ...s, status: 'cancelled', cancelReason: 'replaced_by_admin_activation', cancelledAt: new Date().toISOString() }
@@ -4989,9 +4476,9 @@ const adminServer = http.createServer(async (req, res) => {
   if (req.method === 'GET' && url.pathname === '/api/admin/rewards') {
     const session = requireRole(req, res, 'manager'); if (!session) return;
     const db = readRewards();
-    const forum = readForum();
+    const usersArr = readUsers();
     const entries = db.entries.map(e => {
-      const user = Array.isArray(forum.users) ? forum.users.find(u => u.id === e.userId) : null;
+      const user = usersArr.find(u => u.id === e.userId);
       return { ...e, displayName: user?.displayName || '', username: user?.username || '', email: user?.email || e.email || '' };
     });
     return json(res, 200, { entries });
@@ -5096,7 +4583,6 @@ const adminServer = http.createServer(async (req, res) => {
 
 const PORTAL_CORS_ORIGINS = new Set([
   process.env.SITE_URL || `http://localhost:${MAIN_PORT}`,
-  FORUM_URL,
   GAMES_URL,
   TOOLS_URL,
 ].filter(Boolean));
@@ -5163,11 +4649,10 @@ const portalServer = http.createServer(async (req, res) => {
     const session = getPortalSession(req);
     if (!session) return json(res, 401, { error: 'login_required' });
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
-    const forum = readForum();
-    if (!Array.isArray(forum.users)) forum.users = [];
-    const userIdx = forum.users.findIndex(u => u.id === session.id);
+    const users = readUsers();
+    const userIdx = users.findIndex(u => u.id === session.id);
     if (userIdx < 0) return json(res, 404, { error: 'user_not_found' });
-    const user = { ...forum.users[userIdx] };
+    const user = { ...users[userIdx] };
     if (typeof body.displayName === 'string') {
       const dn = body.displayName.trim();
       if (dn.length > 50) return json(res, 422, { error: 'invalid_payload', message: 'Display name must be 50 characters or fewer.' });
@@ -5183,8 +4668,8 @@ const portalServer = http.createServer(async (req, res) => {
       if (body.newPassword.length < 8) return json(res, 422, { error: 'invalid_payload', message: 'New password must be at least 8 characters.' });
       user.passwordHash = hashPassword(body.newPassword);
     }
-    forum.users[userIdx] = user;
-    writeForum(forum);
+    users[userIdx] = user;
+    writeUsers(users);
     portalSessions.set(session.sid, { ...portalSessions.get(session.sid), displayName: user.displayName });
     saveSessionsToDisk(PORTAL_SESSIONS_DB_PATH, portalSessions);
     return json(res, 200, { ok: true, user: { id: user.id, username: user.username, displayName: user.displayName, createdAt: user.createdAt } });
@@ -5193,8 +4678,7 @@ const portalServer = http.createServer(async (req, res) => {
   if (req.method === 'GET' && url.pathname === '/api/portal/addresses') {
     const session = getPortalSession(req);
     if (!session) return json(res, 401, { error: 'login_required' });
-    const forum = readForum();
-    const user = Array.isArray(forum.users) ? forum.users.find(u => u.id === session.id) : null;
+    const user = readUsers().find(u => u.id === session.id);
     return json(res, 200, { addresses: user?.addresses || [] });
   }
 
@@ -5204,13 +4688,12 @@ const portalServer = http.createServer(async (req, res) => {
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     const { name, line1, line2, city, state, postcode, country } = body || {};
     if (!name || !line1 || !city || !state || !postcode) return json(res, 422, { error: 'missing_fields', message: 'Name, street, city, state and postcode are required.' });
-    const forum = readForum();
-    if (!Array.isArray(forum.users)) forum.users = [];
-    const idx = forum.users.findIndex(u => u.id === session.id);
+    const users = readUsers();
+    const idx = users.findIndex(u => u.id === session.id);
     if (idx < 0) return json(res, 404, { error: 'user_not_found' });
     const addr = { id: 'addr-' + Date.now(), name: String(name).trim(), line1: String(line1).trim(), line2: String(line2||'').trim(), city: String(city).trim(), state: String(state).trim(), postcode: String(postcode).trim(), country: String(country||'AU').trim() };
-    forum.users[idx].addresses = [...(forum.users[idx].addresses || []), addr];
-    writeForum(forum);
+    users[idx].addresses = [...(users[idx].addresses || []), addr];
+    writeUsers(users);
     return json(res, 201, { ok: true, address: addr });
   }
 
@@ -5218,20 +4701,18 @@ const portalServer = http.createServer(async (req, res) => {
     const session = getPortalSession(req);
     if (!session) return json(res, 401, { error: 'login_required' });
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
-    const forum = readForum();
-    if (!Array.isArray(forum.users)) forum.users = [];
-    const idx = forum.users.findIndex(u => u.id === session.id);
+    const users = readUsers();
+    const idx = users.findIndex(u => u.id === session.id);
     if (idx < 0) return json(res, 404, { error: 'user_not_found' });
-    forum.users[idx].addresses = (forum.users[idx].addresses || []).filter(a => a.id !== body.id);
-    writeForum(forum);
+    users[idx].addresses = (users[idx].addresses || []).filter(a => a.id !== body.id);
+    writeUsers(users);
     return json(res, 200, { ok: true });
   }
 
   if (req.method === 'GET' && url.pathname === '/api/portal/orders') {
     const session = getPortalSession(req);
     if (!session) return json(res, 401, { error: 'login_required' });
-    const forumDb = readForum();
-    const portalUser = Array.isArray(forumDb.users) ? forumDb.users.find(u => u.id === session.id) : null;
+    const portalUser = readUsers().find(u => u.id === session.id);
     const sessionEmail = portalUser ? String(portalUser.email || '').toLowerCase() : '';
     if (!sessionEmail) return json(res, 200, { items: [] });
     const orders = readOrders();
@@ -5248,8 +4729,7 @@ const portalServer = http.createServer(async (req, res) => {
     if (!getStripeKey()) return json(res, 503, { error: 'stripe_not_configured', message: 'Online payment is not configured. Please contact us to arrange payment.' });
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     if (!body.orderId) return json(res, 400, { error: 'order_id_required' });
-    const forumDb = readForum();
-    const portalUser = Array.isArray(forumDb.users) ? forumDb.users.find(u => u.id === session.id) : null;
+    const portalUser = readUsers().find(u => u.id === session.id);
     const sessionEmail = portalUser ? String(portalUser.email || '').toLowerCase() : '';
     const orders = readOrders();
     const oIdx = orders.findIndex(o => o.id === body.orderId && String(o.email || '').toLowerCase() === sessionEmail);
@@ -5285,8 +4765,7 @@ const portalServer = http.createServer(async (req, res) => {
     const allCards = (repairs.columns || []).flatMap(col =>
       (col.cards || []).map(card => ({ ...card, column: col.title || col.id }))
     );
-    const forumDb = readForum();
-    const portalUser = Array.isArray(forumDb.users) ? forumDb.users.find(u => u.id === session.id) : null;
+    const portalUser = readUsers().find(u => u.id === session.id);
     const sessionEmail = portalUser ? String(portalUser.email || '').toLowerCase() : '';
     if (!sessionEmail) return json(res, 200, { items: [] });
     const matched = allCards.filter(c => {
@@ -5299,8 +4778,7 @@ const portalServer = http.createServer(async (req, res) => {
   if (req.method === 'GET' && url.pathname === '/api/portal/quotes') {
     const session = getPortalSession(req);
     if (!session) return json(res, 401, { error: 'login_required' });
-    const forumDb = readForum();
-    const portalUser = Array.isArray(forumDb.users) ? forumDb.users.find(u => u.id === session.id) : null;
+    const portalUser = readUsers().find(u => u.id === session.id);
     const sessionEmail = portalUser ? String(portalUser.email || '').toLowerCase() : '';
     if (!sessionEmail) return json(res, 200, { items: [] });
     const quotes = readQuotes();
@@ -5347,22 +4825,21 @@ const portalServer = http.createServer(async (req, res) => {
     if (qIdx < 0) return json(res, 404, { error: 'not_found' });
     const quote = quotes[qIdx];
     if (quote.status !== 'quoted') return json(res, 409, { error: 'quote_not_actionable', message: 'This quote has already been accepted or is not ready for acceptance.' });
-    const forum = readForum();
-    if (!Array.isArray(forum.users)) forum.users = [];
+    const users = readUsers();
     const quoteEmail = String(quote.email || '').toLowerCase();
-    const existingUser = forum.users.find(u => String(u.email || '').toLowerCase() === quoteEmail);
+    const existingUser = users.find(u => String(u.email || '').toLowerCase() === quoteEmail);
     if (existingUser) {
       return json(res, 409, { error: 'email_exists', message: 'An account already exists for this email. Please log in to accept the quote.' });
     }
     if (!username || !/^[a-zA-Z0-9_]{3,30}$/.test(username)) return json(res, 422, { error: 'invalid_payload', message: 'Username must be 3–30 characters, letters, numbers and underscores only.' });
     if (!password || password.length < 8) return json(res, 422, { error: 'invalid_payload', message: 'Password must be at least 8 characters.' });
-    if (forum.users.find(u => u.username && u.username.toLowerCase() === username.toLowerCase())) {
+    if (users.find(u => u.username && u.username.toLowerCase() === username.toLowerCase())) {
       return json(res, 409, { error: 'username_taken', message: 'That username is already taken.' });
     }
     const resolvedDisplayName = (typeof displayName === 'string' ? displayName.trim() : '') || quote.name || username;
     const newUser = { id: 'U-' + Date.now(), username, displayName: resolvedDisplayName, email: quoteEmail, passwordHash: hashPassword(password), createdAt: new Date().toISOString() };
-    forum.users.push(newUser);
-    writeForum(forum);
+    users.push(newUser);
+    writeUsers(users);
     const dq = quote.draftQuote || {};
     const nowStr = new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
     const order = {
@@ -5433,8 +4910,7 @@ const portalServer = http.createServer(async (req, res) => {
     if (!session) return json(res, 401, { error: 'login_required' });
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     if (!body.quoteId) return json(res, 400, { error: 'quote_id_required' });
-    const forumDb = readForum();
-    const portalUser = Array.isArray(forumDb.users) ? forumDb.users.find(u => u.id === session.id) : null;
+    const portalUser = readUsers().find(u => u.id === session.id);
     const sessionEmail = portalUser ? String(portalUser.email || '').toLowerCase() : '';
     const quotes = readQuotes();
     const qIdx = quotes.findIndex(q => q.id === body.quoteId && String(q.email || '').toLowerCase() === sessionEmail);
@@ -5497,8 +4973,7 @@ const portalServer = http.createServer(async (req, res) => {
     };
     mb.subscriptions.push(sub);
     writeMemberships(mb);
-    const forum = readForum();
-    const user = (forum.users || []).find(u => u.username === session.username);
+    const user = readUsers().find(u => u.username === session.username);
     if (user && user.email) {
       const tmpl = emailMembershipWelcome({ customerName: user.displayName || user.username, tierName: tier.name });
       sendEmail({ to: user.email, ...tmpl });
@@ -5517,8 +4992,7 @@ const portalServer = http.createServer(async (req, res) => {
     );
     writeMemberships(mb);
     if (prevTier) {
-      const forum = readForum();
-      const user = (forum.users || []).find(u => u.username === session.username);
+      const user = readUsers().find(u => u.username === session.username);
       if (user && user.email) {
         const tmpl = emailMembershipCancelled({ customerName: user.displayName || user.username, tierName: prevTier.name });
         sendEmail({ to: user.email, ...tmpl });
@@ -5531,10 +5005,12 @@ const portalServer = http.createServer(async (req, res) => {
     if (publicRateLimited(getIp(req), 'forgot-password')) return json(res, 429, { error: 'too_many_requests' });
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
-    if (!email) return json(res, 200, { ok: true }); // always 200 to avoid enumeration
-    const forum = readForum();
-    if (!Array.isArray(forum.users)) forum.users = [];
-    const user = forum.users.find(u => u.email && u.email.toLowerCase() === email);
+    if (!username || !email) return json(res, 200, { ok: true }); // always 200 to avoid enumeration
+    const users = readUsers();
+    const user = users.find(u =>
+      u.username && u.username.toLowerCase() === username.toLowerCase() &&
+      u.email && u.email.toLowerCase() === email
+    );
     if (user) {
       const token = crypto.randomBytes(32).toString('hex');
       resetTokens.set(token, { userId: user.id, expiresAt: now() + RESET_TOKEN_TTL_MS });
@@ -5554,12 +5030,11 @@ const portalServer = http.createServer(async (req, res) => {
     if (!token || password.length < 8) return json(res, 422, { error: 'invalid_payload', message: 'Token and a password of at least 8 characters are required.' });
     const entry = resetTokens.get(token);
     if (!entry || entry.expiresAt < now()) return json(res, 400, { error: 'invalid_token', message: 'This reset link has expired or is invalid.' });
-    const forum = readForum();
-    if (!Array.isArray(forum.users)) forum.users = [];
-    const idx = forum.users.findIndex(u => u.id === entry.userId);
+    const users = readUsers();
+    const idx = users.findIndex(u => u.id === entry.userId);
     if (idx < 0) return json(res, 400, { error: 'invalid_token', message: 'This reset link has expired or is invalid.' });
-    forum.users[idx] = { ...forum.users[idx], passwordHash: hashPassword(password) };
-    writeForum(forum);
+    users[idx] = { ...users[idx], passwordHash: hashPassword(password) };
+    writeUsers(users);
     resetTokens.delete(token);
     saveResetTokens();
     return json(res, 200, { ok: true });
@@ -5602,8 +5077,7 @@ const portalServer = http.createServer(async (req, res) => {
   if (req.method === 'GET' && url.pathname === '/api/portal/wallet') {
     const session = getPortalSession(req);
     if (!session) return json(res, 401, { error: 'login_required' });
-    const forumDb = readForum();
-    const portalUser = Array.isArray(forumDb.users) ? forumDb.users.find(u => u.id === session.id) : null;
+    const portalUser = readUsers().find(u => u.id === session.id);
     const userEmail = portalUser ? String(portalUser.email || '').toLowerCase() : '';
     const giftCards = userEmail
       ? readGiftCards().filter(c => String(c.recipientEmail || '').toLowerCase() === userEmail && !c.isVoid && c.balance > 0)
@@ -5981,7 +5455,7 @@ backfillJobEmails();
 })();
 
 startServer(mainServer,   MAIN_PORT,   'main  ');
-startServer(forumServer,  FORUM_PORT,  'forum ');
+startServer(discourseRedirectServer, DISCOURSE_REDIRECT_PORT, 'redirect');
 startServer(adminServer,  ADMIN_PORT,  'admin ');
 startServer(portalServer, PORTAL_PORT, 'portal');
 startServer(gamesServer,  GAMES_PORT,  'games ');

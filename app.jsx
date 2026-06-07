@@ -21,14 +21,10 @@ const SITE_FLAGS = Object.assign(
   window.OE_FLAGS || {}
 );
 
-// Cross-site URLs — populated from /api/shop-info at runtime. No hardcoded fallbacks
-// so a misconfigured server surfaces the gap rather than silently routing users wrong.
-let _PORTAL_URL = '';
-let _FORUM_URL  = '';
-let _GAMES_URL  = '';
-let _TOOLS_URL  = '';
+// Cross-site URLs — populated from /api/shop-info at runtime.
+let _PORTAL_URL = 'https://portal.outbackelectronics.com.au';
+let _GAMES_URL  = 'https://games.outbackelectronics.com.au';
 function getPortalUrl() { return _PORTAL_URL; }
-function getForumUrl()  { return _FORUM_URL; }
 function getGamesUrl()  { return _GAMES_URL; }
 function getToolsUrl()  { return _TOOLS_URL; }
 
@@ -309,7 +305,6 @@ const PRIMARY_PAGES = [
   { id: 'ai', label: 'AI' },
   { id: 'tutorials', label: 'Tutorials' },
   { id: 'tools-link', label: 'Tools' },
-  { id: 'forum-link', label: 'Forum' },
   { id: 'games-link', label: 'Games' },
   { id: 'groups', label: 'Groups' },
 ];
@@ -384,21 +379,19 @@ function UtilityBar({ go }) {
 }
 
 function useShopInfo() {
-  const [info, setInfo] = useState({ shop: {}, flags: {}, portalUrl: '', forumUrl: '', gamesUrl: '' });
+  const [info, setInfo] = useState({ shop: {}, flags: {}, portalUrl: '', gamesUrl: '' });
   useEffect(() => {
     fetch('/api/shop-info')
       .then(r => r.ok ? r.json() : null)
       .then(d => {
         if (!d) return;
         if (d.portalUrl) _PORTAL_URL = d.portalUrl;
-        if (d.forumUrl)  _FORUM_URL  = d.forumUrl;
         if (d.gamesUrl)  _GAMES_URL  = d.gamesUrl;
         if (d.toolsUrl)  _TOOLS_URL  = d.toolsUrl;
         setInfo({
           shop: d.shop || {},
           flags: d.flags || {},
           portalUrl: d.portalUrl || _PORTAL_URL,
-          forumUrl: d.forumUrl || _FORUM_URL,
           gamesUrl: d.gamesUrl || _GAMES_URL,
         });
       })
@@ -1403,13 +1396,12 @@ function App() {
   });
   const [searchOpen, setSearchOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
-  const { shop, flags, portalUrl, forumUrl } = useShopInfo();
-  const portalUser = usePortalUser(portalUrl);
+  const { shop, flags, portalUrl } = useShopInfo();
+  const portalUser = usePortalUser();
   const resolvedFlags = useMemo(() => Object.assign({}, SITE_FLAGS, flags), [flags]);
   const siteUrls = useMemo(() => ({
     portal: portalUrl || 'https://portal.outbackelectronics.com.au',
-    forum: forumUrl || 'https://forum.outbackelectronics.com.au',
-  }), [portalUrl, forumUrl]);
+  }), [portalUrl]);
 
   useEffect(() => {
     let target = `/${page}`;
@@ -1469,7 +1461,7 @@ function App() {
   const PageComponent = PAGES[page] || PAGES.home;
 
   const shopCtxValue = useMemo(
-    () => ({ ...shop, _flags: resolvedFlags, _portalUrl: siteUrls.portal, _forumUrl: siteUrls.forum }),
+    () => ({ ...shop, _flags: resolvedFlags, _portalUrl: siteUrls.portal }),
     [shop, resolvedFlags, siteUrls]
   );
 

@@ -9,7 +9,6 @@ export default defineConfig({
       input: {
         main: 'index.html',
         admin: 'admin-login.html',
-        forum: 'forum.html',
         portal: 'portal.html',
         games: 'games.html',
         tools: 'tools.html',

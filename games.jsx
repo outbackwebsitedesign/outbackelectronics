@@ -150,7 +150,7 @@ function AuthModal({ onClose, onLogin }) {
         )}
 
         <p style={{ marginTop:16, fontSize:12, color:T.ink3, textAlign:'center' }}>
-          Your account works across the portal, forum, and main site.
+          Your account works across the portal and main site.
         </p>
       </div>
     </div>

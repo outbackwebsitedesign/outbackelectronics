@@ -30,10 +30,9 @@ function HomePage({ go, addToCart, portalUser }) {
   const shop = useShop();
   const [featuredProducts, setFeaturedProducts] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [metrics, setMetrics] = useState({ repairCount: null, ewasteTonnes: null, forumMembers: null });
+  const [metrics, setMetrics] = useState({ repairCount: null, ewasteTonnes: null });
   const [testimonial, setTestimonial] = useState(null);
   const heroProduct = useMemo(() => featuredProducts.find(p => p.infiniteStock || p.stock > 0) || featuredProducts[0] || null, [featuredProducts]);
-  const [recentThreads, setRecentThreads] = useState([]);
   const [aiData, setAiData] = useState(null);
   const [repairServices, setRepairServices] = useState([]);
   const [siteContent, setSiteContent] = useState({});
@@ -59,7 +58,6 @@ function HomePage({ go, addToCart, portalUser }) {
       fetch('/api/catalog/filters').then(r => r.ok ? r.json() : Promise.reject()).then(d => setCategories(d.categories || [])).catch(() => {}),
       fetch('/api/metrics').then(r => r.json()).then(d => setMetrics(d)).catch(() => {}),
       fetch('/api/testimonial').then(r => r.ok ? r.json() : Promise.reject()).then(d => setTestimonial(d.testimonial)).catch(() => {}),
-      fetch('/api/forum/recent').then(r => r.ok ? r.json() : Promise.reject()).then(d => setRecentThreads(d.threads || [])).catch(() => {}),
       fetch('/api/ai').then(r => r.ok ? r.json() : Promise.reject()).then(d => setAiData(d)).catch(() => {}),
       fetch('/api/catalog/services').then(r => r.ok ? r.json() : Promise.reject()).then(d => setRepairServices(d.items || [])).catch(() => {}),
       fetch('/api/settings').then(r => r.ok ? r.json() : Promise.reject()).then(d => setSiteContent(d.siteContent || {})).catch(() => {}),
@@ -126,7 +124,6 @@ function HomePage({ go, addToCart, portalUser }) {
               <div className="row-flex hero-stats" style={{marginTop: 36, gap: 32, borderTop:'1px solid var(--line)', paddingTop: 22}}>
                 <div><div className="serif" style={{fontSize:32, color:'var(--rust)'}}>{metrics.repairCount !== null ? metrics.repairCount.toLocaleString() : '—'}</div><div className="eyebrow">REPAIRS LOGGED</div></div>
                 <div><div className="serif" style={{fontSize:32, color:'var(--rust)'}}>{metrics.ewasteTonnes !== null ? metrics.ewasteTonnes.toFixed(1) + 't' : '—'}</div><div className="eyebrow">E-WASTE DIVERTED</div></div>
-                <div><div className="serif" style={{fontSize:32, color:'var(--rust)'}}>{metrics.forumMembers !== null ? metrics.forumMembers.toLocaleString() : '—'}</div><div className="eyebrow">FORUM MEMBERS</div></div>
               </div>
             </div>
             <div className="hero-image" style={{position:'relative'}}>
@@ -276,7 +273,7 @@ function HomePage({ go, addToCart, portalUser }) {
         </div>
       </section>
 
-      {/* Quote + Forum */}
+      {/* Quote + Community */}
       <section className="container reveal" style={{paddingTop: 64, paddingBottom: 16}}>
         <div className="grid-2">
           <div className="card-paper" style={{padding: 36}}>
@@ -286,25 +283,9 @@ function HomePage({ go, addToCart, portalUser }) {
             <button className="btn btn-rust" style={{marginTop: 18}} onClick={() => go('quote')}>Request a quote →</button>
           </div>
           <div style={{padding: 36, border:'1px solid var(--line)', background:'var(--bg-elev)'}}>
-            <span className="eyebrow">FROM THE FORUM · LAST 24H</span>
-            <ul style={{listStyle:'none', padding:0, margin:'14px 0 0', display:'grid', gap:10}}>
-              {recentThreads.length === 0
-                ? <li style={{color:'var(--ink-2)', fontSize:13}}>No recent threads.</li>
-                : recentThreads.map((t,i)=>{
-                  const threadUrl = t.id
-                    ? `${shop._forumUrl || 'https://forum.outbackelectronics.com.au'}/thread/${t.id}`
-                    : (shop._forumUrl || 'https://forum.outbackelectronics.com.au');
-                  return (
-                    <li key={t.id || i} style={{display:'flex', justifyContent:'space-between', padding:'10px 0', borderBottom:'1px solid var(--line)'}}>
-                      <div>
-                        <a href={threadUrl} target="_blank" rel="noopener noreferrer" style={{fontWeight:500, cursor:'pointer'}}>{t.title}</a>
-                        <div className="mono" style={{fontSize:10, color:'var(--ink-2)', marginTop:3}}>{t.cat ? t.cat.toUpperCase() + ' · ' : ''}{t.replies} REPLIES</div>
-                      </div>
-                      <a href={threadUrl} target="_blank" rel="noopener noreferrer" className="mono" style={{fontSize:11, color:'var(--rust)', cursor:'pointer'}}>→</a>
-                    </li>
-                  );
-                })}
-            </ul>
+            <span className="eyebrow">COMMUNITY FORUM</span>
+            <p style={{marginTop: 14, color:'var(--ink-2)', fontSize:14}}>Join the discussion on our community forum — repairs, builds, troubleshooting, and more.</p>
+            <a href="https://forum.outbackelectronics.com.au" target="_blank" rel="noopener noreferrer" className="btn btn-outline" style={{marginTop: 18, display:'inline-block'}}>Visit the Forum →</a>
           </div>
         </div>
       </section>
