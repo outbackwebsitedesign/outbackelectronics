@@ -1138,7 +1138,7 @@ function _computeHeroImagePreload() {
     if (hero && hero.images && hero.images.length > 0) {
       const src = hero.images[0];
       if (src.startsWith('/assets/uploads/')) {
-        const u = w => `/api/thumb?src=${encodeURIComponent(src)}&w=${w}&q=72`;
+        const u = w => `/api/thumb?src=${encodeURIComponent(src)}&w=${w}&q=82`;
         const srcset = [600, 800, 1000, 1200].map(w => `${u(w)} ${w}w`).join(', ');
         // Mirror the hero <img> srcset/sizes so the preload matches the variant
         // the browser actually picks — no wasted second download.
