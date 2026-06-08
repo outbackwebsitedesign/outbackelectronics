@@ -4468,6 +4468,17 @@ const adminServer = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true, item: next });
   }
 
+  if (req.method === 'GET' && url.pathname === '/api/admin/settings') {
+    const session = requireAdmin(req, res); if (!session) return;
+    const settings = readSettings();
+    const maskedPayload = {
+      ...settings,
+      integrations: settings.integrations.map(r => [r[0], r[1], r[2], maskIntegrationConfig(r[0], r[3])]),
+      security: { adminUsername: settings.security?.adminUsername || '' },
+    };
+    return json(res, 200, maskedPayload);
+  }
+
   if (req.method === 'POST' && url.pathname === '/api/admin/settings/save') {
     const session = requireAdmin(req, res); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
