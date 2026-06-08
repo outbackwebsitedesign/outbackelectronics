@@ -658,12 +658,25 @@ function parseCookies(req) {
 }
 
 function json(res, code, body) {
-  res.writeHead(code, {
+  const payload = JSON.stringify(body);
+  const headers = {
     'Content-Type': 'application/json; charset=utf-8',
     'X-Content-Type-Options': 'nosniff',
     'Strict-Transport-Security': HSTS_VALUE,
-  });
-  res.end(JSON.stringify(body));
+  };
+  const acceptEnc = (res.req && res.req.headers && res.req.headers['accept-encoding']) || '';
+  if (acceptEnc.includes('gzip') && payload.length > 1024) {
+    zlib.gzip(Buffer.from(payload), { level: 6 }, (err, buf) => {
+      if (err) { res.writeHead(code, headers); res.end(payload); return; }
+      headers['Content-Encoding'] = 'gzip';
+      headers['Vary'] = 'Accept-Encoding';
+      res.writeHead(code, headers);
+      res.end(buf);
+    });
+  } else {
+    res.writeHead(code, headers);
+    res.end(payload);
+  }
 }
 
 function isoNow() { return new Date().toISOString(); }
@@ -972,13 +985,17 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null) {
       const extraHeaders = (isSoftwareDownload || isPdf)
         ? { 'Content-Disposition': `attachment; filename="${path.basename(filePath)}"` }
         : {};
+      const expiresDate = isImmutable
+        ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toUTCString()
+        : new Date(0).toUTCString();
       const baseHeaders = {
         'Content-Type': (types[ext] || 'application/octet-stream'),
         'Cache-Control': cacheHeader,
+        'Expires': expiresDate,
         ...securityHeaders,
         ...extraHeaders,
       };
-      const compressible = new Set(['.js', '.css', '.html', '.svg', '.json', '.txt']);
+      const compressible = new Set(['.js', '.jsx', '.css', '.html', '.svg', '.json', '.txt', '.xml']);
       const acceptEnc = req.headers['accept-encoding'] || '';
       if (compressible.has(ext) && acceptEnc.includes('gzip')) {
         const cached = gzipCache.get(filePath);
@@ -2131,7 +2148,7 @@ const mainServer = http.createServer(async (req, res) => {
       'Disallow: /assets/uploads/',
       `Sitemap: ${OG_BASE_URL}/sitemap.xml`,
     ].join('\n') + '\n';
-    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600' });
+    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600', 'Expires': new Date(Date.now() + 3600 * 1000).toUTCString() });
     return res.end(txt);
   }
 
@@ -2154,7 +2171,7 @@ const mainServer = http.createServer(async (req, res) => {
       ...productUrls,
       '</urlset>',
     ].join('\n');
-    res.writeHead(200, { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=3600' });
+    res.writeHead(200, { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=3600', 'Expires': new Date(Date.now() + 3600 * 1000).toUTCString() });
     return res.end(xml);
   }
 
@@ -3349,7 +3366,7 @@ const mainServer = http.createServer(async (req, res) => {
     // instead of serving stale higher-weight files.
     const thumbPath = path.join(thumbsDir, `${baseName}-w${w}-q${THUMB_QUALITY}.webp`);
     const serveThumb = (buf) => {
-      res.writeHead(200, { 'Content-Type': 'image/webp', 'Cache-Control': 'public, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff', 'Vary': 'Accept-Encoding' });
+      res.writeHead(200, { 'Content-Type': 'image/webp', 'Cache-Control': 'public, max-age=31536000, immutable', 'Expires': new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toUTCString(), 'X-Content-Type-Options': 'nosniff', 'Vary': 'Accept-Encoding' });
       res.end(buf);
     };
     try {
