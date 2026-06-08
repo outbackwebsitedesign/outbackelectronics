@@ -14,7 +14,12 @@ function inlineCssPlugin() {
           /<link rel="stylesheet" crossorigin href="(\/assets\/[^"]+\.css)">/g,
           (match, href) => {
             try {
-              const cssPath = resolve(ctx.bundle ? '.' : 'dist', href.slice(1));
+              const assetKey = href.slice(1);
+              if (ctx.bundle && ctx.bundle[assetKey]) {
+                const css = ctx.bundle[assetKey].source;
+                if (css) return `<style>${css}</style>`;
+              }
+              const cssPath = resolve('dist', href.slice(1));
               const css = readFileSync(cssPath, 'utf8');
               return `<style>${css}</style>`;
             } catch {
