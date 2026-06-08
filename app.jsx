@@ -621,9 +621,11 @@ function ApplyTweaks({ tweaks }) {
   return null;
 }
 
+const _noopTweaks = (d) => [d, () => {}];
 function TweaksUI() {
   const { TweaksPanel, TweakSection, TweakColor, TweakToggle, TweakRadio, useTweaks } = window;
-  const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  const [tweaks, setTweak] = (useTweaks || _noopTweaks)(TWEAK_DEFAULTS);
+  if (!TweaksPanel) return null;
   return (
     <>
       <ApplyTweaks tweaks={tweaks} />
@@ -1447,6 +1449,10 @@ function App() {
 
   const PAGES = window.OE_PAGES || {};
   const PageComponent = PAGES[page] || PAGES.home;
+
+  useEffect(() => {
+    if (!PAGES[page] && window.__loadDeferredChunks) window.__loadDeferredChunks();
+  }, [page]);
 
   const shopCtxValue = useMemo(
     () => ({ ...shop, _flags: resolvedFlags, _portalUrl: siteUrls.portal }),
