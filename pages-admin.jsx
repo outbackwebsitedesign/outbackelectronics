@@ -465,7 +465,8 @@ function AdminOverview({ go }) {
   const orderCount = recentOrders === null ? '—' : recentOrders.length;
   const revenue = recentOrders === null ? '—' : '$' + recentOrders.reduce((s, o) => s + (Number(o.total) || 0), 0).toLocaleString();
   const openRepairs = repairs === null ? '—' : repairs.filter(c => c.id !== 'done').reduce((s, c) => s + (c.cards ? c.cards.length : 0), 0);
-  const quotesAwaiting = quotes === null ? '—' : quotes.length;
+  const ACTIVE_QUOTE_STATUSES = new Set(['new', 'in-review', 'quoted']);
+  const quotesAwaiting = quotes === null ? '—' : quotes.filter(q => ACTIVE_QUOTE_STATUSES.has(q.status || 'new')).length;
   const lowStock = catalog === null ? [] : catalog.filter(p => !p.infiniteStock && p.stock != null && p.stock <= 3);
 
   return (
