@@ -4,8 +4,7 @@ import App from '../app.jsx';
 
 const SHOP_INIT_PAGES = new Set([
   '', 'home', 'shop', 'product', 'service', 'services', 'software',
-  'ai', 'ewaste', 'memberships', 'gift-cards', 'cart',
-  'order-success', 'order-cancelled',
+  'ai', 'ewaste', 'memberships', 'gift-cards',
 ]);
 const initPage = location.pathname.replace(/^\/+/, '').split('/')[0];
 const needsDeferredNow = !SHOP_INIT_PAGES.has(initPage);
@@ -18,6 +17,7 @@ function loadDeferredChunks() {
     import('../tweaks-panel.jsx'),
     import('../pages-info.jsx'),
     import('../pages-community.jsx'),
+    import('../pages-cart.jsx'),
   ]);
 }
 window.__loadDeferredChunks = loadDeferredChunks;
