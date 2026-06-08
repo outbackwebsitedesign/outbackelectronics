@@ -2250,7 +2250,7 @@ function AdminServices() {
             <label className="field"><span className="label">Turnaround</span><input className="input" placeholder="e.g. 3–7 days" value={form.tat||''} onChange={e=>setForm({...form, tat:e.target.value})}/></label>
           </div>
           <label className="field"><span className="label">Pricing line</span><input className="input" placeholder="from $120 / $50/hr / quoted" value={form.price||''} onChange={e=>setForm({...form, price:e.target.value})}/></label>
-          <label className="field"><span className="label">Public description</span><textarea className="textarea" value={form.desc||''} onChange={e=>setForm({...form, desc:e.target.value})} /></label>
+          <label className="field"><span className="label">Public description</span><textarea className="textarea" value={form.description||''} onChange={e=>setForm({...form, description:e.target.value})} /></label>
           <label className="field"><span className="label">Bench checklist (internal)</span><textarea className="textarea" placeholder="Steps the tech follows; what gets logged…" value={form.checklist||''} onChange={e=>setForm({...form, checklist:e.target.value})} /></label>
           <label className="field"><span className="label">Status</span>
             <select className="select" value={form.status || 'draft'} onChange={e=>setForm({...form, status:e.target.value})}>

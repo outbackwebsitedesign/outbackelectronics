@@ -259,7 +259,16 @@ function readProducts() {
 function writeProducts(products) { atomicWriteFile(PRODUCTS_DB_PATH, JSON.stringify({ products }, null, 2)); }
 
 function readServices() {
-  try { const p = JSON.parse(cachedReadFile(SERVICES_DB_PATH)); return Array.isArray(p.services) ? p.services : []; } catch { return []; }
+  try {
+    const p = JSON.parse(cachedReadFile(SERVICES_DB_PATH));
+    if (!Array.isArray(p.services)) return [];
+    let dirty = false;
+    for (const s of p.services) {
+      if (!s.id) { s.id = 'svc-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6); dirty = true; }
+    }
+    if (dirty) writeServices(p.services);
+    return p.services;
+  } catch { return []; }
 }
 function writeServices(services) { atomicWriteFile(SERVICES_DB_PATH, JSON.stringify({ services }, null, 2)); }
 
