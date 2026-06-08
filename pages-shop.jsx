@@ -172,23 +172,23 @@ function HomePage({ go, addToCart, portalUser }) {
                     <div style={{width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', color:'var(--ink-3)', fontSize:13, fontFamily:'var(--mono)'}}>{catName.toUpperCase()}</div>
                   )}
                   {imgs.length === 1 && (
-                    <img src={imgs[0]} alt={catName} loading="lazy" style={{width:'100%', height:'100%', objectFit:'cover', display:'block'}} />
+                    <img src={thumbUrl(imgs[0], 400)} srcSet={thumbSrcSet(imgs[0], [200, 300, 400])} sizes="(max-width: 600px) 50vw, 300px" alt={catName} loading="lazy" style={{width:'100%', height:'100%', objectFit:'cover', display:'block'}} />
                   )}
                   {imgs.length === 2 && (
                     <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', height:'100%', gap:2}}>
-                      {imgs.map((src, j) => <img key={j} src={src} alt="" loading="lazy" style={{width:'100%', height:'100%', objectFit:'cover', display:'block'}} />)}
+                      {imgs.map((src, j) => <img key={j} src={thumbUrl(src, 200)} srcSet={thumbSrcSet(src, [100, 150, 200])} sizes="(max-width: 600px) 25vw, 150px" alt="" loading="lazy" style={{width:'100%', height:'100%', objectFit:'cover', display:'block'}} />)}
                     </div>
                   )}
                   {imgs.length === 3 && (
                     <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gridTemplateRows:'1fr 1fr', height:'100%', gap:2}}>
-                      <img src={imgs[0]} alt="" loading="lazy" style={{width:'100%', height:'100%', minHeight:0, objectFit:'cover', display:'block', gridRow:'1 / 3'}} />
-                      <img src={imgs[1]} alt="" loading="lazy" style={{width:'100%', height:'100%', minHeight:0, objectFit:'cover', display:'block'}} />
-                      <img src={imgs[2]} alt="" loading="lazy" style={{width:'100%', height:'100%', minHeight:0, objectFit:'cover', display:'block'}} />
+                      <img src={thumbUrl(imgs[0], 200)} srcSet={thumbSrcSet(imgs[0], [100, 150, 200])} sizes="(max-width: 600px) 25vw, 150px" alt="" loading="lazy" style={{width:'100%', height:'100%', minHeight:0, objectFit:'cover', display:'block', gridRow:'1 / 3'}} />
+                      <img src={thumbUrl(imgs[1], 200)} srcSet={thumbSrcSet(imgs[1], [100, 150, 200])} sizes="(max-width: 600px) 25vw, 150px" alt="" loading="lazy" style={{width:'100%', height:'100%', minHeight:0, objectFit:'cover', display:'block'}} />
+                      <img src={thumbUrl(imgs[2], 200)} srcSet={thumbSrcSet(imgs[2], [100, 150, 200])} sizes="(max-width: 600px) 25vw, 150px" alt="" loading="lazy" style={{width:'100%', height:'100%', minHeight:0, objectFit:'cover', display:'block'}} />
                     </div>
                   )}
                   {imgs.length >= 4 && (
                     <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gridTemplateRows:'1fr 1fr', height:'100%', gap:2}}>
-                      {imgs.slice(0,4).map((src, j) => <img key={j} src={src} alt="" loading="lazy" style={{width:'100%', height:'100%', objectFit:'cover', display:'block'}} />)}
+                      {imgs.slice(0,4).map((src, j) => <img key={j} src={thumbUrl(src, 200)} srcSet={thumbSrcSet(src, [100, 150, 200])} sizes="(max-width: 600px) 25vw, 150px" alt="" loading="lazy" style={{width:'100%', height:'100%', objectFit:'cover', display:'block'}} />)}
                     </div>
                   )}
                 </div>
@@ -992,7 +992,7 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
         <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:48, alignItems:'start'}}>
           <div>
             {activeImage
-              ? <img src={activeImage} alt={product.name} loading="lazy" style={{width:'100%', aspectRatio:'4/3', maxHeight:'70vh', objectFit:'contain', display:'block', background:'var(--bg-deep)'}} />
+              ? <img src={thumbUrl(activeImage, 800)} srcSet={thumbSrcSet(activeImage, [400, 600, 800])} sizes="(max-width: 900px) 100vw, 50vw" alt={product.name} loading="lazy" style={{width:'100%', aspectRatio:'4/3', maxHeight:'70vh', objectFit:'contain', display:'block', background:'var(--bg-deep)'}} />
               : <div className="slot" style={{aspectRatio:'4/3', width:'100%'}}>{product.name.toUpperCase()}</div>}
             {product.images && product.images.length > 1 && (
               <div style={{display:'flex', gap:8, marginTop:10, flexWrap:'wrap'}}>
@@ -1376,7 +1376,7 @@ function GiftCardsPage({ go, addToCart }) {
               <div key={denom.id || i} className="card-paper" style={{padding:28, display:'flex', flexDirection:'column', gap:16}}>
                 <div style={{position:'relative', textAlign:'center', background:'var(--bg-elev)', border:'1px solid var(--line)', overflow:'hidden'}}>
                   {denom.imageUrl
-                    ? <img src={denom.imageUrl} alt={denom.name} width="600" height="180" style={{width:'100%', height:180, objectFit:'cover', display:'block'}} />
+                    ? <img src={thumbUrl(denom.imageUrl, 600)} srcSet={thumbSrcSet(denom.imageUrl, [300, 450, 600])} sizes="(max-width: 600px) 100vw, 400px" alt={denom.name} width="600" height="180" style={{width:'100%', height:180, objectFit:'cover', display:'block'}} />
                     : <div style={{padding:'32px 0'}}>
                         <div className="serif" style={{fontSize:52, color:'var(--rust)', lineHeight:1}}>${Number(denom.priceAud).toFixed(0)}</div>
                         <div className="eyebrow" style={{marginTop:6}}>GIFT CARD</div>
