@@ -3372,7 +3372,7 @@ const mainServer = http.createServer(async (req, res) => {
     const uploadsDir = path.resolve(path.join(__dirname, 'assets/uploads'));
     if (!path.resolve(srcPath).startsWith(uploadsDir + path.sep)) return json(res, 403, { error: 'forbidden' });
     const thumbsDir = path.join(__dirname, 'assets/uploads/.thumbs');
-    fs.mkdirSync(thumbsDir, { recursive: true });
+    try { fs.mkdirSync(thumbsDir, { recursive: true }); } catch {}
     const baseName = path.basename(src, path.extname(src));
     const THUMB_QUALITY = Number.isFinite(qParam) ? Math.min(Math.max(qParam, 40), 90) : 55;
     // Quality is part of the cache key so tuning it regenerates variants
@@ -3386,9 +3386,16 @@ const mainServer = http.createServer(async (req, res) => {
       if (fs.existsSync(thumbPath)) return serveThumb(fs.readFileSync(thumbPath));
       const buf = fs.readFileSync(srcPath);
       const thumb = await sharp(buf).resize({ width: w, withoutEnlargement: true }).webp({ quality: THUMB_QUALITY }).toBuffer();
-      fs.writeFileSync(thumbPath, thumb);
+      try { fs.writeFileSync(thumbPath, thumb); } catch {}
       serveThumb(thumb);
-    } catch { return json(res, 500, { error: 'thumb_failed' }); }
+    } catch (thumbErr) {
+      console.error('[thumb] failed:', src, thumbErr.message || thumbErr);
+      try {
+        const fallback = fs.readFileSync(srcPath);
+        res.writeHead(200, { 'Content-Type': 'image/webp', 'Cache-Control': 'public, max-age=60' });
+        res.end(fallback);
+      } catch { return json(res, 500, { error: 'thumb_failed' }); }
+    }
   }
 
   return serveStatic(req, res, url.pathname, '/dist/index.html', MAIN_SPA_ROUTES);
