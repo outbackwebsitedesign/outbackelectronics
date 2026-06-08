@@ -124,7 +124,7 @@ function HomePage({ go, addToCart, portalUser }) {
             </div>
             <div className="hero-image" style={{position:'relative'}}>
               {heroProduct && heroProduct.images && heroProduct.images.length > 0
-                ? <img src={thumbUrl(heroProduct.images[0], 1000, 82)} srcSet={thumbSrcSet(heroProduct.images[0], [600, 800, 1000, 1200], 82)} sizes="(max-width: 900px) 100vw, 560px" alt={heroProduct.name} fetchpriority="high" style={{width:'100%', aspectRatio:'4/5', objectFit:'cover', display:'block'}} />
+                ? <img src={thumbUrl(heroProduct.images[0], 1000, 72)} srcSet={thumbSrcSet(heroProduct.images[0], [600, 800, 1000, 1200], 72)} sizes="(max-width: 900px) 100vw, 560px" alt={heroProduct.name} fetchpriority="high" style={{width:'100%', aspectRatio:'4/5', objectFit:'cover', display:'block'}} />
                 : <div className="slot slot-rust" style={{aspectRatio: '4/5'}}>RUGGED LAPTOP ON RED-DIRT WORKBENCH</div>}
               {heroProduct && (
                 <div className="card-paper" style={{position:'absolute', bottom:16, left:16, padding:18, width:240, boxShadow:'var(--shadow)'}}>
