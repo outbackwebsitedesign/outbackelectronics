@@ -8,6 +8,22 @@ const sharp = require('sharp');
 
 const gzipCache = new Map();
 
+function gzipSend(req, res, statusCode, headers, body) {
+  const acceptEnc = (req && req.headers && req.headers['accept-encoding']) || '';
+  if (acceptEnc.includes('gzip')) {
+    zlib.gzip(Buffer.from(body), { level: 6 }, (err, buf) => {
+      if (err) { res.writeHead(statusCode, headers); res.end(body); return; }
+      headers['Content-Encoding'] = 'gzip';
+      headers['Vary'] = 'Accept-Encoding';
+      res.writeHead(statusCode, headers);
+      res.end(buf);
+    });
+  } else {
+    res.writeHead(statusCode, headers);
+    res.end(body);
+  }
+}
+
 const MAIN_PORT  = process.env.MAIN_PORT  || 8080;
 const DISCOURSE_REDIRECT_PORT = process.env.DISCOURSE_REDIRECT_PORT || 8081;
 const ADMIN_PORT = process.env.ADMIN_PORT || 8082;
@@ -957,9 +973,9 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null) {
   candidates.push(path.join(__dirname, 'public', safePath));
 
   const tryRead = (paths, idx) => {
-    if (idx >= paths.length) { return sendErrorPage(res, 404, 'Not found', ERROR_404_HTML); }
+    if (idx >= paths.length) { return sendErrorPage(req, res, 404, 'Not found', ERROR_404_HTML); }
     const filePath = paths[idx];
-    if (!ALLOWED_SERVE_ROOTS.some(root => filePath.startsWith(root))) { return sendErrorPage(res, 403, 'Forbidden', ERROR_403_HTML); }
+    if (!ALLOWED_SERVE_ROOTS.some(root => filePath.startsWith(root))) { return sendErrorPage(req, res, 403, 'Forbidden', ERROR_403_HTML); }
     fs.readFile(filePath, (err, data) => {
       if (err) return tryRead(paths, idx + 1);
       const ext = path.extname(filePath).toLowerCase();
@@ -1176,10 +1192,10 @@ function buildJsonLd(og, pathname) {
   return `<script type="application/ld+json">${JSON.stringify(ld)}</script>`;
 }
 
-function serveIndexWithOg(res, og, pathname) {
+function serveIndexWithOg(req, res, og, pathname) {
   const distPath = path.join(__dirname, 'dist', 'index.html');
   readIndexTemplate(distPath, (err, template) => {
-    if (err) return sendErrorPage(res, 404, 'Not found', ERROR_404_HTML);
+    if (err) return sendErrorPage(req, res, 404, 'Not found', ERROR_404_HTML);
     const ogType = og.type === 'product' ? 'product' : 'website';
     const isHome = pathname === '/' || pathname === '/home';
     const heroPreload = isHome ? getHeroImagePreload() : '';
@@ -1199,7 +1215,7 @@ function serveIndexWithOg(res, og, pathname) {
       .replace(/<meta name="twitter:description"[^>]*\/?>/, `<meta name="twitter:description" content="${escOg(og.description)}" />`)
       .replace(/<meta name="twitter:image"[^>]*\/?>/, `<meta name="twitter:image" content="${escOg(absoluteImage)}" />`)
       .replace(/<link rel="canonical"[^>]*\/?>/, `<link rel="canonical" href="${escOg(og.url)}" />`);
-    res.writeHead(200, {
+    gzipSend(req, res, 200, {
       'Content-Type': 'text/html; charset=utf-8',
       'Cache-Control': 'no-cache, must-revalidate',
       'X-Frame-Options': 'DENY',
@@ -1208,8 +1224,7 @@ function serveIndexWithOg(res, og, pathname) {
       'Strict-Transport-Security': HSTS_VALUE,
       'Permissions-Policy': PERMISSIONS_POLICY,
       'Content-Security-Policy': PUBLIC_CSP,
-    });
-    res.end(html);
+    }, html);
   });
 }
 
@@ -1231,7 +1246,7 @@ const ERROR_403_HTML = loadErrorPage('403.html');
 const ERROR_401_HTML = loadErrorPage('401.html');
 const OFFLINE_HTML   = loadErrorPage('offline.html');
 
-function sendErrorPage(res, status, fallback, html) {
+function sendErrorPage(req, res, status, fallback, html) {
   if (!html) { res.writeHead(status); return res.end(fallback); }
   let body = html;
   try {
@@ -1239,17 +1254,16 @@ function sendErrorPage(res, status, fallback, html) {
     const loc = [shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ') || 'Central Queensland, Australia';
     body = body.replace(/<!--SHOP_LOCATION-->[^<]*/g, `<!--SHOP_LOCATION-->${loc}`);
   } catch {}
-  res.writeHead(status, {
+  gzipSend(req, res, status, {
     'Content-Type': 'text/html; charset=utf-8',
     'Cache-Control': 'no-cache, must-revalidate',
     'X-Frame-Options': 'SAMEORIGIN',
     'X-Content-Type-Options': 'nosniff',
     'Strict-Transport-Security': HSTS_VALUE,
-  });
-  res.end(body);
+  }, body);
 }
 
-function sendMaintenance(res) {
+function sendMaintenance(req, res) {
   if (!MAINTENANCE_HTML) { res.writeHead(503); return res.end('Service temporarily unavailable.'); }
   const { shop } = readSettings();
   const email = (shop && shop.email) ? shop.email.trim() : '';
@@ -1257,14 +1271,13 @@ function sendMaintenance(res) {
     ? `<p class="note">Need help? Shoot us an email at <a href="mailto:${email}">${email}</a>!</p>`
     : '';
   const html = MAINTENANCE_HTML.replace(/\{\{CONTACT_EMAIL\}\}/g, emailHtml);
-  res.writeHead(503, {
+  gzipSend(req, res, 503, {
     'Content-Type': 'text/html; charset=utf-8',
     'Cache-Control': 'no-cache, must-revalidate',
     'X-Frame-Options': 'SAMEORIGIN',
     'X-Content-Type-Options': 'nosniff',
     'Strict-Transport-Security': HSTS_VALUE,
-  });
-  res.end(html);
+  }, html);
 }
 
 function checkMaintenance(req, res, url) {
@@ -1307,7 +1320,7 @@ function checkMaintenance(req, res, url) {
   // Let static root assets through so the maintenance page can render them
   if (['/favicon.png', '/favicon.ico', '/logo.webp'].includes(url.pathname)) return false;
 
-  if (url.pathname === '/maintenance') { sendMaintenance(res); return true; }
+  if (url.pathname === '/maintenance') { sendMaintenance(req, res); return true; }
 
   if (req.method === 'GET') {
     const from = encodeURIComponent(url.pathname + url.search);
@@ -3297,7 +3310,7 @@ const mainServer = http.createServer(async (req, res) => {
   // Inject per-route OG tags for social crawlers (Facebook, Slack, iMessage, etc.)
   if (req.method === 'GET') {
     const og = resolveOgTags(url.pathname);
-    if (og) return serveIndexWithOg(res, og, url.pathname);
+    if (og) return serveIndexWithOg(req, res, og, url.pathname);
   }
 
   // ── Universal customer auth (same endpoints on every server) ─────────────────
