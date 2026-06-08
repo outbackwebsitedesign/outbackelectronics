@@ -811,11 +811,17 @@ function hashPassword(password) {
   return `${salt}:${hash}`;
 }
 function verifyPassword(password, stored) {
-  const [salt, hash] = stored.split(':');
-  const attemptBuf = crypto.scryptSync(password, salt, 64);
-  const hashBuf = Buffer.from(hash, 'hex');
-  if (attemptBuf.length !== hashBuf.length) return false;
-  return crypto.timingSafeEqual(attemptBuf, hashBuf);
+  try {
+    if (!stored || typeof stored !== 'string') return false;
+    const [salt, hash] = stored.split(':');
+    if (!salt || !hash) return false;
+    const attemptBuf = crypto.scryptSync(password, salt, 64);
+    const hashBuf = Buffer.from(hash, 'hex');
+    if (attemptBuf.length !== hashBuf.length) return false;
+    return crypto.timingSafeEqual(attemptBuf, hashBuf);
+  } catch {
+    return false;
+  }
 }
 
 // Hash the admin password once at startup so it is never compared plaintext at runtime.
