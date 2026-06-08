@@ -2193,7 +2193,7 @@ const mainServer = http.createServer(async (req, res) => {
     return json(res, 200, { token });
   }
 
-  if (['POST', 'PATCH', 'DELETE'].includes(req.method) && url.pathname !== '/api/stripe/webhook') {
+  if (['POST', 'PATCH', 'DELETE'].includes(req.method) && url.pathname !== '/api/stripe/webhook' && url.pathname !== '/api/analytics/event') {
     if (!verifyCsrf(req, res)) return;
   }
 
@@ -5429,7 +5429,7 @@ const toolsServer = http.createServer(async (req, res) => {
     return json(res, 200, { token });
   }
 
-  if (['POST', 'PATCH', 'DELETE'].includes(req.method) && url.pathname.startsWith('/api/')) {
+  if (['POST', 'PATCH', 'DELETE'].includes(req.method) && url.pathname.startsWith('/api/') && url.pathname !== '/api/analytics/event') {
     if (!verifyCsrf(req, res)) return;
   }
 
@@ -5489,7 +5489,7 @@ const gamesServer = http.createServer(async (req, res) => {
     return json(res, 200, { token });
   }
 
-  if (['POST', 'PATCH', 'DELETE'].includes(req.method) && url.pathname.startsWith('/api/')) {
+  if (['POST', 'PATCH', 'DELETE'].includes(req.method) && url.pathname.startsWith('/api/') && url.pathname !== '/api/analytics/event') {
     if (!verifyCsrf(req, res)) return;
   }
 
