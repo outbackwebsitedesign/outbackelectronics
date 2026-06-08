@@ -428,6 +428,19 @@ function Drawer({ open, onClose, title, children, footer }) {
 // ============================================================
 // OVERVIEW
 // ============================================================
+function parseOrderDate(dateStr) {
+  if (!dateStr) return null;
+  // ISO string (e.g. "2026-06-08T...")
+  if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) return new Date(dateStr);
+  // DD/MM/YYYY
+  const dmy = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (dmy) return new Date(+dmy[3], +dmy[2] - 1, +dmy[1]);
+  // DD Mon YYYY (e.g. "08 Jun 2026")
+  const dmon = dateStr.match(/^(\d{1,2})\s+(\w+)\s+(\d{4})$/);
+  if (dmon) return new Date(`${dmon[2]} ${dmon[1]}, ${dmon[3]}`);
+  return null;
+}
+
 function AdminOverview({ go }) {
   const [orders, setOrders] = useState(null);
   const [repairs, setRepairs] = useState(null);
@@ -444,8 +457,13 @@ function AdminOverview({ go }) {
       .then(r => r.ok ? r.json() : Promise.reject()).then(d => setCatalog(d.products || [])).catch(() => setCatalog([]));
   }, []);
 
-  const orderCount = orders === null ? '—' : orders.length;
-  const revenue = orders === null ? '—' : '$' + orders.reduce((s, o) => s + (Number(o.total) || 0), 0).toLocaleString();
+  const sevenDayCutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const recentOrders = orders === null ? null : orders.filter(o => {
+    const d = parseOrderDate(o.createdAt || o.date);
+    return d && d.getTime() >= sevenDayCutoff;
+  });
+  const orderCount = recentOrders === null ? '—' : recentOrders.length;
+  const revenue = recentOrders === null ? '—' : '$' + recentOrders.reduce((s, o) => s + (Number(o.total) || 0), 0).toLocaleString();
   const openRepairs = repairs === null ? '—' : repairs.filter(c => c.id !== 'done').reduce((s, c) => s + (c.cards ? c.cards.length : 0), 0);
   const quotesAwaiting = quotes === null ? '—' : quotes.length;
   const lowStock = catalog === null ? [] : catalog.filter(p => !p.infiniteStock && p.stock != null && p.stock <= 3);
