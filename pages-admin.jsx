@@ -65,18 +65,13 @@ async function uploadImage(file) {
 // ============================================================
 // LOGIN
 // ============================================================
-function AdminLogin({ onAuth }) {
+function AdminLogin({ onAuth, siteUrl }) {
   const [u, setU] = useState('');
   const [p, setP] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
-  const [siteUrl, setSiteUrl] = useState('');
   useEffect(() => {
     ensureCsrf();
-    fetch('/api/shop-info').then(r => r.json()).then(d => {
-      const url = d.siteUrl || d.shop?.siteUrl;
-      if (url) setSiteUrl(url);
-    }).catch(() => {});
   }, []);
   const submit = async (e) => {
     e.preventDefault();
@@ -5652,6 +5647,7 @@ function AdminPage({ go }) {
   const [search, setSearch] = useState('');
   const [metrics, setMetrics] = useState(null);
   const [metricsState, setMetricsState] = useState('loading');
+  const [siteUrl, setSiteUrl] = useState('');
 
   const fetchSession = (mounted = true) =>
     fetch('/api/admin/session', { credentials: 'include' })
@@ -5663,6 +5659,10 @@ function AdminPage({ go }) {
     let mounted = true;
     ensureCsrf();
     fetchSession(mounted).finally(() => { if (mounted) setChecking(false); });
+    fetch('/api/shop-info').then(r => r.json()).then(d => {
+      const url = d.siteUrl || d.shop?.siteUrl;
+      if (mounted && url) setSiteUrl(url);
+    }).catch(() => {});
     return () => { mounted = false; };
   }, []);
 
@@ -5701,7 +5701,7 @@ function AdminPage({ go }) {
   const effectiveSection = canAccess(section) ? section : (allItems.find(it => (ROLE_LEVELS[it.minRole] ?? 0) <= myLevel)?.id || 'repairs');
 
   if (checking) return <div style={{minHeight:'100vh', display:'grid', placeItems:'center'}}>Checking session…</div>;
-  if (!sessionInfo.authed) return <AdminLogin onAuth={() => { setChecking(true); fetchSession(true).finally(() => setChecking(false)); }} />;
+  if (!sessionInfo.authed) return <AdminLogin onAuth={() => { setChecking(true); fetchSession(true).finally(() => setChecking(false)); }} siteUrl={siteUrl} />;
 
   const view = ADMIN_VIEWS[effectiveSection] || ADMIN_VIEWS.overview;
   const subtitle = view.staticSubtitle || formatMetricSubtitle(effectiveSection, metrics, metricsState);
