@@ -467,7 +467,10 @@ function AdminOverview({ go }) {
   const openRepairs = repairs === null ? '—' : repairs.filter(c => c.id !== 'done').reduce((s, c) => s + (c.cards ? c.cards.length : 0), 0);
   const ACTIVE_QUOTE_STATUSES = new Set(['new', 'in-review', 'quoted']);
   const quotesAwaiting = quotes === null ? '—' : quotes.filter(q => ACTIVE_QUOTE_STATUSES.has(q.status || 'new')).length;
-  const lowStock = catalog === null ? [] : catalog.filter(p => !p.infiniteStock && p.stock != null && p.stock <= 3);
+  const lowStock = catalog === null ? [] : catalog
+    .filter(p => !p.infiniteStock)
+    .map(p => ({ ...p, _stock: p.variants && p.variants.length > 0 ? p.variants.reduce((a, v) => a + (Number(v.stock) || 0), 0) : p.stock }))
+    .filter(p => p._stock != null && p._stock <= 3);
 
   return (
     <div style={{padding: 32, display:'grid', gap: 28}}>
@@ -552,14 +555,14 @@ function AdminOverview({ go }) {
                 ? <li style={{fontSize:13, color:'var(--ink-2)'}}>No low-stock items.</li>
                 : lowStock.map((p,i) => (
                   <li key={i} style={{display:'flex', justifyContent:'space-between', padding:'6px 0', borderBottom:'1px solid var(--line)'}}>
-                    <span>{p.name}</span><span className="mono" style={{color:'var(--rust)'}}>{p.stock} left</span>
+                    <span>{p.name}</span><span className="mono" style={{color:'var(--rust)'}}>{p._stock} left</span>
                   </li>
                 ))
               }
             </ul>
             {lowStock.length > 0 && (
               <button className="btn btn-rust btn-sm" style={{marginTop:14, width:'100%', justifyContent:'center'}} onClick={() => {
-                const csv = ['Name,Stock\n', ...lowStock.map(p => `${p.name},${p.stock}\n`)].join('');
+                const csv = ['Name,Stock\n', ...lowStock.map(p => `${p.name},${p._stock}\n`)].join('');
                 const a = document.createElement('a');
                 a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
                 a.download = 'purchase-order.csv';
