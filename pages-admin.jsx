@@ -2184,20 +2184,21 @@ function AdminServices() {
   const [form, setForm] = useState({});
   const open = (i) => { setEdit(i); setForm(i==='new' ? { id:'', sku:'', status:'draft', cat:'Repair', active:true } : rows[i]); };
   const save = async () => {
-    const item = { ...form, category: form.cat, priceLine: form.price };
+    const item = { ...form, category: form.cat, priceLine: form.price, description: form.description };
     const r = await fetch('/api/admin/catalog/services/save', {
       method: 'POST', headers: postHeaders(),
       credentials: 'include', body: JSON.stringify(item),
     }).catch(() => null);
     if (r && r.ok) {
       const d = await r.json();
-      if (edit === 'new') setRows(rs => [...rs, d.item]);
-      else setRows(rs => rs.map((row, i) => i === edit ? d.item : row));
+      const saved = { ...d.item, cat: d.item.category, price: d.item.priceLine };
+      if (edit === 'new') setRows(rs => [...rs, saved]);
+      else setRows(rs => rs.map((row, i) => i === edit ? saved : row));
+      setEdit(null);
     } else {
-      if (edit === 'new') setRows(rs => [...rs, item]);
-      else setRows(rs => rs.map((row, i) => i === edit ? item : row));
+      const err = r ? await r.json().catch(() => ({})) : {};
+      adminToast(err.message || 'Failed to save service — check server logs', 'error');
     }
-    setEdit(null);
   };
   const remove = async () => {
     const item = rows[edit];

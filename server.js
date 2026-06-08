@@ -3898,10 +3898,14 @@ const adminServer = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/admin/catalog/services/save') {
     const session = requireRole(req, res, 'manager'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    if (!body.name) return json(res, 422, { error: 'name_required' });
     const services = readServices();
-    const idx = services.findIndex(s => s.id && s.id === body.id);
+    const idx = body.id ? services.findIndex(s => s.id === body.id) : -1;
     if (idx >= 0) { services[idx] = body; } else { body.id = 'svc-' + Date.now(); services.push(body); }
-    writeServices(services);
+    try { writeServices(services); } catch (err) {
+      console.error('[services/save] write failed:', err);
+      return json(res, 500, { error: 'write_failed', message: String(err.message || err) });
+    }
     return json(res, 200, { ok: true, item: body });
   }
   if (req.method === 'POST' && url.pathname === '/api/admin/catalog/services/delete') {
