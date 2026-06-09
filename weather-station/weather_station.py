@@ -322,13 +322,14 @@ if 0x36 in detected_addresses:
         # Quick-start: forces the chip to re-estimate SoC from scratch
         _smbus_bus.write_i2c_block_data(0x36, 0x06, [0x40, 0x00])
         import time as _t; _t.sleep(1)
-        # Verify it responds sensibly — version register 0x08 high nibble = 3
-        _ver = (_smbus_bus.read_i2c_block_data(0x36, 0x08, 2)[0] >> 4)
-        if _ver == 3:
+        # Sanity-check: read voltage and confirm it's a plausible LiPo value
+        _raw_v = _smbus_bus.read_i2c_block_data(0x36, 0x02, 2)
+        _voltage = ((_raw_v[0] << 8 | _raw_v[1]) >> 4) * 1.25 / 1000.0
+        if 2.0 <= _voltage <= 5.0:
             max17043 = _smbus_bus
-            log.info('MAX17043 fuel gauge ready at 0x36')
+            log.info('MAX17043 fuel gauge ready at 0x36 (%.3fV)', _voltage)
         else:
-            log.warning('MAX17043 version nibble unexpected (%d) — disabling', _ver)
+            log.warning('MAX17043 voltage out of range (%.3fV) — disabling', _voltage)
     except ImportError:
         log.warning('smbus not installed — MAX17043 will be skipped (pip3 install smbus2)')
     except Exception as e:
