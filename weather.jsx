@@ -66,7 +66,28 @@ function ReadingCard({ def, value, ts, onClick }) {
 }
 
 // ── Sparkline / line graph ─────────────────────────────────────────────────────
-function LineGraph({ points, color = 'var(--rust)', height = 200, fromTs, toTs }) {
+// Sensible Y-axis ranges per well-known key.
+// Falls back to data-driven range padded 10% when key is unknown.
+const Y_DOMAINS = {
+  temperature:  [-10,  60],
+  humidity:     [  0, 100],
+  pressure:     [970, 1040],
+  voc:          [  0, 500],
+  co2:          [300, 2000],
+  o2:           [ 15,  25],
+  nh3:          [  0, 300],
+  h2:           [  0,1000],
+  ch4:          [  0,5000],
+  co:           [  0,1000],
+  h2s:          [  0,  50],
+  combustible:  [  0,1000],
+  compass:      [  0, 360],
+  mag_x:        [-200, 200],
+  mag_y:        [-200, 200],
+  mag_z:        [-200, 200],
+};
+
+function LineGraph({ points, color = 'var(--rust)', height = 200, fromTs, toTs, yDomain }) {
   const now = Date.now();
   const minT = fromTs != null ? fromTs : (points.length ? Math.min(...points.map(p => p.t)) : now - 3600000);
   const maxT = toTs   != null ? toTs   : now;
@@ -98,8 +119,17 @@ function LineGraph({ points, color = 'var(--rust)', height = 200, fromTs, toTs }
   const PAD = { top: 8, bottom: 28, left: 48, right: 12 };
   const iw = W - PAD.left - PAD.right;
   const ih = H - PAD.top - PAD.bottom;
-  const minV = Math.min(...values);
-  const maxV = Math.max(...values);
+
+  let minV, maxV;
+  if (yDomain) {
+    [minV, maxV] = yDomain;
+  } else {
+    const dataMin = Math.min(...values);
+    const dataMax = Math.max(...values);
+    const pad = (dataMax - dataMin) * 0.1 || 1;
+    minV = dataMin - pad;
+    maxV = dataMax + pad;
+  }
   const range = maxV - minV || 1;
 
   const x = t  => PAD.left + ((t  - minT) / tRange) * iw;
@@ -309,6 +339,7 @@ function ReadingDetail({ def, stationId, onBack }) {
             toTs={mode === 'year' && selectedYear
               ? new Date(selectedYear + 1, 0, 1).getTime() - 1
               : Date.now()}
+            yDomain={Y_DOMAINS[def.key] || null}
           />
         )}
       </div>
