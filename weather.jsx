@@ -1045,7 +1045,25 @@ function WeatherDashboard() {
   const [activeStation, setActiveStation] = useState(null);
   const [error, setError] = useState(null);
   const [tick, setTick] = useState(0);
-  const [detailKey, setDetailKey] = useState(null);
+  // URL routing: /temperature, /humidity, etc.
+  const keyFromPath = () => {
+    const seg = window.location.pathname.replace(/^\/+/, '').replace(/\/+$/, '');
+    return seg || null;
+  };
+  const [detailKey, setDetailKeyState] = useState(keyFromPath);
+  const setDetailKey = (key) => {
+    const path = key ? `/${key}` : '/';
+    window.history.pushState({ key }, '', path);
+    setDetailKeyState(key);
+  };
+
+  // Handle browser back/forward
+  useEffect(() => {
+    const onPop = (e) => setDetailKeyState(e.state?.key ?? keyFromPath());
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
   const [addSensorOpen, setAddSensorOpen] = useState(false);
   const fetchStations = () => {
     fetch('/api/weather/stations')
