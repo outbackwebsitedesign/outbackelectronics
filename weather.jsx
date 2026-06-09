@@ -106,7 +106,7 @@ function LineGraph({ points, color = 'var(--rust)', height = 200, fromTs, toTs }
   const y = v  => PAD.top  + (1 - (v  - minV) / range) * ih;
 
   const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ');
-  const areaD = pathD + ` L${x(times[times.length - 1]).toFixed(1)},${(PAD.top + ih).toFixed(1)} L${x(times[0]).toFixed(1)},${(PAD.top + ih).toFixed(1)} Z`;
+  const areaD = pathD + ` L${x(points[points.length - 1].t).toFixed(1)},${(PAD.top + ih).toFixed(1)} L${x(points[0].t).toFixed(1)},${(PAD.top + ih).toFixed(1)} Z`;
 
   // Y-axis ticks
   const yTicks = 4;
