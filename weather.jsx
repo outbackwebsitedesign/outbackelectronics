@@ -29,7 +29,7 @@ const GROUPS = [
 ];
 
 function formatAge(ms) {
-  if (ms < 60000) return `${Math.round(ms / 1000)}s ago`;
+  if (ms < 60000) return `${Math.floor(ms / 1000)}s ago`;
   if (ms < 3600000) return `${Math.round(ms / 60000)}m ago`;
   if (ms < 86400000) return `${Math.round(ms / 3600000)}h ago`;
   return `${Math.round(ms / 86400000)}d ago`;
@@ -218,16 +218,18 @@ function ReadingDetail({ def, stationId, onBack }) {
     if (mode === 'range') loadRange(hours, stationId);
     else if (mode === 'year' && selectedYear) loadYear(selectedYear, stationId);
 
-    // Poll every 15s when viewing a live range so new readings appear automatically
+    // SSE — append new readings instantly when in live range mode
     if (mode !== 'range') return;
-    const iv = setInterval(() => {
-      const sq = stationId ? `&station=${encodeURIComponent(stationId)}` : '';
-      fetch(`/api/weather/history?hours=${hours}${sq}`)
-        .then(r => r.json())
-        .then(d => { if (d.readings) setHistory(d.readings); })
-        .catch(() => {});
-    }, 15000);
-    return () => clearInterval(iv);
+    const es = new EventSource('/api/weather/stream');
+    es.onmessage = (e) => {
+      try {
+        const reading = JSON.parse(e.data);
+        if (!stationId || (reading.station_id || 'default') === stationId) {
+          setHistory(prev => [...prev, reading]);
+        }
+      } catch {}
+    };
+    return () => es.close();
   }, [mode, hours, selectedYear, stationId]);
 
   const points = history
@@ -881,21 +883,11 @@ function WeatherDashboard() {
   const [error, setError] = useState(null);
   const [tick, setTick] = useState(0);
   const [detailKey, setDetailKey] = useState(null);
-  const intervalRef = useRef(null);
-
   const fetchStations = () => {
     fetch('/api/weather/stations')
       .then(r => r.json())
       .then(d => { if (d.stations) setStations(d.stations); })
       .catch(() => {});
-  };
-
-  const fetchLatest = (stationId) => {
-    const q = stationId ? `?station=${encodeURIComponent(stationId)}` : '';
-    fetch(`/api/weather/latest${q}`)
-      .then(r => r.json())
-      .then(d => { if (d.reading) setLatest(d.reading); setError(null); })
-      .catch(() => setError('Could not reach weather station API'));
   };
 
   const fetchHistory = (stationId) => {
@@ -908,13 +900,28 @@ function WeatherDashboard() {
 
   useEffect(() => {
     fetchStations();
-    fetchLatest(activeStation);
     fetchHistory(activeStation);
-    intervalRef.current = setInterval(() => {
-      fetchStations();
-      fetchLatest(activeStation);
-    }, 15000);
-    return () => clearInterval(intervalRef.current);
+
+    // SSE — receive new readings the instant the RPi pushes them
+    const es = new EventSource('/api/weather/stream');
+    es.onmessage = (e) => {
+      try {
+        const reading = JSON.parse(e.data);
+        if (!activeStation || (reading.station_id || 'default') === activeStation) {
+          setLatest(reading);
+          setError(null);
+          setHistory(prev => [...prev, reading]);
+        }
+        setStations(prev => {
+          const sid = reading.station_id || 'default';
+          const exists = prev.find(s => s.id === sid);
+          if (exists) return prev.map(s => s.id === sid ? { ...s, last_seen: reading.ts } : s);
+          return [...prev, { id: sid, last_seen: reading.ts }];
+        });
+      } catch {}
+    };
+    es.onerror = () => setError('Could not reach weather station API');
+    return () => es.close();
   }, [activeStation]);
 
   useEffect(() => {

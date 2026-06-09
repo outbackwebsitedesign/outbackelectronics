@@ -5554,6 +5554,17 @@ function appendWeatherReading(reading) {
   const db = readWeatherDb();
   db.readings.push(reading);
   writeWeatherDb(db);
+  broadcastWeatherReading(reading);
+}
+
+// SSE broadcast — push new readings to all connected browser clients instantly
+const weatherSseClients = new Set();
+
+function broadcastWeatherReading(reading) {
+  const payload = `data: ${JSON.stringify(reading)}\n\n`;
+  for (const res of weatherSseClients) {
+    try { res.write(payload); } catch { weatherSseClients.delete(res); }
+  }
 }
 
 // ── Weather server (8089) ────────────────────────────────────────────────────
@@ -5709,6 +5720,20 @@ const weatherServer = http.createServer(async (req, res) => {
     if (/bot|crawl|spider|slurp|headless/i.test(ua)) return json(res, 204, {});
     appendAnalyticsEvent({ ts: Date.now(), type, page: (body.page || '').slice(0, 256), referrer: (body.referrer || '').slice(0, 256), ua, ip: getIp(req) });
     return json(res, 204, {});
+  }
+
+  // SSE stream — browser subscribes here and receives readings as they arrive
+  if (req.method === 'GET' && url.pathname === '/api/weather/stream') {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+    });
+    res.write(': connected\n\n');
+    weatherSseClients.add(res);
+    req.on('close', () => weatherSseClients.delete(res));
+    return;
   }
 
   return serveStatic(req, res, url.pathname, '/dist/weather.html', null);
