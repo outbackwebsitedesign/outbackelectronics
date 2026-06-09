@@ -1025,6 +1025,13 @@ function WeatherDashboard() {
     fetchStations();
     fetchHistory(activeStation);
 
+    // Fetch the latest reading immediately so the page isn't blank on first load
+    const q = activeStation ? `?station=${encodeURIComponent(activeStation)}` : '';
+    fetch(`/api/weather/latest${q}`)
+      .then(r => r.json())
+      .then(d => { if (d.reading) { setLatest(d.reading); setError(null); } })
+      .catch(() => setError('Could not reach weather station API'));
+
     // SSE — receive new readings the instant the RPi pushes them
     const es = new EventSource('/api/weather/stream');
     es.onmessage = (e) => {
