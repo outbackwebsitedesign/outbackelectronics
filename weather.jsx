@@ -198,6 +198,129 @@ function LineGraph({ points, color = 'var(--rust)', height = 200, fromTs, toTs, 
   );
 }
 
+// ── Derived / calculated measurements ────────────────────────────────────────
+// Each entry requires specific raw keys; if any are absent the card is hidden.
+const DERIVED = [
+  {
+    key: 'dew_point',
+    label: 'Dew Point',
+    unit: '°C',
+    group: 'derived',
+    note: 'Magnus formula',
+    requires: ['temperature', 'humidity'],
+    compute({ temperature: T, humidity: RH }) {
+      const γ = (17.27 * T) / (237.3 + T) + Math.log(RH / 100);
+      return +((237.3 * γ) / (17.27 - γ)).toFixed(1);
+    },
+  },
+  {
+    key: 'frost_point',
+    label: 'Frost Point',
+    unit: '°C',
+    group: 'derived',
+    note: 'Ice saturation',
+    requires: ['temperature', 'humidity'],
+    compute({ temperature: T, humidity: RH }) {
+      // Buck equation over ice
+      const es  = 6.1115 * Math.exp((23.036 - T / 333.7) * (T / (279.82 + T)));
+      const e   = (RH / 100) * es;
+      const lnE = Math.log(e / 6.1115);
+      return +((272.55 * lnE) / (22.452 - lnE)).toFixed(1);
+    },
+  },
+  {
+    key: 'absolute_humidity',
+    label: 'Absolute Humidity',
+    unit: 'g/m³',
+    group: 'derived',
+    note: 'Water vapour mass per m³',
+    requires: ['temperature', 'humidity'],
+    compute({ temperature: T, humidity: RH }) {
+      return +(6.112 * Math.exp((17.67 * T) / (T + 243.5)) * RH * 2.1674 / (273.15 + T)).toFixed(2);
+    },
+  },
+  {
+    key: 'vapour_pressure_deficit',
+    label: 'Vapour Pressure Deficit',
+    unit: 'kPa',
+    group: 'derived',
+    note: 'Plant stress indicator',
+    requires: ['temperature', 'humidity'],
+    compute({ temperature: T, humidity: RH }) {
+      const svp = 0.6108 * Math.exp(17.27 * T / (T + 237.3));
+      return +(svp * (1 - RH / 100)).toFixed(3);
+    },
+  },
+  {
+    key: 'heat_index',
+    label: 'Heat Index',
+    unit: '°C',
+    group: 'derived',
+    note: 'Apparent temperature (hot/humid)',
+    requires: ['temperature', 'humidity'],
+    compute({ temperature: T, humidity: RH }) {
+      // NWS Rothfusz equation — only meaningful above ~27°C and 40% RH
+      if (T < 27 || RH < 40) return null;
+      const HI = -8.78469 + 1.61139411 * T + 2.338549 * RH
+        - 0.14611605 * T * RH - 0.01230809 * T * T
+        - 0.01642482 * RH * RH + 0.00221173 * T * T * RH
+        + 0.00072546 * T * RH * RH - 0.00000358 * T * T * RH * RH;
+      return +HI.toFixed(1);
+    },
+  },
+  {
+    key: 'wet_bulb',
+    label: 'Wet Bulb Temperature',
+    unit: '°C',
+    group: 'derived',
+    note: "Stull's approximation",
+    requires: ['temperature', 'humidity'],
+    compute({ temperature: T, humidity: RH }) {
+      const Tw = T * Math.atan(0.151977 * Math.sqrt(RH + 8.313659))
+        + Math.atan(T + RH) - Math.atan(RH - 1.676331)
+        + 0.00391838 * Math.pow(RH, 1.5) * Math.atan(0.023101 * RH) - 4.686035;
+      return +Tw.toFixed(1);
+    },
+  },
+  {
+    key: 'air_density',
+    label: 'Air Density',
+    unit: 'kg/m³',
+    group: 'derived',
+    note: 'Dry air at measured conditions',
+    requires: ['temperature', 'pressure'],
+    compute({ temperature: T, pressure: P }) {
+      // Ideal gas: ρ = P / (R_specific * T_K)
+      const R = 287.05; // J/(kg·K) for dry air
+      return +(P * 100 / (R * (T + 273.15))).toFixed(4);
+    },
+  },
+  {
+    key: 'magnetic_magnitude',
+    label: 'Magnetic Field Magnitude',
+    unit: 'µT',
+    group: 'derived',
+    note: '|B| from x/y/z components',
+    requires: ['mag_x', 'mag_y', 'mag_z'],
+    compute({ mag_x, mag_y, mag_z }) {
+      return +Math.sqrt(mag_x ** 2 + mag_y ** 2 + mag_z ** 2).toFixed(2);
+    },
+  },
+];
+
+// Returns an object of derived key → value, skipping any that can't be computed
+function computeDerived(data) {
+  const result = {};
+  for (const d of DERIVED) {
+    if (!d.requires.every(k => data[k] !== undefined && data[k] !== null)) continue;
+    try {
+      const val = d.compute(data);
+      if (val !== null && val !== undefined && isFinite(val)) result[d.key] = val;
+    } catch {}
+  }
+  return result;
+}
+
 // ── Detail page for a single reading ──────────────────────────────────────────
 const QUICK_RANGES = [
   { label: '6h',  hours: 6 },
@@ -271,6 +394,11 @@ function ReadingDetail({ def, stationId, onBack }) {
     };
     return () => es.close();
   }, [mode, hours, selectedYear, stationId]);
+
+  const isDerived = DERIVED.some(d => d.key === def.key);
+
+  // Derived values are calculated live — no stored history to graph
+  if (isDerived) return null;
 
   const points = history
     .filter(r => r.data && r.data[def.key] !== undefined)
@@ -1119,6 +1247,7 @@ function WeatherDashboard() {
   }, []);
 
   const data = latest?.data || {};
+  const derivedData = computeDerived(data);
   const rtcTime = latest?.rtc_time || null;
 
   const hasAnyData = Object.keys(data).length > 0;
@@ -1127,12 +1256,14 @@ function WeatherDashboard() {
   );
 
   const detailDef = detailKey
-    ? (READINGS.find(r => r.key === detailKey) || {
-        key: detailKey,
-        label: detailKey.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-        unit: '',
-        group: 'custom',
-      })
+    ? (READINGS.find(r => r.key === detailKey)
+      || DERIVED.find(d => d.key === detailKey)
+      || {
+          key: detailKey,
+          label: detailKey.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+          unit: '',
+          group: 'custom',
+        })
     : null;
 
   if (detailDef) {
@@ -1152,7 +1283,32 @@ function WeatherDashboard() {
           </div>
         </div>
         <div className="container" style={{ flex: 1, paddingTop: 32, paddingBottom: 48 }}>
-          <ReadingDetail def={detailDef} stationId={activeStation} onBack={() => setDetailKey(null)} />
+          {DERIVED.some(d => d.key === detailDef.key) ? (
+            <div>
+              <div className="card" style={{ padding: '28px 32px', display: 'inline-block', minWidth: 200 }}>
+                <div className="eyebrow" style={{ marginBottom: 8 }}>Current Value</div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                  <span style={{ fontSize: 48, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>
+                    {derivedData[detailDef.key] !== undefined
+                      ? (Math.abs(derivedData[detailDef.key]) >= 10
+                          ? derivedData[detailDef.key].toFixed(1)
+                          : derivedData[detailDef.key].toFixed(2))
+                      : '—'}
+                  </span>
+                  <span style={{ fontSize: 20, color: 'var(--ink-3)', fontFamily: "'JetBrains Mono', monospace" }}>
+                    {detailDef.unit}
+                  </span>
+                </div>
+              </div>
+              {detailDef.note && (
+                <p style={{ marginTop: 16, color: 'var(--ink-3)', fontSize: 13 }}>
+                  Calculated from {detailDef.requires?.join(' + ')} · {detailDef.note}
+                </p>
+              )}
+            </div>
+          ) : (
+            <ReadingDetail def={detailDef} stationId={activeStation} onBack={() => setDetailKey(null)} />
+          )}
         </div>
       </>
     );
@@ -1221,6 +1377,19 @@ function WeatherDashboard() {
               </div>
             );
           })}
+
+          {/* Derived / calculated measurements */}
+          {DERIVED.some(d => derivedData[d.key] !== undefined) && (
+            <div style={{ marginBottom: 32 }}>
+              <h2 style={{ fontSize: 18, marginBottom: 16 }}>Calculated</h2>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 }}>
+                {DERIVED.filter(d => derivedData[d.key] !== undefined).map(d => (
+                  <ReadingCard key={d.key} def={d} value={derivedData[d.key]} ts={latest?.ts}
+                    onClick={() => setDetailKey(d.key)} />
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Custom / unknown sensor keys not in the built-in READINGS list */}
           {(() => {
