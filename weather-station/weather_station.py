@@ -48,6 +48,8 @@ logging.basicConfig(
 log = logging.getLogger('weather')
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
+# Script lives in weather-station/ — the repo root is one level up
+REPO_DIR = os.path.dirname(APP_DIR)
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -65,10 +67,10 @@ def read_env_file(path):
     return vals
 
 
-IS_MAIN_SERVER = os.path.exists(os.path.join(APP_DIR, 'server.js'))
+IS_MAIN_SERVER = os.path.exists(os.path.join(REPO_DIR, 'server.js'))
 
 if IS_MAIN_SERVER:
-    env = read_env_file(os.path.join(APP_DIR, '.env'))
+    env = read_env_file(os.path.join(REPO_DIR, '.env'))
     API_URL = 'http://localhost:' + env.get('WEATHER_PORT', os.environ.get('WEATHER_PORT', '8089'))
     API_KEY = env.get('WEATHER_API_KEY', os.environ.get('WEATHER_API_KEY', ''))
     STATION_ID = 'Server Room'
