@@ -2,9 +2,8 @@
 """
 Outback Electronics Weather Station — Raspberry Pi sensor reader.
 
-Reads all 11 sensors and POSTs to the weather API over HTTPS every 30s.
-Each RPi station identifies itself with a STATION_ID and authenticates
-with a WEATHER_API_KEY.
+Reads whatever sensors are available and POSTs to the weather API every 30s.
+Gracefully skips any sensor that isn't connected or whose library is missing.
 
 I2C devices:
   BME680       0x76  — temp, humidity, pressure, VOC gas resistance
@@ -26,17 +25,23 @@ Analog via 2x ADS1115:
 Wiring: all I2C on SDA (GPIO2) / SCL (GPIO3), 3.3V for digital sensors,
 5V for MQ-4 heater. ADS1115 analog inputs wired to sensor AOUT pins.
 
-Install:
+Install (only install libraries for sensors you have):
   sudo apt install -y python3-pip i2c-tools
-  pip3 install adafruit-circuitpython-bme680 adafruit-circuitpython-scd4x \
-    adafruit-circuitpython-ads1x15 adafruit-circuitpython-ds3231 \
-    adafruit-circuitpython-mmc56x3 requests
+  pip3 install requests
+  pip3 install adafruit-circuitpython-bme680       # if BME680 connected
+  pip3 install adafruit-circuitpython-scd4x         # if SCD41 connected
+  pip3 install adafruit-circuitpython-ads1x15       # if ADS1115 connected
+  pip3 install adafruit-circuitpython-ds3231        # if DS3231 connected
+  pip3 install adafruit-circuitpython-mmc56x3       # if MMC5603 connected
 
 Enable I2C:
   sudo raspi-config → Interface Options → I2C → Enable
   sudo reboot
 
-Usage:
+Main server usage (auto-detects, reads .env):
+  python3 weather_station.py
+
+Remote station usage:
   export WEATHER_API_KEY="your-secret-key"
   export WEATHER_URL="https://weather.outbackelectronics.com.au"
   export STATION_ID="station-01"
@@ -50,9 +55,6 @@ import math
 import logging
 import requests
 
-import board
-import busio
-
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
@@ -60,7 +62,9 @@ logging.basicConfig(
 )
 log = logging.getLogger('weather')
 
-IS_MAIN_SERVER = os.path.exists(os.path.join(APP_DIR, 'server.js'))
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# ── Config ────────────────────────────────────────────────────────────────────
 
 def read_env_file(path):
     vals = {}
@@ -75,6 +79,8 @@ def read_env_file(path):
         pass
     return vals
 
+
+IS_MAIN_SERVER = os.path.exists(os.path.join(APP_DIR, 'server.js'))
 
 if IS_MAIN_SERVER:
     env = read_env_file(os.path.join(APP_DIR, '.env'))
@@ -97,64 +103,80 @@ else:
 
 INTERVAL = int(os.environ.get('WEATHER_INTERVAL', '30'))
 
-i2c = busio.I2C(board.SCL, board.SDA)
+# ── I2C bus init ──────────────────────────────────────────────────────────────
+
+i2c = None
+try:
+    import board
+    import busio
+    i2c = busio.I2C(board.SCL, board.SDA)
+    log.info('I2C bus initialised')
+except Exception as e:
+    log.warning('I2C bus not available: %s — I2C sensors will be skipped', e)
 
 # ── Sensor init ───────────────────────────────────────────────────────────────
 
 bme680 = None
-try:
-    import adafruit_bme680
-    bme680 = adafruit_bme680.Adafruit_BME680_I2C(i2c, address=0x76)
-    bme680.sea_level_pressure = 1013.25
-    log.info('BME680 ready at 0x76')
-except Exception as e:
-    log.warning('BME680 init failed: %s', e)
+if i2c:
+    try:
+        import adafruit_bme680
+        bme680 = adafruit_bme680.Adafruit_BME680_I2C(i2c, address=0x76)
+        bme680.sea_level_pressure = 1013.25
+        log.info('BME680 ready at 0x76')
+    except Exception as e:
+        log.warning('BME680 init failed: %s', e)
 
 scd4x = None
-try:
-    import adafruit_scd4x
-    scd4x = adafruit_scd4x.SCD4X(i2c, address=0x62)
-    scd4x.start_periodic_measurement()
-    log.info('SCD41 ready at 0x62 — first reading in ~5s')
-except Exception as e:
-    log.warning('SCD41 init failed: %s', e)
+if i2c:
+    try:
+        import adafruit_scd4x
+        scd4x = adafruit_scd4x.SCD4X(i2c, address=0x62)
+        scd4x.start_periodic_measurement()
+        log.info('SCD41 ready at 0x62 — first reading in ~5s')
+    except Exception as e:
+        log.warning('SCD41 init failed: %s', e)
 
 rtc = None
-try:
-    import adafruit_ds3231
-    rtc = adafruit_ds3231.DS3231(i2c)
-    log.info('DS3231 ready at 0x68')
-except Exception as e:
-    log.warning('DS3231 init failed: %s', e)
+if i2c:
+    try:
+        import adafruit_ds3231
+        rtc = adafruit_ds3231.DS3231(i2c)
+        log.info('DS3231 ready at 0x68')
+    except Exception as e:
+        log.warning('DS3231 init failed: %s', e)
 
 mag = None
-try:
-    import adafruit_mmc56x3
-    mag = adafruit_mmc56x3.MMC5603(i2c)
-    log.info('MMC5603 ready at 0x30')
-except Exception as e:
-    log.warning('MMC5603 init failed: %s', e)
+if i2c:
+    try:
+        import adafruit_mmc56x3
+        mag = adafruit_mmc56x3.MMC5603(i2c)
+        log.info('MMC5603 ready at 0x30')
+    except Exception as e:
+        log.warning('MMC5603 init failed: %s', e)
 
 SEN0322_ADDR = 0x73
 sen0322_ok = False
-try:
-    while not i2c.try_lock():
-        pass
-    i2c.writeto(SEN0322_ADDR, bytes([0x03]))
-    buf = bytearray(3)
-    i2c.readfrom_into(SEN0322_ADDR, buf)
-    i2c.unlock()
-    sen0322_ok = True
-    log.info('SEN0322 O2 ready at 0x73')
-except Exception as e:
+if i2c:
     try:
+        while not i2c.try_lock():
+            pass
+        i2c.writeto(SEN0322_ADDR, bytes([0x03]))
+        buf = bytearray(3)
+        i2c.readfrom_into(SEN0322_ADDR, buf)
         i2c.unlock()
-    except:
-        pass
-    log.warning('SEN0322 init failed: %s', e)
+        sen0322_ok = True
+        log.info('SEN0322 O2 ready at 0x73')
+    except Exception as e:
+        try:
+            i2c.unlock()
+        except:
+            pass
+        log.warning('SEN0322 init failed: %s', e)
 
 
 def read_sen0322():
+    if not i2c:
+        return None
     try:
         while not i2c.try_lock():
             pass
@@ -172,30 +194,39 @@ def read_sen0322():
         return None
 
 
-import adafruit_ads1x15.ads1115 as ADS
-from adafruit_ads1x15.analog_in import AnalogIn
+# ADS1115 x2 for analog sensors
+ADS = None
+AnalogIn = None
+try:
+    import adafruit_ads1x15.ads1115 as _ADS
+    from adafruit_ads1x15.analog_in import AnalogIn as _AnalogIn
+    ADS = _ADS
+    AnalogIn = _AnalogIn
+except ImportError:
+    log.warning('adafruit_ads1x15 not installed — analog sensors will be skipped')
 
 ads1 = None
 ads2 = None
 analog_channels = {}
 
-try:
-    ads1 = ADS.ADS1115(i2c, address=0x48, gain=1)
-    analog_channels['sen0567_nh3'] = AnalogIn(ads1, ADS.P0)
-    analog_channels['sen0572_h2']  = AnalogIn(ads1, ADS.P1)
-    analog_channels['sen0565_ch4'] = AnalogIn(ads1, ADS.P2)
-    analog_channels['sen0564_co']  = AnalogIn(ads1, ADS.P3)
-    log.info('ADS1115 #1 ready at 0x48 (NH3, H2, CH4, CO)')
-except Exception as e:
-    log.warning('ADS1115 #1 init failed: %s', e)
+if ADS and i2c:
+    try:
+        ads1 = ADS.ADS1115(i2c, address=0x48, gain=1)
+        analog_channels['sen0567_nh3'] = AnalogIn(ads1, ADS.P0)
+        analog_channels['sen0572_h2']  = AnalogIn(ads1, ADS.P1)
+        analog_channels['sen0565_ch4'] = AnalogIn(ads1, ADS.P2)
+        analog_channels['sen0564_co']  = AnalogIn(ads1, ADS.P3)
+        log.info('ADS1115 #1 ready at 0x48 (NH3, H2, CH4, CO)')
+    except Exception as e:
+        log.warning('ADS1115 #1 init failed: %s', e)
 
-try:
-    ads2 = ADS.ADS1115(i2c, address=0x49, gain=1)
-    analog_channels['sen0568_h2s']    = AnalogIn(ads2, ADS.P0)
-    analog_channels['mq4_combustible'] = AnalogIn(ads2, ADS.P1)
-    log.info('ADS1115 #2 ready at 0x49 (H2S, MQ-4)')
-except Exception as e:
-    log.warning('ADS1115 #2 init failed: %s', e)
+    try:
+        ads2 = ADS.ADS1115(i2c, address=0x49, gain=1)
+        analog_channels['sen0568_h2s']    = AnalogIn(ads2, ADS.P0)
+        analog_channels['mq4_combustible'] = AnalogIn(ads2, ADS.P1)
+        log.info('ADS1115 #2 ready at 0x49 (H2S, MQ-4)')
+    except Exception as e:
+        log.warning('ADS1115 #2 init failed: %s', e)
 
 
 # ── Analog → ppm conversion ──────────────────────────────────────────────────
@@ -312,16 +343,17 @@ def post_reading(data, rtc_time):
 
 def main():
     log.info('Station "%s" starting — posting to %s every %ds', STATION_ID, API_URL, INTERVAL)
-    log.info('Waiting 5s for SCD41 first measurement...')
-    time.sleep(5)
+
+    if scd4x:
+        log.info('Waiting 5s for SCD41 first measurement...')
+        time.sleep(5)
 
     while True:
         try:
             data, rtc_time = read_all()
-            if data:
-                post_reading(data, rtc_time)
-            else:
-                log.warning('No sensor data collected')
+            post_reading(data, rtc_time)
+            if not data:
+                log.warning('No sensor data collected — posted empty reading')
         except Exception as e:
             log.error('Unexpected error: %s', e)
         time.sleep(INTERVAL)
