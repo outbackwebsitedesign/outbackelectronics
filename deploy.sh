@@ -114,9 +114,11 @@ fi
 
 # ── Weather station sensor service (server RPi has sensors attached) ──────────
 PYTHON_BIN="$(which python3)"
-if [ ! -f "/etc/systemd/system/${WEATHER_SERVICE}.service" ]; then
-    echo "==> Creating weather station sensor service..."
-    sudo tee "/etc/systemd/system/${WEATHER_SERVICE}.service" > /dev/null <<EOF
+WEATHER_EXEC="${PYTHON_BIN} ${APP_DIR}/weather-station/weather_station.py"
+WEATHER_SVC_FILE="/etc/systemd/system/${WEATHER_SERVICE}.service"
+if [ ! -f "${WEATHER_SVC_FILE}" ] || ! grep -qF "${APP_DIR}/weather-station/weather_station.py" "${WEATHER_SVC_FILE}"; then
+    echo "==> Installing/updating weather station sensor service..."
+    sudo tee "${WEATHER_SVC_FILE}" > /dev/null <<EOF
 [Unit]
 Description=Outback Electronics Weather Station Sensor Reader
 After=network-online.target ${SERVICE_NAME}.service
