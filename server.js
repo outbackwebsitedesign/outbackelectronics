@@ -30,7 +30,7 @@ const ADMIN_PORT = process.env.ADMIN_PORT || 8082;
 const PORTAL_PORT = process.env.PORTAL_PORT || 8083;
 const GAMES_PORT  = process.env.GAMES_PORT  || 8084;
 const TOOLS_PORT  = process.env.TOOLS_PORT  || 8085;
-const WEATHER_PORT = process.env.WEATHER_PORT || 8088;
+const WEATHER_PORT = process.env.WEATHER_PORT || 8089;
 
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
 const ADMIN_PASSWORD_RAW = process.env.ADMIN_PASSWORD || '';
@@ -134,7 +134,7 @@ function _defaultSubUrl(base, port, sub) {
 const PORTAL_URL = process.env.PORTAL_URL || _defaultSubUrl(SITE_URL, 8083, 'portal');
 const GAMES_URL  = process.env.GAMES_URL  || _defaultSubUrl(SITE_URL, 8084, 'games');
 const TOOLS_URL  = process.env.TOOLS_URL  || _defaultSubUrl(SITE_URL, 8085, 'tools');
-const WEATHER_URL = process.env.WEATHER_URL || _defaultSubUrl(SITE_URL, 8088, 'weather');
+const WEATHER_URL = process.env.WEATHER_URL || _defaultSubUrl(SITE_URL, 8089, 'weather');
 
 function loadSessionsFromDisk(filePath) {
   try {
@@ -2007,7 +2007,7 @@ function getWeatherUrl() {
   if (WEATHER_URL) return WEATHER_URL;
   const base = getSiteUrl();
   if (/^https?:\/\/(localhost|127\.|0\.0\.0\.0)(:\d+)?/.test(base))
-    return base.replace(/(:\d+)?(\/|$)/, ':8088$2');
+    return base.replace(/(:\d+)?(\/|$)/, ':8089$2');
   return base.replace(/^(https?:\/\/)/, '$1weather.');
 }
 function getAdminUsername() {
@@ -5558,7 +5558,7 @@ function appendWeatherReading(reading) {
   writeWeatherDb(db);
 }
 
-// ── Weather server (8088) ────────────────────────────────────────────────────
+// ── Weather server (8089) ────────────────────────────────────────────────────
 
 const weatherServer = http.createServer(async (req, res) => {
   try {
