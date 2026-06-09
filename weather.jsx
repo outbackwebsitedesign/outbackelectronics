@@ -16,16 +16,19 @@ const READINGS = [
   { key: 'co',          label: 'Carbon Monoxide',  unit: 'ppm',  group: 'gas' },
   { key: 'h2s',         label: 'Hydrogen Sulfide', unit: 'ppm',  group: 'gas' },
   { key: 'combustible', label: 'Combustible Gas',  unit: 'ppm',  group: 'gas', note: 'CH₄, C₃H₈, C₄H₁₀' },
-  { key: 'compass',     label: 'Compass Heading',  unit: '°',    group: 'other' },
-  { key: 'mag_x',       label: 'Magnetic Field X', unit: 'µT',   group: 'other' },
-  { key: 'mag_y',       label: 'Magnetic Field Y', unit: 'µT',   group: 'other' },
-  { key: 'mag_z',       label: 'Magnetic Field Z', unit: 'µT',   group: 'other' },
+  { key: 'compass',         label: 'Compass Heading',  unit: '°',    group: 'other' },
+  { key: 'mag_x',           label: 'Magnetic Field X', unit: 'µT',   group: 'other' },
+  { key: 'mag_y',           label: 'Magnetic Field Y', unit: 'µT',   group: 'other' },
+  { key: 'mag_z',           label: 'Magnetic Field Z', unit: 'µT',   group: 'other' },
+  { key: 'battery_voltage', label: 'Battery Voltage',  unit: 'V',    group: 'power' },
+  { key: 'battery_percent', label: 'Battery Charge',   unit: '%',    group: 'power' },
 ];
 
 const GROUPS = [
   { key: 'environment', label: 'Environment' },
   { key: 'gas',         label: 'Gas Detection' },
   { key: 'other',       label: 'Other' },
+  { key: 'power',       label: 'Power' },
 ];
 
 function formatAge(ms) {
@@ -82,9 +85,11 @@ const Y_DOMAINS = {
   h2s:          [  0,  50],
   combustible:  [  0,1000],
   compass:      [  0, 360],
-  mag_x:        [-200, 200],
-  mag_y:        [-200, 200],
-  mag_z:        [-200, 200],
+  mag_x:            [-200, 200],
+  mag_y:            [-200, 200],
+  mag_z:            [-200, 200],
+  battery_voltage:  [3.0, 4.25],
+  battery_percent:  [0, 100],
 };
 
 function LineGraph({ points, color = 'var(--rust)', height = 200, fromTs, toTs, yDomain }) {

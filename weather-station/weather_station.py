@@ -311,6 +311,46 @@ def read_sen0322():
         return None
 
 
+# ── MAX17043 LiPo fuel gauge (smbus, always 0x36) ────────────────────────────
+
+max17043 = None
+
+if 0x36 in detected_addresses:
+    try:
+        import smbus as _smbus
+        _smbus_bus = _smbus.SMBus(1)
+        # Quick-start: forces the chip to re-estimate SoC from scratch
+        _smbus_bus.write_i2c_block_data(0x36, 0x06, [0x40, 0x00])
+        import time as _t; _t.sleep(1)
+        # Verify it responds sensibly — version register 0x08 high nibble = 3
+        _ver = (_smbus_bus.read_i2c_block_data(0x36, 0x08, 2)[0] >> 4)
+        if _ver == 3:
+            max17043 = _smbus_bus
+            log.info('MAX17043 fuel gauge ready at 0x36')
+        else:
+            log.warning('MAX17043 version nibble unexpected (%d) — disabling', _ver)
+    except ImportError:
+        log.warning('smbus not installed — MAX17043 will be skipped (pip3 install smbus2)')
+    except Exception as e:
+        log.warning('MAX17043 init failed: %s', e)
+else:
+    log.info('MAX17043 not detected on bus (0x36 absent) — skipping')
+
+
+def read_max17043():
+    if not max17043:
+        return None, None
+    try:
+        raw_v   = max17043.read_i2c_block_data(0x36, 0x02, 2)
+        raw_soc = max17043.read_i2c_block_data(0x36, 0x04, 2)
+        voltage = ((raw_v[0] << 8 | raw_v[1]) >> 4) * 1.25 / 1000.0
+        soc     = raw_soc[0] + raw_soc[1] / 256.0
+        return round(voltage, 3), round(soc, 1)
+    except Exception as e:
+        log.warning('MAX17043 read error: %s', e)
+        return None, None
+
+
 # ADS1115 — can be at 0x48, 0x49, 0x4A, 0x4B depending on ADDR pin
 ADS = None
 AnalogIn = None
@@ -402,6 +442,7 @@ def build_sensors_list():
     if rtc:             names.append('DS3231')
     if mag:             names.append('MMC5603')
     if sen0322_ok:      names.append('SEN0322')
+    if max17043:        names.append('MAX17043')
     for addr, _ in ads_devices:
         names.append(f'ADS1115@0x{addr:02x}')
     return names
@@ -433,6 +474,13 @@ def read_all():
         o2 = read_sen0322()
         if o2 is not None:
             raw['sen0322_o2'] = round(o2, 2)
+
+    if max17043:
+        batt_v, batt_soc = read_max17043()
+        if batt_v is not None:
+            raw['battery_voltage'] = batt_v
+        if batt_soc is not None:
+            raw['battery_percent'] = batt_soc
 
     if mag:
         try:
@@ -501,6 +549,11 @@ def read_all():
         data['h2s'] = raw['sen0568_h2s']
     if 'mq4_combustible' in raw:
         data['combustible'] = raw['mq4_combustible']
+
+    if 'battery_voltage' in raw:
+        data['battery_voltage'] = raw['battery_voltage']
+    if 'battery_percent' in raw:
+        data['battery_percent'] = raw['battery_percent']
 
     if 'compass' in raw:
         data['compass'] = raw['compass']

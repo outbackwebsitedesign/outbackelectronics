@@ -91,6 +91,8 @@ These keys get special treatment — the dashboard knows their unit and groups t
 | `mag_x` | Magnetic Field X | µT | Other |
 | `mag_y` | Magnetic Field Y | µT | Other |
 | `mag_z` | Magnetic Field Z | µT | Other |
+| `battery_voltage` | Battery Voltage | V | Power |
+| `battery_percent` | Battery Charge | % | Power |
 
 Any key **not** in the table above appears in a **Custom Sensors** group with
 the key name humanised as the label. You can send any key you like — there is
