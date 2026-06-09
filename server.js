@@ -5570,6 +5570,29 @@ const weatherServer = http.createServer(async (req, res) => {
     return json(res, 200, { token });
   }
 
+  if (req.method === 'GET' && url.pathname === '/api/shop-info') {
+    const { shop, flags } = readSettings();
+    return json(res, 200, { shop, flags: flags || {}, portalUrl: getPortalUrl(), gamesUrl: getGamesUrl(), toolsUrl: getToolsUrl() });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/catalog/products') {
+    return json(res, 200, { items: readProducts().filter(p => p.status === 'published') });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/catalog/services') {
+    return json(res, 200, { items: readServices().filter(s => s.status === 'published') });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/announcement') {
+    const { announcement } = readSettings();
+    if (!announcement.enabled) return json(res, 200, { active: false });
+    if (announcement.expiresAt) {
+      const expires = new Date(announcement.expiresAt);
+      if (!isNaN(expires) && expires < new Date()) return json(res, 200, { active: false });
+    }
+    return json(res, 200, { active: true, text: announcement.text });
+  }
+
   // RPi pushes readings — authenticated via API key, not CSRF
   if (req.method === 'POST' && url.pathname === '/api/weather/readings') {
     const apiKey = req.headers['x-api-key'] || url.searchParams.get('key') || '';

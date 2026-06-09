@@ -364,7 +364,7 @@ function getSiteRoot() {
   try {
     const u = new URL(window.location.href);
     if (u.hostname.startsWith('weather.')) u.hostname = u.hostname.slice('weather.'.length);
-    else if (u.port === '8086') u.port = '8080';
+    else if (u.port === '8089') u.port = '8080';
     return u.origin + '/';
   } catch { return '/'; }
 }
