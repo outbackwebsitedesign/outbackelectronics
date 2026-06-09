@@ -502,14 +502,14 @@ def read_all():
     if 'mq4_combustible' in raw:
         data['combustible'] = raw['mq4_combustible']
 
-    if 'mmc5603_heading' in raw:
-        data['compass'] = raw['mmc5603_heading']
-    if 'mmc5603_x' in raw:
-        data['mag_x'] = raw['mmc5603_x']
-    if 'mmc5603_y' in raw:
-        data['mag_y'] = raw['mmc5603_y']
-    if 'mmc5603_z' in raw:
-        data['mag_z'] = raw['mmc5603_z']
+    if 'compass' in raw:
+        data['compass'] = raw['compass']
+    if 'mag_x' in raw:
+        data['mag_x'] = raw['mag_x']
+    if 'mag_y' in raw:
+        data['mag_y'] = raw['mag_y']
+    if 'mag_z' in raw:
+        data['mag_z'] = raw['mag_z']
 
     rtc_time = None
     if rtc:
