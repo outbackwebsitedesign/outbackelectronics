@@ -218,14 +218,16 @@ const DERIVED = [
     label: 'Frost Point',
     unit: '°C',
     group: 'derived',
-    note: 'Ice saturation',
+    note: 'Ice saturation (Magnus)',
     requires: ['temperature', 'humidity'],
     compute({ temperature: T, humidity: RH }) {
-      // Buck equation over ice
-      const es  = 6.1115 * Math.exp((23.036 - T / 333.7) * (T / (279.82 + T)));
-      const e   = (RH / 100) * es;
-      const lnE = Math.log(e / 6.1115);
-      return +((272.55 * lnE) / (22.452 - lnE)).toFixed(1);
+      // Step 1: actual vapour pressure from water saturation curve
+      const es_water = 6.1078 * Math.exp(17.27 * T / (T + 237.3));
+      const e = (RH / 100) * es_water;
+      // Step 2: invert Magnus over ice to get frost point
+      // es_ice(Tf) = 6.1078 * exp(21.875 * Tf / (Tf + 265.5))
+      const lnE = Math.log(e / 6.1078);
+      return +((265.5 * lnE) / (21.875 - lnE)).toFixed(1);
     },
   },
   {
