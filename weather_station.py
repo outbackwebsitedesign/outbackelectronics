@@ -199,7 +199,16 @@ if not mag:
     log.warning('MMC5603 not found')
 
 # SEN0322 O2 sensor — uses DFRobot's own library
+# Install: git clone https://github.com/DFRobot/DFRobot_OxygenSensor.git ~/DFRobot_OxygenSensor
 # Known I2C address constants: ADDRESS_0=0x70, ADDRESS_1=0x71, ADDRESS_2=0x72, ADDRESS_3=0x73
+import glob as _glob
+for _dfr_path in _glob.glob(os.path.expanduser('~/**/DFRobot_OxygenSensor/python/raspberrypi'), recursive=False):
+    if _dfr_path not in sys.path:
+        sys.path.insert(0, _dfr_path)
+for _home in ['/home/daniel', '/home/pi', '/root', os.path.expanduser('~')]:
+    _p = os.path.join(_home, 'DFRobot_OxygenSensor/python/raspberrypi')
+    if os.path.isdir(_p) and _p not in sys.path:
+        sys.path.insert(0, _p)
 SEN0322_ADDRESSES = [0x73, 0x72, 0x71, 0x70]
 o2_sensor = None
 sen0322_ok = False
