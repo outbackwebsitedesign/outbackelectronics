@@ -182,18 +182,31 @@ MMC5603_ADDRESSES = [0x30]
 mag = None
 if i2c:
     import time as _time
-    _time.sleep(0.2)
+    _time.sleep(0.5)
     for addr in MMC5603_ADDRESSES:
         if addr not in detected_addresses:
             continue
         try:
             import adafruit_mmc56x3
             mag = adafruit_mmc56x3.MMC5603(i2c)
-            _time.sleep(0.1)
+            # Issue magnetic set/reset to clear saturation after bus scan
+            mag.magnetic_set()
+            _time.sleep(0.05)
+            mag.magnetic_reset()
+            _time.sleep(0.05)
+            # Discard first reading (often stale/saturated)
+            _ = mag.magnetic
+            _time.sleep(0.2)
             x, y, z = mag.magnetic
-            if x == y == z:
-                log.warning('MMC5603 at 0x%02x returned identical values (%.1f) — may need recalibration', addr, x)
-            log.info('MMC5603 ready at 0x%02x (test: x=%.1f y=%.1f z=%.1f µT)', addr, x, y, z)
+            if abs(x) > 3000 or abs(y) > 3000 or abs(z) > 3000:
+                log.warning('MMC5603 at 0x%02x returned saturated values (x=%.1f y=%.1f z=%.1f) — retrying', addr, x, y, z)
+                _time.sleep(0.5)
+                x, y, z = mag.magnetic
+            if abs(x) > 3000 or abs(y) > 3000 or abs(z) > 3000:
+                log.warning('MMC5603 at 0x%02x still saturated after retry — readings may be unreliable', addr)
+                mag = None
+            else:
+                log.info('MMC5603 ready at 0x%02x (test: x=%.1f y=%.1f z=%.1f µT)', addr, x, y, z)
             break
         except Exception as e:
             mag = None
@@ -386,13 +399,16 @@ def read_all():
     if mag:
         try:
             x, y, z = mag.magnetic
-            raw['mmc5603_x'] = round(x, 2)
-            raw['mmc5603_y'] = round(y, 2)
-            raw['mmc5603_z'] = round(z, 2)
-            heading = math.degrees(math.atan2(y, x))
-            if heading < 0:
-                heading += 360
-            raw['mmc5603_heading'] = round(heading, 1)
+            if abs(x) > 3000 or abs(y) > 3000 or abs(z) > 3000:
+                log.warning('MMC5603 saturated (%.1f, %.1f, %.1f) — skipping', x, y, z)
+            else:
+                raw['mmc5603_x'] = round(x, 2)
+                raw['mmc5603_y'] = round(y, 2)
+                raw['mmc5603_z'] = round(z, 2)
+                heading = math.degrees(math.atan2(y, x))
+                if heading < 0:
+                    heading += 360
+                raw['mmc5603_heading'] = round(heading, 1)
         except Exception as e:
             log.warning('MMC5603 read error: %s', e)
 
