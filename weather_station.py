@@ -233,11 +233,11 @@ _o2_on_bus = any(a in detected_addresses for a in SEN0322_ADDRESSES)
 if _o2_on_bus:
     try:
         from DFRobot_Oxygen import DFRobot_Oxygen_IIC
-        for addr_idx, addr in enumerate(SEN0322_ADDRESSES):
+        for addr in SEN0322_ADDRESSES:
             if addr not in detected_addresses:
                 continue
             try:
-                o2_sensor = DFRobot_Oxygen_IIC(1, addr_idx)
+                o2_sensor = DFRobot_Oxygen_IIC(1, addr)
                 val = o2_sensor.get_oxygen_data(10)
                 if val > 0:
                     sen0322_ok = True
