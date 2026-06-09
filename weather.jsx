@@ -92,6 +92,7 @@ export default function WeatherApp() {
   const [stations, setStations] = useState([]);
   const [activeStation, setActiveStation] = useState(null);
   const [error, setError] = useState(null);
+  const [tick, setTick] = useState(0);
   const intervalRef = useRef(null);
 
   const fetchStations = () => {
@@ -127,6 +128,11 @@ export default function WeatherApp() {
     }, 15000);
     return () => clearInterval(intervalRef.current);
   }, [activeStation]);
+
+  useEffect(() => {
+    const t = setInterval(() => setTick(n => n + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
 
   const data = latest?.data || {};
   const rtcTime = latest?.rtc_time || null;
