@@ -217,6 +217,17 @@ function ReadingDetail({ def, stationId, onBack }) {
   useEffect(() => {
     if (mode === 'range') loadRange(hours, stationId);
     else if (mode === 'year' && selectedYear) loadYear(selectedYear, stationId);
+
+    // Poll every 15s when viewing a live range so new readings appear automatically
+    if (mode !== 'range') return;
+    const iv = setInterval(() => {
+      const sq = stationId ? `&station=${encodeURIComponent(stationId)}` : '';
+      fetch(`/api/weather/history?hours=${hours}${sq}`)
+        .then(r => r.json())
+        .then(d => { if (d.readings) setHistory(d.readings); })
+        .catch(() => {});
+    }, 15000);
+    return () => clearInterval(iv);
   }, [mode, hours, selectedYear, stationId]);
 
   const points = history
