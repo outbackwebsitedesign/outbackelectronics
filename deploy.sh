@@ -17,6 +17,7 @@ set -e
 
 SERVICE_NAME="outbackelectronics"
 WEATHER_SERVICE="weather-station"
+WATCHDOG_SERVICE="outback-watchdog"
 SERVICE_USER="outbackelectronics"
 APP_DIR="$(cd "$(dirname "$0")" && pwd)"
 NODE_BIN="$(which node)"
@@ -143,9 +144,40 @@ EOF
     echo "==> Weather station service created and enabled on boot."
 fi
 
+# ── Watchdog service ──────────────────────────────────────────────────────────
+PYTHON_BIN="$(which python3)"
+WATCHDOG_SVC_FILE="/etc/systemd/system/${WATCHDOG_SERVICE}.service"
+if [ ! -f "${WATCHDOG_SVC_FILE}" ] || ! grep -qF "${APP_DIR}/watchdog.py" "${WATCHDOG_SVC_FILE}"; then
+    echo "==> Installing/updating watchdog service..."
+    sudo tee "${WATCHDOG_SVC_FILE}" > /dev/null <<EOF
+[Unit]
+Description=Outback Electronics Service Watchdog
+After=network-online.target ${SERVICE_NAME}.service ${WEATHER_SERVICE}.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=${SERVICE_USER}
+WorkingDirectory=${APP_DIR}
+ExecStart=${PYTHON_BIN} ${APP_DIR}/watchdog.py
+Restart=always
+RestartSec=15
+StandardOutput=journal
+StandardError=journal
+EnvironmentFile=-${APP_DIR}/.env
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    sudo systemctl daemon-reload
+    sudo systemctl enable "$WATCHDOG_SERVICE"
+    echo "==> Watchdog service created and enabled on boot."
+fi
+
 echo "==> Restarting services..."
 sudo systemctl restart "$SERVICE_NAME"
 sudo systemctl restart "$WEATHER_SERVICE"
+sudo systemctl restart "$WATCHDOG_SERVICE"
 
 # ── Backup script ────────────────────────────────────────────
 BACKUP_SCRIPT="/home/$(whoami)/backup-db.sh"
@@ -210,3 +242,5 @@ echo "==> Done. Service status:"
 sudo systemctl status "$SERVICE_NAME" --no-pager -l
 echo ""
 sudo systemctl status "$WEATHER_SERVICE" --no-pager -l
+echo ""
+sudo systemctl status "$WATCHDOG_SERVICE" --no-pager -l
