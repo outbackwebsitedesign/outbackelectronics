@@ -1067,7 +1067,14 @@ function WeatherDashboard() {
     !hasAnyData || READINGS.some(r => r.group === g.key && data[r.key] !== undefined)
   );
 
-  const detailDef = detailKey ? READINGS.find(r => r.key === detailKey) : null;
+  const detailDef = detailKey
+    ? (READINGS.find(r => r.key === detailKey) || {
+        key: detailKey,
+        label: detailKey.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+        unit: '',
+        group: 'custom',
+      })
+    : null;
 
   if (detailDef) {
     return (
@@ -1146,11 +1153,7 @@ function WeatherDashboard() {
             return (
               <div key={g.key} style={{ marginBottom: 32 }}>
                 <h2 style={{ fontSize: 18, marginBottom: 16 }}>{g.label}</h2>
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-                  gap: 16,
-                }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 }}>
                   {visible.map(def => (
                     <ReadingCard key={def.key} def={def} value={data[def.key] ?? null} ts={latest?.ts}
                       onClick={() => setDetailKey(def.key)} />
@@ -1159,6 +1162,28 @@ function WeatherDashboard() {
               </div>
             );
           })}
+
+          {/* Custom / unknown sensor keys not in the built-in READINGS list */}
+          {(() => {
+            const knownKeys = new Set(READINGS.map(r => r.key));
+            const extraKeys = Object.keys(data).filter(k => !knownKeys.has(k));
+            if (extraKeys.length === 0) return null;
+            return (
+              <div style={{ marginBottom: 32 }}>
+                <h2 style={{ fontSize: 18, marginBottom: 16 }}>Custom Sensors</h2>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 }}>
+                  {extraKeys.map(k => {
+                    const label = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                    const def = { key: k, label, unit: '', group: 'custom' };
+                    return (
+                      <ReadingCard key={k} def={def} value={data[k] ?? null} ts={latest?.ts}
+                        onClick={() => setDetailKey(k)} />
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
     </>

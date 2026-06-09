@@ -5651,17 +5651,17 @@ const weatherServer = http.createServer(async (req, res) => {
       ts: Date.now(),
       station_id: stationId,
       rtc_time: typeof body.rtc_time === 'string' ? body.rtc_time.slice(0, 32) : null,
+      sensors: Array.isArray(body.sensors) ? body.sensors.slice(0, 32).map(s => String(s).slice(0, 64)) : [],
       data: {},
     };
-    const ALLOWED_KEYS = [
-      'temperature','humidity','pressure','voc',
-      'co2','o2',
-      'nh3','h2','ch4','co','h2s','combustible',
-      'compass','mag_x','mag_y','mag_z',
-    ];
-    for (const k of ALLOWED_KEYS) {
-      if (body.data && typeof body.data[k] === 'number') {
-        reading.data[k] = body.data[k];
+    // Accept any key that is safe (alphanumeric + _ + ., max 64 chars), up to 64 keys
+    if (body.data && typeof body.data === 'object') {
+      const safeKey = /^[a-zA-Z0-9_.]{1,64}$/;
+      for (const [k, v] of Object.entries(body.data)) {
+        if (Object.keys(reading.data).length >= 64) break;
+        if (safeKey.test(k) && typeof v === 'number' && isFinite(v)) {
+          reading.data[k] = v;
+        }
       }
     }
     appendWeatherReading(reading);
