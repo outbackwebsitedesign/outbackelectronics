@@ -27,12 +27,12 @@ Wiring: all I2C on SDA (GPIO2) / SCL (GPIO3), 3.3V for digital sensors,
 
 Install (only install libraries for sensors you have):
   sudo apt install -y python3-pip i2c-tools
-  pip3 install requests
-  pip3 install adafruit-circuitpython-bme680       # if BME680 connected
-  pip3 install adafruit-circuitpython-scd4x         # if SCD41 connected
-  pip3 install adafruit-circuitpython-ads1x15       # if ADS1115 connected
-  pip3 install adafruit-circuitpython-ds3231        # if DS3231 connected
-  pip3 install adafruit-circuitpython-mmc56x3       # if MMC5603 connected
+  pip3 install --break-system-packages requests adafruit-blinka
+  pip3 install --break-system-packages adafruit-circuitpython-bme680       # if BME680 connected
+  pip3 install --break-system-packages adafruit-circuitpython-scd4x         # if SCD41 connected
+  pip3 install --break-system-packages adafruit-circuitpython-ads1x15       # if ADS1115 connected
+  pip3 install --break-system-packages adafruit-circuitpython-ds3231        # if DS3231 connected
+  pip3 install --break-system-packages adafruit-circuitpython-mmc56x3       # if MMC5603 connected
 
 Enable I2C:
   sudo raspi-config → Interface Options → I2C → Enable
