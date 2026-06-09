@@ -907,7 +907,7 @@ function AddSensorModal({ onClose }) {
   };
 
   const setupCmd = result
-    ? `WEATHER_API_KEY="${result.apiKey}" WEATHER_URL="${result.weatherUrl}" STATION_ID="${result.name}" python3 weather_station.py`
+    ? `WEATHER_API_KEY="${result.apiKey}" WEATHER_URL="${result.weatherUrl}" python3 weather-station/weather_station.py`
     : '';
 
   return (
@@ -972,7 +972,7 @@ function AddSensorModal({ onClose }) {
             <div>
               <div className="eyebrow" style={{ marginBottom: 6 }}>Setup — Raspberry Pi / Linux</div>
               <p style={{ fontSize: 13, color: 'var(--ink-2)', marginBottom: 8, lineHeight: 1.5 }}>
-                Download <code style={{ fontFamily: 'monospace', fontSize: 12 }}>weather_station.py</code> from the{' '}
+                Download <code style={{ fontFamily: 'monospace', fontSize: 12 }}>weather-station/weather_station.py</code> from the{' '}
                 <a href="https://github.com/outbackwebsitedesign/outbackelectronics" style={{ color: 'var(--rust)' }} target="_blank" rel="noopener noreferrer">GitHub repo</a>,
                 then run:
               </p>

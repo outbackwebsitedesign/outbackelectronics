@@ -6,8 +6,8 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=pi
-WorkingDirectory=/home/pi/outbackelectronics
-ExecStart=/usr/bin/python3 /home/pi/outbackelectronics/weather_station.py
+WorkingDirectory=/home/pi/outbackelectronics/weather-station
+ExecStart=/usr/bin/python3 /home/pi/outbackelectronics/weather-station/weather_station.py
 Restart=always
 RestartSec=10
 StandardOutput=journal
