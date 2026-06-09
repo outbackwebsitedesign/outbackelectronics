@@ -43,6 +43,7 @@ export default defineConfig({
         portal: 'portal.html',
         games: 'games.html',
         tools: 'tools.html',
+        weather: 'weather.html',
         maintenance: 'maintenance.html',
       },
       output: {

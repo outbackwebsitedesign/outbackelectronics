@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2280949487088267" crossorigin="anonymous"></script>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Outback Electronics — Weather Station</title>
+  <meta name="description" content="Live environmental monitoring: temperature, humidity, pressure, air quality, gas detection, and more from our Raspberry Pi weather station in outback Australia." />
+  <meta property="og:title" content="Outback Electronics — Weather Station" />
+  <meta property="og:description" content="Live environmental monitoring from our Raspberry Pi weather station." />
+  <meta property="og:site_name" content="Outback Electronics" />
+  <meta property="og:url" content="https://weather.outbackelectronics.com.au" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Outback Electronics — Weather Station" />
+  <meta name="twitter:description" content="Live environmental monitoring from our Raspberry Pi weather station." />
+  <link rel="canonical" href="https://weather.outbackelectronics.com.au/" />
+  <link rel="icon" type="image/png" href="/favicon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+  :root {
+    --bg: #f4ede1;
+    --bg-elev: #faf6ec;
+    --bg-deep: #e9dfc9;
+    --ink: #1f1a14;
+    --ink-2: #5a4f40;
+    --ink-3: #8b7e69;
+    --rust: #b5451b;
+    --rust-deep: #923a14;
+    --sky: #1f88f5;
+    --sky-deep: #1668c8;
+    --ochre: #d39a37;
+    --eucalyptus: #4f6b3e;
+    --line: #d8cdb6;
+    --line-strong: #b9ac8d;
+    --paper: #fbf7ed;
+    --ink-on-dark: #f4ede1;
+    --ink-on-dark-muted: #c9bda0;
+    --dark: #1f1a14;
+    --shadow: 0 1px 0 rgba(31,26,20,0.05), 0 8px 24px -12px rgba(31,26,20,0.18);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); }
+  body {
+    font-family: 'Archivo', system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+    font-feature-settings: "ss01", "cv11";
+    -webkit-font-smoothing: antialiased;
+  }
+  @font-face { font-family: 'JetBrains Mono'; src: local('JetBrains Mono'), local('JetBrainsMono-Regular'); font-weight: 100 900; font-style: normal; font-display: swap; }
+  @font-face { font-family: 'Archivo'; src: local('Archivo'), local('Archivo-Regular'); font-weight: 100 900; font-style: normal; font-display: swap; }
+  @font-face { font-family: 'Instrument Serif'; src: local('Instrument Serif'), local('InstrumentSerif-Regular'); font-weight: 100 900; font-style: normal; font-display: swap; }
+  h1, h2, h3, h4, h5 { margin: 0; font-weight: 600; line-height: 1.1; letter-spacing: -0.01em; }
+  p { margin: 0; }
+  a { color: inherit; text-decoration: none; }
+  button { font-family: inherit; cursor: pointer; }
+  .serif { font-family: 'Instrument Serif', Georgia, serif; font-weight: 400; letter-spacing: -0.005em; }
+  .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+  }
+  .rule { height: 1px; background: var(--line); width: 100%; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 16px; border-radius: 0;
+    border: 1px solid var(--ink); background: var(--ink); color: var(--bg);
+    font-weight: 600; font-size: 13px; letter-spacing: 0.02em;
+    cursor: pointer; transition: transform 80ms ease, background 120ms ease;
+    position: relative; overflow: hidden;
+  }
+  .btn:hover { background: var(--rust); border-color: var(--rust); }
+  .btn:active { transform: translateY(1px); }
+  .btn-ghost { background: transparent; color: var(--ink); }
+  .btn-ghost:hover { background: var(--ink); color: var(--bg); }
+  .card { background: var(--bg-elev); border: 1px solid var(--line); }
+  .card-paper { background: var(--paper); border: 1px solid var(--line); }
+  .container { width: 100%; max-width: 1320px; margin: 0 auto; padding: 0 32px; }
+  .utility-bar {
+    background: var(--ink); color: var(--bg-deep);
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    letter-spacing: 0.06em; padding: 8px 0;
+  }
+  .utility-bar a { color: inherit; }
+  .utility-bar a:hover { color: var(--ochre); }
+  .utility-bar .container { display: flex; justify-content: space-between; gap: 24px; align-items: center; }
+  .utility-bar .links { display: flex; gap: 18px; flex-wrap: wrap; }
+  .page-head {
+    border-bottom: 1px solid var(--line);
+    background: var(--bg-elev);
+    padding: 36px 0 28px;
+  }
+  .page-head h1 { font-family: 'Instrument Serif', serif; font-weight: 400; font-size: 64px; margin-top: 14px; }
+  .page-head .lead { max-width: 640px; margin-top: 10px; color: var(--ink-2); font-size: 16px; }
+  footer { background: var(--ink); color: var(--bg-deep); margin-top: 80px; padding: 48px 0 24px;}
+  footer a:hover { color: var(--ochre); }
+  footer .baseline { padding-top: 20px; border-top: 1px solid #3a3127; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-on-dark-muted); }
+  footer .grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 32px; }
+  footer h3 { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ochre); margin-bottom: 14px; font-weight: 500; }
+  footer ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; font-size: 13px; }
+  footer .baseline { margin-top: 48px; }
+  .topnav {
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+    position: sticky; top: 0; z-index: 50;
+    transition: background 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+  }
+  .topnav.scrolled {
+    background: rgba(244, 237, 225, 0.82);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    border-bottom-color: transparent;
+    box-shadow: 0 1px 0 rgba(31,26,20,0.06), 0 6px 24px -8px rgba(31,26,20,0.12);
+  }
+  .topnav .row { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; gap: 24px; }
+  .logo { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+  .logo-mark { background: #000; padding: 6px 10px; display: grid; place-items: center; height: 52px; }
+  .logo-mark img { height: 40px; display: block; }
+  .logo-text { line-height: 1; }
+  .logo-text .sub { font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.18em; color: var(--ink-2); text-transform: uppercase; margin-top: 4px; }
+  .tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 8px; border: 1px solid var(--line-strong);
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    background: var(--bg-elev); color: var(--ink-2);
+  }
+  .tag-euc { background: var(--eucalyptus); color: var(--paper); border-color: var(--eucalyptus); }
+  .tag-rust { background: var(--rust); color: var(--paper); border-color: var(--rust); }
+  .tag-ochre { background: var(--ochre); color: var(--dark); border-color: var(--ochre); }
+  #root { min-height: 100vh; display: flex; flex-direction: column; }
+  @media (max-width: 1100px) {
+    footer .grid { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 700px) {
+    .page-head h1 { font-size: 44px; }
+    .container { padding: 0 20px; }
+    footer .grid { grid-template-columns: 1fr 1fr; }
+    .baseline { flex-direction: column; }
+  }
+  </style>
+  <link rel="stylesheet" href="/mobile.css">
+</head>
+<body>
+  <div id="root"></div>
+  <script>(function(){function pv(){fetch('/api/analytics/event',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'pageview',page:location.pathname+location.search,referrer:document.referrer}),keepalive:true}).catch(function(){});}pv();window.addEventListener('popstate',pv);})();</script>
+  <script type="module" src="/src/weather-entry.jsx"></script>
+</body>
+</html>

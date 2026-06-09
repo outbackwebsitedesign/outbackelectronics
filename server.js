@@ -30,6 +30,7 @@ const ADMIN_PORT = process.env.ADMIN_PORT || 8082;
 const PORTAL_PORT = process.env.PORTAL_PORT || 8083;
 const GAMES_PORT  = process.env.GAMES_PORT  || 8084;
 const TOOLS_PORT  = process.env.TOOLS_PORT  || 8085;
+const WEATHER_PORT = process.env.WEATHER_PORT || 8088;
 
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
 const ADMIN_PASSWORD_RAW = process.env.ADMIN_PASSWORD || '';
@@ -133,6 +134,7 @@ function _defaultSubUrl(base, port, sub) {
 const PORTAL_URL = process.env.PORTAL_URL || _defaultSubUrl(SITE_URL, 8083, 'portal');
 const GAMES_URL  = process.env.GAMES_URL  || _defaultSubUrl(SITE_URL, 8084, 'games');
 const TOOLS_URL  = process.env.TOOLS_URL  || _defaultSubUrl(SITE_URL, 8085, 'tools');
+const WEATHER_URL = process.env.WEATHER_URL || _defaultSubUrl(SITE_URL, 8088, 'weather');
 
 function loadSessionsFromDisk(filePath) {
   try {
@@ -2000,6 +2002,13 @@ function getToolsUrl() {
   if (/^https?:\/\/(localhost|127\.|0\.0\.0\.0)(:\d+)?/.test(base))
     return base.replace(/(:\d+)?(\/|$)/, ':8085$2');
   return base.replace(/^(https?:\/\/)/, '$1tools.');
+}
+function getWeatherUrl() {
+  if (WEATHER_URL) return WEATHER_URL;
+  const base = getSiteUrl();
+  if (/^https?:\/\/(localhost|127\.|0\.0\.0\.0)(:\d+)?/.test(base))
+    return base.replace(/(:\d+)?(\/|$)/, ':8088$2');
+  return base.replace(/^(https?:\/\/)/, '$1weather.');
 }
 function getAdminUsername() {
   try { return readSettings().security?.adminUsername || ADMIN_USERNAME; } catch { return ADMIN_USERNAME; }
@@ -5524,6 +5533,117 @@ const gamesServer = http.createServer(async (req, res) => {
   }
 });
 
+// ── Weather data helpers ──────────────────────────────────────────────────────
+
+const WEATHER_DB = path.join(__dirname, 'weather.db');
+const WEATHER_API_KEY = process.env.WEATHER_API_KEY || '';
+
+function readWeatherDb() {
+  try { return JSON.parse(fs.readFileSync(WEATHER_DB, 'utf8')); }
+  catch { return { readings: [] }; }
+}
+
+function writeWeatherDb(data) {
+  const tmp = WEATHER_DB + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(data));
+  fs.renameSync(tmp, WEATHER_DB);
+}
+
+function appendWeatherReading(reading) {
+  const db = readWeatherDb();
+  db.readings.push(reading);
+  // keep last 7 days (readings every ~30s = ~20160 entries)
+  const cutoff = Date.now() - 7 * 86400000;
+  db.readings = db.readings.filter(r => r.ts > cutoff);
+  writeWeatherDb(db);
+}
+
+// ── Weather server (8088) ────────────────────────────────────────────────────
+
+const weatherServer = http.createServer(async (req, res) => {
+  try {
+  const url = new URL(req.url, `http://${req.headers.host}`);
+
+  if (checkMaintenance(req, res, url)) return;
+
+  if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
+
+  if (req.method === 'GET' && url.pathname === '/api/csrf-token') {
+    const token = ensureCsrfCookie(req, res);
+    return json(res, 200, { token });
+  }
+
+  // RPi pushes readings — authenticated via API key, not CSRF
+  if (req.method === 'POST' && url.pathname === '/api/weather/readings') {
+    const apiKey = req.headers['x-api-key'] || url.searchParams.get('key') || '';
+    if (!WEATHER_API_KEY || apiKey !== WEATHER_API_KEY) {
+      return json(res, 401, { error: 'invalid_api_key' });
+    }
+    let body;
+    try { body = await readJson(req); } catch { return json(res, 400, { error: 'bad_request' }); }
+    if (!body || typeof body !== 'object') return json(res, 400, { error: 'bad_request' });
+    const reading = {
+      ts: Date.now(),
+      rtc_time: typeof body.rtc_time === 'string' ? body.rtc_time.slice(0, 32) : null,
+      data: {},
+    };
+    const ALLOWED_KEYS = [
+      'bme680_temp','bme680_humidity','bme680_pressure','bme680_gas',
+      'scd41_co2','scd41_temp','scd41_humidity',
+      'sen0322_o2','sen0567_nh3','sen0572_h2','sen0565_ch4','sen0564_co','sen0568_h2s',
+      'mq4_combustible',
+      'mmc5603_x','mmc5603_y','mmc5603_z','mmc5603_heading',
+    ];
+    for (const k of ALLOWED_KEYS) {
+      if (body.data && typeof body.data[k] === 'number') {
+        reading.data[k] = body.data[k];
+      }
+    }
+    appendWeatherReading(reading);
+    return json(res, 200, { ok: true });
+  }
+
+  // Latest reading
+  if (req.method === 'GET' && url.pathname === '/api/weather/latest') {
+    const db = readWeatherDb();
+    const last = db.readings.length ? db.readings[db.readings.length - 1] : null;
+    return json(res, 200, { reading: last });
+  }
+
+  // Historical readings
+  if (req.method === 'GET' && url.pathname === '/api/weather/history') {
+    const hours = Math.min(parseInt(url.searchParams.get('hours') || '24', 10) || 24, 168);
+    const since = Date.now() - hours * 3600000;
+    const db = readWeatherDb();
+    const filtered = db.readings.filter(r => r.ts > since);
+    // downsample if too many points — return max ~500
+    let result = filtered;
+    if (filtered.length > 500) {
+      const step = Math.ceil(filtered.length / 500);
+      result = filtered.filter((_, i) => i % step === 0);
+    }
+    return json(res, 200, { readings: result, count: filtered.length });
+  }
+
+  // Analytics event
+  if (req.method === 'POST' && url.pathname === '/api/analytics/event') {
+    if (publicRateLimited(getIp(req), 'analytics')) return json(res, 429, { error: 'rate_limited' });
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'bad_request' }); }
+    const type = typeof body.type === 'string' ? body.type.slice(0, 64) : null;
+    if (!type) return json(res, 400, { error: 'missing_type' });
+    const ua = (req.headers['user-agent'] || '').slice(0, 256);
+    if (/bot|crawl|spider|slurp|headless/i.test(ua)) return json(res, 204, {});
+    appendAnalyticsEvent({ ts: Date.now(), type, page: (body.page || '').slice(0, 256), referrer: (body.referrer || '').slice(0, 256), ua, ip: getIp(req) });
+    return json(res, 204, {});
+  }
+
+  return serveStatic(req, res, url.pathname, '/dist/weather.html', null);
+  } catch (err) {
+    console.error('[weatherServer] unhandled error:', err);
+    if (!res.headersSent) json(res, 500, { error: 'server_error' });
+  }
+});
+
 // ── Global crash guards — keep the process alive on unexpected throws ─────────
 
 process.on('uncaughtException', (err) => {
@@ -5747,3 +5867,4 @@ startServer(adminServer,  ADMIN_PORT,  'admin ');
 startServer(portalServer, PORTAL_PORT, 'portal');
 startServer(gamesServer,  GAMES_PORT,  'games ');
 startServer(toolsServer,  TOOLS_PORT,  'tools ');
+startServer(weatherServer, WEATHER_PORT, 'weather');
