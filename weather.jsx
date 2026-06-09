@@ -227,7 +227,8 @@ const DERIVED = [
       // Step 2: invert Magnus over ice to get frost point
       // es_ice(Tf) = 6.1078 * exp(21.875 * Tf / (Tf + 265.5))
       const lnE = Math.log(e / 6.1078);
-      return +((265.5 * lnE) / (21.875 - lnE)).toFixed(1);
+      const fp = (265.5 * lnE) / (21.875 - lnE);
+      return fp < 0 ? +fp.toFixed(1) : null; // irrelevant above freezing
     },
   },
   {
