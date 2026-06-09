@@ -8,7 +8,7 @@ Pimoroni and Adafruit libraries. Gracefully skips anything missing.
 
 Install (only install libraries for sensors you have):
   sudo apt install -y python3-pip i2c-tools
-  pip3 install --break-system-packages requests adafruit-blinka
+  pip3 install --break-system-packages requests adafruit-blinka smbus2
   pip3 install --break-system-packages adafruit-circuitpython-bme680       # BME680
   pip3 install --break-system-packages adafruit-circuitpython-scd4x         # SCD41
   pip3 install --break-system-packages adafruit-circuitpython-ads1x15       # ADS1115
@@ -176,66 +176,68 @@ if not rtc:
 # MMC5603 can be at 0x30
 MMC5603_ADDRESSES = [0x30]
 mag = None
-for addr in MMC5603_ADDRESSES:
-    if addr not in detected_addresses:
-        continue
-    if i2c:
+if i2c:
+    import time as _time
+    _time.sleep(0.2)
+    for addr in MMC5603_ADDRESSES:
+        if addr not in detected_addresses:
+            continue
         try:
             import adafruit_mmc56x3
             mag = adafruit_mmc56x3.MMC5603(i2c)
-            log.info('MMC5603 ready at 0x%02x', addr)
+            _time.sleep(0.1)
+            x, y, z = mag.magnetic
+            if x == y == z:
+                log.warning('MMC5603 at 0x%02x returned identical values (%.1f) — may need recalibration', addr, x)
+            log.info('MMC5603 ready at 0x%02x (test: x=%.1f y=%.1f z=%.1f µT)', addr, x, y, z)
             break
         except Exception as e:
+            mag = None
             log.warning('MMC5603 init failed at 0x%02x: %s', addr, e)
 
 if not mag:
     log.warning('MMC5603 not found')
 
-# SEN0322 O2 sensor — known addresses 0x70-0x73 (configurable via DIP switches)
+# SEN0322 O2 sensor — uses smbus2 for proper I2C repeated-start
+# Known addresses 0x70-0x73 (configurable via DIP switches)
+# O2 concentration is at register 0x0A, single byte, divide by ~9.09 for %Vol
 SEN0322_ADDRESSES = [0x73, 0x72, 0x71, 0x70]
+SEN0322_O2_REGISTER = 0x0A
+SEN0322_CAL_FACTOR = 20.9 / 190.0
 sen0322_addr = None
 sen0322_ok = False
-if i2c:
+smbus = None
+
+try:
+    import smbus2
+    smbus = smbus2.SMBus(1)
+except ImportError:
+    log.warning('smbus2 not installed — SEN0322 O2 sensor will be skipped')
+
+if smbus:
     for addr in SEN0322_ADDRESSES:
         if addr not in detected_addresses:
             continue
         try:
-            while not i2c.try_lock():
-                pass
-            i2c.writeto(addr, bytes([0x03]))
-            buf = bytearray(3)
-            i2c.readfrom_into(addr, buf)
-            i2c.unlock()
+            val = smbus.read_byte_data(addr, SEN0322_O2_REGISTER)
             sen0322_addr = addr
             sen0322_ok = True
-            log.info('SEN0322 O2 ready at 0x%02x', addr)
+            log.info('SEN0322 O2 ready at 0x%02x (raw=%d, %.1f%%)', addr, val, val * SEN0322_CAL_FACTOR)
             break
-        except Exception:
-            try:
-                i2c.unlock()
-            except:
-                pass
+        except Exception as e:
+            log.warning('SEN0322 probe failed at 0x%02x: %s', addr, e)
 
 if not sen0322_ok:
     log.warning('SEN0322 O2 not found')
 
 
 def read_sen0322():
-    if not i2c or not sen0322_ok:
+    if not smbus or not sen0322_ok:
         return None
     try:
-        while not i2c.try_lock():
-            pass
-        i2c.writeto(sen0322_addr, bytes([0x03]))
-        buf = bytearray(3)
-        i2c.readfrom_into(sen0322_addr, buf)
-        i2c.unlock()
-        return ((buf[0] << 8) | buf[1]) / 10.0
+        val = smbus.read_byte_data(sen0322_addr, SEN0322_O2_REGISTER)
+        return round(val * SEN0322_CAL_FACTOR, 1)
     except Exception as e:
-        try:
-            i2c.unlock()
-        except:
-            pass
         log.warning('SEN0322 read error: %s', e)
         return None
 
