@@ -118,7 +118,17 @@ function LineGraph({ points, color = 'var(--rust)', height = 200, fromTs, toTs }
   const fmt = (v) => Math.abs(v) >= 1000 ? v.toFixed(0) : Math.abs(v) >= 10 ? v.toFixed(1) : v.toFixed(2);
   const fmtTime = (ms) => {
     const d = new Date(ms);
-    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+    const rangeDays = tRange / 86400000;
+    if (rangeDays > 60) {
+      // year view: "Jan", "Feb", …
+      return d.toLocaleString('en-AU', { month: 'short' });
+    } else if (rangeDays > 1) {
+      // multi-day: "Mon 9", "Tue 10", …
+      return d.toLocaleString('en-AU', { weekday: 'short', day: 'numeric' });
+    } else {
+      // intraday: "14:30"
+      return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+    }
   };
 
   const gradId = `grad-${Math.random().toString(36).slice(2)}`;
