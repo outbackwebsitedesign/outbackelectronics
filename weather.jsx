@@ -66,25 +66,44 @@ function ReadingCard({ def, value, ts, onClick }) {
 }
 
 // ── Sparkline / line graph ─────────────────────────────────────────────────────
-function LineGraph({ points, color = 'var(--rust)', height = 200 }) {
+function LineGraph({ points, color = 'var(--rust)', height = 200, fromTs, toTs }) {
+  const now = Date.now();
+  const minT = fromTs != null ? fromTs : (points.length ? Math.min(...points.map(p => p.t)) : now - 3600000);
+  const maxT = toTs   != null ? toTs   : now;
+  const tRange = maxT - minT || 1;
+
   if (!points || points.length < 2) return (
-    <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-3)', fontSize: 13 }}>
-      Not enough data
-    </div>
+    <svg viewBox={`0 0 800 ${height}`} style={{ width: '100%', height: 'auto', display: 'block', overflow: 'visible' }}>
+      {/* still render axes so the empty graph looks intentional */}
+      {Array.from({ length: 5 }, (_, i) => (
+        <line key={i} x1={48} x2={788} y1={8 + ((height - 36) * i) / 4} y2={8 + ((height - 36) * i) / 4}
+          stroke="var(--line)" strokeWidth="1" />
+      ))}
+      {Array.from({ length: 7 }, (_, i) => {
+        const t = minT + (tRange * i) / 6;
+        const xPos = 48 + ((t - minT) / tRange) * (800 - 48 - 12);
+        const d = new Date(t);
+        const label = `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+        return (
+          <text key={i} x={xPos} y={height - 6} textAnchor="middle"
+            fontSize="10" fill="var(--ink-3)" fontFamily="'JetBrains Mono', monospace">{label}</text>
+        );
+      })}
+      <text x={420} y={height / 2} textAnchor="middle" fontSize="13" fill="var(--ink-3)" fontFamily="inherit">No data for this period</text>
+    </svg>
   );
+
   const values = points.map(p => p.v);
-  const times  = points.map(p => p.t);
-  const minV = Math.min(...values);
-  const maxV = Math.max(...values);
-  const range = maxV - minV || 1;
   const W = 800, H = height;
   const PAD = { top: 8, bottom: 28, left: 48, right: 12 };
   const iw = W - PAD.left - PAD.right;
   const ih = H - PAD.top - PAD.bottom;
-  const minT = Math.min(...times), maxT = Math.max(...times), tRange = maxT - minT || 1;
+  const minV = Math.min(...values);
+  const maxV = Math.max(...values);
+  const range = maxV - minV || 1;
 
-  const x = t => PAD.left + ((t - minT) / tRange) * iw;
-  const y = v => PAD.top + (1 - (v - minV) / range) * ih;
+  const x = t  => PAD.left + ((t  - minT) / tRange) * iw;
+  const y = v  => PAD.top  + (1 - (v  - minV) / range) * ih;
 
   const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ');
   const areaD = pathD + ` L${x(times[times.length - 1]).toFixed(1)},${(PAD.top + ih).toFixed(1)} L${x(times[0]).toFixed(1)},${(PAD.top + ih).toFixed(1)} Z`;
@@ -93,7 +112,6 @@ function LineGraph({ points, color = 'var(--rust)', height = 200 }) {
   const yTicks = 4;
   const yTickVals = Array.from({ length: yTicks + 1 }, (_, i) => minV + (range * i) / yTicks);
 
-  // X-axis ticks (hours)
   const xTickCount = 6;
   const xTicks = Array.from({ length: xTickCount + 1 }, (_, i) => minT + (tRange * i) / xTickCount);
 
@@ -258,7 +276,17 @@ function ReadingDetail({ def, stationId, onBack }) {
         {loading ? (
           <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-3)', fontSize: 13 }}>Loading…</div>
         ) : (
-          <LineGraph points={points} color="var(--rust)" height={220} />
+          <LineGraph
+            points={points}
+            color="var(--rust)"
+            height={220}
+            fromTs={mode === 'year' && selectedYear
+              ? new Date(selectedYear, 0, 1).getTime()
+              : Date.now() - hours * 3600000}
+            toTs={mode === 'year' && selectedYear
+              ? new Date(selectedYear + 1, 0, 1).getTime() - 1
+              : Date.now()}
+          />
         )}
       </div>
 
