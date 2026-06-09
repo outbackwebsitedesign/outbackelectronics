@@ -125,8 +125,6 @@ if detected_addresses:
 else:
     log.warning('No I2C devices detected')
 
-# Track which addresses are claimed by a known driver so we can report the rest
-claimed_addresses = set()
 
 
 # ── Sensor init (auto-detect addresses) ──────────────────────────────────────
@@ -143,7 +141,6 @@ if i2c:
             import adafruit_bme680
             bme680_sensor = adafruit_bme680.Adafruit_BME680_I2C(i2c, address=addr)
             bme680_sensor.sea_level_pressure = 1013.25
-            claimed_addresses.add(addr)
             log.info('BME680 ready at 0x%02x', addr)
             break
         except Exception:
@@ -159,7 +156,6 @@ if i2c and 0x62 in detected_addresses:
         import adafruit_scd4x
         scd4x = adafruit_scd4x.SCD4X(i2c, address=0x62)
         scd4x.start_periodic_measurement()
-        claimed_addresses.add(0x62)
         log.info('SCD41 ready at 0x62')
     except Exception as e:
         log.warning('SCD41 init failed: %s', e)
@@ -176,7 +172,6 @@ for addr in DS3231_ADDRESSES:
         try:
             import adafruit_ds3231
             rtc = adafruit_ds3231.DS3231(i2c)
-            claimed_addresses.add(addr)
             log.info('DS3231 ready at 0x%02x', addr)
             break
         except Exception as e:
@@ -202,7 +197,6 @@ if i2c:
                 _time.sleep(0.3)
                 x, y, z = mag.magnetic
                 if abs(x) < 3000 and abs(y) < 3000 and abs(z) < 3000:
-                    claimed_addresses.add(addr)
                     log.info('MMC5603 ready at 0x%02x (test: x=%.1f y=%.1f z=%.1f µT, attempt %d)', addr, x, y, z, _attempt + 1)
                     break
             else:
@@ -255,7 +249,6 @@ if _o2_on_bus:
                 val = o2_sensor.get_oxygen_data(10)
                 if val > 0:
                     sen0322_ok = True
-                    claimed_addresses.add(addr)
                     log.info('SEN0322 O2 ready at 0x%02x (%.1f%%Vol)', addr, val)
                     break
                 else:
@@ -306,7 +299,6 @@ if ADS and i2c:
         try:
             dev = ADS.ADS1115(i2c, address=addr, gain=1)
             ads_devices.append((addr, dev))
-            claimed_addresses.add(addr)
             log.info('ADS1115 ready at 0x%02x', addr)
         except Exception as e:
             log.warning('ADS1115 init failed at 0x%02x: %s', addr, e)
@@ -374,7 +366,7 @@ def voltage_to_ppm(key, voltage):
 # ── Main read cycle ───────────────────────────────────────────────────────────
 
 def build_sensors_list():
-    """Return a list of detected sensor model names for the metadata field."""
+    """Return a list of sensor model names that have active, working drivers."""
     names = []
     if bme680_sensor:   names.append('BME680')
     if scd4x:           names.append('SCD41')
@@ -383,9 +375,6 @@ def build_sensors_list():
     if sen0322_ok:      names.append('SEN0322')
     for addr, _ in ads_devices:
         names.append(f'ADS1115@0x{addr:02x}')
-    # Unknown devices — on bus but not claimed by any driver
-    for addr in sorted(detected_addresses - claimed_addresses):
-        names.append(f'unknown@0x{addr:02x}')
     return names
 
 
