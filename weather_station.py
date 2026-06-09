@@ -60,14 +60,42 @@ logging.basicConfig(
 )
 log = logging.getLogger('weather')
 
-API_URL = os.environ.get('WEATHER_URL', 'https://weather.outbackelectronics.com.au')
-API_KEY = os.environ.get('WEATHER_API_KEY', '')
-STATION_ID = os.environ.get('STATION_ID', 'default')
-INTERVAL = int(os.environ.get('WEATHER_INTERVAL', '30'))
+IS_MAIN_SERVER = os.path.exists(os.path.join(APP_DIR, 'server.js'))
 
-if not API_KEY:
-    log.error('WEATHER_API_KEY env var is required')
-    sys.exit(1)
+def read_env_file(path):
+    vals = {}
+    try:
+        with open(path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    k, v = line.split('=', 1)
+                    vals[k.strip()] = v.strip()
+    except FileNotFoundError:
+        pass
+    return vals
+
+
+if IS_MAIN_SERVER:
+    env = read_env_file(os.path.join(APP_DIR, '.env'))
+    API_URL = 'http://localhost:' + env.get('WEATHER_PORT', os.environ.get('WEATHER_PORT', '8089'))
+    API_KEY = env.get('WEATHER_API_KEY', os.environ.get('WEATHER_API_KEY', ''))
+    STATION_ID = 'hq'
+    if not API_KEY:
+        log.error('WEATHER_API_KEY not found in .env — run deploy.sh to generate it')
+        sys.exit(1)
+else:
+    API_URL = os.environ.get('WEATHER_URL', 'https://weather.outbackelectronics.com.au')
+    API_KEY = os.environ.get('WEATHER_API_KEY', '')
+    STATION_ID = os.environ.get('STATION_ID', '')
+    if not STATION_ID:
+        log.error('STATION_ID env var is required on remote stations')
+        sys.exit(1)
+    if not API_KEY:
+        log.error('WEATHER_API_KEY env var is required on remote stations')
+        sys.exit(1)
+
+INTERVAL = int(os.environ.get('WEATHER_INTERVAL', '30'))
 
 i2c = busio.I2C(board.SCL, board.SDA)
 

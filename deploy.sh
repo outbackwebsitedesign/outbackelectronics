@@ -100,6 +100,16 @@ else
     fi
 fi
 
+# ── Weather API key — auto-generate if missing from .env ─────────────────────
+ENV_FILE="${APP_DIR}/.env"
+if [ -f "$ENV_FILE" ] && grep -q "^WEATHER_API_KEY=" "$ENV_FILE"; then
+    echo "==> WEATHER_API_KEY already set in .env"
+else
+    GENERATED_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))" 2>/dev/null || openssl rand -base64 32 | tr -d '/+=' | head -c 43)
+    echo "WEATHER_API_KEY=${GENERATED_KEY}" >> "$ENV_FILE"
+    echo "==> Generated WEATHER_API_KEY and added to .env"
+fi
+
 # ── Weather station sensor service (server RPi has sensors attached) ──────────
 PYTHON_BIN="$(which python3)"
 if [ ! -f "/etc/systemd/system/${WEATHER_SERVICE}.service" ]; then
