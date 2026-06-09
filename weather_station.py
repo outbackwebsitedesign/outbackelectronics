@@ -198,45 +198,41 @@ if i2c:
 if not mag:
     log.warning('MMC5603 not found')
 
-# SEN0322 O2 sensor — uses smbus2 for proper I2C repeated-start
-# Known addresses 0x70-0x73 (configurable via DIP switches)
-# O2 concentration is at register 0x0A, single byte, divide by ~9.09 for %Vol
+# SEN0322 O2 sensor — uses DFRobot's own library
+# Known I2C address constants: ADDRESS_0=0x70, ADDRESS_1=0x71, ADDRESS_2=0x72, ADDRESS_3=0x73
 SEN0322_ADDRESSES = [0x73, 0x72, 0x71, 0x70]
-SEN0322_O2_REGISTER = 0x0A
-SEN0322_CAL_FACTOR = 20.9 / 190.0
-sen0322_addr = None
+o2_sensor = None
 sen0322_ok = False
-smbus = None
 
 try:
-    import smbus2
-    smbus = smbus2.SMBus(1)
-except ImportError:
-    log.warning('smbus2 not installed — SEN0322 O2 sensor will be skipped')
-
-if smbus:
-    for addr in SEN0322_ADDRESSES:
+    from DFRobot_Oxygen import DFRobot_Oxygen_IIC
+    for addr_idx, addr in enumerate(SEN0322_ADDRESSES):
         if addr not in detected_addresses:
             continue
         try:
-            val = smbus.read_byte_data(addr, SEN0322_O2_REGISTER)
-            sen0322_addr = addr
-            sen0322_ok = True
-            log.info('SEN0322 O2 ready at 0x%02x (raw=%d, %.1f%%)', addr, val, val * SEN0322_CAL_FACTOR)
-            break
+            o2_sensor = DFRobot_Oxygen_IIC(1, addr_idx)
+            val = o2_sensor.get_oxygen_data(10)
+            if val > 0:
+                sen0322_ok = True
+                log.info('SEN0322 O2 ready at 0x%02x (%.1f%%Vol)', addr, val)
+                break
+            else:
+                o2_sensor = None
         except Exception as e:
+            o2_sensor = None
             log.warning('SEN0322 probe failed at 0x%02x: %s', addr, e)
+except ImportError:
+    log.warning('DFRobot_Oxygen not installed — SEN0322 O2 sensor will be skipped')
 
 if not sen0322_ok:
     log.warning('SEN0322 O2 not found')
 
 
 def read_sen0322():
-    if not smbus or not sen0322_ok:
+    if not o2_sensor:
         return None
     try:
-        val = smbus.read_byte_data(sen0322_addr, SEN0322_O2_REGISTER)
-        return round(val * SEN0322_CAL_FACTOR, 1)
+        return round(o2_sensor.get_oxygen_data(10), 1)
     except Exception as e:
         log.warning('SEN0322 read error: %s', e)
         return None
