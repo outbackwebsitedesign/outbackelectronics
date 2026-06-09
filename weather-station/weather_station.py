@@ -317,7 +317,6 @@ if ADS and i2c:
         ],
     }
 
-    pins = [ADS.P0, ADS.P1, ADS.P2, ADS.P3]
     for addr, dev in ads_devices:
         channel_map = ADS_CHANNEL_MAP.get(addr)
         if channel_map is None:
@@ -325,7 +324,7 @@ if ADS and i2c:
             continue
         for key, ch in channel_map:
             try:
-                analog_channels[key] = AnalogIn(dev, pins[ch])
+                analog_channels[key] = AnalogIn(dev, ch)
             except Exception:
                 pass
         log.info('ADS1115@0x%02x channels: %s', addr, ', '.join(k for k, _ in channel_map if k in analog_channels))
