@@ -71,7 +71,7 @@ if IS_MAIN_SERVER:
     env = read_env_file(os.path.join(APP_DIR, '.env'))
     API_URL = 'http://localhost:' + env.get('WEATHER_PORT', os.environ.get('WEATHER_PORT', '8089'))
     API_KEY = env.get('WEATHER_API_KEY', os.environ.get('WEATHER_API_KEY', ''))
-    STATION_ID = 'hq'
+    STATION_ID = 'Server Room'
     if not API_KEY:
         log.error('WEATHER_API_KEY not found in .env — run deploy.sh to generate it')
         sys.exit(1)
