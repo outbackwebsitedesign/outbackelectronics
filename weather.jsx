@@ -875,6 +875,128 @@ function useShopInfo() {
 
 // ── App ───────────────────────────────────────────────────────────────────────
 
+// ── Add Sensor modal ──────────────────────────────────────────────────────────
+function AddSensorModal({ onClose }) {
+  const [step, setStep] = useState('form'); // 'form' | 'done'
+  const [name, setName] = useState('');
+  const [location, setLocation] = useState('');
+  const [contact, setContact] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const submit = async () => {
+    const n = name.trim();
+    if (!n) { setError('Station name is required.'); return; }
+    setBusy(true); setError('');
+    try {
+      const r = await fetch('/api/weather/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: n, location: location.trim(), contact: contact.trim() }),
+      });
+      const d = await r.json();
+      if (!r.ok) {
+        setError(d.error === 'name_taken' ? 'That station name is already taken — choose another.' : 'Registration failed, please try again.');
+        setBusy(false); return;
+      }
+      setResult(d);
+      setStep('done');
+    } catch { setError('Network error, please try again.'); }
+    setBusy(false);
+  };
+
+  const setupCmd = result
+    ? `WEATHER_API_KEY="${result.apiKey}" WEATHER_URL="${result.weatherUrl}" STATION_ID="${result.name}" python3 weather_station.py`
+    : '';
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 400, background: 'rgba(15,13,10,0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+      onClick={onClose}>
+      <div style={{ width: '100%', maxWidth: 540, background: 'var(--bg)', border: '1px solid var(--line)', boxShadow: '0 12px 40px rgba(0,0,0,.35)', maxHeight: '90vh', overflowY: 'auto' }}
+        onClick={e => e.stopPropagation()}>
+        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2 style={{ fontSize: 20, fontFamily: "'Instrument Serif', serif", fontWeight: 400 }}>
+            {step === 'form' ? 'Add a Weather Sensor' : 'Sensor Registered'}
+          </h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--ink-2)', lineHeight: 1 }}>×</button>
+        </div>
+
+        {step === 'form' && (
+          <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <p style={{ fontSize: 14, color: 'var(--ink-2)', lineHeight: 1.6, margin: 0 }}>
+              Anyone can add a sensor to this network. Give your station a name, run the script on a Raspberry Pi, and your readings will appear live on this dashboard.
+            </p>
+            <label className="field" style={{ marginBottom: 0 }}>
+              <span className="label">Station Name *</span>
+              <input className="input" value={name} onChange={e => setName(e.target.value)}
+                placeholder="e.g. My Back Yard, Roof, Workshop" maxLength={64} />
+            </label>
+            <label className="field" style={{ marginBottom: 0 }}>
+              <span className="label">Location (optional)</span>
+              <input className="input" value={location} onChange={e => setLocation(e.target.value)}
+                placeholder="e.g. Alice Springs NT, Australia" maxLength={128} />
+            </label>
+            <label className="field" style={{ marginBottom: 0 }}>
+              <span className="label">Contact / name (optional)</span>
+              <input className="input" value={contact} onChange={e => setContact(e.target.value)}
+                placeholder="e.g. your name or email" maxLength={128} />
+            </label>
+            {error && <div style={{ fontSize: 13, color: 'var(--rust)', padding: '10px 12px', background: '#f3d5c5', border: '1px solid #e8b898' }}>{error}</div>}
+            <button className="btn btn-rust" onClick={submit} disabled={busy} style={{ alignSelf: 'flex-start' }}>
+              {busy ? 'Registering…' : 'Register Station →'}
+            </button>
+          </div>
+        )}
+
+        {step === 'done' && result && (
+          <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ padding: '12px 16px', background: 'rgba(79,107,62,0.1)', border: '1px solid var(--eucalyptus)', fontSize: 14, color: 'var(--eucalyptus)', fontWeight: 600 }}>
+              Station "{result.name}" registered successfully.
+            </div>
+            <p style={{ fontSize: 14, color: 'var(--ink-2)', lineHeight: 1.6, margin: 0 }}>
+              Save your API key — it won't be shown again. Then run the command below on your Raspberry Pi (or any Linux machine with Python 3).
+            </p>
+
+            <div>
+              <div className="eyebrow" style={{ marginBottom: 6 }}>Your API Key</div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
+                <code style={{ flex: 1, padding: '10px 12px', background: 'var(--bg-deep)', border: '1px solid var(--line-strong)', fontSize: 12, fontFamily: "'JetBrains Mono', monospace", wordBreak: 'break-all' }}>
+                  {result.apiKey}
+                </code>
+                <button className="btn btn-ghost" style={{ padding: '10px 14px', fontSize: 12, flexShrink: 0 }}
+                  onClick={() => navigator.clipboard.writeText(result.apiKey)}>Copy</button>
+              </div>
+            </div>
+
+            <div>
+              <div className="eyebrow" style={{ marginBottom: 6 }}>Setup — Raspberry Pi / Linux</div>
+              <p style={{ fontSize: 13, color: 'var(--ink-2)', marginBottom: 8, lineHeight: 1.5 }}>
+                Download <code style={{ fontFamily: 'monospace', fontSize: 12 }}>weather_station.py</code> from the{' '}
+                <a href="https://github.com/outbackwebsitedesign/outbackelectronics" style={{ color: 'var(--rust)' }} target="_blank" rel="noopener noreferrer">GitHub repo</a>,
+                then run:
+              </p>
+              <div style={{ position: 'relative' }}>
+                <pre style={{ margin: 0, padding: '12px 16px', background: '#181410', color: '#f4ede1', fontFamily: "'JetBrains Mono', monospace", fontSize: 11, overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all', border: '1px solid #2a241c' }}>
+                  {setupCmd}
+                </pre>
+                <button className="btn btn-ghost" style={{ position: 'absolute', top: 8, right: 8, padding: '4px 10px', fontSize: 11 }}
+                  onClick={() => navigator.clipboard.writeText(setupCmd)}>Copy</button>
+              </div>
+            </div>
+
+            <p style={{ fontSize: 13, color: 'var(--ink-3)', margin: 0, lineHeight: 1.5 }}>
+              Once running, your station will appear on the dashboard within 30 seconds. Supported sensors: BME280/680 (temp, humidity, pressure, VOC), MQ series gas sensors, QMC5883L compass, and more — see the script header for the full list.
+            </p>
+
+            <button className="btn btn-rust" onClick={onClose} style={{ alignSelf: 'flex-start' }}>Done</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function WeatherDashboard() {
   const [latest, setLatest] = useState(null);
   const [history, setHistory] = useState([]);
@@ -883,6 +1005,7 @@ function WeatherDashboard() {
   const [error, setError] = useState(null);
   const [tick, setTick] = useState(0);
   const [detailKey, setDetailKey] = useState(null);
+  const [addSensorOpen, setAddSensorOpen] = useState(false);
   const fetchStations = () => {
     fetch('/api/weather/stations')
       .then(r => r.json())
@@ -991,7 +1114,16 @@ function WeatherDashboard() {
           </div>
         )}
 
-        <StationStatus latest={latest} rtcTime={rtcTime} stationId={latest?.station_id} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <StationStatus latest={latest} rtcTime={rtcTime} stationId={latest?.station_id} />
+          </div>
+          <button className="btn btn-rust" style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+            onClick={() => setAddSensorOpen(true)}>
+            + Add Sensor
+          </button>
+        </div>
+        {addSensorOpen && <AddSensorModal onClose={() => setAddSensorOpen(false)} />}
 
         {error && (
           <div style={{ marginTop: 16, padding: '12px 16px', background: '#f3d5c5', border: '1px solid #e8b898', color: '#7a3a18', fontSize: 13 }}>

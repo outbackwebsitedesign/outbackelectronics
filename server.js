@@ -70,7 +70,7 @@ const PUBLIC_CSP = "default-src 'self'; " +
 const HSTS_VALUE = 'max-age=31536000; includeSubDomains';
 const PERMISSIONS_POLICY = 'camera=(), microphone=(), geolocation=(), payment=(), usb=()';
 const PUBLIC_RATE_WINDOW_MS = 1000 * 60 * 10;
-const PUBLIC_RATE_LIMITS = { analytics: 120, checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10, 'forgot-password': 5, 'reset-password': 10, 'gift-card/apply': 10, 'gift-card/balance': 5, 'warranty/order-lookup': 10, 'cart/get': 20 };
+const PUBLIC_RATE_LIMITS = { analytics: 120, checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10, 'forgot-password': 5, 'reset-password': 10, 'gift-card/apply': 10, 'gift-card/balance': 5, 'warranty/order-lookup': 10, 'cart/get': 20, 'weather_register': 3 };
 
 fs.mkdirSync(path.join(__dirname, 'assets/uploads'), { recursive: true });
 fs.mkdirSync(path.join(__dirname, 'assets/uploads/software'), { recursive: true });
@@ -5541,7 +5541,17 @@ const WEATHER_API_KEY = process.env.WEATHER_API_KEY || '';
 
 function readWeatherDb() {
   try { return JSON.parse(fs.readFileSync(WEATHER_DB, 'utf8')); }
-  catch { return { readings: [] }; }
+  catch { return { readings: [], stations: [] }; }
+}
+
+function weatherApiKeyValid(apiKey) {
+  if (!apiKey) return null;
+  // Built-in server key (env var) — station_id is set by the device
+  if (WEATHER_API_KEY && apiKey === WEATHER_API_KEY) return { builtin: true };
+  // Registered community station keys
+  const db = readWeatherDb();
+  const station = (db.stations || []).find(s => s.apiKey === apiKey);
+  return station || null;
 }
 
 function writeWeatherDb(data) {
@@ -5605,16 +5615,38 @@ const weatherServer = http.createServer(async (req, res) => {
     return json(res, 200, { active: true, text: announcement.text });
   }
 
+  // Public station registration — anyone can create a station and get an API key
+  if (req.method === 'POST' && url.pathname === '/api/weather/register') {
+    if (publicRateLimited(getIp(req), 'weather_register')) return json(res, 429, { error: 'rate_limited' });
+    let body;
+    try { body = await readJson(req); } catch { return json(res, 400, { error: 'bad_request' }); }
+    const name = typeof body.name === 'string' ? body.name.trim().slice(0, 64) : '';
+    const location = typeof body.location === 'string' ? body.location.trim().slice(0, 128) : '';
+    const contact = typeof body.contact === 'string' ? body.contact.trim().slice(0, 128) : '';
+    if (!name) return json(res, 400, { error: 'name_required' });
+    const db = readWeatherDb();
+    if (!db.stations) db.stations = [];
+    const existing = db.stations.find(s => s.name.toLowerCase() === name.toLowerCase());
+    if (existing) return json(res, 409, { error: 'name_taken' });
+    const apiKey = require('crypto').randomBytes(32).toString('hex');
+    const station = { id: require('crypto').randomBytes(8).toString('hex'), name, location, contact, apiKey, registeredAt: Date.now() };
+    db.stations.push(station);
+    writeWeatherDb(db);
+    return json(res, 200, { ok: true, apiKey, name, weatherUrl: WEATHER_URL || `http://localhost:${WEATHER_PORT}` });
+  }
+
   // RPi pushes readings — authenticated via API key, not CSRF
   if (req.method === 'POST' && url.pathname === '/api/weather/readings') {
     const apiKey = req.headers['x-api-key'] || url.searchParams.get('key') || '';
-    if (!WEATHER_API_KEY || apiKey !== WEATHER_API_KEY) {
-      return json(res, 401, { error: 'invalid_api_key' });
-    }
+    const keyRecord = weatherApiKeyValid(apiKey);
+    if (!keyRecord) return json(res, 401, { error: 'invalid_api_key' });
     let body;
     try { body = await readJson(req); } catch { return json(res, 400, { error: 'bad_request' }); }
     if (!body || typeof body !== 'object') return json(res, 400, { error: 'bad_request' });
-    const stationId = typeof body.station_id === 'string' ? body.station_id.slice(0, 64) : 'default';
+    // Registered stations use their registered name; built-in key uses device-supplied station_id
+    const stationId = keyRecord.builtin
+      ? (typeof body.station_id === 'string' ? body.station_id.slice(0, 64) : 'default')
+      : keyRecord.name;
     const reading = {
       ts: Date.now(),
       station_id: stationId,
