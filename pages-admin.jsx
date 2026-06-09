@@ -718,7 +718,7 @@ function OrderDrawer({ edit, expenses, onClose, onRowUpdate, onSave, onExpensesC
   const linkedExpenses = expenses.filter(e => e.jobId && e.jobId === form.id);
   const partsCost = linkedExpenses.reduce((s, e) => s + (e.partStatus === 'returned' ? 0 : (Number(e.amount) || 0)), 0);
   const returnedCost = linkedExpenses.reduce((s, e) => s + (e.partStatus === 'returned' ? (Number(e.amount) || 0) : 0), 0);
-  const profit = (partsCost || returnedCost) ? (Number(form.total) || 0) - partsCost : null;
+  const profit = (Number(form.total) || 0) - partsCost;
 
   const partStatusColors = { ordered:{bg:'#dceaf5',fg:'#1668c8'}, arrived:{bg:'#fff4d6',fg:'#7a5d10'}, installed:{bg:'#d8e7d0',fg:'#345526'}, returned:{bg:'#f3d5c5',fg:'#7a3a18'} };
 
@@ -976,6 +976,7 @@ function OrderDrawer({ edit, expenses, onClose, onRowUpdate, onSave, onExpensesC
         )}
         {linkedExpenses.length > 0 && (
           <div style={{display:'flex', gap:24, padding:'10px 14px', background: profit >= 0 ? '#d8e7d0' : '#f3d5c5', marginTop:4, flexWrap:'wrap'}}>
+            <div><div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>ORDER TOTAL</div><div className="mono" style={{fontSize:14, fontWeight:600, color:'var(--ink-1)'}}>${(Number(form.total)||0).toLocaleString('en-AU',{minimumFractionDigits:2})}</div></div>
             <div><div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>PARTS COST</div><div className="mono" style={{fontSize:14, fontWeight:600, color:'var(--rust)'}}>-${partsCost.toLocaleString('en-AU',{minimumFractionDigits:2})}</div></div>
             {returnedCost > 0 && <div><div className="mono" style={{fontSize:10, color:'#345526'}}>RETURNED</div><div className="mono" style={{fontSize:14, fontWeight:600, color:'#345526'}}>+${returnedCost.toLocaleString('en-AU',{minimumFractionDigits:2})}</div></div>}
             <div><div className="mono" style={{fontSize:10, color: profit >= 0 ? '#345526' : '#7a3a18'}}>PROFIT</div><div className="mono" style={{fontSize:14, fontWeight:600, color: profit >= 0 ? '#345526' : '#7a3a18'}}>${profit.toLocaleString('en-AU',{minimumFractionDigits:2})}</div></div>
