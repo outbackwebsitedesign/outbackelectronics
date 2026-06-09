@@ -9,7 +9,7 @@ Pimoroni and Adafruit libraries. Gracefully skips anything missing.
 Install (only install libraries for sensors you have):
   sudo apt install -y python3-pip i2c-tools
   pip3 install --break-system-packages requests adafruit-blinka
-  pip3 install --break-system-packages bme680                              # Pimoroni BME680 (or adafruit-circuitpython-bme680)
+  pip3 install --break-system-packages adafruit-circuitpython-bme680       # BME680
   pip3 install --break-system-packages adafruit-circuitpython-scd4x         # SCD41
   pip3 install --break-system-packages adafruit-circuitpython-ads1x15       # ADS1115
   pip3 install --break-system-packages adafruit-circuitpython-ds3231        # DS3231 RTC
@@ -87,31 +87,16 @@ INTERVAL = int(os.environ.get('WEATHER_INTERVAL', '30'))
 # ── I2C bus init & scan ───────────────────────────────────────────────────────
 
 i2c = None
-smbus = None
 detected_addresses = set()
 
 try:
     import board
     import busio
     i2c = busio.I2C(board.SCL, board.SDA)
-    log.info('I2C bus initialised (blinka)')
+    log.info('I2C bus initialised')
 except Exception as e:
-    log.warning('Blinka I2C not available: %s', e)
+    log.warning('I2C bus not available: %s — I2C sensors will be skipped', e)
 
-# Also try smbus2 for Pimoroni-style libs
-try:
-    import smbus2
-    smbus = smbus2.SMBus(1)
-    log.info('SMBus initialised')
-except Exception:
-    try:
-        import smbus as _smbus
-        smbus = _smbus.SMBus(1)
-        log.info('SMBus initialised (legacy)')
-    except Exception:
-        pass
-
-# Scan the I2C bus for connected devices
 def scan_i2c():
     addrs = set()
     if i2c:
@@ -123,13 +108,6 @@ def scan_i2c():
         except Exception:
             try:
                 i2c.unlock()
-            except:
-                pass
-    if not addrs and smbus:
-        for addr in range(0x03, 0x78):
-            try:
-                smbus.read_byte(addr)
-                addrs.add(addr)
             except:
                 pass
     return addrs
@@ -147,28 +125,16 @@ else:
 # BME680 can be at 0x76 or 0x77
 BME680_ADDRESSES = [0x76, 0x77]
 bme680_sensor = None
-bme680_pimoroni = False
 
-for addr in BME680_ADDRESSES:
-    if addr not in detected_addresses:
-        continue
-    # Try Pimoroni library first (it's what the user has working)
-    try:
-        import bme680 as bme680_lib
-        bme680_sensor = bme680_lib.BME680(addr)
-        bme680_pimoroni = True
-        log.info('BME680 ready at 0x%02x (Pimoroni)', addr)
-        break
-    except Exception:
-        pass
-    # Try Adafruit library
-    if i2c:
+if i2c:
+    for addr in BME680_ADDRESSES:
+        if addr not in detected_addresses:
+            continue
         try:
             import adafruit_bme680
             bme680_sensor = adafruit_bme680.Adafruit_BME680_I2C(i2c, address=addr)
             bme680_sensor.sea_level_pressure = 1013.25
-            bme680_pimoroni = False
-            log.info('BME680 ready at 0x%02x (Adafruit)', addr)
+            log.info('BME680 ready at 0x%02x', addr)
             break
         except Exception:
             pass
@@ -367,17 +333,10 @@ def read_all():
 
     if bme680_sensor:
         try:
-            if bme680_pimoroni:
-                if bme680_sensor.get_sensor_data():
-                    data['bme680_temp'] = round(bme680_sensor.data.temperature, 2)
-                    data['bme680_humidity'] = round(bme680_sensor.data.humidity, 2)
-                    data['bme680_pressure'] = round(bme680_sensor.data.pressure, 2)
-                    data['bme680_gas'] = round(bme680_sensor.data.gas_resistance / 1000.0, 2)
-            else:
-                data['bme680_temp'] = round(bme680_sensor.temperature, 2)
-                data['bme680_humidity'] = round(bme680_sensor.relative_humidity, 2)
-                data['bme680_pressure'] = round(bme680_sensor.pressure, 2)
-                data['bme680_gas'] = round(bme680_sensor.gas / 1000.0, 2)
+            data['bme680_temp'] = round(bme680_sensor.temperature, 2)
+            data['bme680_humidity'] = round(bme680_sensor.relative_humidity, 2)
+            data['bme680_pressure'] = round(bme680_sensor.pressure, 2)
+            data['bme680_gas'] = round(bme680_sensor.gas / 1000.0, 2)
         except Exception as e:
             log.warning('BME680 read error: %s', e)
 
