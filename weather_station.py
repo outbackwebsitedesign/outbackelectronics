@@ -204,41 +204,59 @@ if not mag:
 
 # SEN0322 O2 sensor — uses DFRobot's own library
 # Install: git clone https://github.com/DFRobot/DFRobot_OxygenSensor.git ~/DFRobot_OxygenSensor
+#          sudo cp -r ~/DFRobot_OxygenSensor/python/raspberrypi/DFRobot_Oxygen.py /usr/local/lib/python3/dist-packages/
 # Known I2C address constants: ADDRESS_0=0x70, ADDRESS_1=0x71, ADDRESS_2=0x72, ADDRESS_3=0x73
-import glob as _glob
-for _dfr_path in _glob.glob(os.path.expanduser('~/**/DFRobot_OxygenSensor/python/raspberrypi'), recursive=False):
-    if _dfr_path not in sys.path:
-        sys.path.insert(0, _dfr_path)
-for _home in ['/home/daniel', '/home/pi', '/root', os.path.expanduser('~')]:
-    _p = os.path.join(_home, 'DFRobot_OxygenSensor/python/raspberrypi')
+
+# Search common locations for the DFRobot library
+_dfr_search = [
+    '/usr/local/lib/python3/dist-packages',
+    '/opt/DFRobot_OxygenSensor/python/raspberrypi',
+]
+# Also check home directories of common users
+for _home in ['/home/daniel', '/home/pi', '/root']:
+    _dfr_search.append(os.path.join(_home, 'DFRobot_OxygenSensor/python/raspberrypi'))
+# And the current user's home
+_user_home = os.path.expanduser('~')
+if _user_home != '~':
+    _dfr_search.append(os.path.join(_user_home, 'DFRobot_OxygenSensor/python/raspberrypi'))
+
+for _p in _dfr_search:
     if os.path.isdir(_p) and _p not in sys.path:
         sys.path.insert(0, _p)
+
 SEN0322_ADDRESSES = [0x73, 0x72, 0x71, 0x70]
 o2_sensor = None
 sen0322_ok = False
 
-try:
-    from DFRobot_Oxygen import DFRobot_Oxygen_IIC
-    for addr_idx, addr in enumerate(SEN0322_ADDRESSES):
-        if addr not in detected_addresses:
-            continue
-        try:
-            o2_sensor = DFRobot_Oxygen_IIC(1, addr_idx)
-            val = o2_sensor.get_oxygen_data(10)
-            if val > 0:
-                sen0322_ok = True
-                log.info('SEN0322 O2 ready at 0x%02x (%.1f%%Vol)', addr, val)
-                break
-            else:
+# Only attempt if an O2 sensor address is actually on the bus
+_o2_on_bus = any(a in detected_addresses for a in SEN0322_ADDRESSES)
+if _o2_on_bus:
+    try:
+        from DFRobot_Oxygen import DFRobot_Oxygen_IIC
+        for addr_idx, addr in enumerate(SEN0322_ADDRESSES):
+            if addr not in detected_addresses:
+                continue
+            try:
+                o2_sensor = DFRobot_Oxygen_IIC(1, addr_idx)
+                val = o2_sensor.get_oxygen_data(10)
+                if val > 0:
+                    sen0322_ok = True
+                    log.info('SEN0322 O2 ready at 0x%02x (%.1f%%Vol)', addr, val)
+                    break
+                else:
+                    o2_sensor = None
+            except Exception as e:
                 o2_sensor = None
-        except Exception as e:
-            o2_sensor = None
-            log.warning('SEN0322 probe failed at 0x%02x: %s', addr, e)
-except ImportError:
-    log.warning('DFRobot_Oxygen not installed — SEN0322 O2 sensor will be skipped')
+                log.warning('SEN0322 probe failed at 0x%02x: %s', addr, e)
+    except ImportError:
+        log.warning('DFRobot_Oxygen not installed — SEN0322 O2 sensor will be skipped')
+    except Exception as e:
+        log.warning('DFRobot_Oxygen init error: %s', e)
+else:
+    log.info('No SEN0322 O2 addresses (0x70-0x73) detected on bus — skipping')
 
-if not sen0322_ok:
-    log.warning('SEN0322 O2 not found')
+if _o2_on_bus and not sen0322_ok:
+    log.warning('SEN0322 O2 detected but could not initialise')
 
 
 def read_sen0322():
