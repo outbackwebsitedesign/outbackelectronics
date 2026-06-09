@@ -106,6 +106,8 @@ if [ -f "$ENV_FILE" ] && grep -q "^WEATHER_API_KEY=" "$ENV_FILE"; then
     echo "==> WEATHER_API_KEY already set in .env"
 else
     GENERATED_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))" 2>/dev/null || openssl rand -base64 32 | tr -d '/+=' | head -c 43)
+    # Ensure trailing newline before appending
+    [ -s "$ENV_FILE" ] && [ -n "$(tail -c 1 "$ENV_FILE")" ] && echo "" >> "$ENV_FILE"
     echo "WEATHER_API_KEY=${GENERATED_KEY}" >> "$ENV_FILE"
     echo "==> Generated WEATHER_API_KEY and added to .env"
 fi
