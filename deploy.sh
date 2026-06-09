@@ -100,23 +100,33 @@ else
     fi
 fi
 
-# ── Weather station sensor service ────────────────────────────────────────────
+# ── Weather station sensor service (server RPi has sensors attached) ──────────
+PYTHON_BIN="$(which python3)"
 if [ ! -f "/etc/systemd/system/${WEATHER_SERVICE}.service" ]; then
-    echo "==> Creating weather station service..."
-    sudo cp "${APP_DIR}/weather-station.service" "/etc/systemd/system/${WEATHER_SERVICE}.service"
-    # Update paths to match this install
-    sudo sed -i "s|WorkingDirectory=.*|WorkingDirectory=${APP_DIR}|" "/etc/systemd/system/${WEATHER_SERVICE}.service"
-    sudo sed -i "s|ExecStart=.*|ExecStart=/usr/bin/python3 ${APP_DIR}/weather_station.py|" "/etc/systemd/system/${WEATHER_SERVICE}.service"
-    sudo sed -i "s|EnvironmentFile=.*|EnvironmentFile=-${APP_DIR}/.env|" "/etc/systemd/system/${WEATHER_SERVICE}.service"
+    echo "==> Creating weather station sensor service..."
+    sudo tee "/etc/systemd/system/${WEATHER_SERVICE}.service" > /dev/null <<EOF
+[Unit]
+Description=Outback Electronics Weather Station Sensor Reader
+After=network-online.target ${SERVICE_NAME}.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=${SERVICE_USER}
+WorkingDirectory=${APP_DIR}
+ExecStart=${PYTHON_BIN} ${APP_DIR}/weather_station.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+EnvironmentFile=-${APP_DIR}/.env
+
+[Install]
+WantedBy=multi-user.target
+EOF
     sudo systemctl daemon-reload
     sudo systemctl enable "$WEATHER_SERVICE"
     echo "==> Weather station service created and enabled on boot."
-else
-    CURRENT_WS_USER=$(grep -E "^User=" "/etc/systemd/system/${WEATHER_SERVICE}.service" | cut -d= -f2)
-    if [ "$CURRENT_WS_USER" != "$SERVICE_USER" ]; then
-        sudo sed -i "s|^User=.*|User=${SERVICE_USER}|" "/etc/systemd/system/${WEATHER_SERVICE}.service"
-        sudo systemctl daemon-reload
-    fi
 fi
 
 echo "==> Restarting services..."

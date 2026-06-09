@@ -2,8 +2,9 @@
 """
 Outback Electronics Weather Station — Raspberry Pi sensor reader.
 
-Reads all 11 sensors and writes directly to weather.db every 30s.
-Runs on the same RPi as server.js — no HTTP needed.
+Reads all 11 sensors and POSTs to the weather API over HTTPS every 30s.
+Each RPi station identifies itself with a STATION_ID and authenticates
+with a WEATHER_API_KEY.
 
 I2C devices:
   BME680       0x76  — temp, humidity, pressure, VOC gas resistance
@@ -29,13 +30,16 @@ Install:
   sudo apt install -y python3-pip i2c-tools
   pip3 install adafruit-circuitpython-bme680 adafruit-circuitpython-scd4x \
     adafruit-circuitpython-ads1x15 adafruit-circuitpython-ds3231 \
-    adafruit-circuitpython-mmc56x3
+    adafruit-circuitpython-mmc56x3 requests
 
 Enable I2C:
   sudo raspi-config → Interface Options → I2C → Enable
   sudo reboot
 
 Usage:
+  export WEATHER_API_KEY="your-secret-key"
+  export WEATHER_URL="https://weather.outbackelectronics.com.au"
+  export STATION_ID="station-01"
   python3 weather_station.py
 """
 
@@ -43,8 +47,8 @@ import os
 import sys
 import time
 import math
-import json
 import logging
+import requests
 
 import board
 import busio
@@ -56,41 +60,19 @@ logging.basicConfig(
 )
 log = logging.getLogger('weather')
 
-APP_DIR = os.path.dirname(os.path.abspath(__file__))
-WEATHER_DB = os.path.join(APP_DIR, 'weather.db')
+API_URL = os.environ.get('WEATHER_URL', 'https://weather.outbackelectronics.com.au')
+API_KEY = os.environ.get('WEATHER_API_KEY', '')
+STATION_ID = os.environ.get('STATION_ID', 'default')
 INTERVAL = int(os.environ.get('WEATHER_INTERVAL', '30'))
-RETENTION_DAYS = 7
+
+if not API_KEY:
+    log.error('WEATHER_API_KEY env var is required')
+    sys.exit(1)
 
 i2c = busio.I2C(board.SCL, board.SDA)
 
-# ── DB helpers (same atomic-write pattern as server.js) ───────────────────────
-
-def read_weather_db():
-    try:
-        with open(WEATHER_DB, 'r') as f:
-            return json.load(f)
-    except:
-        return {'readings': []}
-
-
-def write_weather_db(data):
-    tmp = WEATHER_DB + '.tmp'
-    with open(tmp, 'w') as f:
-        json.dump(data, f)
-    os.rename(tmp, WEATHER_DB)
-
-
-def append_reading(reading):
-    db = read_weather_db()
-    db['readings'].append(reading)
-    cutoff = int(time.time() * 1000) - RETENTION_DAYS * 86400000
-    db['readings'] = [r for r in db['readings'] if r['ts'] > cutoff]
-    write_weather_db(db)
-
-
 # ── Sensor init ───────────────────────────────────────────────────────────────
 
-# BME680
 bme680 = None
 try:
     import adafruit_bme680
@@ -100,7 +82,6 @@ try:
 except Exception as e:
     log.warning('BME680 init failed: %s', e)
 
-# SCD41
 scd4x = None
 try:
     import adafruit_scd4x
@@ -110,7 +91,6 @@ try:
 except Exception as e:
     log.warning('SCD41 init failed: %s', e)
 
-# DS3231 RTC
 rtc = None
 try:
     import adafruit_ds3231
@@ -119,7 +99,6 @@ try:
 except Exception as e:
     log.warning('DS3231 init failed: %s', e)
 
-# MMC5603 magnetometer
 mag = None
 try:
     import adafruit_mmc56x3
@@ -128,7 +107,6 @@ try:
 except Exception as e:
     log.warning('MMC5603 init failed: %s', e)
 
-# SEN0322 O2 sensor (DFRobot Gravity I2C, address 0x73)
 SEN0322_ADDR = 0x73
 sen0322_ok = False
 try:
@@ -166,7 +144,6 @@ def read_sen0322():
         return None
 
 
-# ADS1115 x2 for analog sensors
 import adafruit_ads1x15.ads1115 as ADS
 from adafruit_ads1x15.analog_in import AnalogIn
 
@@ -284,8 +261,29 @@ def read_all():
     return data, rtc_time
 
 
+def post_reading(data, rtc_time):
+    payload = {
+        'station_id': STATION_ID,
+        'rtc_time': rtc_time,
+        'data': data,
+    }
+    try:
+        r = requests.post(
+            f'{API_URL}/api/weather/readings',
+            json=payload,
+            headers={'X-Api-Key': API_KEY},
+            timeout=10,
+        )
+        if r.status_code == 200:
+            log.info('[%s] Posted %d sensor values', STATION_ID, len(data))
+        else:
+            log.warning('POST returned %d: %s', r.status_code, r.text[:200])
+    except Exception as e:
+        log.warning('POST failed: %s', e)
+
+
 def main():
-    log.info('Weather station starting — writing to %s every %ds', WEATHER_DB, INTERVAL)
+    log.info('Station "%s" starting — posting to %s every %ds', STATION_ID, API_URL, INTERVAL)
     log.info('Waiting 5s for SCD41 first measurement...')
     time.sleep(5)
 
@@ -293,13 +291,7 @@ def main():
         try:
             data, rtc_time = read_all()
             if data:
-                reading = {
-                    'ts': int(time.time() * 1000),
-                    'rtc_time': rtc_time,
-                    'data': data,
-                }
-                append_reading(reading)
-                log.info('Saved %d sensor values', len(data))
+                post_reading(data, rtc_time)
             else:
                 log.warning('No sensor data collected')
         except Exception as e:

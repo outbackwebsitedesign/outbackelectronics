@@ -1,17 +1,21 @@
 [Unit]
 Description=Outback Electronics Weather Station Sensor Reader
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
-User=outbackelectronics
-WorkingDirectory=/home/outbackelectronics
-ExecStart=/usr/bin/python3 /home/outbackelectronics/weather_station.py
-Restart=on-failure
+User=pi
+WorkingDirectory=/home/pi/outbackelectronics
+ExecStart=/usr/bin/python3 /home/pi/outbackelectronics/weather_station.py
+Restart=always
 RestartSec=10
 StandardOutput=journal
 StandardError=journal
-EnvironmentFile=-/home/outbackelectronics/.env
+Environment=WEATHER_API_KEY=
+Environment=WEATHER_URL=https://weather.outbackelectronics.com.au
+Environment=STATION_ID=station-01
+Environment=WEATHER_INTERVAL=30
 
 [Install]
 WantedBy=multi-user.target

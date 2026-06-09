@@ -5582,8 +5582,10 @@ const weatherServer = http.createServer(async (req, res) => {
     let body;
     try { body = await readJson(req); } catch { return json(res, 400, { error: 'bad_request' }); }
     if (!body || typeof body !== 'object') return json(res, 400, { error: 'bad_request' });
+    const stationId = typeof body.station_id === 'string' ? body.station_id.slice(0, 64) : 'default';
     const reading = {
       ts: Date.now(),
+      station_id: stationId,
       rtc_time: typeof body.rtc_time === 'string' ? body.rtc_time.slice(0, 32) : null,
       data: {},
     };
@@ -5603,20 +5605,35 @@ const weatherServer = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true });
   }
 
-  // Latest reading
-  if (req.method === 'GET' && url.pathname === '/api/weather/latest') {
+  // List stations
+  if (req.method === 'GET' && url.pathname === '/api/weather/stations') {
     const db = readWeatherDb();
-    const last = db.readings.length ? db.readings[db.readings.length - 1] : null;
+    const stationMap = {};
+    for (const r of db.readings) {
+      const sid = r.station_id || 'default';
+      if (!stationMap[sid] || r.ts > stationMap[sid].ts) stationMap[sid] = r;
+    }
+    const stations = Object.entries(stationMap).map(([id, r]) => ({ id, last_seen: r.ts }));
+    return json(res, 200, { stations });
+  }
+
+  // Latest reading (optionally filtered by ?station=)
+  if (req.method === 'GET' && url.pathname === '/api/weather/latest') {
+    const station = url.searchParams.get('station') || null;
+    const db = readWeatherDb();
+    const candidates = station ? db.readings.filter(r => (r.station_id || 'default') === station) : db.readings;
+    const last = candidates.length ? candidates[candidates.length - 1] : null;
     return json(res, 200, { reading: last });
   }
 
-  // Historical readings
+  // Historical readings (optionally filtered by ?station=)
   if (req.method === 'GET' && url.pathname === '/api/weather/history') {
     const hours = Math.min(parseInt(url.searchParams.get('hours') || '24', 10) || 24, 168);
+    const station = url.searchParams.get('station') || null;
     const since = Date.now() - hours * 3600000;
     const db = readWeatherDb();
-    const filtered = db.readings.filter(r => r.ts > since);
-    // downsample if too many points — return max ~500
+    let filtered = db.readings.filter(r => r.ts > since);
+    if (station) filtered = filtered.filter(r => (r.station_id || 'default') === station);
     let result = filtered;
     if (filtered.length > 500) {
       const step = Math.ceil(filtered.length / 500);

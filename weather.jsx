@@ -66,7 +66,7 @@ function SensorCard({ def, value, ts }) {
   );
 }
 
-function StationStatus({ latest, rtcTime }) {
+function StationStatus({ latest, rtcTime, stationId }) {
   const online = latest && (Date.now() - latest.ts < 120000);
   return (
     <div className="card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
@@ -76,7 +76,7 @@ function StationStatus({ latest, rtcTime }) {
         boxShadow: online ? '0 0 8px rgba(79,107,62,0.5)' : 'none',
       }} />
       <span style={{ fontWeight: 600, fontSize: 14 }}>
-        Station {online ? 'Online' : 'Offline'}
+        {stationId ? stationId : 'Station'} — {online ? 'Online' : 'Offline'}
       </span>
       {rtcTime && (
         <span className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', marginLeft: 'auto' }}>
@@ -91,30 +91,45 @@ function StationStatus({ latest, rtcTime }) {
 export default function WeatherApp() {
   const [latest, setLatest] = useState(null);
   const [history, setHistory] = useState([]);
+  const [stations, setStations] = useState([]);
+  const [activeStation, setActiveStation] = useState(null);
   const [error, setError] = useState(null);
   const [tab, setTab] = useState('live');
   const intervalRef = useRef(null);
 
-  const fetchLatest = () => {
-    fetch('/api/weather/latest')
+  const fetchStations = () => {
+    fetch('/api/weather/stations')
+      .then(r => r.json())
+      .then(d => { if (d.stations) setStations(d.stations); })
+      .catch(() => {});
+  };
+
+  const fetchLatest = (stationId) => {
+    const q = stationId ? `?station=${encodeURIComponent(stationId)}` : '';
+    fetch(`/api/weather/latest${q}`)
       .then(r => r.json())
       .then(d => { if (d.reading) setLatest(d.reading); setError(null); })
       .catch(() => setError('Could not reach weather station API'));
   };
 
-  const fetchHistory = () => {
-    fetch('/api/weather/history?hours=24')
+  const fetchHistory = (stationId) => {
+    const q = stationId ? `&station=${encodeURIComponent(stationId)}` : '';
+    fetch(`/api/weather/history?hours=24${q}`)
       .then(r => r.json())
       .then(d => { if (d.readings) setHistory(d.readings); })
       .catch(() => {});
   };
 
   useEffect(() => {
-    fetchLatest();
-    fetchHistory();
-    intervalRef.current = setInterval(fetchLatest, 15000);
+    fetchStations();
+    fetchLatest(activeStation);
+    fetchHistory(activeStation);
+    intervalRef.current = setInterval(() => {
+      fetchStations();
+      fetchLatest(activeStation);
+    }, 15000);
     return () => clearInterval(intervalRef.current);
-  }, []);
+  }, [activeStation]);
 
   const readings = latest?.data || {};
   const rtcTime = latest?.rtc_time || null;
@@ -151,7 +166,19 @@ export default function WeatherApp() {
 
       {/* Content */}
       <div className="container" style={{ flex: 1, paddingTop: 32, paddingBottom: 48 }}>
-        <StationStatus latest={latest} rtcTime={rtcTime} />
+        {stations.length > 1 && (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+            <button className={`btn ${!activeStation ? 'btn-rust' : 'btn-ghost'}`} style={{ padding: '6px 12px', fontSize: 12 }}
+              onClick={() => setActiveStation(null)}>All Stations</button>
+            {stations.map(s => (
+              <button key={s.id} className={`btn ${activeStation === s.id ? 'btn-rust' : 'btn-ghost'}`}
+                style={{ padding: '6px 12px', fontSize: 12 }}
+                onClick={() => setActiveStation(s.id)}>{s.id}</button>
+            ))}
+          </div>
+        )}
+
+        <StationStatus latest={latest} rtcTime={rtcTime} stationId={latest?.station_id} />
 
         {error && (
           <div style={{ marginTop: 16, padding: '12px 16px', background: '#f3d5c5', border: '1px solid #e8b898', color: '#7a3a18', fontSize: 13 }}>
