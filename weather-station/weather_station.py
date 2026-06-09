@@ -183,6 +183,21 @@ if not rtc:
 # MMC5603 can be at 0x30
 MMC5603_ADDRESSES = [0x30]
 mag = None
+_mag_i2c_addr = None
+
+def _mmc5603_set_pulse(device, i2c_bus, addr):
+    """Issue a SET pulse to degauss the MMC5603 sense element.
+
+    The Adafruit library doesn't expose SET/RESET directly, so we write
+    the bit ourselves.  Control register 0 is 0x1B; bit 3 (0x08) = SET.
+    The chip clears the bit automatically after ~1 µs.
+    """
+    try:
+        i2c_bus.writeto(addr, bytes([0x1B, 0x08]))
+        import time as _t; _t.sleep(0.01)
+    except Exception:
+        pass  # best-effort; fall through to normal read
+
 if i2c:
     import time as _time
     _time.sleep(0.5)
@@ -191,20 +206,32 @@ if i2c:
             continue
         try:
             import adafruit_mmc56x3
-            mag = adafruit_mmc56x3.MMC5603(i2c)
-            # Discard first few readings — often saturated after bus scan
-            for _attempt in range(5):
+            _candidate = adafruit_mmc56x3.MMC5603(i2c)
+            # Issue a SET pulse to clear any remanence from the I2C bus scan
+            _mmc5603_set_pulse(_candidate, i2c, addr)
+            _time.sleep(0.05)
+            # Try up to 15 times (≈5 s) — saturation can persist after power-on
+            for _attempt in range(15):
                 _time.sleep(0.3)
-                x, y, z = mag.magnetic
+                x, y, z = _candidate.magnetic
                 if abs(x) < 3000 and abs(y) < 3000 and abs(z) < 3000:
-                    log.info('MMC5603 ready at 0x%02x (test: x=%.1f y=%.1f z=%.1f µT, attempt %d)', addr, x, y, z, _attempt + 1)
+                    mag = _candidate
+                    _mag_i2c_addr = addr
+                    log.info('MMC5603 ready at 0x%02x (x=%.1f y=%.1f z=%.1f µT, attempt %d)',
+                             addr, x, y, z, _attempt + 1)
                     break
+                # Re-issue SET every 5 attempts
+                if _attempt % 5 == 4:
+                    log.debug('MMC5603 still saturated at attempt %d — re-issuing SET pulse', _attempt + 1)
+                    _mmc5603_set_pulse(_candidate, i2c, addr)
             else:
-                log.warning('MMC5603 at 0x%02x still saturated after 5 attempts (%.1f, %.1f, %.1f) — disabling', addr, x, y, z)
-                mag = None
+                log.warning('MMC5603 at 0x%02x still saturated after 15 attempts (%.1f, %.1f, %.1f) — will retry at runtime',
+                            addr, x, y, z)
+                # Keep the object; runtime reads will attempt SET recovery
+                mag = _candidate
+                _mag_i2c_addr = addr
             break
         except Exception as e:
-            mag = None
             log.warning('MMC5603 init failed at 0x%02x: %s', addr, e)
 
 if not mag:
@@ -404,7 +431,13 @@ def read_all():
         try:
             x, y, z = mag.magnetic
             if abs(x) > 3000 or abs(y) > 3000 or abs(z) > 3000:
-                log.warning('MMC5603 saturated (%.1f, %.1f, %.1f) — skipping', x, y, z)
+                log.warning('MMC5603 saturated (%.1f, %.1f, %.1f) — issuing SET pulse and retrying', x, y, z)
+                if _mag_i2c_addr is not None:
+                    _mmc5603_set_pulse(mag, i2c, _mag_i2c_addr)
+                import time as _t; _t.sleep(0.05)
+                x, y, z = mag.magnetic
+            if abs(x) > 3000 or abs(y) > 3000 or abs(z) > 3000:
+                log.warning('MMC5603 still saturated after SET pulse (%.1f, %.1f, %.1f) — skipping this reading', x, y, z)
             else:
                 raw['mag_x'] = round(x, 2)
                 raw['mag_y'] = round(y, 2)
