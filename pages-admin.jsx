@@ -673,7 +673,15 @@ function OrderDrawer({ edit, expenses, onClose, onRowUpdate, onSave, onExpensesC
     }
   };
 
+  const PARTS_MARGIN = 0.20;
   const blankExpense = (jobId) => ({ description:'', category:'parts', amount:'', date: new Date().toLocaleDateString('en-AU', {day:'2-digit',month:'2-digit',year:'numeric'}), receipt:null, jobId: jobId||'', notes:'', isSecondHand:false, partStatus:'' });
+
+  const recalcTotal = (expList) => {
+    const cost = expList.filter(e => e.jobId && e.jobId === form.id).reduce((s, e) => s + (e.partStatus === 'returned' ? 0 : (Number(e.amount) || 0)), 0);
+    const newTotal = Math.round(cost * (1 + PARTS_MARGIN) * 100) / 100;
+    setForm(f => ({ ...f, total: newTotal }));
+    saveNow({ total: newTotal });
+  };
 
   const saveExpense = async (exp) => {
     const payload = { ...exp, amount: Number(exp.amount) || 0 };
@@ -685,6 +693,7 @@ function OrderDrawer({ edit, expenses, onClose, onRowUpdate, onSave, onExpensesC
         ? expenses.map(e => e.id === payload.id ? d.item : e)
         : [...expenses, d.item];
       onExpensesChange(newExpenses);
+      recalcTotal(newExpenses);
     }
     setExpenseEdit(null); setExpenseForm({});
   };
@@ -693,7 +702,9 @@ function OrderDrawer({ edit, expenses, onClose, onRowUpdate, onSave, onExpensesC
     if (!confirm('Delete this expense?')) return;
     const r = await fetch('/api/admin/expenses/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id }) }).catch(()=>null);
     if (!r || !r.ok) { adminToast('Failed to delete expense.'); return; }
-    onExpensesChange(expenses.filter(e => e.id !== id));
+    const newExpenses = expenses.filter(e => e.id !== id);
+    onExpensesChange(newExpenses);
+    recalcTotal(newExpenses);
     setExpenseEdit(null); setExpenseForm({});
   };
 
