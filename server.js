@@ -4879,6 +4879,7 @@ const PORTAL_CORS_ORIGINS = new Set([
   process.env.SITE_URL || `http://localhost:${MAIN_PORT}`,
   GAMES_URL,
   TOOLS_URL,
+  WEATHER_URL,
 ].filter(Boolean));
 
 const portalServer = http.createServer(async (req, res) => {
