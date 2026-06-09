@@ -35,17 +35,18 @@ function formatAge(ms) {
   return `${Math.round(ms / 86400000)}d ago`;
 }
 
-function ReadingCard({ def, value, ts }) {
+function ReadingCard({ def, value, ts, onClick }) {
   const age = ts ? Date.now() - ts : null;
   const stale = age !== null && age > 120000;
   const offline = value === null || value === undefined;
 
   return (
-    <div className="card" style={{
+    <div className="card" onClick={onClick} style={{
       padding: '20px',
       display: 'flex', flexDirection: 'column', gap: 8,
       opacity: offline ? 0.4 : 1,
       borderLeft: stale ? '3px solid var(--ochre)' : offline ? '3px solid var(--line-strong)' : '3px solid var(--eucalyptus)',
+      cursor: onClick ? 'pointer' : 'default',
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontSize: 13, color: 'var(--ink-2)', fontWeight: 500 }}>{def.label}</span>
@@ -60,6 +61,234 @@ function ReadingCard({ def, value, ts }) {
         <span style={{ fontSize: 14, color: 'var(--ink-2)', fontFamily: "'JetBrains Mono', monospace" }}>{def.unit}</span>
       </div>
       {def.note && !offline && <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>{def.note}</div>}
+    </div>
+  );
+}
+
+// ── Sparkline / line graph ─────────────────────────────────────────────────────
+function LineGraph({ points, color = 'var(--rust)', height = 200 }) {
+  if (!points || points.length < 2) return (
+    <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-3)', fontSize: 13 }}>
+      Not enough data
+    </div>
+  );
+  const values = points.map(p => p.v);
+  const times  = points.map(p => p.t);
+  const minV = Math.min(...values);
+  const maxV = Math.max(...values);
+  const range = maxV - minV || 1;
+  const W = 800, H = height;
+  const PAD = { top: 8, bottom: 28, left: 48, right: 12 };
+  const iw = W - PAD.left - PAD.right;
+  const ih = H - PAD.top - PAD.bottom;
+  const minT = Math.min(...times), maxT = Math.max(...times), tRange = maxT - minT || 1;
+
+  const x = t => PAD.left + ((t - minT) / tRange) * iw;
+  const y = v => PAD.top + (1 - (v - minV) / range) * ih;
+
+  const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ');
+  const areaD = pathD + ` L${x(times[times.length - 1]).toFixed(1)},${(PAD.top + ih).toFixed(1)} L${x(times[0]).toFixed(1)},${(PAD.top + ih).toFixed(1)} Z`;
+
+  // Y-axis ticks
+  const yTicks = 4;
+  const yTickVals = Array.from({ length: yTicks + 1 }, (_, i) => minV + (range * i) / yTicks);
+
+  // X-axis ticks (hours)
+  const xTickCount = 6;
+  const xTicks = Array.from({ length: xTickCount + 1 }, (_, i) => minT + (tRange * i) / xTickCount);
+
+  const fmt = (v) => Math.abs(v) >= 1000 ? v.toFixed(0) : Math.abs(v) >= 10 ? v.toFixed(1) : v.toFixed(2);
+  const fmtTime = (ms) => {
+    const d = new Date(ms);
+    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+  };
+
+  const gradId = `grad-${Math.random().toString(36).slice(2)}`;
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block', overflow: 'visible' }}>
+      <defs>
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.18" />
+          <stop offset="100%" stopColor={color} stopOpacity="0.02" />
+        </linearGradient>
+      </defs>
+      {/* Grid lines */}
+      {yTickVals.map((v, i) => (
+        <line key={i} x1={PAD.left} x2={W - PAD.right} y1={y(v)} y2={y(v)}
+          stroke="var(--line)" strokeWidth="1" />
+      ))}
+      {/* Area fill */}
+      <path d={areaD} fill={`url(#${gradId})`} />
+      {/* Line */}
+      <path d={pathD} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+      {/* Y axis labels */}
+      {yTickVals.map((v, i) => (
+        <text key={i} x={PAD.left - 6} y={y(v) + 4} textAnchor="end"
+          fontSize="10" fill="var(--ink-3)" fontFamily="'JetBrains Mono', monospace">
+          {fmt(v)}
+        </text>
+      ))}
+      {/* X axis labels */}
+      {xTicks.map((t, i) => (
+        <text key={i} x={x(t)} y={H - 6} textAnchor="middle"
+          fontSize="10" fill="var(--ink-3)" fontFamily="'JetBrains Mono', monospace">
+          {fmtTime(t)}
+        </text>
+      ))}
+    </svg>
+  );
+}
+
+// ── Detail page for a single reading ──────────────────────────────────────────
+const QUICK_RANGES = [
+  { label: '6h',  hours: 6 },
+  { label: '24h', hours: 24 },
+  { label: '7d',  hours: 24 * 7 },
+  { label: '30d', hours: 24 * 30 },
+];
+
+function ReadingDetail({ def, stationId, onBack }) {
+  const [history, setHistory] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [mode, setMode] = useState('range'); // 'range' | 'year'
+  const [hours, setHours] = useState(24);
+  const [years, setYears] = useState([]);
+  const [selectedYear, setSelectedYear] = useState(null);
+
+  // Load available years once
+  useEffect(() => {
+    fetch('/api/weather/years').then(r => r.json()).then(d => {
+      const ys = d.years || [];
+      setYears(ys);
+      if (ys.length > 0 && !selectedYear) setSelectedYear(ys[0]);
+    }).catch(() => {});
+  }, []);
+
+  const loadRange = (h, sid) => {
+    const sq = sid ? `&station=${encodeURIComponent(sid)}` : '';
+    const sq2 = sid ? `?station=${encodeURIComponent(sid)}` : '';
+    setLoading(true);
+    Promise.all([
+      fetch(`/api/weather/history?hours=${h}${sq}`).then(r => r.json()).catch(() => ({ readings: [] })),
+      fetch(`/api/weather/stats${sq2}`).then(r => r.json()).catch(() => ({ stats: {} })),
+    ]).then(([hist, st]) => {
+      setHistory(hist.readings || []);
+      setStats(st.stats || {});
+      setLoading(false);
+    });
+  };
+
+  const loadYear = (yr, sid) => {
+    const from = new Date(yr, 0, 1).getTime();
+    const to   = new Date(yr + 1, 0, 1).getTime() - 1;
+    const sq  = sid ? `&station=${encodeURIComponent(sid)}` : '';
+    const sq2 = sid ? `&station=${encodeURIComponent(sid)}` : '';
+    setLoading(true);
+    Promise.all([
+      fetch(`/api/weather/history?from=${from}&to=${to}${sq}`).then(r => r.json()).catch(() => ({ readings: [] })),
+      fetch(`/api/weather/stats?from=${from}&to=${to}${sq2}`).then(r => r.json()).catch(() => ({ stats: {} })),
+    ]).then(([hist, st]) => {
+      setHistory(hist.readings || []);
+      setStats(st.stats || {});
+      setLoading(false);
+    });
+  };
+
+  useEffect(() => {
+    if (mode === 'range') loadRange(hours, stationId);
+    else if (mode === 'year' && selectedYear) loadYear(selectedYear, stationId);
+  }, [mode, hours, selectedYear, stationId]);
+
+  const points = history
+    .filter(r => r.data && r.data[def.key] !== undefined)
+    .map(r => ({ t: r.ts, v: r.data[def.key] }));
+
+  const keyStat = stats && stats[def.key];
+  const fmt = (v) => v === null || v === undefined ? '—' : (typeof v === 'number' ? (Math.abs(v) >= 10 ? v.toFixed(1) : v.toFixed(2)) : v);
+
+  const avgPeriod = points.length ? (points.reduce((s, p) => s + p.v, 0) / points.length) : null;
+  const minPeriod = points.length ? Math.min(...points.map(p => p.v)) : null;
+  const maxPeriod = points.length ? Math.max(...points.map(p => p.v)) : null;
+  const periodLabel = mode === 'year' ? `${selectedYear}` : QUICK_RANGES.find(r => r.hours === hours)?.label || `${hours}h`;
+
+  return (
+    <div>
+      <div style={{ marginTop: 0, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
+        {[
+          { label: `${periodLabel} Average`, value: fmt(avgPeriod), unit: def.unit },
+          { label: `${periodLabel} Min`,     value: fmt(minPeriod), unit: def.unit },
+          { label: `${periodLabel} Max`,     value: fmt(maxPeriod), unit: def.unit },
+        ].map(s => (
+          <div key={s.label} className="card" style={{ padding: '14px 16px' }}>
+            <div className="eyebrow" style={{ marginBottom: 6 }}>{s.label}</div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+              <span style={{ fontSize: 28, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{s.value}</span>
+              <span style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: "'JetBrains Mono', monospace" }}>{s.unit}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="card" style={{ marginTop: 20, padding: '20px 24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+          <div style={{ fontSize: 14, fontWeight: 600 }}>History — {def.label}</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            {QUICK_RANGES.map(r => (
+              <button key={r.hours} className={`btn ${mode === 'range' && hours === r.hours ? 'btn-rust' : 'btn-ghost'}`}
+                style={{ padding: '4px 10px', fontSize: 11 }}
+                onClick={() => { setMode('range'); setHours(r.hours); }}>
+                {r.label}
+              </button>
+            ))}
+            {years.length > 0 && (
+              <select
+                className="select"
+                style={{ padding: '4px 8px', fontSize: 11, width: 'auto', minWidth: 80 }}
+                value={mode === 'year' ? selectedYear : ''}
+                onChange={e => { if (e.target.value) { setMode('year'); setSelectedYear(parseInt(e.target.value, 10)); } }}
+              >
+                <option value="">Year…</option>
+                {years.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            )}
+          </div>
+        </div>
+        {loading ? (
+          <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-3)', fontSize: 13 }}>Loading…</div>
+        ) : (
+          <LineGraph points={points} color="var(--rust)" height={220} />
+        )}
+      </div>
+
+      {points.length > 0 && (
+        <div className="card" style={{ marginTop: 16, padding: '20px 24px' }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Recent Readings</div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--line)' }}>
+                  <th style={{ textAlign: 'left', padding: '6px 12px 6px 0', fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: '0.1em', color: 'var(--ink-3)', textTransform: 'uppercase' }}>Time</th>
+                  <th style={{ textAlign: 'right', padding: '6px 0', fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: '0.1em', color: 'var(--ink-3)', textTransform: 'uppercase' }}>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...points].reverse().slice(0, 50).map((p, i) => (
+                  <tr key={i} style={{ borderBottom: '1px solid var(--line)' }}>
+                    <td style={{ padding: '6px 12px 6px 0', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: 'var(--ink-2)' }}>
+                      {new Date(p.t).toLocaleString('en-AU', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '6px 0', fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>
+                      {fmt(p.v)} <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>{def.unit}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -612,6 +841,7 @@ function WeatherDashboard() {
   const [activeStation, setActiveStation] = useState(null);
   const [error, setError] = useState(null);
   const [tick, setTick] = useState(0);
+  const [detailKey, setDetailKey] = useState(null);
   const intervalRef = useRef(null);
 
   const fetchStations = () => {
@@ -660,6 +890,31 @@ function WeatherDashboard() {
   const visibleGroups = GROUPS.filter(g =>
     !hasAnyData || READINGS.some(r => r.group === g.key && data[r.key] !== undefined)
   );
+
+  const detailDef = detailKey ? READINGS.find(r => r.key === detailKey) : null;
+
+  if (detailDef) {
+    return (
+      <>
+        <div className="page-head">
+          <div className="container">
+            <div className="crumbs eyebrow">
+              <span onClick={() => setDetailKey(null)} style={{ cursor: 'pointer' }}>Outback</span>
+              <span style={{ color: 'var(--ink-3)' }}>/</span>
+              <span onClick={() => setDetailKey(null)} style={{ cursor: 'pointer' }}>Weather Station</span>
+              <span style={{ color: 'var(--ink-3)' }}>/</span>
+              <span>{detailDef.label}</span>
+            </div>
+            <h1>{detailDef.label}</h1>
+            <p className="lead">{detailDef.unit}{detailDef.note ? ` · ${detailDef.note}` : ''}</p>
+          </div>
+        </div>
+        <div className="container" style={{ flex: 1, paddingTop: 32, paddingBottom: 48 }}>
+          <ReadingDetail def={detailDef} stationId={activeStation} onBack={() => setDetailKey(null)} />
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -712,7 +967,8 @@ function WeatherDashboard() {
                   gap: 16,
                 }}>
                   {visible.map(def => (
-                    <ReadingCard key={def.key} def={def} value={data[def.key] ?? null} ts={latest?.ts} />
+                    <ReadingCard key={def.key} def={def} value={data[def.key] ?? null} ts={latest?.ts}
+                      onClick={() => setDetailKey(def.key)} />
                   ))}
                 </div>
               </div>

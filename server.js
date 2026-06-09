@@ -5552,9 +5552,6 @@ function writeWeatherDb(data) {
 function appendWeatherReading(reading) {
   const db = readWeatherDb();
   db.readings.push(reading);
-  // keep last 7 days (readings every ~30s = ~20160 entries)
-  const cutoff = Date.now() - 7 * 86400000;
-  db.readings = db.readings.filter(r => r.ts > cutoff);
   writeWeatherDb(db);
 }
 
@@ -5627,18 +5624,55 @@ const weatherServer = http.createServer(async (req, res) => {
 
   // Historical readings (optionally filtered by ?station=)
   if (req.method === 'GET' && url.pathname === '/api/weather/history') {
-    const hours = Math.min(parseInt(url.searchParams.get('hours') || '24', 10) || 24, 168);
+    const hours = parseInt(url.searchParams.get('hours') || '24', 10) || 24;
+    const from  = url.searchParams.get('from') ? parseInt(url.searchParams.get('from'), 10) : null;
+    const to    = url.searchParams.get('to')   ? parseInt(url.searchParams.get('to'),   10) : null;
     const station = url.searchParams.get('station') || null;
-    const since = Date.now() - hours * 3600000;
+    const since = from || (Date.now() - hours * 3600000);
+    const until = to || null;
     const db = readWeatherDb();
     let filtered = db.readings.filter(r => r.ts > since);
+    if (until) filtered = filtered.filter(r => r.ts <= until);
     if (station) filtered = filtered.filter(r => (r.station_id || 'default') === station);
     let result = filtered;
-    if (filtered.length > 500) {
-      const step = Math.ceil(filtered.length / 500);
+    if (filtered.length > 1000) {
+      const step = Math.ceil(filtered.length / 1000);
       result = filtered.filter((_, i) => i % step === 0);
     }
     return json(res, 200, { readings: result, count: filtered.length });
+  }
+
+  // Stats — min/avg/max per key, optionally filtered by station/from/to
+  if (req.method === 'GET' && url.pathname === '/api/weather/stats') {
+    const station = url.searchParams.get('station') || null;
+    const from = url.searchParams.get('from') ? parseInt(url.searchParams.get('from'), 10) : null;
+    const to   = url.searchParams.get('to')   ? parseInt(url.searchParams.get('to'),   10) : null;
+    const db = readWeatherDb();
+    let readings = db.readings;
+    if (station) readings = readings.filter(r => (r.station_id || 'default') === station);
+    if (from) readings = readings.filter(r => r.ts >= from);
+    if (to)   readings = readings.filter(r => r.ts <= to);
+    const stats = {};
+    for (const r of readings) {
+      for (const [k, v] of Object.entries(r.data || {})) {
+        if (typeof v !== 'number') continue;
+        if (!stats[k]) stats[k] = { min: v, max: v, sum: 0, count: 0 };
+        if (v < stats[k].min) stats[k].min = v;
+        if (v > stats[k].max) stats[k].max = v;
+        stats[k].sum += v;
+        stats[k].count += 1;
+      }
+    }
+    for (const s of Object.values(stats)) { s.avg = s.count ? s.sum / s.count : null; delete s.sum; }
+    return json(res, 200, { stats, count: readings.length });
+  }
+
+  // Available years in the DB
+  if (req.method === 'GET' && url.pathname === '/api/weather/years') {
+    const db = readWeatherDb();
+    const yearSet = new Set();
+    for (const r of db.readings) { yearSet.add(new Date(r.ts).getFullYear()); }
+    return json(res, 200, { years: [...yearSet].sort((a, b) => b - a) });
   }
 
   // Analytics event
