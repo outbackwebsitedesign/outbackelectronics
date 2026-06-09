@@ -303,36 +303,32 @@ if ADS and i2c:
         except Exception as e:
             log.warning('ADS1115 init failed at 0x%02x: %s', addr, e)
 
-    # Map channels across found ADS1115 devices
-    # First ADS: NH3, H2, CH4, CO on channels 0-3
-    # Second ADS: H2S, MQ-4 on channels 0-1
-    CHANNEL_MAP_1 = [
-        ('sen0567_nh3', 0), ('sen0572_h2', 1),
-        ('sen0565_ch4', 2), ('sen0564_co', 3),
-    ]
-    CHANNEL_MAP_2 = [
-        ('sen0568_h2s', 0), ('mq4_combustible', 1),
-    ]
+    # Map channels by I2C address so board identity is stable regardless of scan order.
+    # 0x48 = gas board 1 (NH3, H2, CH4, CO)
+    # 0x49 = gas board 2 (H2S, combustible)
+    # Change these addresses if your ADDR pin wiring differs.
+    ADS_CHANNEL_MAP = {
+        0x48: [
+            ('sen0567_nh3', 0), ('sen0572_h2', 1),
+            ('sen0565_ch4', 2), ('sen0564_co', 3),
+        ],
+        0x49: [
+            ('sen0568_h2s', 0), ('mq4_combustible', 1),
+        ],
+    }
 
-    if len(ads_devices) >= 1:
-        _, dev = ads_devices[0]
-        pins = [ADS.P0, ADS.P1, ADS.P2, ADS.P3]
-        for key, ch in CHANNEL_MAP_1:
+    pins = [ADS.P0, ADS.P1, ADS.P2, ADS.P3]
+    for addr, dev in ads_devices:
+        channel_map = ADS_CHANNEL_MAP.get(addr)
+        if channel_map is None:
+            log.info('ADS1115 at 0x%02x has no channel map — skipping', addr)
+            continue
+        for key, ch in channel_map:
             try:
                 analog_channels[key] = AnalogIn(dev, pins[ch])
             except Exception:
                 pass
-        log.info('ADS1115 #1 channels: %s', ', '.join(k for k, _ in CHANNEL_MAP_1 if k in analog_channels))
-
-    if len(ads_devices) >= 2:
-        _, dev = ads_devices[1]
-        pins = [ADS.P0, ADS.P1, ADS.P2, ADS.P3]
-        for key, ch in CHANNEL_MAP_2:
-            try:
-                analog_channels[key] = AnalogIn(dev, pins[ch])
-            except Exception:
-                pass
-        log.info('ADS1115 #2 channels: %s', ', '.join(k for k, _ in CHANNEL_MAP_2 if k in analog_channels))
+        log.info('ADS1115@0x%02x channels: %s', addr, ', '.join(k for k, _ in channel_map if k in analog_channels))
 
 
 # ── Analog → ppm conversion ──────────────────────────────────────────────────
@@ -411,13 +407,14 @@ def read_all():
             if abs(x) > 3000 or abs(y) > 3000 or abs(z) > 3000:
                 log.warning('MMC5603 saturated (%.1f, %.1f, %.1f) — skipping', x, y, z)
             else:
-                raw['mmc5603_x'] = round(x, 2)
-                raw['mmc5603_y'] = round(y, 2)
-                raw['mmc5603_z'] = round(z, 2)
+                raw['mag_x'] = round(x, 2)
+                raw['mag_y'] = round(y, 2)
+                raw['mag_z'] = round(z, 2)
+                # 2-D heading — only accurate when sensor is level (no tilt compensation)
                 heading = math.degrees(math.atan2(y, x))
                 if heading < 0:
                     heading += 360
-                raw['mmc5603_heading'] = round(heading, 1)
+                raw['compass'] = round(heading, 1)
         except Exception as e:
             log.warning('MMC5603 read error: %s', e)
 
