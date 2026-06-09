@@ -191,12 +191,19 @@ def _mmc5603_set_pulse(device, i2c_bus, addr):
     The Adafruit library doesn't expose SET/RESET directly, so we write
     the bit ourselves.  Control register 0 is 0x1B; bit 3 (0x08) = SET.
     The chip clears the bit automatically after ~1 µs.
+    CircuitPython busio.I2C requires try_lock/unlock around direct writes.
     """
+    import time as _t
     try:
-        i2c_bus.writeto(addr, bytes([0x1B, 0x08]))
-        import time as _t; _t.sleep(0.01)
-    except Exception:
-        pass  # best-effort; fall through to normal read
+        while not i2c_bus.try_lock():
+            pass
+        try:
+            i2c_bus.writeto(addr, bytes([0x1B, 0x08]))
+        finally:
+            i2c_bus.unlock()
+        _t.sleep(0.01)
+    except Exception as e:
+        log.debug('MMC5603 SET pulse failed: %s', e)
 
 if i2c:
     import time as _time
