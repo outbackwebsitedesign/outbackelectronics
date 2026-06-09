@@ -16,6 +16,7 @@
 set -e
 
 SERVICE_NAME="outbackelectronics"
+WEATHER_SERVICE="weather-station"
 SERVICE_USER="outbackelectronics"
 APP_DIR="$(cd "$(dirname "$0")" && pwd)"
 NODE_BIN="$(which node)"
@@ -99,8 +100,28 @@ else
     fi
 fi
 
-echo "==> Restarting service..."
+# ── Weather station sensor service ────────────────────────────────────────────
+if [ ! -f "/etc/systemd/system/${WEATHER_SERVICE}.service" ]; then
+    echo "==> Creating weather station service..."
+    sudo cp "${APP_DIR}/weather-station.service" "/etc/systemd/system/${WEATHER_SERVICE}.service"
+    # Update paths to match this install
+    sudo sed -i "s|WorkingDirectory=.*|WorkingDirectory=${APP_DIR}|" "/etc/systemd/system/${WEATHER_SERVICE}.service"
+    sudo sed -i "s|ExecStart=.*|ExecStart=/usr/bin/python3 ${APP_DIR}/weather_station.py|" "/etc/systemd/system/${WEATHER_SERVICE}.service"
+    sudo sed -i "s|EnvironmentFile=.*|EnvironmentFile=-${APP_DIR}/.env|" "/etc/systemd/system/${WEATHER_SERVICE}.service"
+    sudo systemctl daemon-reload
+    sudo systemctl enable "$WEATHER_SERVICE"
+    echo "==> Weather station service created and enabled on boot."
+else
+    CURRENT_WS_USER=$(grep -E "^User=" "/etc/systemd/system/${WEATHER_SERVICE}.service" | cut -d= -f2)
+    if [ "$CURRENT_WS_USER" != "$SERVICE_USER" ]; then
+        sudo sed -i "s|^User=.*|User=${SERVICE_USER}|" "/etc/systemd/system/${WEATHER_SERVICE}.service"
+        sudo systemctl daemon-reload
+    fi
+fi
+
+echo "==> Restarting services..."
 sudo systemctl restart "$SERVICE_NAME"
+sudo systemctl restart "$WEATHER_SERVICE"
 
 # ── Backup script ────────────────────────────────────────────
 BACKUP_SCRIPT="/home/$(whoami)/backup-db.sh"
@@ -163,3 +184,5 @@ fi
 
 echo "==> Done. Service status:"
 sudo systemctl status "$SERVICE_NAME" --no-pager -l
+echo ""
+sudo systemctl status "$WEATHER_SERVICE" --no-pager -l

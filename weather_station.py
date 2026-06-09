@@ -2,7 +2,8 @@
 """
 Outback Electronics Weather Station — Raspberry Pi sensor reader.
 
-Reads all 11 sensors and POSTs to weather.outbackelectronics.com.au every 30s.
+Reads all 11 sensors and writes directly to weather.db every 30s.
+Runs on the same RPi as server.js — no HTTP needed.
 
 I2C devices:
   BME680       0x76  — temp, humidity, pressure, VOC gas resistance
@@ -28,15 +29,13 @@ Install:
   sudo apt install -y python3-pip i2c-tools
   pip3 install adafruit-circuitpython-bme680 adafruit-circuitpython-scd4x \
     adafruit-circuitpython-ads1x15 adafruit-circuitpython-ds3231 \
-    adafruit-circuitpython-mmc56x3 requests
+    adafruit-circuitpython-mmc56x3
 
 Enable I2C:
   sudo raspi-config → Interface Options → I2C → Enable
   sudo reboot
 
 Usage:
-  export WEATHER_API_KEY="your-secret-key"
-  export WEATHER_URL="https://weather.outbackelectronics.com.au"
   python3 weather_station.py
 """
 
@@ -44,8 +43,8 @@ import os
 import sys
 import time
 import math
+import json
 import logging
-import requests
 
 import board
 import busio
@@ -57,15 +56,37 @@ logging.basicConfig(
 )
 log = logging.getLogger('weather')
 
-API_URL = os.environ.get('WEATHER_URL', 'https://weather.outbackelectronics.com.au')
-API_KEY = os.environ.get('WEATHER_API_KEY', '')
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+WEATHER_DB = os.path.join(APP_DIR, 'weather.db')
 INTERVAL = int(os.environ.get('WEATHER_INTERVAL', '30'))
-
-if not API_KEY:
-    log.error('WEATHER_API_KEY env var is required')
-    sys.exit(1)
+RETENTION_DAYS = 7
 
 i2c = busio.I2C(board.SCL, board.SDA)
+
+# ── DB helpers (same atomic-write pattern as server.js) ───────────────────────
+
+def read_weather_db():
+    try:
+        with open(WEATHER_DB, 'r') as f:
+            return json.load(f)
+    except:
+        return {'readings': []}
+
+
+def write_weather_db(data):
+    tmp = WEATHER_DB + '.tmp'
+    with open(tmp, 'w') as f:
+        json.dump(data, f)
+    os.rename(tmp, WEATHER_DB)
+
+
+def append_reading(reading):
+    db = read_weather_db()
+    db['readings'].append(reading)
+    cutoff = int(time.time() * 1000) - RETENTION_DAYS * 86400000
+    db['readings'] = [r for r in db['readings'] if r['ts'] > cutoff]
+    write_weather_db(db)
+
 
 # ── Sensor init ───────────────────────────────────────────────────────────────
 
@@ -108,8 +129,6 @@ except Exception as e:
     log.warning('MMC5603 init failed: %s', e)
 
 # SEN0322 O2 sensor (DFRobot Gravity I2C, address 0x73)
-# Protocol: read 3 bytes from register 0x03 → [MSB, LSB, checksum]
-# Value = (MSB << 8 | LSB) / 10.0  → %Vol O2
 SEN0322_ADDR = 0x73
 sen0322_ok = False
 try:
@@ -151,8 +170,8 @@ def read_sen0322():
 import adafruit_ads1x15.ads1115 as ADS
 from adafruit_ads1x15.analog_in import AnalogIn
 
-ads1 = None  # 0x48
-ads2 = None  # 0x49
+ads1 = None
+ads2 = None
 analog_channels = {}
 
 try:
@@ -175,11 +194,9 @@ except Exception as e:
 
 
 # ── Analog → ppm conversion ──────────────────────────────────────────────────
-# DFRobot Fermion MEMS sensors output 0.4–2.0V across their range (typ).
-# These are linear approximations — calibrate with known gas sources for accuracy.
 
 ANALOG_RANGES = {
-    'sen0567_nh3': (0.4, 2.0, 1, 300),       # V_min, V_max, ppm_min, ppm_max
+    'sen0567_nh3': (0.4, 2.0, 1, 300),
     'sen0572_h2':  (0.4, 2.0, 0.1, 1000),
     'sen0565_ch4': (0.4, 2.0, 1, 10000),
     'sen0564_co':  (0.4, 2.0, 5, 5000),
@@ -189,13 +206,8 @@ ANALOG_RANGES = {
 
 def voltage_to_ppm(key, voltage):
     if key == 'mq4_combustible':
-        # MQ-4: Rs/R0 curve, simplified — ratio of sensor resistance to clean air baseline
-        # Using a rough log-linear approximation; needs calibration in clean air
         if voltage < 0.1:
             return None
-        rs = (5.0 - voltage) / voltage * 10.0  # assuming 10k load resistor, 5V supply
-        # rough ppm ≈ 1000 * (rs/r0)^-2.95 where r0 is clean air resistance
-        # without calibration, just return the raw voltage ratio scaled
         return round(max(0, (5.0 - voltage) / max(voltage, 0.01) * 200), 1)
 
     if key not in ANALOG_RANGES:
@@ -214,17 +226,15 @@ def voltage_to_ppm(key, voltage):
 def read_all():
     data = {}
 
-    # BME680
     if bme680:
         try:
             data['bme680_temp'] = round(bme680.temperature, 2)
             data['bme680_humidity'] = round(bme680.relative_humidity, 2)
             data['bme680_pressure'] = round(bme680.pressure, 2)
-            data['bme680_gas'] = round(bme680.gas / 1000.0, 2)  # Ω → kΩ
+            data['bme680_gas'] = round(bme680.gas / 1000.0, 2)
         except Exception as e:
             log.warning('BME680 read error: %s', e)
 
-    # SCD41
     if scd4x:
         try:
             if scd4x.data_ready:
@@ -234,13 +244,11 @@ def read_all():
         except Exception as e:
             log.warning('SCD41 read error: %s', e)
 
-    # O2
     if sen0322_ok:
         o2 = read_sen0322()
         if o2 is not None:
             data['sen0322_o2'] = round(o2, 2)
 
-    # Magnetometer
     if mag:
         try:
             x, y, z = mag.magnetic
@@ -254,7 +262,6 @@ def read_all():
         except Exception as e:
             log.warning('MMC5603 read error: %s', e)
 
-    # Analog sensors
     for key, chan in analog_channels.items():
         try:
             voltage = chan.voltage
@@ -264,7 +271,6 @@ def read_all():
         except Exception as e:
             log.warning('%s read error: %s', key, e)
 
-    # RTC time
     rtc_time = None
     if rtc:
         try:
@@ -278,25 +284,8 @@ def read_all():
     return data, rtc_time
 
 
-def post_reading(data, rtc_time):
-    payload = {'data': data, 'rtc_time': rtc_time}
-    try:
-        r = requests.post(
-            f'{API_URL}/api/weather/readings',
-            json=payload,
-            headers={'X-Api-Key': API_KEY},
-            timeout=10,
-        )
-        if r.status_code == 200:
-            log.info('Posted %d sensor values', len(data))
-        else:
-            log.warning('POST returned %d: %s', r.status_code, r.text[:200])
-    except Exception as e:
-        log.warning('POST failed: %s', e)
-
-
 def main():
-    log.info('Weather station starting — posting to %s every %ds', API_URL, INTERVAL)
+    log.info('Weather station starting — writing to %s every %ds', WEATHER_DB, INTERVAL)
     log.info('Waiting 5s for SCD41 first measurement...')
     time.sleep(5)
 
@@ -304,7 +293,13 @@ def main():
         try:
             data, rtc_time = read_all()
             if data:
-                post_reading(data, rtc_time)
+                reading = {
+                    'ts': int(time.time() * 1000),
+                    'rtc_time': rtc_time,
+                    'data': data,
+                }
+                append_reading(reading)
+                log.info('Saved %d sensor values', len(data))
             else:
                 log.warning('No sensor data collected')
         except Exception as e:
