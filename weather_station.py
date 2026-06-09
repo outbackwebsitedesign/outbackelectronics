@@ -3,36 +3,17 @@
 Outback Electronics Weather Station — Raspberry Pi sensor reader.
 
 Reads whatever sensors are available and POSTs to the weather API every 30s.
-Gracefully skips any sensor that isn't connected or whose library is missing.
-
-I2C devices:
-  BME680       0x76  — temp, humidity, pressure, VOC gas resistance
-  SCD41        0x62  — CO2, temp, humidity
-  SEN0322      0x73  — electrochemical O2 (DFRobot Gravity I2C)
-  MMC5603      0x30  — 3-axis magnetometer
-  DS3231       0x68  — real-time clock
-
-Analog via 2x ADS1115:
-  ADS1115 #1   0x48  (ADDR pin → GND)
-    A0: SEN0567 (NH3)    1–300 ppm
-    A1: SEN0572 (H2)     0.1–1000 ppm
-    A2: SEN0565 (CH4)    1–10000 ppm
-    A3: SEN0564 (CO)     5–5000 ppm
-  ADS1115 #2   0x49  (ADDR pin → VDD)
-    A0: SEN0568 (H2S)    0.5–50 ppm
-    A1: MQ-4             combustible gas
-
-Wiring: all I2C on SDA (GPIO2) / SCL (GPIO3), 3.3V for digital sensors,
-5V for MQ-4 heater. ADS1115 analog inputs wired to sensor AOUT pins.
+Auto-scans the I2C bus to find sensors at any address. Supports both
+Pimoroni and Adafruit libraries. Gracefully skips anything missing.
 
 Install (only install libraries for sensors you have):
   sudo apt install -y python3-pip i2c-tools
   pip3 install --break-system-packages requests adafruit-blinka
-  pip3 install --break-system-packages adafruit-circuitpython-bme680       # if BME680 connected
-  pip3 install --break-system-packages adafruit-circuitpython-scd4x         # if SCD41 connected
-  pip3 install --break-system-packages adafruit-circuitpython-ads1x15       # if ADS1115 connected
-  pip3 install --break-system-packages adafruit-circuitpython-ds3231        # if DS3231 connected
-  pip3 install --break-system-packages adafruit-circuitpython-mmc56x3       # if MMC5603 connected
+  pip3 install --break-system-packages bme680                              # Pimoroni BME680 (or adafruit-circuitpython-bme680)
+  pip3 install --break-system-packages adafruit-circuitpython-scd4x         # SCD41
+  pip3 install --break-system-packages adafruit-circuitpython-ads1x15       # ADS1115
+  pip3 install --break-system-packages adafruit-circuitpython-ds3231        # DS3231 RTC
+  pip3 install --break-system-packages adafruit-circuitpython-mmc56x3       # MMC5603
 
 Enable I2C:
   sudo raspi-config → Interface Options → I2C → Enable
@@ -103,86 +84,185 @@ else:
 
 INTERVAL = int(os.environ.get('WEATHER_INTERVAL', '30'))
 
-# ── I2C bus init ──────────────────────────────────────────────────────────────
+# ── I2C bus init & scan ───────────────────────────────────────────────────────
 
 i2c = None
+smbus = None
+detected_addresses = set()
+
 try:
     import board
     import busio
     i2c = busio.I2C(board.SCL, board.SDA)
-    log.info('I2C bus initialised')
+    log.info('I2C bus initialised (blinka)')
 except Exception as e:
-    log.warning('I2C bus not available: %s — I2C sensors will be skipped', e)
+    log.warning('Blinka I2C not available: %s', e)
 
-# ── Sensor init ───────────────────────────────────────────────────────────────
-
-bme680 = None
-if i2c:
+# Also try smbus2 for Pimoroni-style libs
+try:
+    import smbus2
+    smbus = smbus2.SMBus(1)
+    log.info('SMBus initialised')
+except Exception:
     try:
-        import adafruit_bme680
-        bme680 = adafruit_bme680.Adafruit_BME680_I2C(i2c, address=0x76)
-        bme680.sea_level_pressure = 1013.25
-        log.info('BME680 ready at 0x76')
-    except Exception as e:
-        log.warning('BME680 init failed: %s', e)
+        import smbus as _smbus
+        smbus = _smbus.SMBus(1)
+        log.info('SMBus initialised (legacy)')
+    except Exception:
+        pass
 
+# Scan the I2C bus for connected devices
+def scan_i2c():
+    addrs = set()
+    if i2c:
+        try:
+            while not i2c.try_lock():
+                pass
+            addrs = set(i2c.scan())
+            i2c.unlock()
+        except Exception:
+            try:
+                i2c.unlock()
+            except:
+                pass
+    if not addrs and smbus:
+        for addr in range(0x03, 0x78):
+            try:
+                smbus.read_byte(addr)
+                addrs.add(addr)
+            except:
+                pass
+    return addrs
+
+
+detected_addresses = scan_i2c()
+if detected_addresses:
+    log.info('I2C devices found at: %s', ', '.join(f'0x{a:02x}' for a in sorted(detected_addresses)))
+else:
+    log.warning('No I2C devices detected')
+
+
+# ── Sensor init (auto-detect addresses) ──────────────────────────────────────
+
+# BME680 can be at 0x76 or 0x77
+BME680_ADDRESSES = [0x76, 0x77]
+bme680_sensor = None
+bme680_pimoroni = False
+
+for addr in BME680_ADDRESSES:
+    if addr not in detected_addresses:
+        continue
+    # Try Pimoroni library first (it's what the user has working)
+    try:
+        import bme680 as bme680_lib
+        bme680_sensor = bme680_lib.BME680(addr)
+        bme680_pimoroni = True
+        log.info('BME680 ready at 0x%02x (Pimoroni)', addr)
+        break
+    except Exception:
+        pass
+    # Try Adafruit library
+    if i2c:
+        try:
+            import adafruit_bme680
+            bme680_sensor = adafruit_bme680.Adafruit_BME680_I2C(i2c, address=addr)
+            bme680_sensor.sea_level_pressure = 1013.25
+            bme680_pimoroni = False
+            log.info('BME680 ready at 0x%02x (Adafruit)', addr)
+            break
+        except Exception:
+            pass
+
+if not bme680_sensor:
+    log.warning('BME680 not found at any address')
+
+# SCD41 is always 0x62
 scd4x = None
-if i2c:
+if i2c and 0x62 in detected_addresses:
     try:
         import adafruit_scd4x
         scd4x = adafruit_scd4x.SCD4X(i2c, address=0x62)
         scd4x.start_periodic_measurement()
-        log.info('SCD41 ready at 0x62 — first reading in ~5s')
+        log.info('SCD41 ready at 0x62')
     except Exception as e:
         log.warning('SCD41 init failed: %s', e)
+elif 0x62 not in detected_addresses:
+    log.warning('SCD41 not detected on bus')
 
+# DS3231 can be at 0x68 (also 0x57 for EEPROM on some boards)
+DS3231_ADDRESSES = [0x68]
 rtc = None
-if i2c:
-    try:
-        import adafruit_ds3231
-        rtc = adafruit_ds3231.DS3231(i2c)
-        log.info('DS3231 ready at 0x68')
-    except Exception as e:
-        log.warning('DS3231 init failed: %s', e)
+for addr in DS3231_ADDRESSES:
+    if addr not in detected_addresses:
+        continue
+    if i2c:
+        try:
+            import adafruit_ds3231
+            rtc = adafruit_ds3231.DS3231(i2c)
+            log.info('DS3231 ready at 0x%02x', addr)
+            break
+        except Exception as e:
+            log.warning('DS3231 init failed at 0x%02x: %s', addr, e)
 
+if not rtc:
+    log.warning('DS3231 not found')
+
+# MMC5603 can be at 0x30
+MMC5603_ADDRESSES = [0x30]
 mag = None
-if i2c:
-    try:
-        import adafruit_mmc56x3
-        mag = adafruit_mmc56x3.MMC5603(i2c)
-        log.info('MMC5603 ready at 0x30')
-    except Exception as e:
-        log.warning('MMC5603 init failed: %s', e)
+for addr in MMC5603_ADDRESSES:
+    if addr not in detected_addresses:
+        continue
+    if i2c:
+        try:
+            import adafruit_mmc56x3
+            mag = adafruit_mmc56x3.MMC5603(i2c)
+            log.info('MMC5603 ready at 0x%02x', addr)
+            break
+        except Exception as e:
+            log.warning('MMC5603 init failed at 0x%02x: %s', addr, e)
 
-SEN0322_ADDR = 0x73
+if not mag:
+    log.warning('MMC5603 not found')
+
+# SEN0322 O2 sensor — known addresses 0x70-0x73 (configurable via DIP switches)
+SEN0322_ADDRESSES = [0x73, 0x72, 0x71, 0x70]
+sen0322_addr = None
 sen0322_ok = False
 if i2c:
-    try:
-        while not i2c.try_lock():
-            pass
-        i2c.writeto(SEN0322_ADDR, bytes([0x03]))
-        buf = bytearray(3)
-        i2c.readfrom_into(SEN0322_ADDR, buf)
-        i2c.unlock()
-        sen0322_ok = True
-        log.info('SEN0322 O2 ready at 0x73')
-    except Exception as e:
+    for addr in SEN0322_ADDRESSES:
+        if addr not in detected_addresses:
+            continue
         try:
+            while not i2c.try_lock():
+                pass
+            i2c.writeto(addr, bytes([0x03]))
+            buf = bytearray(3)
+            i2c.readfrom_into(addr, buf)
             i2c.unlock()
-        except:
-            pass
-        log.warning('SEN0322 init failed: %s', e)
+            sen0322_addr = addr
+            sen0322_ok = True
+            log.info('SEN0322 O2 ready at 0x%02x', addr)
+            break
+        except Exception:
+            try:
+                i2c.unlock()
+            except:
+                pass
+
+if not sen0322_ok:
+    log.warning('SEN0322 O2 not found')
 
 
 def read_sen0322():
-    if not i2c:
+    if not i2c or not sen0322_ok:
         return None
     try:
         while not i2c.try_lock():
             pass
-        i2c.writeto(SEN0322_ADDR, bytes([0x03]))
+        i2c.writeto(sen0322_addr, bytes([0x03]))
         buf = bytearray(3)
-        i2c.readfrom_into(SEN0322_ADDR, buf)
+        i2c.readfrom_into(sen0322_addr, buf)
         i2c.unlock()
         return ((buf[0] << 8) | buf[1]) / 10.0
     except Exception as e:
@@ -194,7 +274,7 @@ def read_sen0322():
         return None
 
 
-# ADS1115 x2 for analog sensors
+# ADS1115 — can be at 0x48, 0x49, 0x4A, 0x4B depending on ADDR pin
 ADS = None
 AnalogIn = None
 try:
@@ -205,28 +285,51 @@ try:
 except ImportError:
     log.warning('adafruit_ads1x15 not installed — analog sensors will be skipped')
 
-ads1 = None
-ads2 = None
+ADS1115_ADDRESSES = [0x48, 0x49, 0x4A, 0x4B]
+ads_devices = []
 analog_channels = {}
 
 if ADS and i2c:
-    try:
-        ads1 = ADS.ADS1115(i2c, address=0x48, gain=1)
-        analog_channels['sen0567_nh3'] = AnalogIn(ads1, ADS.P0)
-        analog_channels['sen0572_h2']  = AnalogIn(ads1, ADS.P1)
-        analog_channels['sen0565_ch4'] = AnalogIn(ads1, ADS.P2)
-        analog_channels['sen0564_co']  = AnalogIn(ads1, ADS.P3)
-        log.info('ADS1115 #1 ready at 0x48 (NH3, H2, CH4, CO)')
-    except Exception as e:
-        log.warning('ADS1115 #1 init failed: %s', e)
+    for addr in ADS1115_ADDRESSES:
+        if addr not in detected_addresses:
+            continue
+        try:
+            dev = ADS.ADS1115(i2c, address=addr, gain=1)
+            ads_devices.append((addr, dev))
+            log.info('ADS1115 ready at 0x%02x', addr)
+        except Exception as e:
+            log.warning('ADS1115 init failed at 0x%02x: %s', addr, e)
 
-    try:
-        ads2 = ADS.ADS1115(i2c, address=0x49, gain=1)
-        analog_channels['sen0568_h2s']    = AnalogIn(ads2, ADS.P0)
-        analog_channels['mq4_combustible'] = AnalogIn(ads2, ADS.P1)
-        log.info('ADS1115 #2 ready at 0x49 (H2S, MQ-4)')
-    except Exception as e:
-        log.warning('ADS1115 #2 init failed: %s', e)
+    # Map channels across found ADS1115 devices
+    # First ADS: NH3, H2, CH4, CO on channels 0-3
+    # Second ADS: H2S, MQ-4 on channels 0-1
+    CHANNEL_MAP_1 = [
+        ('sen0567_nh3', 0), ('sen0572_h2', 1),
+        ('sen0565_ch4', 2), ('sen0564_co', 3),
+    ]
+    CHANNEL_MAP_2 = [
+        ('sen0568_h2s', 0), ('mq4_combustible', 1),
+    ]
+
+    if len(ads_devices) >= 1:
+        _, dev = ads_devices[0]
+        pins = [ADS.P0, ADS.P1, ADS.P2, ADS.P3]
+        for key, ch in CHANNEL_MAP_1:
+            try:
+                analog_channels[key] = AnalogIn(dev, pins[ch])
+            except Exception:
+                pass
+        log.info('ADS1115 #1 channels: %s', ', '.join(k for k, _ in CHANNEL_MAP_1 if k in analog_channels))
+
+    if len(ads_devices) >= 2:
+        _, dev = ads_devices[1]
+        pins = [ADS.P0, ADS.P1, ADS.P2, ADS.P3]
+        for key, ch in CHANNEL_MAP_2:
+            try:
+                analog_channels[key] = AnalogIn(dev, pins[ch])
+            except Exception:
+                pass
+        log.info('ADS1115 #2 channels: %s', ', '.join(k for k, _ in CHANNEL_MAP_2 if k in analog_channels))
 
 
 # ── Analog → ppm conversion ──────────────────────────────────────────────────
@@ -262,12 +365,19 @@ def voltage_to_ppm(key, voltage):
 def read_all():
     data = {}
 
-    if bme680:
+    if bme680_sensor:
         try:
-            data['bme680_temp'] = round(bme680.temperature, 2)
-            data['bme680_humidity'] = round(bme680.relative_humidity, 2)
-            data['bme680_pressure'] = round(bme680.pressure, 2)
-            data['bme680_gas'] = round(bme680.gas / 1000.0, 2)
+            if bme680_pimoroni:
+                if bme680_sensor.get_sensor_data():
+                    data['bme680_temp'] = round(bme680_sensor.data.temperature, 2)
+                    data['bme680_humidity'] = round(bme680_sensor.data.humidity, 2)
+                    data['bme680_pressure'] = round(bme680_sensor.data.pressure, 2)
+                    data['bme680_gas'] = round(bme680_sensor.data.gas_resistance / 1000.0, 2)
+            else:
+                data['bme680_temp'] = round(bme680_sensor.temperature, 2)
+                data['bme680_humidity'] = round(bme680_sensor.relative_humidity, 2)
+                data['bme680_pressure'] = round(bme680_sensor.pressure, 2)
+                data['bme680_gas'] = round(bme680_sensor.gas / 1000.0, 2)
         except Exception as e:
             log.warning('BME680 read error: %s', e)
 
