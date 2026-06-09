@@ -8,7 +8,11 @@ Pimoroni and Adafruit libraries. Gracefully skips anything missing.
 
 Install (only install libraries for sensors you have):
   sudo apt install -y python3-pip i2c-tools
-  pip3 install --break-system-packages requests adafruit-blinka smbus2
+  pip3 install --break-system-packages requests adafruit-blinka
+
+  # SEN0322 O2 sensor:
+  sudo apt install -y python3-smbus
+  git clone https://github.com/DFRobot/DFRobot_OxygenSensor.git ~/DFRobot_OxygenSensor
   pip3 install --break-system-packages adafruit-circuitpython-bme680       # BME680
   pip3 install --break-system-packages adafruit-circuitpython-scd4x         # SCD41
   pip3 install --break-system-packages adafruit-circuitpython-ads1x15       # ADS1115
