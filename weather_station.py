@@ -189,24 +189,16 @@ if i2c:
         try:
             import adafruit_mmc56x3
             mag = adafruit_mmc56x3.MMC5603(i2c)
-            # Issue magnetic set/reset to clear saturation after bus scan
-            mag.magnetic_set()
-            _time.sleep(0.05)
-            mag.magnetic_reset()
-            _time.sleep(0.05)
-            # Discard first reading (often stale/saturated)
-            _ = mag.magnetic
-            _time.sleep(0.2)
-            x, y, z = mag.magnetic
-            if abs(x) > 3000 or abs(y) > 3000 or abs(z) > 3000:
-                log.warning('MMC5603 at 0x%02x returned saturated values (x=%.1f y=%.1f z=%.1f) — retrying', addr, x, y, z)
-                _time.sleep(0.5)
+            # Discard first few readings — often saturated after bus scan
+            for _attempt in range(5):
+                _time.sleep(0.3)
                 x, y, z = mag.magnetic
-            if abs(x) > 3000 or abs(y) > 3000 or abs(z) > 3000:
-                log.warning('MMC5603 at 0x%02x still saturated after retry — readings may be unreliable', addr)
-                mag = None
+                if abs(x) < 3000 and abs(y) < 3000 and abs(z) < 3000:
+                    log.info('MMC5603 ready at 0x%02x (test: x=%.1f y=%.1f z=%.1f µT, attempt %d)', addr, x, y, z, _attempt + 1)
+                    break
             else:
-                log.info('MMC5603 ready at 0x%02x (test: x=%.1f y=%.1f z=%.1f µT)', addr, x, y, z)
+                log.warning('MMC5603 at 0x%02x still saturated after 5 attempts (%.1f, %.1f, %.1f) — disabling', addr, x, y, z)
+                mag = None
             break
         except Exception as e:
             mag = None
