@@ -1,30 +1,28 @@
 import { useState, useEffect, useRef } from 'react';
 
-const SENSORS = [
-  { key: 'bme680_temp',     label: 'Temperature',        unit: '°C',  icon: '🌡', group: 'environment', sensor: 'BME680' },
-  { key: 'bme680_humidity', label: 'Humidity',            unit: '%',   icon: '💧', group: 'environment', sensor: 'BME680' },
-  { key: 'bme680_pressure', label: 'Barometric Pressure', unit: 'hPa', icon: '🔵', group: 'environment', sensor: 'BME680' },
-  { key: 'bme680_gas',      label: 'VOC / Gas Resistance',unit: 'kΩ', icon: '🌫', group: 'environment', sensor: 'BME680' },
-  { key: 'scd41_co2',       label: 'CO₂',                unit: 'ppm', icon: '🫁', group: 'environment', sensor: 'SCD41' },
-  { key: 'scd41_temp',      label: 'Temperature (SCD41)', unit: '°C', icon: '🌡', group: 'environment', sensor: 'SCD41' },
-  { key: 'scd41_humidity',  label: 'Humidity (SCD41)',    unit: '%',   icon: '💧', group: 'environment', sensor: 'SCD41' },
-  { key: 'sen0322_o2',      label: 'Oxygen (O₂)',        unit: '%Vol',icon: '🅾️', group: 'gas', sensor: 'SEN0322' },
-  { key: 'sen0567_nh3',     label: 'Ammonia (NH₃)',      unit: 'ppm', icon: '⚗️', group: 'gas', sensor: 'SEN0567' },
-  { key: 'sen0572_h2',      label: 'Hydrogen (H₂)',      unit: 'ppm', icon: '⚡', group: 'gas', sensor: 'SEN0572' },
-  { key: 'sen0565_ch4',     label: 'Methane (CH₄)',      unit: 'ppm', icon: '🔥', group: 'gas', sensor: 'SEN0565' },
-  { key: 'sen0564_co',      label: 'Carbon Monoxide (CO)',unit: 'ppm', icon: '☠️', group: 'gas', sensor: 'SEN0564' },
-  { key: 'sen0568_h2s',     label: 'Hydrogen Sulfide (H₂S)', unit: 'ppm', icon: '🥚', group: 'gas', sensor: 'SEN0568' },
-  { key: 'mq4_combustible', label: 'Combustible Gas',    unit: 'ppm', icon: '💥', group: 'gas', sensor: 'MQ-4', note: 'CH₄, C₃H₈, C₄H₁₀' },
-  { key: 'mmc5603_x',       label: 'Magnetic X',         unit: 'µT',  icon: '🧭', group: 'magnetic', sensor: 'MMC5603' },
-  { key: 'mmc5603_y',       label: 'Magnetic Y',         unit: 'µT',  icon: '🧭', group: 'magnetic', sensor: 'MMC5603' },
-  { key: 'mmc5603_z',       label: 'Magnetic Z',         unit: 'µT',  icon: '🧭', group: 'magnetic', sensor: 'MMC5603' },
-  { key: 'mmc5603_heading',  label: 'Compass Heading',   unit: '°',   icon: '🧭', group: 'magnetic', sensor: 'MMC5603' },
+const READINGS = [
+  { key: 'temperature', label: 'Temperature',     unit: '°C',   group: 'environment' },
+  { key: 'humidity',    label: 'Humidity',         unit: '%',    group: 'environment' },
+  { key: 'pressure',    label: 'Pressure',         unit: 'hPa',  group: 'environment' },
+  { key: 'voc',         label: 'Air Quality (VOC)',unit: 'kΩ',   group: 'environment', note: 'Higher = cleaner air' },
+  { key: 'co2',         label: 'CO₂',             unit: 'ppm',  group: 'environment' },
+  { key: 'o2',          label: 'Oxygen',           unit: '%Vol', group: 'gas' },
+  { key: 'nh3',         label: 'Ammonia',          unit: 'ppm',  group: 'gas' },
+  { key: 'h2',          label: 'Hydrogen',         unit: 'ppm',  group: 'gas' },
+  { key: 'ch4',         label: 'Methane',          unit: 'ppm',  group: 'gas' },
+  { key: 'co',          label: 'Carbon Monoxide',  unit: 'ppm',  group: 'gas' },
+  { key: 'h2s',         label: 'Hydrogen Sulfide', unit: 'ppm',  group: 'gas' },
+  { key: 'combustible', label: 'Combustible Gas',  unit: 'ppm',  group: 'gas', note: 'CH₄, C₃H₈, C₄H₁₀' },
+  { key: 'compass',     label: 'Compass Heading',  unit: '°',    group: 'other' },
+  { key: 'mag_x',       label: 'Magnetic Field X', unit: 'µT',   group: 'other' },
+  { key: 'mag_y',       label: 'Magnetic Field Y', unit: 'µT',   group: 'other' },
+  { key: 'mag_z',       label: 'Magnetic Field Z', unit: 'µT',   group: 'other' },
 ];
 
 const GROUPS = [
   { key: 'environment', label: 'Environment' },
   { key: 'gas',         label: 'Gas Detection' },
-  { key: 'magnetic',    label: 'Magnetometer' },
+  { key: 'other',       label: 'Other' },
 ];
 
 function formatAge(ms) {
@@ -34,7 +32,7 @@ function formatAge(ms) {
   return `${Math.round(ms / 86400000)}d ago`;
 }
 
-function SensorCard({ def, value, ts }) {
+function ReadingCard({ def, value, ts }) {
   const age = ts ? Date.now() - ts : null;
   const stale = age !== null && age > 120000;
   const offline = value === null || value === undefined;
@@ -43,12 +41,12 @@ function SensorCard({ def, value, ts }) {
     <div className="card" style={{
       padding: '20px',
       display: 'flex', flexDirection: 'column', gap: 8,
-      opacity: offline ? 0.5 : 1,
+      opacity: offline ? 0.4 : 1,
       borderLeft: stale ? '3px solid var(--ochre)' : offline ? '3px solid var(--line-strong)' : '3px solid var(--eucalyptus)',
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span className="eyebrow">{def.sensor}</span>
-        {ts && <span className="mono" style={{ fontSize: 10, color: stale ? 'var(--ochre)' : 'var(--ink-3)' }}>
+        <span style={{ fontSize: 13, color: 'var(--ink-2)', fontWeight: 500 }}>{def.label}</span>
+        {ts && !offline && <span className="mono" style={{ fontSize: 10, color: stale ? 'var(--ochre)' : 'var(--ink-3)' }}>
           {formatAge(age)}
         </span>}
       </div>
@@ -58,16 +56,14 @@ function SensorCard({ def, value, ts }) {
         </span>
         <span style={{ fontSize: 14, color: 'var(--ink-2)', fontFamily: "'JetBrains Mono', monospace" }}>{def.unit}</span>
       </div>
-      <div style={{ fontSize: 13, color: 'var(--ink-2)' }}>
-        {def.label}
-        {def.note && <span style={{ fontSize: 11, color: 'var(--ink-3)', marginLeft: 6 }}>({def.note})</span>}
-      </div>
+      {def.note && !offline && <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>{def.note}</div>}
     </div>
   );
 }
 
 function StationStatus({ latest, rtcTime, stationId }) {
   const online = latest && (Date.now() - latest.ts < 120000);
+  const sensorCount = latest ? Object.keys(latest.data || {}).length : 0;
   return (
     <div className="card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
       <div style={{
@@ -78,12 +74,14 @@ function StationStatus({ latest, rtcTime, stationId }) {
       <span style={{ fontWeight: 600, fontSize: 14 }}>
         {stationId ? stationId : 'Station'} — {online ? 'Online' : 'Offline'}
       </span>
+      {online && sensorCount > 0 && (
+        <span className="tag" style={{ marginLeft: 4 }}>{sensorCount} readings</span>
+      )}
       {rtcTime && (
         <span className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', marginLeft: 'auto' }}>
-          RTC: {rtcTime}
+          {rtcTime}
         </span>
       )}
-      <span className="tag tag-euc" style={{ marginLeft: rtcTime ? 0 : 'auto' }}>RPi + DS3231</span>
     </div>
   );
 }
@@ -94,7 +92,6 @@ export default function WeatherApp() {
   const [stations, setStations] = useState([]);
   const [activeStation, setActiveStation] = useState(null);
   const [error, setError] = useState(null);
-  const [tab, setTab] = useState('live');
   const intervalRef = useRef(null);
 
   const fetchStations = () => {
@@ -131,12 +128,17 @@ export default function WeatherApp() {
     return () => clearInterval(intervalRef.current);
   }, [activeStation]);
 
-  const readings = latest?.data || {};
+  const data = latest?.data || {};
   const rtcTime = latest?.rtc_time || null;
+
+  // Only show readings that have data (or all if nothing yet)
+  const hasAnyData = Object.keys(data).length > 0;
+  const visibleGroups = GROUPS.filter(g =>
+    !hasAnyData || READINGS.some(r => r.group === g.key && data[r.key] !== undefined)
+  );
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      {/* Nav */}
       <nav className="topnav" id="topnav">
         <div className="container">
           <div className="row">
@@ -153,18 +155,16 @@ export default function WeatherApp() {
         </div>
       </nav>
 
-      {/* Hero */}
       <div className="page-head">
         <div className="container">
           <span className="eyebrow">Live Environmental Monitoring</span>
           <h1 className="serif">Weather Station</h1>
           <p className="lead">
-            Real-time sensor data from our Raspberry Pi monitoring station — temperature, humidity, pressure, air quality, and gas detection.
+            Real-time environmental data — temperature, humidity, pressure, air quality, and gas detection.
           </p>
         </div>
       </div>
 
-      {/* Content */}
       <div className="container" style={{ flex: 1, paddingTop: 32, paddingBottom: 48 }}>
         {stations.length > 1 && (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
@@ -186,84 +186,29 @@ export default function WeatherApp() {
           </div>
         )}
 
-        {/* Tabs */}
-        <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--line)', marginTop: 32 }}>
-          {[['live', 'Live Readings'], ['sensors', 'Sensor Info']].map(([k, l]) => (
-            <button key={k} className={`tab${tab === k ? ' active' : ''}`} onClick={() => setTab(k)} style={{
-              padding: '10px 14px', fontSize: 13, fontWeight: 500, cursor: 'pointer',
-              borderBottom: tab === k ? '2px solid var(--rust)' : '2px solid transparent',
-              marginBottom: -1, background: 'none', border: 'none',
-              borderBottomWidth: 2, borderBottomStyle: 'solid',
-              borderBottomColor: tab === k ? 'var(--rust)' : 'transparent',
-              color: tab === k ? 'var(--rust)' : 'var(--ink)',
-            }}>
-              {l}
-            </button>
-          ))}
-        </div>
-
-        {tab === 'live' && (
-          <div style={{ marginTop: 24 }}>
-            {GROUPS.map(g => (
+        <div style={{ marginTop: 32 }}>
+          {visibleGroups.map(g => {
+            const groupReadings = READINGS.filter(r => r.group === g.key);
+            const visible = hasAnyData ? groupReadings.filter(r => data[r.key] !== undefined) : groupReadings;
+            if (visible.length === 0) return null;
+            return (
               <div key={g.key} style={{ marginBottom: 32 }}>
-                <h2 style={{ fontSize: 18, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
-                  {g.label}
-                </h2>
+                <h2 style={{ fontSize: 18, marginBottom: 16 }}>{g.label}</h2>
                 <div style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
                   gap: 16,
                 }}>
-                  {SENSORS.filter(s => s.group === g.key).map(def => (
-                    <SensorCard key={def.key} def={def} value={readings[def.key] ?? null} ts={latest?.ts} />
+                  {visible.map(def => (
+                    <ReadingCard key={def.key} def={def} value={data[def.key] ?? null} ts={latest?.ts} />
                   ))}
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-
-        {tab === 'sensors' && (
-          <div style={{ marginTop: 24 }}>
-            <div className="card-paper" style={{ padding: 24, overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                <thead>
-                  <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--line)' }}>
-                    <th style={{ padding: '8px 12px' }} className="eyebrow">Sensor</th>
-                    <th style={{ padding: '8px 12px' }} className="eyebrow">Model</th>
-                    <th style={{ padding: '8px 12px' }} className="eyebrow">Measures</th>
-                    <th style={{ padding: '8px 12px' }} className="eyebrow">Range</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    ['BME680', 'Bosch BME680', 'Temperature, humidity, pressure, VOC gas resistance', '–40–85°C, 0–100%, 300–1100hPa'],
-                    ['SCD41', 'Sensirion SCD41', 'CO₂ concentration, temperature, humidity', '400–5000ppm CO₂'],
-                    ['SEN0322', 'Gravity O₂ Sensor', 'Electrochemical oxygen detection (I2C)', '0–25%Vol'],
-                    ['SEN0567', 'Fermion MEMS NH₃', 'Ammonia detection', '1–300ppm'],
-                    ['SEN0572', 'Fermion MEMS H₂', 'Hydrogen detection', '0.1–1000ppm'],
-                    ['SEN0565', 'Fermion MEMS CH₄', 'Methane detection', '1–10000ppm'],
-                    ['SEN0564', 'Fermion MEMS CO', 'Carbon monoxide detection', '5–5000ppm'],
-                    ['SEN0568', 'Fermion MEMS H₂S', 'Hydrogen sulfide detection', '0.5–50ppm'],
-                    ['MQ-4', 'MQ-4', 'Combustible gas (methane, propane, butane)', 'Analog'],
-                    ['MMC5603', 'MEMSIC MMC5603', '3-axis magnetometer / compass', '±30 Gauss'],
-                    ['DS3231', 'DS3231 RTC', 'Real-time clock (±2ppm accuracy)', 'N/A'],
-                  ].map(([id, model, meas, range]) => (
-                    <tr key={id} style={{ borderBottom: '1px solid var(--line)' }}>
-                      <td style={{ padding: '10px 12px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{id}</td>
-                      <td style={{ padding: '10px 12px' }}>{model}</td>
-                      <td style={{ padding: '10px 12px' }}>{meas}</td>
-                      <td style={{ padding: '10px 12px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{range}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+            );
+          })}
+        </div>
       </div>
 
-      {/* Footer */}
       <footer>
         <div className="container">
           <div className="baseline">

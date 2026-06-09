@@ -5590,11 +5590,10 @@ const weatherServer = http.createServer(async (req, res) => {
       data: {},
     };
     const ALLOWED_KEYS = [
-      'bme680_temp','bme680_humidity','bme680_pressure','bme680_gas',
-      'scd41_co2','scd41_temp','scd41_humidity',
-      'sen0322_o2','sen0567_nh3','sen0572_h2','sen0565_ch4','sen0564_co','sen0568_h2s',
-      'mq4_combustible',
-      'mmc5603_x','mmc5603_y','mmc5603_z','mmc5603_heading',
+      'temperature','humidity','pressure','voc',
+      'co2','o2',
+      'nh3','h2','ch4','co','h2s','combustible',
+      'compass','mag_x','mag_y','mag_z',
     ];
     for (const k of ALLOWED_KEYS) {
       if (body.data && typeof body.data[k] === 'number') {

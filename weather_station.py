@@ -329,41 +329,41 @@ def voltage_to_ppm(key, voltage):
 # ── Main read cycle ───────────────────────────────────────────────────────────
 
 def read_all():
-    data = {}
+    raw = {}
 
     if bme680_sensor:
         try:
-            data['bme680_temp'] = round(bme680_sensor.temperature, 2)
-            data['bme680_humidity'] = round(bme680_sensor.relative_humidity, 2)
-            data['bme680_pressure'] = round(bme680_sensor.pressure, 2)
-            data['bme680_gas'] = round(bme680_sensor.gas / 1000.0, 2)
+            raw['bme680_temp'] = round(bme680_sensor.temperature, 2)
+            raw['bme680_humidity'] = round(bme680_sensor.relative_humidity, 2)
+            raw['bme680_pressure'] = round(bme680_sensor.pressure, 2)
+            raw['bme680_gas'] = round(bme680_sensor.gas / 1000.0, 2)
         except Exception as e:
             log.warning('BME680 read error: %s', e)
 
     if scd4x:
         try:
             if scd4x.data_ready:
-                data['scd41_co2'] = scd4x.CO2
-                data['scd41_temp'] = round(scd4x.temperature, 2)
-                data['scd41_humidity'] = round(scd4x.relative_humidity, 2)
+                raw['scd41_co2'] = scd4x.CO2
+                raw['scd41_temp'] = round(scd4x.temperature, 2)
+                raw['scd41_humidity'] = round(scd4x.relative_humidity, 2)
         except Exception as e:
             log.warning('SCD41 read error: %s', e)
 
     if sen0322_ok:
         o2 = read_sen0322()
         if o2 is not None:
-            data['sen0322_o2'] = round(o2, 2)
+            raw['sen0322_o2'] = round(o2, 2)
 
     if mag:
         try:
             x, y, z = mag.magnetic
-            data['mmc5603_x'] = round(x, 2)
-            data['mmc5603_y'] = round(y, 2)
-            data['mmc5603_z'] = round(z, 2)
+            raw['mmc5603_x'] = round(x, 2)
+            raw['mmc5603_y'] = round(y, 2)
+            raw['mmc5603_z'] = round(z, 2)
             heading = math.degrees(math.atan2(y, x))
             if heading < 0:
                 heading += 360
-            data['mmc5603_heading'] = round(heading, 1)
+            raw['mmc5603_heading'] = round(heading, 1)
         except Exception as e:
             log.warning('MMC5603 read error: %s', e)
 
@@ -372,9 +372,54 @@ def read_all():
             voltage = chan.voltage
             ppm = voltage_to_ppm(key, voltage)
             if ppm is not None:
-                data[key] = ppm
+                raw[key] = ppm
         except Exception as e:
             log.warning('%s read error: %s', key, e)
+
+    # Fuse into clean readings — average where multiple sensors measure the same thing
+    data = {}
+
+    temps = [v for k, v in raw.items() if k in ('bme680_temp', 'scd41_temp')]
+    if temps:
+        data['temperature'] = round(sum(temps) / len(temps), 1)
+
+    humids = [v for k, v in raw.items() if k in ('bme680_humidity', 'scd41_humidity')]
+    if humids:
+        data['humidity'] = round(sum(humids) / len(humids), 1)
+
+    if 'bme680_pressure' in raw:
+        data['pressure'] = raw['bme680_pressure']
+
+    if 'bme680_gas' in raw:
+        data['voc'] = raw['bme680_gas']
+
+    if 'scd41_co2' in raw:
+        data['co2'] = raw['scd41_co2']
+
+    if 'sen0322_o2' in raw:
+        data['o2'] = raw['sen0322_o2']
+
+    if 'sen0567_nh3' in raw:
+        data['nh3'] = raw['sen0567_nh3']
+    if 'sen0572_h2' in raw:
+        data['h2'] = raw['sen0572_h2']
+    if 'sen0565_ch4' in raw:
+        data['ch4'] = raw['sen0565_ch4']
+    if 'sen0564_co' in raw:
+        data['co'] = raw['sen0564_co']
+    if 'sen0568_h2s' in raw:
+        data['h2s'] = raw['sen0568_h2s']
+    if 'mq4_combustible' in raw:
+        data['combustible'] = raw['mq4_combustible']
+
+    if 'mmc5603_heading' in raw:
+        data['compass'] = raw['mmc5603_heading']
+    if 'mmc5603_x' in raw:
+        data['mag_x'] = raw['mmc5603_x']
+    if 'mmc5603_y' in raw:
+        data['mag_y'] = raw['mmc5603_y']
+    if 'mmc5603_z' in raw:
+        data['mag_z'] = raw['mmc5603_z']
 
     rtc_time = None
     if rtc:
