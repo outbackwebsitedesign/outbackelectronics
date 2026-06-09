@@ -389,27 +389,6 @@ def build_sensors_list():
     return names
 
 
-def read_i2c_raw(addr):
-    """Try to read a few bytes from an unknown I2C device."""
-    if not i2c:
-        return None
-    try:
-        buf = bytearray(2)
-        while not i2c.try_lock():
-            pass
-        try:
-            i2c.readfrom_into(addr, buf)
-        finally:
-            i2c.unlock()
-        # Return the two bytes as a single integer (big-endian)
-        return (buf[0] << 8) | buf[1]
-    except Exception:
-        try:
-            i2c.unlock()
-        except Exception:
-            pass
-        return None
-
 
 def read_all():
     raw = {}
@@ -506,12 +485,6 @@ def read_all():
         data['mag_y'] = raw['mmc5603_y']
     if 'mmc5603_z' in raw:
         data['mag_z'] = raw['mmc5603_z']
-
-    # Unknown I2C devices — push raw 2-byte read under i2c_0xAA key
-    for addr in sorted(detected_addresses - claimed_addresses):
-        val = read_i2c_raw(addr)
-        if val is not None:
-            data[f'i2c_0x{addr:02x}'] = val
 
     rtc_time = None
     if rtc:
