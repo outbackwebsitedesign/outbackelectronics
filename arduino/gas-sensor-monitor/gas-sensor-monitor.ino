@@ -11,11 +11,12 @@
 #define LCD_RST   3    // Reset
 
 // ====== Gas Sensor Analog Pins ======
-#define MQ4_PIN   A0   // CH4 Methane
-#define H2_PIN    A1   // H2 Hydrogen
-#define CO_PIN    A2   // CO Carbon Monoxide
-#define NH3_PIN   A3   // NH3 Ammonia
-#define H2S_PIN   A4   // H2S Hydrogen Sulfide
+#define SEN0565_PIN   A0   // SEN0565 Gravity CH4 Sensor (0-100% LEL)
+#define MQ4_PIN       A1   // MQ-4 CH4 Methane (ppm)
+#define H2_PIN        A2   // H2 Hydrogen
+#define CO_PIN        A3   // CO Carbon Monoxide
+#define NH3_PIN       A4   // NH3 Ammonia
+#define H2S_PIN       A5   // H2S Hydrogen Sulfide
 
 // ====== WiFi Configuration ======
 const char* ssid = "YOUR_SSID";              // WiFi network name
@@ -32,7 +33,8 @@ float nh3_ro = 10000.0;   // R0 for NH3
 float h2s_ro = 10000.0;   // R0 for H2S
 
 // ====== Current Sensor Readings ======
-float mq4_ppm = 0;
+float sen0565_lel = 0;    // SEN0565: 0-100% LEL (Lower Explosive Limit)
+float mq4_ppm = 0;        // MQ-4: ppm
 float h2_ppm = 0;
 float co_ppm = 0;
 float nh3_ppm = 0;
@@ -79,7 +81,7 @@ void setup() {
   // calibrateSensors();
 
   Serial.println("Setup complete. Monitoring gases and pushing to weather service.");
-  Serial.println("MQ4(CH4) | H2 | CO | NH3 | H2S (ppm)");
+  Serial.println("SEN0565(%LEL) | MQ4(ppm) | H2 | CO | NH3 | H2S (ppm)");
 }
 
 void loop() {
@@ -98,6 +100,7 @@ void loop() {
   if (now - lastSensorRead >= SENSOR_INTERVAL) {
     lastSensorRead = now;
 
+    sen0565_lel = readSEN0565(SEN0565_PIN);
     mq4_ppm = readSensor(MQ4_PIN, mq4_ro, 4.4, -0.635);
     h2_ppm = readSensor(H2_PIN, h2_ro, 87.4, -1.58);
     co_ppm = readSensor(CO_PIN, co_ro, 605.18, -3.937);
@@ -178,8 +181,8 @@ void pushDataToWeatherService() {
 
   // Build request body as JSON
   String jsonData = "{";
-  jsonData += "\"mq4\":" + String(mq4_ppm, 2) + ",";
-  jsonData += "\"ch4\":" + String(mq4_ppm, 2) + ",";
+  jsonData += "\"sen0565_lel\":" + String(sen0565_lel, 2) + ",";
+  jsonData += "\"mq4_ppm\":" + String(mq4_ppm, 2) + ",";
   jsonData += "\"h2\":" + String(h2_ppm, 2) + ",";
   jsonData += "\"co\":" + String(co_ppm, 2) + ",";
   jsonData += "\"nh3\":" + String(nh3_ppm, 2) + ",";
@@ -216,6 +219,22 @@ void pushDataToWeatherService() {
 }
 
 // ====== Sensor Reading Functions ======
+
+float readSEN0565(int pin) {
+  // DFRobot Gravity Analog Methane Sensor (SEN0565)
+  // Output: 0-5V for 0-100% LEL
+  // LEL (Lower Explosive Limit) for methane is ~5% in air
+  int raw = analogRead(pin);
+  float voltage = (raw / 1023.0) * 5.0;
+
+  // Linear conversion: 5V = 100% LEL
+  float lel = (voltage / 5.0) * 100.0;
+
+  if (lel < 0) lel = 0;
+  if (lel > 100) lel = 100;
+
+  return lel;
+}
 
 float readSensor(int pin, float ro, float a, float b) {
   int raw = analogRead(pin);
@@ -303,11 +322,17 @@ void updateDisplay() {
   }
 
   if (displayMode == 0) {
-    // Page 1: MQ4, H2, CO
-    display.println("CH4(MQ4):");
+    // Page 1: Both CH4 sensors
+    display.println("SEN0565:");
+    display.print(sen0565_lel, 1);
+    display.println("% LEL");
+
+    display.println("MQ4:");
     display.print(mq4_ppm, 1);
     display.println("ppm");
-
+  }
+  else if (displayMode == 1) {
+    // Page 2: H2, CO, NH3
     display.println("H2:");
     display.print(h2_ppm, 1);
     display.println("ppm");
@@ -315,13 +340,13 @@ void updateDisplay() {
     display.println("CO:");
     display.print(co_ppm, 1);
     display.println("ppm");
-  }
-  else if (displayMode == 1) {
-    // Page 2: NH3, H2S
+
     display.println("NH3:");
     display.print(nh3_ppm, 1);
     display.println("ppm");
-
+  }
+  else {
+    // Page 3: H2S & Summary
     display.println("H2S:");
     display.print(h2s_ppm, 1);
     display.println("ppm");
@@ -329,20 +354,13 @@ void updateDisplay() {
     display.println("");
     display.println("Pushing data...");
   }
-  else {
-    // Page 3: Summary
-    display.println("=== SUMMARY ===");
-    display.print("CH4:"); display.println((int)mq4_ppm);
-    display.print("H2:"); display.println((int)h2_ppm);
-    display.print("CO:"); display.println((int)co_ppm);
-    display.print("NH3:"); display.println((int)nh3_ppm);
-    display.print("H2S:"); display.println((int)h2s_ppm);
-  }
 
   display.display();
 }
 
 void printSerialData() {
+  Serial.print(sen0565_lel, 1);
+  Serial.print(" | ");
   Serial.print(mq4_ppm, 1);
   Serial.print(" | ");
   Serial.print(h2_ppm, 1);

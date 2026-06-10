@@ -6,12 +6,13 @@ Real-time environmental gas monitoring with WiFi data push to weather.outbackele
 
 - **Arduino Uno R4 WiFi**
 - **Nokia 5110 LCD Display** (84x48 pixels)
+- **SEN0565** (DFRobot Gravity Analog Methane Sensor)
 - **MQ-4 Sensor** (CH4 Methane)
 - **H2 Sensor** (Hydrogen)
 - **CO Sensor** (Carbon Monoxide)
 - **NH3 Sensor** (Ammonia)
 - **H2S Sensor** (Hydrogen Sulfide)
-- **Resistors**: Five 10kΩ pull-up resistors (one per gas sensor)
+- **Resistors**: Five 10kΩ pull-up resistors (one per MQ-series gas sensor)
 
 ## Wiring
 
@@ -27,17 +28,17 @@ Real-time environmental gas monitoring with WiFi data push to weather.outbackele
 | GND | GND |
 
 ### Gas Sensors
-| Sensor | Arduino Pin |
-|--------|------------|
-| MQ-4 (CH4) | A0 |
-| H2 | A1 |
-| CO | A2 |
-| NH3 | A3 |
-| H2S | A4 |
+| Sensor | Arduino Pin | Notes |
+|--------|------------|-------|
+| SEN0565 (Methane 0-100% LEL) | A0 | DFRobot Gravity - Direct analog output |
+| MQ-4 (CH4) | A1 | MQ-series - Requires 10kΩ load resistor |
+| H2 | A2 | MQ-series - Requires 10kΩ load resistor |
+| CO | A3 | MQ-series - Requires 10kΩ load resistor |
+| NH3 | A4 | MQ-series - Requires 10kΩ load resistor |
+| H2S | A5 | MQ-series - Requires 10kΩ load resistor |
 
-All sensors: VCC → 5V, GND → GND
-
-Use 10kΩ load resistor between sensor output and GND for each sensor.
+**MQ-series sensors**: Connect 10kΩ load resistor between sensor output and GND
+**All sensors**: VCC → 5V, GND → GND
 
 ## Installation
 
@@ -59,8 +60,15 @@ Use 10kΩ load resistor between sensor output and GND for each sensor.
 
 ## Configuration
 
+### SEN0565 Notes
+The **SEN0565 (DFRobot Gravity Analog Methane Sensor)** outputs 0-5V for 0-100% LEL (Lower Explosive Limit). LEL is the concentration at which a gas mixture becomes flammable. For methane in air, LEL is approximately 5%, so:
+- 50% sensor output = 50% LEL ≈ 2.5% methane in air
+- 100% sensor output = 100% LEL ≈ 5% methane in air
+
+This sensor is **independent** from the **MQ-4**, which measures absolute PPM concentrations.
+
 ### Sensor Calibration
-On first run, uncomment the calibration line in `setup()`:
+On first run, uncomment the calibration line in `setup()` **for MQ-series sensors only** (SEN0565 doesn't require calibration):
 ```cpp
 // calibrateSensors();
 ```
@@ -95,8 +103,8 @@ const char* endpoint = "/api/sensors";
 JSON payload with all sensor readings:
 ```json
 {
-  "mq4": 45.23,
-  "ch4": 45.23,
+  "sen0565_lel": 25.5,
+  "mq4_ppm": 45.23,
   "h2": 120.45,
   "co": 8.67,
   "nh3": 12.34,
@@ -104,6 +112,11 @@ JSON payload with all sensor readings:
   "timestamp": 1234567890
 }
 ```
+
+**Sensor Units:**
+- `sen0565_lel`: 0-100% LEL (Lower Explosive Limit)
+- `mq4_ppm`: Parts Per Million
+- All others: Parts Per Million
 
 ## Troubleshooting
 
@@ -130,8 +143,8 @@ JSON payload with all sensor readings:
 ## Serial Monitor Output
 
 ```
-MQ4(CH4) | H2 | CO | NH3 | H2S (ppm)
-45.23 | 120.45 | 8.67 | 12.34 | 5.67
+SEN0565(%LEL) | MQ4(ppm) | H2 | CO | NH3 | H2S (ppm)
+25.5 | 45.23 | 120.45 | 8.67 | 12.34 | 5.67
 POST /api/sensors
 Status: 200
 Data pushed successfully!
