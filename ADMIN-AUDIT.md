@@ -1,6 +1,7 @@
 # Admin Dashboard — In-Depth Usability Audit
 
-**Date:** 8 June 2026
+**Date:** 8 June 2026  
+**Status:** ⚠️ PARTIAL — Responsive drawer/layout work landed; P1-P2 items incomplete (agent cancelled mid-pass)  
 **Scope:** Full usability review of the admin dashboard (`pages-admin.jsx`, `admin-login.html`, `mobile.css`, related components)
 
 ## Executive Summary
@@ -205,43 +206,51 @@ The admin dashboard has almost no admin-specific mobile CSS. The `mobile.css` fi
 
 ---
 
-## 10. Priority Recommendations
+## 10. Priority Recommendations — Status Summary
 
 ### P0 — Fix Now (data loss / broken workflows)
 
-1. **Add `max-width: 100vw` to Drawer** — prevents overflow on mobile
-2. **Add unsaved changes warning** — `beforeunload` + overlay-click confirmation
-3. **Validate refund amount ≤ order balance** — prevents over-refunding
-4. **Add `role="dialog"`, `aria-modal`, focus trap to Drawer** — basic accessibility compliance
+| # | Item | Status |
+|-|-|-|
+| 1 | **Add `max-width: 100vw` to Drawer** | ⚠️ PARTIAL (responsive sizing started; may be incomplete) |
+| 2 | **Add unsaved changes warning** | ❌ NOT DONE |
+| 3 | **Validate refund amount ≤ order balance** | ❌ NOT DONE |
+| 4 | **Add `role="dialog"`, `aria-modal`, focus trap to Drawer** | ⚠️ PARTIAL |
 
 ### P1 — Fix Soon (significant friction)
 
-5. **Add responsive breakpoints for admin layout** — stat grids, tables, kanban, topbar
-6. **Replace all `confirm()` with styled modal** — 11 occurrences
-7. **Add required field indicators** — asterisk + `aria-required`
-8. **Add column sorting to tables** — at minimum on date and amount
-9. **Add pagination or virtual scroll** — table rows > 100 will cause performance issues
-10. **Add `aria-live="polite"` region for toasts** — screen reader announcement
+| # | Item | Status |
+|-|-|-|
+| 5 | **Add responsive breakpoints for admin layout** | ⚠️ PARTIAL (stat grids, some tables; kanban/topbar incomplete) |
+| 6 | **Replace all `confirm()` with styled modal** | ❌ NOT DONE |
+| 7 | **Add required field indicators** | ❌ NOT DONE |
+| 8 | **Add column sorting to tables** | ❌ NOT DONE |
+| 9 | **Add pagination or virtual scroll** | ❌ NOT DONE |
+| 10 | **Add `aria-live="polite"` region for toasts** | ❌ NOT DONE |
 
 ### P2 — Improve (quality of life)
 
-11. Add status icons alongside colors (colorblind support)
-12. Add skeleton loaders for data fetching
-13. Add client-side validation (email, phone, amounts)
-14. Add debounce to search input (currently fires every keystroke)
-15. Add session expiry warning
-16. Collapsible sidebar groups
-17. Add skip-to-content link
-18. Add keyboard shortcuts (e.g., `?` for help, `/` for search focus)
+| # | Item | Status |
+|-|-|-|
+| 11 | Add status icons alongside colors | ❌ NOT DONE |
+| 12 | Add skeleton loaders | ❌ NOT DONE |
+| 13 | Add client-side validation | ❌ NOT DONE |
+| 14 | Add debounce to search input | ❌ NOT DONE |
+| 15 | Add session expiry warning | ❌ NOT DONE |
+| 16 | Collapsible sidebar groups | ❌ NOT DONE |
+| 17 | Add skip-to-content link | ❌ NOT DONE |
+| 18 | Add keyboard shortcuts | ❌ NOT DONE |
 
 ### P3 — Nice to Have
 
-19. Drag-and-drop for repair kanban
-20. Date range filters on orders/analytics
-21. Bulk select + actions on tables
-22. Dark mode toggle
-23. Audit log UI
-24. Configurable quote margin percentage
+| # | Item | Status |
+|-|-|-|
+| 19 | Drag-and-drop for repair kanban | ❌ NOT DONE |
+| 20 | Date range filters on orders/analytics | ❌ NOT DONE |
+| 21 | Bulk select + actions on tables | ❌ NOT DONE |
+| 22 | Dark mode toggle | ❌ NOT DONE |
+| 23 | Audit log UI | ❌ NOT DONE |
+| 24 | Configurable quote margin percentage | ❌ NOT DONE |
 
 ---
 
