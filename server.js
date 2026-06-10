@@ -977,7 +977,7 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null) {
   const tryRead = (paths, idx) => {
     if (idx >= paths.length) { return sendErrorPage(req, res, 404, 'Not found', ERROR_404_HTML); }
     const filePath = paths[idx];
-    if (!ALLOWED_SERVE_ROOTS.some(root => filePath.startsWith(root))) { return sendErrorPage(req, res, 403, 'Forbidden', ERROR_403_HTML); }
+    if (!ALLOWED_SERVE_ROOTS.some(root => filePath.startsWith(root))) { return tryRead(paths, idx + 1); }
     fs.readFile(filePath, (err, data) => {
       if (err) return tryRead(paths, idx + 1);
       const ext = path.extname(filePath).toLowerCase();
