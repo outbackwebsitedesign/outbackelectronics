@@ -22,12 +22,12 @@
 const char* ssid = "YOUR_SSID";              // WiFi network name
 const char* password = "YOUR_PASSWORD";      // WiFi password
 const char* server = "weather.outbackelectronics.com.au";
-const int port = 80;
-const char* endpoint = "/api/sensors";       // API endpoint
+const int port = 8089;                       // Weather service port
+const char* endpoint = "/api/weather/readings";  // Correct API endpoint
 
 // ====== Weather Service Authentication ======
-const char* api_key = "YOUR_API_KEY";        // API key from weather service
-const char* sensor_id = "UNO_R4_WIFI_001";   // Unique sensor identifier
+const char* api_key = "YOUR_API_KEY";        // API key from weather service (x-api-key header)
+const char* station_id = "UNO_R4_WIFI_001";  // Station identifier
 
 // ====== MQ-4 Calibration ======
 float mq4_ro = 10000.0;   // R0 for MQ-4 (measured in clean air)
@@ -179,17 +179,18 @@ void pushDataToWeatherService() {
 
   Serial.println("Pushing data to weather service...");
 
-  // Build request body as JSON
+  // Build request body as JSON (per weather service schema)
   String jsonData = "{";
-  jsonData += "\"api_key\":\"" + String(api_key) + "\",";
-  jsonData += "\"sensor_id\":\"" + String(sensor_id) + "\",";
+  jsonData += "\"station_id\":\"" + String(station_id) + "\",";
+  jsonData += "\"sensors\":[\"SEN0565\",\"MQ4\",\"H2\",\"CO\",\"NH3\",\"H2S\"],";
+  jsonData += "\"data\":{";
   jsonData += "\"sen0565_lel\":" + String(sen0565_lel, 2) + ",";
   jsonData += "\"mq4_ppm\":" + String(mq4_ppm, 2) + ",";
   jsonData += "\"h2_ppm\":" + String(h2_ppm, 2) + ",";
   jsonData += "\"co_ppm\":" + String(co_ppm, 2) + ",";
   jsonData += "\"nh3_ppm\":" + String(nh3_ppm, 2) + ",";
-  jsonData += "\"h2s_ppm\":" + String(h2s_ppm, 2) + ",";
-  jsonData += "\"timestamp\":" + String(millis());
+  jsonData += "\"h2s_ppm\":" + String(h2s_ppm, 2);
+  jsonData += "}";
   jsonData += "}";
 
   // Make HTTP POST request
@@ -201,6 +202,7 @@ void pushDataToWeatherService() {
   client.beginRequest();
   client.post(endpoint);
   client.sendHeader("Content-Type", "application/json");
+  client.sendHeader("x-api-key", api_key);
   client.sendHeader("Content-Length", jsonData.length());
   client.endRequest();
   client.print(jsonData);

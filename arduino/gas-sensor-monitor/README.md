@@ -58,17 +58,35 @@ Real-time environmental gas monitoring with WiFi data push to weather.outbackele
    ```cpp
    const char* ssid = "YOUR_SSID";
    const char* password = "YOUR_PASSWORD";
-   const char* api_key = "YOUR_API_KEY";        // Get from weather service admin
-   const char* sensor_id = "UNO_R4_WIFI_001";   // Unique ID (e.g., location: garden, shed, etc.)
+   const char* api_key = "YOUR_API_KEY";       // Register via /api/weather/register to get key
+   const char* station_id = "UNO_R4_WIFI_001"; // Unique ID (e.g., location: garden, shed, etc.)
    ```
+
+### Getting an API Key
+
+If you don't have an API key yet, you can register one:
+
+```bash
+curl -X POST http://weather.outbackelectronics.com.au:8089/api/weather/register \
+  -H "Content-Type: application/json" \
+  -d '{"name": "My Arduino Sensor"}'
+```
+
+The response will include your `apiKey` and `weatherUrl`.
 
 ## Configuration
 
-### API Key & Sensor ID
-- **api_key**: Authentication key from the weather service (required for POST requests)
-- **sensor_id**: Unique identifier for this sensor/location (helps distinguish multiple Arduinos)
+### Weather Service Details
+- **Server**: `weather.outbackelectronics.com.au:8089`
+- **Endpoint**: `/api/weather/readings` (POST)
+- **Authentication**: API key sent via `x-api-key` header
+
+### API Key & Station ID
+- **api_key**: Authentication key from weather service (sent in `x-api-key` header)
+  - Get by registering at `/api/weather/register`
+- **station_id**: Unique identifier for this sensor/location
   - Examples: `UNO_R4_WIFI_001`, `backyard`, `workshop`, `greenhouse`
-  - Sent with each data push to identify the source
+  - Identifies which station the readings come from
 
 ### Sensor Notes
 
@@ -122,28 +140,32 @@ const char* endpoint = "/api/sensors";
 
 ## Data Sent to Server
 
-JSON payload with all sensor readings (POST to `/api/sensors`):
+**Endpoint:** POST to `http://weather.outbackelectronics.com.au:8089/api/weather/readings`
+
+**Headers:**
+- `Content-Type: application/json`
+- `x-api-key: YOUR_API_KEY`
+
+**JSON payload:**
 ```json
 {
-  "api_key": "YOUR_API_KEY",
-  "sensor_id": "UNO_R4_WIFI_001",
-  "sen0565_lel": 25.5,
-  "mq4_ppm": 45.23,
-  "h2_ppm": 120.45,
-  "co_ppm": 8.67,
-  "nh3_ppm": 12.34,
-  "h2s_ppm": 5.67,
-  "timestamp": 1234567890
+  "station_id": "UNO_R4_WIFI_001",
+  "sensors": ["SEN0565", "MQ4", "H2", "CO", "NH3", "H2S"],
+  "data": {
+    "sen0565_lel": 25.5,
+    "mq4_ppm": 45.23,
+    "h2_ppm": 120.45,
+    "co_ppm": 8.67,
+    "nh3_ppm": 12.34,
+    "h2s_ppm": 5.67
+  }
 }
 ```
 
 **Fields:**
-- `api_key`: Authentication key for weather service
-- `sensor_id`: Unique identifier for this sensor/location
-- `sen0565_lel`: 0-100% LEL (Lower Explosive Limit) - DFRobot Gravity
-- `mq4_ppm`: Parts Per Million - MQ-Series
-- `h2_ppm`, `co_ppm`, `nh3_ppm`, `h2s_ppm`: Parts Per Million - DFRobot Fermion
-- `timestamp`: Milliseconds since Arduino boot
+- `station_id`: Unique identifier for this sensor/location
+- `sensors`: Array of sensor names being reported
+- `data`: Object containing sensor readings with their values
 
 ## Troubleshooting
 
