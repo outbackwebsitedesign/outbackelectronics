@@ -1,9 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getCsrf, ensureCsrf } from './src/lib/api.js';
 
-// Cross-site URLs — populated from /api/shop-info at startup. No hardcoded fallbacks.
+// Cross-site URLs — populated from /api/shop-info at startup, with a sensible
+// fallback derived from the current host so links are never empty during load.
 let _SITE_URL  = '';
-function getSiteUrl()  { return _SITE_URL; }
+function getSiteUrl()  {
+  if (_SITE_URL) return _SITE_URL;
+  try {
+    const { protocol, hostname } = window.location;
+    if (hostname.startsWith('portal.')) return `${protocol}//${hostname.slice('portal.'.length)}`;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') return `${protocol}//${hostname}:8080`;
+  } catch { /* fall through */ }
+  return 'https://outbackelectronics.com.au';
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -18,19 +27,38 @@ function api(path, opts = {}) {
     .catch(() => ({ ok: false, message: 'Network error. Please check your connection and try again.' }));
 }
 
+// Simple in-memory cache so revisiting a tab doesn't refetch every time.
+// Mutations call cachedApi(path, { force: true }) (or invalidateCache) to refresh.
+const _apiCache = new Map();
+function cachedApi(path, { force = false } = {}) {
+  if (!force && _apiCache.has(path)) return Promise.resolve(_apiCache.get(path));
+  return api(path).then(r => {
+    if (r && r.ok !== false) _apiCache.set(path, r);
+    return r;
+  });
+}
+function invalidateCache(prefix) {
+  for (const key of [..._apiCache.keys()]) {
+    if (!prefix || key.startsWith(prefix)) _apiCache.delete(key);
+  }
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 function fmtDate(iso) {
   if (!iso) return '—';
   try { return new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }); }
   catch { return iso; }
 }
 
-function StatusTag({ status }) {
+function StatusTag({ status, label }) {
   const cls =
-    /paid|complete|delivered|approved|solved/i.test(status || '') ? 'tag tag-green' :
+    /paid|complete|delivered|approved|solved|confirmed/i.test(status || '') ? 'tag tag-green' :
+    /cancel|refund|fail|reject/i.test(status || '') ? 'tag tag-red' :
     /pending|new|open|awaiting/i.test(status || '') ? 'tag tag-ochre' :
     /in.progress|active|processing/i.test(status || '') ? 'tag tag-blue' :
     'tag';
-  return <span className={cls}>{status || 'unknown'}</span>;
+  return <span className={cls}>{label || status || 'unknown'}</span>;
 }
 
 // ── Login ─────────────────────────────────────────────────────────────────────
@@ -119,10 +147,25 @@ function RegisterForm({ onLogin, onBack }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [busy, setBusy] = useState(false);
+
+  function validate() {
+    const errs = {};
+    if (!firstName.trim()) errs.firstName = 'First name is required.';
+    if (!lastName.trim()) errs.lastName = 'Last name is required.';
+    if (!email.trim()) errs.email = 'Email address is required.';
+    else if (!EMAIL_RE.test(email.trim())) errs.email = 'Enter a valid email address, e.g. you@example.com.';
+    if (!/^[a-zA-Z0-9_]{3,30}$/.test(username.trim())) errs.username = 'Username must be 3–30 characters — letters, numbers and underscores only.';
+    if (password.length < 8) errs.password = 'Password must be at least 8 characters.';
+    return errs;
+  }
 
   async function handleRegister(e) {
     e.preventDefault();
+    const errs = validate();
+    setFieldErrors(errs);
+    if (Object.keys(errs).length) return;
     setError(''); setBusy(true);
     const r = await api('/api/portal/auth/register', { method: 'POST', body: JSON.stringify({ firstName, lastName, email, phone, address, username, password }) });
     setBusy(false);
@@ -130,24 +173,33 @@ function RegisterForm({ onLogin, onBack }) {
     else { setError(r.message || 'Registration failed.'); }
   }
 
+  const strength = password.length === 0 ? null
+    : password.length < 8 ? { label: 'Too short', color: '#c0392b' }
+    : (password.length >= 12 && /[0-9]/.test(password) && /[^a-zA-Z0-9]/.test(password)) ? { label: 'Strong', color: 'var(--eucalyptus)' }
+    : (password.length >= 10 || (/[0-9]/.test(password) && /[A-Z]/.test(password))) ? { label: 'Good', color: '#7d5a0a' }
+    : { label: 'Okay — longer is stronger', color: '#7d5a0a' };
+
   return (
     <>
       <h2 style={{fontFamily:'Instrument Serif, serif', fontWeight:400, fontSize:28, marginBottom:20}}>Create account</h2>
-      {error && <div className="alert alert-error">{error}</div>}
-      <form onSubmit={handleRegister}>
-        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12}}>
+      {error && <div className="alert alert-error" role="alert">{error}</div>}
+      <form onSubmit={handleRegister} noValidate>
+        <div className="form-grid-2">
           <label className="field">
             <span className="label">First name</span>
-            <input className="input" type="text" value={firstName} autoComplete="given-name" onChange={e => setFirstName(e.target.value)} required />
+            <input className={'input' + (fieldErrors.firstName ? ' invalid' : '')} type="text" value={firstName} autoComplete="given-name" onChange={e => { setFirstName(e.target.value); setFieldErrors(f => ({...f, firstName: ''})); }} required />
+            {fieldErrors.firstName && <span className="field-error">{fieldErrors.firstName}</span>}
           </label>
           <label className="field">
             <span className="label">Last name</span>
-            <input className="input" type="text" value={lastName} autoComplete="family-name" onChange={e => setLastName(e.target.value)} required />
+            <input className={'input' + (fieldErrors.lastName ? ' invalid' : '')} type="text" value={lastName} autoComplete="family-name" onChange={e => { setLastName(e.target.value); setFieldErrors(f => ({...f, lastName: ''})); }} required />
+            {fieldErrors.lastName && <span className="field-error">{fieldErrors.lastName}</span>}
           </label>
         </div>
         <label className="field">
           <span className="label">Email address</span>
-          <input className="input" type="email" value={email} autoComplete="email" onChange={e => setEmail(e.target.value)} required />
+          <input className={'input' + (fieldErrors.email ? ' invalid' : '')} type="email" value={email} autoComplete="email" onChange={e => { setEmail(e.target.value); setFieldErrors(f => ({...f, email: ''})); }} required />
+          {fieldErrors.email && <span className="field-error">{fieldErrors.email}</span>}
         </label>
         <label className="field">
           <span className="label">Phone number</span>
@@ -159,13 +211,19 @@ function RegisterForm({ onLogin, onBack }) {
         </label>
         <label className="field">
           <span className="label">Username</span>
-          <input className="input" type="text" value={username} autoComplete="username" onChange={e => setUsername(e.target.value)} required />
-          <span style={{fontSize:11, color:'var(--ink-3)', marginTop:3, display:'block'}}>3–30 characters, letters, numbers and underscores</span>
+          <input className={'input' + (fieldErrors.username ? ' invalid' : '')} type="text" value={username} autoComplete="username" onChange={e => { setUsername(e.target.value); setFieldErrors(f => ({...f, username: ''})); }} required />
+          {fieldErrors.username
+            ? <span className="field-error">{fieldErrors.username}</span>
+            : <span style={{fontSize:11, color:'var(--ink-3)', marginTop:3, display:'block'}}>3–30 characters, letters, numbers and underscores</span>}
         </label>
         <label className="field">
           <span className="label">Password</span>
-          <input className="input" type="password" value={password} autoComplete="new-password" onChange={e => setPassword(e.target.value)} required />
-          <span style={{fontSize:11, color:'var(--ink-3)', marginTop:3, display:'block'}}>Minimum 8 characters</span>
+          <input className={'input' + (fieldErrors.password ? ' invalid' : '')} type="password" value={password} autoComplete="new-password" onChange={e => { setPassword(e.target.value); setFieldErrors(f => ({...f, password: ''})); }} required />
+          {fieldErrors.password
+            ? <span className="field-error">{fieldErrors.password}</span>
+            : strength
+            ? <span style={{fontSize:11, color: strength.color, marginTop:3, display:'block', fontWeight:600}}>Strength: {strength.label}</span>
+            : <span style={{fontSize:11, color:'var(--ink-3)', marginTop:3, display:'block'}}>Minimum 8 characters</span>}
         </label>
         <button className="btn btn-rust" type="submit" disabled={busy} style={{width:'100%', justifyContent:'center', marginTop:4}}>
           {busy ? 'Creating account…' : 'Create account →'}
@@ -287,8 +345,46 @@ function PortalNav({ user, tab, setTab, onLogout }) {
     { id: 'account',     label: 'Account' },
   ];
 
+  const rowRef = useRef(null);
+  const tabRefs = useRef([]);
+  const [scrollHint, setScrollHint] = useState({ left: false, right: false });
+
+  useEffect(() => {
+    const el = rowRef.current;
+    if (!el) return;
+    const update = () => setScrollHint({
+      left: el.scrollLeft > 4,
+      right: el.scrollLeft + el.clientWidth < el.scrollWidth - 4,
+    });
+    update();
+    el.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    return () => { el.removeEventListener('scroll', update); window.removeEventListener('resize', update); };
+  }, []);
+
+  // Keep the active tab visible when it changes (e.g. via keyboard or deep link)
+  useEffect(() => {
+    const i = tabs.findIndex(t => t.id === tab);
+    const btn = tabRefs.current[i];
+    if (btn && btn.scrollIntoView) btn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [tab]);
+
+  function onTabKeyDown(e, i) {
+    let next = null;
+    if (e.key === 'ArrowRight') next = (i + 1) % tabs.length;
+    else if (e.key === 'ArrowLeft') next = (i - 1 + tabs.length) % tabs.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = tabs.length - 1;
+    if (next === null) return;
+    e.preventDefault();
+    setTab(tabs[next].id);
+    const btn = tabRefs.current[next];
+    if (btn) btn.focus();
+  }
+
   async function handleLogout() {
     await api('/api/portal/auth/logout', { method: 'POST' });
+    invalidateCache();
     onLogout();
   }
 
@@ -307,7 +403,7 @@ function PortalNav({ user, tab, setTab, onLogout }) {
           </a>
           <div className="nav-user">
             <span className="portal-badge">Portal</span>
-            <span style={{color:'var(--ink-3)'}}>Signed in as <strong style={{color:'var(--bg-deep)'}}>{user.displayName || user.username}</strong></span>
+            <span className="nav-signed" style={{color:'var(--sand-dim)'}}>Signed in as <strong style={{color:'var(--bg-deep)'}}>{user.displayName || user.username}</strong></span>
             <button className="btn btn-ghost btn-sm" onClick={handleLogout}
               style={{color:'var(--bg-deep)', borderColor:'#3a3127'}}>
               Sign out
@@ -317,12 +413,27 @@ function PortalNav({ user, tab, setTab, onLogout }) {
       </div>
       <div className="tabs-bar">
         <div className="container">
-          <div className="tabs-row">
-            {tabs.map(t => (
-              <button key={t.id} className={'tab-btn' + (tab === t.id ? ' active' : '')} onClick={() => setTab(t.id)}>
-                {t.label}
-              </button>
-            ))}
+          <div className="tabs-scroll">
+            <div className="tabs-row" ref={rowRef} role="tablist" aria-label="Portal sections">
+              {tabs.map((t, i) => (
+                <button
+                  key={t.id}
+                  ref={el => { tabRefs.current[i] = el; }}
+                  className={'tab-btn' + (tab === t.id ? ' active' : '')}
+                  role="tab"
+                  id={`tab-${t.id}`}
+                  aria-selected={tab === t.id}
+                  aria-controls={`panel-${t.id}`}
+                  tabIndex={tab === t.id ? 0 : -1}
+                  onKeyDown={e => onTabKeyDown(e, i)}
+                  onClick={() => setTab(t.id)}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            {scrollHint.left && <div className="tabs-fade tabs-fade-left" aria-hidden="true">‹</div>}
+            {scrollHint.right && <div className="tabs-fade tabs-fade-right" aria-hidden="true">›</div>}
           </div>
         </div>
       </div>
@@ -335,17 +446,20 @@ function PortalNav({ user, tab, setTab, onLogout }) {
 function OverviewTab({ user, setTab }) {
   const [data, setData] = useState(null);
 
-  useEffect(() => {
+  function load(force) {
+    if (force) setData(null);
     Promise.all([
-      api('/api/portal/orders'),
-      api('/api/portal/repairs'),
-      api('/api/portal/quotes'),
+      cachedApi('/api/portal/orders', { force }),
+      cachedApi('/api/portal/repairs', { force }),
+      cachedApi('/api/portal/quotes', { force }),
     ]).then(([o, r, q]) => setData({
       orders: o.items || [],
       repairs: r.items || [],
       quotes: q.items || [],
     }));
-  }, []);
+  }
+
+  useEffect(() => { load(false); }, []);
 
   const greeting = () => {
     const h = new Date().getHours();
@@ -354,30 +468,48 @@ function OverviewTab({ user, setTab }) {
     return 'Good evening';
   };
 
+  const allZero = data && data.orders.length === 0 && data.repairs.length === 0 && data.quotes.length === 0;
+
+  const statCard = (key, label, count, desc) => (
+    <div className="stat-card" style={{cursor:'pointer'}} role="button" tabIndex={0}
+      aria-label={`${label}: ${count == null ? 'loading' : count} ${desc}. Open ${label} tab.`}
+      onClick={() => setTab(key)}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setTab(key); } }}>
+      <span className="eyebrow">{label}</span>
+      <div className="num">{count == null ? '—' : count}</div>
+      <div className="desc">{desc}</div>
+    </div>
+  );
+
   return (
     <div className="page-section">
       <div className="container">
-        <div className="section-head">
-          <h2>{greeting()}, {data ? (user.displayName || user.username) : '…'}</h2>
-          <p>Welcome to your Outback Electronics customer portal.</p>
-        </div>
+        <SectionHead
+          title={`${greeting()}, ${data ? (user.displayName || user.username) : '…'}`}
+          desc="Welcome to your Outback Electronics customer portal."
+          onRefresh={() => load(true)}
+        />
+
+        {allZero && (
+          <div className="card-paper" style={{padding:28, marginBottom:32, borderLeft:'3px solid var(--ochre)'}}>
+            <span className="eyebrow">Welcome aboard</span>
+            <h3 className="serif" style={{fontSize:26, marginTop:8}}>G'day — let's get you started</h3>
+            <p style={{marginTop:8, color:'var(--ink-2)', fontSize:14, maxWidth:560}}>
+              You don't have any orders, repairs or quotes yet. Browse the shop for rugged gear,
+              ask us to price up a build or repair, or book a service visit — we'll take it from there.
+            </p>
+            <div style={{display:'flex', gap:10, flexWrap:'wrap', marginTop:18}}>
+              <a href={getSiteUrl() + '/shop'} className="btn btn-rust">Browse the shop →</a>
+              <button className="btn btn-ghost" onClick={() => setTab('quotes')}>Request a quote</button>
+              <button className="btn btn-ghost" onClick={() => setTab('bookings')}>Book a service</button>
+            </div>
+          </div>
+        )}
 
         <div className="grid-3" style={{marginBottom:36}}>
-          <div className="stat-card" style={{cursor:'pointer'}} onClick={() => setTab('orders')}>
-            <span className="eyebrow">Orders</span>
-            <div className="num">{data ? data.orders.length : '—'}</div>
-            <div className="desc">recorded orders</div>
-          </div>
-          <div className="stat-card" style={{cursor:'pointer'}} onClick={() => setTab('repairs')}>
-            <span className="eyebrow">Repairs</span>
-            <div className="num">{data ? data.repairs.length : '—'}</div>
-            <div className="desc">repair jobs</div>
-          </div>
-          <div className="stat-card" style={{cursor:'pointer'}} onClick={() => setTab('quotes')}>
-            <span className="eyebrow">Quotes</span>
-            <div className="num">{data ? data.quotes.length : '—'}</div>
-            <div className="desc">quote requests</div>
-          </div>
+          {statCard('orders', 'Orders', data ? data.orders.length : null, 'recorded orders')}
+          {statCard('repairs', 'Repairs', data ? data.repairs.length : null, 'repair jobs')}
+          {statCard('quotes', 'Quotes', data ? data.quotes.length : null, 'quote requests')}
         </div>
 
         <div className="grid-2">
@@ -418,7 +550,7 @@ const UPDATE_TYPE_COLOR = {
   dispatched: 'var(--ink)',
 };
 
-function OrderDetail({ o, onPay, paying }) {
+function OrderDetail({ o, onPay, paying, onCollapse }) {
   const dq = o.draftQuote || {};
   const lineItems = [
     ...(dq.hardwareItems || []).filter(i => i.name).map(i => {
@@ -584,6 +716,12 @@ function OrderDetail({ o, onPay, paying }) {
           <p style={{fontSize:13, color:'var(--ink-2)'}}>{dq.notes}</p>
         </div>
       )}
+
+      {onCollapse && (
+        <div>
+          <button className="btn btn-ghost btn-sm" onClick={onCollapse}>↑ Close details</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -593,10 +731,15 @@ function OrdersTab({ highlightId }) {
   const [expanded, setExpanded] = useState(null);
   const [paying, setPaying] = useState(null);
   const [payErr, setPayErr] = useState('');
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [sortDir, setSortDir] = useState('newest');
+  const [visibleCount, setVisibleCount] = useState(10);
   const paidOrderId = new URLSearchParams(window.location.search).get('paid');
 
-  useEffect(() => {
-    api('/api/portal/orders').then(r => {
+  function load(force) {
+    if (force) setItems(null);
+    cachedApi('/api/portal/orders', { force }).then(r => {
       const orders = r.items || [];
       setItems(orders);
       if (paidOrderId) {
@@ -606,7 +749,9 @@ function OrdersTab({ highlightId }) {
         setExpanded(highlightId);
       }
     }).catch(() => setItems([]));
-  }, []);
+  }
+
+  useEffect(() => { load(false); }, []);
 
   async function handlePay(orderId) {
     setPaying(orderId); setPayErr('');
@@ -620,18 +765,40 @@ function OrdersTab({ highlightId }) {
 
   const FULFILMENT_LABEL = { pending:'Pending', ordering:'Ordering parts', building:'Building', testing:'Testing', packed:'Packed', shipped:'Shipped', fulfilled:'Delivered', refunded:'Refunded' };
 
+  // Sort newest-first by default, with status filter + text search
+  const dateVal = o => new Date(o.date || o.createdAt || 0).getTime() || 0;
+  const statusOptions = [...new Set(items.map(o => o.fulfilment || o.status || 'pending'))];
+  let shown = items.filter(o => {
+    if (statusFilter !== 'all' && (o.fulfilment || o.status || 'pending') !== statusFilter) return false;
+    const q = search.trim().toLowerCase();
+    if (q && ![o.id, o.items, o.quoteRef].some(v => String(v || '').toLowerCase().includes(q))) return false;
+    return true;
+  });
+  shown = [...shown].sort((a, b) => sortDir === 'oldest' ? dateVal(a) - dateVal(b) : dateVal(b) - dateVal(a));
+  const visible = shown.slice(0, visibleCount);
+
   return (
     <div className="page-section">
       <div className="container">
-        <div className="section-head">
-          <h2>Orders</h2>
-          <p>Your order history with Outback Electronics.</p>
-        </div>
-        {paidOrderId && <div className="alert alert-success" style={{marginBottom:20}}>Payment received — thank you! Your order is being processed.</div>}
-        {payErr && <div className="alert alert-error" style={{marginBottom:20}}>{payErr}</div>}
+        <SectionHead title="Orders" desc="Your order history with Outback Electronics." onRefresh={() => load(true)} />
+        {paidOrderId && <div className="alert alert-success" role="status" style={{marginBottom:20}}>Payment received — thank you! Your order is being processed.</div>}
+        {payErr && <div className="alert alert-error" role="alert" style={{marginBottom:20}}>{payErr}</div>}
+        {items.length > 0 && (
+          <FilterBar
+            search={search} onSearch={setSearch} searchPlaceholder="Search orders by ID or item…"
+            filters={[
+              { label: 'Filter by status', value: statusFilter, onChange: setStatusFilter,
+                options: [{ value: 'all', label: 'All statuses' }, ...statusOptions.map(s => ({ value: s, label: FULFILMENT_LABEL[s] || s }))] },
+              { label: 'Sort order', value: sortDir, onChange: setSortDir,
+                options: [{ value: 'newest', label: 'Newest first' }, { value: 'oldest', label: 'Oldest first' }] },
+            ]}
+          />
+        )}
         {items.length === 0
           ? <EmptyState icon="cart" message="No orders found for your account." />
-          : items.map(o => {
+          : shown.length === 0
+          ? <EmptyState icon="cart" message="No orders match your search or filter." hint={false} />
+          : visible.map(o => {
             const paid = (o.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
             const outstanding = o.total != null ? Math.max(0, Number(o.total) - paid) : null;
             const needsPayment = outstanding != null && outstanding > 0;
@@ -640,7 +807,15 @@ function OrdersTab({ highlightId }) {
             const hasUpdates = (o.updates || []).length > 0;
             return (
               <div key={o.id} className="card-paper" style={{padding:20, marginBottom:12, borderLeft: isNew ? '3px solid var(--eucalyptus)' : needsPayment ? '3px solid var(--rust)' : '3px solid transparent'}}>
-                <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:8, cursor:'pointer'}} onClick={() => setExpanded(isExpanded ? null : o.id)}>
+                <div
+                  style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:8, cursor:'pointer'}}
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={isExpanded}
+                  aria-label={`Order ${o.id} — ${isExpanded ? 'collapse' : 'expand'} details`}
+                  onClick={() => setExpanded(isExpanded ? null : o.id)}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(isExpanded ? null : o.id); } }}
+                >
                   <div style={{flex:1, minWidth:0}}>
                     <div style={{display:'flex', gap:10, alignItems:'center', flexWrap:'wrap'}}>
                       <span className="mono" style={{fontSize:12, color:'var(--ink-2)'}}>{o.id}</span>
@@ -652,14 +827,21 @@ function OrdersTab({ highlightId }) {
                   </div>
                   <div style={{display:'flex', alignItems:'center', gap:10}}>
                     <StatusTag status={o.fulfilment || o.status || 'pending'} label={FULFILMENT_LABEL[o.fulfilment] || o.fulfilment} />
-                    <span style={{fontSize:16, color:'var(--ink-3)', userSelect:'none'}}>{isExpanded ? '▲' : '▼'}</span>
+                    <span style={{fontSize:16, color:'var(--ink-3)', userSelect:'none'}} aria-hidden="true">{isExpanded ? '▲' : '▼'}</span>
                   </div>
                 </div>
-                {isExpanded && <OrderDetail o={o} onPay={handlePay} paying={paying} />}
+                {isExpanded && <OrderDetail o={o} onPay={handlePay} paying={paying} onCollapse={() => setExpanded(null)} />}
               </div>
             );
           })
         }
+        {shown.length > visibleCount && (
+          <div style={{textAlign:'center', marginTop:8}}>
+            <button className="btn btn-ghost" onClick={() => setVisibleCount(c => c + 10)}>
+              Show more ({shown.length - visibleCount} remaining)
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -669,47 +851,65 @@ function OrdersTab({ highlightId }) {
 
 function RepairsTab() {
   const [items, setItems] = useState(null);
+  const [search, setSearch] = useState('');
 
-  useEffect(() => {
-    api('/api/portal/repairs').then(r => setItems(r.items || [])).catch(() => setItems([]));
-  }, []);
+  function load(force) {
+    if (force) setItems(null);
+    cachedApi('/api/portal/repairs', { force }).then(r => setItems(r.items || [])).catch(() => setItems([]));
+  }
+
+  useEffect(() => { load(false); }, []);
 
   if (!items) return <LoadingSection />;
+
+  const q = search.trim().toLowerCase();
+  const shown = q
+    ? items.filter(card => [card.id, card.title, card.device, card.description, card.customer, card.name, card.column, card.stage, card.status]
+        .some(v => String(v || '').toLowerCase().includes(q)))
+    : items;
 
   return (
     <div className="page-section">
       <div className="container">
-        <div className="section-head">
-          <h2>Repairs</h2>
-          <p>Status of your repair and service jobs.</p>
-        </div>
+        <SectionHead title="Repairs" desc="Status of your repair and service jobs." onRefresh={() => load(true)} />
+        {items.length > 0 && (
+          <FilterBar search={search} onSearch={setSearch} searchPlaceholder="Search repairs by ID, device or stage…" />
+        )}
         {items.length === 0
           ? <EmptyState icon="tool" message="No repair jobs found for your account." />
+          : shown.length === 0
+          ? <EmptyState icon="tool" message="No repair jobs match your search." hint={false} />
           : (
-            <div className="card-paper" style={{overflow:'auto'}}>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Job ID</th>
-                    <th>Device / Description</th>
-                    <th>Customer</th>
-                    <th>Stage</th>
-                    <th>Updated</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map(card => (
-                    <tr key={card.id}>
-                      <td><span className="mono" style={{fontSize:12}}>{card.id}</span></td>
-                      <td>{card.title || card.device || card.description || '—'}</td>
-                      <td>{card.customer || card.name || '—'}</td>
-                      <td><StatusTag status={card.column || card.stage || card.status} /></td>
-                      <td>{fmtDate(card.updatedAt || card.createdAt)}</td>
+            <>
+              <div className="card-paper" style={{overflow:'auto'}}>
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Job ID</th>
+                      <th>Device / Description</th>
+                      <th>Customer</th>
+                      <th>Stage</th>
+                      <th>Updated</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {shown.map(card => (
+                      <tr key={card.id}>
+                        <td data-label="Job ID"><span className="mono" style={{fontSize:12}}>{card.id}</span></td>
+                        <td data-label="Device / Description">{card.title || card.device || card.description || '—'}</td>
+                        <td data-label="Customer">{card.customer || card.name || '—'}</td>
+                        <td data-label="Stage"><StatusTag status={card.column || card.stage || card.status} /></td>
+                        <td data-label="Updated">{fmtDate(card.updatedAt || card.createdAt)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p style={{fontSize:13, color:'var(--ink-2)', marginTop:14}}>
+                Have a question about a repair, or photos to send us?{' '}
+                <a href={getSiteUrl() + '/contact'} style={{color:'var(--rust)', fontWeight:600}}>Contact the repair team →</a>
+              </p>
+            </>
           )
         }
       </div>
@@ -722,87 +922,117 @@ function RepairsTab() {
 function QuotesTab({ user, onOrderCreated, highlightRef }) {
   const [items, setItems] = useState(null);
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({ name: user.displayName || user.username, email: '', description: '' });
+  const [formData, setFormData] = useState({ name: user.displayName || user.username, email: user.email || '', description: '' });
+  const [fieldErrors, setFieldErrors] = useState({});
   const [submitMsg, setSubmitMsg] = useState('');
   const [busy, setBusy] = useState(false);
   const [accepting, setAccepting] = useState(null);
+  const [acceptErr, setAcceptErr] = useState('');
   const [acceptedOrders, setAcceptedOrders] = useState({});
+  const [search, setSearch] = useState('');
 
-  useEffect(() => {
-    api('/api/portal/quotes').then(r => setItems(r.items || [])).catch(() => setItems([]));
-  }, []);
+  function load(force) {
+    if (force) setItems(null);
+    cachedApi('/api/portal/quotes', { force }).then(r => {
+      const list = r.items || [];
+      setItems(list);
+      // Pre-fill the quote form email from the logged-in user's existing quotes
+      // (the /api/portal/auth/me response doesn't include email — see note).
+      const known = list.find(q => q.email);
+      if (known) setFormData(f => (f.email ? f : { ...f, email: known.email }));
+    }).catch(() => setItems([]));
+  }
+
+  useEffect(() => { load(false); }, []);
 
   async function handleSubmit(e) {
     e.preventDefault();
+    const errs = {};
+    if (!formData.name.trim()) errs.name = 'Please enter your name.';
+    if (!formData.email.trim()) errs.email = 'Please enter your email address.';
+    else if (!EMAIL_RE.test(formData.email.trim())) errs.email = 'Enter a valid email address, e.g. you@example.com.';
+    if (!formData.description.trim()) errs.description = 'Tell us what you need a quote for.';
+    setFieldErrors(errs);
+    if (Object.keys(errs).length) return;
     setBusy(true); setSubmitMsg('');
     const r = await api('/api/portal/quotes/request', { method: 'POST', body: JSON.stringify(formData) });
     setBusy(false);
     if (r.ok) {
       setSubmitMsg('Quote request sent. We\'ll be in touch within 24 hours.');
       setShowForm(false);
-      api('/api/portal/quotes').then(r2 => setItems(r2.items || [])).catch(() => {});
+      cachedApi('/api/portal/quotes', { force: true }).then(r2 => setItems(r2.items || [])).catch(() => {});
     } else {
       setSubmitMsg(r.message || 'Failed to submit. Please try again.');
     }
   }
 
   async function acceptQuote(quoteId) {
-    setAccepting(quoteId);
+    setAccepting(quoteId); setAcceptErr('');
     const r = await api('/api/portal/quotes/accept', { method: 'POST', body: JSON.stringify({ quoteId }) });
     setAccepting(null);
     if (r.ok) {
       setAcceptedOrders(prev => ({ ...prev, [quoteId]: r.orderId }));
-      api('/api/portal/quotes').then(r2 => setItems(r2.items || [])).catch(() => {});
+      invalidateCache('/api/portal/orders');
+      cachedApi('/api/portal/quotes', { force: true }).then(r2 => setItems(r2.items || [])).catch(() => {});
       if (onOrderCreated) onOrderCreated(r.orderId);
     } else {
-      alert(r.message || 'Could not accept quote. Please try again or contact us.');
+      setAcceptErr(r.message || 'Could not accept quote. Please try again or contact us.');
     }
   }
 
   if (!items) return <LoadingSection />;
 
   const actionable = items.filter(q => q.status === 'quoted');
-  const history = items.filter(q => q.status !== 'quoted');
+  const allHistory = items.filter(q => q.status !== 'quoted');
+  const hq = search.trim().toLowerCase();
+  const history = hq
+    ? allHistory.filter(q => [q.quoteRef, q.id, q.summary, q.description, q.notes, q.status]
+        .some(v => String(v || '').toLowerCase().includes(hq)))
+    : allHistory;
 
   return (
     <div className="page-section">
       <div className="container">
-        <div className="section-head" style={{display:'flex', alignItems:'flex-start', justifyContent:'space-between', flexWrap:'wrap', gap:16}}>
-          <div>
-            <h2>Quotes</h2>
-            <p>Your quote requests and their current status.</p>
-          </div>
-          <button className="btn btn-rust" onClick={() => setShowForm(s => !s)}>
-            {showForm ? '↑ Cancel' : '+ Request a Quote'}
-          </button>
-        </div>
+        <SectionHead
+          title="Quotes" desc="Your quote requests and their current status."
+          onRefresh={() => load(true)}
+          action={
+            <button className="btn btn-rust" onClick={() => setShowForm(s => !s)}>
+              {showForm ? '↑ Cancel' : '+ Request a Quote'}
+            </button>
+          }
+        />
 
         {showForm && (
           <div className="card-paper" style={{padding:28, marginBottom:28}}>
             <h3 style={{marginBottom:20, fontSize:18}}>New Quote Request</h3>
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} noValidate>
               <div className="grid-2">
                 <label className="field">
                   <span className="label">Your name</span>
-                  <input className="input" value={formData.name} onChange={e => setFormData(f => ({...f, name: e.target.value}))} required />
+                  <input className={'input' + (fieldErrors.name ? ' invalid' : '')} value={formData.name} onChange={e => { setFormData(f => ({...f, name: e.target.value})); setFieldErrors(f => ({...f, name: ''})); }} required />
+                  {fieldErrors.name && <span className="field-error">{fieldErrors.name}</span>}
                 </label>
                 <label className="field">
                   <span className="label">Email address</span>
-                  <input className="input" type="email" value={formData.email} onChange={e => setFormData(f => ({...f, email: e.target.value}))} required />
+                  <input className={'input' + (fieldErrors.email ? ' invalid' : '')} type="email" value={formData.email} onChange={e => { setFormData(f => ({...f, email: e.target.value})); setFieldErrors(f => ({...f, email: ''})); }} required />
+                  {fieldErrors.email && <span className="field-error">{fieldErrors.email}</span>}
                 </label>
               </div>
               <label className="field">
                 <span className="label">What do you need a quote for?</span>
-                <textarea className="input textarea" rows={4} value={formData.description}
-                  onChange={e => setFormData(f => ({...f, description: e.target.value}))}
+                <textarea className={'input textarea' + (fieldErrors.description ? ' invalid' : '')} rows={4} value={formData.description}
+                  onChange={e => { setFormData(f => ({...f, description: e.target.value})); setFieldErrors(f => ({...f, description: ''})); }}
                   placeholder="Describe the item, service, or repair you need priced up…" required />
+                {fieldErrors.description && <span className="field-error">{fieldErrors.description}</span>}
               </label>
               <button className="btn btn-rust" type="submit" disabled={busy}>{busy ? 'Submitting…' : 'Submit Request →'}</button>
             </form>
           </div>
         )}
 
-        {submitMsg && <div className={'alert ' + (submitMsg.includes('sent') ? 'alert-success' : 'alert-error')} style={{marginBottom:20}}>{submitMsg}</div>}
+        {submitMsg && <div className={'alert ' + (submitMsg.includes('sent') ? 'alert-success' : 'alert-error')} role={submitMsg.includes('sent') ? 'status' : 'alert'} style={{marginBottom:20}}>{submitMsg}</div>}
+        {acceptErr && <div className="alert alert-error" role="alert" style={{marginBottom:20}}>{acceptErr}</div>}
 
         {/* Quotes awaiting acceptance */}
         {actionable.map(q => {
@@ -872,31 +1102,39 @@ function QuotesTab({ user, onOrderCreated, highlightRef }) {
         })}
 
         {/* Quote history */}
-        {history.length === 0 && actionable.length === 0
+        {allHistory.length === 0 && actionable.length === 0
           ? <EmptyState icon="file" message="No quote requests found for your account." />
-          : history.length > 0 && (
-            <div className="card-paper" style={{overflow:'auto'}}>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>Date</th>
-                    <th>Description</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {history.map(q => (
-                    <tr key={q.id}>
-                      <td><span className="mono" style={{fontSize:12}}>{q.quoteRef || q.id}</span></td>
-                      <td>{fmtDate(q.date || q.createdAt)}</td>
-                      <td style={{maxWidth:360}}>{q.summary || q.description || q.notes || '—'}</td>
-                      <td><StatusTag status={q.status} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          : allHistory.length > 0 && (
+            <>
+              <FilterBar search={search} onSearch={setSearch} searchPlaceholder="Search quotes by ID, description or status…" />
+              {history.length === 0
+                ? <EmptyState icon="file" message="No quotes match your search." hint={false} />
+                : (
+                  <div className="card-paper" style={{overflow:'auto'}}>
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>ID</th>
+                          <th>Date</th>
+                          <th>Description</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {history.map(q => (
+                          <tr key={q.id}>
+                            <td data-label="ID"><span className="mono" style={{fontSize:12}}>{q.quoteRef || q.id}</span></td>
+                            <td data-label="Date">{fmtDate(q.date || q.createdAt)}</td>
+                            <td data-label="Description" style={{maxWidth:360}}>{q.summary || q.description || q.notes || '—'}</td>
+                            <td data-label="Status"><StatusTag status={q.status} /></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )
+              }
+            </>
           )
         }
       </div>
@@ -909,18 +1147,22 @@ function QuotesTab({ user, onOrderCreated, highlightRef }) {
 function MembershipsTab() {
   const [data, setData] = useState(null);
   const [tiers, setTiers] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
 
-  useEffect(() => {
+  function load(force) {
+    if (force) setLoading(true);
     Promise.all([
-      api('/api/portal/membership'),
-      fetch('/api/memberships').then(r => r.json()),
+      cachedApi('/api/portal/membership', { force }),
+      cachedApi('/api/memberships', { force }),
     ]).then(([m, t]) => {
       setData(m);
       setTiers(t.items || []);
-    }).catch(() => {});
-  }, []);
+    }).catch(() => {}).finally(() => setLoading(false));
+  }
+
+  useEffect(() => { load(false); }, []);
 
   async function subscribe(tierId) {
     setBusy(true); setMsg(null);
@@ -932,7 +1174,7 @@ function MembershipsTab() {
     } else if (r.ok && !r.url) {
       // Server acknowledged but returned no checkout URL — free/trial tier
       const r2 = await api('/api/portal/membership/subscribe', { method: 'POST', body: JSON.stringify({ tierId }) });
-      if (r2.ok) { setData({ subscription: r2.subscription, tier: r2.tier }); setMsg({ ok: true, text: `Subscribed to ${r2.tier?.name || 'membership'}.` }); }
+      if (r2.ok) { invalidateCache('/api/portal/membership'); setData({ subscription: r2.subscription, tier: r2.tier }); setMsg({ ok: true, text: `Subscribed to ${r2.tier?.name || 'membership'}.` }); }
       else { setMsg({ ok: false, text: r2.message || 'Subscription failed.' }); }
     } else {
       setMsg({ ok: false, text: r.message || 'Could not start checkout. Please contact us to subscribe.' });
@@ -944,17 +1186,19 @@ function MembershipsTab() {
     setBusy(true); setMsg(null);
     const r = await api('/api/portal/membership/cancel', { method: 'POST' });
     setBusy(false);
-    if (r.ok) { setData({ subscription: null, tier: null }); setMsg({ ok: true, text: 'Membership cancelled.' }); }
+    if (r.ok) { invalidateCache('/api/portal/membership'); setData({ subscription: null, tier: null }); setMsg({ ok: true, text: 'Membership cancelled.' }); }
     else { setMsg({ ok: false, text: r.message || 'Failed to cancel.' }); }
   }
 
   const activeTier = data && data.tier;
 
+  if (loading) return <LoadingSection />;
+
   return (
-    <div className="tab-content">
-      <div className="section-block">
-        <h2>Membership</h2>
-        {msg && <div className={`notice ${msg.ok ? '' : 'notice-warn'}`} style={{marginBottom:16}}>{msg.text}</div>}
+    <div className="page-section">
+      <div className="container">
+        <SectionHead title="Membership" desc="Your Outback Electronics membership plan." onRefresh={() => load(true)} />
+        {msg && <div className={'alert ' + (msg.ok ? 'alert-success' : 'alert-error')} role={msg.ok ? 'status' : 'alert'} style={{marginBottom:16}}>{msg.text}</div>}
 
         {activeTier && (
           <div className="card-paper" style={{padding:24, marginBottom:24}}>
@@ -978,7 +1222,7 @@ function MembershipsTab() {
           <p style={{color:'var(--ink-2)', marginBottom:20}}>You don't have an active membership. Choose a tier below.</p>
         )}
 
-        <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:16}}>
+        <div className="grid-3" style={{gap:16}}>
           {tiers.map(tier => {
             const isActive = activeTier && activeTier.id === tier.id;
             return (
@@ -1011,12 +1255,15 @@ function RewardsTab() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    api('/api/portal/rewards')
+  function load(force) {
+    if (force) setLoading(true);
+    cachedApi('/api/portal/rewards', { force })
       .then(d => setData(d))
       .catch(() => setData({ points: 0, history: [] }))
       .finally(() => setLoading(false));
-  }, []);
+  }
+
+  useEffect(() => { load(false); }, []);
 
   if (loading) return <LoadingSection />;
 
@@ -1033,9 +1280,9 @@ function RewardsTab() {
   };
 
   return (
-    <div className="tab-content">
-      <div className="section-block">
-        <h2>My Rewards</h2>
+    <div className="page-section">
+      <div className="container">
+        <SectionHead title="My Rewards" desc="Points earned on completed orders and repairs." onRefresh={() => load(true)} />
 
         {/* Points balance */}
         <div className="card-paper" style={{padding:28, marginTop:16, marginBottom:20, borderLeft:'3px solid var(--ochre)'}}>
@@ -1095,12 +1342,15 @@ function WalletTab() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    api('/api/portal/wallet')
+  function load(force) {
+    if (force) setLoading(true);
+    cachedApi('/api/portal/wallet', { force })
       .then(d => setData(d))
       .catch(() => setData({ giftCards: [], storeCredits: [] }))
       .finally(() => setLoading(false));
-  }, []);
+  }
+
+  useEffect(() => { load(false); }, []);
 
   if (loading) return <LoadingSection />;
 
@@ -1115,12 +1365,12 @@ function WalletTab() {
   }
 
   return (
-    <div className="tab-content">
-      <div className="section-block">
-        <h2>My Wallet</h2>
+    <div className="page-section">
+      <div className="container">
+        <SectionHead title="My Wallet" desc="Gift cards and store credit on your account." onRefresh={() => load(true)} />
 
         {/* Gift Cards */}
-        <div style={{marginTop:20}}>
+        <div>
           <div className="eyebrow" style={{marginBottom:12}}>GIFT CARDS</div>
           {giftCards.length === 0 ? (
             <div className="card-paper" style={{padding:24}}>
@@ -1188,83 +1438,146 @@ function WalletTab() {
 
 // ── Addresses ─────────────────────────────────────────────────────────────────
 
+const EMPTY_ADDRESS = { name: '', line1: '', line2: '', city: '', state: '', postcode: '', country: 'AU' };
+
 function AddressesTab() {
-  const [addresses, setAddresses] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [addresses, setAddresses] = useState(null);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: '', line1: '', line2: '', city: '', state: '', postcode: '', country: 'AU' });
+  const [editingId, setEditingId] = useState(null);
+  const [form, setForm] = useState(EMPTY_ADDRESS);
+  const [fieldErrors, setFieldErrors] = useState({});
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
-  useEffect(() => {
-    api('/api/portal/addresses')
+  function load(force) {
+    if (force) setAddresses(null);
+    cachedApi('/api/portal/addresses', { force })
       .then(d => setAddresses(d.addresses || []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+      .catch(() => setAddresses([]));
+  }
+
+  useEffect(() => { load(false); }, []);
+
+  function validate() {
+    const errs = {};
+    if (!form.name.trim()) errs.name = 'A name or label is required.';
+    if (!form.line1.trim()) errs.line1 = 'Street address is required.';
+    if (!form.city.trim()) errs.city = 'City / suburb is required.';
+    if (!form.state.trim()) errs.state = 'Required.';
+    if (!/^\d{4}$/.test(form.postcode.trim())) errs.postcode = 'Enter a 4-digit postcode.';
+    return errs;
+  }
+
+  function openAdd() {
+    setEditingId(null); setForm(EMPTY_ADDRESS); setFieldErrors({}); setErr(''); setShowForm(true);
+  }
+
+  function openEdit(a) {
+    setEditingId(a.id);
+    setForm({ name: a.name || '', line1: a.line1 || '', line2: a.line2 || '', city: a.city || '', state: a.state || '', postcode: a.postcode || '', country: a.country || 'AU' });
+    setFieldErrors({}); setErr(''); setShowForm(true);
+  }
 
   async function saveAddress(e) {
     e.preventDefault();
+    const errs = validate();
+    setFieldErrors(errs);
+    if (Object.keys(errs).length) return;
     setErr(''); setBusy(true);
+    // There's no update endpoint on the server, so editing saves the revised
+    // address first, then removes the old one (never delete-first — no data loss).
     const r = await api('/api/portal/addresses/save', { method: 'POST', body: JSON.stringify(form) });
+    if (r.ok && editingId) {
+      await api('/api/portal/addresses/delete', { method: 'POST', body: JSON.stringify({ id: editingId }) });
+    }
     setBusy(false);
-    if (r.ok) { setAddresses(a => [...a, r.address]); setShowForm(false); setForm({ name: '', line1: '', line2: '', city: '', state: '', postcode: '', country: 'AU' }); }
-    else setErr(r.message || 'Failed to save address.');
+    if (r.ok) {
+      invalidateCache('/api/portal/addresses');
+      setAddresses(a => editingId ? a.map(x => x.id === editingId ? r.address : x) : [...a, r.address]);
+      setShowForm(false); setEditingId(null); setForm(EMPTY_ADDRESS);
+    } else setErr(r.message || 'Failed to save address.');
   }
 
-  async function deleteAddress(id) {
+  async function deleteAddress() {
+    const id = confirmDelete.id;
+    setDeleting(true);
     await api('/api/portal/addresses/delete', { method: 'POST', body: JSON.stringify({ id }) });
+    setDeleting(false);
+    invalidateCache('/api/portal/addresses');
     setAddresses(a => a.filter(x => x.id !== id));
+    setConfirmDelete(null);
   }
 
-  const f = (k) => ({ value: form[k], onChange: e => setForm(p => ({...p, [k]: e.target.value})) });
+  const f = (k) => ({
+    value: form[k],
+    onChange: e => { const v = e.target.value; setForm(p => ({...p, [k]: v})); setFieldErrors(p => ({...p, [k]: ''})); },
+    className: 'input' + (fieldErrors[k] ? ' invalid' : ''),
+  });
+
+  if (!addresses) return <LoadingSection />;
 
   return (
-    <div className="tab-content">
-      <div className="section-block">
-        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16}}>
-          <h2>Saved Addresses</h2>
-          {!showForm && <button className="btn btn-rust btn-sm" onClick={() => setShowForm(true)}>+ Add Address</button>}
-        </div>
-        {loading ? <LoadingSection /> : (
-          <>
-            {showForm && (
-              <div className="card-paper" style={{padding:24, marginBottom:20}}>
-                <h3 style={{fontSize:15, marginBottom:16}}>New Address</h3>
-                {err && <div className="alert alert-error" style={{marginBottom:12}}>{err}</div>}
-                <form onSubmit={saveAddress}>
-                  <label className="field"><span className="label">Full name / label *</span><input className="input" required {...f('name')} placeholder="Home, Jane Smith, etc." /></label>
-                  <label className="field"><span className="label">Street address *</span><input className="input" required {...f('line1')} placeholder="123 Station Rd" /></label>
-                  <label className="field"><span className="label">Apartment / suite</span><input className="input" {...f('line2')} placeholder="Unit 4" /></label>
-                  <div style={{display:'grid', gridTemplateColumns:'1fr 80px 100px', gap:12}}>
-                    <label className="field"><span className="label">City / suburb *</span><input className="input" required {...f('city')} placeholder="Broken Hill" /></label>
-                    <label className="field"><span className="label">State *</span><input className="input" required {...f('state')} placeholder="NSW" maxLength={3} /></label>
-                    <label className="field"><span className="label">Postcode *</span><input className="input" required {...f('postcode')} placeholder="2880" maxLength={4} /></label>
-                  </div>
-                  <div style={{display:'flex', gap:8, marginTop:8}}>
-                    <button className="btn btn-rust" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save Address'}</button>
-                    <button className="btn btn-ghost" type="button" onClick={() => setShowForm(false)}>Cancel</button>
-                  </div>
-                </form>
+    <div className="page-section">
+      <div className="container">
+        <SectionHead
+          title="Saved Addresses" desc="Delivery addresses for faster checkout."
+          onRefresh={() => load(true)}
+          action={!showForm && <button className="btn btn-rust btn-sm" onClick={openAdd}>+ Add Address</button>}
+        />
+        {showForm && (
+          <div className="card-paper" style={{padding:24, marginBottom:20}}>
+            <h3 style={{fontSize:15, marginBottom:16}}>{editingId ? 'Edit Address' : 'New Address'}</h3>
+            {err && <div className="alert alert-error" role="alert" style={{marginBottom:12}}>{err}</div>}
+            <form onSubmit={saveAddress} noValidate>
+              <label className="field"><span className="label">Full name / label *</span><input required {...f('name')} placeholder="Home, Jane Smith, etc." />{fieldErrors.name && <span className="field-error">{fieldErrors.name}</span>}</label>
+              <label className="field"><span className="label">Street address *</span><input required {...f('line1')} placeholder="123 Station Rd" />{fieldErrors.line1 && <span className="field-error">{fieldErrors.line1}</span>}</label>
+              <label className="field"><span className="label">Apartment / suite</span><input {...f('line2')} placeholder="Unit 4" /></label>
+              <div className="addr-grid">
+                <label className="field"><span className="label">City / suburb *</span><input required {...f('city')} placeholder="Broken Hill" />{fieldErrors.city && <span className="field-error">{fieldErrors.city}</span>}</label>
+                <label className="field"><span className="label">State *</span><input required {...f('state')} placeholder="NSW" maxLength={3} />{fieldErrors.state && <span className="field-error">{fieldErrors.state}</span>}</label>
+                <label className="field"><span className="label">Postcode *</span><input required {...f('postcode')} placeholder="2880" maxLength={4} />{fieldErrors.postcode && <span className="field-error">{fieldErrors.postcode}</span>}</label>
               </div>
-            )}
-            {addresses.length === 0 && !showForm
-              ? <p style={{color:'var(--ink-2)', marginTop:8}}>No saved addresses yet. Add one to speed up checkout.</p>
-              : (
-                <div style={{display:'grid', gap:12}}>
-                  {addresses.map(a => (
-                    <div key={a.id} className="card-paper" style={{padding:20, display:'flex', justifyContent:'space-between', alignItems:'flex-start'}}>
-                      <div>
-                        <div style={{fontWeight:600}}>{a.name}</div>
-                        <div style={{color:'var(--ink-2)', fontSize:14, marginTop:4}}>{a.city} {a.state} {a.postcode}</div>
-                      </div>
-                      <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)', borderColor:'var(--rust)'}} onClick={() => deleteAddress(a.id)}>Remove</button>
+              <div style={{display:'flex', gap:8, marginTop:8}}>
+                <button className="btn btn-rust" type="submit" disabled={busy}>{busy ? 'Saving…' : editingId ? 'Save Changes' : 'Save Address'}</button>
+                <button className="btn btn-ghost" type="button" onClick={() => { setShowForm(false); setEditingId(null); }}>Cancel</button>
+              </div>
+            </form>
+          </div>
+        )}
+        {addresses.length === 0 && !showForm
+          ? <EmptyState icon="pin" message="No saved addresses yet. Add one to speed up checkout." hint={false} />
+          : (
+            <div style={{display:'grid', gap:12}}>
+              {addresses.map(a => (
+                <div key={a.id} className="card-paper" style={{padding:20, display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:12}}>
+                  <div>
+                    <div style={{fontWeight:600}}>{a.name}</div>
+                    <div style={{color:'var(--ink-2)', fontSize:14, marginTop:4}}>
+                      {a.line1}{a.line2 ? `, ${a.line2}` : ''}<br />
+                      {a.city} {a.state} {a.postcode}
                     </div>
-                  ))}
+                  </div>
+                  <div style={{display:'flex', gap:8, flexShrink:0}}>
+                    <button className="btn btn-ghost btn-sm" onClick={() => openEdit(a)}>Edit</button>
+                    <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)', borderColor:'var(--rust)'}} onClick={() => setConfirmDelete(a)}>Remove</button>
+                  </div>
                 </div>
-              )
-            }
-          </>
+              ))}
+            </div>
+          )
+        }
+        {confirmDelete && (
+          <ConfirmDialog
+            title="Remove this address?"
+            message={`"${confirmDelete.name}" — ${confirmDelete.line1 || ''} ${confirmDelete.city || ''} ${confirmDelete.postcode || ''} will be permanently removed.`}
+            confirmLabel="Remove address"
+            danger
+            busy={deleting}
+            onConfirm={deleteAddress}
+            onCancel={() => setConfirmDelete(null)}
+          />
         )}
       </div>
     </div>
@@ -1274,44 +1587,40 @@ function AddressesTab() {
 // ── Bookings ──────────────────────────────────────────────────────────────────
 
 function BookingStatusBadge({ status }) {
-  const s = (status || '').toLowerCase();
-  const style = {
-    display: 'inline-block',
-    padding: '2px 10px',
-    borderRadius: 10,
-    fontSize: 12,
-    fontWeight: 600,
-    ...(s === 'confirmed'
-      ? { background: '#d4edda', color: '#345526' }
-      : s === 'cancelled' || s === 'canceled'
-      ? { background: '#f0e0e0', color: '#7a2020' }
-      : { background: '#fef3cd', color: '#7a5d10' }) // pending / default = ochre/yellow
-  };
-  return <span style={style}>{status || 'pending'}</span>;
+  // Reuses the shared .tag styling so badges match every other status tag.
+  return <StatusTag status={status || 'pending'} />;
 }
 
 function BookingsTab() {
-  const [bookings, setBookings] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [bookings, setBookings] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ serviceName: '', date: '', time: '', notes: '' });
+  const [fieldErrors, setFieldErrors] = useState({});
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
 
   const today = new Date().toISOString().split('T')[0];
 
-  function loadBookings() {
-    return api('/api/portal/bookings')
+  function load(force) {
+    if (force) setBookings(null);
+    cachedApi('/api/portal/bookings', { force })
       .then(d => setBookings(d.bookings || []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      .catch(() => setBookings([]));
   }
 
-  useEffect(() => { loadBookings(); }, []);
+  useEffect(() => { load(false); }, []);
 
   async function handleSubmit(e) {
     e.preventDefault();
+    const errs = {};
+    if (!form.serviceName.trim()) errs.serviceName = 'Tell us what service you need.';
+    if (!form.date) errs.date = 'Pick a preferred date.';
+    if (!form.time) errs.time = 'Pick a preferred time.';
+    setFieldErrors(errs);
+    if (Object.keys(errs).length) return;
     setErr(''); setBusy(true);
     const r = await api('/api/portal/bookings', {
       method: 'POST',
@@ -1322,46 +1631,61 @@ function BookingsTab() {
       setSuccessMsg('Booking request submitted. We\'ll confirm your appointment soon.');
       setShowForm(false);
       setForm({ serviceName: '', date: '', time: '', notes: '' });
-      setLoading(true);
-      loadBookings();
+      load(true);
     } else {
       setErr(r.message || 'Failed to submit booking. Please try again.');
     }
   }
 
-  return (
-    <div className="tab-content">
-      <div className="section-block">
-        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16, flexWrap:'wrap', gap:12}}>
-          <h2 style={{margin:0}}>My Bookings</h2>
-          <button className="btn btn-rust" onClick={() => { setShowForm(s => !s); setErr(''); }}>
-            {showForm ? '↑ Cancel' : '+ Request a Booking'}
-          </button>
-        </div>
+  if (!bookings) return <LoadingSection />;
 
-        {successMsg && <div className="alert alert-success" style={{marginBottom:20}}>{successMsg}</div>}
+  const q = search.trim().toLowerCase();
+  const shown = bookings.filter(b => {
+    const status = (b.status || 'pending').toLowerCase();
+    if (statusFilter !== 'all' && status !== statusFilter) return false;
+    if (q && ![b.service, b.serviceName, b.notes, b.status, b.date, b.time].some(v => String(v || '').toLowerCase().includes(q))) return false;
+    return true;
+  });
+
+  return (
+    <div className="page-section">
+      <div className="container">
+        <SectionHead
+          title="My Bookings" desc="Service appointments you've requested with us."
+          onRefresh={() => load(true)}
+          action={
+            <button className="btn btn-rust" onClick={() => { setShowForm(s => !s); setErr(''); }}>
+              {showForm ? '↑ Cancel' : '+ Request a Booking'}
+            </button>
+          }
+        />
+
+        {successMsg && <div className="alert alert-success" role="status" style={{marginBottom:20}}>{successMsg}</div>}
 
         {showForm && (
           <div className="card-paper" style={{padding:28, marginBottom:24}}>
             <h3 style={{marginBottom:20, fontSize:18}}>New Booking Request</h3>
-            {err && <div className="alert alert-error" style={{marginBottom:16}}>{err}</div>}
-            <form onSubmit={handleSubmit}>
+            {err && <div className="alert alert-error" role="alert" style={{marginBottom:16}}>{err}</div>}
+            <form onSubmit={handleSubmit} noValidate>
               <label className="field">
                 <span className="label">Service Name *</span>
-                <input className="input" type="text" value={form.serviceName}
-                  onChange={e => setForm(f => ({...f, serviceName: e.target.value}))}
+                <input className={'input' + (fieldErrors.serviceName ? ' invalid' : '')} type="text" value={form.serviceName}
+                  onChange={e => { setForm(f => ({...f, serviceName: e.target.value})); setFieldErrors(f => ({...f, serviceName: ''})); }}
                   placeholder="e.g. Laptop repair, field visit, consultation…" required />
+                {fieldErrors.serviceName && <span className="field-error">{fieldErrors.serviceName}</span>}
               </label>
-              <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:16}}>
+              <div className="form-grid-2" style={{gap:16}}>
                 <label className="field">
                   <span className="label">Preferred Date *</span>
-                  <input className="input" type="date" value={form.date} min={today}
-                    onChange={e => setForm(f => ({...f, date: e.target.value}))} required />
+                  <input className={'input' + (fieldErrors.date ? ' invalid' : '')} type="date" value={form.date} min={today}
+                    onChange={e => { setForm(f => ({...f, date: e.target.value})); setFieldErrors(f => ({...f, date: ''})); }} required />
+                  {fieldErrors.date && <span className="field-error">{fieldErrors.date}</span>}
                 </label>
                 <label className="field">
                   <span className="label">Preferred Time *</span>
-                  <input className="input" type="time" value={form.time}
-                    onChange={e => setForm(f => ({...f, time: e.target.value}))} required />
+                  <input className={'input' + (fieldErrors.time ? ' invalid' : '')} type="time" value={form.time}
+                    onChange={e => { setForm(f => ({...f, time: e.target.value})); setFieldErrors(f => ({...f, time: ''})); }} required />
+                  {fieldErrors.time && <span className="field-error">{fieldErrors.time}</span>}
                 </label>
               </div>
               <label className="field">
@@ -1378,17 +1702,27 @@ function BookingsTab() {
           </div>
         )}
 
-        {loading ? <LoadingSection /> : bookings.length === 0
-          ? (
-            <div className="card-paper" style={{padding:28, marginTop: showForm ? 0 : 16}}>
-              <p style={{color:'var(--ink-2)', marginBottom:16}}>No bookings yet. Use the button above to request an appointment, or contact us directly.</p>
-              <div style={{display:'flex', gap:12, flexWrap:'wrap'}}>
-                <a className="btn btn-ghost" href={getSiteUrl() + '/contact'}>Contact us</a>
-              </div>
-            </div>
-          )
+        {bookings.length > 0 && (
+          <FilterBar
+            search={search} onSearch={setSearch} searchPlaceholder="Search bookings by service, notes or date…"
+            filters={[
+              { label: 'Filter by status', value: statusFilter, onChange: setStatusFilter,
+                options: [
+                  { value: 'all', label: 'All statuses' },
+                  { value: 'pending', label: 'Pending' },
+                  { value: 'confirmed', label: 'Confirmed' },
+                  { value: 'cancelled', label: 'Cancelled' },
+                ] },
+            ]}
+          />
+        )}
+
+        {bookings.length === 0
+          ? <EmptyState icon="calendar" message="No bookings yet. Use the button above to request an appointment." />
+          : shown.length === 0
+          ? <EmptyState icon="calendar" message="No bookings match your search or filter." hint={false} />
           : (
-            <div className="card-paper" style={{overflow:'auto', marginTop: showForm ? 0 : 16}}>
+            <div className="card-paper" style={{overflow:'auto'}}>
               <table className="data-table">
                 <thead>
                   <tr>
@@ -1399,15 +1733,15 @@ function BookingsTab() {
                   </tr>
                 </thead>
                 <tbody>
-                  {bookings.map((b, i) => (
+                  {shown.map((b, i) => (
                     <tr key={b.id || i}>
-                      <td style={{whiteSpace:'nowrap'}}>
+                      <td data-label="Date & Time" style={{whiteSpace:'nowrap'}}>
                         {fmtDate(b.date)}
                         {b.time && <span style={{color:'var(--ink-3)', marginLeft:6, fontSize:12}}>{b.time}</span>}
                       </td>
-                      <td>{b.service || b.serviceName || '—'}</td>
-                      <td style={{maxWidth:220, color:'var(--ink-2)', fontSize:13}}>{b.notes || '—'}</td>
-                      <td><BookingStatusBadge status={b.status} /></td>
+                      <td data-label="Service">{b.service || b.serviceName || '—'}</td>
+                      <td data-label="Notes" style={{maxWidth:220, color:'var(--ink-2)', fontSize:13}}>{b.notes || '—'}</td>
+                      <td data-label="Status"><BookingStatusBadge status={b.status} /></td>
                     </tr>
                   ))}
                 </tbody>
@@ -1426,6 +1760,8 @@ function AccountTab({ user, setUser }) {
   const [displayName, setDisplayName] = useState(user.displayName || '');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [pwErrors, setPwErrors] = useState({});
   const [profileMsg, setProfileMsg] = useState(null);
   const [passwordMsg, setPasswordMsg] = useState(null);
   const [profileBusy, setProfileBusy] = useState(false);
@@ -1442,17 +1778,23 @@ function AccountTab({ user, setUser }) {
 
   async function changePassword(e) {
     e.preventDefault();
+    const errs = {};
+    if (!currentPassword) errs.current = 'Enter your current password.';
+    if (newPassword.length < 8) errs.next = 'New password must be at least 8 characters.';
+    if (confirmPassword !== newPassword) errs.confirm = 'Passwords do not match.';
+    setPwErrors(errs);
+    if (Object.keys(errs).length) return;
     setPasswordBusy(true); setPasswordMsg(null);
     const r = await api('/api/portal/profile', { method: 'PATCH', body: JSON.stringify({ currentPassword, newPassword }) });
     setPasswordBusy(false);
-    if (r.ok) { setPasswordMsg({ ok: true, text: 'Password changed.' }); setCurrentPassword(''); setNewPassword(''); }
+    if (r.ok) { setPasswordMsg({ ok: true, text: 'Password changed.' }); setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); }
     else { setPasswordMsg({ ok: false, text: r.message || 'Failed to change password.' }); }
   }
 
   return (
     <div className="page-section">
       <div className="container">
-        <div className="section-head"><h2>Account Settings</h2></div>
+        <SectionHead title="Account Settings" desc="Manage your profile and sign-in details." />
         <div className="grid-2" style={{alignItems:'start'}}>
 
           <div className="card-paper" style={{padding:28}}>
@@ -1460,7 +1802,7 @@ function AccountTab({ user, setUser }) {
             <p style={{color:'var(--ink-2)', fontSize:13, marginBottom:20}}>
               Username: <span className="mono">{user.username}</span>
             </p>
-            {profileMsg && <div className={'alert ' + (profileMsg.ok ? 'alert-success' : 'alert-error')}>{profileMsg.text}</div>}
+            {profileMsg && <div className={'alert ' + (profileMsg.ok ? 'alert-success' : 'alert-error')} role={profileMsg.ok ? 'status' : 'alert'}>{profileMsg.text}</div>}
             <form onSubmit={saveProfile}>
               <label className="field">
                 <span className="label">Display name</span>
@@ -1473,15 +1815,22 @@ function AccountTab({ user, setUser }) {
           <div className="card-paper" style={{padding:28}}>
             <h3 style={{marginBottom:6, fontSize:16}}>Change Password</h3>
             <p style={{color:'var(--ink-2)', fontSize:13, marginBottom:20}}>Choose a password at least 8 characters long.</p>
-            {passwordMsg && <div className={'alert ' + (passwordMsg.ok ? 'alert-success' : 'alert-error')}>{passwordMsg.text}</div>}
-            <form onSubmit={changePassword}>
+            {passwordMsg && <div className={'alert ' + (passwordMsg.ok ? 'alert-success' : 'alert-error')} role={passwordMsg.ok ? 'status' : 'alert'}>{passwordMsg.text}</div>}
+            <form onSubmit={changePassword} noValidate>
               <label className="field">
                 <span className="label">Current password</span>
-                <input className="input" type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} required autoComplete="current-password" />
+                <input className={'input' + (pwErrors.current ? ' invalid' : '')} type="password" value={currentPassword} onChange={e => { setCurrentPassword(e.target.value); setPwErrors(p => ({...p, current: ''})); }} required autoComplete="current-password" />
+                {pwErrors.current && <span className="field-error">{pwErrors.current}</span>}
               </label>
               <label className="field">
                 <span className="label">New password</span>
-                <input className="input" type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} required autoComplete="new-password" />
+                <input className={'input' + (pwErrors.next ? ' invalid' : '')} type="password" value={newPassword} onChange={e => { setNewPassword(e.target.value); setPwErrors(p => ({...p, next: ''})); }} required autoComplete="new-password" />
+                {pwErrors.next && <span className="field-error">{pwErrors.next}</span>}
+              </label>
+              <label className="field">
+                <span className="label">Confirm new password</span>
+                <input className={'input' + (pwErrors.confirm ? ' invalid' : '')} type="password" value={confirmPassword} onChange={e => { setConfirmPassword(e.target.value); setPwErrors(p => ({...p, confirm: ''})); }} required autoComplete="new-password" />
+                {pwErrors.confirm && <span className="field-error">{pwErrors.confirm}</span>}
               </label>
               <button className="btn btn-rust" type="submit" disabled={passwordBusy}>{passwordBusy ? 'Updating…' : 'Update Password'}</button>
             </form>
@@ -1495,21 +1844,87 @@ function AccountTab({ user, setUser }) {
 
 // ── Shared UI ─────────────────────────────────────────────────────────────────
 
-function LoadingSection() {
+function SectionHead({ title, desc, onRefresh, action }) {
   return (
-    <div className="page-section">
-      <div className="container">
-        <div style={{color:'var(--ink-2)', fontSize:14, padding:'40px 0'}}>Loading…</div>
+    <div className="section-head" style={{display:'flex', alignItems:'flex-start', justifyContent:'space-between', flexWrap:'wrap', gap:16}}>
+      <div>
+        <h2>{title}</h2>
+        {desc && <p>{desc}</p>}
+      </div>
+      {(onRefresh || action) && (
+        <div style={{display:'flex', gap:8, alignItems:'center', flexWrap:'wrap'}}>
+          {onRefresh && <button className="btn btn-ghost btn-sm" onClick={onRefresh} aria-label="Refresh this section">↻ Refresh</button>}
+          {action}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FilterBar({ search, onSearch, searchPlaceholder, filters }) {
+  return (
+    <div className="filter-bar" role="search">
+      <input
+        className="input" type="search" value={search}
+        placeholder={searchPlaceholder || 'Search…'}
+        aria-label={searchPlaceholder || 'Search'}
+        onChange={e => onSearch(e.target.value)}
+      />
+      {(filters || []).map((f, i) => (
+        <select key={i} className="input" value={f.value} aria-label={f.label} onChange={e => f.onChange(e.target.value)}>
+          {f.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      ))}
+    </div>
+  );
+}
+
+function ConfirmDialog({ title, message, confirmLabel = 'Confirm', danger, busy, onConfirm, onCancel }) {
+  const boxRef = useRef(null);
+  useEffect(() => {
+    const onKey = e => { if (e.key === 'Escape') onCancel(); };
+    document.addEventListener('keydown', onKey);
+    const btn = boxRef.current && boxRef.current.querySelector('button');
+    if (btn) btn.focus();
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+  return (
+    <div className="modal-overlay" onClick={onCancel}>
+      <div className="modal-box" ref={boxRef} role="alertdialog" aria-modal="true" aria-label={title} onClick={e => e.stopPropagation()}>
+        <h3 style={{fontSize:17, marginBottom:10}}>{title}</h3>
+        <p style={{color:'var(--ink-2)', fontSize:14, marginBottom:20}}>{message}</p>
+        <div style={{display:'flex', gap:10, justifyContent:'flex-end'}}>
+          <button className="btn btn-ghost" onClick={onCancel}>Cancel</button>
+          <button className={'btn ' + (danger ? 'btn-danger' : 'btn-rust')} onClick={onConfirm} disabled={busy}>
+            {busy ? 'Working…' : confirmLabel}
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
-function EmptyState({ icon, message }) {
+function LoadingSection() {
+  return (
+    <div className="page-section" role="status" aria-live="polite">
+      <div className="container">
+        <span className="sr-only">Loading…</span>
+        <div className="skeleton" style={{height:40, width:'40%', maxWidth:260, marginBottom:24}} aria-hidden="true" />
+        <div className="skeleton" style={{height:88, marginBottom:12}} aria-hidden="true" />
+        <div className="skeleton" style={{height:88, marginBottom:12}} aria-hidden="true" />
+        <div className="skeleton" style={{height:88}} aria-hidden="true" />
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({ icon, message, hint = true }) {
   const icons = {
     cart: <path d="M3 4h2l2.5 12h11l2-9H6"/>,
     tool: <><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></>,
     file: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></>,
+    pin: <><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></>,
+    calendar: <><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></>,
   };
   return (
     <div className="empty">
@@ -1517,9 +1932,11 @@ function EmptyState({ icon, message }) {
         {icons[icon] || null}
       </svg>
       <p>{message}</p>
-      <p style={{marginTop:8, fontSize:13}}>
-        Need help? <a href={getSiteUrl() + '/contact'} style={{color:'var(--rust)'}}>Contact our team →</a>
-      </p>
+      {hint && (
+        <p style={{marginTop:8, fontSize:13}}>
+          Need help? <a href={getSiteUrl() + '/contact'} style={{color:'var(--rust)'}}>Contact our team →</a>
+        </p>
+      )}
     </div>
   );
 }
@@ -1558,8 +1975,8 @@ function WarrantyPage({ orderId: initialOrderId }) {
   }
 
   if (done) return (
-    <div className="tab-content">
-      <div className="section-block" style={{ maxWidth: 600 }}>
+    <div className="page-section">
+      <div className="container" style={{ maxWidth: 600 }}>
         <div className="eyebrow" style={{ color: 'var(--rust)', marginBottom: 12 }}>WARRANTY REGISTERED</div>
         <h2 style={{ marginBottom: 12 }}>You're covered.</h2>
         <p style={{ color: 'var(--ink-2)', lineHeight: 1.7 }}>
@@ -1571,8 +1988,8 @@ function WarrantyPage({ orderId: initialOrderId }) {
   );
 
   return (
-    <div className="tab-content">
-      <div className="section-block" style={{ maxWidth: 640 }}>
+    <div className="page-section">
+      <div className="container" style={{ maxWidth: 640 }}>
         <h2 style={{ marginBottom: 8 }}>Register Your Build</h2>
         <p style={{ color: 'var(--ink-2)', marginBottom: 24 }}>Enter your order ID and we'll pull up your build details automatically.</p>
 
@@ -1661,16 +2078,18 @@ function Dashboard({ user, setUser, onLogout }) {
   return (
     <>
       <PortalNav user={user} tab={tab} setTab={switchTab} onLogout={onLogout} />
-      {tab === 'overview'    && <OverviewTab user={user} setTab={switchTab} />}
-      {tab === 'orders'      && <OrdersTab highlightId={newOrderId} />}
-      {tab === 'repairs'     && <RepairsTab />}
-      {tab === 'quotes'      && <QuotesTab user={user} onOrderCreated={handleOrderCreated} highlightRef={quoteRef} />}
-      {tab === 'memberships' && <MembershipsTab />}
-      {tab === 'rewards'     && <RewardsTab />}
-      {tab === 'wallet'      && <WalletTab />}
-      {tab === 'addresses'   && <AddressesTab />}
-      {tab === 'bookings'    && <BookingsTab />}
-      {tab === 'account'     && <AccountTab user={user} setUser={setUser} />}
+      <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
+        {tab === 'overview'    && <OverviewTab user={user} setTab={switchTab} />}
+        {tab === 'orders'      && <OrdersTab highlightId={newOrderId} />}
+        {tab === 'repairs'     && <RepairsTab />}
+        {tab === 'quotes'      && <QuotesTab user={user} onOrderCreated={handleOrderCreated} highlightRef={quoteRef} />}
+        {tab === 'memberships' && <MembershipsTab />}
+        {tab === 'rewards'     && <RewardsTab />}
+        {tab === 'wallet'      && <WalletTab />}
+        {tab === 'addresses'   && <AddressesTab />}
+        {tab === 'bookings'    && <BookingsTab />}
+        {tab === 'account'     && <AccountTab user={user} setUser={setUser} />}
+      </div>
       <footer className="portal-footer">
         <div className="container">
           <div className="row-flex">
@@ -1783,7 +2202,7 @@ function OrderTokenView({ token, onLogin }) {
         <div className="card-paper" style={{padding:28}}>
           {formErr && <div className="alert alert-error" style={{marginBottom:16}}>{formErr}</div>}
           <form onSubmit={handleRegister}>
-            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12}}>
+            <div className="form-grid-2">
               <label className="field" style={{margin:0}}>
                 <span className="label">First name</span>
                 <input className="input" type="text" value={firstName} autoComplete="given-name" onChange={e => setFirstName(e.target.value)} required />
@@ -1797,7 +2216,7 @@ function OrderTokenView({ token, onLogin }) {
               <span className="label">Email address</span>
               <input className="input" type="email" value={info.email} readOnly style={{opacity:0.6, cursor:'not-allowed'}} />
             </label>
-            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12}}>
+            <div className="form-grid-2">
               <label className="field" style={{margin:0}}>
                 <span className="label">Phone <span style={{color:'var(--ink-3)'}}>(optional)</span></span>
                 <input className="input" type="tel" value={phone} autoComplete="tel" onChange={e => setPhone(e.target.value)} />

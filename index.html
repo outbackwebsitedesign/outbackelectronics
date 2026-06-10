@@ -3,7 +3,7 @@
 <head>
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2280949487088267" crossorigin="anonymous"></script>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Outback Electronics — Built for where the signal ends</title>
 <meta name="description" content="Outback Electronics — Arduino &amp; microcontroller builds, PC &amp; phone repairs, software and AI solutions, and off-grid electronics. Serving remote Australia by appointment." />
 <meta property="og:title" content="Outback Electronics — Built for where the signal ends" />
@@ -359,6 +359,29 @@
   }
   .skip-link:focus { top: 8px; }
 
+  /* visually hidden — for screen-reader-only live regions and labels */
+  .sr-only {
+    position: absolute; width: 1px; height: 1px;
+    padding: 0; margin: -1px; overflow: hidden;
+    clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+  }
+
+  /* small inline loading spinner */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner {
+    display: inline-block; width: 14px; height: 14px;
+    border: 2px solid currentColor; border-right-color: transparent;
+    border-radius: 50%; animation: spin 700ms linear infinite;
+    vertical-align: -2px;
+  }
+
+  /* breadcrumb links */
+  .crumbs a { cursor: pointer; }
+  .crumbs a:hover { color: var(--rust); text-decoration: underline; }
+
+  /* floating cart checkout bar — mobile only, shown via mobile.css */
+  .cart-mobile-bar { display: none; }
+
   /* hamburger hidden on desktop; mobile.css shows it */
   .hamburger { display: none; }
   .mobile-nav { display: none; }
@@ -545,6 +568,11 @@ if ('serviceWorker' in navigator) {
 <ins class="adsbygoogle" style="display:inline-block;width:300px;height:250px;" data-ad-client="ca-pub-2280949487088267" data-ad-slot="8687829753"></ins>
 <script>if(window.innerWidth>1400){(adsbygoogle=window.adsbygoogle||[]).push({});}</script>
 </div>
+<noscript>
+<div style="background:#b5451b;color:#fbf7ed;padding:12px 16px;text-align:center;font-family:system-ui,sans-serif;font-size:14px;">
+This site requires JavaScript to browse the shop and place orders. Please enable JavaScript, or call us to order by phone.
+</div>
+</noscript>
 <div id="root"><div class="utility-bar"><div class="container"><div class="links"><span>FREE FREIGHT OVER $200 · OUTBACK NT/SA/WA</span></div><div class="links"></div></div></div></div>
 
 <script>window.addEventListener('load',function(){(function(){function pv(){fetch('/api/analytics/event',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'pageview',page:location.pathname+location.search,referrer:document.referrer}),keepalive:true}).catch(function(){});}pv();window.addEventListener('popstate',pv);})();});</script>

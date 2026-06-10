@@ -8,8 +8,16 @@
   .mainlinks { display: none !important; }
   .hamburger { display: grid !important; }
 
-  /* Hide utility bar entirely — too cramped */
+  /* Hide utility bar entirely — too cramped (its links live in the drawer instead) */
   .utility-bar { display: none !important; }
+
+  /* Announcement bar — truncate long text instead of wrapping/pushing nav down */
+  .announce {
+    padding: 8px 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 
   /* Topnav row — tighter, leaner */
   .topnav .row { padding: 10px 0; gap: 10px; }
@@ -87,6 +95,19 @@
     padding: 12px 20px;
   }
 
+  /* Promo + phone from the (hidden) utility bar, surfaced in the drawer */
+  .mobile-nav-promo {
+    padding: 14px 20px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--ink-2);
+    border-bottom: 1px solid var(--line);
+    display: grid;
+    gap: 6px;
+  }
+  .mobile-nav-promo .phone { color: var(--ochre); }
+
   /* Grids collapse to single column */
   .grid-2,
   .grid-3,
@@ -139,8 +160,8 @@
   .policy-nav a { border-left: none; border-bottom: 2px solid transparent; padding: 6px 10px; font-size: 12px; }
   .policy-nav a.active { border-bottom-color: var(--rust); border-left: none; }
 
-  /* Cart */
-  .cart-layout { grid-template-columns: 1fr !important; gap: 24px !important; }
+  /* Cart — bottom margin clears the fixed checkout bar */
+  .cart-layout { grid-template-columns: 1fr !important; gap: 24px !important; margin-bottom: 84px; }
   .cart-header-row { display: none !important; }
   .cart-item-row {
     grid-template-columns: 1fr auto !important;
@@ -151,6 +172,21 @@
   .cart-item-row > :nth-child(2) { grid-column: 1; grid-row: 2; justify-content: flex-start !important; }
   .cart-item-row > :nth-child(3) { grid-column: 2; grid-row: 2; }
   .cart-item-row > :nth-child(4) { grid-column: 2; grid-row: 1; align-self: start; }
+
+  /* Floating checkout bar — keeps total + checkout reachable while editing the cart */
+  .cart-mobile-bar {
+    display: flex !important;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 1001;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+    background: var(--paper);
+    border-top: 1px solid var(--line-strong);
+    box-shadow: 0 -4px 16px rgba(31,26,20,0.12);
+  }
 
   /* Group cards stack */
   .group-card { flex-direction: column; gap: 10px; }

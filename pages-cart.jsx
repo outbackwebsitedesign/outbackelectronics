@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { getCsrf, ensureCsrf } from './src/lib/api.js';
 
 const PageHead = window.PageHead;
+const ErrorText = window.ErrorText;
 
 // ---------------- Order Success / Cancelled ----------------
 
@@ -11,15 +12,15 @@ function OrderSuccessPage({ go }) {
     const params = new URLSearchParams(location.search);
     const sid = params.get('session_id');
     const orderId = params.get('order_id');
-    if (orderId) {
-      setSession({ customerEmail: null, amountAud: 0, orderId });
+    if (orderId && !sid) {
+      setSession({ customerEmail: null, amountAud: null, orderId });
       return;
     }
     if (!sid) return;
     fetch(`/api/checkout/session?id=${encodeURIComponent(sid)}`)
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d) setSession(d); })
-      .catch(() => {});
+      .then(d => { if (d) setSession(orderId ? { orderId, ...d } : d); })
+      .catch(() => { if (orderId) setSession({ customerEmail: null, amountAud: null, orderId }); });
   }, []);
 
   return (
@@ -32,10 +33,21 @@ function OrderSuccessPage({ go }) {
             ? <>Thanks{session.customerName ? `, ${session.customerName}` : ''}! A confirmation has been sent to <strong>{session.customerEmail}</strong>.</>
             : 'Thanks for your order! Your payment was received successfully.'}
         </p>
-        {session?.amountAud && (
+        {(session?.orderId || session?.amountAud != null) && (
           <div style={{padding:'14px 24px', background:'var(--paper)', border:'1px solid var(--line)', display:'inline-block', margin:'0 auto'}}>
-            <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginBottom:4}}>AMOUNT PAID</div>
-            <div className="serif" style={{fontSize:32}}>${Number(session.amountAud).toLocaleString('en-AU', {minimumFractionDigits:2})}</div>
+            {session?.orderId && (
+              <div style={{marginBottom: session?.amountAud != null ? 12 : 0}}>
+                <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginBottom:4}}>ORDER NUMBER</div>
+                <div className="mono" style={{fontSize:20, fontWeight:600}}>{session.orderId}</div>
+              </div>
+            )}
+            {/* amountAud can legitimately be 0 (gift-card-only orders) — only hide when unknown */}
+            {session?.amountAud != null && (
+              <div>
+                <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginBottom:4}}>AMOUNT PAID</div>
+                <div className="serif" style={{fontSize:32}}>${Number(session.amountAud).toLocaleString('en-AU', {minimumFractionDigits:2})}</div>
+              </div>
+            )}
           </div>
         )}
         <p style={{fontSize:13, color:'var(--ink-3)'}}>
@@ -324,15 +336,15 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
                     {item.cond && <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:2}}>{item.cond}</div>}
                   </div>
                   <div style={{display:'flex', alignItems:'center', justifyContent:'center', gap:6}}>
-                    <button onClick={() => updateQty(key, item.qty - 1)} style={{width:28, height:28, border:'1px solid var(--line)', background:'var(--bg-elev)', cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center'}}>−</button>
-                    <span className="mono" style={{fontSize:14, minWidth:20, textAlign:'center'}}>{item.qty}</span>
-                    <button onClick={() => updateQty(key, item.qty + 1)} style={{width:28, height:28, border:'1px solid var(--line)', background:'var(--bg-elev)', cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center'}}>+</button>
+                    <button onClick={() => updateQty(key, item.qty - 1)} aria-label={`Decrease quantity of ${item.name}`} style={{width:28, height:28, border:'1px solid var(--line)', background:'var(--bg-elev)', cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center'}}>−</button>
+                    <span className="mono" aria-label={`Quantity of ${item.name}`} style={{fontSize:14, minWidth:20, textAlign:'center'}}>{item.qty}</span>
+                    <button onClick={() => updateQty(key, item.qty + 1)} aria-label={`Increase quantity of ${item.name}`} style={{width:28, height:28, border:'1px solid var(--line)', background:'var(--bg-elev)', cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center'}}>+</button>
                   </div>
                   <div style={{textAlign:'right', fontFamily:'Instrument Serif,serif', fontSize:18, color:'var(--rust)'}}>
                     ${(item.price * item.qty).toLocaleString()}
                   </div>
                   <div style={{textAlign:'center'}}>
-                    <button onClick={() => removeFromCart(key)} title="Remove" style={{background:'none', border:'none', cursor:'pointer', color:'var(--ink-3)', fontSize:18, lineHeight:1}}>×</button>
+                    <button onClick={() => removeFromCart(key)} title="Remove" aria-label={`Remove ${item.name} from cart`} style={{background:'none', border:'none', cursor:'pointer', color:'var(--ink-3)', fontSize:18, lineHeight:1}}>×</button>
                   </div>
                 </div>
               );
@@ -373,7 +385,7 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
                           {shippingLoading ? '…' : 'Quote'}
                         </button>
                       </div>
-                      {shippingError && <div style={{marginTop:6, fontSize:12, color:'#b91c1c'}}>{shippingError}</div>}
+                      <ErrorText inline>{shippingError}</ErrorText>
                     </>
                   ) : shippingQuote.digital ? (
                     <div style={{fontSize:12, color:'#16a34a'}}>All items are digital — no shipping required.</div>
@@ -461,7 +473,7 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
                       {gcLoading ? '…' : 'Apply'}
                     </button>
                   </div>
-                  {gcError && <div style={{marginTop:6, fontSize:12, color:'#b91c1c'}}>{gcError}</div>}
+                  <ErrorText inline>{gcError}</ErrorText>
                 </div>
               )}
 
@@ -495,13 +507,13 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
                   <button className="btn btn-ghost btn-sm" onClick={lookupRewards} disabled={rewardsLoading || !rewardsEmail.trim() || !rewardsPassword} style={{width:'100%', justifyContent:'center'}}>
                     {rewardsLoading ? '…' : 'Check Points Balance'}
                   </button>
-                  {rewardsError && <div style={{marginTop:6, fontSize:12, color:'#b91c1c'}}>{rewardsError}</div>}
+                  <ErrorText inline>{rewardsError}</ErrorText>
                 </div>
               )}
 
-              {error && <div style={{marginBottom:12, padding:'10px 14px', background:'#fff1f0', border:'1px solid #fca5a5', fontSize:13, color:'#b91c1c'}}>{error}</div>}
-              <button className="btn btn-rust" style={{width:'100%', justifyContent:'center'}} onClick={checkout} disabled={checkingOut}>
-                {checkingOut ? 'Redirecting…' : `Checkout — $${total.toLocaleString('en-AU', {minimumFractionDigits:2})}${selectedShipping ? '' : cart.some(i=>!i.digital) ? ' + shipping' : ''}`}
+              <ErrorText style={{marginBottom:12}}>{error}</ErrorText>
+              <button className="btn btn-rust" style={{width:'100%', justifyContent:'center', gap:8}} onClick={checkout} disabled={checkingOut} aria-busy={checkingOut}>
+                {checkingOut ? <><span className="spinner" aria-hidden="true" /> Redirecting…</> : `Checkout — $${total.toLocaleString('en-AU', {minimumFractionDigits:2})}${selectedShipping ? '' : cart.some(i=>!i.digital) ? ' + shipping' : ''}`}
               </button>
               <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginTop:10, textAlign:'center'}}>SECURE CHECKOUT VIA STRIPE</div>
 
@@ -520,14 +532,24 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
                   <div style={{display:'flex', gap:6, alignItems:'center'}}>
                     <input readOnly value={shareLink} onClick={e => e.target.select()} style={{flex:1, fontSize:11, fontFamily:'monospace', padding:'5px 8px', border:'1px solid var(--line)', background:'var(--bg-elev)', color:'var(--ink)'}} />
                   </div>
-                  <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginTop:4}}>EXPIRES IN 30 DAYS</div>
+                  <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginTop:4}}>EXPIRES {new Date(Date.now() + 30 * 86400000).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase()} (30 DAYS)</div>
                 </div>
               )}
-              {shareError && <div style={{marginTop:8, fontSize:12, color:'#b91c1c'}}>{shareError}</div>}
+              <ErrorText inline style={{marginTop:8}}>{shareError}</ErrorText>
             </div>
           </div>
         </div>
       </section>
+      {/* Floating checkout bar — mobile only (hidden on desktop via index.html, shown in mobile.css) */}
+      <div className="cart-mobile-bar">
+        <div>
+          <div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>TOTAL{selectedShipping ? '' : cart.some(i => !i.digital) ? ' + SHIPPING' : ''}</div>
+          <div className="serif" style={{fontSize:22, color:'var(--rust)', lineHeight:1.1}}>${total.toLocaleString('en-AU', {minimumFractionDigits:2})}</div>
+        </div>
+        <button className="btn btn-rust" style={{justifyContent:'center', gap:8}} onClick={checkout} disabled={checkingOut} aria-busy={checkingOut}>
+          {checkingOut ? <><span className="spinner" aria-hidden="true" /> Redirecting…</> : 'Checkout →'}
+        </button>
+      </div>
     </>
   );
 }

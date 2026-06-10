@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { getCsrf } from './src/lib/api.js';
 const _fallbackShopCtx = React.createContext({});
 const useShop = () => useContext(window.__ShopContext__ || _fallbackShopCtx);
+const ErrorText = window.ErrorText;
 
 // ============================================================
 // REQUEST A QUOTE
@@ -227,7 +228,7 @@ function QuotePage({ go, pageParams }) {
             </label>
 
             <hr className="thin" />
-            {submitError && <div className="notice" style={{marginBottom: 12, color: 'var(--rust)', fontSize: 13}}>{submitError}</div>}
+            <ErrorText style={{marginBottom: 12}}>{submitError}</ErrorText>
             <div className="row-flex" style={{justifyContent:'space-between'}}>
               <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>WE REPLY IN ≤24H · NO BOTS · NO UPSELL</span>
               <button className="btn btn-rust" type="submit" disabled={submitting}>{submitting ? 'Sending…' : 'Send to the bench →'}</button>
@@ -383,7 +384,7 @@ function ContactPage({ go }) {
                   <label className="field" style={{marginTop:10}}><span className="label">Name</span><input className="input" placeholder="Your name" value={qm.name} onChange={e => setQm(q => ({...q, name: e.target.value}))} required /></label>
                   <label className="field"><span className="label">Email</span><input className="input" placeholder="your@email.com" type="email" value={qm.email} onChange={e => setQm(q => ({...q, email: e.target.value}))} required /></label>
                   <label className="field"><span className="label">Message</span><textarea className="textarea" placeholder="How can we help?" value={qm.msg} onChange={e => setQm(q => ({...q, msg: e.target.value}))} required /></label>
-                  {qmError && <div style={{fontSize:12, color:'var(--rust)', marginBottom:8}}>{qmError}</div>}
+                  <ErrorText inline style={{marginTop:0, marginBottom:8}}>{qmError}</ErrorText>
                   <button className="btn btn-rust" style={{width:'100%', justifyContent:'center'}} type="submit" disabled={qmSending}>{qmSending ? 'Sending…' : 'Send →'}</button>
                 </form>
               )}
@@ -1563,10 +1564,10 @@ function PoliciesPage({ go, pageParams }) {
         lead={`Last updated ${DOCS[activeDoc]?.updated}`} />
       <section className="container" style={{paddingTop: 32, paddingBottom: 60}}>
         <div className="policy-layout">
-          <aside className="policy-nav">
+          <aside className="policy-nav" aria-label="Policy documents">
             <div className="eyebrow" style={{padding:'0 0 8px 0', marginBottom:4}}>DOCUMENTS</div>
             {Object.entries(DOCS).map(([s, d]) => (
-              <a key={s} className={activeDoc===s?'active':''} onClick={() => goDoc(s)}>{d.title}</a>
+              <a key={s} href={`/policies/${s}`} className={activeDoc===s?'active':''} aria-current={activeDoc===s ? 'page' : undefined} onClick={(e) => { e.preventDefault(); goDoc(s); }}>{d.title}</a>
             ))}
           </aside>
           <div className="policy-content">
@@ -1732,9 +1733,7 @@ function WarrantyRegisterPage({ go }) {
                 </button>
               </div>
             </div>
-            {lookupError && (
-              <div className="notice" style={{ marginTop: 10, fontSize: 13, color: 'var(--rust)' }}>{lookupError}</div>
-            )}
+            <ErrorText style={{marginTop: 10}}>{lookupError}</ErrorText>
 
             {orderData && (
               <div style={{ marginTop: 16 }}>
@@ -1783,7 +1782,7 @@ function WarrantyRegisterPage({ go }) {
             </label>
 
             <hr className="thin" />
-            {submitError && <div className="notice" style={{ marginBottom: 12, color: 'var(--rust)', fontSize: 13 }}>{submitError}</div>}
+            <ErrorText style={{marginBottom: 12}}>{submitError}</ErrorText>
             <div className="row-flex" style={{ justifyContent: 'space-between' }}>
               <span className="mono" style={{ fontSize: 11, color: 'var(--ink-2)' }}>KEEP YOUR RECEIPT — IT'S YOUR PROOF OF PURCHASE</span>
               <button className="btn btn-rust" type="submit" disabled={submitting}>{submitting ? 'Registering…' : 'Register build →'}</button>

@@ -76,7 +76,7 @@ function TutorialModal({ tutorial, onClose }) {
         onClick={e => e.stopPropagation()}>
         <div className="row-flex" style={{justifyContent:'space-between', marginBottom:8}}>
           <span className="tag tag-outline">{tutorial.cat?.toUpperCase() || 'TUTORIAL'}</span>
-          <button style={{background:'none', border:'none', cursor:'pointer', fontSize:22, color:'var(--ink-2)', lineHeight:1}} onClick={onClose}>×</button>
+          <button aria-label="Close tutorial" style={{background:'none', border:'none', cursor:'pointer', fontSize:22, color:'var(--ink-2)', lineHeight:1}} onClick={onClose}>×</button>
         </div>
         <h1 style={{fontFamily:'Instrument Serif, serif', fontSize:40, lineHeight:1.05, marginTop:10}}>{tutorial.title || tutorial.t}</h1>
         <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:10, marginBottom:28}}>
@@ -126,9 +126,11 @@ function TutorialsPage({ go }) {
       <section className="container" style={{paddingTop: 32, paddingBottom: 48}}>
 
         {/* Category filters */}
-        <div className="tabs" style={{marginBottom: 24}}>
+        <div className="tabs" style={{marginBottom: 24}} role="group" aria-label="Filter tutorials by category">
           {cats.map(c => (
-            <div key={c} className={`tab ${filter===c?'active':''}`} onClick={() => setFilter(c)}>{c}</div>
+            <div key={c} className={`tab ${filter===c?'active':''}`} role="button" tabIndex={0} aria-pressed={filter===c}
+              onClick={() => setFilter(c)}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setFilter(c); } }}>{c}</div>
           ))}
         </div>
 
@@ -185,7 +187,7 @@ function TutorialsPage({ go }) {
             onClick={e => e.stopPropagation()}>
             <div className="row-flex" style={{justifyContent:'space-between', marginBottom:8}}>
               {activeTutorial.category && <span className="tag tag-outline">{activeTutorial.category.toUpperCase()}</span>}
-              <button style={{background:'none', border:'none', cursor:'pointer', fontSize:22, color:'var(--ink-2)', lineHeight:1, marginLeft:'auto'}} onClick={() => setActiveTutorial(null)}>×</button>
+              <button aria-label="Close tutorial" style={{background:'none', border:'none', cursor:'pointer', fontSize:22, color:'var(--ink-2)', lineHeight:1, marginLeft:'auto'}} onClick={() => setActiveTutorial(null)}>×</button>
             </div>
             <h1 style={{fontFamily:'Instrument Serif, serif', fontSize:36, lineHeight:1.05, marginTop:10}}>{activeTutorial.title}</h1>
             {activeTutorial.description && (

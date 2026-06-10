@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useMemo, useContext } from 'react';
-import { getCsrf } from './src/lib/api.js';
+import React, { useState, useEffect, useMemo, useContext, useRef } from 'react';
+import { getCsrf, ensureCsrf } from './src/lib/api.js';
 
 const _fallbackShopCtx = React.createContext({});
 const useShop = () => useContext(window.__ShopContext__ || _fallbackShopCtx);
+const ErrorText = window.ErrorText;
 
 function thumbUrl(src, w, q) {
   if (!src || !src.startsWith('/assets/uploads/')) return src;
@@ -307,6 +308,23 @@ function HomePage({ go, addToCart, portalUser }) {
 // SHOP
 // ============================================================
 
+// Colour-coded product condition so "New" vs "Refurbished" reads at a glance
+const COND_COLORS = {
+  'New': 'var(--eucalyptus)',
+  'Refurbished': 'var(--ochre)',
+  'Used': 'var(--rust)',
+};
+function CondLabel({ cond }) {
+  if (!cond) return null;
+  const color = COND_COLORS[cond] || 'var(--ink-2)';
+  return (
+    <span style={{color, fontWeight:600}}>
+      <span aria-hidden="true" style={{display:'inline-block', width:7, height:7, borderRadius:'50%', background:color, marginRight:5, verticalAlign:'1px'}} />
+      {cond}
+    </span>
+  );
+}
+
 function ProductCard({ p, onClick }) {
   const hasVariants = p.variants && p.variants.length > 0;
   let displayPrice, displayTag, displayTagClass, displaySku;
@@ -340,7 +358,7 @@ function ProductCard({ p, onClick }) {
         ? <img src={thumbUrl(thumb, 600)} srcSet={thumbSrcSet(thumb, [300, 450, 600])} sizes="(max-width: 600px) 50vw, (max-width: 1100px) 33vw, 300px" alt={p.name} loading="lazy" style={{width:'100%', aspectRatio:'4/3', objectFit:'cover', display:'block'}} />
         : <div className="slot" style={{aspectRatio:'4/3'}}>{p.name.toUpperCase()}</div>}
       <div className="body">
-        <div className="meta">{p.cond} · {displaySku}</div>
+        <div className="meta"><CondLabel cond={p.cond} />{p.cond ? ' · ' : ''}{displaySku}</div>
         <div className="name">{p.name}</div>
         <div className="row-px">
           <div>
@@ -354,15 +372,32 @@ function ProductCard({ p, onClick }) {
   );
 }
 
+// #8 — shop filters/sort/search are serialized to the URL (?cat=&cond=&brands=&min=&max=&sort=&q=)
+// so filtered views can be shared, bookmarked, and survive back/forward navigation.
+function readShopParamsFromUrl() {
+  const sp = new URLSearchParams(location.search);
+  return {
+    cat: sp.get('cat') || null,
+    cond: sp.get('cond') || null,
+    brands: (sp.get('brands') || '').split(',').filter(Boolean),
+    min: sp.get('min') || '',
+    max: sp.get('max') || '',
+    sort: sp.get('sort') || null,
+    q: sp.get('q') || '',
+  };
+}
+
 function ShopPage({ go, addToCart, pageParams }) {
-  const [cat, setCat] = useState(pageParams?.initialCat || 'All');
+  const urlInit = useMemo(readShopParamsFromUrl, []);
+  const [cat, setCat] = useState(pageParams?.initialCat || urlInit.cat || 'All');
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterMeta, setFilterMeta] = useState({ categories: [], brands: [], conditions: [] });
-  const [selectedBrands, setSelectedBrands] = useState([]);
+  const [selectedBrands, setSelectedBrands] = useState(urlInit.brands);
   const [catalogError, setCatalogError] = useState(null);
-  const [priceMin, setPriceMin] = useState('');
-  const [priceMax, setPriceMax] = useState('');
+  const [priceMin, setPriceMin] = useState(urlInit.min);
+  const [priceMax, setPriceMax] = useState(urlInit.max);
+  const [query, setQuery] = useState(pageParams?.initialQuery || urlInit.q || '');
   useEffect(() => {
     Promise.all([
       fetch('/api/catalog/products')
@@ -375,15 +410,71 @@ function ShopPage({ go, addToCart, pageParams }) {
         .catch(() => {}),
     ]).finally(() => setLoading(false));
   }, []);
-  const [cond, setCond] = useState(pageParams?.initialCond || 'Any');
-  const [sort, setSort] = useState('relevance');
+  const [cond, setCond] = useState(pageParams?.initialCond || urlInit.cond || 'Any');
+  const [sort, setSort] = useState(urlInit.sort || 'relevance');
   const [visibleCount, setVisibleCount] = useState(12);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const chunkSize = 12;
-  const activeFilterCount = [cat !== 'All', cond !== 'Any', selectedBrands.length > 0, priceMin !== '', priceMax !== ''].filter(Boolean).length;
-  const clearFilters = () => { setCat('All'); setCond('Any'); setSelectedBrands([]); setPriceMin(''); setPriceMax(''); };
+
+  // Apply new params when navigated to while already mounted (e.g. footer category
+  // links or the search overlay's "view all results" while on /shop).
+  useEffect(() => {
+    if (!pageParams) return;
+    if (pageParams.initialCat) setCat(pageParams.initialCat);
+    if (pageParams.initialCond) setCond(pageParams.initialCond);
+    if (pageParams.initialQuery != null) setQuery(pageParams.initialQuery);
+  }, [pageParams]);
+
+  // Serialize active filters/sort/search into the URL (replaceState — no history spam)
+  const [urlSyncTick, setUrlSyncTick] = useState(0);
+  useEffect(() => {
+    // Second pass after mount so the initial state lands after App pushes /shop
+    const t = setTimeout(() => setUrlSyncTick(1), 0);
+    return () => clearTimeout(t);
+  }, []);
+  useEffect(() => {
+    if (!location.pathname.startsWith('/shop')) return;
+    const sp = new URLSearchParams();
+    if (cat !== 'All') sp.set('cat', cat);
+    if (cond !== 'Any') sp.set('cond', cond);
+    if (selectedBrands.length > 0) sp.set('brands', selectedBrands.join(','));
+    if (priceMin !== '') sp.set('min', priceMin);
+    if (priceMax !== '') sp.set('max', priceMax);
+    if (sort !== 'relevance') sp.set('sort', sort);
+    if (query.trim()) sp.set('q', query.trim());
+    const qs = sp.toString();
+    const target = qs ? `/shop?${qs}` : '/shop';
+    if (location.pathname + location.search !== target) window.history.replaceState({}, '', target);
+  }, [cat, cond, selectedBrands, priceMin, priceMax, sort, query, urlSyncTick]);
+
+  // Restore filters from the URL on back/forward navigation
+  useEffect(() => {
+    const onPop = () => {
+      if (!location.pathname.startsWith('/shop')) return;
+      const p = readShopParamsFromUrl();
+      setCat(p.cat || 'All');
+      setCond(p.cond || 'Any');
+      setSelectedBrands(p.brands);
+      setPriceMin(p.min);
+      setPriceMax(p.max);
+      setSort(p.sort || 'relevance');
+      setQuery(p.q);
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  const activeFilterCount = [cat !== 'All', cond !== 'Any', selectedBrands.length > 0, priceMin !== '', priceMax !== '', query.trim() !== ''].filter(Boolean).length;
+  const clearFilters = () => { setCat('All'); setCond('Any'); setSelectedBrands([]); setPriceMin(''); setPriceMax(''); setQuery(''); };
   const filtered = useMemo(() => {
     let f = [...products];
+    const q = query.trim().toLowerCase();
+    if (q) f = f.filter(p =>
+      (p.name || '').toLowerCase().includes(q) ||
+      (p.brand || '').toLowerCase().includes(q) ||
+      (p.sku || '').toLowerCase().includes(q) ||
+      (p.category || '').toLowerCase().includes(q)
+    );
     if (cat !== 'All') f = f.filter(p => p.category === cat);
     if (cond !== 'Any') f = f.filter(p => p.cond === cond);
     if (selectedBrands.length > 0) f = f.filter(p => selectedBrands.includes(p.brand));
@@ -399,12 +490,12 @@ function ShopPage({ go, addToCart, pageParams }) {
     if (sort === 'price-asc') f.sort((a,b) => a.price-b.price);
     if (sort === 'price-desc') f.sort((a,b) => b.price-a.price);
     return f;
-  }, [products, cat, cond, selectedBrands, priceMin, priceMax, sort]);
+  }, [products, cat, cond, selectedBrands, priceMin, priceMax, sort, query]);
 
   const totalResults = filtered.length;
   const visible = filtered.slice(0, visibleCount);
 
-  useEffect(() => { setVisibleCount(chunkSize); }, [cat, cond, sort, priceMin, priceMax, products.length]);
+  useEffect(() => { setVisibleCount(chunkSize); }, [cat, cond, sort, priceMin, priceMax, query, products.length]);
   useEffect(() => {
     const onScroll = () => {
       const nearBottom = window.innerHeight + window.scrollY >= document.body.offsetHeight - 240;
@@ -420,7 +511,7 @@ function ShopPage({ go, addToCart, pageParams }) {
       <div className="container" style={{paddingTop: 32, paddingBottom: 32}}>
         {/* Mobile filter toggle bar — hidden on desktop via CSS */}
         <div className="shop-filter-bar">
-          <button className="btn btn-sm btn-ghost shop-filter-toggle" onClick={() => setFiltersOpen(o => !o)}>
+          <button className="btn btn-sm btn-ghost shop-filter-toggle" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(o => !o)}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
             {filtersOpen ? 'Hide filters' : 'Filters'}
             {activeFilterCount > 0 && <span style={{background:'var(--rust)', color:'#fff', borderRadius:999, fontSize:9, padding:'1px 5px', fontWeight:700, marginLeft:2}}>{activeFilterCount}</span>}
@@ -431,7 +522,7 @@ function ShopPage({ go, addToCart, pageParams }) {
         </div>
 
         <div className="shop-layout">
-          <aside className={`shop-filters${filtersOpen ? ' open' : ''}`}>
+          <aside className={`shop-filters${filtersOpen ? ' open' : ''}`} aria-label="Product filters">
             {activeFilterCount > 0 && (
               <div style={{marginBottom:16, display:'flex', justifyContent:'space-between', alignItems:'center'}}>
                 <span className="mono" style={{fontSize:10, color:'var(--rust)'}}>FILTERS ACTIVE</span>
@@ -457,8 +548,8 @@ function ShopPage({ go, addToCart, pageParams }) {
             <hr className="thin" />
             <div className="eyebrow" style={{marginBottom: 10}}>PRICE</div>
             <div className="row-flex" style={{gap:8}}>
-              <input className="input" placeholder="$ min" style={{padding:'8px 10px'}} type="number" min="0" value={priceMin} onChange={e => setPriceMin(e.target.value)} />
-              <input className="input" placeholder="$ max" style={{padding:'8px 10px'}} type="number" min="0" value={priceMax} onChange={e => setPriceMax(e.target.value)} />
+              <input className="input" placeholder="$ min" aria-label="Minimum price" style={{padding:'8px 10px'}} type="number" min="0" value={priceMin} onChange={e => setPriceMin(e.target.value)} />
+              <input className="input" placeholder="$ max" aria-label="Maximum price" style={{padding:'8px 10px'}} type="number" min="0" value={priceMax} onChange={e => setPriceMax(e.target.value)} />
             </div>
             <hr className="thin" />
             <div className="eyebrow" style={{marginBottom: 10}}>BRAND</div>
@@ -477,10 +568,15 @@ function ShopPage({ go, addToCart, pageParams }) {
                 Unable to load products — {catalogError}. Please refresh the page or try again later.
               </div>
             )}
-            <div className="row-flex" style={{justifyContent:'space-between', marginBottom: 18}}>
-              <div className="mono" style={{fontSize:12, color:'var(--ink-2)'}}>SHOWING {visible.length} OF {totalResults} RESULTS · {cat.toUpperCase()}</div>
+            <div className="row-flex" style={{justifyContent:'space-between', marginBottom: 18, flexWrap:'wrap', gap:10}}>
+              <div className="mono" aria-live="polite" style={{fontSize:12, color:'var(--ink-2)'}}>
+                SHOWING {visible.length} OF {totalResults} RESULTS · {cat.toUpperCase()}{query.trim() ? ` · “${query.trim().toUpperCase()}”` : ''}
+              </div>
               <div className="row-flex" style={{gap:10}}>
-                <select className="select" value={sort} onChange={e => setSort(e.target.value)} style={{padding:'6px 28px 6px 10px', fontSize:13}}>
+                <input className="input" type="search" placeholder="Search products…" aria-label="Search products"
+                  value={query} onChange={e => setQuery(e.target.value)}
+                  style={{padding:'6px 10px', fontSize:13, width:180}} />
+                <select className="select" value={sort} onChange={e => setSort(e.target.value)} aria-label="Sort products" style={{padding:'6px 28px 6px 10px', fontSize:13}}>
                   <option value="relevance">Sort: Relevance</option>
                   <option value="price-asc">Price: low → high</option>
                   <option value="price-desc">Price: high → low</option>
@@ -780,17 +876,20 @@ function EwastePage({ go }) {
 // AI
 // ============================================================
 function ModelCardModal({ model, onClose, go }) {
+  const panelRef = useRef(null);
+  window.useFocusTrap(panelRef, onClose);
   return (
     <div style={{position:'fixed', inset:0, zIndex:500, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(15,13,10,0.7)'}}
       onClick={onClose}>
-      <div style={{width:'100%', maxWidth:560, background:'var(--bg)', border:'1px solid var(--line)', boxShadow:'0 12px 40px rgba(0,0,0,.35)', padding:32}}
+      <div ref={panelRef} role="dialog" aria-modal="true" aria-label={`${model.name} model details`}
+        style={{width:'100%', maxWidth:560, background:'var(--bg)', border:'1px solid var(--line)', boxShadow:'0 12px 40px rgba(0,0,0,.35)', padding:32}}
         onClick={e => e.stopPropagation()}>
         <div className="row-flex" style={{justifyContent:'space-between', marginBottom:18}}>
           <div>
             <span className="tag tag-euc">OPEN WEIGHTS</span>
             <h2 className="mono" style={{fontSize:24, marginTop:8, color:'var(--rust)'}}>{model.name}</h2>
           </div>
-          <button style={{background:'none', border:'none', cursor:'pointer', fontSize:22, color:'var(--ink-2)', lineHeight:1}} onClick={onClose}>×</button>
+          <button aria-label="Close model details" style={{background:'none', border:'none', cursor:'pointer', fontSize:22, color:'var(--ink-2)', lineHeight:1}} onClick={onClose}>×</button>
         </div>
         <table style={{width:'100%', borderCollapse:'collapse', fontSize:14, marginBottom:20}}>
           <tbody>
@@ -929,26 +1028,85 @@ function AIPage({ go }) {
 // ============================================================
 // PRODUCT DETAIL
 // ============================================================
+
+// In-app not-found view for invalid /product/:id and /service/:id deep links —
+// the user gets a clear message and a way back instead of a blank page.
+function CatalogNotFound({ go, kind }) {
+  const isService = kind === 'service';
+  return (
+    <>
+      <PageHead crumbs={['Outback', isService ? 'Services' : 'Shop', 'Not Found']}
+        title={isService ? 'Service not found' : 'Product not found'}
+        lead={`Sorry — we couldn't find that ${kind}. It may have been removed or the link may be incorrect.`} />
+      <section className="container" style={{paddingTop:32, paddingBottom:48}}>
+        <div style={{display:'flex', gap:12, flexWrap:'wrap'}}>
+          <button className="btn btn-rust" onClick={() => go(isService ? 'services' : 'shop')}>
+            {isService ? 'Browse all Services →' : 'Browse the Shop →'}
+          </button>
+          <button className="btn btn-ghost" onClick={() => go('contact')}>Contact us</button>
+        </div>
+      </section>
+    </>
+  );
+}
+
+// Full-screen image lightbox with keyboard navigation (Escape closes, arrows cycle)
+function ImageLightbox({ images, startIndex, alt, onClose }) {
+  const [idx, setIdx] = useState(startIndex || 0);
+  const panelRef = useRef(null);
+  window.useFocusTrap(panelRef, onClose);
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'ArrowRight') setIdx(i => (i + 1) % images.length);
+      if (e.key === 'ArrowLeft') setIdx(i => (i - 1 + images.length) % images.length);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [images.length]);
+  return (
+    <div style={{position:'fixed', inset:0, zIndex:600, background:'rgba(15,13,10,0.9)', display:'flex', alignItems:'center', justifyContent:'center', padding:24}}
+      onClick={onClose}>
+      <div ref={panelRef} role="dialog" aria-modal="true" aria-label={`${alt} — image ${idx + 1} of ${images.length}`}
+        style={{position:'relative', maxWidth:'92vw', maxHeight:'92vh'}} onClick={e => e.stopPropagation()}>
+        <img src={images[idx]} alt={alt} style={{maxWidth:'92vw', maxHeight:'86vh', objectFit:'contain', display:'block', background:'var(--bg-deep)'}} />
+        <button onClick={onClose} aria-label="Close image viewer"
+          style={{position:'absolute', top:-14, right:-14, width:36, height:36, borderRadius:'50%', background:'var(--paper)', border:'1px solid var(--line)', cursor:'pointer', fontSize:18, lineHeight:1, display:'grid', placeItems:'center'}}>×</button>
+        {images.length > 1 && (
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:10, gap:12}}>
+            <button className="btn btn-ghost btn-sm" aria-label="Previous image" onClick={() => setIdx(i => (i - 1 + images.length) % images.length)}>← Prev</button>
+            <span className="mono" style={{fontSize:11, color:'var(--paper)'}}>{idx + 1} / {images.length}</span>
+            <button className="btn btn-ghost btn-sm" aria-label="Next image" onClick={() => setIdx(i => (i + 1) % images.length)}>Next →</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ProductDetailPage({ go, addToCart, pageParams }) {
   const [product, setProduct] = useState(pageParams || null);
   const [selectedVariant, setSelectedVariant] = useState(null);
   const [activeImage, setActiveImage] = useState(null);
   const [notifyEmail, setNotifyEmail] = useState('');
   const [notifySent, setNotifySent] = useState(false);
+  const [notifySending, setNotifySending] = useState(false);
+  const [notifyError, setNotifyError] = useState(null);
   const [relatedProducts, setRelatedProducts] = useState([]);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   useEffect(() => {
-    if (pageParams) {
-      setProduct(pageParams);
+    setProduct(pageParams || null);
+    if (pageParams && !pageParams._notFound) {
       const firstVariant = pageParams.variants && pageParams.variants.length > 0 ? pageParams.variants[0] : null;
       setSelectedVariant(firstVariant);
       const firstImg = (firstVariant?.images?.length ? firstVariant.images[0] : null) || (pageParams.images?.[0] ?? null);
       setActiveImage(firstImg);
+      setNotifyEmail(''); setNotifySent(false); setNotifyError(null); setLightboxOpen(false);
     }
   }, [pageParams]);
 
   useEffect(() => {
-    if (!pageParams) return;
+    if (!pageParams || pageParams._notFound) return;
     fetch('/api/catalog/products').then(r => r.ok ? r.json() : null).then(d => {
       if (!d) return;
       const all = d.items || [];
@@ -965,16 +1123,53 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
     if (v.images && v.images.length > 0) setActiveImage(v.images[0]);
   };
 
+  // #11 — actually register the back-in-stock request with the server
+  const submitNotify = async () => {
+    const email = notifyEmail.trim();
+    if (!email || notifySending) return;
+    setNotifyError(null);
+    setNotifySending(true);
+    try {
+      await ensureCsrf();
+      const resp = await fetch('/api/stock-notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() },
+        body: JSON.stringify({
+          email,
+          productId: product.id || product.sku || '',
+          variantSku: selectedVariant?.sku || '',
+        }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (resp.ok) setNotifySent(true);
+      else setNotifyError(data.message || 'Could not save your request. Please try again.');
+    } catch {
+      setNotifyError('Could not connect. Please try again.');
+    } finally {
+      setNotifySending(false);
+    }
+  };
+
+  // Deep link still resolving — show a loading state, not a premature 404
   if (!product) {
     return (
       <>
-        <PageHead crumbs={['Outback', 'Shop', 'Product']} title="Product not found" lead="This product could not be loaded." />
+        <PageHead crumbs={['Outback', 'Shop', 'Product']} title="Loading…" />
         <section className="container" style={{paddingTop:32, paddingBottom:48}}>
-          <button className="btn btn-ghost" onClick={() => go('shop')}>← Back to Shop</button>
+          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:48}}>
+            <div className="skeleton" style={{aspectRatio:'4/3'}} />
+            <div style={{display:'grid', gap:14, alignContent:'start'}}>
+              <div className="skeleton" style={{height:36, width:'70%'}} />
+              <div className="skeleton" style={{height:18, width:'40%'}} />
+              <div className="skeleton" style={{height:48, width:'55%'}} />
+            </div>
+          </div>
         </section>
       </>
     );
   }
+
+  if (product._notFound) return <CatalogNotFound go={go} kind="product" />;
 
   const hasVariants = product.variants && product.variants.length > 0;
   const activePrice = selectedVariant ? selectedVariant.price : product.price;
@@ -992,17 +1187,32 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
         <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:48, alignItems:'start'}}>
           <div>
             {activeImage
-              ? <img src={thumbUrl(activeImage, 800)} srcSet={thumbSrcSet(activeImage, [400, 600, 800])} sizes="(max-width: 900px) 100vw, 50vw" alt={product.name} loading="lazy" style={{width:'100%', aspectRatio:'4/3', maxHeight:'70vh', objectFit:'contain', display:'block', background:'var(--bg-deep)'}} />
+              ? <button onClick={() => setLightboxOpen(true)} aria-label={`View larger image of ${product.name}`}
+                  style={{display:'block', width:'100%', padding:0, border:'none', background:'none', cursor:'zoom-in'}}>
+                  <img src={thumbUrl(activeImage, 800)} srcSet={thumbSrcSet(activeImage, [400, 600, 800])} sizes="(max-width: 900px) 100vw, 50vw" alt={product.name} loading="lazy" style={{width:'100%', aspectRatio:'4/3', maxHeight:'70vh', objectFit:'contain', display:'block', background:'var(--bg-deep)'}} />
+                </button>
               : <div className="slot" style={{aspectRatio:'4/3', width:'100%'}}>{product.name.toUpperCase()}</div>}
+            {activeImage && (
+              <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginTop:6, textAlign:'center'}}>CLICK IMAGE TO ZOOM</div>
+            )}
             {product.images && product.images.length > 1 && (
               <div style={{display:'flex', gap:8, marginTop:10, flexWrap:'wrap'}}>
                 {product.images.map((url, i) => (
-                  <div key={i} onClick={() => setActiveImage(url)}
-                    style={{width:64, height:64, cursor:'pointer', border: activeImage===url ? '2px solid var(--rust)' : '2px solid transparent', flexShrink:0}}>
+                  <button key={i} onClick={() => setActiveImage(url)}
+                    aria-label={`View image ${i + 1} of ${product.images.length}`} aria-pressed={activeImage === url}
+                    style={{width:64, height:64, cursor:'pointer', padding:0, background:'none', border: activeImage===url ? '2px solid var(--rust)' : '2px solid transparent', flexShrink:0}}>
                     <img src={thumbUrl(url, 128)} alt="" loading="lazy" width="64" height="64" style={{width:'100%', height:'100%', objectFit:'cover', display:'block'}} />
-                  </div>
+                  </button>
                 ))}
               </div>
+            )}
+            {lightboxOpen && activeImage && (
+              <ImageLightbox
+                images={(product.images && product.images.length > 0 ? product.images : [activeImage]).map(u => thumbUrl(u, 1600, 90))}
+                startIndex={Math.max(0, (product.images || [activeImage]).indexOf(activeImage))}
+                alt={product.name}
+                onClose={() => setLightboxOpen(false)}
+              />
             )}
           </div>
           <div>
@@ -1020,20 +1230,21 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
 
             {hasVariants && (
               <div style={{marginBottom:24}}>
-                <div className="eyebrow" style={{marginBottom:10}}>SELECT VARIANT</div>
-                <div style={{display:'grid', gap:8}}>
+                <div className="eyebrow" id="variant-label" style={{marginBottom:10}}>SELECT VARIANT</div>
+                <div style={{display:'grid', gap:8}} role="radiogroup" aria-labelledby="variant-label">
                   {product.variants.map((v, i) => {
                     const isSelected = selectedVariant && selectedVariant.sku === v.sku;
                     const stockLabel = !v.stock || v.stock === 0 ? 'Out of stock' : v.stock <= 3 ? `${v.stock} left` : 'In stock';
                     return (
-                      <div key={i} onClick={() => selectVariant(v)}
-                        style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 14px', cursor:'pointer', border:'1px solid var(--line)', borderLeft: isSelected ? '3px solid var(--rust)' : '1px solid var(--line)', background: isSelected ? 'var(--bg-elev)' : 'transparent'}}>
+                      <button key={i} type="button" onClick={() => selectVariant(v)}
+                        role="radio" aria-checked={!!isSelected}
+                        style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 14px', cursor:'pointer', font:'inherit', color:'inherit', textAlign:'left', width:'100%', border:'1px solid var(--line)', borderLeft: isSelected ? '3px solid var(--rust)' : '1px solid var(--line)', background: isSelected ? 'var(--bg-elev)' : 'transparent'}}>
                         <span style={{fontWeight: isSelected ? 600 : 400}}>{v.name}</span>
                         <div style={{display:'flex', gap:14, alignItems:'center'}}>
                           <span className="mono" style={{fontSize:14}}>${v.price.toLocaleString()}</span>
                           <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{stockLabel}</span>
                         </div>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -1055,7 +1266,7 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
             {!inStock && (
               <div style={{marginTop:16, padding:'16px 18px', background:'var(--bg-elev)', border:'1px solid var(--line)'}}>
                 {notifySent ? (
-                  <div className="mono" style={{fontSize:12, color:'var(--eucalyptus)'}}>✓ We'll email you when this is back in stock.</div>
+                  <div className="mono" role="status" style={{fontSize:12, color:'var(--eucalyptus)'}}>✓ We'll email you when this is back in stock.</div>
                 ) : (
                   <>
                     <div className="eyebrow" style={{marginBottom:8}}>NOTIFY ME WHEN BACK IN STOCK</div>
@@ -1064,16 +1275,19 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
                         className="input"
                         type="email"
                         placeholder="your@email.com"
+                        aria-label="Email address for back-in-stock notification"
                         value={notifyEmail}
-                        onChange={e => setNotifyEmail(e.target.value)}
+                        onChange={e => { setNotifyEmail(e.target.value); setNotifyError(null); }}
+                        onKeyDown={e => e.key === 'Enter' && submitNotify()}
                         style={{flex:1, fontSize:13}}
                       />
                       <button className="btn btn-ghost btn-sm"
-                        disabled={!notifyEmail.trim()}
-                        onClick={() => { if (notifyEmail.trim()) setNotifySent(true); }}>
-                        Notify me
+                        disabled={!notifyEmail.trim() || notifySending}
+                        onClick={submitNotify}>
+                        {notifySending ? '…' : 'Notify me'}
                       </button>
                     </div>
+                    <ErrorText inline>{notifyError}</ErrorText>
                   </>
                 )}
               </div>
@@ -1146,7 +1360,8 @@ function ServiceDetailPage({ go, pageParams }) {
   const [geocoding, setGeocoding] = useState(false);
 
   useEffect(() => {
-    if (pageParams) { setService(pageParams); setBookForm({ name: '', email: '', loc: '', date: '', notes: '' }); setBookError(null); setDistanceKm(null); }
+    setService(pageParams || null);
+    if (pageParams && !pageParams._notFound) { setBookForm({ name: '', email: '', loc: '', date: '', notes: '' }); setBookError(null); setDistanceKm(null); }
   }, [pageParams]);
 
   // Debounced geocode on loc change
@@ -1222,16 +1437,23 @@ function ServiceDetailPage({ go, pageParams }) {
     }
   };
 
+  // Deep link still resolving — show a loading state, not a premature 404
   if (!service) {
     return (
       <>
-        <PageHead crumbs={['Outback', 'Services', 'Service']} title="Service not found" lead="This service could not be loaded." />
+        <PageHead crumbs={['Outback', 'Services', 'Service']} title="Loading…" />
         <section className="container" style={{paddingTop:32, paddingBottom:48}}>
-          <button className="btn btn-ghost" onClick={() => go('services')}>← Back to Services</button>
+          <div style={{maxWidth:640, display:'grid', gap:14}}>
+            <div className="skeleton" style={{height:36, width:'60%'}} />
+            <div className="skeleton" style={{height:18, width:'90%'}} />
+            <div className="skeleton" style={{height:80, width:'100%'}} />
+          </div>
         </section>
       </>
     );
   }
+
+  if (service._notFound) return <CatalogNotFound go={go} kind="service" />;
 
   return (
     <>
@@ -1286,16 +1508,16 @@ function ServiceDetailPage({ go, pageParams }) {
               )}
               <label className="field" style={{marginBottom:14}}>
                 <span className="label">Preferred date (optional)</span>
-                <input className="input" type="date" value={bookForm.date} onChange={e => setBookForm(f => ({...f, date: e.target.value}))} min={new Date().toISOString().slice(0,10)} />
+                <input className="input" type="date" value={bookForm.date} onChange={e => setBookForm(f => ({...f, date: e.target.value}))} min={new Date().toISOString().slice(0,10)} max={new Date(Date.now() + 365 * 86400000).toISOString().slice(0,10)} />
               </label>
               <label className="field" style={{marginBottom:18}}>
                 <span className="label">Notes (optional)</span>
                 <textarea className="textarea" rows={3} value={bookForm.notes} onChange={e => setBookForm(f => ({...f, notes: e.target.value}))} placeholder="Anything we should know before the appointment." />
               </label>
-              {bookError && <div style={{color:'var(--rust)', fontSize:13, marginBottom:12}}>{bookError}</div>}
+              <ErrorText style={{marginBottom:12}}>{bookError}</ErrorText>
               <div style={{display:'flex', gap:12, alignItems:'center'}}>
-                <button type="submit" className="btn btn-rust" style={{flex:1, justifyContent:'center'}} disabled={booking || outOfRange}>
-                  {booking ? 'Redirecting…' : travelFee > 0
+                <button type="submit" className="btn btn-rust" style={{flex:1, justifyContent:'center', gap:8}} disabled={booking || outOfRange} aria-busy={booking}>
+                  {booking ? <><span className="spinner" aria-hidden="true" /> Redirecting…</> : travelFee > 0
                     ? `Pay now — $${(fixedPrice + travelFee).toLocaleString('en-AU', {minimumFractionDigits:2})} (incl. travel) →`
                     : `Pay now — $${fixedPrice.toLocaleString('en-AU', {minimumFractionDigits:2})} →`}
                 </button>
@@ -1437,7 +1659,7 @@ function GiftCardsPage({ go, addToCart }) {
               </button>
             </div>
           </div>
-          {balanceError && <p style={{marginTop:10, fontSize:13, color:'#b91c1c'}}>{balanceError}</p>}
+          <ErrorText inline style={{marginTop:10, fontSize:13}}>{balanceError}</ErrorText>
           {balanceResult && (
             <div style={{marginTop:12, padding:'12px 16px', background: balanceResult.isVoid ? '#fff7ed' : '#f0fdf4', border:`1px solid ${balanceResult.isVoid ? '#fed7aa' : '#86efac'}`, fontSize:14}}>
               {balanceResult.isVoid
@@ -1522,11 +1744,7 @@ function MembershipsPage({ go, portalUser }) {
       <PageHead crumbs={['Outback', 'Memberships']} title="Memberships"
         lead="Get access to member-only groups, exclusive content, and workshop perks. Cancel any time." />
       <section className="container" style={{paddingTop:40, paddingBottom:56}}>
-        {checkoutError && (
-          <div style={{marginBottom:20, padding:'12px 16px', background:'#fff1f0', border:'1px solid #fca5a5', fontSize:13, color:'#b91c1c'}}>
-            {checkoutError}
-          </div>
-        )}
+        <ErrorText style={{marginBottom:20}}>{checkoutError}</ErrorText>
 
         {tiersLoading ? (
           <div style={{textAlign:'center', padding:'64px 0', color:'var(--ink-2)', fontSize:13}}>Loading…</div>

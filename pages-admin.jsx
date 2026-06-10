@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createRoot } from 'react-dom/client';
 import { getCsrf, ensureCsrf } from './src/lib/api.js';
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
@@ -28,18 +29,120 @@ function cashRound(amount) {
 
 function postHeaders() { return { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() }; }
 
+// Persistent polite live region so screen readers announce toasts.
+function ensureToastRegion() {
+  let region = document.getElementById('admin-toast-region');
+  if (!region) {
+    region = document.createElement('div');
+    region.id = 'admin-toast-region';
+    region.setAttribute('role', 'status');
+    region.setAttribute('aria-live', 'polite');
+    Object.assign(region.style, {
+      position: 'fixed', bottom: '24px', left: '50%', transform: 'translateX(-50%)',
+      zIndex: '99999', pointerEvents: 'none', display: 'grid', gap: '8px', justifyItems: 'center',
+    });
+    document.body.appendChild(region);
+  }
+  return region;
+}
+
 function adminToast(msg, type = 'error') {
+  const region = ensureToastRegion();
   const el = document.createElement('div');
   el.textContent = msg;
   Object.assign(el.style, {
-    position: 'fixed', bottom: '24px', left: '50%', transform: 'translateX(-50%)',
     background: type === 'error' ? 'var(--rust, #c0392b)' : '#345526',
     color: '#fff', padding: '10px 20px', borderRadius: '4px',
-    fontSize: '13px', zIndex: '99999', pointerEvents: 'none',
+    fontSize: '13px', pointerEvents: 'none',
     boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
   });
-  document.body.appendChild(el);
+  region.appendChild(el);
   setTimeout(() => el.remove(), 4000);
+}
+
+// ── Validation helpers (client-side; server remains authoritative) ───────────
+const isValidEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(v || '').trim());
+const isValidPhone = (v) => /^[\d\s()+\-.]{6,20}$/.test(String(v || '').trim());
+// Strip minus signs from numeric text inputs so prices/amounts can't go negative.
+const nonNegInput = (v) => (typeof v === 'string' ? v.replace(/-/g, '') : v);
+
+// Marks a required field label; pair with aria-required on the input.
+const ReqMark = () => <span className="admin-req" aria-hidden="true"> *</span>;
+
+// ── Overlay / dirty-drawer registries (module-level singletons) ──────────────
+// Overlays (confirm dialogs, shortcut help) stack above drawers; while one is
+// open the Drawer must not react to Escape/Tab.
+let adminOverlayCount = 0;
+const pushAdminOverlay = () => { adminOverlayCount++; };
+const popAdminOverlay = () => { adminOverlayCount = Math.max(0, adminOverlayCount - 1); };
+const hasAdminOverlay = () => adminOverlayCount > 0;
+// Open drawers with unsaved changes register here so sidebar navigation can warn.
+let adminDirtyDrawers = 0;
+const hasDirtyDrawer = () => adminDirtyDrawers > 0;
+
+// Tracks whether `value` has changed since `resetKey` last changed.
+function useDirtyTracker(value, resetKey) {
+  const snap = JSON.stringify(value ?? null);
+  const baseRef = React.useRef(snap);
+  const keyRef = React.useRef(resetKey);
+  if (keyRef.current !== resetKey) { keyRef.current = resetKey; baseRef.current = snap; }
+  return snap !== baseRef.current;
+}
+
+// ── ConfirmModal — styled replacement for window.confirm() ───────────────────
+function ConfirmModal({ title = 'Please confirm', message, confirmLabel = 'Confirm', cancelLabel = 'Cancel', danger = false, onConfirm, onCancel }) {
+  const dialogRef = React.useRef(null);
+  const confirmRef = React.useRef(null);
+  useEffect(() => {
+    pushAdminOverlay();
+    const prev = document.activeElement;
+    if (confirmRef.current) confirmRef.current.focus();
+    const h = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onCancel(); return; }
+      if (e.key === 'Tab' && dialogRef.current) {
+        const btns = dialogRef.current.querySelectorAll('button');
+        if (btns.length === 0) return;
+        const first = btns[0], last = btns[btns.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+        else if (!dialogRef.current.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+      }
+    };
+    document.addEventListener('keydown', h, true);
+    return () => {
+      popAdminOverlay();
+      document.removeEventListener('keydown', h, true);
+      if (prev && typeof prev.focus === 'function' && document.contains(prev)) prev.focus();
+    };
+  }, [onCancel]);
+  return (
+    <div style={{position:'fixed', inset:0, zIndex:600, background:'rgba(15,13,10,0.6)', display:'grid', placeItems:'center', padding:16}} onClick={onCancel}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={title} onClick={e => e.stopPropagation()}
+        style={{background:'var(--paper)', border:'1px solid var(--line-strong)', boxShadow:'0 16px 48px rgba(0,0,0,.35)', padding:24, width:'100%', maxWidth:420}}>
+        <div className="mono" style={{fontSize:10, letterSpacing:'.1em', color: danger ? 'var(--rust)' : 'var(--ink-2)', marginBottom:10}}>{title.toUpperCase()}</div>
+        <div style={{fontSize:14, lineHeight:1.5, color:'var(--ink)', marginBottom:18, whiteSpace:'pre-line'}}>{message}</div>
+        <div className="row-flex" style={{display:'flex', gap:8, justifyContent:'flex-end'}}>
+          <button className="btn btn-ghost btn-sm" onClick={onCancel}>{cancelLabel}</button>
+          <button ref={confirmRef} className={danger ? 'btn btn-sm btn-rust' : 'btn btn-sm'} onClick={onConfirm}>{confirmLabel}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Promise-based wrapper: `if (!(await adminConfirm('Delete?'))) return;`
+function adminConfirm(message, opts = {}) {
+  return new Promise((resolve) => {
+    const host = document.createElement('div');
+    if (document.querySelector('.admin-theme-dark')) host.className = 'admin-theme-dark';
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const close = (val) => {
+      setTimeout(() => { root.unmount(); host.remove(); }, 0);
+      resolve(val);
+    };
+    root.render(<ConfirmModal message={message} {...opts} onConfirm={() => close(true)} onCancel={() => close(false)} />);
+  });
 }
 
 async function uploadImage(file) {
@@ -208,8 +311,28 @@ const ADMIN_SECTIONS = [
   ]},
 ];
 
+const COLLAPSED_GROUPS_KEY = 'oe-admin-collapsed-groups';
+
 function AdminSidebar({ section, setSection, onSignOut, role, username }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(COLLAPSED_GROUPS_KEY) || '[]'); } catch { return []; }
+  });
+  const toggleGroup = (g) => setCollapsed(cur => {
+    const next = cur.includes(g) ? cur.filter(x => x !== g) : [...cur, g];
+    try { localStorage.setItem(COLLAPSED_GROUPS_KEY, JSON.stringify(next)); } catch {}
+    return next;
+  });
+  const navTo = async (id) => {
+    if (id !== section && hasDirtyDrawer()) {
+      const ok = await adminConfirm('A panel with unsaved changes is open.\nLeave this section and discard those changes?', {
+        title: 'Unsaved changes', confirmLabel: 'Leave anyway', cancelLabel: 'Stay here', danger: true,
+      });
+      if (!ok) return;
+    }
+    setSection(id);
+    setMobileOpen(false);
+  };
   const myLevel = ROLE_LEVELS[role] ?? 0;
   const visibleSections = ADMIN_SECTIONS
     .map(g => ({ ...g, items: g.items.filter(it => {
@@ -222,15 +345,22 @@ function AdminSidebar({ section, setSection, onSignOut, role, username }) {
 
   const NavContent = () => (
     <>
-      <div style={{flex:1, overflowY:'auto', padding:'14px 10px'}}>
-        {visibleSections.map((g) => (
+      <nav aria-label="Admin navigation" style={{flex:1, overflowY:'auto', padding:'14px 10px'}}>
+        {visibleSections.map((g) => {
+          const isCollapsed = collapsed.includes(g.group) && !g.items.some(it => it.id === section);
+          return (
           <div key={g.group} style={{marginBottom: 18}}>
-            <div className="mono" style={{fontSize:10, letterSpacing:'.12em', color:'rgba(244,237,225,0.4)', padding:'4px 10px 8px'}}>{g.group}</div>
-            <div style={{display:'grid', gap: 2}}>
+            <button type="button" className="mono" onClick={() => toggleGroup(g.group)} aria-expanded={!isCollapsed}
+              style={{display:'flex', alignItems:'center', justifyContent:'space-between', width:'100%', background:'none', border:'none', cursor:'pointer', fontSize:10, letterSpacing:'.12em', color:'rgba(244,237,225,0.4)', padding:'4px 10px 8px', fontFamily:'JetBrains Mono, monospace'}}>
+              <span>{g.group}</span>
+              <span aria-hidden="true" style={{fontSize:8, transition:'transform 150ms ease', transform: isCollapsed ? 'rotate(-90deg)' : 'none'}}>▼</span>
+            </button>
+            {!isCollapsed && <div style={{display:'grid', gap: 2}}>
               {g.items.map(it => {
                 const active = section === it.id;
                 return (
-                  <a key={it.id} onClick={() => { setSection(it.id); setMobileOpen(false); }}
+                  <a key={it.id} href={'/' + it.id} aria-current={active ? 'page' : undefined}
+                    onClick={(e) => { e.preventDefault(); navTo(it.id); }}
                     style={{
                       display:'flex', alignItems:'center', gap:10, padding:'8px 10px',
                       cursor:'pointer', fontSize:13, lineHeight:1.2, borderRadius:2,
@@ -253,10 +383,11 @@ function AdminSidebar({ section, setSection, onSignOut, role, username }) {
                   </a>
                 );
               })}
-            </div>
+            </div>}
           </div>
-        ))}
-      </div>
+          );
+        })}
+      </nav>
       <div style={{padding:'12px 14px', borderTop:'1px solid #2a241c', display:'flex', alignItems:'center', gap:10}}>
         <div style={{width:32, height:32, background:'var(--ochre)', color:'var(--dark)', fontSize:12, fontWeight:700, display:'grid', placeItems:'center', fontFamily:'JetBrains Mono, monospace', flexShrink:0}}>{initials}</div>
         <div style={{flex:1, minWidth:0}}>
@@ -329,18 +460,31 @@ function AdminSidebar({ section, setSection, onSignOut, role, username }) {
   );
 }
 
-function AdminTopbar({ title, subtitle, actions, search, onSearch }) {
+function AdminTopbar({ title, subtitle, actions, search, onSearch, searchRef }) {
+  // Local input state debounced into onSearch so filtering doesn't run on every keystroke.
+  const [local, setLocal] = useState(search || '');
+  const timerRef = React.useRef(null);
+  useEffect(() => {
+    if (timerRef.current) return; // user is mid-typing; don't clobber
+    setLocal(search || '');
+  }, [search]);
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
+  const handleChange = (v) => {
+    setLocal(v);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => { timerRef.current = null; if (onSearch) onSearch(v); }, 250);
+  };
   return (
-    <div style={{padding:'18px 32px', borderBottom:'1px solid var(--line)', background:'var(--bg-elev)', display:'flex', alignItems:'center', justifyContent:'space-between', gap:24}}>
+    <div className="admin-topbar" style={{padding:'18px 32px', borderBottom:'1px solid var(--line)', background:'var(--bg-elev)', display:'flex', alignItems:'center', justifyContent:'space-between', gap:24, flexWrap:'wrap'}}>
       <div>
         <div className="mono" style={{fontSize:11, letterSpacing:'.12em', color:'var(--ink-2)'}}>STAFF TERMINAL · {new Date().toLocaleDateString('en-AU', {weekday:'long', day:'2-digit', month:'short'}).toUpperCase()}</div>
-        <div style={{display:'flex', alignItems:'baseline', gap:14, marginTop:4}}>
+        <div style={{display:'flex', alignItems:'baseline', gap:14, marginTop:4, flexWrap:'wrap'}}>
           <h1 className="serif" style={{fontSize:32, fontWeight:400, lineHeight:1}}>{title}</h1>
           {subtitle && <span style={{fontSize:13, color:'var(--ink-2)'}}>{subtitle}</span>}
         </div>
       </div>
       <div className="row-flex" style={{gap:10}}>
-        <input className="input" placeholder="Search orders, SKUs, customers…" style={{padding:'7px 12px', fontSize:13, width:260}} value={search||''} onChange={e => onSearch && onSearch(e.target.value)} />
+        <input ref={searchRef} className="input admin-topbar-search" type="search" aria-label="Search orders, SKUs, customers" placeholder="Search… ( / )" style={{padding:'7px 12px', fontSize:13, width:260}} value={local} onChange={e => handleChange(e.target.value)} />
         {actions}
       </div>
     </div>
@@ -366,57 +510,205 @@ function StatTile({ label, value, delta, tone }) {
   );
 }
 
-function Table({ columns, rows, onRowClick, emptyMessage }) {
+const TABLE_PAGE_SIZE = 50;
+
+function Table({ columns, rows, onRowClick, emptyMessage, loading }) {
   const tpl = columns.map(c => c.w || '1fr').join(' ');
+  const [sort, setSort] = useState(null); // { key, dir: 'asc' | 'desc' }
+  const [page, setPage] = useState(0);
+  const safeRows = rows || [];
+
+  // Keep the original index alongside each row so onRowClick(row, i) callers
+  // that index into their own state arrays keep working when sorted/paged.
+  const sorted = useMemo(() => {
+    const indexed = safeRows.map((r, i) => ({ r, i }));
+    if (!sort) return indexed;
+    const col = columns.find(c => (c.key || c.label) === sort.key);
+    if (!col || !col.sort) return indexed;
+    const val = typeof col.sort === 'function' ? col.sort : (r) => r[col.key];
+    const arr = [...indexed].sort((a, b) => {
+      const av = val(a.r), bv = val(b.r);
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      if (typeof av === 'number' && typeof bv === 'number') return av - bv;
+      return String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: 'base' });
+    });
+    if (sort.dir === 'desc') arr.reverse();
+    return arr;
+  }, [safeRows, sort, columns]);
+
+  useEffect(() => { setPage(0); }, [safeRows.length, sort]);
+
+  const paged = sorted.length > TABLE_PAGE_SIZE;
+  const pageCount = Math.max(1, Math.ceil(sorted.length / TABLE_PAGE_SIZE));
+  const curPage = Math.min(page, pageCount - 1);
+  const visible = paged ? sorted.slice(curPage * TABLE_PAGE_SIZE, (curPage + 1) * TABLE_PAGE_SIZE) : sorted;
+
+  const toggleSort = (col) => {
+    const key = col.key || col.label;
+    setSort(s => {
+      if (!s || s.key !== key) return { key, dir: 'asc' };
+      if (s.dir === 'asc') return { key, dir: 'desc' };
+      return null;
+    });
+  };
+
   return (
     <div style={{background:'var(--paper)', border:'1px solid var(--line-strong)'}}>
-      <div style={{display:'grid', gridTemplateColumns:tpl, padding:'10px 18px', background:'var(--bg-elev)', borderBottom:'2px solid var(--ink)', fontFamily:'JetBrains Mono, monospace', fontSize:10, letterSpacing:'.1em', color:'var(--ink-2)'}}>
-        {columns.map((c,i) => <div key={i}>{c.label.toUpperCase()}</div>)}
+      <div className="admin-table-scroll" style={{overflowX:'auto'}}>
+        <div style={{minWidth:560}}>
+          <div role="row" style={{display:'grid', gridTemplateColumns:tpl, padding:'10px 18px', background:'var(--bg-elev)', borderBottom:'2px solid var(--ink)', fontFamily:'JetBrains Mono, monospace', fontSize:10, letterSpacing:'.1em', color:'var(--ink-2)'}}>
+            {columns.map((c,i) => {
+              const key = c.key || c.label;
+              const active = sort && sort.key === key;
+              if (!c.sort) return <div key={i} role="columnheader">{c.label.toUpperCase()}</div>;
+              return (
+                <div key={i} role="columnheader" aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                  <button type="button" onClick={() => toggleSort(c)}
+                    title={`Sort by ${c.label}`}
+                    style={{font:'inherit', letterSpacing:'inherit', color: active ? 'var(--rust)' : 'inherit', background:'none', border:'none', padding:0, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:4}}>
+                    {c.label.toUpperCase()}
+                    <span aria-hidden="true" style={{fontSize:8, opacity: active ? 1 : 0.4}}>{active ? (sort.dir === 'asc' ? '▲' : '▼') : '▲▼'}</span>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+          {loading ? (
+            [...Array(5)].map((_, i) => (
+              <div key={i} aria-hidden="true" style={{display:'grid', gridTemplateColumns:tpl, padding:'14px 18px', borderTop:'1px solid var(--line)', gap:12}}>
+                {columns.map((_, j) => <div key={j} className="admin-skel" style={{height:14, maxWidth: j === 0 ? 80 : 140}}/>)}
+              </div>
+            ))
+          ) : sorted.length === 0 ? (
+            <div style={{padding:'32px 24px', textAlign:'center', color:'var(--ink-2)'}}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{margin:'0 auto 12px', display:'block', opacity:.35}}><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+              <div style={{fontSize:13, fontWeight:500}}>{emptyMessage || 'Nothing here yet.'}</div>
+              {onRowClick && <div style={{fontSize:12, color:'var(--ink-3)', marginTop:4}}>Use the button above to add your first record.</div>}
+            </div>
+          ) : visible.map(({ r, i }) => (
+            <div key={i}
+              role={onRowClick ? 'button' : undefined}
+              tabIndex={onRowClick ? 0 : undefined}
+              onClick={() => onRowClick && onRowClick(r,i)}
+              onKeyDown={e => { if (onRowClick && (e.key==='Enter'||e.key===' ')) { e.preventDefault(); onRowClick(r,i); } }}
+              style={{display:'grid', gridTemplateColumns:tpl, padding:'14px 18px', borderTop:'1px solid var(--line)', fontSize:13, alignItems:'center', cursor: onRowClick?'pointer':'default'}}
+              onMouseEnter={e => { if (onRowClick) e.currentTarget.style.background='var(--bg-elev)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background='transparent'; }}>
+              {columns.map((c,j) => <div key={j} style={{minWidth:0, overflow:'hidden', textOverflow:'ellipsis'}}>{c.render ? c.render(r) : r[c.key]}</div>)}
+            </div>
+          ))}
+        </div>
       </div>
-      {rows.length === 0 ? (
-        <div style={{padding:'32px 24px', textAlign:'center', color:'var(--ink-2)'}}>
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{margin:'0 auto 12px', display:'block', opacity:.35}}><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
-          <div style={{fontSize:13, fontWeight:500}}>{emptyMessage || 'Nothing here yet.'}</div>
-          {onRowClick && <div style={{fontSize:12, color:'var(--ink-3)', marginTop:4}}>Use the button above to add your first record.</div>}
+      {!loading && paged && (
+        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, padding:'10px 18px', borderTop:'1px solid var(--line)', background:'var(--bg-elev)', flexWrap:'wrap'}}>
+          <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{sorted.length.toLocaleString()} RECORDS · PAGE {curPage + 1} / {pageCount}</span>
+          <div style={{display:'flex', gap:6}}>
+            <button className="btn btn-ghost btn-sm" disabled={curPage === 0} style={{opacity: curPage === 0 ? 0.45 : 1}} onClick={() => setPage(p => Math.max(0, p - 1))}>← Prev</button>
+            <button className="btn btn-ghost btn-sm" disabled={curPage >= pageCount - 1} style={{opacity: curPage >= pageCount - 1 ? 0.45 : 1}} onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}>Next →</button>
+          </div>
         </div>
-      ) : rows.map((r,i) => (
-        <div key={i}
-          role={onRowClick ? 'button' : undefined}
-          tabIndex={onRowClick ? 0 : undefined}
-          onClick={() => onRowClick && onRowClick(r,i)}
-          onKeyDown={e => { if (onRowClick && (e.key==='Enter'||e.key===' ')) { e.preventDefault(); onRowClick(r,i); } }}
-          style={{display:'grid', gridTemplateColumns:tpl, padding:'14px 18px', borderTop:'1px solid var(--line)', fontSize:13, alignItems:'center', cursor: onRowClick?'pointer':'default'}}
-          onMouseEnter={e => { if (onRowClick) e.currentTarget.style.background='var(--bg-elev)'; }}
-          onMouseLeave={e => { e.currentTarget.style.background='transparent'; }}>
-          {columns.map((c,j) => <div key={j}>{c.render ? c.render(r) : r[c.key]}</div>)}
-        </div>
-      ))}
+      )}
     </div>
   );
 }
 
+// Glyphs paired with status colors so state is never conveyed by colour alone (WCAG 1.4.1).
+const STATUS_GLYPHS = {
+  paid:'✓', 'part-paid':'◐', unpaid:'✕',
+  pending:'○', ordering:'◔', building:'⚒', testing:'◈', packed:'▣', shipped:'➤', fulfilled:'✓', refunded:'↩',
+  new:'★', 'in-review':'◐', quoted:'✉', won:'✓', closed:'—',
+  live:'✓', sold:'✓', bench:'⚒', recycle:'↻',
+  ok:'✓', 'low batt':'◐', offline:'✕', maintenance:'⚒',
+  active:'✓', cancelled:'✕', expired:'—',
+};
+
 function StatusPill({ value, map }) {
   const cfg = map[value] || { bg:'var(--bg-deep)', fg:'var(--ink)' };
-  return <span className="tag" style={{background: cfg.bg, color: cfg.fg, borderColor: cfg.bg}}>{value.toUpperCase()}</span>;
+  const glyph = STATUS_GLYPHS[String(value || '').toLowerCase()];
+  return (
+    <span className="tag" style={{background: cfg.bg, color: cfg.fg, borderColor: cfg.bg, gap:4}}>
+      {glyph && <span aria-hidden="true" style={{fontFamily:'inherit'}}>{glyph}</span>}
+      {String(value).toUpperCase()}
+    </span>
+  );
 }
 
-function Drawer({ open, onClose, title, children, footer }) {
+function Drawer({ open, onClose, title, children, footer, dirty = false }) {
+  const panelRef = React.useRef(null);
+  const confirmingRef = React.useRef(false);
+  const dirtyRef = React.useRef(dirty);
+  dirtyRef.current = dirty;
+
+  // Close request — warns first when there are unsaved changes (P0: data safety).
+  const requestClose = React.useCallback(async () => {
+    if (confirmingRef.current) return;
+    if (dirtyRef.current) {
+      confirmingRef.current = true;
+      const ok = await adminConfirm('You have unsaved changes that will be lost.\nClose without saving?', {
+        title: 'Unsaved changes', confirmLabel: 'Discard changes', cancelLabel: 'Keep editing', danger: true,
+      });
+      confirmingRef.current = false;
+      if (!ok) return;
+    }
+    onClose();
+  }, [onClose]);
+
+  // Register dirty state globally (sidebar nav warns) + native beforeunload guard.
+  useEffect(() => {
+    if (!open || !dirty) return;
+    adminDirtyDrawers++;
+    const onBeforeUnload = (e) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => {
+      adminDirtyDrawers = Math.max(0, adminDirtyDrawers - 1);
+      window.removeEventListener('beforeunload', onBeforeUnload);
+    };
+  }, [open, dirty]);
+
+  // Focus management: move focus in on open, trap Tab, restore focus on close.
   useEffect(() => {
     if (!open) return;
-    const h = e => { if (e.key === 'Escape') onClose(); };
+    const prevFocus = document.activeElement;
+    if (panelRef.current) panelRef.current.focus();
+    const focusables = () => panelRef.current
+      ? Array.from(panelRef.current.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+      : [];
+    const h = (e) => {
+      if (hasAdminOverlay()) return; // a confirm dialog / help overlay is stacked on top
+      if (e.key === 'Escape') { e.preventDefault(); requestClose(); return; }
+      if (e.key === 'Tab' && panelRef.current) {
+        const els = focusables();
+        if (els.length === 0) { e.preventDefault(); panelRef.current.focus(); return; }
+        const first = els[0], last = els[els.length - 1];
+        if (e.shiftKey && (document.activeElement === first || document.activeElement === panelRef.current)) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+        else if (!panelRef.current.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+      }
+    };
     document.addEventListener('keydown', h);
-    return () => document.removeEventListener('keydown', h);
-  }, [open, onClose]);
+    return () => {
+      document.removeEventListener('keydown', h);
+      if (prevFocus && typeof prevFocus.focus === 'function' && document.contains(prevFocus)) prevFocus.focus();
+    };
+  }, [open, requestClose]);
+
   if (!open) return null;
   return (
     <div style={{position:'fixed', inset:0, zIndex:200}}>
-      <div aria-hidden="true" onClick={onClose} style={{position:'absolute', inset:0, background:'rgba(15,13,10,0.5)'}}></div>
-      <div style={{position:'absolute', top:0, right:0, bottom:0, width:540, background:'var(--bg)', borderLeft:'1px solid var(--line)', boxShadow:'-8px 0 24px rgba(0,0,0,.15)', display:'flex', flexDirection:'column'}}>
+      <div aria-hidden="true" onClick={requestClose} style={{position:'absolute', inset:0, background:'rgba(15,13,10,0.5)'}}></div>
+      <div ref={panelRef} role="dialog" aria-modal="true" aria-label={typeof title === 'string' && title ? title : 'Edit panel'} tabIndex={-1}
+        className="admin-drawer"
+        style={{position:'absolute', top:0, right:0, bottom:0, width:'min(540px, 100vw)', maxWidth:'100vw', background:'var(--bg)', borderLeft:'1px solid var(--line)', boxShadow:'-8px 0 24px rgba(0,0,0,.15)', display:'flex', flexDirection:'column', outline:'none'}}>
         <div style={{padding:'16px 24px', borderBottom:'1px solid var(--line)', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12}}>
-          <h3 style={{fontSize:16, fontWeight:600, margin:0}}>{title}</h3>
-          <button className="icon-btn" onClick={onClose} aria-label="Close" style={{flexShrink:0}}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
+          <h3 style={{fontSize:16, fontWeight:600, margin:0, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{title}</h3>
+          <div style={{display:'flex', alignItems:'center', gap:10, flexShrink:0}}>
+            {dirty && <span className="mono" title="This drawer has unsaved changes" style={{fontSize:9, letterSpacing:'.08em', color:'var(--ochre)'}}>● UNSAVED</span>}
+            <button className="icon-btn" onClick={requestClose} aria-label="Close" style={{flexShrink:0}}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
         </div>
         <div style={{flex:1, overflowY:'auto', padding:24}}>{children}</div>
         {footer && <div style={{padding:'14px 24px', borderTop:'1px solid var(--line)', background:'var(--bg-elev)'}}>{footer}</div>}
@@ -481,7 +773,7 @@ function AdminOverview({ go }) {
         <StatTile label="QUOTES AWAITING" value={quotesAwaiting} tone="rust" />
       </div>
 
-      <div style={{display:'grid', gridTemplateColumns:'2fr 1fr', gap:28}}>
+      <div className="admin-split" style={{display:'grid', gridTemplateColumns:'2fr 1fr', gap:28}}>
         <div>
           <div className="row-flex" style={{justifyContent:'space-between', marginBottom:12}}>
             <h3 className="serif" style={{fontSize:22}}>Activity stream</h3>
@@ -628,16 +920,23 @@ function OrderDrawer({ edit, expenses, onClose, onRowUpdate, onSave, onExpensesC
   const [refundBusy, setRefundBusy] = useState(false);
   const [refundError, setRefundError] = useState(null);
 
+  // Dirty tracking against the last persisted snapshot — drives the
+  // unsaved-changes warning in the Drawer (overlay click / Escape / nav).
+  const savedSnapRef = React.useRef(JSON.stringify({ ...edit }));
+  const dirty = JSON.stringify(form) !== savedSnapRef.current;
+
   const saveNow = async (patch) => {
     const updated = { ...form, ...patch };
     const prevForm = form;
     const rowId = edit?.id || updated.id;
     setForm(updated);
     onRowUpdate(updated);
+    savedSnapRef.current = JSON.stringify(updated);
     const r = await fetch('/api/admin/orders/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ ...updated, _originalId: rowId }) }).catch(()=>null);
     if (!r || !r.ok) {
       setForm(prevForm);
       onRowUpdate(prevForm);
+      savedSnapRef.current = JSON.stringify(prevForm);
       adminToast('Save failed — change not persisted. Please try again.');
     }
   };
@@ -645,8 +944,16 @@ function OrderDrawer({ edit, expenses, onClose, onRowUpdate, onSave, onExpensesC
   const doRefund = async () => {
     const amt = Number(refundEntry.amount);
     if (!amt || amt <= 0) { setRefundError('Enter a refund amount greater than zero.'); return; }
+    // Never refund more than has actually been taken for this order.
+    const paid = orderAmountPaid(form);
+    const maxRefund = Math.round(((paid > 0 ? paid : orderEffectiveTotal(form)) - (form.refund ? Number(form.refund.amount) || 0 : 0)) * 100) / 100;
+    if (amt > maxRefund + 0.005) {
+      setRefundError(`Refund exceeds the amount paid on this order — maximum refundable is $${Math.max(0, maxRefund).toFixed(2)}.`);
+      return;
+    }
     const methodLabel = refundEntry.method === 'stripe' ? 'refund to the original card via Stripe' : 'issue store credit';
-    if (!confirm(`This will ${methodLabel} of $${amt.toFixed(2)} for order ${form.id} and mark it refunded. Continue?`)) return;
+    const ok = await adminConfirm(`This will ${methodLabel} of $${amt.toFixed(2)} for order ${form.id} and mark it refunded.`, { title: 'Issue refund', confirmLabel: 'Issue refund', danger: true });
+    if (!ok) return;
     setRefundBusy(true); setRefundError(null);
     const r = await fetch('/api/admin/orders/refund', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: form.id, method: refundEntry.method, amount: amt }) }).catch(()=>null);
     setRefundBusy(false);
@@ -655,6 +962,7 @@ function OrderDrawer({ edit, expenses, onClose, onRowUpdate, onSave, onExpensesC
     if (!r.ok) { setRefundError(d.message || 'Refund failed.'); return; }
     setForm(d.order);
     onRowUpdate(d.order);
+    savedSnapRef.current = JSON.stringify(d.order);
     setRefundEntry({ method:'stripe', amount:'' });
   };
 
@@ -670,6 +978,7 @@ function OrderDrawer({ edit, expenses, onClose, onRowUpdate, onSave, onExpensesC
       const updated = { ...form, fulfilment: d.fulfilment };
       setForm(updated);
       onRowUpdate(updated);
+      savedSnapRef.current = JSON.stringify(updated);
     }
   };
 
@@ -699,7 +1008,7 @@ function OrderDrawer({ edit, expenses, onClose, onRowUpdate, onSave, onExpensesC
   };
 
   const deleteExpense = async (id) => {
-    if (!confirm('Delete this expense?')) return;
+    if (!(await adminConfirm('Delete this expense? This cannot be undone.', { title: 'Delete expense', confirmLabel: 'Delete', danger: true }))) return;
     const r = await fetch('/api/admin/expenses/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id }) }).catch(()=>null);
     if (!r || !r.ok) { adminToast('Failed to delete expense.'); return; }
     const newExpenses = expenses.filter(e => e.id !== id);
@@ -740,7 +1049,7 @@ function OrderDrawer({ edit, expenses, onClose, onRowUpdate, onSave, onExpensesC
       <div style={{padding:'12px', background:'var(--paper)', border:'1px solid var(--ochre)', marginBottom:6}}>
         <div className="grid-2" style={{gap:10, marginBottom:10}}>
           <label className="field" style={{margin:0}}><span className="label">Description</span><input className="input" value={ef.description||''} onChange={ev=>setExpenseForm(f=>({...f,description:ev.target.value}))}/></label>
-          <label className="field" style={{margin:0}}><span className="label">Amount (AUD)</span><input className="input" type="number" step="0.01" value={ef.amount||''} onChange={ev=>setExpenseForm(f=>({...f,amount:ev.target.value}))}/></label>
+          <label className="field" style={{margin:0}}><span className="label">Amount (AUD)</span><input className="input" type="number" min="0" step="0.01" value={ef.amount||''} onChange={ev=>setExpenseForm(f=>({...f,amount:nonNegInput(ev.target.value)}))}/></label>
         </div>
         <div className="grid-2" style={{gap:10, marginBottom:10}}>
           <label className="field" style={{margin:0}}><span className="label">Category</span>
@@ -796,7 +1105,7 @@ function OrderDrawer({ edit, expenses, onClose, onRowUpdate, onSave, onExpensesC
   };
 
   return (
-    <Drawer open={true} onClose={onClose} title={edit.id ? `Order ${edit.id}` : 'New order'}
+    <Drawer open={true} onClose={onClose} dirty={dirty} title={edit.id ? `Order ${edit.id}` : 'New order'}
       footer={<div className="row-flex" style={{gap:8, justifyContent:'space-between'}}>
         {edit.id
           ? <button className="btn btn-ghost btn-sm" style={{fontSize:12}}
@@ -817,19 +1126,25 @@ function OrderDrawer({ edit, expenses, onClose, onRowUpdate, onSave, onExpensesC
         <div className="row-flex" style={{gap:8}}>
           <button className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
           <button className="btn btn-sm" onClick={async () => {
+            if (form.email && !isValidEmail(form.email)) { adminToast('Customer email looks invalid — please check it.'); return; }
+            if (form.phone && !isValidPhone(form.phone)) { adminToast('Phone number looks invalid — please check it.'); return; }
+            if (Number(form.total) < 0) { adminToast('Order total cannot be negative.'); return; }
             const payload = { ...form, _originalId: edit.id || form.id };
             const r = await fetch('/api/admin/orders/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(payload) }).catch(()=>null);
             if (r && r.ok) {
               const d = await r.json();
-              if (d.error) { alert(d.message || 'Save failed'); return; }
+              if (d.error) { adminToast(d.message || 'Save failed'); return; }
+              savedSnapRef.current = JSON.stringify(d.item || form);
               onSave(d.item || form, !edit.id);
+            } else {
+              adminToast('Save failed — changes not persisted. Please try again.');
             }
           }}>{edit.id ? 'Save' : 'Create order'}</button>
         </div>
       </div>}
     >
-      <label className="field"><span className="label">Order Number</span><input className="input" style={{fontFamily:'monospace', fontWeight:700}} value={form.id||''} onChange={e=>setForm({...form,id:e.target.value})} placeholder="e.g. OE-1001"/></label>
-      <label className="field"><span className="label">Customer</span><input className="input" value={form.cust||''} onChange={e=>setForm({...form,cust:e.target.value})}/></label>
+      <label className="field"><span className="label">Order Number<ReqMark/></span><input className="input" aria-required="true" style={{fontFamily:'monospace', fontWeight:700}} value={form.id||''} onChange={e=>setForm({...form,id:e.target.value})} placeholder="e.g. OE-1001"/></label>
+      <label className="field"><span className="label">Customer<ReqMark/></span><input className="input" aria-required="true" value={form.cust||''} onChange={e=>setForm({...form,cust:e.target.value})}/></label>
       <label className="field"><span className="label">Email</span><input className="input" type="email" value={form.email||''} onChange={e=>setForm({...form,email:e.target.value})}/></label>
       <label className="field"><span className="label">Phone</span><input className="input" type="tel" value={form.phone||''} onChange={e=>setForm({...form,phone:e.target.value})}/></label>
       <label className="field"><span className="label">Shipping Address</span><input className="input" value={form.shippingAddress||''} onChange={e=>setForm({...form,shippingAddress:e.target.value})} placeholder="Street, City, State, Postcode"/></label>
@@ -956,7 +1271,7 @@ function OrderDrawer({ edit, expenses, onClose, onRowUpdate, onSave, onExpensesC
           <div style={{padding:'12px', background:'var(--paper)', border:'1px solid var(--ochre)', marginBottom:6}}>
             <div className="grid-2" style={{gap:10, marginBottom:10}}>
               <label className="field" style={{margin:0}}><span className="label">Description</span><input className="input" value={expenseForm.description||''} onChange={e=>setExpenseForm(f=>({...f,description:e.target.value}))} autoFocus/></label>
-              <label className="field" style={{margin:0}}><span className="label">Amount (AUD)</span><input className="input" type="number" step="0.01" value={expenseForm.amount||''} onChange={e=>setExpenseForm(f=>({...f,amount:e.target.value}))}/></label>
+              <label className="field" style={{margin:0}}><span className="label">Amount (AUD)</span><input className="input" type="number" min="0" step="0.01" value={expenseForm.amount||''} onChange={e=>setExpenseForm(f=>({...f,amount:nonNegInput(e.target.value)}))}/></label>
             </div>
             <div className="grid-2" style={{gap:10, marginBottom:10}}>
               <label className="field" style={{margin:0}}><span className="label">Category</span>
@@ -1020,7 +1335,7 @@ function OrderDrawer({ edit, expenses, onClose, onRowUpdate, onSave, onExpensesC
         </div>
       ))}
       <div style={{display:'grid', gridTemplateColumns:'100px 100px 1fr auto', gap:8, alignItems:'end', marginTop:8}}>
-        <label className="field" style={{margin:0}}><span className="label">Amount</span><input className="input" type="number" min="0" step="0.01" placeholder="0.00" value={payEntry.amount} onChange={e=>setPayEntry(v=>({...v,amount:e.target.value}))}/></label>
+        <label className="field" style={{margin:0}}><span className="label">Amount</span><input className="input" type="number" min="0" step="0.01" placeholder="0.00" value={payEntry.amount} onChange={e=>setPayEntry(v=>({...v,amount:nonNegInput(e.target.value)}))}/></label>
         <label className="field" style={{margin:0}}><span className="label">Method</span>
           <select className="select" value={payEntry.method} onChange={e=>setPayEntry(v=>({...v,method:e.target.value}))}>
             {['Cash','Card','Bank Transfer','Crypto','Other'].map(m => <option key={m}>{m}</option>)}
@@ -1047,7 +1362,7 @@ function OrderDrawer({ edit, expenses, onClose, onRowUpdate, onSave, onExpensesC
                     <option value="store-credit">Store credit</option>
                   </select>
                 </label>
-                <label className="field" style={{margin:0}}><span className="label">Amount</span><input className="input" type="number" min="0" step="0.01" placeholder={Number(form.total||0).toFixed(2)} value={refundEntry.amount} onChange={e=>setRefundEntry(v=>({...v,amount:e.target.value}))}/></label>
+                <label className="field" style={{margin:0}}><span className="label">Amount</span><input className="input" type="number" min="0" max={(orderAmountPaid(form) > 0 ? orderAmountPaid(form) : orderEffectiveTotal(form)).toFixed(2)} step="0.01" placeholder={Number(form.total||0).toFixed(2)} value={refundEntry.amount} onChange={e=>setRefundEntry(v=>({...v,amount:nonNegInput(e.target.value)}))}/></label>
                 <button className="btn btn-sm" style={{background:'#7a3a18', color:'#fff', border:'none', marginBottom:1}} onClick={doRefund} disabled={refundBusy}>{refundBusy ? 'Processing…' : 'Issue Refund'}</button>
               </div>
               {refundEntry.method === 'store-credit' && <div style={{fontSize:11, color:'var(--ink-3)', marginTop:6}}>Store credit requires the customer to have an account with email {form.email || '(none set)'}.</div>}
@@ -1088,24 +1403,43 @@ function OrderDrawer({ edit, expenses, onClose, onRowUpdate, onSave, onExpensesC
 // ============================================================
 function AdminOrders({ search }) {
   const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [expenses, setExpenses] = useState([]);
   const [edit, setEdit] = useState(null);
+  const [statusTab, setStatusTab] = useState('all');
+  const [dateRange, setDateRange] = useState({ from: '', to: '' });
   useEffect(() => {
     fetch('/api/admin/orders', { credentials:'include' })
-      .then(r => r.ok ? r.json() : Promise.reject()).then(d => setRows(d.items || [])).catch(() => setRows([]));
+      .then(r => r.ok ? r.json() : Promise.reject()).then(d => setRows(d.items || [])).catch(() => setRows([])).finally(() => setLoading(false));
     fetch('/api/admin/expenses', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject()).then(d => setExpenses(d.items || [])).catch(() => {});
   }, []);
 
   const q = (search || '').toLowerCase().trim();
-  const visibleRows = useMemo(() => q
-    ? rows.filter(r =>
-        (r.id || '').toLowerCase().includes(q) ||
-        (r.cust || '').toLowerCase().includes(q) ||
-        (r.items || '').toLowerCase().includes(q) ||
-        (r.loc || '').toLowerCase().includes(q)
-      )
-    : rows, [rows, q]);
+  const visibleRows = useMemo(() => {
+    let out = rows;
+    if (q) out = out.filter(r =>
+      (r.id || '').toLowerCase().includes(q) ||
+      (r.cust || '').toLowerCase().includes(q) ||
+      (r.items || '').toLowerCase().includes(q) ||
+      (r.loc || '').toLowerCase().includes(q)
+    );
+    if (statusTab !== 'all') {
+      out = out.filter(r => ['shipped','refunded'].includes(statusTab)
+        ? (r.fulfilment || 'pending') === statusTab
+        : orderPaymentStatus(r) === statusTab);
+    }
+    if (dateRange.from || dateRange.to) {
+      const fromTs = dateRange.from ? new Date(dateRange.from + 'T00:00:00').getTime() : -Infinity;
+      const toTs = dateRange.to ? new Date(dateRange.to + 'T23:59:59').getTime() : Infinity;
+      out = out.filter(r => {
+        const d = parseOrderDate(r.createdAt || r.date);
+        if (!d) return false;
+        return d.getTime() >= fromTs && d.getTime() <= toTs;
+      });
+    }
+    return out;
+  }, [rows, q, statusTab, dateRange]);
 
   const tabCounts = useMemo(() => ({
     all: rows.length,
@@ -1122,29 +1456,41 @@ function AdminOrders({ search }) {
 
   return (
     <div style={{padding:32}}>
-      <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:18}}>
-        <div className="tabs" style={{margin:0}}>
-          {[['all','All'],['unpaid','Unpaid'],['part-paid','Part paid'],['paid','Paid'],['shipped','Shipped'],['refunded','Refunded']].map(([k,l],i) => (
-            <div key={k} className={`tab ${i===0?'active':''}`}>{l} ({tabCounts[k]})</div>
+      <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14, flexWrap:'wrap', gap:10}}>
+        <div className="tabs tabs-row" style={{margin:0}}>
+          {[['all','All'],['unpaid','Unpaid'],['part-paid','Part paid'],['paid','Paid'],['shipped','Shipped'],['refunded','Refunded']].map(([k,l]) => (
+            <div key={k} role="button" tabIndex={0} className={`tab ${statusTab===k?'active':''}`} style={{cursor:'pointer'}}
+              onClick={() => setStatusTab(k)}
+              onKeyDown={e => { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); setStatusTab(k); } }}>{l} ({tabCounts[k]})</div>
           ))}
         </div>
         <button className="btn btn-rust btn-sm" onClick={() => setEdit(blankOrder())}>+ New order</button>
       </div>
+      <div className="row-flex" style={{gap:8, marginBottom:14, alignItems:'center'}}>
+        <span className="mono" style={{fontSize:10, letterSpacing:'.08em', color:'var(--ink-2)'}}>DATE RANGE</span>
+        <input className="input" type="date" aria-label="Orders from date" style={{width:150, padding:'5px 8px', fontSize:12}} value={dateRange.from} onChange={e => setDateRange(r => ({ ...r, from: e.target.value }))} />
+        <span style={{color:'var(--ink-3)', fontSize:12}}>→</span>
+        <input className="input" type="date" aria-label="Orders to date" style={{width:150, padding:'5px 8px', fontSize:12}} value={dateRange.to} onChange={e => setDateRange(r => ({ ...r, to: e.target.value }))} />
+        {(dateRange.from || dateRange.to) && (
+          <button className="btn btn-ghost btn-sm" onClick={() => setDateRange({ from:'', to:'' })}>Clear</button>
+        )}
+      </div>
       <Table
+        loading={loading}
         columns={[
-          { key:'id', label:'Order #', w:'140px', render:r => <span className="mono" style={{fontSize:12, color:'var(--rust)'}}>{r.id}</span> },
-          { key:'cust', label:'Customer', w:'1.5fr' },
+          { key:'id', label:'Order #', w:'140px', sort:true, render:r => <span className="mono" style={{fontSize:12, color:'var(--rust)'}}>{r.id}</span> },
+          { key:'cust', label:'Customer', w:'1.5fr', sort:true },
           { key:'items', label:'Items', w:'2fr', render:r => <span style={{fontSize:13}}>{r.items}</span> },
-          { key:'total', label:'Total', w:'90px', render:r => <span className="mono" style={{fontWeight:600}}>${(Number(r.total)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}</span> },
-          { key:'balance', label:'Balance', w:'90px', render:r => {
+          { key:'total', label:'Total', w:'90px', sort:r => Number(r.total) || 0, render:r => <span className="mono" style={{fontWeight:600}}>${(Number(r.total)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}</span> },
+          { key:'balance', label:'Balance', w:'90px', sort:r => orderBalance(r), render:r => {
             const b = orderBalance(r);
             return b <= 0.005
               ? <span className="mono" style={{fontSize:11, color:'var(--eucalyptus)'}}>CLEAR</span>
               : <span className="mono" style={{fontSize:12, color:'var(--rust)', fontWeight:600}}>${b.toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>;
           }},
-          { key:'payment', label:'Payment', w:'100px', render:r => <StatusPill value={orderPaymentStatus(r)} map={ORDER_PAYMENT_MAP} /> },
-          { key:'fulfilment', label:'Fulfilment', w:'110px', render:r => { const legacyFul = ['packed','shipped','fulfilled','refunded'].includes(r.status) ? r.status : null; return <StatusPill value={r.fulfilment || legacyFul || 'pending'} map={ORDER_FULFILMENT_MAP} />; } },
-          { key:'date', label:'When', w:'110px', render:r => <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{fmtOrderDate(r.date).toUpperCase()}</span> },
+          { key:'payment', label:'Payment', w:'100px', sort:r => orderPaymentStatus(r), render:r => <StatusPill value={orderPaymentStatus(r)} map={ORDER_PAYMENT_MAP} /> },
+          { key:'fulfilment', label:'Fulfilment', w:'110px', sort:r => r.fulfilment || 'pending', render:r => { const legacyFul = ['packed','shipped','fulfilled','refunded'].includes(r.status) ? r.status : null; return <StatusPill value={r.fulfilment || legacyFul || 'pending'} map={ORDER_FULFILMENT_MAP} />; } },
+          { key:'date', label:'When', w:'110px', sort:r => { const d = parseOrderDate(r.createdAt || r.date); return d ? d.getTime() : 0; }, render:r => <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{fmtOrderDate(r.date).toUpperCase()}</span> },
         ]}
         rows={visibleRows}
         onRowClick={openRow}
@@ -1183,6 +1529,8 @@ function AdminRepairs() {
   const [cols, setCols] = useState(DEFAULT_REPAIR_COLS);
   const [newJob, setNewJob] = useState(null);
   const [newJobForm, setNewJobForm] = useState({ t:'', who:'', tag:'' });
+  const [dragOverCol, setDragOverCol] = useState(null);
+  const newJobDirty = useDirtyTracker(newJobForm, newJob);
   useEffect(() => {
     fetch('/api/admin/repairs', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject())
@@ -1217,6 +1565,24 @@ function AdminRepairs() {
       credentials: 'include', body: JSON.stringify({ columns: updated }),
     }).catch(() => null);
   };
+  // Drag-and-drop: move a card between stages and persist via the existing save API.
+  const moveCard = async (cardId, fromId, toId) => {
+    if (!cardId || fromId === toId) return;
+    let moved = null;
+    const without = cols.map(c => c.id === fromId
+      ? { ...c, cards: (c.cards || []).filter(cd => { if (cd.id === cardId) { moved = cd; return false; } return true; }) }
+      : c);
+    if (!moved) return;
+    const updated = without.map(c => c.id === toId ? { ...c, cards: [...(c.cards || []), moved] } : c);
+    const prev = cols;
+    setCols(updated);
+    const r = await fetch('/api/admin/repairs/save', {
+      method: 'POST', headers: postHeaders(),
+      credentials: 'include', body: JSON.stringify({ columns: updated }),
+    }).catch(() => null);
+    if (!r || !r.ok) { setCols(prev); adminToast('Failed to move job — change not saved.'); }
+    else adminToast(`Moved to ${updated.find(c => c.id === toId)?.label || toId}.`, 'success');
+  };
   return (
     <div style={{padding:32, overflowX:'auto'}}>
       <div className="row-flex" style={{justifyContent:'space-between', marginBottom: 18}}>
@@ -1224,33 +1590,50 @@ function AdminRepairs() {
         <button className="btn btn-rust btn-sm" onClick={() => { setNewJobForm({ t:'', who:'', tag:'' }); setNewJob(true); }}>+ New job</button>
       </div>
       {newJob && (
-        <Drawer open={true} onClose={() => setNewJob(null)} title="New repair job"
+        <Drawer open={true} onClose={() => setNewJob(null)} dirty={newJobDirty} title="New repair job"
           footer={<div className="row-flex" style={{gap:8, justifyContent:'flex-end'}}>
             <button className="btn btn-ghost btn-sm" onClick={() => setNewJob(null)}>Cancel</button>
             <button className="btn btn-rust btn-sm" onClick={createJob}>Create job</button>
           </div>}>
-          <label className="field"><span className="label">Job description</span><input className="input" placeholder="e.g. Toughbook 55 — keyboard ribbon fault" value={newJobForm.t} onChange={e => setNewJobForm(f => ({...f, t:e.target.value}))} /></label>
+          <label className="field"><span className="label">Job description<ReqMark/></span><input className="input" aria-required="true" placeholder="e.g. Toughbook 55 — keyboard ribbon fault" value={newJobForm.t} onChange={e => setNewJobForm(f => ({...f, t:e.target.value}))} /></label>
           <label className="field"><span className="label">Assigned to</span><input className="input" placeholder="Technician name" value={newJobForm.who} onChange={e => setNewJobForm(f => ({...f, who:e.target.value}))} /></label>
           <label className="field"><span className="label">Tag (optional)</span><input className="input" placeholder="e.g. URGENT" value={newJobForm.tag} onChange={e => setNewJobForm(f => ({...f, tag:e.target.value}))} /></label>
         </Drawer>
       )}
       <div style={{display:'grid', gridTemplateColumns:'repeat(5, minmax(240px, 1fr))', gap:16, minWidth:1200}}>
         {cols.map(c => (
-          <div key={c.id}>
+          <div key={c.id}
+            onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverCol(c.id); }}
+            onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverCol(cur => cur === c.id ? null : cur); }}
+            onDrop={e => {
+              e.preventDefault();
+              setDragOverCol(null);
+              try {
+                const { cardId, from } = JSON.parse(e.dataTransfer.getData('text/plain') || '{}');
+                moveCard(cardId, from, c.id);
+              } catch {}
+            }}
+            style={{outline: dragOverCol === c.id ? '2px dashed var(--ochre)' : 'none', outlineOffset: 4}}>
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:10}}>
               <span className="eyebrow">{c.label}</span>
               <span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>{c.cards.length}</span>
             </div>
-            <div style={{display:'grid', gap:10}}>
+            <div style={{display:'grid', gap:10, minHeight:40}}>
               {c.cards.map(card => (
-                <div key={card.id} style={{padding:14, background:'var(--paper)', border:'1px solid var(--line)', cursor:'grab'}}>
+                <div key={card.id} draggable
+                  onDragStart={e => {
+                    e.dataTransfer.setData('text/plain', JSON.stringify({ cardId: card.id, from: c.id }));
+                    e.dataTransfer.effectAllowed = 'move';
+                  }}
+                  title="Drag to another column to change stage"
+                  style={{padding:14, background:'var(--paper)', border:'1px solid var(--line)', cursor:'grab'}}>
                   <div className="row-flex" style={{justifyContent:'space-between'}}>
                     <span className="mono" style={{fontSize:10, color:'var(--rust)'}}>{card.id}</span>
                     {card.tag && <span className="tag" style={{fontSize:9}}>{card.tag}</span>}
                   </div>
                   <div style={{fontSize:13, marginTop:6, fontWeight:500, lineHeight:1.3}}>{card.t}</div>
                   <div className="mono" style={{fontSize:10, color:'var(--ink-2)', marginTop:8, display:'flex', justifyContent:'space-between'}}>
-                    <span>{card.who.toUpperCase()}</span><span>{card.age.toUpperCase()}</span>
+                    <span>{(card.who || '').toUpperCase()}</span><span>{(card.age || '').toUpperCase()}</span>
                   </div>
                 </div>
               ))}
@@ -1267,7 +1650,7 @@ function AdminRepairs() {
 // QUOTE CREATOR
 // ============================================================
 function QuoteCreator({ context, onBack, onQuoteSent }) {
-  const HARDWARE_MARGIN = 0.02;
+  const DEFAULT_HARDWARE_MARGIN_PCT = 2;
   const PC_BUILD_RATE = 40;
   const genRef = () => 'QT-' + Date.now().toString().slice(-6);
 
@@ -1277,6 +1660,7 @@ function QuoteCreator({ context, onBack, onQuoteSent }) {
     customerName: dq.customerName || context?.name || '',
     customerEmail: dq.customerEmail || context?.email || '',
     validDays: dq.validDays || 30,
+    marginPct: dq.marginPct != null ? dq.marginPct : DEFAULT_HARDWARE_MARGIN_PCT,
     hardwareItems: dq.hardwareItems?.length ? dq.hardwareItems : [{ id: 'h' + Date.now(), name: '', qty: 1, basePrice: '' }],
     pcBuild: dq.pcBuild || false,
     pcHours: dq.pcHours || '',
@@ -1286,6 +1670,10 @@ function QuoteCreator({ context, onBack, onQuoteSent }) {
   });
   const [sending, setSending] = useState(false);
   const [msg, setMsg] = useState({ text: '', ok: true });
+
+  // Margin is configurable per quote (defaults to 2%).
+  const marginPctNum = Math.max(0, parseFloat(form.marginPct) || 0);
+  const HARDWARE_MARGIN = marginPctNum / 100;
 
   const hw = form.hardwareItems;
   const hardwareTotal = hw.reduce((s, i) => s + (parseFloat(i.basePrice) || 0) * (parseInt(i.qty) || 1) * (1 + HARDWARE_MARGIN), 0);
@@ -1305,6 +1693,7 @@ function QuoteCreator({ context, onBack, onQuoteSent }) {
 
   const doSend = async () => {
     if (!form.customerEmail) { setMsg({ text: 'Customer email is required.', ok: false }); return; }
+    if (!isValidEmail(form.customerEmail)) { setMsg({ text: 'Customer email looks invalid — please check it.', ok: false }); return; }
     setSending(true); setMsg({ text: '', ok: true });
     try {
       const r = await fetch('/api/admin/quotes/send', { method: 'POST', headers: postHeaders(), credentials: 'include', body: JSON.stringify(buildPayload()) });
@@ -1357,7 +1746,7 @@ function QuoteCreator({ context, onBack, onQuoteSent }) {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 24, alignItems: 'start' }}>
+      <div className="admin-split" style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 24, alignItems: 'start' }}>
         {/* ── Left column ── */}
         <div style={{ display: 'grid', gap: 20 }}>
 
@@ -1368,16 +1757,19 @@ function QuoteCreator({ context, onBack, onQuoteSent }) {
               <label className="field" style={{ margin: 0 }}><span className="label">Customer name</span>
                 <input className="input" placeholder="Jane Smith" value={form.customerName} onChange={e => setForm({ ...form, customerName: e.target.value })} />
               </label>
-              <label className="field" style={{ margin: 0 }}><span className="label">Customer email</span>
-                <input className="input" type="email" placeholder="jane@example.com" value={form.customerEmail} onChange={e => setForm({ ...form, customerEmail: e.target.value })} />
+              <label className="field" style={{ margin: 0 }}><span className="label">Customer email<ReqMark/></span>
+                <input className="input" type="email" aria-required="true" placeholder="jane@example.com" value={form.customerEmail} onChange={e => setForm({ ...form, customerEmail: e.target.value })} />
               </label>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px', gap: 14, marginTop: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px 130px', gap: 14, marginTop: 14 }}>
               <label className="field" style={{ margin: 0 }}><span className="label">Quote reference</span>
                 <input className="input" value={form.quoteRef} onChange={e => setForm({ ...form, quoteRef: e.target.value })} />
               </label>
               <label className="field" style={{ margin: 0 }}><span className="label">Valid (days)</span>
                 <input className="input" type="number" min="1" value={form.validDays} onChange={e => setForm({ ...form, validDays: Number(e.target.value) })} />
+              </label>
+              <label className="field" style={{ margin: 0 }}><span className="label">Hardware margin %</span>
+                <input className="input" type="number" min="0" step="0.5" value={form.marginPct} onChange={e => setForm({ ...form, marginPct: nonNegInput(e.target.value) })} />
               </label>
             </div>
           </section>
@@ -1387,7 +1779,7 @@ function QuoteCreator({ context, onBack, onQuoteSent }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
               <div>
                 <div className="eyebrow" style={{ margin: 0 }}>HARDWARE ITEMS</div>
-                <div className="mono" style={{ fontSize: 10, color: 'var(--ink-2)', marginTop: 4, letterSpacing: '.06em' }}>2% MARGIN AUTO-APPLIED · NOT ITEMISED FOR CUSTOMER</div>
+                <div className="mono" style={{ fontSize: 10, color: 'var(--ink-2)', marginTop: 4, letterSpacing: '.06em' }}>{marginPctNum}% MARGIN AUTO-APPLIED · NOT ITEMISED FOR CUSTOMER</div>
               </div>
               <button className="btn btn-ghost btn-sm" onClick={addHw}>+ Add item</button>
             </div>
@@ -1411,7 +1803,7 @@ function QuoteCreator({ context, onBack, onQuoteSent }) {
                     <input className="input" type="number" min="1" placeholder="1" value={item.qty} onChange={e => updHw(item.id, { qty: e.target.value })} />
                     <div style={{ position: 'relative' }}>
                       <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--ink-2)', pointerEvents: 'none' }}>$</span>
-                      <input className="input" type="number" min="0" step="0.01" placeholder="0.00" value={item.basePrice} onChange={e => updHw(item.id, { basePrice: e.target.value })} style={{ paddingLeft: 22 }} />
+                      <input className="input" type="number" min="0" step="0.01" placeholder="0.00" value={item.basePrice} onChange={e => updHw(item.id, { basePrice: nonNegInput(e.target.value) })} style={{ paddingLeft: 22 }} />
                     </div>
                     <div className="mono" style={{ fontSize: 13, fontWeight: 600, textAlign: 'right', color: 'var(--ink)' }}>
                       ${fmtAUD(customerPrice)}
@@ -1479,7 +1871,7 @@ function QuoteCreator({ context, onBack, onQuoteSent }) {
                   <input className="input" placeholder="e.g. Cable management, OS installation" value={item.description} onChange={e => updOther(item.id, { description: e.target.value })} />
                   <div style={{ position: 'relative' }}>
                     <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--ink-2)', pointerEvents: 'none' }}>$</span>
-                    <input className="input" type="number" min="0" step="0.01" placeholder="0.00" value={item.amount} onChange={e => updOther(item.id, { amount: e.target.value })} style={{ paddingLeft: 22 }} />
+                    <input className="input" type="number" min="0" step="0.01" placeholder="0.00" value={item.amount} onChange={e => updOther(item.id, { amount: nonNegInput(e.target.value) })} style={{ paddingLeft: 22 }} />
                   </div>
                   <button className="icon-btn" style={{ width: 24, height: 24, fontSize: 16, color: 'var(--ink-3)' }} onClick={() => remOther(item.id)}>×</button>
                 </div>
@@ -1587,6 +1979,7 @@ function AdminQuotes() {
   const [assignTarget, setAssignTarget] = useState(null);
   const [assignee, setAssignee] = useState('');
   const [activeTab, setActiveTab] = useState('new');
+  const quoteDirty = useDirtyTracker(form, edit);
 
   useEffect(() => {
     fetch('/api/admin/quotes', { credentials:'include' })
@@ -1629,9 +2022,9 @@ function AdminQuotes() {
   }
 
   return (
-    <div style={{padding:32, display:'grid', gridTemplateColumns:'1fr 360px', gap:24}}>
+    <div className="admin-split" style={{padding:32, display:'grid', gridTemplateColumns:'1fr 360px', gap:24}}>
       <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, flexWrap:'wrap', gap:10 }}>
           <div className="tabs" style={{marginBottom:0}}>
             {[
               { key:'new',       label:`Inbox (${quotes.filter(q=>q.status==='new').length})` },
@@ -1704,9 +2097,10 @@ function AdminQuotes() {
       </aside>
 
       {edit !== null && (
-        <Drawer open={true} onClose={() => setEdit(null)} title={`Quote ${edit.id}`}
+        <Drawer open={true} onClose={() => setEdit(null)} dirty={quoteDirty} title={`Quote ${edit.id}`}
           footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
             <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={async () => {
+              if (!(await adminConfirm(`Delete quote ${edit.id}? This cannot be undone.`, { title: 'Delete quote', confirmLabel: 'Delete', danger: true }))) return;
               const r = await fetch('/api/admin/quotes/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: edit.id }) }).catch(()=>null);
               if (!r || !r.ok) { adminToast('Failed to delete quote.'); return; }
               setQuotes(qs => qs.filter(q => q.id !== edit.id));
@@ -1783,7 +2177,7 @@ function AdminEwaste() {
         <StatTile label="PALLETS AWAITING SORT" value={0} tone={0 > 0 ? 'rust' : undefined} />
       </div>
 
-      <div style={{display:'grid', gridTemplateColumns:'2fr 1fr', gap:24}}>
+      <div className="admin-split" style={{display:'grid', gridTemplateColumns:'2fr 1fr', gap:24}}>
         <div>
           <div className="row-flex" style={{justifyContent:'space-between', marginBottom:12}}>
             <h3 className="serif" style={{fontSize:22}}>Recent intakes</h3>
@@ -2766,7 +3160,7 @@ function AdminTutorials() {
         </div>
         {notice.msg && <div style={{marginBottom:12, fontSize:13, color:notice.type==='error'?'var(--rust)':'var(--eucalyptus)'}}>{notice.msg}</div>}
 
-        <div style={{display:'grid', gridTemplateColumns:'1fr 280px', gap:24}}>
+        <div className="admin-split" style={{display:'grid', gridTemplateColumns:'1fr 280px', gap:24}}>
           <div style={{background:'var(--paper)', border:'1px solid var(--line)', padding:32}}>
             <input className="input" placeholder="Tutorial title" value={form.title||''} onChange={e=>setForm({...form, title:e.target.value})}
               style={{fontFamily:'Instrument Serif, serif', fontSize:32, padding:'8px 0', border:'none', borderBottom:'1px solid var(--line)', background:'transparent'}} />
@@ -3831,7 +4225,7 @@ function AdminGiftCards() {
       </div>
 
       {mainTab === 'issued' && (
-        <div style={{display:'grid', gridTemplateColumns:'1fr 320px', gap:32, alignItems:'start'}}>
+        <div className="admin-split" style={{display:'grid', gridTemplateColumns:'1fr 320px', gap:32, alignItems:'start'}}>
           <div>
             <div className="tabs" style={{marginBottom:18}}>
               {[['all','All'], ['active','Active'], ['used','Used up'], ['void','Voided']].map(([v,l]) => (
@@ -3887,7 +4281,7 @@ function AdminGiftCards() {
       )}
 
       {mainTab === 'denominations' && (
-        <div style={{display:'grid', gridTemplateColumns:'1fr 360px', gap:32, alignItems:'start'}}>
+        <div className="admin-split" style={{display:'grid', gridTemplateColumns:'1fr 360px', gap:32, alignItems:'start'}}>
           <div>
             <div className="row-flex" style={{justifyContent:'flex-end', marginBottom:14}}>
               <button className="btn btn-rust btn-sm" onClick={openNewDenom}>+ New Denomination</button>

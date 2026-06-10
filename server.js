@@ -70,7 +70,7 @@ const PUBLIC_CSP = "default-src 'self'; " +
 const HSTS_VALUE = 'max-age=31536000; includeSubDomains';
 const PERMISSIONS_POLICY = 'camera=(), microphone=(), geolocation=(), payment=(), usb=()';
 const PUBLIC_RATE_WINDOW_MS = 1000 * 60 * 10;
-const PUBLIC_RATE_LIMITS = { analytics: 120, checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10, 'forgot-password': 5, 'reset-password': 10, 'gift-card/apply': 10, 'gift-card/balance': 5, 'warranty/order-lookup': 10, 'cart/get': 20, 'weather_register': 3 };
+const PUBLIC_RATE_LIMITS = { analytics: 120, checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10, 'forgot-password': 5, 'reset-password': 10, 'gift-card/apply': 10, 'gift-card/balance': 5, 'warranty/order-lookup': 10, 'cart/get': 20, 'weather_register': 3, 'stock-notify': 5 };
 
 fs.mkdirSync(path.join(__dirname, 'assets/uploads'), { recursive: true });
 fs.mkdirSync(path.join(__dirname, 'assets/uploads/software'), { recursive: true });
@@ -125,6 +125,7 @@ const SESSIONS_DB_PATH        = path.join(__dirname, 'sessions.db');
 const PORTAL_SESSIONS_DB_PATH = path.join(__dirname, 'portal-sessions.db');
 const RESET_TOKENS_DB_PATH = path.join(__dirname, 'password-reset-tokens.db');
 const CARTS_DB_PATH = path.join(__dirname, 'carts.db');
+const STOCK_NOTIFY_DB_PATH = path.join(__dirname, 'stock-notify.db');
 const RESET_TOKEN_TTL_MS = 1000 * 60 * 60; // 1 hour
 function _defaultSubUrl(base, port, sub) {
   if (/^https?:\/\/(localhost|127\.|0\.0\.0\.0)(:\d+)?/.test(base))
@@ -270,6 +271,11 @@ function readCarts() {
   try { const p = JSON.parse(cachedReadFile(CARTS_DB_PATH)); return Array.isArray(p.carts) ? p.carts : []; } catch { return []; }
 }
 function writeCarts(carts) { atomicWriteFile(CARTS_DB_PATH, JSON.stringify({ carts }, null, 2)); }
+
+function readStockNotify() {
+  try { const p = JSON.parse(cachedReadFile(STOCK_NOTIFY_DB_PATH)); return Array.isArray(p.requests) ? p.requests : []; } catch { return []; }
+}
+function writeStockNotify(requests) { atomicWriteFile(STOCK_NOTIFY_DB_PATH, JSON.stringify({ requests }, null, 2)); }
 
 function readProducts() {
   try { const p = JSON.parse(cachedReadFile(PRODUCTS_DB_PATH)); return Array.isArray(p.products) ? p.products : []; } catch { return []; }
@@ -2473,10 +2479,14 @@ const mainServer = http.createServer(async (req, res) => {
     const resp = await stripeRequest('GET', `/v1/checkout/sessions/${encodeURIComponent(sid)}?expand[]=customer_details`, null).catch(() => null);
     if (!resp || resp.status !== 200) return json(res, 502, { error: 'stripe_error' });
     const s = resp.body;
+    // Include our order number (created by the Stripe webhook) so the success
+    // page can show the customer a reference for pickup/support.
+    const matchedOrder = readOrders().find(o => o.stripeSessionId === sid);
     return json(res, 200, {
       amountAud: (s.amount_total || 0) / 100,
       customerName: s.customer_details?.name || '',
       customerEmail: s.customer_details?.email || '',
+      orderId: matchedOrder ? matchedOrder.id : null,
     });
   }
 
@@ -3228,6 +3238,33 @@ const mainServer = http.createServer(async (req, res) => {
     const cart = readCarts().find(c => c.id === id && c.expiresAt > Date.now());
     if (!cart) return json(res, 404, { error: 'not_found' });
     return json(res, 200, { items: cart.items });
+  }
+
+  // ── Back-in-stock notification requests ──────────────────────────────────────
+  if (req.method === 'POST' && url.pathname === '/api/stock-notify') {
+    if (publicRateLimited(getIp(req), 'stock-notify')) return json(res, 429, { error: 'too_many_requests' });
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const email = String(body.email || '').trim().toLowerCase();
+    const productId = String(body.productId || '').trim();
+    const variantSku = String(body.variantSku || '').trim();
+    if (!email || !productId) return json(res, 422, { error: 'missing_fields' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json(res, 422, { error: 'invalid_email', message: 'Email address is invalid.' });
+    const product = readProducts().find(p => (p.id === productId || p.sku === productId) && p.status === 'published');
+    if (!product) return json(res, 404, { error: 'not_found', message: 'Product not found.' });
+    const requests = readStockNotify();
+    const exists = requests.some(r => r.email === email && r.productId === product.id && (r.variantSku || '') === variantSku && !r.notifiedAt);
+    if (!exists) {
+      requests.push({
+        id: 'sn-' + Date.now(),
+        email,
+        productId: product.id,
+        productName: product.name,
+        ...(variantSku ? { variantSku } : {}),
+        createdAt: new Date().toISOString(),
+      });
+      writeStockNotify(requests);
+    }
+    return json(res, 201, { ok: true });
   }
 
   // ── Contact quick-message ────────────────────────────────────────────────────

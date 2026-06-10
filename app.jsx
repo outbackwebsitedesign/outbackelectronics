@@ -53,6 +53,44 @@ function observeReveal() {
 }
 window.observeReveal = observeReveal;
 
+// ---------------- Focus Trap Hook ----------------
+// Traps Tab focus inside containerRef while mounted, closes on Escape, and
+// restores focus to the previously focused element (the trigger) on unmount.
+function useFocusTrap(containerRef, onClose) {
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const prevFocus = document.activeElement;
+    const getFocusable = () => Array.from(container.querySelectorAll(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    ));
+    if (!container.contains(document.activeElement)) {
+      const els = getFocusable();
+      if (els[0]) els[0].focus();
+      else if (typeof container.focus === 'function') container.focus();
+    }
+    const handleKey = (e) => {
+      if (e.key === 'Escape') { e.stopPropagation(); if (onClose) onClose(); return; }
+      if (e.key !== 'Tab') return;
+      const els = getFocusable();
+      if (els.length === 0) { e.preventDefault(); return; }
+      const first = els[0];
+      const last = els[els.length - 1];
+      if (e.shiftKey && (document.activeElement === first || !container.contains(document.activeElement))) {
+        e.preventDefault(); last.focus();
+      } else if (!e.shiftKey && (document.activeElement === last || !container.contains(document.activeElement))) {
+        e.preventDefault(); first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKey, true);
+    return () => {
+      document.removeEventListener('keydown', handleKey, true);
+      if (prevFocus && typeof prevFocus.focus === 'function') prevFocus.focus();
+    };
+  }, []);
+}
+window.useFocusTrap = useFocusTrap;
+
 // ---------------- Search Overlay ----------------
 function SearchOverlay({ go, onClose }) {
   const [q, setQ] = useState('');
@@ -60,7 +98,9 @@ function SearchOverlay({ go, onClose }) {
   const [highlightIdx, setHighlightIdx] = useState(0);
   const inputRef = useRef(null);
   const listRef = useRef(null);
+  const panelRef = useRef(null);
   useEffect(() => { inputRef.current && inputRef.current.focus(); }, []);
+  useFocusTrap(panelRef, onClose);
 
   useEffect(() => {
     fetch('/api/catalog/products')
@@ -78,14 +118,21 @@ function SearchOverlay({ go, onClose }) {
   const pageResults = query.length < 1
     ? allPages.slice(0, 6)
     : allPages.filter(p => p.label.toLowerCase().includes(query));
-  const productResults = query.length >= 2 ? products.filter(p =>
+  const productMatches = query.length >= 2 ? products.filter(p =>
     (p.name || '').toLowerCase().includes(query) ||
     (p.brand || '').toLowerCase().includes(query) ||
     (p.sku || '').toLowerCase().includes(query) ||
     (p.category || '').toLowerCase().includes(query)
-  ).slice(0, 6) : [];
+  ) : [];
+  const productResults = productMatches.slice(0, 6);
+  const hasMoreProducts = productMatches.length > productResults.length;
 
   const allResults = [...pageResults, ...productResults.map(p => ({ ...p, _isProduct: true }))];
+
+  const viewAllResults = () => {
+    go('shop', { initialQuery: q.trim() });
+    onClose();
+  };
 
   useEffect(() => { setHighlightIdx(0); }, [q]);
 
@@ -104,24 +151,29 @@ function SearchOverlay({ go, onClose }) {
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setHighlightIdx(i => Math.max(i - 1, 0));
-    } else if (e.key === 'Enter' && allResults[highlightIdx]) {
-      pick(allResults[highlightIdx]);
+    } else if (e.key === 'Enter') {
+      if (allResults[highlightIdx]) pick(allResults[highlightIdx]);
+      else if (query.length >= 2 && productMatches.length > 0) viewAllResults();
     }
   };
 
   return (
     <div className="search-backdrop" style={{position:'fixed', inset:0, zIndex:500, display:'flex', flexDirection:'column', alignItems:'center', paddingTop:80, background:'rgba(15,13,10,0.72)'}}
       onClick={onClose}>
-      <div style={{width:'100%', maxWidth:560, background:'var(--bg)', border:'1px solid var(--line)', boxShadow:'0 12px 40px rgba(0,0,0,.35)'}}
+      <div ref={panelRef} role="dialog" aria-modal="true" aria-label="Search pages and products"
+        style={{width:'100%', maxWidth:560, background:'var(--bg)', border:'1px solid var(--line)', boxShadow:'0 12px 40px rgba(0,0,0,.35)'}}
         onClick={e => e.stopPropagation()}>
         <div style={{display:'flex', alignItems:'center', padding:'12px 16px', borderBottom:'1px solid var(--line)', gap:10}}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{flexShrink:0, color:'var(--ink-2)'}}><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" style={{flexShrink:0, color:'var(--ink-2)'}}><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
           <input ref={inputRef} value={q} onChange={e => setQ(e.target.value)}
             placeholder="Search pages and products…" style={{flex:1, border:'none', outline:'none', background:'transparent', fontSize:15, color:'var(--ink)'}}
+            role="combobox" aria-expanded={allResults.length > 0} aria-controls="search-results-list" aria-autocomplete="list"
+            aria-activedescendant={allResults[highlightIdx] ? `search-option-${highlightIdx}` : undefined}
+            aria-label="Search pages and products"
             onKeyDown={handleKeyDown} />
           <button onClick={onClose} style={{background:'none', border:'none', cursor:'pointer', color:'var(--ink-2)', fontSize:18, lineHeight:1}} aria-label="Close search">×</button>
         </div>
-        <div ref={listRef} style={{maxHeight:420, overflowY:'auto'}}>
+        <div ref={listRef} id="search-results-list" role="listbox" aria-label="Search results" style={{maxHeight:420, overflowY:'auto'}}>
           {query.length === 0 && (
             <div style={{padding:'6px 20px 2px', fontSize:11, color:'var(--ink-3)', fontFamily:'monospace', letterSpacing:'0.08em'}}>QUICK LINKS</div>
           )}
@@ -132,10 +184,11 @@ function SearchOverlay({ go, onClose }) {
             const isHighlighted = highlightIdx === idx;
             return (
               <div key={p.id} onClick={() => pick(p)}
+                role="option" id={`search-option-${idx}`} aria-selected={isHighlighted}
                 style={{padding:'12px 20px', cursor:'pointer', fontSize:14, borderBottom:'1px solid var(--line)', display:'flex', alignItems:'center', gap:10, background: isHighlighted ? 'var(--bg-elev)' : 'transparent'}}
                 onMouseEnter={() => setHighlightIdx(idx)}
-                onMouseLeave={() => setHighlightIdx(idx)}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{color:'var(--ink-3)'}}><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                onMouseLeave={() => setHighlightIdx(-1)}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" style={{color:'var(--ink-3)'}}><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                 {p.label}
               </div>
             );
@@ -148,9 +201,10 @@ function SearchOverlay({ go, onClose }) {
             const isHighlighted = highlightIdx === idx;
             return (
               <div key={p.id || p.sku} onClick={() => pick({...p, _isProduct: true})}
+                role="option" id={`search-option-${idx}`} aria-selected={isHighlighted}
                 style={{padding:'12px 20px', cursor:'pointer', fontSize:14, borderBottom:'1px solid var(--line)', display:'flex', alignItems:'center', gap:10, background: isHighlighted ? 'var(--bg-elev)' : 'transparent'}}
                 onMouseEnter={() => setHighlightIdx(idx)}
-                onMouseLeave={() => setHighlightIdx(idx)}>
+                onMouseLeave={() => setHighlightIdx(-1)}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{color:'var(--rust)'}}><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M16 3v4M8 3v4M2 11h20"/></svg>
                 <div>
                   <div style={{fontWeight:500}}>{p.name}</div>
@@ -160,6 +214,12 @@ function SearchOverlay({ go, onClose }) {
               </div>
             );
           })}
+          {hasMoreProducts && (
+            <button onClick={viewAllResults}
+              style={{display:'block', width:'100%', textAlign:'center', padding:'12px 20px', cursor:'pointer', fontSize:13, fontWeight:600, color:'var(--rust)', background:'transparent', border:'none', borderBottom:'1px solid var(--line)'}}>
+              View all {productMatches.length} results for "{q.trim()}" →
+            </button>
+          )}
           {allResults.length === 0 && query.length > 0 && <div style={{padding:'16px 20px', color:'var(--ink-2)', fontSize:14}}>No results for "{q}".</div>}
           {query.length === 0 && (
             <div style={{padding:'10px 20px', fontSize:12, color:'var(--ink-3)', borderTop:'1px solid var(--line)'}}>
@@ -374,6 +434,50 @@ function useAnnouncement() {
   return text;
 }
 
+// Highlight the parent nav item for detail pages that aren't in PRIMARY_PAGES,
+// so the active nav state always resets visibly on navigation (incl. logo clicks).
+const NAV_PAGE_ALIASES = { product: 'shop', service: 'services', repairs: 'services' };
+
+function MobileNavDrawer({ page, go, onClose, handleNavClick }) {
+  const shop = useShop();
+  const drawerRef = useRef(null);
+  useFocusTrap(drawerRef, onClose);
+  const isNavActive = (id) => page === id || NAV_PAGE_ALIASES[page] === id;
+  return (
+    <div ref={drawerRef} id="mobile-nav" className="mobile-nav" role="dialog" aria-modal="true" aria-label="Navigation menu">
+      <div className="mobile-nav-header">
+        <Logo onClick={() => { go('home'); onClose(); }} />
+        <button className="icon-btn" aria-label="Close menu" onClick={onClose}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      {PRIMARY_PAGES.map(p => (
+        <a key={p.id}
+          href={isExternalLink(p.id) ? externalHref(p.id) : `/${p.id}`}
+          className={isNavActive(p.id) ? 'active' : ''}
+          aria-current={isNavActive(p.id) ? 'page' : undefined}
+          onClick={isExternalLink(p.id) ? undefined : (e) => { e.preventDefault(); handleNavClick(p.id); }}
+          {...(isExternalLink(p.id) ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>
+          {p.label}
+        </a>
+      ))}
+      <div className="mobile-nav-utils">
+        {UTILITY_PAGES.map(p => (
+          <a key={p.id} href={`/${p.id}`} className={page === p.id ? 'active' : ''}
+            aria-current={page === p.id ? 'page' : undefined}
+            onClick={(e) => { e.preventDefault(); handleNavClick(p.id); }}>
+            {p.label}
+          </a>
+        ))}
+      </div>
+      <div className="mobile-nav-promo">
+        <span>FREE FREIGHT OVER $200 · OUTBACK NT/SA/WA</span>
+        {shop.phone && <span className="phone">{shop.phone}</span>}
+      </div>
+    </div>
+  );
+}
+
 function TopNav({ page, go, cart, onSearchOpen, accountOpen, setAccountOpen, portalUser }) {
   const announcement = useAnnouncement();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -410,18 +514,22 @@ function TopNav({ page, go, cart, onSearchOpen, accountOpen, setAccountOpen, por
       <div className={scrolled ? 'topnav scrolled' : 'topnav'}>
         <div className="container row">
           <Logo onClick={() => go('home')} />
-          <nav className="mainlinks">
-            {PRIMARY_PAGES.map(p => (
-              <a
-                key={p.id}
-                href={isExternalLink(p.id) ? externalHref(p.id) : `/${p.id}`}
-                className={page === p.id ? 'active' : ''}
-                onClick={isExternalLink(p.id) ? undefined : (e) => { e.preventDefault(); go(p.id); }}
-                {...(isExternalLink(p.id) ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-              >
-                {p.label}
-              </a>
-            ))}
+          <nav className="mainlinks" aria-label="Primary">
+            {PRIMARY_PAGES.map(p => {
+              const active = page === p.id || NAV_PAGE_ALIASES[page] === p.id;
+              return (
+                <a
+                  key={p.id}
+                  href={isExternalLink(p.id) ? externalHref(p.id) : `/${p.id}`}
+                  className={active ? 'active' : ''}
+                  aria-current={active ? 'page' : undefined}
+                  onClick={isExternalLink(p.id) ? undefined : (e) => { e.preventDefault(); go(p.id); }}
+                  {...(isExternalLink(p.id) ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                >
+                  {p.label}
+                </a>
+              );
+            })}
           </nav>
           <div className="topnav-actions">
             <button className="icon-btn" title="Search" aria-label="Search" onClick={onSearchOpen}>
@@ -443,11 +551,11 @@ function TopNav({ page, go, cart, onSearchOpen, accountOpen, setAccountOpen, por
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M3 4h2l2.5 12h11l2-9H6"/><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/></svg>
               {cart > 0 && <span className={`cart-count${cartPopped ? ' popped' : ''}`} aria-hidden="true">{cart}</span>}
             </button>
-            {/* Hamburger — hidden on desktop via CSS, shown on mobile */}
-            <button className="icon-btn hamburger" style={{display:'none'}} title="Menu" aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'} aria-expanded={mobileMenuOpen} aria-controls="mobile-nav" onClick={() => setMobileMenuOpen(o => !o)}>
+            {/* Hamburger — hidden on desktop via CSS (.hamburger), shown on mobile */}
+            <button className="icon-btn hamburger" title="Menu" aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'} aria-expanded={mobileMenuOpen} aria-controls="mobile-nav" onClick={() => setMobileMenuOpen(o => !o)}>
               {mobileMenuOpen
-                ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+                ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
               }
             </button>
           </div>
@@ -455,31 +563,7 @@ function TopNav({ page, go, cart, onSearchOpen, accountOpen, setAccountOpen, por
       </div>
       {/* Mobile nav drawer — hidden on desktop via CSS */}
       {mobileMenuOpen && (
-        <div id="mobile-nav" className="mobile-nav" role="dialog" aria-modal="true" aria-label="Navigation menu">
-          <div className="mobile-nav-header">
-            <Logo onClick={() => { go('home'); setMobileMenuOpen(false); }} />
-            <button className="icon-btn" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
-            </button>
-          </div>
-          {PRIMARY_PAGES.map(p => (
-            <a key={p.id}
-              href={isExternalLink(p.id) ? externalHref(p.id) : `/${p.id}`}
-              className={page === p.id ? 'active' : ''}
-              onClick={isExternalLink(p.id) ? undefined : (e) => { e.preventDefault(); handleNavClick(p.id); }}
-              {...(isExternalLink(p.id) ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>
-              {p.label}
-            </a>
-          ))}
-          <div className="mobile-nav-utils">
-            {UTILITY_PAGES.map(p => (
-              <a key={p.id} href={`/${p.id}`} className={page === p.id ? 'active' : ''}
-                onClick={(e) => { e.preventDefault(); handleNavClick(p.id); }}>
-                {p.label}
-              </a>
-            ))}
-          </div>
-        </div>
+        <MobileNavDrawer page={page} go={go} onClose={() => setMobileMenuOpen(false)} handleNavClick={handleNavClick} />
       )}
     </header>
   );
@@ -490,32 +574,37 @@ function Footer({ go }) {
   const shop = useShop();
   const [topCategories, setTopCategories] = useState([]);
   const [footerServices, setFooterServices] = useState([]);
+  const [footerLoading, setFooterLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/catalog/products')
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then(d => {
-        const counts = {};
-        (d.items || []).forEach(p => {
-          if (p.status === 'published' && p.category) {
-            counts[p.category] = (counts[p.category] || 0) + 1;
-          }
-        });
-        const sorted = Object.entries(counts)
-          .sort(([, a], [, b]) => b - a)
-          .slice(0, 5)
-          .map(([cat]) => cat);
-        setTopCategories(sorted);
-      })
-      .catch(() => {});
-
-    fetch('/api/catalog/services')
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then(d => {
-        setFooterServices((d.items || []).slice(0, 5));
-      })
-      .catch(() => {});
+    Promise.allSettled([
+      fetch('/api/catalog/products')
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(d => {
+          const counts = {};
+          (d.items || []).forEach(p => {
+            if (p.status === 'published' && p.category) {
+              counts[p.category] = (counts[p.category] || 0) + 1;
+            }
+          });
+          const sorted = Object.entries(counts)
+            .sort(([, a], [, b]) => b - a)
+            .slice(0, 5)
+            .map(([cat]) => cat);
+          setTopCategories(sorted);
+        }),
+      fetch('/api/catalog/services')
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(d => {
+          setFooterServices((d.items || []).slice(0, 5));
+        }),
+    ]).finally(() => setFooterLoading(false));
   }, []);
+
+  // Skeleton rows keep the footer columns sized while link data loads (no layout shift)
+  const footerSkeleton = Array.from({ length: 5 }).map((_, i) => (
+    <li key={`sk-${i}`} aria-hidden="true"><span className="skeleton" style={{display:'inline-block', height:13, width: 90 + (i % 3) * 24, opacity:0.35}} /></li>
+  ));
 
   return (
     <footer>
@@ -537,7 +626,7 @@ function Footer({ go }) {
           <div>
             <h3>Shop</h3>
             <ul>
-              {topCategories.map((cat) => (
+              {footerLoading ? footerSkeleton : topCategories.map((cat) => (
                 <li key={cat}><a href="/shop" onClick={(e) => { e.preventDefault(); go('shop', { initialCat: cat }); }}>{cat}</a></li>
               ))}
             </ul>
@@ -545,7 +634,7 @@ function Footer({ go }) {
           <div>
             <h3>Services</h3>
             <ul>
-              {footerServices.map((svc) => (
+              {footerLoading ? footerSkeleton : footerServices.map((svc) => (
                 <li key={svc.id}><a href={`/service/${svc.slug || svc.id}`} onClick={(e) => { e.preventDefault(); go('service', svc); }}>{svc.name}</a></li>
               ))}
             </ul>
@@ -578,19 +667,47 @@ function Footer({ go }) {
   );
 }
 
+// ---------------- Shared error message ----------------
+// Single error style used across cart/checkout/forms, announced to screen
+// readers via role="alert". `inline` renders the compact (no box) variant.
+function ErrorText({ children, inline, style }) {
+  if (!children) return null;
+  const base = inline
+    ? { marginTop: 6, fontSize: 12, color: '#b91c1c' }
+    : { padding: '10px 14px', background: '#fff1f0', border: '1px solid #fca5a5', fontSize: 13, color: '#b91c1c' };
+  return <div role="alert" style={{ ...base, ...style }}>{children}</div>;
+}
+
 // ---------------- Page Head helper ----------------
+// Map breadcrumb labels to SPA page ids so intermediate crumbs are real links.
+const CRUMB_PAGE_IDS = {
+  'Outback': 'home', 'Home': 'home', 'Shop': 'shop', 'Services': 'services',
+  'Memberships': 'memberships', 'Software': 'software', 'eWaste': 'ewaste', 'AI': 'ai',
+  'Tutorials': 'tutorials', 'Groups': 'groups', 'Gift Cards': 'gift-cards', 'Cart': 'cart',
+  'Contact': 'contact', 'Policies': 'policies', 'Quote': 'quote', 'Sellers': 'sellers',
+};
 function PageHead({ crumbs, title, lead, kicker }) {
+  const goCrumb = (e, id) => {
+    e.preventDefault();
+    if (typeof window.__OE_GO__ === 'function') window.__OE_GO__(id);
+  };
   return (
     <div className="page-head">
       <div className="container">
-        <div className="crumbs eyebrow">
-          {crumbs.map((c, i) => (
-            <React.Fragment key={i}>
-              <span>{c}</span>
-              {i < crumbs.length - 1 && <span style={{color:'var(--ink-3)'}}>/</span>}
-            </React.Fragment>
-          ))}
-        </div>
+        <nav className="crumbs eyebrow" aria-label="Breadcrumb">
+          {crumbs.map((c, i) => {
+            const isLast = i === crumbs.length - 1;
+            const pageId = !isLast ? CRUMB_PAGE_IDS[c] : null;
+            return (
+              <React.Fragment key={i}>
+                {pageId
+                  ? <a href={`/${pageId === 'home' ? '' : pageId}`} onClick={(e) => goCrumb(e, pageId)}>{c}</a>
+                  : <span aria-current={isLast ? 'page' : undefined}>{c}</span>}
+                {!isLast && <span style={{color:'var(--ink-3)'}} aria-hidden="true">/</span>}
+              </React.Fragment>
+            );
+          })}
+        </nav>
         <h1 data-screen-label={title}>{title}</h1>
         {lead && <p className="lead">{lead}</p>}
         {kicker && <div style={{marginTop:18}}>{kicker}</div>}
@@ -703,24 +820,32 @@ function App() {
   });
   const [pageParams, setPageParams] = useState(null);
 
+  // Resolve a /product/:id or /service/:id path to its catalog item; marks the
+  // params as not-found so detail pages can render a proper 404 view (never blank).
+  const resolveDeepLink = (path) => {
+    if (path.startsWith('product/')) {
+      const id = decodeURIComponent(path.slice('product/'.length));
+      fetch('/api/catalog/products').then(r => r.json()).then(d => {
+        const p = (d.items || []).find(x => x.sku === id || String(x.id) === id || x.slug === id);
+        setPageParams(p || { _notFound: true });
+      }).catch(() => setPageParams({ _notFound: true }));
+    } else if (path.startsWith('service/')) {
+      const id = decodeURIComponent(path.slice('service/'.length));
+      fetch('/api/catalog/services').then(r => r.json()).then(d => {
+        const s = (d.items || []).find(x => String(x.id) === id || x.slug === id);
+        setPageParams(s || { _notFound: true });
+      }).catch(() => setPageParams({ _notFound: true }));
+    }
+  };
+
   // Resolve deep-linked product/service on first load
   useEffect(() => {
     const path = location.pathname.replace(/^\/+/, '');
     if (path.startsWith('policies/') && !pageParams) {
       const slug = decodeURIComponent(path.slice('policies/'.length));
       if (slug) setPageParams({ slug });
-    } else if (path.startsWith('product/') && !pageParams) {
-      const id = decodeURIComponent(path.slice('product/'.length));
-      fetch('/api/catalog/products').then(r => r.json()).then(d => {
-        const p = (d.items || []).find(x => x.sku === id || String(x.id) === id || x.slug === id);
-        if (p) setPageParams(p);
-      }).catch(() => {});
-    } else if (path.startsWith('service/') && !pageParams) {
-      const id = decodeURIComponent(path.slice('service/'.length));
-      fetch('/api/catalog/services').then(r => r.json()).then(d => {
-        const s = (d.items || []).find(x => String(x.id) === id || x.slug === id);
-        if (s) setPageParams(s);
-      }).catch(() => {});
+    } else if ((path.startsWith('product/') || path.startsWith('service/')) && !pageParams) {
+      resolveDeepLink(path);
     }
   }, []);
   const [cart, setCart] = useState(() => {
@@ -735,6 +860,21 @@ function App() {
     portal: portalUrl || 'https://portal.outbackelectronics.com.au',
   }), [portalUrl]);
 
+  const DEFAULT_META_DESCRIPTION = 'Outback Electronics — Arduino & microcontroller builds, PC & phone repairs, software and AI solutions, and off-grid electronics. Serving remote Australia by appointment.';
+  const PAGE_DESCRIPTIONS = {
+    shop:         'Browse new, refurbished and field-tested electronics — Arduino gear, PC & phone parts, and off-grid kit. Every refurb passes our 38-point bench check.',
+    services:     'Repairs and services for PCs, phones, and remote-area electronics — bench, ute, or in the field. Fixed-price quotes within 24 hours.',
+    memberships:  'Outback Electronics memberships — member-only groups, exclusive content, and workshop perks. Cancel any time.',
+    software:     'Software tools from Outback Electronics — mostly open source, mostly Linux, built for remote-area work.',
+    ewaste:       'Free e-waste drop-off and trade-in tiers — we sort, salvage, refurbish, or properly recycle, and pay you for what is worth saving.',
+    ai:           'Custom AI built to your problem — chatbots, integrations, fine-tuned models, and edge deployments for remote Australia.',
+    tutorials:    'Tutorials from the Outback Electronics workshop — repairs, builds, and troubleshooting guides.',
+    groups:       'Community groups at Outback Electronics — meet other remote-area tinkerers.',
+    quote:        'Request a quote from Outback Electronics — tell us the use case in plain English, our techs will spec it, price it, and ship it.',
+    'gift-cards': 'Outback Electronics gift cards — redeemable on products and services, sent by email instantly, never expire.',
+    contact:      'Contact Outback Electronics — appointment-only workshop serving remote NT, SA and WA.',
+    cart:         'Your Outback Electronics cart — review items, get a shipping quote, and check out securely via Stripe.',
+  };
   const PAGE_TITLES = {
     home:         'Outback Electronics — Built for where the signal ends',
     shop:         'Shop — Outback Electronics',
@@ -768,12 +908,21 @@ function App() {
       target = `/policies/${slug}`;
     }
     if (location.pathname !== target) window.history.pushState({}, '', target);
-    window.scrollTo({top:0});
+    window.scrollTo({top:0, behavior:'smooth'});
     // Update the browser tab title on every SPA navigation
     let title = PAGE_TITLES[page] || 'Outback Electronics';
     if (page === 'product' && pageParams?.name) title = `${pageParams.name} — Outback Electronics`;
     else if (page === 'service' && pageParams?.name) title = `${pageParams.name} — Outback Electronics`;
     document.title = title;
+    // Keep the meta description in sync so deep-linked shares don't all show the homepage blurb
+    let description = PAGE_DESCRIPTIONS[page] || DEFAULT_META_DESCRIPTION;
+    if ((page === 'product' || page === 'service') && pageParams?.name) {
+      description = pageParams.description
+        ? String(pageParams.description).slice(0, 160)
+        : `${pageParams.name} — available from Outback Electronics.`;
+    }
+    const metaDesc = document.querySelector('meta[name="description"]');
+    if (metaDesc) metaDesc.setAttribute('content', description);
     // Observe newly mounted reveal elements after a short delay (wait for render)
     const t = setTimeout(observeReveal, 80);
     return () => clearTimeout(t);
@@ -782,8 +931,8 @@ function App() {
   useEffect(() => {
     const onPop = () => {
       const path = location.pathname.replace(/^\/+/, '');
-      if (path.startsWith('product/')) { setPage('product'); setPageParams(null); return; }
-      if (path.startsWith('service/')) { setPage('service'); setPageParams(null); return; }
+      if (path.startsWith('product/')) { setPage('product'); setPageParams(null); resolveDeepLink(path); return; }
+      if (path.startsWith('service/')) { setPage('service'); setPageParams(null); resolveDeepLink(path); return; }
       if (path.startsWith('policies/')) { setPage('policies'); setPageParams({ slug: path.slice('policies/'.length) }); return; }
       if (KNOWN_PAGES.includes(path)) setPage(path);
     };
@@ -797,6 +946,9 @@ function App() {
 
   const PAGE_ALIASES = { repairs: 'services' };
   const go = (id, params = null) => { setPage(PAGE_ALIASES[id] || id); setPageParams(params); };
+
+  // Expose go() for components rendered outside App's prop chain (e.g. PageHead breadcrumbs)
+  useEffect(() => { window.__OE_GO__ = go; });
 
   const addToCart = (item) => {
     const key = item.sku || item.id || item.name;
@@ -840,8 +992,13 @@ function App() {
 
   return (
     <ShopContext.Provider value={shopCtxValue}>
+      <a className="skip-link" href="#main-content">Skip to content</a>
+      {/* Screen-reader announcement when the cart changes (badge update is visual only) */}
+      <div className="sr-only" role="status" aria-live="polite">
+        {cartCount > 0 ? `Cart: ${cartCount} item${cartCount === 1 ? '' : 's'}` : 'Cart is empty'}
+      </div>
       <TopNav page={page} go={go} cart={cartCount} onSearchOpen={() => setSearchOpen(true)} accountOpen={accountOpen} setAccountOpen={setAccountOpen} portalUser={portalUser} />
-      <main id="main-content">
+      <main id="main-content" tabIndex={-1}>
         <div key={page} className="page-in">
           <PageComponent go={go} addToCart={addToCart} pageParams={pageParams} cart={cart} removeFromCart={removeFromCart} updateQty={updateQty} clearCart={clearCart} portalUser={portalUser} />
         </div>
@@ -865,7 +1022,7 @@ function App() {
 // Expose helpers globally
 window.__ShopContext__ = ShopContext;
 window.__OE_HELPERS__ = { portalApi, getPortalUrl };
-Object.assign(window, { PageHead, PRIMARY_PAGES, UTILITY_PAGES });
+Object.assign(window, { PageHead, ErrorText, PRIMARY_PAGES, UTILITY_PAGES });
 window.OE_PAGES = Object.assign(window.OE_PAGES || {}, {
   account: () => <AccountPlaceholderPage title="Account Dashboard" portalPath="/account" />,
   orders: () => <AccountPlaceholderPage title="My Orders" portalPath="/orders" />,
