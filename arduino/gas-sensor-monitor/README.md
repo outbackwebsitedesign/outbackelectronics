@@ -7,12 +7,12 @@ Real-time environmental gas monitoring with WiFi data push to weather.outbackele
 - **Arduino Uno R4 WiFi**
 - **Nokia 5110 LCD Display** (84x48 pixels)
 - **SEN0565** (DFRobot Gravity Analog Methane Sensor)
-- **MQ-4 Sensor** (CH4 Methane)
-- **H2 Sensor** (Hydrogen)
-- **CO Sensor** (Carbon Monoxide)
-- **NH3 Sensor** (Ammonia)
-- **H2S Sensor** (Hydrogen Sulfide)
-- **Resistors**: Five 10kΩ pull-up resistors (one per MQ-series gas sensor)
+- **MQ-4** (MQ-Series Methane Sensor) - **ONLY MQ-series sensor**
+- **DFRobot Fermion H2** (Hydrogen Sensor)
+- **DFRobot Fermion CO** (Carbon Monoxide Sensor)
+- **DFRobot Fermion NH3** (Ammonia Sensor)
+- **DFRobot Fermion H2S** (Hydrogen Sulfide Sensor)
+- **Resistor**: One 10kΩ pull-up resistor (for MQ-4 only)
 
 ## Wiring
 
@@ -28,17 +28,19 @@ Real-time environmental gas monitoring with WiFi data push to weather.outbackele
 | GND | GND |
 
 ### Gas Sensors
-| Sensor | Arduino Pin | Notes |
-|--------|------------|-------|
-| SEN0565 (Methane 0-100% LEL) | A0 | DFRobot Gravity - Direct analog output |
-| MQ-4 (CH4) | A1 | MQ-series - Requires 10kΩ load resistor |
-| H2 | A2 | MQ-series - Requires 10kΩ load resistor |
-| CO | A3 | MQ-series - Requires 10kΩ load resistor |
-| NH3 | A4 | MQ-series - Requires 10kΩ load resistor |
-| H2S | A5 | MQ-series - Requires 10kΩ load resistor |
+| Sensor | Arduino Pin | Type | Notes |
+|--------|------------|------|-------|
+| SEN0565 (0-100% LEL) | A0 | DFRobot Gravity | Direct analog output, no calibration needed |
+| MQ-4 | A1 | MQ-Series | Requires 10kΩ load resistor, needs calibration |
+| H2 | A2 | DFRobot Fermion | Direct analog output, pre-calibrated |
+| CO | A3 | DFRobot Fermion | Direct analog output, pre-calibrated |
+| NH3 | A4 | DFRobot Fermion | Direct analog output, pre-calibrated |
+| H2S | A5 | DFRobot Fermion | Direct analog output, pre-calibrated |
 
-**MQ-series sensors**: Connect 10kΩ load resistor between sensor output and GND
+**MQ-4 only**: Connect 10kΩ load resistor between sensor output and GND
 **All sensors**: VCC → 5V, GND → GND
+
+**DFRobot Fermion sensors** come pre-calibrated with factory voltage-to-PPM curves. Adjust multipliers in `readFermion()` based on your specific sensor datasheets.
 
 ## Installation
 
@@ -60,22 +62,34 @@ Real-time environmental gas monitoring with WiFi data push to weather.outbackele
 
 ## Configuration
 
-### SEN0565 Notes
-The **SEN0565 (DFRobot Gravity Analog Methane Sensor)** outputs 0-5V for 0-100% LEL (Lower Explosive Limit). LEL is the concentration at which a gas mixture becomes flammable. For methane in air, LEL is approximately 5%, so:
-- 50% sensor output = 50% LEL ≈ 2.5% methane in air
-- 100% sensor output = 100% LEL ≈ 5% methane in air
+### Sensor Notes
 
-This sensor is **independent** from the **MQ-4**, which measures absolute PPM concentrations.
+**SEN0565 (DFRobot Gravity Methane)**
+- Outputs 0-5V for 0-100% LEL (Lower Explosive Limit)
+- LEL ≈ 5% methane in air (flammability threshold)
+- Pre-calibrated, no setup needed
 
-### Sensor Calibration
-On first run, uncomment the calibration line in `setup()` **for MQ-series sensors only** (SEN0565 doesn't require calibration):
+**MQ-4 (MQ-Series Methane)**
+- Resistive sensor requiring calibration
+- Independent from SEN0565
+- Measures absolute PPM (parts per million)
+- Requires 10kΩ load resistor
+
+**DFRobot Fermion Sensors (H2, CO, NH3, H2S)**
+- Pre-calibrated with factory voltage-to-PPM curves
+- Direct analog output (0-5V)
+- No calibration needed
+- Adjust multipliers in `readFermion()` if needed based on datasheets
+
+### MQ-4 Calibration
+On first run, uncomment the calibration line in `setup()`:
 ```cpp
-// calibrateSensors();
+// calibrateMQ4();
 ```
 
-Keep sensors in clean air for 60 seconds while calibration runs. This measures the R0 baseline resistance for accurate PPM calculations.
+Keep **MQ-4 only** in clean air for 60 seconds while calibration runs. This measures the R0 baseline resistance for accurate PPM calculations.
 
-After calibration completes, comment it back out.
+After calibration completes, comment it back out. DFRobot Fermion sensors and SEN0565 do not require calibration.
 
 ### Push Interval
 Edit the push interval (default 30 seconds):
@@ -100,23 +114,23 @@ const char* endpoint = "/api/sensors";
 
 ## Data Sent to Server
 
-JSON payload with all sensor readings:
+JSON payload with all sensor readings (POST to `/api/sensors`):
 ```json
 {
   "sen0565_lel": 25.5,
   "mq4_ppm": 45.23,
-  "h2": 120.45,
-  "co": 8.67,
-  "nh3": 12.34,
-  "h2s": 5.67,
+  "h2_ppm": 120.45,
+  "co_ppm": 8.67,
+  "nh3_ppm": 12.34,
+  "h2s_ppm": 5.67,
   "timestamp": 1234567890
 }
 ```
 
 **Sensor Units:**
-- `sen0565_lel`: 0-100% LEL (Lower Explosive Limit)
-- `mq4_ppm`: Parts Per Million
-- All others: Parts Per Million
+- `sen0565_lel`: 0-100% LEL (Lower Explosive Limit) - DFRobot Gravity
+- `mq4_ppm`: Parts Per Million - MQ-Series
+- `h2_ppm`, `co_ppm`, `nh3_ppm`, `h2s_ppm`: Parts Per Million - DFRobot Fermion
 
 ## Troubleshooting
 
@@ -131,9 +145,19 @@ JSON payload with all sensor readings:
 - Reset Arduino
 
 **Sensor readings are 0 or unrealistic:**
-- Calibrate sensors in clean air
-- Check sensor wiring
-- Verify 10kΩ load resistors are properly connected
+- For **MQ-4**: Calibrate in clean air
+- For **DFRobot Fermion**: Verify voltage-to-PPM multipliers in `readFermion()` match datasheets
+- For **SEN0565**: Check voltage output with multimeter
+- Check all sensor wiring
+- Verify 10kΩ load resistor on MQ-4 is properly connected
+
+**DFRobot Fermion sensors showing wrong PPM values:**
+- The default multipliers in `readFermion()` are estimates
+- Check your sensor datasheets for exact voltage-to-PPM curves
+- Adjust the multipliers accordingly:
+  ```cpp
+  ppm = voltage * YOUR_MULTIPLIER;  // e.g., voltage * 1000 for H2
+  ```
 
 **HTTP push failing:**
 - Check WiFi connection
@@ -143,8 +167,17 @@ JSON payload with all sensor readings:
 ## Serial Monitor Output
 
 ```
-SEN0565(%LEL) | MQ4(ppm) | H2 | CO | NH3 | H2S (ppm)
+=== Gas Sensor Monitor for Uno R4 WiFi ===
+Sensors: SEN0565, MQ-4, DFRobot Fermion (H2/CO/NH3/H2S)
+Connecting to WiFi: YOUR_SSID
+WiFi connected!
+IP address: 192.168.1.100
+
+SEN0565(%LEL) | MQ4(ppm) | H2(ppm) | CO(ppm) | NH3(ppm) | H2S(ppm)
 25.5 | 45.23 | 120.45 | 8.67 | 12.34 | 5.67
+25.6 | 45.18 | 120.52 | 8.65 | 12.35 | 5.68
+
+Pushing data to weather service...
 POST /api/sensors
 Status: 200
 Data pushed successfully!

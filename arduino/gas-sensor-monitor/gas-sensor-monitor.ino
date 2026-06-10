@@ -13,10 +13,10 @@
 // ====== Gas Sensor Analog Pins ======
 #define SEN0565_PIN   A0   // SEN0565 Gravity CH4 Sensor (0-100% LEL)
 #define MQ4_PIN       A1   // MQ-4 CH4 Methane (ppm)
-#define H2_PIN        A2   // H2 Hydrogen
-#define CO_PIN        A3   // CO Carbon Monoxide
-#define NH3_PIN       A4   // NH3 Ammonia
-#define H2S_PIN       A5   // H2S Hydrogen Sulfide
+#define H2_PIN        A2   // DFRobot Fermion H2 Hydrogen
+#define CO_PIN        A3   // DFRobot Fermion CO Carbon Monoxide
+#define NH3_PIN       A4   // DFRobot Fermion NH3 Ammonia
+#define H2S_PIN       A5   // DFRobot Fermion H2S Hydrogen Sulfide
 
 // ====== WiFi Configuration ======
 const char* ssid = "YOUR_SSID";              // WiFi network name
@@ -25,20 +25,16 @@ const char* server = "weather.outbackelectronics.com.au";
 const int port = 80;
 const char* endpoint = "/api/sensors";       // API endpoint
 
-// ====== Sensor Calibration Values ======
+// ====== MQ-4 Calibration ======
 float mq4_ro = 10000.0;   // R0 for MQ-4 (measured in clean air)
-float h2_ro = 10000.0;    // R0 for H2
-float co_ro = 10000.0;    // R0 for CO
-float nh3_ro = 10000.0;   // R0 for NH3
-float h2s_ro = 10000.0;   // R0 for H2S
 
 // ====== Current Sensor Readings ======
 float sen0565_lel = 0;    // SEN0565: 0-100% LEL (Lower Explosive Limit)
 float mq4_ppm = 0;        // MQ-4: ppm
-float h2_ppm = 0;
-float co_ppm = 0;
-float nh3_ppm = 0;
-float h2s_ppm = 0;
+float h2_ppm = 0;         // DFRobot Fermion H2
+float co_ppm = 0;         // DFRobot Fermion CO
+float nh3_ppm = 0;        // DFRobot Fermion NH3
+float h2s_ppm = 0;        // DFRobot Fermion H2S
 
 // ====== Status Variables ======
 Adafruit_PCD8544 display(LCD_CLK, LCD_DIN, LCD_DC, LCD_CE, LCD_RST);
@@ -71,17 +67,17 @@ void setup() {
   display.display();
 
   Serial.println("\n=== Gas Sensor Monitor for Uno R4 WiFi ===");
-  Serial.println("Initializing sensors and WiFi...");
+  Serial.println("Sensors: SEN0565, MQ-4, DFRobot Fermion (H2/CO/NH3/H2S)");
 
   // Initialize WiFi
   connectToWiFi();
 
-  // Optional: Uncomment to calibrate sensors on first run
-  // Make sure sensors are in clean air for 60 seconds
-  // calibrateSensors();
+  // Optional: Uncomment to calibrate MQ-4 on first run
+  // Keep MQ-4 in clean air for 60 seconds
+  // calibrateMQ4();
 
   Serial.println("Setup complete. Monitoring gases and pushing to weather service.");
-  Serial.println("SEN0565(%LEL) | MQ4(ppm) | H2 | CO | NH3 | H2S (ppm)");
+  Serial.println("SEN0565(%LEL) | MQ4(ppm) | H2(ppm) | CO(ppm) | NH3(ppm) | H2S(ppm)");
 }
 
 void loop() {
@@ -101,11 +97,11 @@ void loop() {
     lastSensorRead = now;
 
     sen0565_lel = readSEN0565(SEN0565_PIN);
-    mq4_ppm = readSensor(MQ4_PIN, mq4_ro, 4.4, -0.635);
-    h2_ppm = readSensor(H2_PIN, h2_ro, 87.4, -1.58);
-    co_ppm = readSensor(CO_PIN, co_ro, 605.18, -3.937);
-    nh3_ppm = readSensor(NH3_PIN, nh3_ro, 102.2, -2.473);
-    h2s_ppm = readSensor(H2S_PIN, h2s_ro, 34.46, -3.421);
+    mq4_ppm = readMQ4(MQ4_PIN, mq4_ro);
+    h2_ppm = readFermion(H2_PIN, "H2");
+    co_ppm = readFermion(CO_PIN, "CO");
+    nh3_ppm = readFermion(NH3_PIN, "NH3");
+    h2s_ppm = readFermion(H2S_PIN, "H2S");
 
     updateDisplay();
     printSerialData();
@@ -183,10 +179,10 @@ void pushDataToWeatherService() {
   String jsonData = "{";
   jsonData += "\"sen0565_lel\":" + String(sen0565_lel, 2) + ",";
   jsonData += "\"mq4_ppm\":" + String(mq4_ppm, 2) + ",";
-  jsonData += "\"h2\":" + String(h2_ppm, 2) + ",";
-  jsonData += "\"co\":" + String(co_ppm, 2) + ",";
-  jsonData += "\"nh3\":" + String(nh3_ppm, 2) + ",";
-  jsonData += "\"h2s\":" + String(h2s_ppm, 2) + ",";
+  jsonData += "\"h2_ppm\":" + String(h2_ppm, 2) + ",";
+  jsonData += "\"co_ppm\":" + String(co_ppm, 2) + ",";
+  jsonData += "\"nh3_ppm\":" + String(nh3_ppm, 2) + ",";
+  jsonData += "\"h2s_ppm\":" + String(h2s_ppm, 2) + ",";
   jsonData += "\"timestamp\":" + String(millis());
   jsonData += "}";
 
@@ -223,11 +219,8 @@ void pushDataToWeatherService() {
 float readSEN0565(int pin) {
   // DFRobot Gravity Analog Methane Sensor (SEN0565)
   // Output: 0-5V for 0-100% LEL
-  // LEL (Lower Explosive Limit) for methane is ~5% in air
   int raw = analogRead(pin);
   float voltage = (raw / 1023.0) * 5.0;
-
-  // Linear conversion: 5V = 100% LEL
   float lel = (voltage / 5.0) * 100.0;
 
   if (lel < 0) lel = 0;
@@ -236,66 +229,81 @@ float readSEN0565(int pin) {
   return lel;
 }
 
-float readSensor(int pin, float ro, float a, float b) {
+float readMQ4(int pin, float ro) {
+  // MQ-4 Methane Sensor (MQ-series, resistive)
+  // Calibration curve: ppm = a * (Rs/Ro)^b
   int raw = analogRead(pin);
   float voltage = (raw / 1023.0) * 5.0;
 
-  float rl = 10000.0;  // Load resistor (typically 10k)
+  float rl = 10000.0;
   float rs = (rl * (5.0 - voltage)) / voltage;
   float ratio = rs / ro;
-  float ppm = a * pow(ratio, b);
+  float ppm = 4.4 * pow(ratio, -0.635);
 
   if (ppm < 0) ppm = 0;
 
   return ppm;
 }
 
-float getSensorResistance(int pin) {
+float readFermion(int pin, String gasType) {
+  // DFRobot Fermion Sensors (H2, CO, NH3, H2S)
+  // Linear voltage-to-ppm conversion based on sensor calibration
+  // Adjust multipliers based on your specific sensor datasheets
   int raw = analogRead(pin);
   float voltage = (raw / 1023.0) * 5.0;
-  float rl = 10000.0;
-  return (rl * (5.0 - voltage)) / voltage;
+  float ppm = 0;
+
+  if (gasType == "H2") {
+    ppm = voltage * 1000;  // 0-5V = 0-5000 ppm (adjust per datasheet)
+  }
+  else if (gasType == "CO") {
+    ppm = voltage * 500;   // 0-5V = 0-2500 ppm (adjust per datasheet)
+  }
+  else if (gasType == "NH3") {
+    ppm = voltage * 500;   // 0-5V = 0-2500 ppm (adjust per datasheet)
+  }
+  else if (gasType == "H2S") {
+    ppm = voltage * 100;   // 0-5V = 0-500 ppm (adjust per datasheet)
+  }
+
+  if (ppm < 0) ppm = 0;
+
+  return ppm;
 }
 
-// ====== Calibration Function ======
+// ====== MQ-4 Calibration Function ======
 
-void calibrateSensors() {
+void calibrateMQ4() {
+  // MQ-4 calibration - only needed for MQ-series sensor
+  // DFRobot Fermion sensors are pre-calibrated
   display.clearDisplay();
   display.setTextSize(1);
   display.setCursor(0, 0);
-  display.println("Calibrating...");
+  display.println("Calibrating MQ-4");
   display.println("Keep in clean");
   display.println("air for 60s");
   display.display();
 
-  Serial.println("Calibration: Reading in clean air (60s)...");
+  Serial.println("MQ-4 Calibration: Reading in clean air (60s)...");
 
-  float sum_mq4 = 0, sum_h2 = 0, sum_co = 0, sum_nh3 = 0, sum_h2s = 0;
+  float sum_mq4 = 0;
   int samples = 60;
 
   for (int i = 0; i < samples; i++) {
-    sum_mq4 += getSensorResistance(MQ4_PIN);
-    sum_h2 += getSensorResistance(H2_PIN);
-    sum_co += getSensorResistance(CO_PIN);
-    sum_nh3 += getSensorResistance(NH3_PIN);
-    sum_h2s += getSensorResistance(H2S_PIN);
+    int raw = analogRead(MQ4_PIN);
+    float voltage = (raw / 1023.0) * 5.0;
+    float rl = 10000.0;
+    sum_mq4 += (rl * (5.0 - voltage)) / voltage;
 
     delay(1000);
     Serial.print(".");
   }
 
   mq4_ro = sum_mq4 / samples;
-  h2_ro = sum_h2 / samples;
-  co_ro = sum_co / samples;
-  nh3_ro = sum_nh3 / samples;
-  h2s_ro = sum_h2s / samples;
 
-  Serial.println("\nCalibration complete!");
-  Serial.print("MQ4_RO: "); Serial.println(mq4_ro);
-  Serial.print("H2_RO: "); Serial.println(h2_ro);
-  Serial.print("CO_RO: "); Serial.println(co_ro);
-  Serial.print("NH3_RO: "); Serial.println(nh3_ro);
-  Serial.print("H2S_RO: "); Serial.println(h2s_ro);
+  Serial.println("\nMQ-4 Calibration complete!");
+  Serial.print("MQ4_RO: ");
+  Serial.println(mq4_ro);
 }
 
 // ====== Display Functions ======
@@ -332,7 +340,7 @@ void updateDisplay() {
     display.println("ppm");
   }
   else if (displayMode == 1) {
-    // Page 2: H2, CO, NH3
+    // Page 2: Fermion H2, CO, NH3
     display.println("H2:");
     display.print(h2_ppm, 1);
     display.println("ppm");
@@ -346,7 +354,7 @@ void updateDisplay() {
     display.println("ppm");
   }
   else {
-    // Page 3: H2S & Summary
+    // Page 3: Fermion H2S
     display.println("H2S:");
     display.print(h2s_ppm, 1);
     display.println("ppm");
