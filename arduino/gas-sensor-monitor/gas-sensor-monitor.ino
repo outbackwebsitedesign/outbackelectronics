@@ -19,15 +19,15 @@
 #define H2S_PIN       A5   // DFRobot Fermion H2S Hydrogen Sulfide
 
 // ====== WiFi Configuration ======
-const char* ssid = "YOUR_SSID";              // WiFi network name
-const char* password = "YOUR_PASSWORD";      // WiFi password
+const char* ssid = "OutbackElectronics-5GHz";              // WiFi network name
+const char* password = "wildmonkeys2810";      // WiFi password
 const char* server = "weather.outbackelectronics.com.au";
 const int port = 8089;                       // Weather service port
 const char* endpoint = "/api/weather/readings";  // Correct API endpoint
 
 // ====== Weather Service Authentication ======
-const char* api_key = "YOUR_API_KEY";        // API key from weather service (x-api-key header)
-const char* station_id = "UNO_R4_WIFI_001";  // Station identifier
+const char* api_key = "651a3107c424b3509929a19b6398515f19059cdfcd145251762590fa9cc67653";        // API key from weather service (x-api-key header)
+const char* station_id = "Air Sensor 1";  // Station identifier
 
 // ====== MQ-4 Calibration ======
 float mq4_ro = 10000.0;   // R0 for MQ-4 (measured in clean air)
