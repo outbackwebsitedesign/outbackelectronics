@@ -54,13 +54,21 @@ Real-time environmental gas monitoring with WiFi data push to weather.outbackele
    - Search and install "Adafruit PCD8544"
    - Search and install "ArduinoHttpClient"
 
-3. Edit WiFi credentials in the sketch:
+3. Edit WiFi credentials and API settings at the top of the sketch:
    ```cpp
    const char* ssid = "YOUR_SSID";
    const char* password = "YOUR_PASSWORD";
+   const char* api_key = "YOUR_API_KEY";        // Get from weather service admin
+   const char* sensor_id = "UNO_R4_WIFI_001";   // Unique ID (e.g., location: garden, shed, etc.)
    ```
 
 ## Configuration
+
+### API Key & Sensor ID
+- **api_key**: Authentication key from the weather service (required for POST requests)
+- **sensor_id**: Unique identifier for this sensor/location (helps distinguish multiple Arduinos)
+  - Examples: `UNO_R4_WIFI_001`, `backyard`, `workshop`, `greenhouse`
+  - Sent with each data push to identify the source
 
 ### Sensor Notes
 
@@ -117,6 +125,8 @@ const char* endpoint = "/api/sensors";
 JSON payload with all sensor readings (POST to `/api/sensors`):
 ```json
 {
+  "api_key": "YOUR_API_KEY",
+  "sensor_id": "UNO_R4_WIFI_001",
   "sen0565_lel": 25.5,
   "mq4_ppm": 45.23,
   "h2_ppm": 120.45,
@@ -127,10 +137,13 @@ JSON payload with all sensor readings (POST to `/api/sensors`):
 }
 ```
 
-**Sensor Units:**
+**Fields:**
+- `api_key`: Authentication key for weather service
+- `sensor_id`: Unique identifier for this sensor/location
 - `sen0565_lel`: 0-100% LEL (Lower Explosive Limit) - DFRobot Gravity
 - `mq4_ppm`: Parts Per Million - MQ-Series
 - `h2_ppm`, `co_ppm`, `nh3_ppm`, `h2s_ppm`: Parts Per Million - DFRobot Fermion
+- `timestamp`: Milliseconds since Arduino boot
 
 ## Troubleshooting
 

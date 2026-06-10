@@ -25,6 +25,10 @@ const char* server = "weather.outbackelectronics.com.au";
 const int port = 80;
 const char* endpoint = "/api/sensors";       // API endpoint
 
+// ====== Weather Service Authentication ======
+const char* api_key = "YOUR_API_KEY";        // API key from weather service
+const char* sensor_id = "UNO_R4_WIFI_001";   // Unique sensor identifier
+
 // ====== MQ-4 Calibration ======
 float mq4_ro = 10000.0;   // R0 for MQ-4 (measured in clean air)
 
@@ -177,6 +181,8 @@ void pushDataToWeatherService() {
 
   // Build request body as JSON
   String jsonData = "{";
+  jsonData += "\"api_key\":\"" + String(api_key) + "\",";
+  jsonData += "\"sensor_id\":\"" + String(sensor_id) + "\",";
   jsonData += "\"sen0565_lel\":" + String(sen0565_lel, 2) + ",";
   jsonData += "\"mq4_ppm\":" + String(mq4_ppm, 2) + ",";
   jsonData += "\"h2_ppm\":" + String(h2_ppm, 2) + ",";
