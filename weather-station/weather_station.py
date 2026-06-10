@@ -37,6 +37,7 @@ import os
 import sys
 import time
 import math
+import json
 import logging
 import requests
 
@@ -50,6 +51,7 @@ log = logging.getLogger('weather')
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 # Script lives in weather-station/ — the repo root is one level up
 REPO_DIR = os.path.dirname(APP_DIR)
+QUEUE_FILE = os.path.join(APP_DIR, 'readings-queue.db')
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -579,6 +581,63 @@ def read_all():
     return data, rtc_time, sensors
 
 
+# ── Offline queue management ──────────────────────────────────────────────────
+
+def load_queue():
+    if not os.path.exists(QUEUE_FILE):
+        return []
+    try:
+        with open(QUEUE_FILE, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        log.warning('Failed to load queue: %s', e)
+        return []
+
+
+def save_queue(queue):
+    try:
+        tmp_path = QUEUE_FILE + '.tmp'
+        with open(tmp_path, 'w') as f:
+            json.dump(queue, f)
+        os.rename(tmp_path, QUEUE_FILE)
+    except Exception as e:
+        log.warning('Failed to save queue: %s', e)
+
+
+def flush_queue():
+    queue = load_queue()
+    if not queue:
+        return
+
+    sent = 0
+    remaining = []
+
+    for payload in queue:
+        try:
+            r = requests.post(
+                f'{API_URL}/api/weather/readings',
+                json=payload,
+                headers={'X-Api-Key': API_KEY},
+                timeout=10,
+            )
+            if r.status_code == 200:
+                sent += 1
+            else:
+                remaining.append(payload)
+        except Exception:
+            remaining.append(payload)
+
+    if remaining:
+        save_queue(remaining)
+        if sent > 0:
+            log.info('Queue flush: %d sent, %d remain in queue', sent, len(remaining))
+    else:
+        if sent > 0:
+            log.info('Queue flushed: all %d queued readings sent', sent)
+        if os.path.exists(QUEUE_FILE):
+            os.remove(QUEUE_FILE)
+
+
 def post_reading(data, rtc_time, sensors):
     payload = {
         'station_id': STATION_ID,
@@ -595,10 +654,13 @@ def post_reading(data, rtc_time, sensors):
         )
         if r.status_code == 200:
             log.info('[%s] Posted %d sensor values', STATION_ID, len(data))
+            return True
         else:
             log.warning('POST returned %d: %s', r.status_code, r.text[:200])
+            return False
     except Exception as e:
         log.warning('POST failed: %s', e)
+        return False
 
 
 def main():
@@ -611,9 +673,30 @@ def main():
     while True:
         try:
             data, rtc_time, sensors = read_all()
-            post_reading(data, rtc_time, sensors)
+
             if not data:
-                log.warning('No sensor data collected — posted empty reading')
+                log.warning('No sensor data collected')
+                time.sleep(INTERVAL)
+                continue
+
+            success = post_reading(data, rtc_time, sensors)
+
+            if success:
+                # Online and reading sent — try to flush any queued readings
+                flush_queue()
+            else:
+                # Offline — queue this reading for later
+                queue = load_queue()
+                payload = {
+                    'station_id': STATION_ID,
+                    'rtc_time': rtc_time,
+                    'sensors': sensors,
+                    'data': data,
+                }
+                queue.append(payload)
+                save_queue(queue)
+                log.info('Reading queued (%d in queue)', len(queue))
+
         except Exception as e:
             log.error('Unexpected error: %s', e)
         time.sleep(INTERVAL)
