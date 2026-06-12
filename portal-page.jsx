@@ -2150,7 +2150,7 @@ function OrderTokenView({ token, onLogin }) {
     setFormErr(''); setBusy(true);
     const r = await api('/api/portal/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ firstName, lastName, email: info.email, phone, address, username, password }),
+      body: JSON.stringify({ firstName, lastName, orderToken: token, phone, address, username, password }),
     });
     setBusy(false);
     if (r.ok) {

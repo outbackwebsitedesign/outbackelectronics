@@ -70,7 +70,7 @@ const PUBLIC_CSP = "default-src 'self'; " +
 const HSTS_VALUE = 'max-age=31536000; includeSubDomains';
 const PERMISSIONS_POLICY = 'camera=(), microphone=(), geolocation=(), payment=(), usb=()';
 const PUBLIC_RATE_WINDOW_MS = 1000 * 60 * 10;
-const PUBLIC_RATE_LIMITS = { analytics: 120, checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10, 'forgot-password': 5, 'reset-password': 10, 'gift-card/apply': 10, 'gift-card/balance': 5, 'warranty/order-lookup': 10, 'cart/get': 20, 'weather_register': 3, 'stock-notify': 5 };
+const PUBLIC_RATE_LIMITS = { analytics: 120, checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10, 'forgot-password': 5, 'reset-password': 10, 'gift-card/apply': 10, 'gift-card/balance': 5, 'warranty/order-lookup': 10, 'cart/get': 20, 'weather_register': 3, 'stock-notify': 5, 'membership': 10, 'order-token': 30 };
 
 fs.mkdirSync(path.join(__dirname, 'assets/uploads'), { recursive: true });
 fs.mkdirSync(path.join(__dirname, 'assets/uploads/software'), { recursive: true });
@@ -93,8 +93,26 @@ const FROM_ADDRESS = `Outback Electronics <${SMTP_USER || 'noreply@outbackelectr
 const ROLE_LEVELS = { owner: 4, manager: 3, technician: 2, staff: 1, seller: 1, pending: 0 };
 
 const PORTAL_SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
-const loginAttempts = new Map();
-const publicRateCounts = new Map();
+// Rate-limit counters are persisted so a process restart can't be used to
+// reset login lockouts or public endpoint limits.
+const RATE_LIMITS_DB_PATH = path.join(__dirname, 'rate-limits.db');
+const { loginAttempts, publicRateCounts } = (() => {
+  try {
+    const raw = JSON.parse(fs.readFileSync(RATE_LIMITS_DB_PATH, 'utf8'));
+    return {
+      loginAttempts: new Map(Object.entries(raw.loginAttempts || {})),
+      publicRateCounts: new Map(Object.entries(raw.publicRateCounts || {})),
+    };
+  } catch { return { loginAttempts: new Map(), publicRateCounts: new Map() }; }
+})();
+function saveRateLimitState() {
+  try {
+    atomicWriteFile(RATE_LIMITS_DB_PATH, JSON.stringify({
+      loginAttempts: Object.fromEntries(loginAttempts),
+      publicRateCounts: Object.fromEntries(publicRateCounts),
+    }));
+  } catch {}
+}
 const PRODUCTS_DB_PATH  = path.join(__dirname, 'products.db');
 const SERVICES_DB_PATH  = path.join(__dirname, 'services.db');
 const ORDERS_DB_PATH    = path.join(__dirname, 'orders.db');
@@ -176,6 +194,12 @@ function saveResetTokens() {
   fs.writeFileSync(RESET_TOKENS_DB_PATH, JSON.stringify(obj));
 }
 
+// Reset tokens are stored hashed — a leaked password-reset-tokens.db cannot be
+// used to take over accounts. The raw token only ever exists in the email link.
+function hashResetToken(token) {
+  return crypto.createHash('sha256').update(String(token)).digest('hex');
+}
+
 // Prune expired sessions and flush to disk every 10 minutes.
 setInterval(() => {
   const t = now();
@@ -191,6 +215,7 @@ setInterval(() => {
   saveSessionsToDisk(SESSIONS_DB_PATH, sessions);
   saveSessionsToDisk(PORTAL_SESSIONS_DB_PATH, portalSessions);
   saveResetTokens();
+  saveRateLimitState();
 }, 10 * 60 * 1000).unref();
 
 // Security: sanitize tutorial HTML content and validate video URLs.
@@ -399,6 +424,38 @@ function readMemberships() {
 }
 function writeMemberships(data) { atomicWriteFile(MEMBERSHIPS_DB_PATH, JSON.stringify(data, null, 2)); }
 
+// Integration secrets (Stripe keys, SMTP password, AusPost API key) are
+// encrypted at rest in settings.db when SETTINGS_ENCRYPTION_KEY is set in the
+// environment. Without the key they are stored as-is (legacy behaviour).
+const SENSITIVE_INTEGRATION_KEYS = new Set(['secretKey', 'webhookSecret', 'apiKey', 'pass']);
+const _settingsEncKey = process.env.SETTINGS_ENCRYPTION_KEY
+  ? crypto.createHash('sha256').update(process.env.SETTINGS_ENCRYPTION_KEY).digest()
+  : null;
+function encryptSecret(v) {
+  if (!_settingsEncKey || typeof v !== 'string' || !v || v.startsWith('enc:v1:')) return v;
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', _settingsEncKey, iv);
+  const ct = Buffer.concat([cipher.update(v, 'utf8'), cipher.final()]);
+  return 'enc:v1:' + Buffer.concat([iv, cipher.getAuthTag(), ct]).toString('base64');
+}
+function decryptSecret(v) {
+  if (typeof v !== 'string' || !v.startsWith('enc:v1:')) return v;
+  if (!_settingsEncKey) return '';
+  try {
+    const buf = Buffer.from(v.slice(7), 'base64');
+    const decipher = crypto.createDecipheriv('aes-256-gcm', _settingsEncKey, buf.subarray(0, 12));
+    decipher.setAuthTag(buf.subarray(12, 28));
+    return Buffer.concat([decipher.update(buf.subarray(28)), decipher.final()]).toString('utf8');
+  } catch { return ''; }
+}
+function mapIntegrationSecrets(integrations, fn) {
+  return (Array.isArray(integrations) ? integrations : []).map(r => {
+    const cfg = r[3] || {};
+    const out = {};
+    for (const [k, v] of Object.entries(cfg)) out[k] = SENSITIVE_INTEGRATION_KEYS.has(k) ? fn(v) : v;
+    return [r[0], r[1], r[2], out];
+  });
+}
 function readSettings() {
   try {
     const d = JSON.parse(cachedReadFile(SETTINGS_DB_PATH));
@@ -407,13 +464,16 @@ function readSettings() {
       announcement: d.announcement || {},
       maintenance: d.maintenance || {},
       staff: Array.isArray(d.staff) ? d.staff : [],
-      integrations: Array.isArray(d.integrations) ? d.integrations : [],
+      integrations: mapIntegrationSecrets(d.integrations, decryptSecret),
       siteContent: d.siteContent || {},
       security: d.security || {},
     };
   } catch { return { shop: {}, announcement: {}, maintenance: {}, staff: [], integrations: [], siteContent: {}, security: {} }; }
 }
-function writeSettings(data) { atomicWriteFile(SETTINGS_DB_PATH, JSON.stringify(data, null, 2)); }
+function writeSettings(data) {
+  const toStore = { ...data, integrations: mapIntegrationSecrets(data.integrations, encryptSecret) };
+  atomicWriteFile(SETTINGS_DB_PATH, JSON.stringify(toStore, null, 2));
+}
 
 // SSE clients listening for maintenance state changes
 const maintenanceSseClients = new Set();
@@ -426,11 +486,17 @@ function pushMaintenanceEvent(enabled) {
 
 function maskIntegrationConfig(name, config) {
   if (!config) return {};
-  // Return config as-is; admin dashboard shows full values
+  // Secrets never leave the server in full — the admin dashboard sees a masked
+  // value (last 4 chars) and settings/save ignores masked values on round-trip.
   const result = {};
   for (const [k, v] of Object.entries(config)) {
     if (k === 'adminPasswordHash') continue; // never send password hash
-    result[k] = v;
+    if (SENSITIVE_INTEGRATION_KEYS.has(k)) {
+      const s = String(v || '');
+      result[k] = s ? '••••' + s.slice(-4) : '';
+    } else {
+      result[k] = v;
+    }
   }
   return result;
 }
@@ -673,6 +739,12 @@ function validatePolicyPayload(value) {
 function now() { return Date.now(); }
 function randomId() { return crypto.randomBytes(32).toString('hex'); }
 
+function maskEmail(email) {
+  const [local = '', domain = ''] = String(email || '').split('@');
+  if (!domain) return '';
+  return `${local.slice(0, 2)}***@${domain}`;
+}
+
 function parseCookies(req) {
   const raw = req.headers.cookie || '';
   return Object.fromEntries(raw.split(';').map(v => v.trim()).filter(Boolean).map(kv => {
@@ -900,6 +972,8 @@ function trackFailure(ip) {
   entry.attempts.push(t);
   if (entry.attempts.length >= RATE_MAX_ATTEMPTS) { entry.lockedUntil = t + LOCKOUT_MS; entry.attempts = []; }
   loginAttempts.set(ip, entry);
+  // Persist lockouts immediately so a restart can't clear them
+  if (entry.lockedUntil > t) saveRateLimitState();
 }
 function clearFailures(ip) { loginAttempts.delete(ip); }
 function publicRateLimited(ip, bucket) {
@@ -953,8 +1027,38 @@ const ALLOWED_SERVE_ROOTS = [
 ];
 
 // spaRoutes: Set of route names to serve rootFile for (main SPA).
+// Strict CSP for ad-free services (admin, portal): no 'unsafe-inline' for
+// scripts — inline <script> blocks in the built HTML are allowed via SHA-256
+// hashes computed lazily from dist/ (which only exists after a build).
+const _inlineScriptHashCache = new Map();
+function inlineScriptHashes(rootFile) {
+  if (_inlineScriptHashCache.has(rootFile)) return _inlineScriptHashCache.get(rootFile);
+  let hashes = [];
+  try {
+    const html = fs.readFileSync(path.join(__dirname, rootFile.replace(/^\//, '')), 'utf8');
+    const re = /<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi;
+    let m;
+    while ((m = re.exec(html))) {
+      if (m[1].trim()) hashes.push(`'sha256-${crypto.createHash('sha256').update(m[1]).digest('base64')}'`);
+    }
+  } catch { return []; } // dist not built yet — don't cache, retry next request
+  _inlineScriptHashCache.set(rootFile, hashes);
+  return hashes;
+}
+function strictCsp(rootFile) {
+  const hashes = inlineScriptHashes(rootFile).join(' ');
+  return "default-src 'self'; " +
+    `script-src 'self'${hashes ? ' ' + hashes : ''}; ` +
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+    "img-src 'self' data: https:; " +
+    "font-src 'self' data: https://fonts.gstatic.com; " +
+    "connect-src 'self' https://nominatim.openstreetmap.org; " +
+    "frame-src 'self' https://www.openstreetmap.org; " +
+    "frame-ancestors 'none';";
+}
+
 // Pass null to serve rootFile for all non-asset paths (forum/admin/portal).
-function serveStatic(req, res, urlPath, rootFile, spaRoutes = null) {
+function serveStatic(req, res, urlPath, rootFile, spaRoutes = null, cspOverride = null) {
   const cleanPath = String(urlPath || '/').split('?')[0];
   const isAsset = cleanPath.startsWith('/assets/') || /\.(jsx|js|css|png|ico|jpg|svg|woff2?|txt)$/.test(cleanPath);
   let safePath;
@@ -1003,7 +1107,7 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null) {
         'Permissions-Policy': PERMISSIONS_POLICY,
         'Content-Security-Policy': isEmbeddable
           ? "default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://nominatim.openstreetmap.org; frame-src https://www.openstreetmap.org; frame-ancestors 'self';"
-          : PUBLIC_CSP,
+          : (cspOverride || PUBLIC_CSP),
       } : { 'X-Content-Type-Options': 'nosniff', 'Strict-Transport-Security': HSTS_VALUE };
       const isPdf = ext === '.pdf';
       const extraHeaders = (isSoftwareDownload || isPdf)
@@ -2095,7 +2199,14 @@ async function handleCustomerRegister(req, res) {
   const password = typeof body.password === 'string' ? body.password : '';
   const firstName = typeof body.firstName === 'string' ? body.firstName.trim() : '';
   const lastName  = typeof body.lastName  === 'string' ? body.lastName.trim()  : '';
-  const email     = typeof body.email     === 'string' ? body.email.trim().toLowerCase() : '';
+  let email       = typeof body.email     === 'string' ? body.email.trim().toLowerCase() : '';
+  // Registration from an order-tracking link: the client sends the token and the
+  // server resolves the email itself, so the address is never exposed client-side.
+  if (typeof body.orderToken === 'string' && body.orderToken) {
+    const tokenOrder = readOrders().find(o => o.trackingToken === body.orderToken && o.trackingTokenExpiry > Date.now());
+    if (!tokenOrder || !tokenOrder.email) return json(res, 400, { error: 'invalid_token', message: 'This link is invalid or has expired.' });
+    email = String(tokenOrder.email).trim().toLowerCase();
+  }
   const phone     = typeof body.phone     === 'string' ? body.phone.trim()     : '';
   const address   = typeof body.address   === 'string' ? body.address.trim()   : '';
   if (!firstName) return json(res, 422, { error: 'invalid_payload', message: 'First name is required.' });
@@ -2396,7 +2507,7 @@ const mainServer = http.createServer(async (req, res) => {
 
     for (const li of items) {
       const pid = String(li.productId || '');
-      const qty = Math.max(1, Math.floor(Number(li.quantity) || 1));
+      const qty = Math.min(999, Math.max(1, Math.floor(Number(li.quantity) || 1)));
       const prod = catalog.find(p => p.id === pid);
       if (!prod || prod.digital) continue;
       hasPhysical = true;
@@ -2503,6 +2614,7 @@ const mainServer = http.createServer(async (req, res) => {
       ? items
       : (name && priceAud ? [{ name, priceAud, quantity, productId: productId || '' }] : null);
     if (!rawLineItems) return json(res, 422, { error: 'missing_fields', message: 'items array or name+priceAud required' });
+    if (rawLineItems.length > 100) return json(res, 422, { error: 'too_many_items', message: 'A checkout can contain at most 100 line items.' });
 
     // Resolve authoritative server-side prices from the catalog.
     // Client-supplied priceAud is ignored for any item with a recognised productId.
@@ -2534,7 +2646,7 @@ const mainServer = http.createServer(async (req, res) => {
     const lineItems = [];
     for (const li of rawLineItems) {
       const pid = String(li.productId || '');
-      const qty = Math.max(1, Math.floor(Number(li.quantity) || 1));
+      const qty = Math.min(999, Math.max(1, Math.floor(Number(li.quantity) || 1)));
       if (pid.startsWith('gc-')) {
         // Gift card denominations: price is the chosen denomination value.
         // Look up in catalog; fall back to client value only if not found (admin-created custom GC).
@@ -3188,13 +3300,14 @@ const mainServer = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/cart/save') {
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     if (!Array.isArray(body.items) || body.items.length === 0) return json(res, 422, { error: 'empty_cart' });
+    if (body.items.length > 100) return json(res, 422, { error: 'too_many_items', message: 'A cart can contain at most 100 line items.' });
     const cartProducts = readProducts();
     const cartServices = readServices();
     const items = [];
     for (const i of body.items) {
       const pid = String(i.id || i.sku || '');
       const variantSku = i._variantSku ? String(i._variantSku) : null;
-      const qty = Math.max(1, Math.floor(Number(i.qty) || 1));
+      const qty = Math.min(999, Math.max(1, Math.floor(Number(i.qty) || 1)));
       // Resolve price and name authoritatively from catalog
       const prod = cartProducts.find(p => p.id === pid && p.status === 'published');
       if (prod) {
@@ -3962,6 +4075,9 @@ const adminServer = http.createServer(async (req, res) => {
       const sellerPrice = parseFloat(body.priceAud) || 0;
       body.sellerPrice = Math.round(sellerPrice * 100) / 100;
       body.priceAud = Math.round(sellerPrice * (1 + commissionPct / 100) * 100) / 100;
+      // Sellers cannot publish their own listings — every seller save goes back
+      // to draft and a manager must publish it.
+      body.status = 'draft';
     }
     if (idx >= 0) { products[idx] = body; } else { body.id = 'prod-' + Date.now(); products.push(body); }
     writeProducts(products);
@@ -4020,7 +4136,16 @@ const adminServer = http.createServer(async (req, res) => {
       orders.push(bodyToStore);
     }
     writeOrders(orders);
-    auditAdminAction({ req, session, action: existing ? 'order.update' : 'order.create', result: { status: 'ok', changed: { id: bodyToStore.id } } });
+    // Financial fields are audited with before/after values so any change to an
+    // order's total or recorded payments is traceable to a staff member.
+    const sumPayments = o => (o && Array.isArray(o.payments) ? o.payments : []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
+    auditAdminAction({ req, session, action: existing ? 'order.update' : 'order.create', result: { status: 'ok', changed: {
+      id: bodyToStore.id,
+      totalBefore: existing ? Number(existing.total) || 0 : null,
+      totalAfter: Number(bodyToStore.total) || 0,
+      paymentsBefore: existing ? sumPayments(existing) : null,
+      paymentsAfter: sumPayments(bodyToStore),
+    } } });
     const justFulfilled = body.fulfilment === 'fulfilled' && existing && existing.fulfilment !== 'fulfilled';
     if (justFulfilled && body.email) {
       const pts = Math.floor(Number(body.total) || 0);
@@ -4137,15 +4262,18 @@ const adminServer = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true });
   }
 
-  // Public: validate an order tracking token (used by portal registration flow)
+  // Public: validate an order tracking token (used by portal registration flow).
+  // PII is kept server-side: the email is masked for display and the register
+  // endpoint resolves the real address from the token itself.
   if (req.method === 'GET' && url.pathname === '/api/order-token') {
+    if (publicRateLimited(getIp(req), 'order-token')) return json(res, 429, { error: 'too_many_requests' });
     const token = url.searchParams.get('token');
     if (!token) return json(res, 400, { error: 'missing_token' });
     const orders = readOrders();
     const order = orders.find(o => o.trackingToken === token && o.trackingTokenExpiry > Date.now());
     if (!order) return json(res, 404, { error: 'invalid_or_expired', message: 'This link is invalid or has expired.' });
     const hasAccount = !!readUsers().find(u => u.email && u.email.toLowerCase() === order.email.toLowerCase());
-    return json(res, 200, { ok: true, orderId: order.id, customerName: order.cust, email: order.email, hasAccount });
+    return json(res, 200, { ok: true, orderId: order.id, customerName: String(order.cust || '').split(' ')[0] || '', email: maskEmail(order.email), hasAccount });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/admin/customers/save') {
@@ -4584,7 +4712,11 @@ const adminServer = http.createServer(async (req, res) => {
       const existingConfig = existingByName[r[0]] || {};
       const incomingConfig = r[3] || {};
       const config = { ...existingConfig };
-      for (const [k, v] of Object.entries(incomingConfig)) { config[k] = v; }
+      for (const [k, v] of Object.entries(incomingConfig)) {
+        // Masked secrets round-tripped from the dashboard mean "unchanged"
+        if (SENSITIVE_INTEGRATION_KEYS.has(k) && typeof v === 'string' && v.includes('••••')) continue;
+        config[k] = v;
+      }
       return [r[0], r[1], !!r[2], config];
     });
     const security = { ...(existing.security || {}) };
@@ -4781,6 +4913,27 @@ const adminServer = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/admin/repairs/save') {
     const session = requireRole(req, res, 'technician'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    // The board is replaced wholesale, so validate its shape before writing:
+    // an object with a bounded array of column objects, each with a string id
+    // and a bounded array of card objects with string ids.
+    if (!body || typeof body !== 'object' || Array.isArray(body) || !Array.isArray(body.columns)) {
+      return json(res, 422, { error: 'invalid_payload', message: 'Body must be an object with a columns array.' });
+    }
+    if (body.columns.length > 50) return json(res, 422, { error: 'invalid_payload', message: 'Too many columns.' });
+    for (const col of body.columns) {
+      if (!col || typeof col !== 'object' || Array.isArray(col) || typeof col.id !== 'string' || !col.id) {
+        return json(res, 422, { error: 'invalid_payload', message: 'Each column must be an object with a string id.' });
+      }
+      if (col.cards !== undefined && !Array.isArray(col.cards)) {
+        return json(res, 422, { error: 'invalid_payload', message: 'Column cards must be an array.' });
+      }
+      if ((col.cards || []).length > 1000) return json(res, 422, { error: 'invalid_payload', message: 'Too many cards in a column.' });
+      for (const card of col.cards || []) {
+        if (!card || typeof card !== 'object' || Array.isArray(card) || typeof card.id !== 'string' || !card.id) {
+          return json(res, 422, { error: 'invalid_payload', message: 'Each card must be an object with a string id.' });
+        }
+      }
+    }
     // Detect cards that changed column since last save — email customer
     const prev = readRepairs();
     const prevCardCol = {};
@@ -4903,7 +5056,7 @@ const adminServer = http.createServer(async (req, res) => {
     if (!isIpAllowed(ip)) return json(res, 403, { error: 'forbidden' });
   }
 
-  return serveStatic(req, res, url.pathname, '/dist/admin-login.html', null);
+  return serveStatic(req, res, url.pathname, '/dist/admin-login.html', null, strictCsp('/dist/admin-login.html'));
   } catch (err) {
     console.error('[adminServer] unhandled error:', err);
     if (!res.headersSent) json(res, 500, { error: 'server_error', message: 'An unexpected error occurred.' });
@@ -4990,8 +5143,22 @@ const portalServer = http.createServer(async (req, res) => {
       if (dn.length > 50) return json(res, 422, { error: 'invalid_payload', message: 'Display name must be 50 characters or fewer.' });
       user.displayName = dn;
     }
+    let previousEmail = null;
     if (typeof body.email === 'string') {
-      user.email = body.email.trim().toLowerCase();
+      const newEmail = body.email.trim().toLowerCase();
+      if (newEmail !== String(user.email || '').toLowerCase()) {
+        // Changing the email re-keys password reset and order history, so it
+        // requires the current password and notifies the old address.
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) return json(res, 422, { error: 'invalid_payload', message: 'Email address is invalid.' });
+        if (typeof body.currentPassword !== 'string' || !verifyPassword(body.currentPassword, user.passwordHash)) {
+          return json(res, 401, { error: 'invalid_password', message: 'Your current password is required to change your email address.' });
+        }
+        if (users.some((u, i) => i !== userIdx && u.email && u.email.toLowerCase() === newEmail)) {
+          return json(res, 409, { error: 'email_taken', message: 'An account with that email address already exists.' });
+        }
+        previousEmail = user.email || '';
+        user.email = newEmail;
+      }
     }
     if (typeof body.newPassword === 'string') {
       if (typeof body.currentPassword !== 'string' || !verifyPassword(body.currentPassword, user.passwordHash)) {
@@ -5002,6 +5169,17 @@ const portalServer = http.createServer(async (req, res) => {
     }
     users[userIdx] = user;
     writeUsers(users);
+    if (previousEmail) {
+      sendEmail({
+        to: previousEmail,
+        subject: 'Your account email address was changed',
+        html: emailHtml('Email address changed', `
+          <p>G'day ${escHtml(user.displayName || user.username)},</p>
+          <p>The email address on your Outback Electronics account was just changed to <strong>${escHtml(maskEmail(user.email))}</strong>.</p>
+          <p>If this wasn't you, contact us immediately so we can secure your account.</p>
+        `),
+      });
+    }
     portalSessions.set(session.sid, { ...portalSessions.get(session.sid), displayName: user.displayName });
     saveSessionsToDisk(PORTAL_SESSIONS_DB_PATH, portalSessions);
     return json(res, 200, { ok: true, user: { id: user.id, username: user.username, displayName: user.displayName, createdAt: user.createdAt } });
@@ -5287,7 +5465,39 @@ const portalServer = http.createServer(async (req, res) => {
     return json(res, 200, { subscription: sub, tier });
   }
 
+  // Create a Stripe checkout session for a paid membership tier. Activation
+  // happens in the Stripe webhook (metadata.membershipTierId) after payment.
+  // Free tiers return no URL and the client falls back to /membership/subscribe.
+  if (req.method === 'POST' && url.pathname === '/api/portal/membership/checkout') {
+    if (publicRateLimited(getIp(req), 'membership')) return json(res, 429, { error: 'too_many_requests' });
+    const session = getPortalSession(req);
+    if (!session) return json(res, 401, { error: 'login_required' });
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const mb = readMemberships();
+    const tier = mb.tiers.find(t => t.id === (body || {}).tierId && t.status === 'published');
+    if (!tier) return json(res, 404, { error: 'tier_not_found' });
+    if (!(Number(tier.priceAud) > 0)) return json(res, 200, { ok: true }); // free tier — no payment needed
+    if (!getStripeKey()) return json(res, 503, { error: 'stripe_not_configured', message: 'Online payment is not configured. Please contact us.' });
+    const portalUser = readUsers().find(u => u.id === session.id);
+    const params = {
+      'mode': 'payment',
+      'success_url': `${getPortalUrl()}/membership?subscribed=1`,
+      'cancel_url': `${getPortalUrl()}/membership`,
+      'customer_email': (portalUser && portalUser.email) || '',
+      'metadata[membershipTierId]': tier.id,
+      'payment_intent_data[metadata][membershipTierId]': tier.id,
+      'line_items[0][price_data][currency]': 'aud',
+      'line_items[0][price_data][unit_amount]': String(Math.round(Number(tier.priceAud) * 100)),
+      'line_items[0][price_data][product_data][name]': `${tier.name} membership`,
+      'line_items[0][quantity]': '1',
+    };
+    const resp = await stripeRequest('POST', '/v1/checkout/sessions', params).catch(() => null);
+    if (!resp || resp.status !== 200) return json(res, 502, { error: 'stripe_error', message: 'Could not create payment session. Please try again.' });
+    return json(res, 200, { ok: true, url: resp.body.url });
+  }
+
   if (req.method === 'POST' && url.pathname === '/api/portal/membership/subscribe') {
+    if (publicRateLimited(getIp(req), 'membership')) return json(res, 429, { error: 'too_many_requests' });
     const session = getPortalSession(req);
     if (!session) return json(res, 401, { error: 'login_required' });
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
@@ -5295,6 +5505,11 @@ const portalServer = http.createServer(async (req, res) => {
     const mb = readMemberships();
     const tier = mb.tiers.find(t => t.id === tierId && t.status === 'published');
     if (!tier) return json(res, 404, { error: 'tier_not_found' });
+    // Paid tiers can only be activated by the Stripe webhook after a successful
+    // payment — direct activation here is reserved for free tiers.
+    if (Number(tier.priceAud) > 0) {
+      return json(res, 402, { error: 'payment_required', message: 'This membership tier requires payment. Please purchase it through checkout.' });
+    }
     mb.subscriptions = mb.subscriptions.filter(s => s.username !== session.username);
     const sub = {
       id: 'sub-' + Date.now(),
@@ -5314,6 +5529,7 @@ const portalServer = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/portal/membership/cancel') {
+    if (publicRateLimited(getIp(req), 'membership')) return json(res, 429, { error: 'too_many_requests' });
     const session = getPortalSession(req);
     if (!session) return json(res, 401, { error: 'login_required' });
     const mb = readMemberships();
@@ -5337,15 +5553,12 @@ const portalServer = http.createServer(async (req, res) => {
     if (publicRateLimited(getIp(req), 'forgot-password')) return json(res, 429, { error: 'too_many_requests' });
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
-    if (!username || !email) return json(res, 200, { ok: true }); // always 200 to avoid enumeration
+    if (!email) return json(res, 200, { ok: true }); // always 200 to avoid enumeration
     const users = readUsers();
-    const user = users.find(u =>
-      u.username && u.username.toLowerCase() === username.toLowerCase() &&
-      u.email && u.email.toLowerCase() === email
-    );
+    const user = users.find(u => u.email && u.email.toLowerCase() === email);
     if (user) {
       const token = crypto.randomBytes(32).toString('hex');
-      resetTokens.set(token, { userId: user.id, expiresAt: now() + RESET_TOKEN_TTL_MS });
+      resetTokens.set(hashResetToken(token), { userId: user.id, expiresAt: now() + RESET_TOKEN_TTL_MS });
       saveResetTokens();
       const resetUrl = `${getPortalUrl()}?reset=${token}`;
       const tmpl = emailPasswordReset({ displayName: user.displayName || user.username, resetUrl });
@@ -5360,14 +5573,15 @@ const portalServer = http.createServer(async (req, res) => {
     const token = typeof body?.token === 'string' ? body.token : '';
     const password = typeof body?.password === 'string' ? body.password : '';
     if (!token || password.length < 8) return json(res, 422, { error: 'invalid_payload', message: 'Token and a password of at least 8 characters are required.' });
-    const entry = resetTokens.get(token);
+    const tokenHash = hashResetToken(token);
+    const entry = resetTokens.get(tokenHash);
     if (!entry || entry.expiresAt < now()) return json(res, 400, { error: 'invalid_token', message: 'This reset link has expired or is invalid.' });
     const users = readUsers();
     const idx = users.findIndex(u => u.id === entry.userId);
     if (idx < 0) return json(res, 400, { error: 'invalid_token', message: 'This reset link has expired or is invalid.' });
     users[idx] = { ...users[idx], passwordHash: hashPassword(password) };
     writeUsers(users);
-    resetTokens.delete(token);
+    resetTokens.delete(tokenHash);
     saveResetTokens();
     return json(res, 200, { ok: true });
   }
@@ -5461,7 +5675,7 @@ const portalServer = http.createServer(async (req, res) => {
     return json(res, 204, {});
   }
 
-  return serveStatic(req, res, url.pathname, '/dist/portal.html', null);
+  return serveStatic(req, res, url.pathname, '/dist/portal.html', null, strictCsp('/dist/portal.html'));
   } catch (err) {
     console.error('[portalServer] unhandled error:', err);
     if (!res.headersSent) json(res, 500, { error: 'server_error', message: 'An unexpected error occurred.' });
@@ -5841,23 +6055,27 @@ function migrateEnvToSettings() {
   const s = readSettings();
   let changed = false;
 
+  // Secrets are NOT copied from the environment into settings.db — the getters
+  // (getStripeKey, getSmtpConfig, getAuspostKey) fall back to env vars when the
+  // stored value is empty, so they only end up on disk if entered via the
+  // dashboard (and are then encrypted when SETTINGS_ENCRYPTION_KEY is set).
   if (!s.integrations.find(r => r[0] === 'Stripe')) {
     s.integrations = [['Stripe', 'api.stripe.com', !!(STRIPE_SECRET_KEY), {
-      secretKey: STRIPE_SECRET_KEY || '', publishableKey: STRIPE_PUBLISHABLE_KEY || '', webhookSecret: STRIPE_WEBHOOK_SECRET || '',
+      secretKey: '', publishableKey: STRIPE_PUBLISHABLE_KEY || '', webhookSecret: '',
     }], ...s.integrations];
     changed = true;
   }
 
   if (!s.integrations.find(r => r[0] === 'Email')) {
     s.integrations.push(['Email', SMTP_HOST || 'smtp.gmail.com', !!(SMTP_HOST && SMTP_USER && SMTP_PASS), {
-      host: SMTP_HOST || '', port: String(SMTP_PORT || ''), user: SMTP_USER || '', pass: SMTP_PASS || '', notifyEmail: NOTIFY_EMAIL || '',
+      host: SMTP_HOST || '', port: String(SMTP_PORT || ''), user: SMTP_USER || '', pass: '', notifyEmail: NOTIFY_EMAIL || '',
     }]);
     changed = true;
   }
 
   if (!s.integrations.find(r => r[0] === 'AusPost')) {
     s.integrations.push(['AusPost', 'digitalapi.auspost.com.au', !!(AUSPOST_API_KEY), {
-      apiKey: AUSPOST_API_KEY || '',
+      apiKey: '',
     }]);
     changed = true;
   }
