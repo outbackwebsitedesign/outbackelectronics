@@ -830,13 +830,16 @@ function isPrivateIp(ip) {
     /^::ffff:(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)/.test(ip);
 }
 
+function isLoopback(ip) {
+  return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+}
+
 function getIp(req) {
   const remoteIp = req.socket.remoteAddress || 'unknown';
-  // With a Cloudflare Tunnel (cloudflared), all traffic arrives via loopback (127.0.0.1),
-  // so isPrivateIp is sufficient to identify trusted proxy connections. Only trust
-  // CF-Connecting-IP / X-Forwarded-For from private/loopback addresses to prevent spoofing
-  // if the tunnel is ever misconfigured and a port is exposed directly.
-  if (isPrivateIp(remoteIp)) {
+  // Only trust CF-Connecting-IP / X-Forwarded-For from loopback. Cloudflare Tunnel
+  // (cloudflared) always connects from loopback, so this is sufficient. Trusting
+  // all private IPs would allow anyone on the LAN to spoof an allowlisted IP.
+  if (isLoopback(remoteIp)) {
     const cf = (req.headers['cf-connecting-ip'] || '').trim();
     if (cf) return cf;
     const forwarded = (req.headers['x-forwarded-for'] || '').split(',')[0].trim();
@@ -4103,7 +4106,7 @@ const adminServer = http.createServer(async (req, res) => {
     if (idx >= 0) { services[idx] = body; } else { body.id = 'svc-' + Date.now(); services.push(body); }
     try { writeServices(services); } catch (err) {
       console.error('[services/save] write failed:', err);
-      return json(res, 500, { error: 'write_failed', message: String(err.message || err) });
+      return json(res, 500, { error: 'write_failed' });
     }
     return json(res, 200, { ok: true, item: body });
   }

@@ -12,28 +12,28 @@ operational and a small number of code-level issues.
 
 ## High priority
 
-### 1. Stored XSS in tutorial content — `pages-community.jsx:209`
-`activeTutorial.content` is rendered via `dangerouslySetInnerHTML` with no
+### 1. ✅ Stored XSS in tutorial content — `pages-community.jsx:209`
+~~`activeTutorial.content` is rendered via `dangerouslySetInnerHTML` with no
 sanitization. A compromised admin account or poisoned tutorial record yields
-stored XSS on the public site.
+stored XSS on the public site.~~
 
-**Fix:** render through the existing safe `renderMarkdown()` path, or
-sanitize with DOMPurify. Related: the markdown link renderer
-(`pages-community.jsx:19`) does not block `javascript:` URLs.
+**Fixed:** replaced `dangerouslySetInnerHTML` with `renderMarkdown()` (safe JSX).
+Also blocked `javascript:` URLs in the inline link renderer (`pages-community.jsx:19`).
 
-### 2. `X-Forwarded-For` spoofing — `server.js:833-846` (`getIp`)
-When the socket IP is private, the first `X-Forwarded-For` value is trusted
+### 2. ✅ `X-Forwarded-For` spoofing — `server.js:833-846` (`getIp`)
+~~When the socket IP is private, the first `X-Forwarded-For` value is trusted
 as-is. If any service port is ever directly reachable (or a local proxy
 doesn't strip XFF), an attacker can spoof an allowlisted IP to bypass
-`ADMIN_IP_ALLOWLIST` and reset login lockout counters.
+`ADMIN_IP_ALLOWLIST` and reset login lockout counters.~~
 
-**Fix:** only trust XFF / `cf-connecting-ip` when explicitly configured for
-the actual proxy in front of the app.
+**Fixed:** proxy headers are now only trusted when the socket IP is loopback
+(`127.0.0.1`/`::1`). Cloudflare Tunnel always connects from loopback, so
+legitimate traffic is unaffected; LAN clients can no longer spoof the IP.
 
-### 3. Error detail leakage — `server.js:4106`
-`String(err.message || err)` is returned to clients on write failures.
+### 3. ✅ Error detail leakage — `server.js:4106`
+~~`String(err.message || err)` is returned to clients on write failures.~~
 
-**Fix:** log the full error server-side; return a generic message.
+**Fixed:** full error logged server-side only; generic `write_failed` returned to client.
 
 ---
 

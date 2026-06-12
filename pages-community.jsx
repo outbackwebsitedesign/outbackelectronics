@@ -16,7 +16,8 @@ function renderMarkdown(md) {
       if (t.startsWith('![')) {
         parts.push(<img key={m.index} src={m[5]} alt={m[4]} style={{maxWidth:'100%', margin:'8px 0', display:'block'}} />);
       } else if (t.startsWith('[')) {
-        parts.push(<a key={m.index} href={m[3]} style={{color:'var(--rust)'}} target="_blank" rel="noopener noreferrer">{m[2]}</a>);
+        const href = /^javascript:/i.test(m[3]) ? '#' : m[3];
+        parts.push(<a key={m.index} href={href} style={{color:'var(--rust)'}} target="_blank" rel="noopener noreferrer">{m[2]}</a>);
       } else if (t.startsWith('**')) {
         parts.push(<strong key={m.index}>{t.slice(2,-2)}</strong>);
       } else if (t.startsWith('_')) {
@@ -205,8 +206,9 @@ function TutorialsPage({ go }) {
               </div>
             )}
             {activeTutorial.content ? (
-              <div style={{fontSize:15, color:'var(--ink)', lineHeight:1.75}}
-                dangerouslySetInnerHTML={{__html: activeTutorial.content}} />
+              <div style={{fontSize:15, color:'var(--ink)', lineHeight:1.75}}>
+                {renderMarkdown(activeTutorial.content)}
+              </div>
             ) : (
               <p style={{color:'var(--ink-2)', fontSize:14}}>No content available for this tutorial yet.</p>
             )}
