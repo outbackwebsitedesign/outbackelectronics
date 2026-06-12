@@ -2294,6 +2294,17 @@ const mainServer = http.createServer(async (req, res) => {
     return res.end(txt);
   }
 
+  if (req.method === 'GET' && url.pathname === '/.well-known/security.txt') {
+    const { shop } = readSettings();
+    const contact = ((shop && shop.email) ? shop.email.trim() : '') || NOTIFY_EMAIL || '';
+    const expires = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+    const lines = [`Expires: ${expires}`, 'Preferred-Languages: en'];
+    if (contact) lines.unshift(`Contact: mailto:${contact}`);
+    const txt = lines.join('\n') + '\n';
+    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=86400' });
+    return res.end(txt);
+  }
+
   if (req.method === 'GET' && url.pathname === '/sitemap.xml') {
     const now = new Date().toISOString().slice(0, 10);
     const staticUrls = Object.keys(STATIC_OG).map(p => `  <url><loc>${escOg(OG_BASE_URL + p)}</loc><lastmod>${now}</lastmod><changefreq>weekly</changefreq><priority>${p === '/' || p === '/home' ? '1.0' : '0.8'}</priority></url>`);
@@ -2649,7 +2660,8 @@ const mainServer = http.createServer(async (req, res) => {
     const lineItems = [];
     for (const li of rawLineItems) {
       const pid = String(li.productId || '');
-      const qty = Math.min(999, Math.max(1, Math.floor(Number(li.quantity) || 1)));
+      const qty = Math.floor(Number(li.quantity) || 0);
+      if (qty < 1 || qty > 999) return json(res, 422, { error: 'invalid_quantity', message: `Quantity for item ${pid || '(unknown)'} must be between 1 and 999.` });
       if (pid.startsWith('gc-')) {
         // Gift card denominations: price is the chosen denomination value.
         // Look up in catalog; fall back to client value only if not found (admin-created custom GC).
@@ -2703,7 +2715,9 @@ const mainServer = http.createServer(async (req, res) => {
 
     // Validate and apply gift card if provided
     // Validate shipping amount (server-side cap to prevent manipulation: max $200)
-    const validatedShipping = shippingAmount && Number(shippingAmount) > 0 ? Math.min(200, Number(shippingAmount)) : 0;
+    const rawShipping = Number(shippingAmount) || 0;
+    if (rawShipping < 0 || rawShipping > 200) return json(res, 422, { error: 'invalid_shipping', message: 'Shipping amount is outside the accepted range.' });
+    const validatedShipping = rawShipping > 0 ? rawShipping : 0;
     // Travel/callout fee — calculated server-side from reported one-way distance.
     // Fuel: $0.55/km round trip ($110/tank ÷ 400km × 2). Free within 10km.
     // Daily allowance (D > 400km): $150/day, 6h driving/day at ~80km/h = 480km/day; ×2 for return.
@@ -3622,7 +3636,10 @@ const adminServer = http.createServer(async (req, res) => {
   }
 
   if (['POST', 'PATCH', 'DELETE'].includes(req.method)) {
-    if (!verifyCsrf(req, res)) return;
+    // Login is pre-auth; CSRF provides no meaningful protection (attacker must
+    // know the password anyway) and requiring it is fragile on first visit
+    // before a CSRF cookie has been issued.
+    if (url.pathname !== '/api/admin/login' && !verifyCsrf(req, res)) return;
   }
 
   if (req.method === 'POST' && url.pathname === '/api/admin/login') {
@@ -3841,6 +3858,21 @@ const adminServer = http.createServer(async (req, res) => {
     const uniqueIps = new Set(events.map(e => e.ip)).size;
 
     return json(res, 200, { days, totalViews, uniqueVisitors: uniqueIps, daily, topPages, topReferrers, devices: { mobile, tablet, desktop } });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/admin/audit-log') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    const limit = Math.min(500, Math.max(1, parseInt(url.searchParams.get('limit') || '200')));
+    const offset = Math.max(0, parseInt(url.searchParams.get('offset') || '0'));
+    let lines = [];
+    try {
+      const raw = fs.readFileSync(ADMIN_AUDIT_LOG_PATH, 'utf8');
+      lines = raw.split('\n').filter(Boolean);
+    } catch { /* file may not exist yet */ }
+    lines.reverse();
+    const total = lines.length;
+    const page = lines.slice(offset, offset + limit).map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+    return json(res, 200, { total, offset, limit, entries: page });
   }
 
   if (req.method === 'GET' && url.pathname === '/api/admin/metrics') {

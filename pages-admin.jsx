@@ -277,6 +277,7 @@ const NAV_ICONS = {
   policies:     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>,
   settings:     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M16.24 16.24l1.41 1.41M4.93 4.93l1.41 1.41M7.76 16.24l-1.41 1.41M22 12h-2M4 12H2M12 22v-2M12 4V2"/></svg>,
   'seller-billing': <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>,
+  'audit-log': <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="12" y2="17"/></svg>,
 };
 
 const ADMIN_SECTIONS = [
@@ -308,6 +309,7 @@ const ADMIN_SECTIONS = [
     { id:'expenses',  label:'Expenses',      minRole:'manager' },
     { id:'seller-billing', label:'Seller Billing', minRole:'manager' },
     { id:'settings',  label:'Settings',      minRole:'seller' },
+    { id:'audit-log', label:'Audit Log',     minRole:'manager' },
   ]},
 ];
 
@@ -6035,6 +6037,72 @@ function formatMetricSubtitle(section, metrics, fallbackState = 'loading') {
   return metrics.subtitles[section] || null;
 }
 
+function AdminAuditLog() {
+  const [entries, setEntries] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const limit = 100;
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/admin/audit-log?limit=${limit}&offset=${page * limit}`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => { setEntries(d.entries || []); setTotal(d.total || 0); })
+      .catch(() => setEntries([]))
+      .finally(() => setLoading(false));
+  }, [page]);
+
+  const pageCount = Math.max(1, Math.ceil(total / limit));
+  const actionColor = (a) => {
+    if (a.includes('delete')) return '#c0392b';
+    if (a.includes('refund') || a.includes('void')) return '#e67e22';
+    if (a.includes('login') || a.includes('logout')) return '#2980b9';
+    return 'var(--ink-2)';
+  };
+
+  return (
+    <div style={{padding:32}}>
+      <div className="row-flex" style={{justifyContent:'space-between', marginBottom:18}}>
+        <span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>// {total} ENTRIES · PAGE {page + 1} OF {pageCount}</span>
+        <div className="row-flex" style={{gap:8}}>
+          <button className="btn btn-ghost btn-sm" disabled={page === 0} onClick={() => setPage(p => p - 1)}>← Prev</button>
+          <button className="btn btn-ghost btn-sm" disabled={page >= pageCount - 1} onClick={() => setPage(p => p + 1)}>Next →</button>
+        </div>
+      </div>
+      {loading ? <div style={{color:'var(--ink-2)', fontSize:13}}>Loading…</div> : entries.length === 0 ? (
+        <div style={{color:'var(--ink-2)', fontSize:13}}>No audit entries found.</div>
+      ) : (
+        <div style={{overflowX:'auto'}}>
+          <table style={{width:'100%', borderCollapse:'collapse', fontSize:12}}>
+            <thead>
+              <tr style={{borderBottom:'1px solid var(--line)'}}>
+                {['Timestamp','Actor','IP','Action','Status','Detail'].map(h => (
+                  <th key={h} className="mono" style={{textAlign:'left', padding:'6px 10px', fontSize:10, color:'var(--ink-3)', fontWeight:500, whiteSpace:'nowrap'}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {entries.map((e, i) => (
+                <tr key={i} style={{borderBottom:'1px solid var(--line)', background: i % 2 === 0 ? 'transparent' : 'var(--bg-elev)'}}>
+                  <td className="mono" style={{padding:'5px 10px', whiteSpace:'nowrap', color:'var(--ink-2)', fontSize:11}}>{e.timestamp ? new Date(e.timestamp).toLocaleString('en-AU') : '—'}</td>
+                  <td style={{padding:'5px 10px', whiteSpace:'nowrap'}}>{e.actor || '—'}</td>
+                  <td className="mono" style={{padding:'5px 10px', whiteSpace:'nowrap', color:'var(--ink-2)'}}>{e.ip || '—'}</td>
+                  <td style={{padding:'5px 10px', whiteSpace:'nowrap', color: actionColor(e.action || '')}}>{e.action || '—'}</td>
+                  <td style={{padding:'5px 10px', whiteSpace:'nowrap'}}>
+                    <span style={{fontSize:10, padding:'2px 6px', borderRadius:2, background: e.status === 'ok' ? '#d4edda' : '#f8d7da', color: e.status === 'ok' ? '#155724' : '#721c24'}}>{e.status || '—'}</span>
+                  </td>
+                  <td className="mono" style={{padding:'5px 10px', color:'var(--ink-2)', maxWidth:320, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontSize:11}} title={JSON.stringify(e.changed || {})}>{e.reason || JSON.stringify(e.changed || {})}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const ADMIN_VIEWS = {
   overview:   { c: AdminOverview,   t:'Overview',         staticSubtitle:'shop heartbeat · today' },
   orders:     { c: AdminOrders,     t:'Orders' },
@@ -6057,13 +6125,14 @@ const ADMIN_VIEWS = {
   expenses:   { c: AdminExpenses,   t:'Expenses',         staticSubtitle:'track costs · receipt uploads' },
   settings:   { c: AdminSettings,   t:'Settings',         staticSubtitle:'shop · staff · integrations' },
   'seller-billing': { c: AdminSellerBilling, t:'Seller Billing', staticSubtitle:'listing fees · balances · card management' },
+  'audit-log': { c: AdminAuditLog, t:'Audit Log', staticSubtitle:'admin actions · actor · timestamp · detail' },
 };
 
 const ADMIN_ALL_IDS = new Set([
   'overview','orders','repairs','quotes','ewaste',
   'products','services','software','tutorials','ai',
   'groups','customers','sellers',
-  'memberships','gift-cards','rewards','expenses','policies','seller-billing','settings',
+  'memberships','gift-cards','rewards','expenses','policies','seller-billing','settings','audit-log',
 ]);
 
 function adminSectionFromPath() {

@@ -7,3 +7,6 @@ node_modules/
 *.log
 dist/
 package-lock.json
+*.pem
+*.key
+secrets.*

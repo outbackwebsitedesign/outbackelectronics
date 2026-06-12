@@ -242,6 +242,7 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
       setRewardsData(data);
       setRewardsApply(data.points > 0);
       setStoreCreditApply((data.storeCredit || 0) > 0);
+      setRewardsPassword('');
     } catch {
       setRewardsError('Could not connect. Please try again.');
     } finally {

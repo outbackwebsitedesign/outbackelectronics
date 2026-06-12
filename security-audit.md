@@ -56,14 +56,20 @@ legitimate traffic is unaffected; LAN clients can no longer spoof the IP.
 
 ## Low priority
 
-- `/api/admin/login` requires a CSRF token fetched first
-  (`server.js:3602`) — works but fragile; exempt login explicitly.
-- Quantity/shipping caps silently clamp instead of returning an error
-  (`server.js:2649, 2703`).
-- `.gitignore`: add `*.pem`, `*.key`, `secrets.*`.
-- No `/.well-known/security.txt`; no admin-facing audit-log viewer.
-- Rewards lookup keeps the password in React state after submit
-  (`pages-cart.jsx:229-250`).
+- ✅ `/api/admin/login` CSRF exempted — login is pre-auth; CSRF provides
+  no meaningful protection and was fragile on first visit before a token
+  was issued (`server.js`).
+- ✅ Quantity/shipping caps now return 422 instead of silently clamping
+  (`server.js` checkout handler).
+- ✅ `.gitignore`: added `*.pem`, `*.key`, `secrets.*`.
+- ✅ `/.well-known/security.txt` endpoint added to main server; contact
+  email pulled from `settings.db` → `shop.email`, falls back to
+  `NOTIFY_EMAIL`.
+- ✅ Admin audit log viewer added (`/audit-log` section, manager+ only)
+  — paginated table of all `auditAdminAction` entries from
+  `admin-audit.log`; backed by `GET /api/admin/audit-log`.
+- ✅ Rewards password cleared from React state after a successful lookup
+  (`pages-cart.jsx`).
 
 ## Accepted risk (owner decision)
 
