@@ -12,18 +12,7 @@ operational and a small number of code-level issues.
 
 ## High priority
 
-### 1. Unencrypted backups include `.env` — `deploy.sh:183-219`
-The hourly backup tars every `.db` file **and `.env`** (Stripe secret key,
-SMTP password, admin password) in plaintext onto the USB stick with default
-permissions. Old archives are deleted with `rm`, not securely wiped.
-
-**Fix:**
-- Encrypt the archive (`openssl enc -aes-256-cbc` or `age`); store the
-  passphrase in a password manager.
-- Exclude `.env` from backups — restore secrets from the password manager.
-- `chmod 600` the backup files.
-
-### 2. Stored XSS in tutorial content — `pages-community.jsx:209`
+### 1. Stored XSS in tutorial content — `pages-community.jsx:209`
 `activeTutorial.content` is rendered via `dangerouslySetInnerHTML` with no
 sanitization. A compromised admin account or poisoned tutorial record yields
 stored XSS on the public site.
@@ -32,7 +21,7 @@ stored XSS on the public site.
 sanitize with DOMPurify. Related: the markdown link renderer
 (`pages-community.jsx:19`) does not block `javascript:` URLs.
 
-### 3. `X-Forwarded-For` spoofing — `server.js:833-846` (`getIp`)
+### 2. `X-Forwarded-For` spoofing — `server.js:833-846` (`getIp`)
 When the socket IP is private, the first `X-Forwarded-For` value is trusted
 as-is. If any service port is ever directly reachable (or a local proxy
 doesn't strip XFF), an attacker can spoof an allowlisted IP to bypass
@@ -41,7 +30,7 @@ doesn't strip XFF), an attacker can spoof an allowlisted IP to bypass
 **Fix:** only trust XFF / `cf-connecting-ip` when explicitly configured for
 the actual proxy in front of the app.
 
-### 4. Error detail leakage — `server.js:4106`
+### 3. Error detail leakage — `server.js:4106`
 `String(err.message || err)` is returned to clients on write failures.
 
 **Fix:** log the full error server-side; return a generic message.
@@ -79,6 +68,11 @@ the actual proxy in front of the app.
 
 ## Accepted risk (owner decision)
 
+- **Unencrypted USB backups including `.env`** — `deploy.sh:183-219`. The
+  hourly backup tars the `.db` files and `.env` in plaintext onto a USB
+  stick. Owner has assessed this as a non-issue: only the owner has physical
+  access to the server and the stick does not leave the premises. Revisit if
+  backups are ever taken offsite.
 - **Hardcoded WiFi password and weather API key** in
   `arduino/gas-sensor-monitor/gas-sensor-monitor.ino:22-29` (also in git
   history). Owner has assessed this as a non-issue for this private repo /
@@ -110,9 +104,8 @@ the actual proxy in front of the app.
 
 ## Suggested order of work
 
-1. Encrypt backups and drop `.env` from them (`deploy.sh`).
-2. Fix the tutorial XSS.
-3. Harden `getIp()` and sanitize the write-failure error response.
-4. Replace `Math.random()` IDs; validate the Stripe redirect URL; add
+1. Fix the tutorial XSS.
+2. Harden `getIp()` and sanitize the write-failure error response.
+3. Replace `Math.random()` IDs; validate the Stripe redirect URL; add
    refund-amount validation.
-5. Low-priority items as convenient.
+4. Low-priority items as convenient.
