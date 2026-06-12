@@ -36,6 +36,9 @@ APP_DIR = os.path.dirname(os.path.abspath(__file__))
 def read_env_file(path):
     vals = {}
     try:
+        st = os.stat(path)
+        if st.st_mode & 0o004:
+            log.warning('.env is world-readable (mode %o) — run: chmod 600 .env', st.st_mode & 0o777)
         with open(path) as f:
             for line in f:
                 line = line.strip()

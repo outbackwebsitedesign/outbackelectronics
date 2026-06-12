@@ -19,6 +19,7 @@ SERVICE_NAME="outbackelectronics"
 WEATHER_SERVICE="weather-station"
 WATCHDOG_SERVICE="outback-watchdog"
 SERVICE_USER="outbackelectronics"
+APP_GROUP="outback-app"
 APP_DIR="$(cd "$(dirname "$0")" && pwd)"
 NODE_BIN="$(which node)"
 NPM_BIN="$(which npm)"
@@ -40,29 +41,37 @@ if ! id -u "$SERVICE_USER" &>/dev/null; then
     sudo useradd --system --no-create-home --shell /usr/sbin/nologin "$SERVICE_USER"
 fi
 
-# Add the service user to the deploying user's primary group so it can read
-# app files (server.js, dist/, node_modules) and the .env secrets file without
-# making them world-readable.
-DEPLOY_GROUP="$(id -gn)"
-if ! id -Gn "$SERVICE_USER" 2>/dev/null | grep -qw "$DEPLOY_GROUP"; then
-    sudo usermod -aG "$DEPLOY_GROUP" "$SERVICE_USER"
+# Create a dedicated app group if it doesn't exist, then add the service user
+# to it. Using a dedicated group (not the deploying user's primary group) means
+# group membership grants no broader privileges than app-file access.
+if ! getent group "$APP_GROUP" &>/dev/null; then
+    sudo groupadd --system "$APP_GROUP"
+fi
+if ! id -Gn "$SERVICE_USER" 2>/dev/null | grep -qw "$APP_GROUP"; then
+    sudo usermod -aG "$APP_GROUP" "$SERVICE_USER"
+fi
+# Also add the deploying user to the app group so they retain write access.
+DEPLOY_USER="$(id -un)"
+if ! id -Gn "$DEPLOY_USER" 2>/dev/null | grep -qw "$APP_GROUP"; then
+    sudo usermod -aG "$APP_GROUP" "$DEPLOY_USER"
 fi
 
 # Set the setgid bit on the app directory so .db/.tmp files created by the
-# service inherit the deploy group and stay writable by the service user.
+# service inherit the app group and stay writable by the service user.
+sudo chgrp "$APP_GROUP" "$APP_DIR"
 sudo chmod g+s "$APP_DIR"
 
 # Make existing .db, .log, and .tmp files in the app root group-writable.
 # (node_modules and dist/ are deliberately excluded — max-depth 1.)
 sudo find "$APP_DIR" -maxdepth 1 \( -name "*.db" -o -name "*.log" -o -name "*.tmp" \) \
-    -exec chmod g+rw {} \; 2>/dev/null || true
+    -exec chgrp "$APP_GROUP" {} \; -exec chmod g+rw {} \; 2>/dev/null || true
 
-# Ensure .env is readable by the service group but not world-readable.
+# Ensure .env is readable by the app group but not world-readable.
 if [ -f "$APP_DIR/.env" ]; then
-    sudo chgrp "$DEPLOY_GROUP" "$APP_DIR/.env"
+    sudo chgrp "$APP_GROUP" "$APP_DIR/.env"
     sudo chmod 640 "$APP_DIR/.env"
 fi
-echo "==> Service user '${SERVICE_USER}' configured (group: ${DEPLOY_GROUP})."
+echo "==> Service user '${SERVICE_USER}' configured (group: ${APP_GROUP})."
 # ── End dedicated service user ────────────────────────────────────────────────
 
 # Create systemd service if it doesn't exist

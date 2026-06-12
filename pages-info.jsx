@@ -7,32 +7,6 @@ const ErrorText = window.ErrorText;
 // ============================================================
 // REQUEST A QUOTE
 // ============================================================
-const _SHOP_LAT = -24.4235;
-const _SHOP_LNG = 145.4693;
-const _CALLOUT_FREE_KM = 10;
-const _CALLOUT_LOCAL_CAP_KM = 200;
-const _CALLOUT_HIVAL_THRESHOLD = 10000;
-const _CALLOUT_FUEL_RATE = 220 / 400;
-const _CALLOUT_KM_PER_DAY = 480;
-const _CALLOUT_DAILY_RATE = 150;
-const _CALLOUT_DAILY_THRESHOLD_KM = 400;
-
-function _calloutFeeAud(distKm) {
-  if (distKm <= _CALLOUT_FREE_KM) return 0;
-  const fuel = distKm * _CALLOUT_FUEL_RATE;
-  const daily = distKm > _CALLOUT_DAILY_THRESHOLD_KM
-    ? Math.ceil(distKm / _CALLOUT_KM_PER_DAY) * 2 * _CALLOUT_DAILY_RATE
-    : 0;
-  return Math.round(fuel + daily);
-}
-
-function _haversineKm(lat1, lng1, lat2, lng2) {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-}
 
 function QuotePage({ go, pageParams }) {
   const shop = useShop();
@@ -40,7 +14,7 @@ function QuotePage({ go, pageParams }) {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
   const [ticketId, setTicketId] = useState(null);
-  const [locDistKm, setLocDistKm] = useState(null);
+  const [calloutInfo, setCalloutInfo] = useState(null);
   const [locGeocoding, setLocGeocoding] = useState(false);
 
   const initForm = () => {
@@ -61,28 +35,29 @@ function QuotePage({ go, pageParams }) {
   const [form, setForm] = useState(initForm);
 
   useEffect(() => {
-    if (pageParams) { setForm(initForm()); setLocDistKm(null); }
+    if (pageParams) { setForm(initForm()); setCalloutInfo(null); }
   }, [pageParams]);
 
   const update = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   useEffect(() => {
-    if (!form.loc || form.loc.trim().length < 3) { setLocDistKm(null); return; }
+    if (!form.loc || form.loc.trim().length < 3) { setCalloutInfo(null); return; }
     const t = setTimeout(async () => {
       setLocGeocoding(true);
       try {
-        const res = await fetch(
+        const geoRes = await fetch(
           `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(form.loc + ', Australia')}&limit=1`,
           { headers: { 'Accept-Language': 'en' } }
         );
-        const data = await res.json();
-        if (data[0]) {
-          const km = _haversineKm(_SHOP_LAT, _SHOP_LNG, parseFloat(data[0].lat), parseFloat(data[0].lon));
-          setLocDistKm(Math.round(km));
+        const geoData = await geoRes.json();
+        if (geoData[0]) {
+          const feeRes = await fetch(`/api/callout-fee?lat=${encodeURIComponent(geoData[0].lat)}&lng=${encodeURIComponent(geoData[0].lon)}`);
+          const info = await feeRes.json();
+          setCalloutInfo(info);
         } else {
-          setLocDistKm(null);
+          setCalloutInfo(null);
         }
-      } catch { setLocDistKm(null); }
+      } catch { setCalloutInfo(null); }
       finally { setLocGeocoding(false); }
     }, 700);
     return () => clearTimeout(t);
@@ -198,20 +173,19 @@ function QuotePage({ go, pageParams }) {
             </div>
             <label className="field"><span className="label">Location / nearest town</span><input className="input" value={form.loc} onChange={e => update('loc', e.target.value)} placeholder="Newman, WA" /></label>
             {locGeocoding && <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:4, marginBottom:4}}>Checking distance…</div>}
-            {!locGeocoding && locDistKm !== null && (() => {
-              const fee = _calloutFeeAud(locDistKm);
-              const days = locDistKm > _CALLOUT_DAILY_THRESHOLD_KM ? Math.ceil(locDistKm / _CALLOUT_KM_PER_DAY) : 0;
-              const isHiVal = pageParams && Number(pageParams.priceAud) >= _CALLOUT_HIVAL_THRESHOLD;
-              const capExceeded = locDistKm > _CALLOUT_LOCAL_CAP_KM && !isHiVal;
+            {!locGeocoding && calloutInfo !== null && (() => {
+              const { distKm, fee, days, localCapKm, hiValThreshold, dailyRate } = calloutInfo;
+              const isHiVal = pageParams && Number(pageParams.priceAud) >= hiValThreshold;
+              const capExceeded = distKm > localCapKm && !isHiVal;
               return (
                 <div style={{marginTop:4, marginBottom:4, padding:'8px 12px', fontSize:13, border:'1px solid var(--line)', background:'var(--bg-elev)', borderColor: capExceeded ? 'var(--rust)' : 'var(--line)'}}>
                   {capExceeded
-                    ? <span style={{color:'var(--rust)'}}>That's {locDistKm}km — on-site visits for most services are capped at {_CALLOUT_LOCAL_CAP_KM}km. We can still quote; or post the device to us.</span>
+                    ? <span style={{color:'var(--rust)'}}>That's {distKm}km — on-site visits for most services are capped at {localCapKm}km. We can still quote; or post the device to us.</span>
                     : fee === 0
-                      ? <span><span style={{color:'var(--rust)', fontWeight:600}}>Free callout</span> — you're {locDistKm}km away.</span>
+                      ? <span><span style={{color:'var(--rust)', fontWeight:600}}>Free callout</span> — you're {distKm}km away.</span>
                       : days > 0
-                        ? <span><span style={{fontWeight:600}}>~${fee} travel fee</span> — {locDistKm}km: fuel + {days * 2} travel days @ $150/day. We'll confirm in the quote.</span>
-                        : <span><span style={{fontWeight:600}}>~${fee} travel fee</span> — {locDistKm}km at $0.55/km (round trip fuel). We'll confirm in the quote.</span>
+                        ? <span><span style={{fontWeight:600}}>~${fee} travel fee</span> — {distKm}km: fuel + {days * 2} travel days @ ${dailyRate}/day. We'll confirm in the quote.</span>
+                        : <span><span style={{fontWeight:600}}>~${fee} travel fee</span> — {distKm}km at $0.55/km (round trip fuel). We'll confirm in the quote.</span>
                   }
                 </div>
               );

@@ -39,21 +39,20 @@ legitimate traffic is unaffected; LAN clients can no longer spoof the IP.
 
 ## Medium priority
 
-- **Predictable IDs from `Math.random()`** — `server.js:316, 338, 559-607`
-  (service, customer, rewards/store-credit history IDs). Use
-  `crypto.randomBytes(8).toString('hex')`.
-- **Stripe redirect not validated** — `pages-cart.jsx:286` does
-  `window.location.href = data.url` with no check. Constrain to
-  `https://checkout.stripe.com/`.
-- **Refund amount not validated against order total** (open item from
-  ADMIN-AUDIT.md) — an admin typo can refund more than was charged.
-- **Deploy script group setup** — `deploy.sh:38-65` adds the service user to
-  the deploying user's primary group; use a dedicated system group instead.
-- **`.env` permissions unchecked** — `watchdog.py:36-49` reads `.env`
-  without verifying it isn't world-readable. Ensure `chmod 600 .env` on the
-  server.
-- **Quote pricing logic + shop GPS coordinates in the public bundle** —
-  `pages-info.jsx:10-17`. Move fee calculation server-side if it matters.
+- ✅ **Predictable IDs from `Math.random()`** — All `Math.random().toString(36)`
+  ID suffixes in `server.js` replaced with `crypto.randomBytes(4).toString('hex')`.
+- ✅ **Stripe redirect not validated** — `pages-cart.jsx:286` now checks that
+  `data.url` starts with `https://checkout.stripe.com/` before redirecting.
+- ✅ **Refund amount not validated against order total** — Already validated at
+  `server.js:4178-4181` (`maxRefund` cap enforced server-side). Confirmed closed.
+- ✅ **Deploy script group setup** — `deploy.sh` now creates and uses a dedicated
+  `outback-app` system group instead of the deploying user's primary group.
+- ✅ **`.env` permissions unchecked** — `watchdog.py` now checks the file mode
+  at startup and logs a warning if `.env` is world-readable.
+- ✅ **Quote pricing logic + shop GPS coordinates in the public bundle** —
+  Pricing constants and haversine formula removed from `pages-info.jsx`;
+  new `GET /api/callout-fee?lat=&lng=` endpoint computes distance and fee
+  server-side and returns only the values needed for display.
 
 ## Low priority
 

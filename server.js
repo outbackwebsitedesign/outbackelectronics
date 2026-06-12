@@ -313,7 +313,7 @@ function readServices() {
     if (!Array.isArray(p.services)) return [];
     let dirty = false;
     for (const s of p.services) {
-      if (!s.id) { s.id = 'svc-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6); dirty = true; }
+      if (!s.id) { s.id = 'svc-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex'); dirty = true; }
     }
     if (dirty) writeServices(p.services);
     return p.services;
@@ -335,7 +335,7 @@ function readCustomers() {
     const p = JSON.parse(cachedReadFile(CUSTOMERS_DB_PATH));
     const customers = Array.isArray(p.customers) ? p.customers : [];
     let dirty = false;
-    for (const c of customers) { if (!c.id) { c.id = 'cust-' + Date.now() + '-' + Math.random().toString(36).slice(2); dirty = true; } }
+    for (const c of customers) { if (!c.id) { c.id = 'cust-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex'); dirty = true; } }
     if (dirty) writeCustomers(customers);
     return customers;
   } catch { return []; }
@@ -556,7 +556,7 @@ function grantRewardPoints(email, points, type, description, refId) {
   if (!entry) { entry = { userId: user.id, email: String(user.email || '').toLowerCase(), points: 0, history: [] }; db.entries.push(entry); }
   if (refId && entry.history.some(h => h.refId === refId)) return; // deduplicate
   entry.points += points;
-  entry.history.push({ id: 'rh-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6), type, points, description: description || '', refId: refId || null, date: new Date().toISOString() });
+  entry.history.push({ id: 'rh-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex'), type, points, description: description || '', refId: refId || null, date: new Date().toISOString() });
   writeRewards(db);
 }
 
@@ -567,7 +567,7 @@ function deductRewardPoints(userId, points, description, refId) {
   if (!entry || entry.points < points) return false;
   if (refId && entry.history.some(h => h.refId === refId)) return false; // deduplicate
   entry.points = Math.max(0, entry.points - points);
-  entry.history.push({ id: 'rh-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6), type: 'redeem', points: -points, description: description || '', refId: refId || null, date: new Date().toISOString() });
+  entry.history.push({ id: 'rh-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex'), type: 'redeem', points: -points, description: description || '', refId: refId || null, date: new Date().toISOString() });
   writeRewards(db);
   return true;
 }
@@ -591,7 +591,7 @@ function grantStoreCredit(email, amount, type, description, refId) {
   if (!entry) { entry = { userId: user.id, email: String(user.email || '').toLowerCase(), balance: 0, history: [] }; db.entries.push(entry); }
   if (refId && entry.history.some(h => h.refId === refId)) return false; // deduplicate
   entry.balance = roundCents(entry.balance + amt);
-  entry.history.push({ id: 'sc-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6), type: type || 'grant', amount: amt, description: description || '', refId: refId || null, date: new Date().toISOString() });
+  entry.history.push({ id: 'sc-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex'), type: type || 'grant', amount: amt, description: description || '', refId: refId || null, date: new Date().toISOString() });
   writeStoreCredits(db);
   return true;
 }
@@ -604,7 +604,7 @@ function deductStoreCredit(userId, amount, description, refId) {
   if (!entry || entry.balance < amt) return false;
   if (refId && entry.history.some(h => h.refId === refId)) return false; // deduplicate
   entry.balance = roundCents(Math.max(0, entry.balance - amt));
-  entry.history.push({ id: 'sc-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6), type: 'redeem', amount: -amt, description: description || '', refId: refId || null, date: new Date().toISOString() });
+  entry.history.push({ id: 'sc-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex'), type: 'redeem', amount: -amt, description: description || '', refId: refId || null, date: new Date().toISOString() });
   writeStoreCredits(db);
   return true;
 }
@@ -2083,14 +2083,14 @@ function buildPartsFromDraftQuote(dq) {
   const parts = [];
   for (const item of (dq.hardwareItems || [])) {
     if (!item.name) continue;
-    parts.push({ id: item.id || ('p-' + Date.now() + '-' + Math.random().toString(36).slice(2,6)), name: item.name, qty: parseInt(item.qty) || 1, status: 'pending', orderedAt: null, deliveredAt: null, installedAt: null });
+    parts.push({ id: item.id || ('p-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex')), name: item.name, qty: parseInt(item.qty) || 1, status: 'pending', orderedAt: null, deliveredAt: null, installedAt: null });
   }
   if (dq.pcBuild && dq.pcBuildFee > 0) {
     parts.push({ id: 'p-build', name: 'Custom PC Build (labour)', qty: 1, status: 'pending', orderedAt: null, deliveredAt: null, installedAt: null });
   }
   for (const item of (dq.otherItems || [])) {
     if (!item.description) continue;
-    parts.push({ id: item.id || ('p-' + Date.now() + '-' + Math.random().toString(36).slice(2,6)), name: item.description, qty: 1, status: 'pending', orderedAt: null, deliveredAt: null, installedAt: null });
+    parts.push({ id: item.id || ('p-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex')), name: item.description, qty: 1, status: 'pending', orderedAt: null, deliveredAt: null, installedAt: null });
   }
   return parts;
 }
@@ -3074,7 +3074,7 @@ const mainServer = http.createServer(async (req, res) => {
             if (prod && prod.createdBy && prod.sellerPrice != null) {
               const txns = readSellerLedger();
               txns.push({
-                id: 'txn-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+                id: 'txn-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex'),
                 sellerId: prod.createdBy,
                 type: 'sale_credit',
                 amount: prod.sellerPrice,
@@ -3131,7 +3131,7 @@ const mainServer = http.createServer(async (req, res) => {
           if (prod && prod.createdBy && prod.sellerPrice != null) {
             const txns = readSellerLedger();
             txns.push({
-              id: 'txn-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+              id: 'txn-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex'),
               sellerId: prod.createdBy,
               type: 'sale_credit',
               amount: prod.sellerPrice,
@@ -3381,6 +3381,25 @@ const mainServer = http.createServer(async (req, res) => {
       writeStockNotify(requests);
     }
     return json(res, 201, { ok: true });
+  }
+
+  // ── Callout fee estimate (keeps pricing constants server-side) ───────────────
+  if (req.method === 'GET' && url.pathname === '/api/callout-fee') {
+    const SHOP_LAT = -24.4235, SHOP_LNG = 145.4693;
+    const FREE_KM = 10, LOCAL_CAP_KM = 200, HIVAL_THRESHOLD = 10000;
+    const FUEL_RATE = 220 / 400, KM_PER_DAY = 480, DAILY_RATE = 150, DAILY_THRESHOLD_KM = 400;
+    const lat = parseFloat(url.searchParams.get('lat'));
+    const lng = parseFloat(url.searchParams.get('lng'));
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return json(res, 422, { error: 'invalid_coords' });
+    const R = 6371;
+    const dLat = (lat - SHOP_LAT) * Math.PI / 180;
+    const dLng = (lng - SHOP_LNG) * Math.PI / 180;
+    const a = Math.sin(dLat/2)**2 + Math.cos(SHOP_LAT*Math.PI/180) * Math.cos(lat*Math.PI/180) * Math.sin(dLng/2)**2;
+    const distKm = Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+    const fuel = distKm > FREE_KM ? distKm * FUEL_RATE : 0;
+    const days = distKm > DAILY_THRESHOLD_KM ? Math.ceil(distKm / KM_PER_DAY) : 0;
+    const fee = distKm <= FREE_KM ? 0 : Math.round(fuel + days * 2 * DAILY_RATE);
+    return json(res, 200, { distKm, fee, days, freeKm: FREE_KM, localCapKm: LOCAL_CAP_KM, hiValThreshold: HIVAL_THRESHOLD, dailyRate: DAILY_RATE });
   }
 
   // ── Contact quick-message ────────────────────────────────────────────────────
@@ -5029,7 +5048,7 @@ const adminServer = http.createServer(async (req, res) => {
       db.entries.push(entry);
     }
     entry.balance = roundCents(Math.max(0, entry.balance + amt));
-    entry.history.push({ id: 'sc-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6), type: amt > 0 ? 'grant' : 'adjust', amount: amt, description: description || '', refId: null, date: new Date().toISOString() });
+    entry.history.push({ id: 'sc-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex'), type: amt > 0 ? 'grant' : 'adjust', amount: amt, description: description || '', refId: null, date: new Date().toISOString() });
     writeStoreCredits(db);
     auditAdminAction({ req, session, action: 'store-credit.adjust', result: { status: 'ok', changed: { userId, amount: amt, description } } });
     return json(res, 200, { ok: true, entry });
@@ -6154,7 +6173,7 @@ async function runMonthlyListingFees() {
 
     const txns = readSellerLedger();
     txns.push({
-      id: 'txn-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+      id: 'txn-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex'),
       sellerId: seller.id,
       type: 'listing_fee',
       amount: fee,

@@ -283,7 +283,8 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
       });
       let data;
       try { data = await resp.json(); } catch { data = {}; }
-      if (data.url) { clearCart(); window.location.href = data.url; }
+      if (data.url && data.url.startsWith('https://checkout.stripe.com/')) { clearCart(); window.location.href = data.url; }
+      else if (data.url) { setError('Unexpected redirect URL from payment provider.'); }
       else setError(data.message || 'Checkout failed. Please try again.');
     } catch (err) {
       setError('Could not connect to payment provider. Please try again.');
