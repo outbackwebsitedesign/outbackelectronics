@@ -4006,6 +4006,13 @@ const adminServer = http.createServer(async (req, res) => {
   const validUploadId = id => typeof id === 'string' && /^[a-zA-Z0-9_-]{8,64}$/.test(id);
   const swChunksRoot = path.join(__dirname, 'assets/uploads/software/.chunks');
 
+  // GET /api/admin/software  — list all software items (admin)
+  // GET /api/admin/software/list — same, used by membership access picker
+  if (req.method === 'GET' && (url.pathname === '/api/admin/software' || url.pathname === '/api/admin/software/list')) {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    return json(res, 200, { items: readSoftware() });
+  }
+
   // POST /api/admin/software/upload/chunk
   // Body: { uploadId, chunkIndex, totalChunks, filename, data (base64 data-URI of slice) }
   // Each chunk is up to 20 MB raw → ~27 MB base64. readJson cap: 30 MB.

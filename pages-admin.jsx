@@ -670,6 +670,8 @@ function Drawer({ open, onClose, title, children, footer, dirty = false }) {
   }, [open, dirty]);
 
   // Focus management: move focus in on open, trap Tab, restore focus on close.
+  const requestCloseRef = React.useRef(requestClose);
+  requestCloseRef.current = requestClose;
   useEffect(() => {
     if (!open) return;
     const prevFocus = document.activeElement;
@@ -679,7 +681,7 @@ function Drawer({ open, onClose, title, children, footer, dirty = false }) {
       : [];
     const h = (e) => {
       if (hasAdminOverlay()) return; // a confirm dialog / help overlay is stacked on top
-      if (e.key === 'Escape') { e.preventDefault(); requestClose(); return; }
+      if (e.key === 'Escape') { e.preventDefault(); requestCloseRef.current(); return; }
       if (e.key === 'Tab' && panelRef.current) {
         const els = focusables();
         if (els.length === 0) { e.preventDefault(); panelRef.current.focus(); return; }
@@ -694,7 +696,7 @@ function Drawer({ open, onClose, title, children, footer, dirty = false }) {
       document.removeEventListener('keydown', h);
       if (prevFocus && typeof prevFocus.focus === 'function' && document.contains(prevFocus)) prevFocus.focus();
     };
-  }, [open, requestClose]);
+  }, [open]);
 
   if (!open) return null;
   return (
