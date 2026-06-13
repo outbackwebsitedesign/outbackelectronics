@@ -815,6 +815,7 @@ function App() {
     if (path.startsWith('product/')) return 'product';
     if (path.startsWith('service/')) return 'service';
     if (path.startsWith('policies/')) return 'policies';
+    if (path.startsWith('software/')) return 'software';
     const resolved = PAGE_ALIASES_INIT[path] || path;
     return KNOWN_PAGES.includes(resolved) ? resolved : 'home';
   });
@@ -838,7 +839,7 @@ function App() {
     }
   };
 
-  // Resolve deep-linked product/service on first load
+  // Resolve deep-linked product/service/software on first load
   useEffect(() => {
     const path = location.pathname.replace(/^\/+/, '');
     if (path.startsWith('policies/') && !pageParams) {
@@ -846,6 +847,11 @@ function App() {
       if (slug) setPageParams({ slug });
     } else if ((path.startsWith('product/') || path.startsWith('service/')) && !pageParams) {
       resolveDeepLink(path);
+    } else if (path.startsWith('software/') && !pageParams) {
+      const rest = path.slice('software/'.length);
+      const parts = rest.split('/').filter(Boolean);
+      if (parts.length === 1) setPageParams({ slug: decodeURIComponent(parts[0]) });
+      else if (parts.length >= 2) setPageParams({ os: parts[0], slug: decodeURIComponent(parts[1]) });
     }
   }, []);
   const [cart, setCart] = useState(() => {
@@ -906,6 +912,9 @@ function App() {
     } else if (page === 'policies') {
       const slug = pageParams?.slug || 'terms-and-conditions';
       target = `/policies/${slug}`;
+    } else if (page === 'software' && pageParams?.slug) {
+      if (pageParams.os) target = `/software/${pageParams.os}/${pageParams.slug}`;
+      else target = `/software/${pageParams.slug}`;
     }
     if (location.pathname !== target) window.history.pushState({}, '', target);
     window.scrollTo({top:0, behavior:'smooth'});
@@ -913,6 +922,7 @@ function App() {
     let title = PAGE_TITLES[page] || 'Outback Electronics';
     if (page === 'product' && pageParams?.name) title = `${pageParams.name} — Outback Electronics`;
     else if (page === 'service' && pageParams?.name) title = `${pageParams.name} — Outback Electronics`;
+    else if (page === 'software' && pageParams?.name) title = `${pageParams.name} — Outback Electronics`;
     document.title = title;
     // Keep the meta description in sync so deep-linked shares don't all show the homepage blurb
     let description = PAGE_DESCRIPTIONS[page] || DEFAULT_META_DESCRIPTION;
@@ -934,7 +944,16 @@ function App() {
       if (path.startsWith('product/')) { setPage('product'); setPageParams(null); resolveDeepLink(path); return; }
       if (path.startsWith('service/')) { setPage('service'); setPageParams(null); resolveDeepLink(path); return; }
       if (path.startsWith('policies/')) { setPage('policies'); setPageParams({ slug: path.slice('policies/'.length) }); return; }
-      if (KNOWN_PAGES.includes(path)) setPage(path);
+      if (path.startsWith('software/')) {
+        const rest = path.slice('software/'.length);
+        const parts = rest.split('/').filter(Boolean);
+        setPage('software');
+        if (parts.length === 1) setPageParams({ slug: decodeURIComponent(parts[0]) });
+        else if (parts.length >= 2) setPageParams({ os: parts[0], slug: decodeURIComponent(parts[1]) });
+        else setPageParams(null);
+        return;
+      }
+      if (KNOWN_PAGES.includes(path)) { setPage(path); setPageParams(null); }
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);

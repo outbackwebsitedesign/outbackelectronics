@@ -2869,7 +2869,7 @@ function AdminSoftware() {
 
   const open = (i) => {
     setEdit(i);
-    setForm(i==='new' ? { license:'OSS · MIT', live:true, files:[] } : { ...rows[i], files: rows[i].files||[] });
+    setForm(i==='new' ? { license:'OSS · MIT', live:true, files:[], platforms:[], minSpecs:{}, recSpecs:{} } : { ...rows[i], files: rows[i].files||[], platforms: rows[i].platforms||[], minSpecs: rows[i].minSpecs||{}, recSpecs: rows[i].recSpecs||{} });
     setUploadErr('');
     setUploadProgress(null);
   };
@@ -2969,44 +2969,106 @@ function AdminSoftware() {
             <button className="btn btn-sm" onClick={save}>Save</button>
           </div>}
         >
-          <label className="field"><span className="label">Product name</span><input className="input" value={form.name||''} onChange={e=>setForm({...form, name:e.target.value})}/></label>
+          {/* ── Identity ── */}
+          <label className="field"><span className="label">Product name</span>
+            <input className="input" value={form.name||''} onChange={e=>{
+              const name = e.target.value;
+              const autoSlug = name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+              setForm(f => ({ ...f, name, ...((!f.slug || f._slugAuto) ? { slug: autoSlug, _slugAuto: true } : {}) }));
+            }}/>
+          </label>
+          <div className="grid-2" style={{gap:14}}>
+            <label className="field"><span className="label">URL slug</span>
+              <input className="input mono" placeholder="pc-x" value={form.slug||''} onChange={e=>setForm({...form, slug:e.target.value.toLowerCase().replace(/[^a-z0-9-]/g,''), _slugAuto:false})}/>
+            </label>
+            <label className="field"><span className="label">Version</span>
+              <input className="input" placeholder="0.1.0" value={form.version||''} onChange={e=>setForm({...form, version:e.target.value})}/>
+            </label>
+          </div>
           <div className="grid-2" style={{gap:14}}>
             <label className="field"><span className="label">License</span>
               <select className="select" value={form.license||'OSS · MIT'} onChange={e=>setForm({...form, license:e.target.value})}>
-                <option>OSS · MIT</option><option>OSS · GPLv3</option><option>OSS · Apache-2.0</option><option>COMMERCIAL</option>
+                <option>OSS · MIT</option><option>OSS · GPLv3</option><option>OSS · Apache-2.0</option><option>COMMERCIAL</option><option>FREEWARE</option>
               </select>
             </label>
-            <label className="field"><span className="label">Pricing</span><input className="input" placeholder="free / $12/mo" value={form.price||''} onChange={e=>setForm({...form, price:e.target.value})}/></label>
+            <label className="field"><span className="label">Pricing</span><input className="input" placeholder="Free / $12/mo" value={form.price||''} onChange={e=>setForm({...form, price:e.target.value})}/></label>
           </div>
-          <label className="field"><span className="label">Public tagline</span><textarea className="textarea" placeholder="One paragraph for the Software page card." value={form.tagline||''} onChange={e=>setForm({...form, tagline:e.target.value})}/></label>
-          <label className="field"><span className="label">Repository / GitHub URL</span><input className="input" placeholder="github.com/outback/…" value={form.repo||''} onChange={e=>setForm({...form, repo:e.target.value})}/></label>
-          <label className="field"><span className="label">Quickstart snippet</span><textarea className="textarea mono" style={{fontFamily:'JetBrains Mono, monospace', fontSize:12}} placeholder="curl -sSL get.outbackelec.au/your-tool | sh" value={form.quickstart||''} onChange={e=>setForm({...form, quickstart:e.target.value})}/></label>
 
-          {/* ---- Installation / Download Files ---- */}
-          <div style={{marginTop:4}}>
+          {/* ── Description ── */}
+          <label className="field"><span className="label">Tagline <span style={{fontWeight:400, color:'var(--ink-2)'}}>— shown on listing card</span></span>
+            <input className="input" placeholder="One-liner shown on the card" value={form.tagline||''} onChange={e=>setForm({...form, tagline:e.target.value})}/>
+          </label>
+          <label className="field"><span className="label">Full description <span style={{fontWeight:400, color:'var(--ink-2)'}}>— shown on detail page</span></span>
+            <textarea className="textarea" rows={5} placeholder="Detailed description of what the software does, who it's for, and what problems it solves." value={form.description||''} onChange={e=>setForm({...form, description:e.target.value})}/>
+          </label>
+          <label className="field"><span className="label">Repository / GitHub URL</span><input className="input" placeholder="https://github.com/outback/…" value={form.repo||''} onChange={e=>setForm({...form, repo:e.target.value})}/></label>
+          <label className="field"><span className="label">Quickstart snippet</span>
+            <textarea className="textarea" style={{fontFamily:'JetBrains Mono, monospace', fontSize:12}} rows={3} placeholder="curl -sSL get.outbackelec.au/your-tool | sh" value={form.quickstart||''} onChange={e=>setForm({...form, quickstart:e.target.value})}/>
+          </label>
+          <label className="field"><span className="label">Additional requirements</span>
+            <textarea className="textarea" rows={2} placeholder="e.g. Requires an internet connection. Root access needed for installation." value={form.requirements||''} onChange={e=>setForm({...form, requirements:e.target.value})}/>
+          </label>
+
+          {/* ── Supported platforms ── */}
+          <div>
+            <span className="label">Supported platforms <span style={{fontWeight:400, color:'var(--ink-2)'}}>— controls which OS buttons show on the card</span></span>
+            <div className="row-flex" style={{gap:8, flexWrap:'wrap', marginTop:6}}>
+              {['linux','windows','macos','ios','android','cross'].map(os => {
+                const checked = (form.platforms||[]).includes(os);
+                return (
+                  <label key={os} style={{display:'flex', alignItems:'center', gap:6, fontSize:13, cursor:'pointer', padding:'4px 10px', border:'1px solid var(--line)', borderRadius:4, background: checked ? 'var(--bg-deep)' : 'transparent'}}>
+                    <input type="checkbox" checked={checked} onChange={e=>{
+                      const p = form.platforms||[];
+                      setForm({...form, platforms: e.target.checked ? [...p,os] : p.filter(x=>x!==os)});
+                    }}/>
+                    {os.charAt(0).toUpperCase()+os.slice(1)}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ── System requirements ── */}
+          <div>
+            <span className="label">System requirements</span>
+            <div className="grid-2" style={{gap:14, marginTop:8}}>
+              <div>
+                <div style={{fontSize:11, fontWeight:600, color:'var(--ink-2)', marginBottom:8, textTransform:'uppercase', letterSpacing:'.06em'}}>Minimum</div>
+                {[['os','OS / Distro'],['cpu','CPU'],['ram','RAM'],['storage','Storage'],['other','Other']].map(([k,l])=>(
+                  <label key={k} className="field" style={{marginBottom:8}}>
+                    <span className="label" style={{fontSize:11}}>{l}</span>
+                    <input className="input" style={{fontSize:12}} placeholder={k==='os'?'Ubuntu 20.04+':k==='cpu'?'1 GHz dual-core':k==='ram'?'512 MB':k==='storage'?'200 MB':''} value={(form.minSpecs||{})[k]||''} onChange={e=>setForm({...form, minSpecs:{...(form.minSpecs||{}), [k]:e.target.value}})}/>
+                  </label>
+                ))}
+              </div>
+              <div>
+                <div style={{fontSize:11, fontWeight:600, color:'var(--ink-2)', marginBottom:8, textTransform:'uppercase', letterSpacing:'.06em'}}>Recommended</div>
+                {[['os','OS / Distro'],['cpu','CPU'],['ram','RAM'],['storage','Storage'],['other','Other']].map(([k,l])=>(
+                  <label key={k} className="field" style={{marginBottom:8}}>
+                    <span className="label" style={{fontSize:11}}>{l}</span>
+                    <input className="input" style={{fontSize:12}} placeholder={k==='os'?'Ubuntu 22.04+':k==='cpu'?'2 GHz quad-core':k==='ram'?'2 GB':k==='storage'?'1 GB SSD':''} value={(form.recSpecs||{})[k]||''} onChange={e=>setForm({...form, recSpecs:{...(form.recSpecs||{}), [k]:e.target.value}})}/>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Installation / Download Files ── */}
+          <div>
             <div className="row-flex" style={{justifyContent:'space-between', alignItems:'center', marginBottom:10}}>
               <span className="label" style={{margin:0}}>Installation Files</span>
               <div className="row-flex" style={{gap:8, alignItems:'center'}}>
-                <button
-                  className="btn btn-ghost btn-sm"
-                  style={{fontSize:12}}
-                  disabled={uploadProgress !== null}
-                  onClick={()=>fileInputRef.current&&fileInputRef.current.click()}
-                >+ Upload file</button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  style={{display:'none'}}
+                <button className="btn btn-ghost btn-sm" style={{fontSize:12}} disabled={uploadProgress !== null}
+                  onClick={()=>fileInputRef.current&&fileInputRef.current.click()}>+ Upload file</button>
+                <input ref={fileInputRef} type="file" style={{display:'none'}}
                   accept=".zip,.gz,.tgz,.bz2,.xz,.7z,.iso,.img,.apk,.aab,.exe,.msi,.deb,.rpm,.dmg,.pkg,.appimage,.run,.sh,.tar"
-                  onChange={handleFileSelect}
-                />
+                  onChange={handleFileSelect}/>
               </div>
             </div>
             {uploadProgress !== null && (
               <div style={{marginBottom:10}}>
                 <div className="row-flex" style={{justifyContent:'space-between', fontSize:12, color:'var(--ink-2)', marginBottom:4}}>
-                  <span>Uploading…</span>
-                  <span>{uploadProgress}%</span>
+                  <span>Uploading…</span><span>{uploadProgress}%</span>
                 </div>
                 <div style={{background:'var(--border)', borderRadius:4, height:6, overflow:'hidden'}}>
                   <div style={{background:'var(--rust)', height:'100%', width:`${uploadProgress}%`, transition:'width 0.2s ease'}}/>
@@ -3023,7 +3085,7 @@ function AdminSoftware() {
               <SoftwareFileRow key={f.id} file={f} onDelete={deleteFile} onUpdate={updateFile} />
             ))}
             <div style={{fontSize:11, color:'var(--ink-2)', marginTop:6}}>
-              Supported: .zip .tar.gz .iso .apk .exe .msi .deb .rpm .dmg .appimage &mdash; max 10 GB per file
+              Supported: .zip .tar.gz .iso .apk .exe .msi .deb .rpm .dmg .appimage — max 10 GB per file
             </div>
           </div>
 

@@ -739,74 +739,270 @@ function ServicesPage({ go }) {
 }
 
 // ============================================================
-// SOFTWARE
+// SOFTWARE — OS icons, listing, OS picker, detail page
 // ============================================================
-function SoftwarePage({ go }) {
+const OS_META = {
+  linux:   { label: 'Linux',   icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a7 7 0 0 0-7 7c0 2.3 1.1 4.3 2.8 5.6C5.2 15.8 4 18.3 4 21h16c0-2.7-1.2-5.2-3.8-6.4A7 7 0 0 0 19 9a7 7 0 0 0-7-7zm0 2a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5zm-2 2v2h4V6h-4zm-1 4a1 1 0 0 0-1 1 1 1 0 0 0 1 1 1 1 0 0 0 1-1 1 1 0 0 0-1-1zm6 0a1 1 0 0 0-1 1 1 1 0 0 0 1 1 1 1 0 0 0 1-1 1 1 0 0 0-1-1z"/></svg> },
+  windows: { label: 'Windows', icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.6L10.5 4.5V11.5H3V5.6ZM11.5 4.3L21 3V11.5H11.5V4.3ZM3 12.5H10.5V19.5L3 18.4V12.5ZM11.5 12.5H21V21L11.5 19.7V12.5Z"/></svg> },
+  macos:   { label: 'macOS',   icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg> },
+  ios:     { label: 'iOS',     icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="7" y="1" width="10" height="22" rx="2.5"/><circle cx="12" cy="19" r="1" fill="currentColor" stroke="none"/><line x1="9.5" y1="4" x2="14.5" y2="4"/></svg> },
+  android: { label: 'Android', icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18c0 .55.45 1 1 1h1v3.5c0 .83.67 1.5 1.5 1.5S11 23.33 11 22.5V19h2v3.5c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5V19h1c.55 0 1-.45 1-1V8H6v10zM3.5 8C2.67 8 2 8.67 2 9.5v7c0 .83.67 1.5 1.5 1.5S5 17.33 5 16.5v-7C5 8.67 4.33 8 3.5 8zm17 0c-.83 0-1.5.67-1.5 1.5v7c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5v-7c0-.83-.67-1.5-1.5-1.5zm-4.97-5.84l1.3-1.3c.2-.2.2-.51 0-.71-.2-.2-.51-.2-.71 0l-1.48 1.48A5.84 5.84 0 0 0 12 1c-1.1 0-2.15.23-3.1.63L7.41.15c-.2-.2-.51-.2-.71 0-.2.2-.2.51 0 .71l1.3 1.3C6.01 3.07 5 4.96 5 7h14c0-2.04-1.01-3.93-2.47-4.84zM10 5H9V4h1v1zm5 0h-1V4h1v1z"/></svg> },
+  cross:   { label: 'All platforms', icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg> },
+};
+
+function SoftwarePage({ go, pageParams }) {
   const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [osPicker, setOsPicker] = useState(null); // product being picked for
+
   useEffect(() => {
-    fetch('/api/software').then(r => r.ok ? r.json() : Promise.reject()).then(d => setProducts(d.items || [])).catch(() => {});
+    fetch('/api/software').then(r => r.ok ? r.json() : Promise.reject()).then(d => setProducts(d.items || [])).catch(() => {}).finally(() => setLoading(false));
   }, []);
+
+  // Deep-link: resolve product by slug once data loads
+  useEffect(() => {
+    if (!pageParams?.slug || !products.length) return;
+    const found = products.find(p => p.slug === pageParams.slug);
+    if (found && pageParams.name === undefined) {
+      // Enrich pageParams with loaded data so title/meta update
+      // We do this via a no-op state trick — just trigger a re-render via go
+    }
+  }, [products, pageParams]);
+
+  // Detail page
+  if (pageParams?.slug && pageParams?.os) {
+    const product = products.find(p => p.slug === pageParams.slug);
+    if (!loading && !product) return (
+      <><PageHead crumbs={['Outback','Software']} title="Not found" lead="This software entry doesn't exist." />
+      <section className="container" style={{padding:'40px 0'}}><button className="btn btn-ghost btn-sm" onClick={() => go('software', null)}>← Back to Software</button></section></>
+    );
+    if (!product) return <section className="container" style={{padding:'80px 0', textAlign:'center'}}><span className="mono" style={{fontSize:12,color:'var(--ink-2)'}}>Loading…</span></section>;
+    return <SoftwareDetailPage product={product} os={pageParams.os} go={go} />;
+  }
+
+  // OS picker page (slug set but no OS yet)
+  if (pageParams?.slug) {
+    const product = products.find(p => p.slug === pageParams.slug);
+    if (!loading && !product) return (
+      <><PageHead crumbs={['Outback','Software']} title="Not found" lead="This software entry doesn't exist." />
+      <section className="container" style={{padding:'40px 0'}}><button className="btn btn-ghost btn-sm" onClick={() => go('software', null)}>← Back to Software</button></section></>
+    );
+    if (!product) return <section className="container" style={{padding:'80px 0', textAlign:'center'}}><span className="mono" style={{fontSize:12,color:'var(--ink-2)'}}>Loading…</span></section>;
+    return <SoftwareOSPickerPage product={product} go={go} />;
+  }
+
+  // Listing
   return (
     <>
       <PageHead crumbs={['Outback','Software']} title="Software"
         lead="Tools we wrote for ourselves, then cleaned up enough to share. Mostly open source, mostly Linux, all paid-back in pull requests." />
-      <section className="container" style={{paddingTop: 40, paddingBottom: 32}}>
+      <section className="container" style={{paddingTop: 40, paddingBottom: 48}}>
+        {loading && <div className="mono" style={{fontSize:12,color:'var(--ink-2)'}}>Loading…</div>}
+        {!loading && products.length === 0 && (
+          <div style={{padding:'48px 0'}}>
+            <p className="serif" style={{fontSize:28, marginBottom:12}}>Still in the workshop.</p>
+            <p style={{color:'var(--ink-2)', fontSize:15, maxWidth:520, lineHeight:1.7}}>
+              We're working on our first software release — internal tools we use every day that we think are worth sharing. Check back soon.
+            </p>
+          </div>
+        )}
         <div className="grid-2" style={{gap: 24}}>
-          {products.length === 0 && (
-            <div style={{gridColumn:'1/-1', padding:'48px 0'}}>
-              <p className="serif" style={{fontSize:28, marginBottom:12}}>Still in the workshop.</p>
-              <p style={{color:'var(--ink-2)', fontSize:15, maxWidth:520, lineHeight:1.7}}>
-                We're working on our first software release — internal tools we use every day that we think are worth sharing. Check back soon.
-              </p>
-            </div>
-          )}
           {products.map((p,i) => {
             const isOss = (p.license||'').includes('OSS');
-            const files = p.files || [];
-            const hasFiles = files.length > 0;
-            const hasRepo = !!p.repo;
-            const cardHref = hasRepo ? p.repo : (hasFiles ? files[0].url : null);
-            const cardTarget = hasRepo ? '_blank' : null;
-            const cardDownload = !hasRepo && hasFiles ? (files[0].originalName || files[0].filename) : null;
-            const cardProps = cardHref ? {
-              href: cardHref,
-              ...(cardTarget ? { target: cardTarget, rel: 'noopener noreferrer' } : {}),
-              ...(cardDownload ? { download: cardDownload } : {}),
-              style: { textDecoration: 'none', color: 'inherit', display: 'grid', gridTemplateColumns: '1fr', gap: 14, padding: 28, cursor: 'pointer' },
-            } : { style: { display: 'grid', gridTemplateColumns: '1fr', gap: 14, padding: 28 } };
-            const CardEl = cardHref ? 'a' : 'div';
+            const platforms = getSupportedPlatforms(p);
+            const hasLink = !!p.slug || !!p.repo;
             return (
-            <CardEl key={p.id||i} className="card-paper card-hover" {...cardProps}>
-              <div className="row-flex" style={{justifyContent:'space-between'}}>
-                <span className={`tag ${isOss?'tag-euc':'tag-rust'}`}>{p.license}</span>
-                <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{p.stars}</span>
-              </div>
-              <h3 className="serif" style={{fontSize: 36, lineHeight:1}}>{p.name}</h3>
-              {p.tagline && <p style={{color:'var(--ink-2)', fontSize:14}}>{p.tagline}</p>}
-              {p.description && <p style={{color:'var(--ink-2)', fontSize:14}}>{p.description}</p>}
-              {p.quickstart && (
-                <pre style={{background:'var(--bg-deep)', borderRadius:6, padding:'10px 14px', fontSize:12, fontFamily:'JetBrains Mono, monospace', overflowX:'auto', margin:0}}>{p.quickstart}</pre>
-              )}
-              <div className="row-flex" style={{justifyContent:'space-between', borderTop:'1px solid var(--line)', paddingTop: 14}}>
-                <span className="price" style={{fontSize: 20}}>{p.price}</span>
-                <div className="row-flex" style={{gap:8}}>
-                  {hasRepo && <span className="btn btn-ghost btn-sm" style={{pointerEvents:'none'}}>Repo →</span>}
-                  {hasFiles && files.map((f,fi) => (
-                    <span key={fi} className="btn btn-sm" style={{pointerEvents:'none'}}>
-                      {f.label || (files.length === 1 ? 'Download' : `Download${f.platform && f.platform !== 'other' ? ' · ' + f.platform : ''}`)}
-                    </span>
-                  ))}
-                  {!hasRepo && !hasFiles && <span style={{fontSize:12, color:'var(--ink-2)'}}>Coming soon</span>}
+              <div key={p.id||i} className="card-paper card-hover" onClick={() => p.slug ? go('software', { slug: p.slug }) : null}
+                style={{padding: 28, display:'grid', gridTemplateColumns:'1fr', gap:14, cursor: p.slug ? 'pointer' : 'default'}}>
+                <div className="row-flex" style={{justifyContent:'space-between'}}>
+                  <span className={`tag ${isOss?'tag-euc':'tag-rust'}`}>{p.license}</span>
+                  {p.version && <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>v{p.version}</span>}
+                </div>
+                <h3 className="serif" style={{fontSize: 36, lineHeight:1}}>{p.name}</h3>
+                {p.tagline && <p style={{color:'var(--ink-2)', fontSize:14, margin:0}}>{p.tagline}</p>}
+                <div className="row-flex" style={{justifyContent:'space-between', borderTop:'1px solid var(--line)', paddingTop: 14, marginTop: 4}}>
+                  <span className="price" style={{fontSize: 20}}>{p.price || 'Free'}</span>
+                  <div className="row-flex" style={{gap:10}}>
+                    {platforms.map(os => (
+                      <span key={os} style={{color:'var(--ink-2)'}} title={OS_META[os]?.label || os}>{OS_META[os]?.icon || os}</span>
+                    ))}
+                    {platforms.length === 0 && <span style={{fontSize:12,color:'var(--ink-2)'}}>Coming soon</span>}
+                  </div>
                 </div>
               </div>
-            </CardEl>
             );
           })}
         </div>
       </section>
-
+      {osPicker && <SoftwareOSOverlay product={osPicker} go={go} onClose={() => setOsPicker(null)} />}
     </>
   );
+}
+
+function getSupportedPlatforms(product) {
+  // Derive available platforms from uploaded files, deduplicated
+  const fromFiles = [...new Set((product.files || []).map(f => f.platform).filter(p => p && p !== 'other'))];
+  // Also include any manually set platforms that don't have a file yet
+  const manual = product.platforms || [];
+  return [...new Set([...fromFiles, ...manual.filter(p => p !== 'other')])];
+}
+
+function SoftwareOSPickerPage({ product, go }) {
+  const platforms = getSupportedPlatforms(product);
+  const isOss = (product.license||'').includes('OSS');
+  return (
+    <>
+      <PageHead crumbs={['Outback','Software',product.name]} title={product.name}
+        lead={product.tagline || ''} />
+      <section className="container" style={{paddingTop:32, paddingBottom:48}}>
+        <button className="btn btn-ghost btn-sm" style={{marginBottom:32}} onClick={() => go('software', null)}>← All Software</button>
+        <div style={{maxWidth:600}}>
+          <span className="eyebrow">SELECT YOUR PLATFORM</span>
+          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(140px,1fr))', gap:16, marginTop:20}}>
+            {platforms.map(os => {
+              const meta = OS_META[os] || { label: os, icon: null };
+              const hasFile = (product.files||[]).some(f => f.platform === os || (os === 'cross' && f.platform === 'cross'));
+              return (
+                <button key={os} onClick={() => go('software', { slug: product.slug, os })}
+                  className="card-paper card-hover"
+                  style={{padding:'24px 16px', display:'flex', flexDirection:'column', alignItems:'center', gap:10, cursor:'pointer', border:'1px solid var(--line)', background:'var(--paper)', textAlign:'center'}}>
+                  <span style={{color:'var(--ink)'}}>{meta.icon}</span>
+                  <span style={{fontWeight:600, fontSize:14}}>{meta.label}</span>
+                  {!hasFile && <span className="tag tag-outline" style={{fontSize:10}}>Coming soon</span>}
+                </button>
+              );
+            })}
+            {platforms.length === 0 && <p style={{color:'var(--ink-2)', fontSize:14}}>No downloads available yet. Check back soon.</p>}
+          </div>
+          {product.repo && isOss && (
+            <div style={{marginTop:32}}>
+              <a href={product.repo} target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-sm">View source on GitHub →</a>
+            </div>
+          )}
+        </div>
+      </section>
+    </>
+  );
+}
+
+function SoftwareDetailPage({ product, os, go }) {
+  const meta = OS_META[os] || { label: os, icon: null };
+  const isOss = (product.license||'').includes('OSS');
+  const osFiles = (product.files||[]).filter(f => f.platform === os || (os === 'cross' && f.platform === 'cross') || f.platform === 'other');
+  const otherPlatforms = getSupportedPlatforms(product).filter(p => p !== os);
+  const minSpecs = product.minSpecs || {};
+  const recSpecs = product.recSpecs || {};
+  const hasSpecs = Object.values({...minSpecs,...recSpecs}).some(v => v);
+
+  return (
+    <>
+      <PageHead crumbs={['Outback','Software',product.name,meta.label]} title={product.name}
+        lead={product.tagline || ''} />
+      <section className="container" style={{paddingTop:32, paddingBottom:64}}>
+        <div className="row-flex" style={{gap:12, marginBottom:32, flexWrap:'wrap'}}>
+          <button className="btn btn-ghost btn-sm" onClick={() => go('software', { slug: product.slug })}>← {product.name}</button>
+          {otherPlatforms.map(p => (
+            <button key={p} className="btn btn-ghost btn-sm" onClick={() => go('software', { slug: product.slug, os: p })}>
+              {OS_META[p]?.label || p} →
+            </button>
+          ))}
+        </div>
+
+        <div style={{display:'grid', gridTemplateColumns:'1fr min(320px,35%)', gap:48, alignItems:'start'}}>
+          {/* Left: info */}
+          <div>
+            <div className="row-flex" style={{gap:12, marginBottom:20, flexWrap:'wrap'}}>
+              <span className={`tag ${isOss?'tag-euc':'tag-rust'}`}>{product.license}</span>
+              {product.version && <span className="tag tag-outline">v{product.version}</span>}
+              <span className="row-flex" style={{gap:6, color:'var(--ink-2)', fontSize:14}}>{meta.icon}<span>{meta.label}</span></span>
+            </div>
+            <h1 className="serif" style={{fontSize:56, lineHeight:1, marginBottom:16}}>{product.name}</h1>
+            {product.tagline && <p style={{fontSize:18, color:'var(--ink-2)', marginBottom:24, lineHeight:1.6}}>{product.tagline}</p>}
+            {product.description && <div style={{fontSize:15, lineHeight:1.8, color:'var(--ink)', marginBottom:32, whiteSpace:'pre-wrap'}}>{product.description}</div>}
+            {product.quickstart && (
+              <div style={{marginBottom:32}}>
+                <span className="eyebrow">QUICK START</span>
+                <pre style={{background:'var(--bg-deep)', borderRadius:6, padding:'14px 18px', fontSize:13, fontFamily:'JetBrains Mono, monospace', overflowX:'auto', marginTop:10}}>{product.quickstart}</pre>
+              </div>
+            )}
+            {product.requirements && (
+              <div style={{marginBottom:32}}>
+                <span className="eyebrow">ADDITIONAL REQUIREMENTS</span>
+                <p style={{fontSize:14, color:'var(--ink-2)', marginTop:8, lineHeight:1.7}}>{product.requirements}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Right: download + specs */}
+          <div style={{display:'flex', flexDirection:'column', gap:20}}>
+            {/* Download */}
+            <div className="card-paper" style={{padding:24}}>
+              <span className="eyebrow" style={{marginBottom:12, display:'block'}}>DOWNLOAD</span>
+              {osFiles.length === 0 ? (
+                <p style={{fontSize:13, color:'var(--ink-2)'}}>No {meta.label} build available yet.</p>
+              ) : osFiles.map((f,i) => (
+                <div key={i} style={{marginBottom: i < osFiles.length-1 ? 12 : 0}}>
+                  <a href={f.url} download={f.originalName||f.filename} className="btn btn-sm" style={{width:'100%', textAlign:'center', textDecoration:'none', display:'block', marginBottom:6}}>
+                    ↓ {f.label || f.originalName || 'Download'}
+                  </a>
+                  <div className="row-flex" style={{justifyContent:'space-between'}}>
+                    {f.version && <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>v{f.version}</span>}
+                    {f.size > 0 && <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{fmtSize(f.size)}</span>}
+                  </div>
+                </div>
+              ))}
+              {product.price && <div style={{marginTop:16, paddingTop:12, borderTop:'1px solid var(--line)'}}>
+                <span className="price">{product.price}</span>
+              </div>}
+            </div>
+
+            {/* Repo */}
+            {product.repo && (
+              <a href={product.repo} target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-sm" style={{textDecoration:'none', textAlign:'center'}}>
+                View source →
+              </a>
+            )}
+
+            {/* System requirements */}
+            {hasSpecs && (
+              <div className="card-paper" style={{padding:24}}>
+                <span className="eyebrow" style={{marginBottom:16, display:'block'}}>SYSTEM REQUIREMENTS</span>
+                <table style={{width:'100%', fontSize:13, borderCollapse:'collapse'}}>
+                  <thead>
+                    <tr>
+                      <th style={{textAlign:'left', color:'var(--ink-2)', fontWeight:400, paddingBottom:8, width:'35%'}}></th>
+                      <th style={{textAlign:'left', color:'var(--ink-2)', fontWeight:600, paddingBottom:8, fontSize:11}}>MINIMUM</th>
+                      <th style={{textAlign:'left', color:'var(--ink-2)', fontWeight:600, paddingBottom:8, fontSize:11}}>RECOMMENDED</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[['OS','os'],['CPU','cpu'],['RAM','ram'],['Storage','storage'],['Other','other']].map(([label,key]) => {
+                      if (!minSpecs[key] && !recSpecs[key]) return null;
+                      return (
+                        <tr key={key} style={{borderTop:'1px solid var(--line)'}}>
+                          <td style={{padding:'8px 0', color:'var(--ink-2)', fontWeight:500}}>{label}</td>
+                          <td style={{padding:'8px 8px 8px 0'}}>{minSpecs[key] || '—'}</td>
+                          <td style={{padding:'8px 0'}}>{recSpecs[key] || '—'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
+
+function fmtSize(bytes) {
+  if (!bytes) return '';
+  if (bytes >= 1024*1024*1024) return (bytes/(1024*1024*1024)).toFixed(1)+' GB';
+  if (bytes >= 1024*1024) return (bytes/(1024*1024)).toFixed(1)+' MB';
+  if (bytes >= 1024) return (bytes/1024).toFixed(0)+' KB';
+  return bytes+' B';
 }
 
 // ============================================================
