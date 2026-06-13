@@ -149,6 +149,7 @@ function RegisterForm({ onLogin, onBack }) {
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const [busy, setBusy] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   function validate() {
     const errs = {};
@@ -158,6 +159,7 @@ function RegisterForm({ onLogin, onBack }) {
     else if (!EMAIL_RE.test(email.trim())) errs.email = 'Enter a valid email address, e.g. you@example.com.';
     if (!/^[a-zA-Z0-9_]{3,30}$/.test(username.trim())) errs.username = 'Username must be 3–30 characters — letters, numbers and underscores only.';
     if (password.length < 8) errs.password = 'Password must be at least 8 characters.';
+    if (!termsAccepted) errs.terms = 'You must accept the Terms & Conditions and Privacy Policy to create an account.';
     return errs;
   }
 
@@ -225,6 +227,23 @@ function RegisterForm({ onLogin, onBack }) {
             ? <span style={{fontSize:11, color: strength.color, marginTop:3, display:'block', fontWeight:600}}>Strength: {strength.label}</span>
             : <span style={{fontSize:11, color:'var(--ink-3)', marginTop:3, display:'block'}}>Minimum 8 characters</span>}
         </label>
+        <label style={{display:'flex', alignItems:'flex-start', gap:10, marginTop:16, marginBottom:4, cursor:'pointer'}}>
+          <input
+            type="checkbox"
+            checked={termsAccepted}
+            onChange={e => { setTermsAccepted(e.target.checked); setFieldErrors(f => ({...f, terms: ''})); }}
+            style={{marginTop:2, flexShrink:0, accentColor:'var(--rust)', width:16, height:16, cursor:'pointer'}}
+          />
+          <span style={{fontSize:13, color:'var(--ink-2)', lineHeight:1.5}}>
+            I have read and agree to the{' '}
+            <a href={getSiteUrl() + '/policies/terms-and-conditions'} target="_blank" rel="noopener noreferrer" style={{color:'var(--rust)', fontWeight:600}}>Terms &amp; Conditions</a>
+            {', '}
+            <a href={getSiteUrl() + '/policies/privacy-policy'} target="_blank" rel="noopener noreferrer" style={{color:'var(--rust)', fontWeight:600}}>Privacy Policy</a>
+            {', and '}
+            <a href={getSiteUrl() + '/policies'} target="_blank" rel="noopener noreferrer" style={{color:'var(--rust)', fontWeight:600}}>all site policies</a>.
+          </span>
+        </label>
+        {fieldErrors.terms && <span className="field-error" style={{display:'block', marginBottom:8}}>{fieldErrors.terms}</span>}
         <button className="btn btn-rust" type="submit" disabled={busy} style={{width:'100%', justifyContent:'center', marginTop:4}}>
           {busy ? 'Creating account…' : 'Create account →'}
         </button>
@@ -2122,6 +2141,7 @@ function OrderTokenView({ token, onLogin }) {
   const [password, setPassword] = useState('');
   const [formErr, setFormErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   useEffect(() => {
     api(`/api/order-token?token=${encodeURIComponent(token)}`)
@@ -2147,6 +2167,7 @@ function OrderTokenView({ token, onLogin }) {
 
   async function handleRegister(e) {
     e.preventDefault();
+    if (!termsAccepted) { setFormErr('You must accept the Terms & Conditions and Privacy Policy to create an account.'); return; }
     setFormErr(''); setBusy(true);
     const r = await api('/api/portal/auth/register', {
       method: 'POST',
@@ -2235,6 +2256,22 @@ function OrderTokenView({ token, onLogin }) {
               <span className="label">Password</span>
               <input className="input" type="password" value={password} autoComplete="new-password" onChange={e => setPassword(e.target.value)} required />
               <span style={{fontSize:11, color:'var(--ink-3)', marginTop:3, display:'block'}}>Minimum 8 characters</span>
+            </label>
+            <label style={{display:'flex', alignItems:'flex-start', gap:10, marginTop:16, marginBottom:4, cursor:'pointer'}}>
+              <input
+                type="checkbox"
+                checked={termsAccepted}
+                onChange={e => { setTermsAccepted(e.target.checked); setFormErr(''); }}
+                style={{marginTop:2, flexShrink:0, accentColor:'var(--rust)', width:16, height:16, cursor:'pointer'}}
+              />
+              <span style={{fontSize:13, color:'var(--ink-2)', lineHeight:1.5}}>
+                I have read and agree to the{' '}
+                <a href={getSiteUrl() + '/policies/terms-and-conditions'} target="_blank" rel="noopener noreferrer" style={{color:'var(--rust)', fontWeight:600}}>Terms &amp; Conditions</a>
+                {', '}
+                <a href={getSiteUrl() + '/policies/privacy-policy'} target="_blank" rel="noopener noreferrer" style={{color:'var(--rust)', fontWeight:600}}>Privacy Policy</a>
+                {', and '}
+                <a href={getSiteUrl() + '/policies'} target="_blank" rel="noopener noreferrer" style={{color:'var(--rust)', fontWeight:600}}>all site policies</a>.
+              </span>
             </label>
             <button className="btn btn-rust" type="submit" disabled={busy} style={{width:'100%', justifyContent:'center', marginTop:8}}>
               {busy ? 'Creating account…' : 'Create account & view order →'}
