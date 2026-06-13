@@ -765,8 +765,18 @@ function SoftwarePage({ go }) {
             const files = p.files || [];
             const hasFiles = files.length > 0;
             const hasRepo = !!p.repo;
+            const cardHref = hasRepo ? p.repo : (hasFiles ? files[0].url : null);
+            const cardTarget = hasRepo ? '_blank' : null;
+            const cardDownload = !hasRepo && hasFiles ? (files[0].originalName || files[0].filename) : null;
+            const cardProps = cardHref ? {
+              href: cardHref,
+              ...(cardTarget ? { target: cardTarget, rel: 'noopener noreferrer' } : {}),
+              ...(cardDownload ? { download: cardDownload } : {}),
+              style: { textDecoration: 'none', color: 'inherit', display: 'grid', gridTemplateColumns: '1fr', gap: 14, padding: 28, cursor: 'pointer' },
+            } : { style: { display: 'grid', gridTemplateColumns: '1fr', gap: 14, padding: 28 } };
+            const CardEl = cardHref ? 'a' : 'div';
             return (
-            <div key={p.id||i} className="card-paper" style={{padding: 28, display:'grid', gridTemplateColumns:'1fr', gap:14}}>
+            <CardEl key={p.id||i} className="card-paper card-hover" {...cardProps}>
               <div className="row-flex" style={{justifyContent:'space-between'}}>
                 <span className={`tag ${isOss?'tag-euc':'tag-rust'}`}>{p.license}</span>
                 <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{p.stars}</span>
@@ -780,16 +790,16 @@ function SoftwarePage({ go }) {
               <div className="row-flex" style={{justifyContent:'space-between', borderTop:'1px solid var(--line)', paddingTop: 14}}>
                 <span className="price" style={{fontSize: 20}}>{p.price}</span>
                 <div className="row-flex" style={{gap:8}}>
-                  {hasRepo && <a href={p.repo} target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-sm" style={{textDecoration:'none'}}>Repo →</a>}
+                  {hasRepo && <span className="btn btn-ghost btn-sm" style={{pointerEvents:'none'}}>Repo →</span>}
                   {hasFiles && files.map((f,fi) => (
-                    <a key={fi} href={f.url} download={f.originalName||f.filename} className="btn btn-sm" style={{textDecoration:'none'}}>
+                    <span key={fi} className="btn btn-sm" style={{pointerEvents:'none'}}>
                       {f.label || (files.length === 1 ? 'Download' : `Download${f.platform && f.platform !== 'other' ? ' · ' + f.platform : ''}`)}
-                    </a>
+                    </span>
                   ))}
                   {!hasRepo && !hasFiles && <span style={{fontSize:12, color:'var(--ink-2)'}}>Coming soon</span>}
                 </div>
               </div>
-            </div>
+            </CardEl>
             );
           })}
         </div>
