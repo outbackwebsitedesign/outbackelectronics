@@ -1091,34 +1091,53 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null, cspOverride 
     if (idx >= paths.length) { return sendErrorPage(req, res, 404, 'Not found', ERROR_404_HTML); }
     const filePath = paths[idx];
     if (!ALLOWED_SERVE_ROOTS.some(root => filePath.startsWith(root))) { return tryRead(paths, idx + 1); }
+
+    const ext = path.extname(filePath).toLowerCase();
+    const types = { '.html': 'text/html', '.jsx': 'text/javascript', '.js': 'text/javascript', '.css': 'text/css', '.txt': 'text/plain', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.woff': 'font/woff', '.woff2': 'font/woff2' };
+    const isSoftwareDownload = filePath.includes('/assets/uploads/software/') && !filePath.includes('/.chunks/');
+    const isImmutable = /\.(js|css|png|jpg|jpeg|webp|gif|svg|ico|woff2?)$/.test(ext) && !isSoftwareDownload;
+    const cacheHeader = isImmutable ? 'public, max-age=31536000, immutable' : 'no-cache, must-revalidate';
+    const isHtml = ext === '.html';
+    const isEmbeddable = isHtml && cleanPath.startsWith('/assets/') && !cleanPath.startsWith('/assets/uploads/');
+    const securityHeaders = isHtml ? {
+      'X-Frame-Options': isEmbeddable ? 'SAMEORIGIN' : 'DENY',
+      'X-Content-Type-Options': 'nosniff',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
+      'Strict-Transport-Security': HSTS_VALUE,
+      'Permissions-Policy': PERMISSIONS_POLICY,
+      'Content-Security-Policy': isEmbeddable
+        ? "default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://nominatim.openstreetmap.org; frame-src https://www.openstreetmap.org; frame-ancestors 'self';"
+        : (cspOverride || PUBLIC_CSP),
+    } : { 'X-Content-Type-Options': 'nosniff', 'Strict-Transport-Security': HSTS_VALUE };
+    const isPdf = ext === '.pdf';
+    const expiresDate = isImmutable
+      ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toUTCString()
+      : new Date(0).toUTCString();
+
+    // Stream large binary downloads directly — no buffering in memory.
+    if (isSoftwareDownload || isPdf) {
+      fs.stat(filePath, (statErr, stat) => {
+        if (statErr) return tryRead(paths, idx + 1);
+        const headers = {
+          'Content-Type': types[ext] || 'application/octet-stream',
+          'Content-Length': stat.size,
+          'Content-Disposition': `attachment; filename="${path.basename(filePath).replace(/^\d+-/, '')}"`,
+          'Cache-Control': 'no-cache, must-revalidate',
+          'Expires': new Date(0).toUTCString(),
+          'X-Content-Type-Options': 'nosniff',
+          'Strict-Transport-Security': HSTS_VALUE,
+        };
+        res.writeHead(200, headers);
+        const stream = fs.createReadStream(filePath);
+        stream.on('error', () => { if (!res.headersSent) res.end(); else res.destroy(); });
+        stream.pipe(res);
+      });
+      return;
+    }
+
     fs.readFile(filePath, (err, data) => {
       if (err) return tryRead(paths, idx + 1);
-      const ext = path.extname(filePath).toLowerCase();
-      const types = { '.html': 'text/html', '.jsx': 'text/javascript', '.js': 'text/javascript', '.css': 'text/css', '.txt': 'text/plain', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.woff': 'font/woff', '.woff2': 'font/woff2' };
-      const isSoftwareDownload = filePath.includes('/assets/uploads/software/');
-      const isImmutable = /\.(js|css|png|jpg|jpeg|webp|gif|svg|ico|woff2?)$/.test(ext) && !isSoftwareDownload;
-      const cacheHeader = isImmutable
-        ? 'public, max-age=31536000, immutable'
-        : 'no-cache, must-revalidate';
-      const isHtml = ext === '.html';
-      const isEmbeddable = isHtml && cleanPath.startsWith('/assets/') && !cleanPath.startsWith('/assets/uploads/');
-      const securityHeaders = isHtml ? {
-        'X-Frame-Options': isEmbeddable ? 'SAMEORIGIN' : 'DENY',
-        'X-Content-Type-Options': 'nosniff',
-        'Referrer-Policy': 'strict-origin-when-cross-origin',
-        'Strict-Transport-Security': HSTS_VALUE,
-        'Permissions-Policy': PERMISSIONS_POLICY,
-        'Content-Security-Policy': isEmbeddable
-          ? "default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://nominatim.openstreetmap.org; frame-src https://www.openstreetmap.org; frame-ancestors 'self';"
-          : (cspOverride || PUBLIC_CSP),
-      } : { 'X-Content-Type-Options': 'nosniff', 'Strict-Transport-Security': HSTS_VALUE };
-      const isPdf = ext === '.pdf';
-      const extraHeaders = (isSoftwareDownload || isPdf)
-        ? { 'Content-Disposition': `attachment; filename="${path.basename(filePath).replace(/^\d+-/, '')}"` }
-        : {};
-      const expiresDate = isImmutable
-        ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toUTCString()
-        : new Date(0).toUTCString();
+      const extraHeaders = {};
       const baseHeaders = {
         'Content-Type': (types[ext] || 'application/octet-stream'),
         'Cache-Control': cacheHeader,
