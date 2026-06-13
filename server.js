@@ -1125,7 +1125,7 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null, cspOverride 
           'Content-Type': types[ext] || 'application/octet-stream',
           'Content-Disposition': `attachment; filename="${filename}"`,
           'Accept-Ranges': 'bytes',
-          'Cache-Control': 'no-cache, must-revalidate',
+          'Cache-Control': 'public, max-age=31536000, immutable',
           'X-Content-Type-Options': 'nosniff',
           'Strict-Transport-Security': HSTS_VALUE,
         };
