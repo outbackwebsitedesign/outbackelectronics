@@ -918,6 +918,21 @@ function SoftwareDetailPage({ product, os, go }) {
 
   return (
     <>
+      <style>{`
+        .sw-detail-grid { display: grid; grid-template-columns: 1fr min(320px,35%); gap: 48px; align-items: start; }
+        .sw-detail-h1 { font-size: 56px; line-height: 1; margin-bottom: 16px; }
+        .sw-specs-table { width: 100%; font-size: 13px; border-collapse: collapse; }
+        @media (max-width: 680px) {
+          .sw-detail-grid { grid-template-columns: 1fr; gap: 32px; }
+          .sw-detail-h1 { font-size: 36px; }
+          .sw-specs-table thead { display: none; }
+          .sw-specs-table tr { display: block; border-top: 1px solid var(--line); padding: 10px 0; }
+          .sw-specs-table td { display: block; padding: 2px 0 !important; }
+          .sw-specs-table td:first-child { font-weight: 600; color: var(--ink); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+          .sw-specs-table td:nth-child(2)::before { content: 'Min: '; color: var(--ink-2); font-size: 11px; }
+          .sw-specs-table td:nth-child(3)::before { content: 'Rec: '; color: var(--ink-2); font-size: 11px; }
+        }
+      `}</style>
       <PageHead crumbs={['Outback','Software',product.name,meta.label]} title={product.name}
         lead={product.tagline || ''} />
       <section className="container" style={{paddingTop:32, paddingBottom:64}}>
@@ -930,7 +945,7 @@ function SoftwareDetailPage({ product, os, go }) {
           ))}
         </div>
 
-        <div style={{display:'grid', gridTemplateColumns:'1fr min(320px,35%)', gap:48, alignItems:'start'}}>
+        <div className="sw-detail-grid">
           {/* Left: info */}
           <div>
             <div className="row-flex" style={{gap:12, marginBottom:20, flexWrap:'wrap'}}>
@@ -938,13 +953,13 @@ function SoftwareDetailPage({ product, os, go }) {
               {product.version && <span className="tag tag-outline">v{product.version}</span>}
               <span className="row-flex" style={{gap:6, color:'var(--ink-2)', fontSize:14}}>{meta.icon}<span>{meta.label}</span></span>
             </div>
-            <h1 className="serif" style={{fontSize:56, lineHeight:1, marginBottom:16}}>{product.name}</h1>
+            <h1 className="serif sw-detail-h1">{product.name}</h1>
             {product.tagline && <p style={{fontSize:18, color:'var(--ink-2)', marginBottom:24, lineHeight:1.6}}>{product.tagline}</p>}
             {product.description && <div style={{fontSize:15, lineHeight:1.8, color:'var(--ink)', marginBottom:32, whiteSpace:'pre-wrap'}}>{product.description}</div>}
             {product.quickstart && (
               <div style={{marginBottom:32}}>
                 <span className="eyebrow">QUICK START</span>
-                <pre style={{background:'var(--bg-deep)', borderRadius:6, padding:'14px 18px', fontSize:13, fontFamily:'JetBrains Mono, monospace', overflowX:'auto', marginTop:10}}>{product.quickstart}</pre>
+                <pre style={{background:'var(--bg-deep)', borderRadius:6, padding:'14px 18px', fontSize:13, fontFamily:'JetBrains Mono, monospace', overflowX:'auto', marginTop:10, wordBreak:'break-all', whiteSpace:'pre-wrap'}}>{product.quickstart}</pre>
               </div>
             )}
             {product.requirements && (
@@ -964,7 +979,7 @@ function SoftwareDetailPage({ product, os, go }) {
                 <p style={{fontSize:13, color:'var(--ink-2)'}}>No {meta.label} build available yet.</p>
               ) : osFiles.map((f,i) => (
                 <div key={i} style={{marginBottom: i < osFiles.length-1 ? 12 : 0}}>
-                  <a href={f.url} download={f.originalName||f.filename} className="btn btn-sm" style={{width:'100%', textAlign:'center', textDecoration:'none', display:'block', marginBottom:6}}>
+                  <a href={f.url} download={f.originalName||f.filename} className="btn btn-sm" style={{width:'100%', textAlign:'center', textDecoration:'none', display:'block', marginBottom:6, wordBreak:'break-all', whiteSpace:'normal'}}>
                     ↓ {f.label || f.originalName || 'Download'}
                   </a>
                   <div className="row-flex" style={{justifyContent:'space-between'}}>
@@ -989,7 +1004,7 @@ function SoftwareDetailPage({ product, os, go }) {
             {hasSpecs && (
               <div className="card-paper" style={{padding:24}}>
                 <span className="eyebrow" style={{marginBottom:16, display:'block'}}>SYSTEM REQUIREMENTS</span>
-                <table style={{width:'100%', fontSize:13, borderCollapse:'collapse'}}>
+                <table className="sw-specs-table">
                   <thead>
                     <tr>
                       <th style={{textAlign:'left', color:'var(--ink-2)', fontWeight:400, paddingBottom:8, width:'35%'}}></th>
