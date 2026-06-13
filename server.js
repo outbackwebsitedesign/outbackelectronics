@@ -1114,7 +1114,7 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null, cspOverride 
       } : { 'X-Content-Type-Options': 'nosniff', 'Strict-Transport-Security': HSTS_VALUE };
       const isPdf = ext === '.pdf';
       const extraHeaders = (isSoftwareDownload || isPdf)
-        ? { 'Content-Disposition': `attachment; filename="${path.basename(filePath)}"` }
+        ? { 'Content-Disposition': `attachment; filename="${path.basename(filePath).replace(/^\d+-/, '')}"` }
         : {};
       const expiresDate = isImmutable
         ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toUTCString()
