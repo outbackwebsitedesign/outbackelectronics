@@ -568,9 +568,11 @@ function RegisterPage({ go }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
+    if (!termsAccepted) { setError('You must accept the Terms & Conditions and Privacy Policy to create an account.'); return; }
     setError(''); setBusy(true);
     const r = await portalApi('/api/portal/auth/register', {
       method: 'POST',
@@ -633,6 +635,17 @@ function RegisterPage({ go }) {
                 <span style={labelStyle}>Password</span>
                 <input style={inputStyle} type="password" value={password} autoComplete="new-password" onChange={e => setPassword(e.target.value)} required />
                 <span style={{fontSize:11, color:'var(--ink-3)'}}>Minimum 8 characters</span>
+              </label>
+              <label style={{display:'flex', alignItems:'flex-start', gap:10, marginTop:8, marginBottom:4, cursor:'pointer'}}>
+                <input type="checkbox" checked={termsAccepted} onChange={e => { setTermsAccepted(e.target.checked); setError(''); }} style={{marginTop:2, flexShrink:0, accentColor:'var(--rust)', width:16, height:16, cursor:'pointer'}} />
+                <span style={{fontSize:13, color:'var(--ink-2)', lineHeight:1.5}}>
+                  I have read and agree to the{' '}
+                  <a href="/policies/terms-and-conditions" target="_blank" rel="noopener noreferrer" style={{color:'var(--rust)', fontWeight:600}}>Terms &amp; Conditions</a>
+                  {', '}
+                  <a href="/policies/privacy-policy" target="_blank" rel="noopener noreferrer" style={{color:'var(--rust)', fontWeight:600}}>Privacy Policy</a>
+                  {', and '}
+                  <a href="/policies" target="_blank" rel="noopener noreferrer" style={{color:'var(--rust)', fontWeight:600}}>all site policies</a>.
+                </span>
               </label>
               <button className="btn btn-rust" type="submit" disabled={busy} style={{width:'100%', justifyContent:'center', marginTop:8}}>
                 {busy ? 'Creating account…' : 'Create account →'}

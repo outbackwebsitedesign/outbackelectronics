@@ -52,6 +52,15 @@ function derivePortalUrl() {
   } catch { return 'https://portal.outbackelectronics.com.au'; }
 }
 const PORTAL_URL = derivePortalUrl();
+function deriveSiteUrl() {
+  try {
+    const u = new URL(window.location.href);
+    if (u.hostname.startsWith('games.')) { u.hostname = u.hostname.replace('games.', ''); return u.origin; }
+    if (u.port === '8084') { u.port = '8080'; return u.origin; }
+    return 'https://outbackelectronics.com.au';
+  } catch { return 'https://outbackelectronics.com.au'; }
+}
+const SITE_URL = deriveSiteUrl();
 const { portalApi, usePortalUser } = makePortalHelpers(() => PORTAL_URL);
 
 // ── Auth Modal ────────────────────────────────────────────────────────────────
@@ -77,6 +86,7 @@ function AuthModal({ onClose, onLogin }) {
   const [regPass, setRegPass] = useState('');
   const [regError, setRegError] = useState('');
   const [regBusy, setRegBusy] = useState(false);
+  const [regTerms, setRegTerms] = useState(false);
 
   async function handleLogin(e) {
     e.preventDefault();
@@ -89,6 +99,7 @@ function AuthModal({ onClose, onLogin }) {
 
   async function handleRegister(e) {
     e.preventDefault();
+    if (!regTerms) { setRegError('You must accept the Terms & Conditions and Privacy Policy to create an account.'); return; }
     setRegError(''); setRegBusy(true);
     const r = await portalApi('/api/portal/auth/register', { method: 'POST', body: JSON.stringify({ firstName: regFirst, lastName: regLast, email: regEmail, phone: regPhone, address: regAddress, username: regUser, password: regPass }) });
     setRegBusy(false);
@@ -129,6 +140,17 @@ function AuthModal({ onClose, onLogin }) {
             <label style={fieldStyle}><span style={labelStyle}>Address</span><input style={inputStyle} type="text" value={regAddress} autoComplete="street-address" onChange={e => setRegAddress(e.target.value)} /></label>
             <label style={fieldStyle}><span style={labelStyle}>Username</span><input style={inputStyle} type="text" value={regUser} autoComplete="username" onChange={e => setRegUser(e.target.value)} required /><span style={{fontSize:11, color:T.ink3}}>3–30 chars · letters, numbers, underscores</span></label>
             <label style={fieldStyle}><span style={labelStyle}>Password</span><input style={inputStyle} type="password" value={regPass} autoComplete="new-password" onChange={e => setRegPass(e.target.value)} required /><span style={{fontSize:11, color:T.ink3}}>Minimum 8 characters</span></label>
+            <label style={{display:'flex', alignItems:'flex-start', gap:10, marginTop:4, marginBottom:4, cursor:'pointer'}}>
+              <input type="checkbox" checked={regTerms} onChange={e => { setRegTerms(e.target.checked); setRegError(''); }} style={{marginTop:2, flexShrink:0, accentColor:T.ochre, width:15, height:15, cursor:'pointer'}} />
+              <span style={{fontSize:12, color:T.ink2, lineHeight:1.5}}>
+                I agree to the{' '}
+                <a href={SITE_URL + '/policies/terms-and-conditions'} target="_blank" rel="noopener noreferrer" style={{color:T.ochre, fontWeight:600}}>Terms &amp; Conditions</a>
+                {', '}
+                <a href={SITE_URL + '/policies/privacy-policy'} target="_blank" rel="noopener noreferrer" style={{color:T.ochre, fontWeight:600}}>Privacy Policy</a>
+                {', and '}
+                <a href={SITE_URL + '/policies'} target="_blank" rel="noopener noreferrer" style={{color:T.ochre, fontWeight:600}}>all site policies</a>.
+              </span>
+            </label>
             <button type="submit" disabled={regBusy} style={{ ...css.btn, ...css.btnPrimary, width:'100%', marginTop:8 }}>{regBusy ? 'Creating account…' : 'Create account →'}</button>
           </form>
         )}
