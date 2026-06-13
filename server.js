@@ -3994,6 +3994,7 @@ const adminServer = http.createServer(async (req, res) => {
   // Allowed extensions/MIME for software files (shared by chunk + finalize)
   const SW_ALLOWED_EXT = new Set([
     '.zip', '.gz', '.tgz', '.bz2', '.xz', '.7z',
+    '.tar.gz', '.tar.bz2', '.tar.xz', '.tar.zst',
     '.iso', '.img',
     '.apk', '.aab',
     '.exe', '.msi',

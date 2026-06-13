@@ -2919,6 +2919,7 @@ function AdminSoftware() {
         ae === 'file_too_large' ? `File too large (max ${err.apiData?.maxGB||10} GB).` :
         ae === 'unsupported_file_type' ? 'Unsupported file type.' :
         ae === 'missing_chunk' ? 'Upload incomplete — please try again.' :
+        ae ? `Upload failed (${ae}). Please try again.` :
         'Upload failed. Please try again.'
       );
     }

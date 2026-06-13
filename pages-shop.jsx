@@ -760,22 +760,38 @@ function SoftwarePage({ go }) {
               </p>
             </div>
           )}
-          {products.map((p,i) => (
+          {products.map((p,i) => {
+            const isOss = (p.license||'').includes('OSS');
+            const files = p.files || [];
+            const hasFiles = files.length > 0;
+            const hasRepo = !!p.repo;
+            return (
             <div key={p.id||i} className="card-paper" style={{padding: 28, display:'grid', gridTemplateColumns:'1fr', gap:14}}>
               <div className="row-flex" style={{justifyContent:'space-between'}}>
-                <span className={`tag ${(p.license||'').includes('OSS')?'tag-euc':'tag-rust'}`}>{p.license}</span>
+                <span className={`tag ${isOss?'tag-euc':'tag-rust'}`}>{p.license}</span>
                 <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{p.stars}</span>
               </div>
               <h3 className="serif" style={{fontSize: 36, lineHeight:1}}>{p.name}</h3>
+              {p.tagline && <p style={{color:'var(--ink-2)', fontSize:14}}>{p.tagline}</p>}
               {p.description && <p style={{color:'var(--ink-2)', fontSize:14}}>{p.description}</p>}
+              {p.quickstart && (
+                <pre style={{background:'var(--bg-deep)', borderRadius:6, padding:'10px 14px', fontSize:12, fontFamily:'JetBrains Mono, monospace', overflowX:'auto', margin:0}}>{p.quickstart}</pre>
+              )}
               <div className="row-flex" style={{justifyContent:'space-between', borderTop:'1px solid var(--line)', paddingTop: 14}}>
                 <span className="price" style={{fontSize: 20}}>{p.price}</span>
                 <div className="row-flex" style={{gap:8}}>
-                  <button className="btn btn-sm" onClick={() => p.repo && window.open(p.repo, '_blank')} disabled={!p.repo} title={!p.repo ? 'No repository available' : undefined}>{(p.license||'').includes('OSS') ? 'Repo →' : 'Try free →'}</button>
+                  {hasRepo && <a href={p.repo} target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-sm" style={{textDecoration:'none'}}>Repo →</a>}
+                  {hasFiles && files.map((f,fi) => (
+                    <a key={fi} href={f.url} download={f.originalName||f.filename} className="btn btn-sm" style={{textDecoration:'none'}}>
+                      {f.label || (files.length === 1 ? 'Download' : `Download${f.platform && f.platform !== 'other' ? ' · ' + f.platform : ''}`)}
+                    </a>
+                  ))}
+                  {!hasRepo && !hasFiles && <span style={{fontSize:12, color:'var(--ink-2)'}}>Coming soon</span>}
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 
