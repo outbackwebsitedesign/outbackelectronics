@@ -3,7 +3,6 @@ import { getCsrf, ensureCsrf } from './src/lib/api.js';
 
 const _fallbackShopCtx = React.createContext({});
 const useShop = () => useContext(window.__ShopContext__ || _fallbackShopCtx);
-const ErrorText = window.ErrorText;
 
 function thumbUrl(src, w, q) {
   if (!src || !src.startsWith('/assets/uploads/')) return src;
@@ -1344,7 +1343,9 @@ function ImageLightbox({ images, startIndex, alt, onClose }) {
 
 function ProductDetailPage({ go, addToCart, pageParams }) {
   const [product, setProduct] = useState(pageParams || null);
-  const [selectedVariant, setSelectedVariant] = useState(null);
+  const [selectedVariant, setSelectedVariant] = useState(
+    pageParams?.variants?.length ? pageParams.variants[0] : null
+  );
   const [activeImage, setActiveImage] = useState(null);
   const [notifyEmail, setNotifyEmail] = useState('');
   const [notifySent, setNotifySent] = useState(false);
