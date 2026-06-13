@@ -2977,14 +2977,9 @@ function AdminSoftware() {
               setForm(f => ({ ...f, name, ...((!f.slug || f._slugAuto) ? { slug: autoSlug, _slugAuto: true } : {}) }));
             }}/>
           </label>
-          <div className="grid-2" style={{gap:14}}>
-            <label className="field"><span className="label">URL slug</span>
-              <input className="input mono" placeholder="pc-x" value={form.slug||''} onChange={e=>setForm({...form, slug:e.target.value.toLowerCase().replace(/[^a-z0-9-]/g,''), _slugAuto:false})}/>
-            </label>
-            <label className="field"><span className="label">Version</span>
-              <input className="input" placeholder="0.1.0" value={form.version||''} onChange={e=>setForm({...form, version:e.target.value})}/>
-            </label>
-          </div>
+          <label className="field"><span className="label">Version</span>
+            <input className="input" placeholder="0.1.0" value={form.version||''} onChange={e=>setForm({...form, version:e.target.value})}/>
+          </label>
           <div className="grid-2" style={{gap:14}}>
             <label className="field"><span className="label">License</span>
               <select className="select" value={form.license||'OSS · MIT'} onChange={e=>setForm({...form, license:e.target.value})}>
