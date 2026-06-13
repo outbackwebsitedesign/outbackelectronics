@@ -4040,7 +4040,7 @@ const adminServer = http.createServer(async (req, res) => {
       fs.mkdirSync(chunkDir, { recursive: true });
       fs.writeFileSync(path.join(chunkDir, String(chunkIndex).padStart(6, '0')), buf);
       return json(res, 200, { ok: true, chunk: chunkIndex });
-    } catch { return json(res, 500, { error: 'chunk_failed' }); }
+    } catch (e) { return json(res, 500, { error: 'chunk_failed', detail: e?.message }); }
   }
 
   // POST /api/admin/software/upload/finalize
