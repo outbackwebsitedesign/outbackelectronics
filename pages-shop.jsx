@@ -881,7 +881,7 @@ function SoftwareOSPickerPage({ product, go }) {
           <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(140px,1fr))', gap:16, marginTop:20}}>
             {platforms.map(os => {
               const meta = OS_META[os] || { label: os, icon: null };
-              const hasFile = (product.files||[]).some(f => f.platform === os || (os === 'cross' && f.platform === 'cross'));
+              const hasFile = (product.files||[]).some(f => f.platform === os || (os === 'cross' && f.platform === 'cross') || f.platform === 'other' || !f.platform);
               return (
                 <button key={os} onClick={() => go('software', { slug: product.slug, os })}
                   className="card-paper card-hover"
