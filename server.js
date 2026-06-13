@@ -1118,19 +1118,33 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null, cspOverride 
     if (isSoftwareDownload || isPdf) {
       fs.stat(filePath, (statErr, stat) => {
         if (statErr) return tryRead(paths, idx + 1);
-        const headers = {
+        const totalSize = stat.size;
+        const rangeHeader = req.headers['range'];
+        const filename = path.basename(filePath).replace(/^\d+-/, '');
+        const baseHeaders = {
           'Content-Type': types[ext] || 'application/octet-stream',
-          'Content-Length': stat.size,
-          'Content-Disposition': `attachment; filename="${path.basename(filePath).replace(/^\d+-/, '')}"`,
+          'Content-Disposition': `attachment; filename="${filename}"`,
+          'Accept-Ranges': 'bytes',
           'Cache-Control': 'no-cache, must-revalidate',
-          'Expires': new Date(0).toUTCString(),
           'X-Content-Type-Options': 'nosniff',
           'Strict-Transport-Security': HSTS_VALUE,
         };
-        res.writeHead(200, headers);
-        const stream = fs.createReadStream(filePath);
-        stream.on('error', () => { if (!res.headersSent) res.end(); else res.destroy(); });
-        stream.pipe(res);
+        if (rangeHeader) {
+          const match = rangeHeader.match(/^bytes=(\d*)-(\d*)$/);
+          const start = match && match[1] !== '' ? parseInt(match[1], 10) : 0;
+          const end = match && match[2] !== '' ? parseInt(match[2], 10) : totalSize - 1;
+          if (!match || start > end || end >= totalSize) {
+            res.writeHead(416, { 'Content-Range': `bytes */${totalSize}` });
+            return res.end();
+          }
+          res.writeHead(206, { ...baseHeaders, 'Content-Range': `bytes ${start}-${end}/${totalSize}`, 'Content-Length': end - start + 1 });
+          fs.createReadStream(filePath, { start, end }).pipe(res);
+        } else {
+          res.writeHead(200, { ...baseHeaders, 'Content-Length': totalSize });
+          const stream = fs.createReadStream(filePath);
+          stream.on('error', () => { if (!res.headersSent) res.end(); else res.destroy(); });
+          stream.pipe(res);
+        }
       });
       return;
     }

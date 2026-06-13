@@ -61,6 +61,11 @@ fi
 sudo chgrp "$APP_GROUP" "$APP_DIR"
 sudo chmod g+s "$APP_DIR"
 
+# Ensure the uploads directory (and software subdirs) are writable by the
+# service user so file uploads succeed at runtime.
+sudo chown -R "$SERVICE_USER:$APP_GROUP" "$APP_DIR/assets/uploads"
+sudo chmod -R ug+rwX "$APP_DIR/assets/uploads"
+
 # Make existing .db, .log, and .tmp files in the app root group-writable.
 # (node_modules and dist/ are deliberately excluded — max-depth 1.)
 sudo find "$APP_DIR" -maxdepth 1 \( -name "*.db" -o -name "*.log" -o -name "*.tmp" \) \
