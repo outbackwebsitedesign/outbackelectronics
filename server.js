@@ -7007,16 +7007,22 @@ function normalizeFireItem(p, geometry) {
   };
 }
 function normalizeFireData(raw) {
-  // GeoJSON FeatureCollection — NSW RFS, QLD QFD, VIC, WA ArcGIS
+  // Heuristic: is this item fire-related?
+  // Accept if: no type field (dedicated fire feed), has known fire alert level, or type mentions fire/burn/etc.
+  const FIRE_CATS = new Set(['emergency warning', 'watch and act', 'advice', 'information']);
+  function isFireItem(p) {
+    const typeVal = [p.type, p.feedType, p.feedtype, p.eventType, p.category1, p.incident_type, p.IncidentType, p.incidentType]
+      .filter(Boolean).map(s => String(s).toLowerCase());
+    if (!typeVal.length) return true; // no type field — assume dedicated fire feed
+    const cat = String(p.WarningLevel || p.category || p.alertLevel || p.responseLevel || '').toLowerCase().trim();
+    if (FIRE_CATS.has(cat)) return true;
+    return typeVal.some(t => /fire|burn|ember|blaze|bush|grass|smoke|vegetation/i.test(t));
+  }
+
+  // GeoJSON FeatureCollection — NSW RFS, QLD QFD, VIC, WA, etc.
   const feats = Array.isArray(raw?.features) ? raw.features : null;
   if (feats) {
-    // Some feeds (VIC) contain all emergency types — filter to fire/burn if a type field exists on most features
-    const hasType = feats.some(f => f.properties?.type || f.properties?.feedType || f.properties?.eventType || f.properties?.category1);
-    const filtered = hasType ? feats.filter(f => {
-      const p = f.properties || {};
-      const t = String(p.type || p.feedType || p.eventType || p.category1 || p.incident_type || p.IncidentType || '');
-      return !t || /fire|burn|ember|blaze/i.test(t);
-    }) : feats;
+    const filtered = feats.filter(f => isFireItem(f.properties || {}));
     const counts = {}, items = [];
     for (const f of filtered) {
       const item = normalizeFireItem(f.properties || {}, f.geometry);
@@ -7025,29 +7031,29 @@ function normalizeFireData(raw) {
     }
     return { available: true, total: filtered.length, counts, items };
   }
-  // VIC Emergency getIncidentJSON: { result: [...] } — filter for fire types
+  // VIC Emergency getIncidentJSON legacy: { result: [...] }
   const result = Array.isArray(raw?.result) ? raw.result : null;
   if (result) {
-    const fire = result.filter(i => /fire|burn/i.test(i.type || i.feedType || i.eventType || ''));
+    const filtered = result.filter(i => isFireItem(i));
     const counts = {}, items = [];
-    for (const i of fire) {
+    for (const i of filtered) {
       const item = normalizeFireItem(i, null);
       counts[item.category] = (counts[item.category] || 0) + 1;
       if (items.length < 40) items.push(item);
     }
-    return { available: true, total: fire.length, counts, items };
+    return { available: true, total: filtered.length, counts, items };
   }
   // SA CFS cfs_current_incidents.json: { incidents: [...] }
   const incidents = Array.isArray(raw?.incidents) ? raw.incidents : null;
   if (incidents) {
-    const fire = incidents.filter(i => /fire|burn/i.test(i.type || i.incidentType || ''));
+    const filtered = incidents.filter(i => isFireItem(i));
     const counts = {}, items = [];
-    for (const i of fire) {
+    for (const i of filtered) {
       const item = normalizeFireItem(i, null);
       counts[item.category] = (counts[item.category] || 0) + 1;
       if (items.length < 40) items.push(item);
     }
-    return { available: true, total: fire.length, counts, items };
+    return { available: true, total: filtered.length, counts, items };
   }
   // NT PFES — direct array of incidents or { data: [...] }
   const rawArr = Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : Array.isArray(raw?.incidents_list) ? raw.incidents_list : null;
@@ -7272,6 +7278,32 @@ const fireServer = createServiceServer({
     if (req.method === 'GET' && url.pathname === '/api/fire/status') { await handleFireStatus(req, res, url); return true; }
     if (req.method === 'GET' && url.pathname === '/api/fire/fdr')    { await handleFDRStatus(req, res, url); return true; }
     if (req.method === 'GET' && url.pathname === '/api/fire/roads')  { await handleRoadsStatus(req, res, url); return true; }
+    if (req.method === 'GET' && url.pathname === '/api/fire/debug') {
+      const state = (url.searchParams.get('state') || 'QLD').toUpperCase();
+      const feedUrl = FIRE_STATE_FEEDS[state];
+      if (!feedUrl) return json(res, 200, { state, feedUrl: null, available: false });
+      const rawText = await fetchFireFeedRaw(feedUrl);
+      let parsed = null, normalized = null, parseError = null;
+      if (rawText) {
+        const trimmed = rawText.trimStart();
+        if (trimmed.startsWith('<')) {
+          const entries = /<kml[\s>]/i.test(trimmed) ? parseFireKml(rawText) : parseFireAtom(rawText);
+          normalized = normalizeAtomEntries(entries);
+          parsed = { xmlEntries: entries.slice(0, 3) };
+        } else {
+          try { parsed = JSON.parse(rawText); normalized = normalizeFireData(parsed); } catch (e) { parseError = e.message; }
+        }
+      }
+      return json(res, 200, {
+        state, feedUrl,
+        rawLength: rawText ? rawText.length : 0,
+        rawSnippet: rawText ? rawText.slice(0, 500) : null,
+        parseError,
+        topLevelKeys: parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? Object.keys(parsed) : null,
+        firstItem: Array.isArray(parsed) ? parsed[0] : (parsed?.features?.[0] || parsed?.incidents?.[0] || parsed?.result?.[0] || parsed?.data?.[0]),
+        normalized: normalized ? { total: normalized.total, counts: normalized.counts, firstItem: normalized.items?.[0] } : null,
+      });
+    }
     return false;
   },
 });
