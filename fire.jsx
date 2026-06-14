@@ -12,8 +12,8 @@ const LEVELS = [
 
 const STATES = [
   { key: 'QLD', label: 'Queensland',         service: 'QFD',      center: [-22.5, 144.0], zoom: 6,
-    officialLabel: 'QFES Current Incidents',  officialUrl: 'https://www.qfes.qld.gov.au/Current-Incidents',
-    banLabel: 'Fire danger ratings',          banUrl: 'https://www.ruralfire.qld.gov.au/Fire_Information/Pages/FireDangerRatings.aspx',
+    officialLabel: 'QFD Current Incidents',   officialUrl: 'https://www.fire.qld.gov.au/Current-Incidents',
+    banLabel: 'Fire danger ratings',          banUrl: 'https://www.fire.qld.gov.au/prepare/bushfire/fire-danger-ratings',
     trafficLabel: 'Traffic QLD',              trafficUrl: 'https://www.131940.com.au/' },
   { key: 'NSW', label: 'New South Wales',    service: 'RFS',      center: [-32.0, 147.0], zoom: 6,
     officialLabel: 'RFS Fires Near Me',       officialUrl: 'https://www.rfs.nsw.gov.au/fire-information/fires-near-me',
