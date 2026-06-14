@@ -7743,7 +7743,7 @@ setInterval(() => {
 const RADIO_DIR = process.env.RADIO_MEDIA_DIR || path.join(__dirname, 'radio-media');
 try { fs.mkdirSync(RADIO_DIR, { recursive: true }); } catch {}
 const RADIO_BYTES_PER_SEC = Math.max(4000, Math.round((parseInt(process.env.RADIO_BITRATE_KBPS, 10) || 128) * 125));
-let _radioPlaylist = [], _radioIdx = -1, _radioTrack = null, _radioBuf = null, _radioPos = 0;
+let _radioPlaylist = [], _radioIdx = -1, _radioTrack = null, _radioArtist = null, _radioBuf = null, _radioPos = 0;
 // Real byte rate of the track currently on air. We stream the raw file bytes,
 // so the correct pace is fileBytes / trackDurationSeconds — exact for CBR and
 // VBR alike. Falls back to the fixed estimate when a file can't be parsed.
@@ -7810,9 +7810,39 @@ function radioPreloadAppend(chunk) {
 function radioPreloadGet() {
   return _radioPreloadChunks.length ? Buffer.concat(_radioPreloadChunks) : null;
 }
+function radioShuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+}
+// Extract TPE1 (artist) from an ID3v2 tag. Returns a string or null.
+function id3Artist(buf) {
+  if (!buf || buf.length < 10) return null;
+  if (buf[0] !== 0x49 || buf[1] !== 0x44 || buf[2] !== 0x33) return null;
+  const ver = buf[3];
+  const tagEnd = 10 + (((buf[6] & 0x7f) << 21) | ((buf[7] & 0x7f) << 14) | ((buf[8] & 0x7f) << 7) | (buf[9] & 0x7f));
+  let pos = 10;
+  while (pos + 10 <= tagEnd && pos + 10 <= buf.length) {
+    const id = buf.toString('latin1', pos, pos + 4);
+    const sz = ver >= 4
+      ? (((buf[pos+4] & 0x7f) << 21) | ((buf[pos+5] & 0x7f) << 14) | ((buf[pos+6] & 0x7f) << 7) | (buf[pos+7] & 0x7f))
+      : buf.readUInt32BE(pos + 4);
+    if (sz <= 0 || sz > 1024 * 1024 || pos + 10 + sz > buf.length) break;
+    if (id === 'TPE1' && sz > 1) {
+      const enc = buf[pos + 10];
+      const raw = buf.slice(pos + 11, pos + 10 + sz);
+      try {
+        const s = (enc === 1 || enc === 2) ? raw.toString('utf16le') : raw.toString('utf8');
+        return s.replace(/\0.*$/, '').trim() || null;
+      } catch { return null; }
+    }
+    pos += 10 + sz;
+  }
+  return null;
+}
 // Walk radio-media/ recursively — each subfolder is an album. Playlist entries
-// are relative paths (e.g. "Heimsöknin/01-track.mp3"), sorted so albums group
-// and tracks play in order within each.
+// are relative paths (e.g. "Heimsöknin/01-track.mp3"), shuffled for random playback.
 function radioScan() {
   const out = [];
   const walk = (dir, rel) => {
@@ -7827,7 +7857,7 @@ function radioScan() {
     }
   };
   walk(RADIO_DIR, '');
-  out.sort((a, b) => a.localeCompare(b));
+  radioShuffle(out);
   _radioPlaylist = out;
 }
 radioScan();
@@ -7838,9 +7868,10 @@ function radioLoadNext() {
   if (_radioIdx === 0) radioScan();
   _radioTrack = _radioPlaylist[_radioIdx] || null;
   try { _radioBuf = _radioTrack ? fs.readFileSync(path.join(RADIO_DIR, _radioTrack)) : null; _radioPos = 0; } catch { _radioBuf = null; }
-  // Strip a leading ID3v2 tag before streaming. It carries metadata and often
-  // hundreds of KB of embedded cover art — non-audio bytes the browser plays as
-  // silence, producing a long gap at every track change. We send audio frames only.
+  // Extract artist from ID3 tag before stripping it, then strip the tag.
+  // The tag carries metadata and often hundreds of KB of embedded cover art —
+  // non-audio bytes the browser plays as silence, producing a gap at every track change.
+  _radioArtist = id3Artist(_radioBuf);
   if (_radioBuf && _radioBuf.length >= 10 && _radioBuf[0] === 0x49 && _radioBuf[1] === 0x44 && _radioBuf[2] === 0x33) {
     const tagSize = 10 + (((_radioBuf[6] & 0x7f) << 21) | ((_radioBuf[7] & 0x7f) << 14) | ((_radioBuf[8] & 0x7f) << 7) | (_radioBuf[9] & 0x7f));
     if (tagSize > 0 && tagSize < _radioBuf.length) _radioBuf = _radioBuf.slice(tagSize);
@@ -7932,7 +7963,7 @@ const radioServer = createServiceServer({
       const album = slash >= 0 ? rel.slice(0, slash).split('/').pop() : null;
       const file = slash >= 0 ? rel.slice(slash + 1) : rel;
       const title = file ? file.replace(/\.mp3$/i, '').replace(/^\d+[-_ ]*/, '').replace(/[_-]+/g, ' ').trim() : null;
-      json(res, 200, { onAir: _radioPlaylist.length > 0, track: title, album: album || null, count: _radioPlaylist.length, listeners: _radioListeners.size });
+      json(res, 200, { onAir: _radioPlaylist.length > 0, track: title, album: album || null, artist: _radioArtist || null, count: _radioPlaylist.length, listeners: _radioListeners.size });
       return true;
     }
     if (req.method === 'GET' && url.pathname === '/stream') {
