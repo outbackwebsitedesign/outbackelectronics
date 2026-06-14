@@ -115,7 +115,6 @@ export default function FireApp() {
         map.current.fitBounds(st.bounds, { padding: [10, 10] });
         return;
       }
-      let hasMarkers = false;
       for (const item of roads.items || []) {
         if (item.lat == null || item.lon == null) continue;
         const color = roadColor(item.type);
@@ -123,13 +122,8 @@ export default function FireApp() {
           radius: 8, weight: 2, color: '#fff', fillColor: color, fillOpacity: 0.9,
         }).addTo(markers.current)
           .bindPopup(`<b>${item.title}</b><br><small>${item.type || 'Incident'}</small>`);
-        hasMarkers = true;
       }
-      if (hasMarkers) {
-        map.current.fitBounds(markers.current.getBounds(), { padding: [24, 24] });
-      } else {
-        map.current.fitBounds(st.bounds, { padding: [10, 10] });
-      }
+      map.current.fitBounds(st.bounds, { padding: [10, 10] });
       return;
     }
 
@@ -138,20 +132,14 @@ export default function FireApp() {
       map.current.fitBounds(st.bounds, { padding: [10, 10] });
       return;
     }
-    let hasMarkers = false;
     for (const item of data.items || []) {
       if (item.lat == null || item.lon == null) continue;
       L.circleMarker([item.lat, item.lon], {
         radius: 9, weight: 2, color: '#fff', fillColor: colorFor(item.category), fillOpacity: 0.9,
       }).addTo(markers.current)
         .bindPopup(`<b>${item.title}</b><br><small>${item.category}</small>`);
-      hasMarkers = true;
     }
-    if (hasMarkers) {
-      map.current.fitBounds(markers.current.getBounds(), { padding: [24, 24] });
-    } else {
-      map.current.fitBounds(st.bounds, { padding: [10, 10] });
-    }
+    map.current.fitBounds(st.bounds, { padding: [10, 10] });
   }, [data, roads, layer, state]);
 
   const available = data && data.available;

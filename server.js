@@ -7301,16 +7301,24 @@ function parseWAClosures(raw) {
   }
   return { available: true, total: items.length, items };
 }
-// NT road report obstructions — flat JSON array, field names guessed (empty feed at time of writing)
+// NT road report obstructions — response wrapped in { response: [...] }, coords in startPoint:[lat,lon]
 function parseNTObstructions(raw) {
-  const arr = Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : [];
+  const arr = Array.isArray(raw) ? raw : Array.isArray(raw?.response) ? raw.response : Array.isArray(raw?.data) ? raw.data : [];
   const items = [];
   for (const item of arr) {
-    const lat = parseFloat(item.Lat ?? item.lat ?? item.latitude ?? item.Y ?? NaN);
-    const lon = parseFloat(item.Lon ?? item.lon ?? item.longitude ?? item.X ?? NaN);
+    const sp = item.startPoint;
+    const lat = Array.isArray(sp) ? parseFloat(sp[0]) : parseFloat(item.Lat ?? item.lat ?? item.latitude ?? item.Y ?? NaN);
+    const lon = Array.isArray(sp) ? parseFloat(sp[1]) : parseFloat(item.Lon ?? item.lon ?? item.longitude ?? item.X ?? NaN);
     if (!isFinite(lat) || !isFinite(lon)) continue;
-    const title = String(item.Description ?? item.description ?? item.Title ?? item.title ?? item.Type ?? 'Road Obstruction').slice(0, 200);
-    items.push({ title, type: 'road_closure', lat, lon });
+    const road = item.roadName || '';
+    const loc  = item.locationComment || item.comment || '';
+    const title = (road && loc ? `${road} — ${loc}` : road || loc || 'Road Obstruction').slice(0, 200);
+    const rt = String(item.restrictionType || '').toLowerCase();
+    const type = /road closed|impassable|detour/.test(rt) ? 'road_closure'
+               : /caution|roadworks/.test(rt)             ? 'caution'
+               : /4wd|high clearance/.test(rt)            ? 'hazard'
+               : 'other';
+    items.push({ title, type, lat, lon });
   }
   return { available: true, total: items.length, items };
 }
