@@ -51,6 +51,7 @@ export default defineConfig({
         sky: 'sky.html',
         fire: 'fire.html',
         maps: 'maps.html',
+        coverage: 'coverage.html',
       },
       output: {
         manualChunks: {

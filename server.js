@@ -6958,6 +6958,39 @@ const fireServer = createServiceServer({
 // ── Maps (8106) — interactive outback map (Leaflet CDN + OSM tiles) ──────────
 const mapsServer = createServiceServer({ htmlEntry: '/dist/maps.html' });
 
+// ── Coverage (8105) — crowd-sourced mobile/satellite signal map ──────────────
+const COVERAGE_DB = path.join(__dirname, 'coverage.db');
+function readCoverage() { try { const d = JSON.parse(fs.readFileSync(COVERAGE_DB, 'utf8')); return Array.isArray(d.reports) ? d.reports : []; } catch { return []; } }
+function writeCoverage(reports) { atomicWriteFile(COVERAGE_DB, JSON.stringify({ reports })); }
+const COVERAGE_CARRIERS = ['Telstra', 'Optus', 'Vodafone', 'Starlink', 'Other'];
+const COVERAGE_TECHS = ['5G', '4G', '3G', 'Satellite', 'None'];
+const coverageServer = createServiceServer({
+  htmlEntry: '/dist/coverage.html',
+  routes: async (req, res, url) => {
+    if (req.method === 'GET' && url.pathname === '/api/coverage/reports') {
+      json(res, 200, { reports: readCoverage().slice(-3000) });
+      return true;
+    }
+    if (req.method === 'POST' && url.pathname === '/api/coverage/report') {
+      if (publicRateLimited(getIp(req), 'coverage')) { json(res, 429, { error: 'rate_limited' }); return true; }
+      let b; try { b = await readJson(req); } catch { json(res, 400, { error: 'bad_request' }); return true; }
+      const lat = Number(b.lat), lon = Number(b.lon);
+      if (!isFinite(lat) || !isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) { json(res, 422, { error: 'bad_coords' }); return true; }
+      const carrier = COVERAGE_CARRIERS.includes(b.carrier) ? b.carrier : 'Other';
+      const tech = COVERAGE_TECHS.includes(b.tech) ? b.tech : 'None';
+      const bars = Math.max(0, Math.min(5, parseInt(b.bars, 10) || 0));
+      const note = typeof b.note === 'string' ? b.note.trim().slice(0, 140) : '';
+      const reports = readCoverage();
+      reports.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), lat: +lat.toFixed(5), lon: +lon.toFixed(5), carrier, tech, bars, note, ts: Date.now() });
+      if (reports.length > 20000) reports.splice(0, reports.length - 20000);
+      writeCoverage(reports);
+      json(res, 200, { ok: true });
+      return true;
+    }
+    return false;
+  },
+});
+
 startServer(mainServer,   MAIN_PORT,   'main  ');
 startServer(discourseRedirectServer, DISCOURSE_REDIRECT_PORT, 'redirect');
 startServer(adminServer,  ADMIN_PORT,  'admin ');
@@ -6971,3 +7004,4 @@ startServer(solarServer,  SOLAR_PORT,  'solar ');
 startServer(skyServer,    SKY_PORT,    'sky   ');
 startServer(fireServer,   FIRE_PORT,   'fire  ');
 startServer(mapsServer,   MAPS_PORT,   'maps  ');
+startServer(coverageServer, COVERAGE_PORT, 'cover ');

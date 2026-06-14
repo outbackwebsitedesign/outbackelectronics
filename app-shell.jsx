@@ -62,6 +62,23 @@ export function useAuth() {
   return { user, refresh };
 }
 
+// CSRF double-submit helper, shared by every service that mutates data.
+let _csrf = null;
+export async function getCsrf() {
+  if (_csrf) return _csrf;
+  try { const d = await fetch('/api/csrf-token', { credentials: 'include' }).then(r => r.json()); _csrf = d.token; } catch {}
+  return _csrf;
+}
+export async function apiPost(path, body) {
+  const token = await getCsrf();
+  return fetch(path, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token || '' },
+    body: JSON.stringify(body || {}),
+  });
+}
+
 function useScrolled() {
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
