@@ -7809,7 +7809,7 @@ if (_radioPlaylist.length) {
 // setTimeout so accumulated jitter never causes the 1-per-second glitch that
 // setInterval produces. Larger chunks mean the browser always has a comfortable
 // runway between deliveries.
-const RADIO_TICK_MS = 30000;
+const RADIO_TICK_MS = 10000;
 const RADIO_CHUNK_BYTES = Math.round(RADIO_BYTES_PER_SEC * 1.15 * (RADIO_TICK_MS / 1000));
 let _radioNextTick = Date.now();
 function radioTick() {
