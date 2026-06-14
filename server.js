@@ -6915,6 +6915,46 @@ const skyServer = createServiceServer({
   },
 });
 
+// ── Fire (8109) — live NSW RFS incidents + alert summary (cached, graceful) ──
+let _fireCache = { ts: 0, data: null };
+function fetchFireIncidents() {
+  return new Promise((resolve) => {
+    const req = https.get('https://www.rfs.nsw.gov.au/feeds/majorIncidents.json', { timeout: 7000, headers: { 'User-Agent': 'OutbackElectronics/1.0' } }, (r) => {
+      if (r.statusCode !== 200) { r.resume(); return resolve(null); }
+      let buf = '';
+      r.on('data', c => { buf += c; if (buf.length > 5e6) req.destroy(); });
+      r.on('end', () => { try { resolve(JSON.parse(buf)); } catch { resolve(null); } });
+    });
+    req.on('error', () => resolve(null));
+    req.on('timeout', () => { req.destroy(); resolve(null); });
+  });
+}
+async function handleFireStatus(req, res) {
+  const t = Date.now();
+  if (!_fireCache.data || t - _fireCache.ts > 10 * 60 * 1000) {
+    const d = await fetchFireIncidents();
+    if (d) _fireCache = { ts: t, data: d };
+  }
+  if (!_fireCache.data) return json(res, 200, { available: false });
+  const feats = Array.isArray(_fireCache.data.features) ? _fireCache.data.features : [];
+  const counts = {};
+  const items = [];
+  for (const f of feats) {
+    const p = f.properties || {};
+    const cat = String(p.category || 'Other');
+    counts[cat] = (counts[cat] || 0) + 1;
+    if (items.length < 40) items.push({ title: String(p.title || 'Incident').slice(0, 160), category: cat, pubDate: p.pubDate || null });
+  }
+  return json(res, 200, { available: true, total: feats.length, counts, items, updated: t });
+}
+const fireServer = createServiceServer({
+  htmlEntry: '/dist/fire.html',
+  routes: async (req, res, url) => {
+    if (req.method === 'GET' && url.pathname === '/api/fire/status') { await handleFireStatus(req, res); return true; }
+    return false;
+  },
+});
+
 startServer(mainServer,   MAIN_PORT,   'main  ');
 startServer(discourseRedirectServer, DISCOURSE_REDIRECT_PORT, 'redirect');
 startServer(adminServer,  ADMIN_PORT,  'admin ');
@@ -6926,3 +6966,4 @@ startServer(aiGatewayServer, AI_GATEWAY_PORT, 'ai    ');
 startServer(hubServer,    HUB_PORT,    'hub   ');
 startServer(solarServer,  SOLAR_PORT,  'solar ');
 startServer(skyServer,    SKY_PORT,    'sky   ');
+startServer(fireServer,   FIRE_PORT,   'fire  ');
