@@ -3638,7 +3638,7 @@ const mainServer = http.createServer(async (req, res) => {
     console.log('[ai-chat] messages count:', messages.length);
     if (!messages.length) return json(res, 422, { error: 'messages_required' });
     const payload = JSON.stringify({
-      model: 'smollm2:135m',
+      model: 'qwen2.5:1.5b',
       stream: true,
       messages: [
         {
