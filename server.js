@@ -7745,10 +7745,11 @@ try { fs.mkdirSync(RADIO_DIR, { recursive: true }); } catch {}
 const RADIO_BYTES_PER_SEC = Math.max(4000, Math.round((parseInt(process.env.RADIO_BITRATE_KBPS, 10) || 128) * 125));
 let _radioPlaylist = [], _radioIdx = -1, _radioTrack = null, _radioBuf = null, _radioPos = 0;
 const _radioListeners = new Set();
-// Rolling preload buffer — last ~10 s of audio sent to new listeners as a burst
-// so their browser buffer is full before real-time pacing kicks in.
-const RADIO_PRELOAD_MAX = RADIO_BYTES_PER_SEC * 10;
-const _radioPreloadChunks = []; // array of Buffers
+// Rolling preload buffer — last ~30 s of audio sent to new listeners as an
+// immediate burst so the browser fills its playback buffer before real-time
+// pacing takes over. 30 s gives plenty of headroom against network jitter.
+const RADIO_PRELOAD_MAX = RADIO_BYTES_PER_SEC * 30;
+const _radioPreloadChunks = [];
 let _radioPreloadSize = 0;
 function radioPreloadAppend(chunk) {
   _radioPreloadChunks.push(chunk);
@@ -7789,16 +7790,22 @@ function radioLoadNext() {
   _radioTrack = _radioPlaylist[_radioIdx] || null;
   try { _radioBuf = _radioTrack ? fs.readFileSync(path.join(RADIO_DIR, _radioTrack)) : null; _radioPos = 0; } catch { _radioBuf = null; }
 }
+// Clock always ticks so the preload buffer is warm even before the first listener
+// connects. Pace is 1.15× real-time — slightly faster than playback speed so the
+// browser's buffer stays ahead of the decoder and event-loop jitter can't starve it.
+const RADIO_TICK_MS = 250;
+const RADIO_CHUNK_BYTES = Math.round(RADIO_BYTES_PER_SEC * 1.15 / (1000 / RADIO_TICK_MS));
 setInterval(() => {
-  if (!_radioListeners.size) return; // advance the dial only while someone's tuned in
   if (!_radioBuf) { radioLoadNext(); if (!_radioBuf) return; }
-  const end = Math.min(_radioPos + Math.round(RADIO_BYTES_PER_SEC / 4), _radioBuf.length);
+  const end = Math.min(_radioPos + RADIO_CHUNK_BYTES, _radioBuf.length);
   const chunk = _radioBuf.slice(_radioPos, end);
   _radioPos = end;
   radioPreloadAppend(chunk);
-  for (const res of _radioListeners) { try { res.write(chunk); } catch { _radioListeners.delete(res); } }
+  if (_radioListeners.size) {
+    for (const res of _radioListeners) { try { res.write(chunk); } catch { _radioListeners.delete(res); } }
+  }
   if (_radioPos >= _radioBuf.length) radioLoadNext();
-}, 250);
+}, RADIO_TICK_MS);
 const radioServer = createServiceServer({
   htmlEntry: '/dist/radio.html',
   routes: async (req, res, url) => {
@@ -7816,9 +7823,16 @@ const radioServer = createServiceServer({
       if (!_radioPlaylist.length) { json(res, 503, { error: 'off_air' }); return true; }
       if (!_radioBuf) radioLoadNext();
       res.writeHead(200, { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'no-cache, no-store', 'Pragma': 'no-cache', 'Connection': 'keep-alive' });
-      // Send ~10 s of recent audio immediately so the browser buffer is pre-filled
+      // Burst ~30 s of audio immediately so the browser fills its buffer before
+      // real-time pacing starts. Fall back to reading ahead in the current track
+      // if the preload buffer hasn't warmed up yet (e.g. very first connection).
       const preload = radioPreloadGet();
-      if (preload) res.write(preload);
+      if (preload) {
+        res.write(preload);
+      } else if (_radioBuf) {
+        const ahead = Math.min(_radioPos + RADIO_BYTES_PER_SEC * 30, _radioBuf.length);
+        res.write(_radioBuf.slice(_radioPos, ahead));
+      }
       _radioListeners.add(res);
       req.on('close', () => { _radioListeners.delete(res); });
       return true; // keep the connection open for streaming
