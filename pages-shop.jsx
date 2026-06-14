@@ -2112,11 +2112,12 @@ function AIChatPage({ go }) {
   const [streaming, setStreaming] = React.useState(false);
   const [error, setError] = React.useState('');
   const [authRequired, setAuthRequired] = React.useState(false);
-  const bottomRef = React.useRef(null);
+  const scrollRef = React.useRef(null);
   const textareaRef = React.useRef(null);
 
   React.useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
   async function send() {
@@ -2214,7 +2215,7 @@ function AIChatPage({ go }) {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid var(--line)', borderRadius: 8, overflow: 'hidden', background: 'var(--paper)' }}>
-            <div style={{ overflowY: 'auto', padding: '24px 20px 12px', display: 'flex', flexDirection: 'column', gap: 14, maxHeight: 520, minHeight: 320 }}>
+            <div ref={scrollRef} style={{ overflowY: 'auto', padding: '24px 20px 12px', display: 'flex', flexDirection: 'column', gap: 14, maxHeight: 520, minHeight: 320 }}>
               {messages.map((m, i) => (
                 <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
                   <div style={{
@@ -2233,7 +2234,6 @@ function AIChatPage({ go }) {
                   </div>
                 </div>
               ))}
-              <div ref={bottomRef} />
             </div>
 
             {authRequired && (
