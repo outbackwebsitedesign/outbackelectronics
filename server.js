@@ -3636,7 +3636,7 @@ const mainServer = http.createServer(async (req, res) => {
     const messages = Array.isArray(body?.messages) ? body.messages : [];
     if (!messages.length) return json(res, 422, { error: 'messages_required' });
     const payload = JSON.stringify({
-      model: 'qwen2.5:1.5b',
+      model: 'smollm2:135m',
       stream: true,
       messages: [
         {
