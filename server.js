@@ -1487,7 +1487,7 @@ function checkMaintenance(req, res, url) {
 }
 
 const MAIN_SPA_ROUTES = new Set([
-  'home', 'shop', 'services', 'software', 'ewaste', 'ai', 'ai-chat', 'tutorials', 'groups',
+  'home', 'shop', 'services', 'software', 'ewaste', 'ai', 'tutorials', 'groups',
   'quote', 'sellers', 'contact', 'policies', 'admin',
   'account', 'profile', 'subscriptions', 'rewards', 'wallet', 'my-groups',
   'orders', 'addresses', 'bookings',
