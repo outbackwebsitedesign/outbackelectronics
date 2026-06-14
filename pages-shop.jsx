@@ -2175,13 +2175,14 @@ function inlineMarkdown(text) {
   // strip LaTeX delimiters \(...\) and \[...\]
   text = text.replace(/\\\((.+?)\\\)/g, '$1').replace(/\\\[(.+?)\\\]/g, '$1');
   const parts = [];
-  const re = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|__[^_]+__|_[^_]+_)/g;
+  const re = /(`[^`]+`|\*\*(.+?)\*\*|\*([^*]+)\*|__(.+?)__|_([^_]+)_)/g;
   let last = 0, m;
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) parts.push(text.slice(last, m.index));
     const t = m[0];
     if (t.startsWith('`')) parts.push(<code key={m.index} style={{ background: 'rgba(0,0,0,0.08)', padding: '1px 4px', borderRadius: 3, fontSize: '0.9em', fontFamily: 'monospace' }}>{t.slice(1, -1)}</code>);
-    else if (t.startsWith('**') || t.startsWith('__')) parts.push(<strong key={m.index}>{t.slice(2, -2)}</strong>);
+    else if (t.startsWith('**')) parts.push(<strong key={m.index}>{t.slice(2, -2)}</strong>);
+    else if (t.startsWith('__')) parts.push(<strong key={m.index}>{t.slice(2, -2)}</strong>);
     else parts.push(<em key={m.index}>{t.slice(1, -1)}</em>);
     last = m.index + t.length;
   }
