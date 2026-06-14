@@ -6915,11 +6915,21 @@ const skyServer = createServiceServer({
   },
 });
 
-// ── Fire (8109) — live NSW RFS incidents + alert summary (cached, graceful) ──
-let _fireCache = { ts: 0, data: null };
-function fetchFireIncidents() {
+// ── Fire (8109) — live bushfire incidents by state, cached per state ──────────
+const FIRE_STATE_FEEDS = {
+  QLD: 'https://www.qfes.qld.gov.au/data/alerts/bushfireAlert.json',
+  NSW: 'https://www.rfs.nsw.gov.au/feeds/majorIncidents.json',
+  VIC: 'https://data.emergency.vic.gov.au/Show?pageId=getAll',
+  WA:  'https://www.emergency.wa.gov.au/feeds/waemergency.json',
+  SA:  null,
+  TAS: null,
+  NT:  null,
+  ACT: null,
+};
+const _fireCache = {};
+function fetchFireFeed(url) {
   return new Promise((resolve) => {
-    const req = https.get('https://www.rfs.nsw.gov.au/feeds/majorIncidents.json', { timeout: 7000, headers: { 'User-Agent': 'OutbackElectronics/1.0' } }, (r) => {
+    const req = https.get(url, { timeout: 7000, headers: { 'User-Agent': 'OutbackElectronics/1.0' } }, (r) => {
       if (r.statusCode !== 200) { r.resume(); return resolve(null); }
       let buf = '';
       r.on('data', c => { buf += c; if (buf.length > 5e6) req.destroy(); });
@@ -6929,28 +6939,57 @@ function fetchFireIncidents() {
     req.on('timeout', () => { req.destroy(); resolve(null); });
   });
 }
-async function handleFireStatus(req, res) {
+function normalizeFireData(raw) {
+  // GeoJSON FeatureCollection (NSW RFS, QLD QFES, WA DFES)
+  const feats = Array.isArray(raw?.features) ? raw.features : null;
+  if (feats) {
+    const counts = {}, items = [];
+    for (const f of feats) {
+      const p = f.properties || {};
+      const cat = String(p.category || p.Category || p.alertLevel || p.type || 'Other');
+      counts[cat] = (counts[cat] || 0) + 1;
+      if (items.length < 40) items.push({
+        title: String(p.title || p.Title || p.name || p.Name || 'Incident').slice(0, 160),
+        category: cat,
+        pubDate: p.pubDate || p.created || p.Updated || null,
+      });
+    }
+    return { available: true, total: feats.length, counts, items };
+  }
+  // VIC Emergency: { result: [...] }
+  const result = Array.isArray(raw?.result) ? raw.result : null;
+  if (result) {
+    const fire = result.filter(i => /fire|burn/i.test(i.type || i.feedType || ''));
+    const counts = {}, items = [];
+    for (const i of fire) {
+      const cat = String(i.feedType || i.type || 'Other');
+      counts[cat] = (counts[cat] || 0) + 1;
+      if (items.length < 40) items.push({ title: String(i.title || i.sourceTitle || 'Incident').slice(0, 160), category: cat, pubDate: i.updated || null });
+    }
+    return { available: true, total: fire.length, counts, items };
+  }
+  return null;
+}
+async function handleFireStatus(req, res, url) {
+  const state = (url.searchParams.get('state') || 'QLD').toUpperCase();
+  if (!(state in FIRE_STATE_FEEDS)) return json(res, 400, { error: 'Unknown state' });
+  const feedUrl = FIRE_STATE_FEEDS[state];
+  if (!feedUrl) return json(res, 200, { available: false });
   const t = Date.now();
-  if (!_fireCache.data || t - _fireCache.ts > 10 * 60 * 1000) {
-    const d = await fetchFireIncidents();
-    if (d) _fireCache = { ts: t, data: d };
+  const cached = _fireCache[state];
+  if (!cached || t - cached.ts > 10 * 60 * 1000) {
+    const raw = await fetchFireFeed(feedUrl);
+    const normalized = raw ? normalizeFireData(raw) : null;
+    if (normalized) _fireCache[state] = { ts: t, data: normalized };
   }
-  if (!_fireCache.data) return json(res, 200, { available: false });
-  const feats = Array.isArray(_fireCache.data.features) ? _fireCache.data.features : [];
-  const counts = {};
-  const items = [];
-  for (const f of feats) {
-    const p = f.properties || {};
-    const cat = String(p.category || 'Other');
-    counts[cat] = (counts[cat] || 0) + 1;
-    if (items.length < 40) items.push({ title: String(p.title || 'Incident').slice(0, 160), category: cat, pubDate: p.pubDate || null });
-  }
-  return json(res, 200, { available: true, total: feats.length, counts, items, updated: t });
+  const entry = _fireCache[state];
+  if (!entry) return json(res, 200, { available: false });
+  return json(res, 200, { ...entry.data, updated: entry.ts });
 }
 const fireServer = createServiceServer({
   htmlEntry: '/dist/fire.html',
   routes: async (req, res, url) => {
-    if (req.method === 'GET' && url.pathname === '/api/fire/status') { await handleFireStatus(req, res); return true; }
+    if (req.method === 'GET' && url.pathname === '/api/fire/status') { await handleFireStatus(req, res, url); return true; }
     return false;
   },
 });
