@@ -369,6 +369,7 @@ function PortalNav({ user, tab, setTab, onLogout }) {
     { id: 'wallet',      label: 'Wallet' },
     { id: 'addresses',   label: 'Addresses' },
     { id: 'bookings',    label: 'Bookings' },
+    { id: 'ai-chat',    label: 'AI Assistant' },
     { id: 'account',     label: 'Account' },
   ];
 
@@ -2069,9 +2070,154 @@ function WarrantyPage({ orderId: initialOrderId }) {
   );
 }
 
+// ── AI Chat ───────────────────────────────────────────────────────────────────
+
+function AIChatTab() {
+  const [messages, setMessages] = useState([
+    { role: 'assistant', content: 'G\'day! I\'m the Outback Electronics AI assistant. Ask me anything about electronics repair, troubleshooting, components, or soldering — I\'m here to help.' }
+  ]);
+  const [input, setInput] = useState('');
+  const [streaming, setStreaming] = useState(false);
+  const [error, setError] = useState('');
+  const bottomRef = useRef(null);
+  const textareaRef = useRef(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  async function send() {
+    const text = input.trim();
+    if (!text || streaming) return;
+    setInput('');
+    setError('');
+    const userMsg = { role: 'user', content: text };
+    const history = [...messages, userMsg];
+    setMessages([...history, { role: 'assistant', content: '' }]);
+    setStreaming(true);
+
+    try {
+      const csrf = getCsrf();
+      const res = await fetch('/api/portal/ai-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+        credentials: 'include',
+        body: JSON.stringify({ messages: history }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'AI service error');
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6);
+          if (data === '[DONE]') break;
+          try {
+            const { token } = JSON.parse(data);
+            setMessages(prev => {
+              const next = [...prev];
+              next[next.length - 1] = { role: 'assistant', content: next[next.length - 1].content + token };
+              return next;
+            });
+          } catch { /* skip malformed */ }
+        }
+      }
+    } catch (e) {
+      setError(e.message || 'Something went wrong. Please try again.');
+      setMessages(prev => prev.slice(0, -1));
+    } finally {
+      setStreaming(false);
+      setTimeout(() => textareaRef.current?.focus(), 50);
+    }
+  }
+
+  function onKeyDown(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+  }
+
+  function clearChat() {
+    setMessages([{ role: 'assistant', content: 'G\'day! I\'m the Outback Electronics AI assistant. Ask me anything about electronics repair, troubleshooting, components, or soldering — I\'m here to help.' }]);
+    setInput('');
+    setError('');
+  }
+
+  return (
+    <div className="tab-content">
+      <div className="section-header">
+        <div>
+          <h2>AI Assistant</h2>
+          <p className="section-sub">Powered by local AI — your questions stay on our server, never sent to the cloud.</p>
+        </div>
+        <button className="btn btn-ghost btn-sm" onClick={clearChat} disabled={streaming}>Clear chat</button>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 0, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 20px 8px', display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 480, minHeight: 300 }}>
+          {messages.map((m, i) => (
+            <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
+              <div style={{
+                maxWidth: '80%',
+                padding: '10px 14px',
+                borderRadius: m.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+                background: m.role === 'user' ? 'var(--rust)' : 'var(--surface-raised, var(--bg))',
+                border: m.role === 'user' ? 'none' : '1px solid var(--border)',
+                color: m.role === 'user' ? '#fff' : 'var(--text)',
+                fontSize: 14,
+                lineHeight: 1.55,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+              }}>
+                {m.content || (streaming && i === messages.length - 1 ? <span style={{ opacity: 0.5 }}>▌</span> : '')}
+              </div>
+            </div>
+          ))}
+          <div ref={bottomRef} />
+        </div>
+
+        {error && <div className="alert alert-error" style={{ margin: '0 20px 8px' }}>{error}</div>}
+
+        <div style={{ display: 'flex', gap: 8, padding: '12px 16px', borderTop: '1px solid var(--border)', alignItems: 'flex-end' }}>
+          <textarea
+            ref={textareaRef}
+            className="input textarea"
+            rows={2}
+            style={{ flex: 1, resize: 'none', fontSize: 14 }}
+            placeholder="Ask about a repair, component, circuit… (Enter to send, Shift+Enter for new line)"
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={onKeyDown}
+            disabled={streaming}
+          />
+          <button
+            className="btn btn-rust"
+            style={{ height: 56, minWidth: 72, flexShrink: 0 }}
+            onClick={send}
+            disabled={streaming || !input.trim()}
+          >
+            {streaming ? '…' : 'Send'}
+          </button>
+        </div>
+      </div>
+
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
+        AI responses may not always be accurate. For complex repairs, <a href="/bookings">book a service</a>.
+      </p>
+    </div>
+  );
+}
+
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
-const PORTAL_TABS = ['overview','orders','repairs','quotes','memberships','rewards','wallet','addresses','bookings','account'];
+const PORTAL_TABS = ['overview','orders','repairs','quotes','memberships','rewards','wallet','addresses','bookings','ai-chat','account'];
 
 function Dashboard({ user, setUser, onLogout }) {
   const [tab, setTab] = useState(() => {
@@ -2115,6 +2261,7 @@ function Dashboard({ user, setUser, onLogout }) {
         {tab === 'wallet'      && <WalletTab />}
         {tab === 'addresses'   && <AddressesTab />}
         {tab === 'bookings'    && <BookingsTab />}
+        {tab === 'ai-chat'     && <AIChatTab />}
         {tab === 'account'     && <AccountTab user={user} setUser={setUser} />}
       </div>
       <footer className="portal-footer">

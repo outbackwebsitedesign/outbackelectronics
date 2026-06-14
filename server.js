@@ -5858,6 +5858,52 @@ const portalServer = http.createServer(async (req, res) => {
     return json(res, 204, {});
   }
 
+  if (req.method === 'POST' && url.pathname === '/api/portal/ai-chat') {
+    const session = getPortalSession(req);
+    if (!session) return json(res, 401, { error: 'login_required' });
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const messages = Array.isArray(body?.messages) ? body.messages : [];
+    if (!messages.length) return json(res, 422, { error: 'messages_required' });
+    const payload = {
+      model: 'qwen2.5:1.5b',
+      stream: true,
+      messages: [
+        {
+          role: 'system',
+          content: `You are the Outback Electronics AI assistant — a helpful, knowledgeable electronics technician and advisor. You help customers with electronics repair questions, troubleshooting, parts selection, soldering tips, circuit theory, and general DIY electronics guidance. Outback Electronics is a small Australian electronics repair and parts shop based in the outback. Be concise, practical, and friendly. If a repair is complex or risky, recommend booking a professional repair through Outback Electronics. Do not discuss topics unrelated to electronics, technology, or the shop.`
+        },
+        ...messages.slice(-20).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content).slice(0, 4000) }))
+      ],
+    };
+    let ollamaRes;
+    try {
+      ollamaRes = await fetch('http://127.0.0.1:11434/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    } catch (e) {
+      return json(res, 503, { error: 'ai_unavailable', message: 'AI service is currently offline.' });
+    }
+    if (!ollamaRes.ok) return json(res, 502, { error: 'ai_error' });
+    res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
+    try {
+      for await (const chunk of ollamaRes.body) {
+        const lines = chunk.toString().split('\n').filter(Boolean);
+        for (const line of lines) {
+          try {
+            const obj = JSON.parse(line);
+            const token = obj?.message?.content ?? '';
+            if (token) res.write(`data: ${JSON.stringify({ token })}\n\n`);
+            if (obj.done) { res.write('data: [DONE]\n\n'); }
+          } catch { /* partial JSON chunk, skip */ }
+        }
+      }
+    } catch { /* client disconnected */ }
+    res.end();
+    return;
+  }
+
   return serveStatic(req, res, url.pathname, '/dist/portal.html', null, strictCsp('/dist/portal.html'));
   } catch (err) {
     console.error('[portalServer] unhandled error:', err);
