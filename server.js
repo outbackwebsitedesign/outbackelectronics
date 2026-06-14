@@ -3647,7 +3647,7 @@ const mainServer = http.createServer(async (req, res) => {
       ],
     });
     await new Promise((resolve) => {
-      const ollamaReq = http.request({ hostname: '127.0.0.1', port: 11434, path: '/api/chat', method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } }, (ollamaRes) => {
+      const ollamaReq = http.request({ hostname: '127.0.0.1', port: 11434, path: '/api/chat', method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }, timeout: 120000 }, (ollamaRes) => {
         if (ollamaRes.statusCode !== 200) {
           json(res, 502, { error: 'ai_error' });
           ollamaRes.resume();
@@ -3672,7 +3672,8 @@ const mainServer = http.createServer(async (req, res) => {
         ollamaRes.on('end', () => { res.end(); resolve(); });
         ollamaRes.on('error', () => { if (!res.headersSent) json(res, 502, { error: 'ai_error' }); else res.end(); resolve(); });
       });
-      ollamaReq.on('error', () => { json(res, 503, { error: 'ai_unavailable', message: 'AI service is currently offline.' }); resolve(); });
+      ollamaReq.on('timeout', () => { ollamaReq.destroy(); json(res, 504, { error: 'ai_timeout', message: 'AI took too long to respond. Please try again.' }); resolve(); });
+      ollamaReq.on('error', () => { if (!res.headersSent) json(res, 503, { error: 'ai_unavailable', message: 'AI service is currently offline.' }); resolve(); });
       ollamaReq.write(payload);
       ollamaReq.end();
     });
