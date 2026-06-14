@@ -6612,6 +6612,13 @@ const aiGatewayServer = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
 
   try {
+    // Session info (for AI frontend to check login state)
+    if (req.method === 'GET' && url.pathname === '/api/session') {
+      const session = getPortalSession(req);
+      if (!session) return json(res, 401, { error: 'not_logged_in' });
+      return json(res, 200, { id: session.id, username: session.username, displayName: session.displayName });
+    }
+
     // Health / status
     if (req.method === 'GET' && url.pathname === '/health') {
       return json(res, 200, { ok: true, ragReady: _ragReady, ragDocs: _ragDocs.length, queue: _aiQueue.length });
@@ -6689,7 +6696,7 @@ const aiGatewayServer = http.createServer(async (req, res) => {
       return;
     }
 
-    json(res, 404, { error: 'not_found' });
+    return serveStatic(req, res, url.pathname, '/dist/ai.html', new Set(['chat', 'vision']));
   } catch (err) {
     console.error('[aiGateway] error:', err);
     if (!res.headersSent) json(res, 500, { error: 'server_error' });
