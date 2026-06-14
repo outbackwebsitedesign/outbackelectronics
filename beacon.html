@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Beacon — Outback Electronics</title>
+<meta name="description" content="A simple safety check-in beacon for remote travel. Set a schedule, check in with one tap, and your contact is emailed automatically if you miss one." />
+<link rel="icon" type="image/png" href="/favicon.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  /* Base + shared shell come from app-shell.css. Beacon-specific layout only. */
+  .beacon-card { background: var(--bg-elev); border: 1px solid var(--line); padding: 24px; max-width: 540px; }
+  .beacon-card.overdue { box-shadow: inset 4px 0 0 #b3231b; border-color: #e7a9a3; }
+  .beacon-status { font-weight: 700; margin-bottom: 16px; }
+  .beacon-ok { width: 100%; padding: 22px; font-size: 22px; font-weight: 700; background: var(--eucalyptus); color: var(--paper); border: none; cursor: pointer; letter-spacing: 0.02em; transition: background 120ms; }
+  .beacon-ok:hover { background: #3e5630; }
+  .beacon-msg { font-size: 13px; color: var(--eucalyptus); font-weight: 600; min-height: 18px; margin: 10px 0 0; }
+  .beacon-info { list-style: none; padding: 0; margin: 18px 0; }
+  .beacon-info li { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .beacon-info li span { color: var(--ink-2); }
+  .beacon-note { font-size: 12px; color: var(--ink-3); margin-top: 18px; max-width: 600px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="module" src="/src/beacon-entry.jsx"></script>
+</body>
+</html>

@@ -7679,6 +7679,62 @@ const swapServer = createServiceServer({
   },
 });
 
+// ── Beacon (8108) — safety check-ins; emails a contact on a missed check-in ─
+const BEACON_DB = path.join(__dirname, 'beacon.db');
+function readBeacons() { try { const d = JSON.parse(fs.readFileSync(BEACON_DB, 'utf8')); return (d && d.beacons) || {}; } catch { return {}; } }
+function writeBeacons(beacons) { atomicWriteFile(BEACON_DB, JSON.stringify({ beacons })); }
+const beaconEsc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function beaconView(b) {
+  if (!b || !b.active) return { active: false };
+  const dueAt = b.lastCheckIn + b.intervalHours * 3600000;
+  return { active: true, intervalHours: b.intervalHours, contactName: b.contactName, contactEmail: b.contactEmail, message: b.message, lastCheckIn: b.lastCheckIn, dueAt, overdue: Date.now() > dueAt };
+}
+const beaconServer = createServiceServer({
+  htmlEntry: '/dist/beacon.html',
+  routes: async (req, res, url) => {
+    if (!url.pathname.startsWith('/api/beacon')) return false;
+    const session = getPortalSession(req);
+    if (!session) { json(res, 401, { error: 'login_required' }); return true; }
+    const beacons = readBeacons();
+    if (req.method === 'GET' && url.pathname === '/api/beacon/status') { json(res, 200, beaconView(beacons[session.id])); return true; }
+    if (req.method === 'POST' && url.pathname === '/api/beacon/setup') {
+      let b; try { b = await readJson(req); } catch { json(res, 400, { error: 'bad_request' }); return true; }
+      const intervalHours = Math.max(1, Math.min(168, parseInt(b.intervalHours, 10) || 24));
+      const contactEmail = String(b.contactEmail || '').trim().slice(0, 120);
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) { json(res, 422, { error: 'bad_email', message: 'A valid contact email is required.' }); return true; }
+      beacons[session.id] = { userId: session.id, userName: session.displayName || session.username, intervalHours, contactEmail, contactName: String(b.contactName || '').trim().slice(0, 80), message: String(b.message || '').trim().slice(0, 300), active: true, lastCheckIn: Date.now(), alertedAt: 0 };
+      writeBeacons(beacons); json(res, 200, beaconView(beacons[session.id])); return true;
+    }
+    if (req.method === 'POST' && url.pathname === '/api/beacon/checkin') {
+      const b = beacons[session.id]; if (!b || !b.active) { json(res, 404, { error: 'no_beacon' }); return true; }
+      b.lastCheckIn = Date.now(); b.alertedAt = 0; writeBeacons(beacons); json(res, 200, beaconView(b)); return true;
+    }
+    if (req.method === 'POST' && url.pathname === '/api/beacon/stop') {
+      const b = beacons[session.id]; if (b) { b.active = false; writeBeacons(beacons); } json(res, 200, { active: false }); return true;
+    }
+    return false;
+  },
+});
+// Overdue checker — emails the nominated contact once per missed cycle
+setInterval(() => {
+  try {
+    const beacons = readBeacons(); let changed = false; const now = Date.now();
+    for (const id of Object.keys(beacons)) {
+      const b = beacons[id];
+      if (!b || !b.active) continue;
+      const dueAt = b.lastCheckIn + b.intervalHours * 3600000;
+      if (now > dueAt && (!b.alertedAt || b.alertedAt < b.lastCheckIn)) {
+        if (b.contactEmail) {
+          const hoursLate = Math.round((now - dueAt) / 3600000);
+          sendEmail({ to: b.contactEmail, subject: `Missed check-in from ${b.userName || 'a traveller'}`, html: `<p>Hi ${beaconEsc(b.contactName || 'there')},</p><p><b>${beaconEsc(b.userName || 'A traveller')}</b> set up an Outback Electronics safety beacon and has missed a scheduled check-in — it was due ${new Date(dueAt).toLocaleString('en-AU')} (about ${hoursLate}h ago).</p>${b.message ? `<p>Their note: "${beaconEsc(b.message)}"</p>` : ''}<p>This is an automated safety alert. Please try to reach them — and contact emergency services (000) if you're concerned.</p>` }).catch(() => {});
+        }
+        b.alertedAt = now; changed = true;
+      }
+    }
+    if (changed) writeBeacons(beacons);
+  } catch {}
+}, 5 * 60 * 1000);
+
 startServer(mainServer,   MAIN_PORT,   'main  ');
 startServer(discourseRedirectServer, DISCOURSE_REDIRECT_PORT, 'redirect');
 startServer(adminServer,  ADMIN_PORT,  'admin ');
@@ -7696,3 +7752,4 @@ startServer(coverageServer, COVERAGE_PORT, 'cover ');
 startServer(driveServer,  DRIVE_PORT,  'drive ');
 startServer(photosServer, PHOTOS_PORT, 'photos');
 startServer(swapServer,   SWAP_PORT,   'swap  ');
+startServer(beaconServer, BEACON_PORT, 'beacon');

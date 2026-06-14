@@ -55,6 +55,7 @@ export default defineConfig({
         drive: 'drive.html',
         photos: 'photos.html',
         swap: 'swap.html',
+        beacon: 'beacon.html',
       },
       output: {
         manualChunks: {
