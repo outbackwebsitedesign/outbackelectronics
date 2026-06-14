@@ -37,17 +37,6 @@ const STATES = [
     trafficLabel: 'ACT traffic',              trafficUrl: 'https://www.tccs.act.gov.au/roads-and-paths/travel-and-traffic' },
 ];
 
-const FDR_COLORS = {
-  'Catastrophic': '#7b0000',
-  'Extreme':      '#b3231b',
-  'Severe':       '#c4591a',
-  'Very High':    '#b08a12',
-  'High':         '#4a7ba0',
-  'Low-Moderate': '#4a7ba0',
-  'No Rating':    '#555',
-};
-const FDR_RANK = { 'Low-Moderate': 0, Moderate: 1, High: 2, 'Very High': 3, Severe: 4, Extreme: 5, Catastrophic: 6 };
-
 const ROAD_COLORS = {
   accident:    '#b3231b',
   roadwork:    '#b08a12',
@@ -70,7 +59,6 @@ export default function FireApp() {
   const [state, setState] = useState('QLD');
   const [layer, setLayer] = useState('fire');
   const [data, setData] = useState(null);
-  const [fdr, setFdr] = useState(null);
   const [roads, setRoads] = useState(null);
   const mapEl = useRef(null);
   const map = useRef(null);
@@ -84,15 +72,6 @@ export default function FireApp() {
       .then(r => r.json())
       .then(setData)
       .catch(() => setData({ available: false }));
-  }, [state]);
-
-  // Fetch FDR when state changes
-  useEffect(() => {
-    setFdr(null);
-    fetch(`/api/fire/fdr?state=${state}`)
-      .then(r => r.json())
-      .then(setFdr)
-      .catch(() => setFdr({ available: false }));
   }, [state]);
 
   // Fetch road data when state changes or layer switches to roads
@@ -175,10 +154,6 @@ export default function FireApp() {
     return rank(a.category) - rank(b.category);
   });
 
-  const fdrRating = fdr?.rating || null;
-  const fdrColor = fdrRating ? (FDR_COLORS[fdrRating] || '#555') : null;
-  const fdrBan = fdr?.fireBan || false;
-
   return (
     <>
       <TopNav current="fire" />
@@ -204,41 +179,6 @@ export default function FireApp() {
             </select>
           </div>
         </div>
-
-        {fdr?.available && fdrRating && (
-          <div className="fdr-widget" style={{ '--fdr-color': fdrColor }}>
-            <div className="fdr-rating">
-              <span className="fdr-label">Today's fire danger</span>
-              <span className="fdr-value">{fdrRating}</span>
-            </div>
-            {fdrBan && (
-              <div className="fdr-ban">TOTAL FIRE BAN IN EFFECT</div>
-            )}
-          </div>
-        )}
-        {fdr?.available && fdr?.districts?.length > 0 && (
-          <div className="fdr-districts">
-            <div className="fdr-districts-head">Fire danger by district</div>
-            {[...fdr.districts]
-              .sort((a, b) => {
-                if (a.fireBan !== b.fireBan) return a.fireBan ? -1 : 1;
-                return (FDR_RANK[b.rating] ?? -1) - (FDR_RANK[a.rating] ?? -1);
-              })
-              .map((d, i) => (
-                <div className="fdr-district-row" key={i}>
-                  <span className="fdr-district-name">{d.name}</span>
-                  <span className="fdr-district-badges">
-                    {d.fireBan && <span className="fdr-district-ban">FIRE BAN</span>}
-                    {d.rating && <span className="fdr-district-rating" style={{ color: FDR_COLORS[d.rating] || '#555' }}>{d.rating}</span>}
-                  </span>
-                </div>
-              ))
-            }
-          </div>
-        )}
-        {fdr && !fdr.available && (
-          <p className="fire-note fdr-unavail">Fire danger rating unavailable for {st.label} — <a href={st.officialUrl} target="_blank" rel="noopener">check official source</a>.</p>
-        )}
 
         {layer === 'fire' && (
           <>
