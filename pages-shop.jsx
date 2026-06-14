@@ -2120,18 +2120,26 @@ function renderMarkdown(text) {
       i++;
       continue;
     }
-    // unordered list
+    // unordered list (allow blank lines between items)
     if (/^[-*] /.test(line)) {
       const items = [];
-      while (i < lines.length && /^[-*] /.test(lines[i])) { items.push(lines[i].slice(2)); i++; }
-      out.push(<ul key={i} style={{ paddingLeft: 20, margin: '4px 0' }}>{items.map((t, j) => <li key={j} style={{ marginBottom: 2 }}>{inlineMarkdown(t)}</li>)}</ul>);
+      while (i < lines.length) {
+        if (/^[-*] /.test(lines[i])) { items.push(lines[i].slice(2)); i++; }
+        else if (!lines[i].trim() && i + 1 < lines.length && /^[-*] /.test(lines[i + 1])) { i++; }
+        else break;
+      }
+      out.push(<ul key={i} style={{ paddingLeft: 20, margin: '4px 0' }}>{items.map((t, j) => <li key={j} style={{ marginBottom: 4 }}>{inlineMarkdown(t)}</li>)}</ul>);
       continue;
     }
-    // ordered list
+    // ordered list (allow blank lines between items)
     if (/^\d+\. /.test(line)) {
       const items = [];
-      while (i < lines.length && /^\d+\. /.test(lines[i])) { items.push(lines[i].replace(/^\d+\. /, '')); i++; }
-      out.push(<ol key={i} style={{ paddingLeft: 20, margin: '4px 0' }}>{items.map((t, j) => <li key={j} style={{ marginBottom: 2 }}>{inlineMarkdown(t)}</li>)}</ol>);
+      while (i < lines.length) {
+        if (/^\d+\. /.test(lines[i])) { items.push(lines[i].replace(/^\d+\. /, '')); i++; }
+        else if (!lines[i].trim() && i + 1 < lines.length && /^\d+\. /.test(lines[i + 1])) { i++; }
+        else break;
+      }
+      out.push(<ol key={i} style={{ paddingLeft: 20, margin: '4px 0' }}>{items.map((t, j) => <li key={j} style={{ marginBottom: 4 }}>{inlineMarkdown(t)}</li>)}</ol>);
       continue;
     }
     // headings
