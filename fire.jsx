@@ -135,7 +135,7 @@ export default function FireApp() {
 
     // Fire layer
     if (!data?.available) {
-      map.current.setView(st.center, st.zoom);
+      map.current.fitBounds(st.bounds, { padding: [10, 10] });
       return;
     }
     let hasMarkers = false;
@@ -150,7 +150,7 @@ export default function FireApp() {
     if (hasMarkers) {
       map.current.fitBounds(markers.current.getBounds(), { padding: [24, 24] });
     } else {
-      map.current.setView(st.center, st.zoom);
+      map.current.fitBounds(st.bounds, { padding: [10, 10] });
     }
   }, [data, roads, layer, state]);
 
