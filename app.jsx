@@ -777,7 +777,7 @@ function TweaksUI() {
   );
 }
 // ---------------- Router ----------------
-const KNOWN_PAGES = [...PRIMARY_PAGES, ...UTILITY_PAGES, ...ACCOUNT_PAGES, {id:'cart'}, {id:'order-success'}, {id:'order-cancelled'}, {id:'register'}, {id:'about'}, {id:'repairs'}, {id:'humanly-ai'}].map(p => p.id);
+const KNOWN_PAGES = [...PRIMARY_PAGES, ...UTILITY_PAGES, ...ACCOUNT_PAGES, {id:'cart'}, {id:'order-success'}, {id:'order-cancelled'}, {id:'register'}, {id:'about'}, {id:'repairs'}, {id:'humanly-ai'}, {id:'ai-chat'}].map(p => p.id);
 
 function App() {
   useEffect(() => { ensureCsrf(); }, []);

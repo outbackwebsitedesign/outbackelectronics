@@ -2092,6 +2092,185 @@ function MembershipsPage({ go, portalUser }) {
   );
 }
 
+// ---------------- AI Chat ----------------
+function AIChatPage({ go }) {
+  const [messages, setMessages] = React.useState([
+    { role: 'assistant', content: "G'day! I'm the Outback Electronics AI assistant — running locally on our own hardware, no cloud involved. Ask me anything about electronics repair, troubleshooting, components, or soldering." }
+  ]);
+  const [input, setInput] = React.useState('');
+  const [streaming, setStreaming] = React.useState(false);
+  const [error, setError] = React.useState('');
+  const [authRequired, setAuthRequired] = React.useState(false);
+  const bottomRef = React.useRef(null);
+  const textareaRef = React.useRef(null);
+
+  React.useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  async function send() {
+    const text = input.trim();
+    if (!text || streaming) return;
+    setInput('');
+    setError('');
+    setAuthRequired(false);
+    const userMsg = { role: 'user', content: text };
+    const history = [...messages, userMsg];
+    setMessages([...history, { role: 'assistant', content: '' }]);
+    setStreaming(true);
+
+    try {
+      const csrf = window.getCsrf ? window.getCsrf() : '';
+      const res = await fetch('/api/ai-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+        credentials: 'include',
+        body: JSON.stringify({ messages: history }),
+      });
+      if (res.status === 401) {
+        setMessages(prev => prev.slice(0, -1));
+        setAuthRequired(true);
+        setStreaming(false);
+        return;
+      }
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'AI service error');
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6);
+          if (data === '[DONE]') break;
+          try {
+            const { token } = JSON.parse(data);
+            setMessages(prev => {
+              const next = [...prev];
+              next[next.length - 1] = { role: 'assistant', content: next[next.length - 1].content + token };
+              return next;
+            });
+          } catch { /* skip */ }
+        }
+      }
+    } catch (e) {
+      setError(e.message || 'Something went wrong. Please try again.');
+      setMessages(prev => prev.slice(0, -1));
+    } finally {
+      setStreaming(false);
+      setTimeout(() => textareaRef.current?.focus(), 50);
+    }
+  }
+
+  function onKeyDown(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+  }
+
+  function clearChat() {
+    setMessages([{ role: 'assistant', content: "G'day! I'm the Outback Electronics AI assistant — running locally on our own hardware, no cloud involved. Ask me anything about electronics repair, troubleshooting, components, or soldering." }]);
+    setInput('');
+    setError('');
+    setAuthRequired(false);
+  }
+
+  const portalUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? 'http://localhost:8083'
+    : `https://portal.${window.location.hostname.replace(/^www\./, '')}`;
+
+  return (
+    <>
+      <PageHead
+        crumbs={['Outback', 'AI', 'Chat']}
+        title="AI Assistant"
+        kicker={<span className="tag tag-rust">LOCAL AI · ON-PREM</span>}
+        lead="Ask our AI anything about electronics repair, components, troubleshooting, or soldering. Runs entirely on our own hardware — your questions never leave our server."
+      />
+
+      <section className="container" style={{ paddingTop: 32, paddingBottom: 48 }}>
+        <div style={{ maxWidth: 760, margin: '0 auto' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#4caf50', display: 'inline-block' }} />
+              <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>AI online · on-prem</span>
+            </div>
+            <button className="btn btn-ghost btn-sm" onClick={clearChat} disabled={streaming}>Clear chat</button>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid var(--line)', borderRadius: 8, overflow: 'hidden', background: 'var(--paper)' }}>
+            <div style={{ overflowY: 'auto', padding: '24px 20px 12px', display: 'flex', flexDirection: 'column', gap: 14, maxHeight: 520, minHeight: 320 }}>
+              {messages.map((m, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
+                  <div style={{
+                    maxWidth: '80%',
+                    padding: '10px 14px',
+                    borderRadius: m.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+                    background: m.role === 'user' ? 'var(--rust)' : 'var(--surface, #f5f0eb)',
+                    border: m.role === 'user' ? 'none' : '1px solid var(--line)',
+                    color: m.role === 'user' ? '#fff' : 'var(--ink)',
+                    fontSize: 14,
+                    lineHeight: 1.6,
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                  }}>
+                    {m.content || (streaming && i === messages.length - 1 ? <span style={{ opacity: 0.4 }}>▌</span> : '')}
+                  </div>
+                </div>
+              ))}
+              <div ref={bottomRef} />
+            </div>
+
+            {authRequired && (
+              <div style={{ margin: '0 20px 12px', padding: '14px 16px', background: 'var(--surface, #f5f0eb)', border: '1px solid var(--line)', borderRadius: 6 }}>
+                <p style={{ margin: 0, fontSize: 14, color: 'var(--ink)' }}>
+                  You need a portal account to chat. &nbsp;
+                  <a href={portalUrl} style={{ color: 'var(--rust)', fontWeight: 600 }}>Sign in or register →</a>
+                </p>
+              </div>
+            )}
+
+            {error && (
+              <div className="alert alert-error" style={{ margin: '0 20px 12px' }}>{error}</div>
+            )}
+
+            <div style={{ display: 'flex', gap: 8, padding: '12px 16px', borderTop: '1px solid var(--line)', alignItems: 'flex-end' }}>
+              <textarea
+                ref={textareaRef}
+                className="input textarea"
+                rows={2}
+                style={{ flex: 1, resize: 'none', fontSize: 14 }}
+                placeholder={authRequired ? 'Sign in to send a message…' : 'Ask about a repair, component, circuit… (Enter to send, Shift+Enter for new line)'}
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={onKeyDown}
+                disabled={streaming || authRequired}
+              />
+              <button
+                className="btn btn-rust"
+                style={{ height: 56, minWidth: 72, flexShrink: 0 }}
+                onClick={send}
+                disabled={streaming || !input.trim() || authRequired}
+              >
+                {streaming ? '…' : 'Send'}
+              </button>
+            </div>
+          </div>
+
+          <p style={{ fontSize: 12, color: 'var(--ink-2)', marginTop: 10 }}>
+            AI responses may not always be accurate. For complex repairs, <button className="link-btn" onClick={() => go('services')}>book a service</button>.
+          </p>
+        </div>
+      </section>
+    </>
+  );
+}
+
 // ---------------- Register ----------------
 window.OE_PAGES = Object.assign(window.OE_PAGES || {}, {
   home: HomePage,
@@ -2100,6 +2279,7 @@ window.OE_PAGES = Object.assign(window.OE_PAGES || {}, {
   software: SoftwarePage,
   ewaste: EwastePage,
   ai: AIPage,
+  'ai-chat': AIChatPage,
   product: ProductDetailPage,
   service: ServiceDetailPage,
   'gift-cards': GiftCardsPage,
