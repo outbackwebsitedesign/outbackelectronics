@@ -3635,7 +3635,7 @@ const mainServer = http.createServer(async (req, res) => {
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     const messages = Array.isArray(body?.messages) ? body.messages : [];
     if (!messages.length) return json(res, 422, { error: 'messages_required' });
-    const payload = {
+    const payload = JSON.stringify({
       model: 'qwen2.5:1.5b',
       stream: true,
       messages: [
@@ -3645,33 +3645,37 @@ const mainServer = http.createServer(async (req, res) => {
         },
         ...messages.slice(-20).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content).slice(0, 4000) }))
       ],
-    };
-    let ollamaRes;
-    try {
-      ollamaRes = await fetch('http://127.0.0.1:11434/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-    } catch {
-      return json(res, 503, { error: 'ai_unavailable', message: 'AI service is currently offline.' });
-    }
-    if (!ollamaRes.ok) return json(res, 502, { error: 'ai_error' });
-    res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
-    try {
-      for await (const chunk of ollamaRes.body) {
-        const lines = chunk.toString().split('\n').filter(Boolean);
-        for (const line of lines) {
-          try {
-            const obj = JSON.parse(line);
-            const token = obj?.message?.content ?? '';
-            if (token) res.write(`data: ${JSON.stringify({ token })}\n\n`);
-            if (obj.done) { res.write('data: [DONE]\n\n'); }
-          } catch { /* partial JSON chunk, skip */ }
+    });
+    await new Promise((resolve) => {
+      const ollamaReq = http.request({ hostname: '127.0.0.1', port: 11434, path: '/api/chat', method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } }, (ollamaRes) => {
+        if (ollamaRes.statusCode !== 200) {
+          json(res, 502, { error: 'ai_error' });
+          ollamaRes.resume();
+          return resolve();
         }
-      }
-    } catch { /* client disconnected */ }
-    res.end();
+        res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
+        let buf = '';
+        ollamaRes.on('data', (chunk) => {
+          buf += chunk.toString();
+          const lines = buf.split('\n');
+          buf = lines.pop();
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const obj = JSON.parse(line);
+              const token = obj?.message?.content ?? '';
+              if (token) res.write(`data: ${JSON.stringify({ token })}\n\n`);
+              if (obj.done) res.write('data: [DONE]\n\n');
+            } catch { /* partial line */ }
+          }
+        });
+        ollamaRes.on('end', () => { res.end(); resolve(); });
+        ollamaRes.on('error', () => { if (!res.headersSent) json(res, 502, { error: 'ai_error' }); else res.end(); resolve(); });
+      });
+      ollamaReq.on('error', () => { json(res, 503, { error: 'ai_unavailable', message: 'AI service is currently offline.' }); resolve(); });
+      ollamaReq.write(payload);
+      ollamaReq.end();
+    });
     return;
   }
 
