@@ -7738,12 +7738,33 @@ setInterval(() => {
 // ── Radio (8110) — continuous server-side broadcast from radio-media/ ────────
 // One shared timeline streamed to all listeners (audio-only; tune in/out but no
 // pause or skip). Drop .mp3 files into radio-media/. Paced to a CBR estimate.
-const RADIO_DIR = path.join(__dirname, 'radio-media');
-fs.mkdirSync(RADIO_DIR, { recursive: true });
+// Media folder is configurable — point RADIO_MEDIA_DIR at any library
+// (e.g. /home/daniel/Music). Defaults to radio-media/ in the project root.
+const RADIO_DIR = process.env.RADIO_MEDIA_DIR || path.join(__dirname, 'radio-media');
+try { fs.mkdirSync(RADIO_DIR, { recursive: true }); } catch {}
 const RADIO_BYTES_PER_SEC = Math.max(4000, Math.round((parseInt(process.env.RADIO_BITRATE_KBPS, 10) || 128) * 125));
 let _radioPlaylist = [], _radioIdx = -1, _radioTrack = null, _radioBuf = null, _radioPos = 0;
 const _radioListeners = new Set();
-function radioScan() { try { _radioPlaylist = fs.readdirSync(RADIO_DIR).filter(f => /\.mp3$/i.test(f)).sort(); } catch { _radioPlaylist = []; } }
+// Walk radio-media/ recursively — each subfolder is an album. Playlist entries
+// are relative paths (e.g. "Heimsöknin/01-track.mp3"), sorted so albums group
+// and tracks play in order within each.
+function radioScan() {
+  const out = [];
+  const walk = (dir, rel) => {
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (e.name.startsWith('.')) continue;
+      const abs = path.join(dir, e.name);
+      const r = rel ? rel + '/' + e.name : e.name;
+      if (e.isDirectory()) walk(abs, r);
+      else if (/\.mp3$/i.test(e.name)) out.push(r);
+    }
+  };
+  walk(RADIO_DIR, '');
+  out.sort((a, b) => a.localeCompare(b));
+  _radioPlaylist = out;
+}
 radioScan();
 function radioLoadNext() {
   if (!_radioPlaylist.length) radioScan();
@@ -7766,8 +7787,12 @@ const radioServer = createServiceServer({
   htmlEntry: '/dist/radio.html',
   routes: async (req, res, url) => {
     if (req.method === 'GET' && url.pathname === '/api/radio/nowplaying') {
-      const title = _radioTrack ? _radioTrack.replace(/\.mp3$/i, '').replace(/^\d+[-_ ]*/, '').replace(/[_-]+/g, ' ').trim() : null;
-      json(res, 200, { onAir: _radioPlaylist.length > 0, track: title, count: _radioPlaylist.length, listeners: _radioListeners.size });
+      const rel = _radioTrack || '';
+      const slash = rel.lastIndexOf('/');
+      const album = slash >= 0 ? rel.slice(0, slash).split('/').pop() : null;
+      const file = slash >= 0 ? rel.slice(slash + 1) : rel;
+      const title = file ? file.replace(/\.mp3$/i, '').replace(/^\d+[-_ ]*/, '').replace(/[_-]+/g, ' ').trim() : null;
+      json(res, 200, { onAir: _radioPlaylist.length > 0, track: title, album: album || null, count: _radioPlaylist.length, listeners: _radioListeners.size });
       return true;
     }
     if (req.method === 'GET' && url.pathname === '/stream') {

@@ -39,6 +39,7 @@ export default function RadioApp() {
           <div className="radio-dial">
             <div className="radio-wave" data-on={playing}>{Array.from({ length: 7 }).map((_, i) => <i key={i} />)}</div>
             <div className="radio-np">{offAir ? 'Off air' : (playing ? (np && np.track ? np.track : 'On air') : 'Tap to tune in')}</div>
+            {playing && np && np.album ? <div className="radio-album">{np.album}</div> : null}
             <div className="radio-sub">{offAir ? 'No tracks loaded yet' : (np ? `${np.count} track${np.count === 1 ? '' : 's'} in rotation · ${np.listeners} listening` : '…')}</div>
           </div>
           {offAir ? <button className="btn radio-btn" disabled>Off air</button>
