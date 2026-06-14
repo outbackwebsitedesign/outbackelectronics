@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Sky — Outback Electronics</title>
+<meta name="description" content="Tonight's dark-sky window, moon phase and live aurora forecast for remote Australia. Plan your stargazing and satellite spotting." />
+<link rel="icon" type="image/png" href="/favicon.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  /* Base + shared shell come from app-shell.css. Sky-specific layout only. */
+  .sky-tools { max-width: 360px; margin-bottom: 24px; }
+  .sky-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+  .sky-card { background: var(--bg-elev); border: 1px solid var(--line); padding: 20px; }
+  .sky-card h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.1em; font-family: 'JetBrains Mono', monospace; color: var(--ink-2); margin-bottom: 14px; }
+  .sky-big { font-family: 'Instrument Serif', serif; font-size: 40px; line-height: 1; }
+  .sky-moon { font-size: 46px; line-height: 1; }
+  .sky-sub { color: var(--ink-3); font-size: 13px; margin-top: 8px; }
+  .sky-line { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .sky-line span { color: var(--ink-2); }
+  .sky-rate { display: inline-block; margin-top: 10px; padding: 3px 10px; font-family: 'JetBrains Mono', monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .rate-excellent { background: var(--eucalyptus); color: var(--paper); }
+  .rate-good { background: var(--ochre); color: var(--dark); }
+  .rate-fair { background: var(--bg-deep); color: var(--ink-2); }
+  .rate-poor { background: var(--line-strong); color: var(--ink); }
+  .kp-bar { height: 10px; background: var(--bg-deep); border: 1px solid var(--line-strong); margin: 12px 0 8px; position: relative; }
+  .kp-fill { height: 100%; background: linear-gradient(90deg, var(--eucalyptus), var(--ochre), var(--rust)); }
+  .sky-track { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="module" src="/src/sky-entry.jsx"></script>
+</body>
+</html>

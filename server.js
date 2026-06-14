@@ -6873,6 +6873,48 @@ const hubServer = createServiceServer({
 // ── Solar (8107) — off-grid power planner (pure client-side calculator) ──────
 const solarServer = createServiceServer({ htmlEntry: '/dist/solar.html' });
 
+// ── Sky (8104) — dark-sky window + moon (client) + live aurora Kp (NOAA) ────
+let _auroraCache = { ts: 0, data: null };
+function fetchAuroraKp() {
+  return new Promise((resolve) => {
+    const req = https.get('https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json', { timeout: 6000 }, (r) => {
+      if (r.statusCode !== 200) { r.resume(); return resolve(null); }
+      let buf = '';
+      r.on('data', c => { buf += c; if (buf.length > 1e6) req.destroy(); });
+      r.on('end', () => {
+        try {
+          const rows = JSON.parse(buf); // rows[0] is a header; later rows are [time, Kp, ...]
+          for (let i = rows.length - 1; i >= 1; i--) {
+            const kp = parseFloat(rows[i][1]);
+            if (isFinite(kp)) return resolve({ kp, time: rows[i][0] });
+          }
+          resolve(null);
+        } catch { resolve(null); }
+      });
+    });
+    req.on('error', () => resolve(null));
+    req.on('timeout', () => { req.destroy(); resolve(null); });
+  });
+}
+async function handleSkyAurora(req, res) {
+  const t = Date.now();
+  if (!_auroraCache.data || t - _auroraCache.ts > 10 * 60 * 1000) {
+    const d = await fetchAuroraKp();
+    if (d) _auroraCache = { ts: t, data: d };
+  }
+  if (!_auroraCache.data) return json(res, 200, { available: false });
+  const kp = _auroraCache.data.kp;
+  const level = kp >= 7 ? 'severe' : kp >= 5 ? 'storm' : kp >= 4 ? 'active' : 'quiet';
+  return json(res, 200, { available: true, kp, level, time: _auroraCache.data.time });
+}
+const skyServer = createServiceServer({
+  htmlEntry: '/dist/sky.html',
+  routes: async (req, res, url) => {
+    if (req.method === 'GET' && url.pathname === '/api/sky/aurora') { await handleSkyAurora(req, res); return true; }
+    return false;
+  },
+});
+
 startServer(mainServer,   MAIN_PORT,   'main  ');
 startServer(discourseRedirectServer, DISCOURSE_REDIRECT_PORT, 'redirect');
 startServer(adminServer,  ADMIN_PORT,  'admin ');
@@ -6883,3 +6925,4 @@ startServer(weatherServer, WEATHER_PORT, 'weather');
 startServer(aiGatewayServer, AI_GATEWAY_PORT, 'ai    ');
 startServer(hubServer,    HUB_PORT,    'hub   ');
 startServer(solarServer,  SOLAR_PORT,  'solar ');
+startServer(skyServer,    SKY_PORT,    'sky   ');
