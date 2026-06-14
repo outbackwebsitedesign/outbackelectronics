@@ -53,6 +53,7 @@ export default defineConfig({
         maps: 'maps.html',
         coverage: 'coverage.html',
         drive: 'drive.html',
+        photos: 'photos.html',
       },
       output: {
         manualChunks: {

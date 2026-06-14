@@ -7561,6 +7561,57 @@ const driveServer = createServiceServer({
   },
 });
 
+// ── Photos (8103) — account-gated photo gallery (photos.db + photos-files/) ──
+const PHOTOS_DB = path.join(__dirname, 'photos.db');
+const PHOTOS_DIR = path.join(__dirname, 'photos-files');
+fs.mkdirSync(PHOTOS_DIR, { recursive: true });
+function readPhotos() { try { const d = JSON.parse(fs.readFileSync(PHOTOS_DB, 'utf8')); return Array.isArray(d.photos) ? d.photos : []; } catch { return []; } }
+function writePhotos(photos) { atomicWriteFile(PHOTOS_DB, JSON.stringify({ photos })); }
+const photosServer = createServiceServer({
+  htmlEntry: '/dist/photos.html',
+  routes: async (req, res, url) => {
+    if (!url.pathname.startsWith('/api/photos')) return false;
+    const session = getPortalSession(req);
+    if (!session) { json(res, 401, { error: 'login_required' }); return true; }
+    if (req.method === 'GET' && url.pathname === '/api/photos/list') {
+      const photos = readPhotos().filter(p => p.userId === session.id).map(({ path: _p, ...m }) => m).sort((a, b) => b.ts - a.ts);
+      json(res, 200, { photos }); return true;
+    }
+    if (req.method === 'POST' && url.pathname === '/api/photos/upload') {
+      let b; try { b = await readJson(req, 25e6); } catch { json(res, 400, { error: 'bad_request' }); return true; }
+      const type = String(b.type || '').toLowerCase();
+      if (!type.startsWith('image/')) { json(res, 422, { error: 'not_image', message: 'Images only.' }); return true; }
+      const buf = Buffer.from(String(b.dataBase64 || ''), 'base64');
+      if (!buf.length) { json(res, 422, { error: 'empty' }); return true; }
+      if (buf.length > 15 * 1024 * 1024) { json(res, 413, { error: 'too_large', message: 'Max 15 MB per photo.' }); return true; }
+      const dir = userDirFor(PHOTOS_DIR, session.id);
+      const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+      const ext = (type.split('/')[1] || 'jpg').replace(/[^a-z0-9]/g, '').slice(0, 5) || 'jpg';
+      const fp = path.join(dir, id + '.' + ext);
+      fs.writeFileSync(fp, buf);
+      const photos = readPhotos();
+      photos.push({ id, userId: session.id, name: safeFileName(b.name || ('photo.' + ext)), size: buf.length, type, ts: Date.now(), path: fp });
+      writePhotos(photos);
+      json(res, 200, { ok: true }); return true;
+    }
+    if (req.method === 'GET' && url.pathname === '/api/photos/file') {
+      const p = readPhotos().find(x => x.id === url.searchParams.get('id') && x.userId === session.id);
+      if (!p || !fs.existsSync(p.path)) { json(res, 404, { error: 'not_found' }); return true; }
+      res.writeHead(200, { 'Content-Type': p.type || 'image/jpeg', 'Content-Length': p.size, 'Cache-Control': 'private, max-age=3600', 'X-Content-Type-Options': 'nosniff' });
+      fs.createReadStream(p.path).on('error', () => res.end()).pipe(res); return true;
+    }
+    if (req.method === 'POST' && url.pathname === '/api/photos/delete') {
+      let b; try { b = await readJson(req); } catch { json(res, 400, { error: 'bad_request' }); return true; }
+      const photos = readPhotos(); const i = photos.findIndex(x => x.id === b.id && x.userId === session.id);
+      if (i < 0) { json(res, 404, { error: 'not_found' }); return true; }
+      try { fs.unlinkSync(photos[i].path); } catch {}
+      photos.splice(i, 1); writePhotos(photos);
+      json(res, 200, { ok: true }); return true;
+    }
+    return false;
+  },
+});
+
 startServer(mainServer,   MAIN_PORT,   'main  ');
 startServer(discourseRedirectServer, DISCOURSE_REDIRECT_PORT, 'redirect');
 startServer(adminServer,  ADMIN_PORT,  'admin ');
@@ -7576,3 +7627,4 @@ startServer(fireServer,   FIRE_PORT,   'fire  ');
 startServer(mapsServer,   MAPS_PORT,   'maps  ');
 startServer(coverageServer, COVERAGE_PORT, 'cover ');
 startServer(driveServer,  DRIVE_PORT,  'drive ');
+startServer(photosServer, PHOTOS_PORT, 'photos');
