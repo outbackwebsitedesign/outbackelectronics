@@ -2131,22 +2131,28 @@ function renderMarkdown(text) {
       out.push(<ul key={i} style={{ paddingLeft: 20, margin: '4px 0' }}>{items.map((t, j) => <li key={j} style={{ marginBottom: 4 }}>{inlineMarkdown(t)}</li>)}</ul>);
       continue;
     }
-    // ordered list (allow blank lines between title, sub-bullets, and next item)
+    // ordered list
     if (/^\d+\. /.test(line)) {
       const items = [];
+      let lastItem = null;
       while (i < lines.length) {
-        if (/^\d+\. /.test(lines[i])) {
-          const text = [lines[i].replace(/^\d+\. /, '')];
+        const l = lines[i];
+        if (/^\d+\. /.test(l)) {
+          lastItem = [l.replace(/^\d+\. /, '')];
+          items.push(lastItem);
           i++;
-          // collect sub-bullets, skipping blank lines before them
-          while (i < lines.length) {
-            if (/^[-*] /.test(lines[i])) { text.push('• ' + lines[i].slice(2)); i++; }
-            else if (!lines[i].trim() && i + 1 < lines.length && /^[-*] /.test(lines[i + 1])) { i++; }
-            else break;
-          }
-          items.push(text);
-        } else if (!lines[i].trim() && i + 1 < lines.length && /^\d+\. /.test(lines[i + 1])) { i++; }
-        else break;
+        } else if (/^[-*] /.test(l)) {
+          if (lastItem) lastItem.push('• ' + l.slice(2));
+          i++;
+        } else if (!l.trim()) {
+          // skip blank lines within a list — but stop if next non-blank is not a list line
+          let j = i + 1;
+          while (j < lines.length && !lines[j].trim()) j++;
+          if (j < lines.length && (/^\d+\. /.test(lines[j]) || /^[-*] /.test(lines[j]))) { i++; }
+          else break;
+        } else {
+          break;
+        }
       }
       out.push(
         <ol key={i} style={{ paddingLeft: 20, margin: '4px 0' }}>
