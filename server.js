@@ -7216,36 +7216,45 @@ function fetchFeedJSON(url, extraHeaders) { return fetchFeedRaw(url, extraHeader
 // ── Roads layer ───────────────────────────────────────────────────────────────
 // Public key (100 req/min limit) — override with QLDTRAFFIC_API_KEY env var for higher limits
 const QLDTRAFFIC_API_KEY = process.env.QLDTRAFFIC_API_KEY || '3e83add325cbb69ac4d8e5bf433d770b';
+// filterByType: true → mixed-emergency feed; only include road/traffic/vehicle events
 const ROAD_FEEDS = {
-  QLD: `https://api.qldtraffic.qld.gov.au/v2/events?apikey=${QLDTRAFFIC_API_KEY}`,
-  NSW: 'https://data.livetraffic.com/traffic/hazards/incident.json',
+  QLD: { url: `https://api.qldtraffic.qld.gov.au/v2/events?apikey=${QLDTRAFFIC_API_KEY}` },
+  NSW: { url: 'https://data.livetraffic.com/traffic/hazards/incident.json' },
+  VIC: { url: 'https://emergency.vic.gov.au/public/events-geojson.json', filterByType: true },
 };
-function normalizeRoadData(raw) {
+const ROAD_TYPE_RE = /road|crash|accident|traffic|vehicle|collision|roadblock|flood|closure|hazard|transport/i;
+function normalizeRoadData(raw, filterByType) {
   if (!Array.isArray(raw?.features)) return null;
   const items = [];
   for (const f of raw.features) {
     const p = f.properties || {};
+    if (filterByType) {
+      const typeVals = [p.incident_type, p.category1, p.type, p.feedtype, p.eventType, p.groupedType]
+        .filter(Boolean).map(s => String(s).toLowerCase());
+      if (!typeVals.some(t => ROAD_TYPE_RE.test(t))) continue;
+    }
     const coords = geomCentroid(f.geometry);
     if (!coords) continue;
-    const title = String(p.description || p.headline || p.displayName || p.event_type || p.title || p.type || 'Incident').slice(0, 160);
-    const type = String(p.event_type || p.incidentKind || p.type || p.category || 'other').toLowerCase();
+    const title = String(p.description || p.sourceTitle || p.headline || p.displayName
+      || p.incident_type || p.event_type || p.title || p.type || 'Incident').slice(0, 160);
+    const type = String(p.event_type || p.incident_type || p.incidentKind || p.category1 || p.type || p.category || 'other').toLowerCase();
     items.push({ title, type, lat: coords.lat, lon: coords.lon });
   }
-  return { available: true, total: raw.features.length, items };
+  return { available: true, total: items.length, items };
 }
 const _roadCache = {};
 async function handleRoadsStatus(req, res, url) {
   const state = (url.searchParams.get('state') || 'QLD').toUpperCase();
-  const feedUrl = ROAD_FEEDS[state];
-  if (!feedUrl) return json(res, 200, { available: false });
+  const feedCfg = ROAD_FEEDS[state];
+  if (!feedCfg) return json(res, 200, { available: false });
   const t = Date.now();
   const cached = _roadCache[state];
   if (!cached || t - cached.ts > 5 * 60 * 1000) {
-    // Pass API key as both header and query param to support all auth styles
     const extraHeaders = (state === 'QLD' && QLDTRAFFIC_API_KEY)
       ? { 'Authorization': `apikey ${QLDTRAFFIC_API_KEY}` } : {};
-    const raw = await fetchFeedJSON(feedUrl, extraHeaders);
-    const normalized = raw ? normalizeRoadData(raw) : null;
+    const deadline = new Promise(r => setTimeout(() => r(null), 12000));
+    const raw = await Promise.race([fetchFeedJSON(feedCfg.url, extraHeaders), deadline]);
+    const normalized = raw ? normalizeRoadData(raw, feedCfg.filterByType) : null;
     if (normalized) _roadCache[state] = { ts: t, data: normalized };
   }
   const entry = _roadCache[state];

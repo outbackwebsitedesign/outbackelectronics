@@ -78,10 +78,14 @@ export default function FireApp() {
   useEffect(() => {
     if (layer !== 'roads') return;
     setRoads(null);
-    fetch(`/api/fire/roads?state=${state}`)
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 15000);
+    fetch(`/api/fire/roads?state=${state}`, { signal: ctrl.signal })
       .then(r => r.json())
       .then(setRoads)
-      .catch(() => setRoads({ available: false }));
+      .catch(() => setRoads({ available: false }))
+      .finally(() => clearTimeout(timer));
+    return () => { ctrl.abort(); clearTimeout(timer); };
   }, [state, layer]);
 
   // Init map once
