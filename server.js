@@ -6614,6 +6614,10 @@ const aiGatewayServer = http.createServer(async (req, res) => {
   try {
     // Session info (for AI frontend to check login state)
     if (req.method === 'GET' && url.pathname === '/api/session') {
+      const cookies = parseCookies(req);
+      const sid = cookies.oe_portal_session;
+      console.log('[ai/session] cookie header:', req.headers.cookie || '(none)');
+      console.log('[ai/session] parsed sid:', sid || '(none)', '| portalSessions size:', portalSessions.size);
       const session = getPortalSession(req);
       if (!session) return json(res, 401, { error: 'not_logged_in' });
       return json(res, 200, { id: session.id, username: session.username, displayName: session.displayName });
