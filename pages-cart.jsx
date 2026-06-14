@@ -525,8 +525,10 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
                   <a href="/policies/terms-and-conditions" target="_blank" rel="noopener noreferrer" style={{color:'var(--rust)', fontWeight:600}}>Terms &amp; Conditions</a>
                   {', '}
                   <a href="/policies/privacy-policy" target="_blank" rel="noopener noreferrer" style={{color:'var(--rust)', fontWeight:600}}>Privacy Policy</a>
+                  {', '}
+                  <a href="/policies/return-policy" target="_blank" rel="noopener noreferrer" style={{color:'var(--rust)', fontWeight:600}}>Return Policy</a>
                   {', and '}
-                  <a href="/policies" target="_blank" rel="noopener noreferrer" style={{color:'var(--rust)', fontWeight:600}}>all policies</a>.
+                  <a href="/policies" target="_blank" rel="noopener noreferrer" style={{color:'var(--rust)', fontWeight:600}}>all site policies</a>.
                 </span>
               </label>
               <ErrorText style={{marginBottom:12}}>{error}</ErrorText>
