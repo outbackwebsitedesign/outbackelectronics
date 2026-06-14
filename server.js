@@ -7735,6 +7735,54 @@ setInterval(() => {
   } catch {}
 }, 5 * 60 * 1000);
 
+// ── Radio (8110) — continuous server-side broadcast from radio-media/ ────────
+// One shared timeline streamed to all listeners (audio-only; tune in/out but no
+// pause or skip). Drop .mp3 files into radio-media/. Paced to a CBR estimate.
+const RADIO_DIR = path.join(__dirname, 'radio-media');
+fs.mkdirSync(RADIO_DIR, { recursive: true });
+const RADIO_BYTES_PER_SEC = Math.max(4000, Math.round((parseInt(process.env.RADIO_BITRATE_KBPS, 10) || 128) * 125));
+let _radioPlaylist = [], _radioIdx = -1, _radioTrack = null, _radioBuf = null, _radioPos = 0;
+const _radioListeners = new Set();
+function radioScan() { try { _radioPlaylist = fs.readdirSync(RADIO_DIR).filter(f => /\.mp3$/i.test(f)).sort(); } catch { _radioPlaylist = []; } }
+radioScan();
+function radioLoadNext() {
+  if (!_radioPlaylist.length) radioScan();
+  if (!_radioPlaylist.length) { _radioBuf = null; _radioTrack = null; return; }
+  _radioIdx = (_radioIdx + 1) % _radioPlaylist.length;
+  if (_radioIdx === 0) radioScan(); // pick up newly-added tracks each loop
+  _radioTrack = _radioPlaylist[_radioIdx] || null;
+  try { _radioBuf = _radioTrack ? fs.readFileSync(path.join(RADIO_DIR, _radioTrack)) : null; _radioPos = 0; } catch { _radioBuf = null; }
+}
+setInterval(() => {
+  if (!_radioListeners.size) return; // advance the dial only while someone's tuned in
+  if (!_radioBuf) { radioLoadNext(); if (!_radioBuf) return; }
+  const end = Math.min(_radioPos + Math.round(RADIO_BYTES_PER_SEC / 4), _radioBuf.length);
+  const chunk = _radioBuf.slice(_radioPos, end);
+  _radioPos = end;
+  for (const res of _radioListeners) { try { res.write(chunk); } catch { _radioListeners.delete(res); } }
+  if (_radioPos >= _radioBuf.length) radioLoadNext();
+}, 250);
+const radioServer = createServiceServer({
+  htmlEntry: '/dist/radio.html',
+  routes: async (req, res, url) => {
+    if (req.method === 'GET' && url.pathname === '/api/radio/nowplaying') {
+      const title = _radioTrack ? _radioTrack.replace(/\.mp3$/i, '').replace(/^\d+[-_ ]*/, '').replace(/[_-]+/g, ' ').trim() : null;
+      json(res, 200, { onAir: _radioPlaylist.length > 0, track: title, count: _radioPlaylist.length, listeners: _radioListeners.size });
+      return true;
+    }
+    if (req.method === 'GET' && url.pathname === '/stream') {
+      if (!_radioPlaylist.length) radioScan();
+      if (!_radioPlaylist.length) { json(res, 503, { error: 'off_air' }); return true; }
+      if (!_radioBuf) radioLoadNext();
+      res.writeHead(200, { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'no-cache, no-store', 'Pragma': 'no-cache', 'Connection': 'keep-alive' });
+      _radioListeners.add(res);
+      req.on('close', () => { _radioListeners.delete(res); });
+      return true; // keep the connection open for streaming
+    }
+    return false;
+  },
+});
+
 startServer(mainServer,   MAIN_PORT,   'main  ');
 startServer(discourseRedirectServer, DISCOURSE_REDIRECT_PORT, 'redirect');
 startServer(adminServer,  ADMIN_PORT,  'admin ');
@@ -7753,3 +7801,4 @@ startServer(driveServer,  DRIVE_PORT,  'drive ');
 startServer(photosServer, PHOTOS_PORT, 'photos');
 startServer(swapServer,   SWAP_PORT,   'swap  ');
 startServer(beaconServer, BEACON_PORT, 'beacon');
+startServer(radioServer,  RADIO_PORT,  'radio ');

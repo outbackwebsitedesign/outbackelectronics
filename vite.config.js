@@ -56,6 +56,7 @@ export default defineConfig({
         photos: 'photos.html',
         swap: 'swap.html',
         beacon: 'beacon.html',
+        radio: 'radio.html',
       },
       output: {
         manualChunks: {

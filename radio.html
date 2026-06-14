@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Outback Radio — Outback Electronics</title>
+<meta name="description" content="A continuous community radio broadcast for remote Australia. Tune in or out — but there's no pause or skip. Just like the wireless." />
+<link rel="icon" type="image/png" href="/favicon.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  /* Base + shared shell come from app-shell.css. Radio-specific layout only. */
+  .radio-deck { background: var(--dark); color: var(--bg-deep); padding: 40px 32px; display: flex; flex-direction: column; align-items: center; gap: 24px; max-width: 520px; }
+  .radio-dial { text-align: center; }
+  .radio-wave { display: flex; gap: 4px; justify-content: center; align-items: flex-end; height: 36px; margin-bottom: 18px; }
+  .radio-wave i { width: 5px; height: 8px; background: var(--ochre); display: block; }
+  .radio-wave[data-on="true"] i { animation: rwave 900ms ease-in-out infinite; }
+  .radio-wave[data-on="true"] i:nth-child(2) { animation-delay: 0.12s; }
+  .radio-wave[data-on="true"] i:nth-child(3) { animation-delay: 0.24s; }
+  .radio-wave[data-on="true"] i:nth-child(4) { animation-delay: 0.36s; }
+  .radio-wave[data-on="true"] i:nth-child(5) { animation-delay: 0.18s; }
+  .radio-wave[data-on="true"] i:nth-child(6) { animation-delay: 0.30s; }
+  .radio-wave[data-on="true"] i:nth-child(7) { animation-delay: 0.06s; }
+  @keyframes rwave { 0%, 100% { height: 8px; } 50% { height: 34px; } }
+  .radio-np { font-family: 'Instrument Serif', serif; font-size: 30px; line-height: 1.1; }
+  .radio-sub { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: var(--ink-on-dark-muted); margin-top: 10px; text-transform: uppercase; }
+  .radio-btn { min-width: 170px; justify-content: center; }
+  .radio-note { font-size: 12px; color: var(--ink-3); margin-top: 22px; max-width: 520px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="module" src="/src/radio-entry.jsx"></script>
+</body>
+</html>
