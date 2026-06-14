@@ -7805,21 +7805,30 @@ if (_radioPlaylist.length) {
   }
 }
 // Clock ticks 24/7 regardless of listeners.
-// Pace is 1.15× real-time so the browser's buffer stays comfortably ahead of
-// the decoder and event-loop jitter can't starve it between ticks.
-const RADIO_TICK_MS = 250;
-const RADIO_CHUNK_BYTES = Math.round(RADIO_BYTES_PER_SEC * 1.15 / (1000 / RADIO_TICK_MS));
-setInterval(() => {
-  if (!_radioBuf) { radioLoadNext(); if (!_radioBuf) return; }
-  const end = Math.min(_radioPos + RADIO_CHUNK_BYTES, _radioBuf.length);
-  const chunk = _radioBuf.slice(_radioPos, end);
-  _radioPos = end;
-  radioPreloadAppend(chunk);
-  if (_radioListeners.size) {
-    for (const res of _radioListeners) { try { res.write(chunk); } catch { _radioListeners.delete(res); } }
+// Sends 2 s worth of audio every 2 s at 1.15× real-time using a drift-compensating
+// setTimeout so accumulated jitter never causes the 1-per-second glitch that
+// setInterval produces. Larger chunks mean the browser always has a comfortable
+// runway between deliveries.
+const RADIO_TICK_MS = 2000;
+const RADIO_CHUNK_BYTES = Math.round(RADIO_BYTES_PER_SEC * 1.15 * (RADIO_TICK_MS / 1000));
+let _radioNextTick = Date.now();
+function radioTick() {
+  if (!_radioBuf) { radioLoadNext(); }
+  if (_radioBuf) {
+    const end = Math.min(_radioPos + RADIO_CHUNK_BYTES, _radioBuf.length);
+    const chunk = _radioBuf.slice(_radioPos, end);
+    _radioPos = end;
+    radioPreloadAppend(chunk);
+    if (_radioListeners.size) {
+      for (const res of _radioListeners) { try { res.write(chunk); } catch { _radioListeners.delete(res); } }
+    }
+    if (_radioPos >= _radioBuf.length) radioLoadNext();
   }
-  if (_radioPos >= _radioBuf.length) radioLoadNext();
-}, RADIO_TICK_MS);
+  _radioNextTick += RADIO_TICK_MS;
+  setTimeout(radioTick, Math.max(0, _radioNextTick - Date.now()));
+}
+_radioNextTick = Date.now();
+setTimeout(radioTick, 0);
 const radioServer = createServiceServer({
   htmlEntry: '/dist/radio.html',
   routes: async (req, res, url) => {
