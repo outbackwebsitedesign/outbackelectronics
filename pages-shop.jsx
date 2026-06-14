@@ -2131,15 +2131,27 @@ function renderMarkdown(text) {
       out.push(<ul key={i} style={{ paddingLeft: 20, margin: '4px 0' }}>{items.map((t, j) => <li key={j} style={{ marginBottom: 4 }}>{inlineMarkdown(t)}</li>)}</ul>);
       continue;
     }
-    // ordered list (allow blank lines between items)
+    // ordered list (allow blank lines and sub-bullet continuations between items)
     if (/^\d+\. /.test(line)) {
       const items = [];
       while (i < lines.length) {
-        if (/^\d+\. /.test(lines[i])) { items.push(lines[i].replace(/^\d+\. /, '')); i++; }
-        else if (!lines[i].trim() && i + 1 < lines.length && /^\d+\. /.test(lines[i + 1])) { i++; }
+        if (/^\d+\. /.test(lines[i])) {
+          const text = [lines[i].replace(/^\d+\. /, '')];
+          i++;
+          while (i < lines.length && /^[-*] /.test(lines[i])) { text.push('• ' + lines[i].slice(2)); i++; }
+          items.push(text);
+        } else if (!lines[i].trim() && i + 1 < lines.length && /^\d+\. /.test(lines[i + 1])) { i++; }
         else break;
       }
-      out.push(<ol key={i} style={{ paddingLeft: 20, margin: '4px 0' }}>{items.map((t, j) => <li key={j} style={{ marginBottom: 4 }}>{inlineMarkdown(t)}</li>)}</ol>);
+      out.push(
+        <ol key={i} style={{ paddingLeft: 20, margin: '4px 0' }}>
+          {items.map((parts, j) => (
+            <li key={j} style={{ marginBottom: 6 }}>
+              {parts.map((t, k) => <div key={k}>{inlineMarkdown(t)}</div>)}
+            </li>
+          ))}
+        </ol>
+      );
       continue;
     }
     // headings
