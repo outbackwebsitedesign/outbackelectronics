@@ -9,6 +9,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   /* Base + shared shell come from app-shell.css. Fire-specific layout only. */
   .fire-alerts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 22px; }
@@ -30,6 +32,8 @@
   .fire-state-select { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
   .fire-state-select label { font-size: 12px; font-family: 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-2); white-space: nowrap; }
   .fire-state-select select { background: var(--bg-elev); border: 1px solid var(--line-strong); color: var(--ink); padding: 6px 10px; font-size: 14px; font-family: inherit; cursor: pointer; }
+  .fire-map { height: 420px; min-height: 280px; margin: 20px 0; border: 1px solid var(--line); z-index: 1; background: var(--bg-deep); }
+  @media (max-width: 600px) { .fire-map { height: 300px; } }
   .fire-links { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 22px; }
 </style>
 </head>

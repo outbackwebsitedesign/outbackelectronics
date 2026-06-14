@@ -6939,6 +6939,14 @@ function fetchFireFeed(url) {
     req.on('timeout', () => { req.destroy(); resolve(null); });
   });
 }
+function geomCentroid(g) {
+  if (!g) return null;
+  if (g.type === 'Point') { const [lon, lat] = g.coordinates; return isFinite(lat) && isFinite(lon) ? { lat, lon } : null; }
+  if (g.type === 'Polygon') { const r = g.coordinates[0]; if (!r?.length) return null; return { lat: r.reduce((s, c) => s + c[1], 0) / r.length, lon: r.reduce((s, c) => s + c[0], 0) / r.length }; }
+  if (g.type === 'MultiPolygon') { const r = g.coordinates[0]?.[0]; if (!r?.length) return null; return { lat: r.reduce((s, c) => s + c[1], 0) / r.length, lon: r.reduce((s, c) => s + c[0], 0) / r.length }; }
+  if (g.type === 'GeometryCollection') { for (const sub of g.geometries || []) { const c = geomCentroid(sub); if (c) return c; } }
+  return null;
+}
 function normalizeFireData(raw) {
   // GeoJSON FeatureCollection (NSW RFS, QLD QFES, WA DFES)
   const feats = Array.isArray(raw?.features) ? raw.features : null;
@@ -6948,11 +6956,16 @@ function normalizeFireData(raw) {
       const p = f.properties || {};
       const cat = String(p.category || p.Category || p.alertLevel || p.type || 'Other');
       counts[cat] = (counts[cat] || 0) + 1;
-      if (items.length < 40) items.push({
-        title: String(p.title || p.Title || p.name || p.Name || 'Incident').slice(0, 160),
-        category: cat,
-        pubDate: p.pubDate || p.created || p.Updated || null,
-      });
+      if (items.length < 40) {
+        const coords = geomCentroid(f.geometry);
+        items.push({
+          title: String(p.title || p.Title || p.name || p.Name || 'Incident').slice(0, 160),
+          category: cat,
+          pubDate: p.pubDate || p.created || p.Updated || null,
+          lat: coords?.lat ?? null,
+          lon: coords?.lon ?? null,
+        });
+      }
     }
     return { available: true, total: feats.length, counts, items };
   }
@@ -6964,7 +6977,13 @@ function normalizeFireData(raw) {
     for (const i of fire) {
       const cat = String(i.feedType || i.type || 'Other');
       counts[cat] = (counts[cat] || 0) + 1;
-      if (items.length < 40) items.push({ title: String(i.title || i.sourceTitle || 'Incident').slice(0, 160), category: cat, pubDate: i.updated || null });
+      if (items.length < 40) items.push({
+        title: String(i.title || i.sourceTitle || 'Incident').slice(0, 160),
+        category: cat,
+        pubDate: i.updated || null,
+        lat: i.lat ?? i.latitude ?? null,
+        lon: i.lon ?? i.longitude ?? null,
+      });
     }
     return { available: true, total: fire.length, counts, items };
   }
