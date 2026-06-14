@@ -52,6 +52,7 @@ export default defineConfig({
         fire: 'fire.html',
         maps: 'maps.html',
         coverage: 'coverage.html',
+        drive: 'drive.html',
       },
       output: {
         manualChunks: {

@@ -7465,6 +7465,58 @@ const coverageServer = createServiceServer({
   },
 });
 
+// ── Drive (8102) — account-gated file storage (drive.db + drive-files/) ─────
+const DRIVE_DB = path.join(__dirname, 'drive.db');
+const DRIVE_DIR = path.join(__dirname, 'drive-files');
+fs.mkdirSync(DRIVE_DIR, { recursive: true });
+function readDrive() { try { const d = JSON.parse(fs.readFileSync(DRIVE_DB, 'utf8')); return Array.isArray(d.files) ? d.files : []; } catch { return []; } }
+function writeDrive(files) { atomicWriteFile(DRIVE_DB, JSON.stringify({ files })); }
+function safeFileName(n) { return String(n || 'file').replace(/[^a-zA-Z0-9._ -]/g, '_').slice(0, 120) || 'file'; }
+function userDirFor(base, id) { const d = path.join(base, String(id).replace(/[^a-zA-Z0-9_-]/g, '_')); fs.mkdirSync(d, { recursive: true }); return d; }
+const driveServer = createServiceServer({
+  htmlEntry: '/dist/drive.html',
+  routes: async (req, res, url) => {
+    if (!url.pathname.startsWith('/api/drive')) return false;
+    const session = getPortalSession(req);
+    if (!session) { json(res, 401, { error: 'login_required' }); return true; }
+    if (req.method === 'GET' && url.pathname === '/api/drive/list') {
+      const files = readDrive().filter(f => f.userId === session.id).map(({ path: _p, ...m }) => m).sort((a, b) => b.ts - a.ts);
+      json(res, 200, { files }); return true;
+    }
+    if (req.method === 'POST' && url.pathname === '/api/drive/upload') {
+      let b; try { b = await readJson(req, 30e6); } catch { json(res, 400, { error: 'bad_request' }); return true; }
+      const name = safeFileName(b.name);
+      const type = String(b.type || 'application/octet-stream').slice(0, 100);
+      const buf = Buffer.from(String(b.dataBase64 || ''), 'base64');
+      if (!buf.length) { json(res, 422, { error: 'empty' }); return true; }
+      if (buf.length > 20 * 1024 * 1024) { json(res, 413, { error: 'too_large', message: 'Max 20 MB per file.' }); return true; }
+      const dir = userDirFor(DRIVE_DIR, session.id);
+      const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+      const fp = path.join(dir, id + '-' + name);
+      fs.writeFileSync(fp, buf);
+      const files = readDrive();
+      files.push({ id, userId: session.id, name, size: buf.length, type, ts: Date.now(), path: fp });
+      writeDrive(files);
+      json(res, 200, { ok: true }); return true;
+    }
+    if (req.method === 'GET' && url.pathname === '/api/drive/file') {
+      const f = readDrive().find(x => x.id === url.searchParams.get('id') && x.userId === session.id);
+      if (!f || !fs.existsSync(f.path)) { json(res, 404, { error: 'not_found' }); return true; }
+      res.writeHead(200, { 'Content-Type': f.type || 'application/octet-stream', 'Content-Disposition': `attachment; filename="${f.name}"`, 'Content-Length': f.size, 'X-Content-Type-Options': 'nosniff' });
+      fs.createReadStream(f.path).on('error', () => res.end()).pipe(res); return true;
+    }
+    if (req.method === 'POST' && url.pathname === '/api/drive/delete') {
+      let b; try { b = await readJson(req); } catch { json(res, 400, { error: 'bad_request' }); return true; }
+      const files = readDrive(); const i = files.findIndex(x => x.id === b.id && x.userId === session.id);
+      if (i < 0) { json(res, 404, { error: 'not_found' }); return true; }
+      try { fs.unlinkSync(files[i].path); } catch {}
+      files.splice(i, 1); writeDrive(files);
+      json(res, 200, { ok: true }); return true;
+    }
+    return false;
+  },
+});
+
 startServer(mainServer,   MAIN_PORT,   'main  ');
 startServer(discourseRedirectServer, DISCOURSE_REDIRECT_PORT, 'redirect');
 startServer(adminServer,  ADMIN_PORT,  'admin ');
@@ -7479,3 +7531,4 @@ startServer(skyServer,    SKY_PORT,    'sky   ');
 startServer(fireServer,   FIRE_PORT,   'fire  ');
 startServer(mapsServer,   MAPS_PORT,   'maps  ');
 startServer(coverageServer, COVERAGE_PORT, 'cover ');
+startServer(driveServer,  DRIVE_PORT,  'drive ');

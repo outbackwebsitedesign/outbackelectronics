@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Drive — Outback Electronics</title>
+<meta name="description" content="Your files, stored on the Outback Electronics server — not big tech's cloud. Upload, download and manage your documents." />
+<link rel="icon" type="image/png" href="/favicon.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  /* Base + shared shell come from app-shell.css. Drive-specific layout only. */
+  .drive-drop { border: 2px dashed var(--line-strong); background: var(--bg-elev); padding: 34px; text-align: center; cursor: pointer; margin-bottom: 24px; display: flex; flex-direction: column; gap: 6px; transition: border-color 120ms; }
+  .drive-drop:hover { border-color: var(--rust); }
+  .drive-drop.busy { opacity: 0.7; }
+  .drive-drop b { font-size: 16px; }
+  .drive-drop span { font-size: 13px; color: var(--ink-3); min-height: 16px; }
+  .drive-empty { color: var(--ink-3); }
+  .file-list { border-top: 1px solid var(--line); }
+  .file-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: 12px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--line); }
+  .file-name { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-meta { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ink-3); }
+  @media (max-width: 560px) { .file-row { grid-template-columns: 1fr auto; } .file-meta { display: none; } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="module" src="/src/drive-entry.jsx"></script>
+</body>
+</html>
