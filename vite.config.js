@@ -46,6 +46,7 @@ export default defineConfig({
         weather: 'weather.html',
         maintenance: 'maintenance.html',
         ai: 'ai.html',
+        hub: 'hub.html',
       },
       output: {
         manualChunks: {

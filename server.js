@@ -32,6 +32,18 @@ const GAMES_PORT  = process.env.GAMES_PORT  || 8084;
 const TOOLS_PORT  = process.env.TOOLS_PORT  || 8085;
 const WEATHER_PORT = process.env.WEATHER_PORT || 8089;
 const AI_GATEWAY_PORT = process.env.AI_GATEWAY_PORT || 8091;
+// ── Customer-facing service suite (hub + apps) — see CLAUDE.md ───────────────
+const HUB_PORT      = process.env.HUB_PORT      || 8101;
+const DRIVE_PORT    = process.env.DRIVE_PORT    || 8102;
+const PHOTOS_PORT   = process.env.PHOTOS_PORT   || 8103;
+const SKY_PORT      = process.env.SKY_PORT      || 8104;
+const COVERAGE_PORT = process.env.COVERAGE_PORT || 8105;
+const MAPS_PORT     = process.env.MAPS_PORT     || 8106;
+const SOLAR_PORT    = process.env.SOLAR_PORT    || 8107;
+const BEACON_PORT   = process.env.BEACON_PORT   || 8108;
+const FIRE_PORT     = process.env.FIRE_PORT     || 8109;
+const RADIO_PORT    = process.env.RADIO_PORT    || 8110;
+const SWAP_PORT     = process.env.SWAP_PORT     || 8111;
 
 const FORUM_PUBLIC_URL = process.env.FORUM_PUBLIC_URL || 'https://forum.outbackelectronics.com.au';
 const DISCOURSE_CONNECT_SECRET = process.env.DISCOURSE_CONNECT_SECRET || '';
@@ -151,14 +163,19 @@ const STOCK_NOTIFY_DB_PATH = path.join(__dirname, 'stock-notify.db');
 const RAG_CACHE_DB_PATH = path.join(__dirname, 'rag-cache.db');
 const RESET_TOKEN_TTL_MS = 1000 * 60 * 60; // 1 hour
 function _defaultSubUrl(base, port, sub) {
+  // Localhost/dev: swap the port on the same host (e.g. http://localhost:8080 → :8101).
+  // Anchor on scheme+host so we replace the authority's port, not the // after the scheme.
   if (/^https?:\/\/(localhost|127\.|0\.0\.0\.0)(:\d+)?/.test(base))
-    return base.replace(/(:\d+)?(\/|$)/, `:${port}$2`);
+    return base.replace(/^(https?:\/\/[^/:]+)(:\d+)?/, `$1:${port}`);
+  // Production: prefix the subdomain (e.g. https://outbackelectronics.com.au → https://hub.…).
   return base.replace(/^(https?:\/\/)/, `$1${sub}.`);
 }
 const PORTAL_URL = process.env.PORTAL_URL || _defaultSubUrl(SITE_URL, 8083, 'portal');
 const GAMES_URL  = process.env.GAMES_URL  || _defaultSubUrl(SITE_URL, 8084, 'games');
 const TOOLS_URL  = process.env.TOOLS_URL  || _defaultSubUrl(SITE_URL, 8085, 'tools');
 const WEATHER_URL = process.env.WEATHER_URL || _defaultSubUrl(SITE_URL, 8089, 'weather');
+// New-suite URLs are resolved dynamically in serviceUrls() (settings-aware),
+// so no per-service consts are needed here — only env overrides + ports.
 
 function loadSessionsFromDisk(filePath) {
   try {
@@ -2160,6 +2177,35 @@ function getWeatherUrl() {
   if (/^https?:\/\/(localhost|127\.|0\.0\.0\.0)(:\d+)?/.test(base))
     return base.replace(/(:\d+)?(\/|$)/, ':8089$2');
   return base.replace(/^(https?:\/\/)/, '$1weather.');
+}
+// Resolve a service URL: explicit env override wins, else derive from the
+// configured site URL (subdomain in prod, port on localhost).
+function subUrl(override, port, sub) {
+  return override || _defaultSubUrl(getSiteUrl(), port, sub);
+}
+// Aggregated map of every service URL. Returned by /api/shop-info on every
+// server so any frontend (especially the hub launcher) can cross-link without
+// hard-coding hostnames. Localhost falls back to ports; production to subdomains.
+function serviceUrls() {
+  return {
+    siteUrl:     getSiteUrl(),
+    portalUrl:   subUrl(process.env.PORTAL_URL,   PORTAL_PORT,     'portal'),
+    gamesUrl:    subUrl(process.env.GAMES_URL,    GAMES_PORT,      'games'),
+    toolsUrl:    subUrl(process.env.TOOLS_URL,    TOOLS_PORT,      'tools'),
+    weatherUrl:  subUrl(process.env.WEATHER_URL,  WEATHER_PORT,    'weather'),
+    aiUrl:       subUrl(process.env.AI_URL,       AI_GATEWAY_PORT, 'ai'),
+    hubUrl:      subUrl(process.env.HUB_URL,      HUB_PORT,        'hub'),
+    driveUrl:    subUrl(process.env.DRIVE_URL,    DRIVE_PORT,      'drive'),
+    photosUrl:   subUrl(process.env.PHOTOS_URL,   PHOTOS_PORT,     'photos'),
+    skyUrl:      subUrl(process.env.SKY_URL,      SKY_PORT,        'sky'),
+    coverageUrl: subUrl(process.env.COVERAGE_URL, COVERAGE_PORT,   'coverage'),
+    mapsUrl:     subUrl(process.env.MAPS_URL,     MAPS_PORT,       'maps'),
+    solarUrl:    subUrl(process.env.SOLAR_URL,    SOLAR_PORT,      'solar'),
+    beaconUrl:   subUrl(process.env.BEACON_URL,   BEACON_PORT,     'beacon'),
+    fireUrl:     subUrl(process.env.FIRE_URL,     FIRE_PORT,       'fire'),
+    radioUrl:    subUrl(process.env.RADIO_URL,    RADIO_PORT,      'radio'),
+    swapUrl:     subUrl(process.env.SWAP_URL,     SWAP_PORT,       'swap'),
+  };
 }
 function getAdminUsername() {
   try { return readSettings().security?.adminUsername || ADMIN_USERNAME; } catch { return ADMIN_USERNAME; }
@@ -6707,6 +6753,123 @@ const aiGatewayServer = http.createServer(async (req, res) => {
 // Build RAG index 5s after startup (non-blocking)
 setTimeout(() => buildRagIndex().catch(e => console.error('[ai] RAG build error:', e)), 5000);
 
+// ════════════════════════════════════════════════════════════════════════════
+// Customer-facing service suite (hub + apps)
+// Shared factory so each new subdomain service doesn't repeat the common
+// preamble: maintenance gate, CSRF, shop-info, announcement, unified-account
+// auth (one login across all subdomains via the shared-domain cookie),
+// analytics, and the static SPA fallback. Each service supplies only its own
+// routes via the `routes(req, res, url)` callback — return true if handled.
+// ════════════════════════════════════════════════════════════════════════════
+function createServiceServer({ htmlEntry, spaRoutes = null, routes = null }) {
+  return http.createServer(async (req, res) => {
+    try {
+      const url = new URL(req.url, `http://${req.headers.host}`);
+
+      if (checkMaintenance(req, res, url)) return;
+      if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
+
+      if (req.method === 'GET' && url.pathname === '/api/csrf-token') {
+        const token = ensureCsrfCookie(req, res);
+        return json(res, 200, { token });
+      }
+      if (['POST', 'PATCH', 'DELETE'].includes(req.method) && url.pathname.startsWith('/api/') && url.pathname !== '/api/analytics/event') {
+        if (!verifyCsrf(req, res)) return;
+      }
+
+      if (req.method === 'POST' && url.pathname === '/api/analytics/event') {
+        if (publicRateLimited(getIp(req), 'analytics')) return json(res, 429, { error: 'rate_limited' });
+        let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'bad_request' }); }
+        const type = typeof body.type === 'string' ? body.type.slice(0, 64) : null;
+        if (!type) return json(res, 400, { error: 'missing_type' });
+        const ua = (req.headers['user-agent'] || '').slice(0, 256);
+        if (/bot|crawl|spider|slurp|headless/i.test(ua)) return json(res, 204, {});
+        appendAnalyticsEvent({ ts: Date.now(), type, page: (body.page || '').slice(0, 256), referrer: (body.referrer || '').slice(0, 256), ua, ip: getIp(req) });
+        return json(res, 204, {});
+      }
+
+      if (req.method === 'GET' && url.pathname === '/api/shop-info') {
+        const { shop, flags } = readSettings();
+        return json(res, 200, { shop, flags: flags || {}, ...serviceUrls() });
+      }
+      if (req.method === 'GET' && url.pathname === '/api/announcement') {
+        const { announcement } = readSettings();
+        if (!announcement || !announcement.enabled) return json(res, 200, { active: false });
+        if (announcement.expiresAt) {
+          const expires = new Date(announcement.expiresAt);
+          if (!isNaN(expires) && expires < new Date()) return json(res, 200, { active: false });
+        }
+        return json(res, 200, { active: true, text: announcement.text });
+      }
+
+      // Unified account — one login across every subdomain (shared-domain cookie)
+      if (req.method === 'GET'  && url.pathname === '/api/auth/me')       return handleCustomerMe(req, res);
+      if (req.method === 'POST' && url.pathname === '/api/auth/login')    return handleCustomerLogin(req, res);
+      if (req.method === 'POST' && url.pathname === '/api/auth/register') return handleCustomerRegister(req, res);
+      if (req.method === 'POST' && url.pathname === '/api/auth/logout')   return handleCustomerLogout(req, res);
+
+      if (routes) {
+        const handled = await routes(req, res, url);
+        if (handled) return;
+      }
+
+      return serveStatic(req, res, url.pathname, htmlEntry, spaRoutes);
+    } catch (err) {
+      console.error(`[service ${htmlEntry}] error:`, err);
+      if (!res.headersSent) json(res, 500, { error: 'server_error' });
+    }
+  });
+}
+
+// ── Hub (8101) — account-aware launcher + live snapshot ─────────────────────
+function hubLatestWeather() {
+  try { const db = readWeatherDb(); const r = db.readings || []; return r.length ? r[r.length - 1] : null; }
+  catch { return null; }
+}
+function hubActiveAnnouncement() {
+  try {
+    const { announcement } = readSettings();
+    if (!announcement || !announcement.enabled) return null;
+    if (announcement.expiresAt) { const e = new Date(announcement.expiresAt); if (!isNaN(e) && e < new Date()) return null; }
+    return { text: announcement.text };
+  } catch { return null; }
+}
+function handleHubOverview(req, res) {
+  const weather = hubLatestWeather();
+  const announcement = hubActiveAnnouncement();
+  const session = getPortalSession(req);
+  if (!session) return json(res, 200, { user: null, weather, announcement });
+  const portalUser = readUsers().find(u => u.id === session.id);
+  const email = portalUser ? String(portalUser.email || '').toLowerCase() : '';
+  const orders = email ? readOrders().filter(o => String(o.email || '').toLowerCase() === email) : [];
+  const quotes = email ? readQuotes().filter(q => String(q.email || '').toLowerCase() === email) : [];
+  const repairCards = email ? flatRepairs().filter(c => String(c.email || '').toLowerCase() === email) : [];
+  const openOrders = orders.filter(o => {
+    const paid = (o.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
+    return paid < Number(o.total || 0);
+  }).length;
+  const activeRepairs = repairCards.filter(c => c._colId !== 'done').length;
+  const openQuotes = quotes.filter(q => q.status !== 'accepted' && q.status !== 'declined').length;
+  return json(res, 200, {
+    user: { displayName: session.displayName, username: session.username },
+    weather,
+    announcement,
+    stats: {
+      orders: orders.length, openOrders,
+      repairs: repairCards.length, activeRepairs,
+      quotes: quotes.length, openQuotes,
+    },
+  });
+}
+const hubServer = createServiceServer({
+  htmlEntry: '/dist/hub.html',
+  spaRoutes: new Set([]),
+  routes: async (req, res, url) => {
+    if (req.method === 'GET' && url.pathname === '/api/hub/overview') { handleHubOverview(req, res); return true; }
+    return false;
+  },
+});
+
 startServer(mainServer,   MAIN_PORT,   'main  ');
 startServer(discourseRedirectServer, DISCOURSE_REDIRECT_PORT, 'redirect');
 startServer(adminServer,  ADMIN_PORT,  'admin ');
@@ -6715,3 +6878,4 @@ startServer(gamesServer,  GAMES_PORT,  'games ');
 startServer(toolsServer,  TOOLS_PORT,  'tools ');
 startServer(weatherServer, WEATHER_PORT, 'weather');
 startServer(aiGatewayServer, AI_GATEWAY_PORT, 'ai    ');
+startServer(hubServer,    HUB_PORT,    'hub   ');
