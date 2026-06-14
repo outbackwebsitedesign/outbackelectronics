@@ -7020,6 +7020,15 @@ const fireServer = createServiceServer({
   htmlEntry: '/dist/fire.html',
   routes: async (req, res, url) => {
     if (req.method === 'GET' && url.pathname === '/api/fire/status') { await handleFireStatus(req, res, url); return true; }
+    if (req.method === 'GET' && url.pathname === '/api/fire/raw') {
+      const state = (url.searchParams.get('state') || 'QLD').toUpperCase();
+      const feedUrl = FIRE_STATE_FEEDS[state];
+      if (!feedUrl) return json(res, 200, { error: 'no feed' });
+      const raw = await fetchFireFeed(feedUrl);
+      if (!raw) return json(res, 200, { error: 'fetch failed' });
+      const firstFeature = raw.features?.[0] || raw.result?.[0] || raw.incidents?.[0] || raw;
+      return json(res, 200, { keys: Object.keys(raw), firstFeature, totalFeatures: raw.features?.length ?? raw.result?.length ?? raw.incidents?.length });
+    }
     return false;
   },
 });
