@@ -3631,11 +3631,9 @@ const mainServer = http.createServer(async (req, res) => {
 
   if (req.method === 'POST' && url.pathname === '/api/ai-chat') {
     const session = getPortalSession(req);
-    console.log('[ai-chat] session:', session ? session.username : 'none');
     if (!session) return json(res, 401, { error: 'login_required' });
-    let body; try { body = await readJson(req); } catch (e) { console.log('[ai-chat] readJson failed:', e.message); return json(res, 400, { error: 'invalid_json' }); }
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     const messages = Array.isArray(body?.messages) ? body.messages : [];
-    console.log('[ai-chat] messages count:', messages.length);
     if (!messages.length) return json(res, 422, { error: 'messages_required' });
     const payload = JSON.stringify({
       model: 'qwen2.5:1.5b',

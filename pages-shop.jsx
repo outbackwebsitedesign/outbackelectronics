@@ -2104,6 +2104,71 @@ function MembershipsPage({ go, portalUser }) {
 }
 
 // ---------------- AI Chat ----------------
+function renderMarkdown(text) {
+  const lines = text.split('\n');
+  const out = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    // fenced code block
+    if (line.startsWith('```')) {
+      const lang = line.slice(3).trim();
+      const code = [];
+      i++;
+      while (i < lines.length && !lines[i].startsWith('```')) { code.push(lines[i]); i++; }
+      out.push(<pre key={i} style={{ background: 'var(--bg, #f0ece6)', border: '1px solid var(--line)', borderRadius: 4, padding: '10px 12px', overflowX: 'auto', fontSize: 13, fontFamily: 'monospace', margin: '8px 0' }}><code>{code.join('\n')}</code></pre>);
+      i++;
+      continue;
+    }
+    // unordered list
+    if (/^[-*] /.test(line)) {
+      const items = [];
+      while (i < lines.length && /^[-*] /.test(lines[i])) { items.push(lines[i].slice(2)); i++; }
+      out.push(<ul key={i} style={{ paddingLeft: 20, margin: '4px 0' }}>{items.map((t, j) => <li key={j} style={{ marginBottom: 2 }}>{inlineMarkdown(t)}</li>)}</ul>);
+      continue;
+    }
+    // ordered list
+    if (/^\d+\. /.test(line)) {
+      const items = [];
+      while (i < lines.length && /^\d+\. /.test(lines[i])) { items.push(lines[i].replace(/^\d+\. /, '')); i++; }
+      out.push(<ol key={i} style={{ paddingLeft: 20, margin: '4px 0' }}>{items.map((t, j) => <li key={j} style={{ marginBottom: 2 }}>{inlineMarkdown(t)}</li>)}</ol>);
+      continue;
+    }
+    // headings
+    if (/^#{1,3} /.test(line)) {
+      const level = line.match(/^(#{1,3}) /)[1].length;
+      const content = line.replace(/^#{1,3} /, '');
+      const Tag = `h${level + 2}`;
+      out.push(<Tag key={i} style={{ margin: '8px 0 4px', fontSize: level === 1 ? 17 : level === 2 ? 15 : 14 }}>{inlineMarkdown(content)}</Tag>);
+      i++; continue;
+    }
+    // blank line
+    if (!line.trim()) { out.push(<br key={i} />); i++; continue; }
+    // paragraph
+    out.push(<p key={i} style={{ margin: '2px 0', lineHeight: 1.6 }}>{inlineMarkdown(line)}</p>);
+    i++;
+  }
+  return out;
+}
+
+function inlineMarkdown(text) {
+  // strip LaTeX delimiters \(...\) and \[...\]
+  text = text.replace(/\\\((.+?)\\\)/g, '$1').replace(/\\\[(.+?)\\\]/g, '$1');
+  const parts = [];
+  const re = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|__[^_]+__|_[^_]+_)/g;
+  let last = 0, m;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) parts.push(text.slice(last, m.index));
+    const t = m[0];
+    if (t.startsWith('`')) parts.push(<code key={m.index} style={{ background: 'rgba(0,0,0,0.08)', padding: '1px 4px', borderRadius: 3, fontSize: '0.9em', fontFamily: 'monospace' }}>{t.slice(1, -1)}</code>);
+    else if (t.startsWith('**') || t.startsWith('__')) parts.push(<strong key={m.index}>{t.slice(2, -2)}</strong>);
+    else parts.push(<em key={m.index}>{t.slice(1, -1)}</em>);
+    last = m.index + t.length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return parts;
+}
+
 function AIChatPage({ go }) {
   const [messages, setMessages] = React.useState([
     { role: 'assistant', content: "G'day! I'm the Outback Electronics AI assistant — running locally on our own hardware, no cloud involved. Ask me anything about electronics repair, troubleshooting, components, or soldering." }
@@ -2227,10 +2292,11 @@ function AIChatPage({ go }) {
                     color: m.role === 'user' ? '#fff' : 'var(--ink)',
                     fontSize: 14,
                     lineHeight: 1.6,
-                    whiteSpace: 'pre-wrap',
                     wordBreak: 'break-word',
                   }}>
-                    {m.content || (streaming && i === messages.length - 1 ? <span style={{ opacity: 0.4 }}>▌</span> : '')}
+                    {m.role === 'assistant'
+                      ? (m.content ? renderMarkdown(m.content) : (streaming && i === messages.length - 1 ? <span style={{ opacity: 0.4 }}>▌</span> : ''))
+                      : m.content}
                   </div>
                 </div>
               ))}
