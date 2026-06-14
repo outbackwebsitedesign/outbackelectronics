@@ -7249,16 +7249,20 @@ function parseQLDClosures(raw) {
   }
   return { available: true, total: items.length, items };
 }
-// NSW Live Traffic GeoJSON — filter incidentKind for closure-type events
+// NSW Live Traffic GeoJSON — incidentKind is only Planned/Unplanned; real filter is
+// periods[].closureType === 'ROAD_CLOSURE'. Title from roads[].mainStreet + suburb.
 function parseNSWClosures(raw) {
   if (!Array.isArray(raw?.features)) return null;
   const items = [];
   for (const f of raw.features) {
     const p = f.properties || {};
-    if (!/clos/i.test(String(p.incidentKind || p.type || p.category || ''))) continue;
+    const hasRoadClosure = Array.isArray(p.periods) && p.periods.some(per => per.closureType === 'ROAD_CLOSURE');
+    if (!hasRoadClosure) continue;
     const coords = geomCentroid(f.geometry);
     if (!coords) continue;
-    const title = String(p.headline || p.displayName || p.description || p.incidentKind || 'Road Closure').slice(0, 200);
+    const rds = Array.isArray(p.roads) ? p.roads : [];
+    const road = rds[0] ? [rds[0].mainStreet, rds[0].suburb].filter(Boolean).join(' — ') : '';
+    const title = (road || p.displayName || p.mainCategory || 'Road Closure').slice(0, 200);
     items.push({ title, type: 'road_closure', lat: coords.lat, lon: coords.lon });
   }
   return { available: true, total: items.length, items };
