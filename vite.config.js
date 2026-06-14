@@ -50,6 +50,7 @@ export default defineConfig({
         solar: 'solar.html',
         sky: 'sky.html',
         fire: 'fire.html',
+        maps: 'maps.html',
       },
       output: {
         manualChunks: {

@@ -6955,6 +6955,9 @@ const fireServer = createServiceServer({
   },
 });
 
+// ── Maps (8106) — interactive outback map (Leaflet CDN + OSM tiles) ──────────
+const mapsServer = createServiceServer({ htmlEntry: '/dist/maps.html' });
+
 startServer(mainServer,   MAIN_PORT,   'main  ');
 startServer(discourseRedirectServer, DISCOURSE_REDIRECT_PORT, 'redirect');
 startServer(adminServer,  ADMIN_PORT,  'admin ');
@@ -6967,3 +6970,4 @@ startServer(hubServer,    HUB_PORT,    'hub   ');
 startServer(solarServer,  SOLAR_PORT,  'solar ');
 startServer(skyServer,    SKY_PORT,    'sky   ');
 startServer(fireServer,   FIRE_PORT,   'fire  ');
+startServer(mapsServer,   MAPS_PORT,   'maps  ');

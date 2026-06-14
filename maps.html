@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Maps — Outback Electronics</title>
+<meta name="description" content="An outback map for remote Australia — fuel, water, camps and the workshop, plus your own saved pins. Built for the long paddock." />
+<link rel="icon" type="image/png" href="/favicon.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  /* Base + shared shell come from app-shell.css. Maps-specific layout only. */
+  .maps-wrap { display: grid; grid-template-columns: 320px 1fr; align-items: stretch; }
+  @media (max-width: 760px) { .maps-wrap { grid-template-columns: 1fr; } }
+  .maps-side { padding: 18px; background: var(--bg-elev); border-right: 1px solid var(--line); max-height: 76vh; overflow-y: auto; }
+  @media (max-width: 760px) { .maps-side { max-height: none; border-right: none; border-bottom: 1px solid var(--line); } }
+  #map { height: 76vh; min-height: 380px; z-index: 1; background: var(--bg-deep); }
+  @media (max-width: 760px) { #map { height: 56vh; } }
+  .maps-side h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; font-family: 'JetBrains Mono', monospace; color: var(--ink-2); margin: 0 0 12px; }
+  .maps-search { display: flex; gap: 6px; margin-bottom: 16px; }
+  .cat-toggle { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+  .cat-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; padding: 4px 9px; border: 1px solid var(--line-strong); cursor: pointer; font-family: 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: 0.04em; user-select: none; }
+  .cat-chip.off { opacity: 0.4; }
+  .cat-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .poi-item { padding: 9px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .poi-item:hover .n { color: var(--rust); }
+  .poi-item .n { font-weight: 600; font-size: 14px; }
+  .poi-item .m { font-size: 12px; color: var(--ink-3); }
+  .maps-hint { font-size: 12px; color: var(--ink-3); margin-top: 14px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="module" src="/src/maps-entry.jsx"></script>
+</body>
+</html>
