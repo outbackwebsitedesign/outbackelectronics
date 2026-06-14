@@ -13,7 +13,6 @@ const CATS = {
   pin:   { label: 'My pins',  color: '#7a1fa2' },
 };
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const catOf = (t) => t.amenity === 'fuel' ? 'fuel' : t.amenity === 'drinking_water' ? 'water' : (t.tourism === 'camp_site' || t.tourism === 'caravan_site') ? 'camp' : null;
 
 export default function MapsApp() {
   const info = useShopInfo();
@@ -30,14 +29,12 @@ export default function MapsApp() {
     if (!m) return;
     if (m.getZoom() < 10) { setPois([]); setStatus('Zoom in to load fuel, water & camps'); return; }
     const b = m.getBounds();
-    const bbox = `${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()}`;
-    const query = `[out:json][timeout:20];(node["amenity"="fuel"](${bbox});node["amenity"="drinking_water"](${bbox});node["tourism"="camp_site"](${bbox});node["tourism"="caravan_site"](${bbox}););out body 120;`;
     setStatus('Loading places…');
     try {
-      const r = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(query) }).then(r => r.json());
-      const list = (r.elements || []).map(el => ({ id: el.id, lat: el.lat, lon: el.lon, cat: catOf(el.tags || {}), name: (el.tags && el.tags.name) || null })).filter(p => p.cat && p.lat && p.lon);
+      const r = await fetch(`/api/maps/pois?s=${b.getSouth()}&w=${b.getWest()}&n=${b.getNorth()}&e=${b.getEast()}`).then(r => r.json());
+      const list = (r.pois || []).filter(p => p.cat && p.lat && p.lon);
       setPois(list);
-      setStatus(list.length ? `${list.length} places in view` : 'No fuel/water/camps mapped here');
+      setStatus(r.available === false ? 'Live places unavailable right now' : (list.length ? `${list.length} places in view` : 'No fuel/water/camps mapped here'));
     } catch { setStatus('Live places unavailable right now'); }
   }, []);
 

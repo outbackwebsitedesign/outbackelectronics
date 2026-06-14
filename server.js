@@ -7430,7 +7430,51 @@ const fireServer = createServiceServer({
 });
 
 // ── Maps (8106) — interactive outback map (Leaflet CDN + OSM tiles) ──────────
-const mapsServer = createServiceServer({ htmlEntry: '/dist/maps.html' });
+// POIs are proxied from OSM Overpass server-side so the browser only talks to
+// 'self' — no dependency on the (Cloudflare-managed) external CSP. Cached 2 min.
+function fetchOverpass(bbox) {
+  return new Promise((resolve) => {
+    const query = `[out:json][timeout:20];(node["amenity"="fuel"](${bbox});node["amenity"="drinking_water"](${bbox});node["tourism"="camp_site"](${bbox});node["tourism"="caravan_site"](${bbox}););out body 150;`;
+    const body = 'data=' + encodeURIComponent(query);
+    const req = https.request({ hostname: 'overpass-api.de', path: '/api/interpreter', method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body), 'User-Agent': 'OutbackElectronics/1.0' }, timeout: 25000 }, (r) => {
+      if (r.statusCode !== 200) { r.resume(); return resolve(null); }
+      let buf = '';
+      r.on('data', c => { buf += c; if (buf.length > 8e6) req.destroy(); });
+      r.on('end', () => { try { resolve(JSON.parse(buf)); } catch { resolve(null); } });
+    });
+    req.on('error', () => resolve(null));
+    req.on('timeout', () => { req.destroy(); resolve(null); });
+    req.write(body); req.end();
+  });
+}
+const _overpassCache = new Map();
+async function cachedOverpass(bbox) {
+  const hit = _overpassCache.get(bbox);
+  if (hit && Date.now() - hit.ts < 120000) return hit.data;
+  const data = await fetchOverpass(bbox);
+  if (data) { _overpassCache.set(bbox, { ts: Date.now(), data }); if (_overpassCache.size > 80) _overpassCache.delete(_overpassCache.keys().next().value); }
+  return data;
+}
+const mapsServer = createServiceServer({
+  htmlEntry: '/dist/maps.html',
+  routes: async (req, res, url) => {
+    if (req.method === 'GET' && url.pathname === '/api/maps/pois') {
+      const r2 = (x) => Math.round(Number(x) * 100) / 100;
+      const s = r2(url.searchParams.get('s')), w = r2(url.searchParams.get('w')), n = r2(url.searchParams.get('n')), e = r2(url.searchParams.get('e'));
+      if (![s, w, n, e].every(Number.isFinite)) { json(res, 422, { error: 'bad_bbox' }); return true; }
+      const data = await cachedOverpass(`${s},${w},${n},${e}`);
+      if (!data) { json(res, 200, { available: false, pois: [] }); return true; }
+      const pois = (data.elements || []).map(el => {
+        const t = el.tags || {};
+        const cat = t.amenity === 'fuel' ? 'fuel' : t.amenity === 'drinking_water' ? 'water' : (t.tourism === 'camp_site' || t.tourism === 'caravan_site') ? 'camp' : null;
+        return (cat && el.lat && el.lon) ? { id: el.id, lat: el.lat, lon: el.lon, cat, name: (t.name || null) } : null;
+      }).filter(Boolean);
+      json(res, 200, { available: true, pois });
+      return true;
+    }
+    return false;
+  },
+});
 
 // ── Coverage (8105) — crowd-sourced mobile/satellite signal map ──────────────
 const COVERAGE_DB = path.join(__dirname, 'coverage.db');
