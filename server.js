@@ -7744,11 +7744,60 @@ const RADIO_DIR = process.env.RADIO_MEDIA_DIR || path.join(__dirname, 'radio-med
 try { fs.mkdirSync(RADIO_DIR, { recursive: true }); } catch {}
 const RADIO_BYTES_PER_SEC = Math.max(4000, Math.round((parseInt(process.env.RADIO_BITRATE_KBPS, 10) || 128) * 125));
 let _radioPlaylist = [], _radioIdx = -1, _radioTrack = null, _radioBuf = null, _radioPos = 0;
+// Real byte rate of the track currently on air. We stream the raw file bytes,
+// so the correct pace is fileBytes / trackDurationSeconds — exact for CBR and
+// VBR alike. Falls back to the fixed estimate when a file can't be parsed.
+// Pacing off the fixed estimate (e.g. 128 kbps) underfeeds higher-bitrate files,
+// which drains the browser buffer and causes the once-per-second rebuffer glitch
+// (and, because each listener stalls independently, multi-device drift).
+let _radioByteRate = RADIO_BYTES_PER_SEC;
+// Decode the true duration of an MP3 by walking its frame headers. Returns
+// seconds, or null if no valid frames are found. Skips a leading ID3v2 tag.
+function mp3Duration(buf) {
+  let i = 0;
+  if (buf.length >= 10 && buf[0] === 0x49 && buf[1] === 0x44 && buf[2] === 0x33) {
+    i = 10 + (((buf[6] & 0x7f) << 21) | ((buf[7] & 0x7f) << 14) | ((buf[8] & 0x7f) << 7) | (buf[9] & 0x7f));
+  }
+  // bitrate tables (kbps) indexed by layer: 3=Layer1, 2=Layer2, 1=Layer3
+  const brV1 = { 3: [0,32,64,96,128,160,192,224,256,288,320,352,384,416,448],
+                 2: [0,32,48,56,64,80,96,112,128,160,192,224,256,320,384],
+                 1: [0,32,40,48,56,64,80,96,112,128,160,192,224,256,320] };
+  const brV2 = { 3: [0,32,48,56,64,80,96,112,128,144,160,176,192,224,256],
+                 2: [0,8,16,24,32,40,48,56,64,80,96,112,128,144,160],
+                 1: [0,8,16,24,32,40,48,56,64,80,96,112,128,144,160] };
+  const srTab = { 3: [44100,48000,32000], 2: [22050,24000,16000], 0: [11025,12000,8000] };
+  let dur = 0, frames = 0;
+  const limit = buf.length - 4;
+  while (i < limit) {
+    if (buf[i] !== 0xff || (buf[i + 1] & 0xe0) !== 0xe0) { i++; continue; }
+    const ver = (buf[i + 1] >> 3) & 3;   // 3=MPEG1, 2=MPEG2, 0=MPEG2.5
+    const layer = (buf[i + 1] >> 1) & 3; // 3=Layer1, 2=Layer2, 1=Layer3
+    if (ver === 1 || layer === 0) { i++; continue; }
+    const brIdx = (buf[i + 2] >> 4) & 0xf;
+    const srIdx = (buf[i + 2] >> 2) & 3;
+    const pad = (buf[i + 2] >> 1) & 1;
+    if (brIdx === 0 || brIdx === 15 || srIdx === 3) { i++; continue; }
+    const kbps = (ver === 3 ? brV1 : brV2)[layer][brIdx];
+    const sr = srTab[ver][srIdx];
+    if (!kbps || !sr) { i++; continue; }
+    const bitrate = kbps * 1000;
+    const spf = layer === 3 ? 384 : (layer === 1 && ver !== 3 ? 576 : 1152);
+    const frameLen = layer === 3
+      ? (Math.floor(12 * bitrate / sr) + pad) * 4
+      : Math.floor((spf / 8) * bitrate / sr) + pad;
+    if (frameLen < 4) { i++; continue; }
+    dur += spf / sr;
+    frames++;
+    i += frameLen;
+  }
+  return frames > 2 ? dur : null;
+}
 const _radioListeners = new Set();
-// Rolling preload buffer — last ~30 s of audio sent to new listeners as an
+// Rolling preload buffer — last ~15 s of audio sent to new listeners as an
 // immediate burst so the browser fills its playback buffer before real-time
-// pacing takes over. 30 s gives plenty of headroom against network jitter.
-const RADIO_PRELOAD_MAX = RADIO_BYTES_PER_SEC * 30;
+// pacing takes over. Held in seconds and sized against the current byte rate.
+const RADIO_PRELOAD_SECONDS = 15;
+let RADIO_PRELOAD_MAX = RADIO_BYTES_PER_SEC * RADIO_PRELOAD_SECONDS;
 const _radioPreloadChunks = [];
 let _radioPreloadSize = 0;
 function radioPreloadAppend(chunk) {
@@ -7789,6 +7838,13 @@ function radioLoadNext() {
   if (_radioIdx === 0) radioScan();
   _radioTrack = _radioPlaylist[_radioIdx] || null;
   try { _radioBuf = _radioTrack ? fs.readFileSync(path.join(RADIO_DIR, _radioTrack)) : null; _radioPos = 0; } catch { _radioBuf = null; }
+  // Pace this track at its real byte rate so the stream matches playback speed
+  // regardless of the encode (CBR/VBR, any bitrate).
+  if (_radioBuf) {
+    const dur = mp3Duration(_radioBuf);
+    _radioByteRate = dur && dur > 0 ? Math.max(4000, Math.round(_radioBuf.length / dur)) : RADIO_BYTES_PER_SEC;
+    RADIO_PRELOAD_MAX = _radioByteRate * RADIO_PRELOAD_SECONDS;
+  }
 }
 // Start the broadcast immediately at server start from a random playlist position
 // so restarts don't always land on track 1, and the preload warms up straight away.
@@ -7799,23 +7855,23 @@ if (_radioPlaylist.length) {
   // listener gets a burst even if they connect within seconds of startup.
   if (_radioBuf) {
     const seedStart = Math.floor(_radioBuf.length * 0.4);
-    const seedEnd = Math.min(seedStart + RADIO_BYTES_PER_SEC * 30, _radioBuf.length);
+    const seedEnd = Math.min(seedStart + _radioByteRate * RADIO_PRELOAD_SECONDS, _radioBuf.length);
     radioPreloadAppend(_radioBuf.slice(seedStart, seedEnd));
     _radioPos = seedEnd < _radioBuf.length ? seedEnd : _radioBuf.length;
   }
 }
 // Clock ticks 24/7 regardless of listeners.
-// Sends 2 s worth of audio every 2 s at 1.15× real-time using a drift-compensating
-// setTimeout so accumulated jitter never causes the 1-per-second glitch that
-// setInterval produces. Larger chunks mean the browser always has a comfortable
-// runway between deliveries.
+// Sends one tick's worth of audio every tick at the track's real byte rate using
+// a drift-compensating setTimeout so accumulated jitter never causes the
+// 1-per-second glitch that setInterval produces. A small headroom keeps the
+// browser buffer topped up without letting it grow unbounded.
 const RADIO_TICK_MS = 1000;
-const RADIO_CHUNK_BYTES = Math.round(RADIO_BYTES_PER_SEC * 1.15 * (RADIO_TICK_MS / 1000));
 let _radioNextTick = Date.now();
 function radioTick() {
   if (!_radioBuf) { radioLoadNext(); }
   if (_radioBuf) {
-    const end = Math.min(_radioPos + RADIO_CHUNK_BYTES, _radioBuf.length);
+    const chunkBytes = Math.round(_radioByteRate * 1.02 * (RADIO_TICK_MS / 1000));
+    const end = Math.min(_radioPos + chunkBytes, _radioBuf.length);
     const chunk = _radioBuf.slice(_radioPos, end);
     _radioPos = end;
     radioPreloadAppend(chunk);
@@ -7853,7 +7909,7 @@ const radioServer = createServiceServer({
       if (preload) {
         res.write(preload);
       } else if (_radioBuf) {
-        const ahead = Math.min(_radioPos + RADIO_BYTES_PER_SEC * 30, _radioBuf.length);
+        const ahead = Math.min(_radioPos + _radioByteRate * RADIO_PRELOAD_SECONDS, _radioBuf.length);
         res.write(_radioBuf.slice(_radioPos, ahead));
       }
       _radioListeners.add(res);
