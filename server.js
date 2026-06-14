@@ -6928,8 +6928,8 @@ const FIRE_STATE_FEEDS = {
   VIC: 'https://emergency.vic.gov.au/public/events-geojson.json',
   // SA CFS — JSON current incidents from ESO
   SA:  'https://data.eso.sa.gov.au/prod/cfs/criimson/cfs_current_incidents.json',
-  // WA DFES — no confirmed public JSON feed yet (ArcGIS vkTwD8kHw2woKBqV serves QLD ESCAD, not WA)
-  WA:  null,
+  // WA DFES — Emergency WA incident JSON (requires Accept: application/json to avoid SPA HTML)
+  WA:  'https://www.emergency.wa.gov.au/data/incident_FCAD.json',
   // TAS TFS — KML current incidents feed
   TAS: 'http://www.fire.tas.gov.au/Show?pageId=bfKml',
   // NT Fire & Rescue — public incident JSON feed
@@ -6944,7 +6944,7 @@ function fetchFireFeedRaw(url, _depth) {
   if (_depth > 3) return Promise.resolve(null);
   return new Promise((resolve) => {
     const mod = url.startsWith('https') ? https : http;
-    const req = mod.get(url, { timeout: 9000, headers: { 'User-Agent': FEED_UA, 'Accept': 'application/json, application/xml, application/atom+xml, text/xml, */*' } }, (r) => {
+    const req = mod.get(url, { timeout: 9000, headers: { 'User-Agent': FEED_UA, 'Accept': 'application/json, application/geo+json, application/xml, application/atom+xml, text/xml, */*' } }, (r) => {
       if (r.statusCode >= 300 && r.statusCode < 400 && r.headers.location) {
         r.resume();
         return resolve(fetchFireFeedRaw(r.headers.location, _depth + 1));
