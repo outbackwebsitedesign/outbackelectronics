@@ -43,7 +43,7 @@ export default function HubApp() {
     <>
       <TopNav current="hub" />
 
-      {ann && ann.text ? <div className="oe-ann"><div className="container">{ann.text}</div></div> : null}
+      {ann && ann.text ? <div className="announce">{ann.text}</div> : null}
 
       <main className="container hub-main">
         <section className="hub-hero">
@@ -80,7 +80,7 @@ export default function HubApp() {
 
         {user ? (
           <section className="hub-snapshot">
-            <h2 className="hub-h2">Your snapshot</h2>
+            <h2 className="svc-h2">Your snapshot</h2>
             <div className="hub-stats">
               <a className="hub-stat" href={(urls.portalUrl || '') + '/orders'}>
                 <b>{stats ? stats.openOrders : '—'}</b><span>Open orders</span>

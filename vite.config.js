@@ -47,6 +47,7 @@ export default defineConfig({
         maintenance: 'maintenance.html',
         ai: 'ai.html',
         hub: 'hub.html',
+        solar: 'solar.html',
       },
       output: {
         manualChunks: {

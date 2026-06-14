@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Solar Power Planner — Outback Electronics</title>
+<meta name="description" content="Size a stand-alone solar + battery system for life off the grid. Built for worst-case winter sun, the way it should be done out bush." />
+<link rel="icon" type="image/png" href="/favicon.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  /* Base + shared shell come from app-shell.css. Only Solar-specific layout here. */
+  .solar-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 28px; align-items: start; }
+  @media (max-width: 860px) { .solar-grid { grid-template-columns: 1fr; } }
+  .solar-panel, .solar-results { background: var(--bg-elev); border: 1px solid var(--line); padding: 22px; }
+  .solar-results { position: sticky; top: 92px; }
+  .appl-head, .appl-row { display: grid; grid-template-columns: 1.6fr 0.8fr 0.8fr 0.6fr 30px; gap: 8px; align-items: center; }
+  .appl-head { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-3); margin-bottom: 8px; font-family: 'JetBrains Mono', monospace; }
+  .appl-row { margin-bottom: 8px; }
+  .appl-row .input { padding: 8px 9px; font-size: 13px; }
+  .appl-x { background: transparent; border: 1px solid var(--line-strong); color: var(--ink-3); cursor: pointer; height: 34px; font-size: 16px; line-height: 1; }
+  .appl-x:hover { border-color: var(--rust); color: var(--rust); }
+  .res-big { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
+  .res-card { background: var(--bg); border: 1px solid var(--line); padding: 14px 10px; text-align: center; }
+  .res-card.hl { background: var(--rust); border-color: var(--rust); }
+  .res-card b { display: block; font-size: 26px; font-weight: 700; }
+  .res-card.hl b, .res-card.hl span { color: var(--paper); }
+  .res-card span { font-size: 10px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.05em; }
+  .res-list { list-style: none; padding: 0; margin: 0 0 14px; }
+  .res-list li { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .res-list li span { color: var(--ink-2); }
+  .res-note { font-size: 12px; color: var(--ink-3); margin-bottom: 16px; }
+  .res-cta { display: flex; gap: 10px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="module" src="/src/solar-entry.jsx"></script>
+</body>
+</html>

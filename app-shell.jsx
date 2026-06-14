@@ -1,11 +1,13 @@
 // Shared app-shell for the Outback Electronics service suite.
-// Imported by every subdomain app (hub, drive, photos, sky, …) so they share
-// one launcher, one nav, one account state, and one visual language.
+// Imported by every subdomain app (hub, solar, sky, …) so they share one
+// launcher, one nav, one account state, and one visual language — matching
+// the main site via app-shell.css.
 //
 // URLs are NEVER hard-coded — they're read at runtime from /api/shop-info
-// (which every service returns via serviceUrls() in server.js). That keeps
-// localhost (ports) and production (subdomains) working from the same code.
+// (which every service returns via serviceUrls() in server.js), so localhost
+// (ports) and production (subdomains) both work from the same code.
 import { useState, useEffect, useRef } from 'react';
+import './app-shell.css';
 
 // The whole environment. `url` is the key in the /api/shop-info response.
 export const SERVICES = [
@@ -60,6 +62,17 @@ export function useAuth() {
   return { user, refresh };
 }
 
+function useScrolled() {
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+  return scrolled;
+}
+
 function Launcher({ urls, current, onClose }) {
   const ref = useRef(null);
   useEffect(() => {
@@ -93,26 +106,29 @@ export function TopNav({ current }) {
   const info = useShopInfo();
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
+  const scrolled = useScrolled();
   const urls = info || {};
   const shopName = (info && info.shop && info.shop.name) || 'Outback Electronics';
   const hubHref = urls.hubUrl || urls.siteUrl || '/';
   return (
-    <header className="topnav">
-      <div className="container inner">
-        <a className="logo" href={hubHref}>
-          <span className="logo-mark"><img src="/logo.webp" alt="" onError={e => { e.target.style.display = 'none'; }} /></span>
-          <span className="logo-text">
-            <span className="name">{shopName}</span>
-            <span className="sub">Field Network</span>
-          </span>
-        </a>
-        <div className="nav-right">
-          {user === undefined ? null : user
-            ? <span className="oe-hello">{user.displayName || user.username}</span>
-            : (urls.portalUrl ? <a className="btn btn-sm" href={urls.portalUrl}>Sign in</a> : null)}
-          <button className="oe-launch-btn" aria-label="App launcher" aria-expanded={open} onClick={() => setOpen(o => !o)}>
-            <span className="oe-waffle">{Array.from({ length: 9 }).map((_, i) => <i key={i} />)}</span>
-          </button>
+    <header className={scrolled ? 'topnav scrolled' : 'topnav'}>
+      <div className="container">
+        <div className="row">
+          <a className="logo" href={hubHref}>
+            <span className="logo-mark"><img src="/logo.webp" alt={shopName} onError={e => { e.target.style.display = 'none'; }} /></span>
+            <span className="logo-text">
+              <span className="name">{shopName}</span>
+              <span className="sub">Field Network</span>
+            </span>
+          </a>
+          <div className="nav-right">
+            {user === undefined ? null : user
+              ? <span className="oe-hello">{user.displayName || user.username}</span>
+              : (urls.portalUrl ? <a className="btn btn-sm" href={urls.portalUrl}>Sign in</a> : null)}
+            <button className="icon-btn oe-launch-btn" aria-label="App launcher" aria-expanded={open} onClick={() => setOpen(o => !o)}>
+              <span className="oe-waffle">{Array.from({ length: 9 }).map((_, i) => <i key={i} />)}</span>
+            </button>
+          </div>
         </div>
       </div>
       {open && <Launcher urls={urls} current={current} onClose={() => setOpen(false)} />}
@@ -123,37 +139,26 @@ export function TopNav({ current }) {
 export function Footer() {
   const info = useShopInfo();
   const name = (info && info.shop && info.shop.name) || 'Outback Electronics';
+  const hubHref = (info && info.hubUrl) || '/';
+  const year = new Date().getFullYear();
   return (
-    <footer className="footer">
-      <div className="container inner">
-        <span>{name} — Field Network</span>
-        <span>Built for where the signal ends</span>
+    <footer className="oe-footer">
+      <div className="container">
+        <div className="oe-footer-top">
+          <a className="logo" href={hubHref}>
+            <span className="logo-mark sm"><img src="/logo.webp" alt="" onError={e => { e.target.style.display = 'none'; }} /></span>
+            <span className="logo-text">
+              <span className="name">{name}</span>
+              <span className="sub">Field Network</span>
+            </span>
+          </a>
+          <p className="oe-footer-tag serif">Built for where the signal ends.</p>
+        </div>
+        <div className="oe-footer-base">
+          <span>© {year} {name}</span>
+          <span>Moama, NSW · By appointment</span>
+        </div>
       </div>
     </footer>
   );
-}
-
-// Inject the shell-only styles once (launcher + nav extras). The base design
-// system (colours, .btn, .topnav, .footer, .container) lives in each app's HTML.
-const SHELL_CSS = `
-.nav-right{ position: relative; }
-.oe-hello{ color: var(--bg-deep); font-weight: 600; font-size: 13px; }
-.oe-launch-btn{ background: transparent; border: 1px solid #3a3228; color: var(--sand-dim); width: 38px; height: 38px; display: grid; place-items: center; cursor: pointer; transition: border-color 120ms, color 120ms; }
-.oe-launch-btn:hover{ border-color: var(--ochre); color: var(--ochre); }
-.oe-waffle{ display: grid; grid-template-columns: repeat(3, 4px); gap: 3px; }
-.oe-waffle i{ width: 4px; height: 4px; background: currentColor; display: block; border-radius: 1px; }
-.oe-launcher{ position: absolute; right: 0; top: calc(100% + 10px); background: var(--bg-elev); border: 1px solid var(--line-strong); box-shadow: var(--shadow); padding: 12px; width: min(440px, 92vw); z-index: 80; }
-.oe-launcher-grid{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
-@media (max-width: 420px){ .oe-launcher-grid{ grid-template-columns: repeat(2, 1fr); } }
-.oe-tile{ display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 6px; text-align: center; border: 1px solid transparent; transition: background 120ms, border-color 120ms; cursor: pointer; }
-.oe-tile:hover{ background: var(--bg-deep); border-color: var(--line); }
-.oe-tile.is-active{ background: var(--bg-deep); border-color: var(--ochre); cursor: default; }
-.oe-tile-glyph{ font-size: 22px; line-height: 1; }
-.oe-tile-label{ font-size: 11px; font-weight: 600; color: var(--ink-2); letter-spacing: 0.02em; }
-`;
-if (typeof document !== 'undefined' && !document.getElementById('oe-shell-css')) {
-  const el = document.createElement('style');
-  el.id = 'oe-shell-css';
-  el.textContent = SHELL_CSS;
-  document.head.appendChild(el);
 }

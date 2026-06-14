@@ -6870,6 +6870,9 @@ const hubServer = createServiceServer({
   },
 });
 
+// ── Solar (8107) — off-grid power planner (pure client-side calculator) ──────
+const solarServer = createServiceServer({ htmlEntry: '/dist/solar.html' });
+
 startServer(mainServer,   MAIN_PORT,   'main  ');
 startServer(discourseRedirectServer, DISCOURSE_REDIRECT_PORT, 'redirect');
 startServer(adminServer,  ADMIN_PORT,  'admin ');
@@ -6879,3 +6882,4 @@ startServer(toolsServer,  TOOLS_PORT,  'tools ');
 startServer(weatherServer, WEATHER_PORT, 'weather');
 startServer(aiGatewayServer, AI_GATEWAY_PORT, 'ai    ');
 startServer(hubServer,    HUB_PORT,    'hub   ');
+startServer(solarServer,  SOLAR_PORT,  'solar ');
