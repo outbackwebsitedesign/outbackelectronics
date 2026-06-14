@@ -6925,8 +6925,8 @@ const FIRE_STATE_FEEDS = {
   VIC: 'https://emergency.vic.gov.au/public/events-geojson.json',
   // SA CFS — JSON current incidents from ESO
   SA:  'https://data.eso.sa.gov.au/prod/cfs/criimson/cfs_current_incidents.json',
-  // WA DFES — ArcGIS public FeatureServer GeoJSON
-  WA:  'https://services1.arcgis.com/vkTwD8kHw2woKBqV/arcgis/rest/services/ESCAD_Current_Incidents_Public/FeatureServer/0/query?f=geojson&where=1%3D1&outFields=*',
+  // WA DFES — Emergency WA public incident JSON
+  WA:  'https://www.emergency.wa.gov.au/data/incident_FCAD.json',
   // TAS TFS — KML current incidents feed
   TAS: 'http://www.fire.tas.gov.au/Show?pageId=bfKml',
   // NT Fire & Rescue — public incident JSON feed
