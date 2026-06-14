@@ -7353,10 +7353,26 @@ async function handleRoadsStatus(req, res, url) {
   const t = Date.now();
   const cached = _roadCache[state];
   if (!cached || t - cached.ts > 5 * 60 * 1000) {
-    const extraHeaders = feedCfg.qldAuth ? { 'Authorization': `apikey ${QLDTRAFFIC_API_KEY}` } : {};
     const deadline = new Promise(r => setTimeout(() => r(null), 12000));
-    const raw = await Promise.race([fetchFeedJSON(feedCfg.url, extraHeaders), deadline]);
-    const normalized = raw != null ? feedCfg.parse(raw) : null;
+    let normalized = null;
+    if (feedCfg.vicAuth) {
+      // VIC: fetch planned + unplanned in parallel, merge features, parse once
+      if (!VIC_OPENDATA_KEY) {
+        // no key — leave normalized null so we return available:false
+      } else {
+        const vicHeaders = { 'Ocp-Apim-Subscription-Key': VIC_OPENDATA_KEY };
+        const fetches = (feedCfg.urls || []).map(u => fetchFeedJSON(u, vicHeaders).catch(() => null));
+        const raws = await Promise.race([Promise.all(fetches), deadline.then(() => null)]);
+        if (raws) {
+          const allFeatures = raws.flatMap(r => r?.features || []);
+          normalized = feedCfg.parse({ type: 'FeatureCollection', features: allFeatures });
+        }
+      }
+    } else {
+      const extraHeaders = feedCfg.qldAuth ? { 'Authorization': `apikey ${QLDTRAFFIC_API_KEY}` } : {};
+      const raw = await Promise.race([fetchFeedJSON(feedCfg.url, extraHeaders), deadline]);
+      normalized = raw != null ? feedCfg.parse(raw) : null;
+    }
     if (normalized) _roadCache[state] = { ts: t, data: normalized };
   }
   const entry = _roadCache[state];
