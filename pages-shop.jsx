@@ -2184,7 +2184,9 @@ function AIChatPage({ go }) {
 
   React.useEffect(() => {
     const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (distFromBottom < 80) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
   // drain queue when streaming finishes
