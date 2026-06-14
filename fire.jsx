@@ -78,7 +78,7 @@ export default function FireApp() {
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19, attribution: '© OpenStreetMap contributors',
     }).addTo(m);
-    markers.current = L.layerGroup().addTo(m);
+    markers.current = L.featureGroup().addTo(m);
     map.current = m;
   }, []);
 
