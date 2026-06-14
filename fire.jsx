@@ -53,7 +53,11 @@ const colorFor = (cat) => {
   const m = LEVELS.find(l => l.key.toLowerCase() === String(cat).toLowerCase());
   return m ? m.color : '#666';
 };
-const roadColor = (type) => ROAD_COLORS[String(type).toLowerCase()] || ROAD_COLORS.other;
+const roadColor = (type) => {
+  const t = String(type).toLowerCase();
+  if (/clos/i.test(t)) return ROAD_COLORS.closure;
+  return ROAD_COLORS[t] || ROAD_COLORS.other;
+};
 
 export default function FireApp() {
   const [state, setState] = useState('QLD');
@@ -179,7 +183,7 @@ export default function FireApp() {
             <label htmlFor="fire-layer">Layer</label>
             <select id="fire-layer" value={layer} onChange={e => setLayer(e.target.value)}>
               <option value="fire">Fire incidents</option>
-              <option value="roads">Road incidents</option>
+              <option value="roads">Road closures</option>
             </select>
           </div>
         </div>
@@ -206,9 +210,9 @@ export default function FireApp() {
 
         {layer === 'roads' && (
           <>
-            {roads?.available && <p className="fire-note">{roads.total} road incident{roads.total === 1 ? '' : 's'} reported · updated live.</p>}
-            {roads == null && <p className="fire-note">Loading road incidents…</p>}
-            {roads && !roads.available && <p className="fire-note">Road incident feed unavailable for {st.label} — check the traffic link below.</p>}
+            {roads?.available && <p className="fire-note">{roads.total} road closure{roads.total === 1 ? '' : 's'} · updated live.</p>}
+            {roads == null && <p className="fire-note">Loading road closures…</p>}
+            {roads && !roads.available && <p className="fire-note">Road closure data unavailable for {st.label} — check the traffic link below.</p>}
           </>
         )}
 
@@ -230,11 +234,11 @@ export default function FireApp() {
         {layer === 'roads' && roads?.available && (
           <div className="fire-list">
             {(roads.items || []).length === 0
-              ? <p className="fire-note">No road incidents listed.</p>
+              ? <p className="fire-note">No road closures listed.</p>
               : (roads.items || []).map((it, i) => (
                 <div className="fire-item" key={i}>
                   <span className="t">{it.title}</span>
-                  <span className="fire-badge" style={{ borderColor: roadColor(it.type), color: roadColor(it.type) }}>{it.type || 'incident'}</span>
+                  <span className="fire-badge" style={{ borderColor: roadColor(it.type), color: roadColor(it.type) }}>{/clos/i.test(it.type) ? 'Closed' : it.type || 'Closed'}</span>
                 </div>
               ))}
           </div>

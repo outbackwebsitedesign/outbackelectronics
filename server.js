@@ -6986,6 +6986,8 @@ function parseFireAtom(xml) {
 function geomCentroid(g) {
   if (!g) return null;
   if (g.type === 'Point') { const [lon, lat] = g.coordinates; return isFinite(lat) && isFinite(lon) ? { lat, lon } : null; }
+  if (g.type === 'LineString') { const c = g.coordinates; if (!c?.length) return null; return { lat: c.reduce((s, p) => s + p[1], 0) / c.length, lon: c.reduce((s, p) => s + p[0], 0) / c.length }; }
+  if (g.type === 'MultiLineString') { const all = g.coordinates.flat(); if (!all.length) return null; return { lat: all.reduce((s, p) => s + p[1], 0) / all.length, lon: all.reduce((s, p) => s + p[0], 0) / all.length }; }
   if (g.type === 'Polygon') { const r = g.coordinates[0]; if (!r?.length) return null; return { lat: r.reduce((s, c) => s + c[1], 0) / r.length, lon: r.reduce((s, c) => s + c[0], 0) / r.length }; }
   if (g.type === 'MultiPolygon') { const r = g.coordinates[0]?.[0]; if (!r?.length) return null; return { lat: r.reduce((s, c) => s + c[1], 0) / r.length, lon: r.reduce((s, c) => s + c[0], 0) / r.length }; }
   if (g.type === 'GeometryCollection') { for (const sub of g.geometries || []) { const c = geomCentroid(sub); if (c) return c; } }
@@ -7213,35 +7215,102 @@ function fetchFeedRaw(url, extraHeaders, _depth) {
 function fetchFeedJSON(url, extraHeaders) { return fetchFeedRaw(url, extraHeaders).then(s => { if (!s) return null; try { return JSON.parse(s); } catch { return null; } }); }
 
 
-// ── Roads layer ───────────────────────────────────────────────────────────────
-// Public key (100 req/min limit) — override with QLDTRAFFIC_API_KEY env var for higher limits
+// ── Road closures ─────────────────────────────────────────────────────────────
 const QLDTRAFFIC_API_KEY = process.env.QLDTRAFFIC_API_KEY || '3e83add325cbb69ac4d8e5bf433d770b';
-// filterByType: true → mixed-emergency feed; only include road/traffic/vehicle events
-const ROAD_FEEDS = {
-  QLD: { url: `https://api.qldtraffic.qld.gov.au/v2/events?apikey=${QLDTRAFFIC_API_KEY}` },
-  NSW: { url: 'https://data.livetraffic.com/traffic/hazards/incident.json' },
-  VIC: { url: 'https://emergency.vic.gov.au/public/events-geojson.json', filterByType: true },
-};
-const ROAD_TYPE_RE = /road|crash|accident|traffic|vehicle|collision|roadblock|flood|closure|hazard|transport/i;
-function normalizeRoadData(raw, filterByType) {
+// Web Mercator (EPSG:3857) → WGS84 — WA and SA ArcGIS services return projected coords
+function mercToLatLon(x, y) {
+  const lon = (x / 20037508.342) * 180;
+  const lat = (Math.atan(Math.exp(y / 6378137.0)) * 360.0) / Math.PI - 90;
+  return isFinite(lat) && isFinite(lon) ? { lat, lon } : null;
+}
+function arcGisMercCentroid(paths) {
+  if (!Array.isArray(paths)) return null;
+  const pts = paths.flat();
+  if (!pts.length) return null;
+  const mx = pts.reduce((s, p) => s + p[0], 0) / pts.length;
+  const my = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+  return mercToLatLon(mx, my);
+}
+// QLD Traffic API GeoJSON — EPSG:7844 geographic (lat/lon already), MultiLineString
+function parseQLDClosures(raw) {
   if (!Array.isArray(raw?.features)) return null;
   const items = [];
   for (const f of raw.features) {
     const p = f.properties || {};
-    if (filterByType) {
-      const typeVals = [p.incident_type, p.category1, p.type, p.feedtype, p.eventType, p.groupedType]
-        .filter(Boolean).map(s => String(s).toLowerCase());
-      if (!typeVals.some(t => ROAD_TYPE_RE.test(t))) continue;
-    }
     const coords = geomCentroid(f.geometry);
     if (!coords) continue;
-    const title = String(p.description || p.sourceTitle || p.headline || p.displayName
-      || p.incident_type || p.event_type || p.title || p.type || 'Incident').slice(0, 160);
-    const type = String(p.event_type || p.incident_type || p.incidentKind || p.category1 || p.type || p.category || 'other').toLowerCase();
+    const title = String(p.description || p.road_name || p.location_description || p.event_type || 'Road Closure').slice(0, 200);
+    items.push({ title, type: 'road_closure', lat: coords.lat, lon: coords.lon });
+  }
+  return { available: true, total: items.length, items };
+}
+// NSW Live Traffic GeoJSON — filter incidentKind for closure-type events
+function parseNSWClosures(raw) {
+  if (!Array.isArray(raw?.features)) return null;
+  const items = [];
+  for (const f of raw.features) {
+    const p = f.properties || {};
+    if (!/clos/i.test(String(p.incidentKind || p.type || p.category || ''))) continue;
+    const coords = geomCentroid(f.geometry);
+    if (!coords) continue;
+    const title = String(p.headline || p.displayName || p.description || p.incidentKind || 'Road Closure').slice(0, 200);
+    items.push({ title, type: 'road_closure', lat: coords.lat, lon: coords.lon });
+  }
+  return { available: true, total: items.length, items };
+}
+// SA ArcGIS MapServer layer 1 — pre-filtered to RD_CLOSURE, Web Mercator paths
+function parseSAClosures(raw) {
+  if (!Array.isArray(raw?.features)) return null;
+  const items = [];
+  for (const f of raw.features) {
+    const a = f.attributes || {};
+    const coords = arcGisMercCentroid(f.geometry?.paths);
+    if (!coords) continue;
+    const road = a.LOCAL_ROAD_NAME || '';
+    const from = a.START_SUBURB || '';
+    const to = a.END_SUBURB || '';
+    const detail = (a.PLOT_DETAILS || '').replace(/\s*Ref#\s*\d+\s*$/i, '').trim();
+    const title = (detail || [road, from && to ? `${from} to ${to}` : from || to].filter(Boolean).join(' — ') || 'Road Closure').slice(0, 200);
+    items.push({ title, type: 'road_closure', lat: coords.lat, lon: coords.lon });
+  }
+  return { available: true, total: items.length, items };
+}
+// WA WebEOC ArcGIS FeatureServer layer 4 — Web Mercator paths
+function parseWAClosures(raw) {
+  if (!Array.isArray(raw?.features)) return null;
+  const items = [];
+  for (const f of raw.features) {
+    const a = f.attributes || {};
+    const coords = arcGisMercCentroid(f.geometry?.paths);
+    if (!coords) continue;
+    const desc = [a.Location || a.Road, a.TrafficImp].filter(Boolean).join(' — ');
+    const title = (desc || 'Road Closure').slice(0, 200);
+    const ct = String(a.ClosureTyp || '').toLowerCase();
+    const type = ct.includes('clos') ? 'road_closure' : ct || 'caution';
     items.push({ title, type, lat: coords.lat, lon: coords.lon });
   }
   return { available: true, total: items.length, items };
 }
+// NT road report obstructions — flat JSON array, field names guessed (empty feed at time of writing)
+function parseNTObstructions(raw) {
+  const arr = Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : [];
+  const items = [];
+  for (const item of arr) {
+    const lat = parseFloat(item.Lat ?? item.lat ?? item.latitude ?? item.Y ?? NaN);
+    const lon = parseFloat(item.Lon ?? item.lon ?? item.longitude ?? item.X ?? NaN);
+    if (!isFinite(lat) || !isFinite(lon)) continue;
+    const title = String(item.Description ?? item.description ?? item.Title ?? item.title ?? item.Type ?? 'Road Obstruction').slice(0, 200);
+    items.push({ title, type: 'road_closure', lat, lon });
+  }
+  return { available: true, total: items.length, items };
+}
+const ROAD_FEEDS = {
+  QLD: { url: `https://api.qldtraffic.qld.gov.au/v2/events?apikey=${QLDTRAFFIC_API_KEY}&event_type=road_closure`, parse: parseQLDClosures, qldAuth: true },
+  NSW: { url: 'https://data.livetraffic.com/traffic/hazards/incident.json', parse: parseNSWClosures },
+  SA:  { url: "https://maps.sa.gov.au/arcgis/rest/services/DPTIExtTransport/TrafficSAOpenData/MapServer/1/query?where=PLOT_TYPE+%3D+%27RD_CLOSURE%27&outFields=PLOT_DETAILS%2CLOCAL_ROAD_NAME%2CSTART_SUBURB%2CEND_SUBURB&f=json", parse: parseSAClosures },
+  WA:  { url: 'https://services2.arcgis.com/cHGEnmsJ165IBJRM/arcgis/rest/services/WebEoc_RoadClosures/FeatureServer/4/query?where=1%3D1&outFields=Location%2CIncidentTy%2CClosureTyp%2CRoad%2CTrafficImp%2CRegion&f=json', parse: parseWAClosures },
+  NT:  { url: 'https://roadreport.nt.gov.au/api/Obstruction/GetAll', parse: parseNTObstructions },
+};
 const _roadCache = {};
 async function handleRoadsStatus(req, res, url) {
   const state = (url.searchParams.get('state') || 'QLD').toUpperCase();
@@ -7250,11 +7319,10 @@ async function handleRoadsStatus(req, res, url) {
   const t = Date.now();
   const cached = _roadCache[state];
   if (!cached || t - cached.ts > 5 * 60 * 1000) {
-    const extraHeaders = (state === 'QLD' && QLDTRAFFIC_API_KEY)
-      ? { 'Authorization': `apikey ${QLDTRAFFIC_API_KEY}` } : {};
+    const extraHeaders = feedCfg.qldAuth ? { 'Authorization': `apikey ${QLDTRAFFIC_API_KEY}` } : {};
     const deadline = new Promise(r => setTimeout(() => r(null), 12000));
     const raw = await Promise.race([fetchFeedJSON(feedCfg.url, extraHeaders), deadline]);
-    const normalized = raw ? normalizeRoadData(raw, feedCfg.filterByType) : null;
+    const normalized = raw != null ? feedCfg.parse(raw) : null;
     if (normalized) _roadCache[state] = { ts: t, data: normalized };
   }
   const entry = _roadCache[state];
