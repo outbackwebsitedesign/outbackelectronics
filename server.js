@@ -7810,12 +7810,6 @@ function radioPreloadAppend(chunk) {
 function radioPreloadGet() {
   return _radioPreloadChunks.length ? Buffer.concat(_radioPreloadChunks) : null;
 }
-function radioShuffle(arr) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-}
 // Extract TPE1 (artist) from an ID3v2 tag. Returns a string or null.
 function id3Artist(buf) {
   if (!buf || buf.length < 10) return null;
@@ -7842,7 +7836,8 @@ function id3Artist(buf) {
   return null;
 }
 // Walk radio-media/ recursively — each subfolder is an album. Playlist entries
-// are relative paths (e.g. "Heimsöknin/01-track.mp3"), shuffled for random playback.
+// are relative paths (e.g. "Heimsöknin/01-track.mp3"), sorted so albums group
+// and tracks play in order within each.
 function radioScan() {
   const out = [];
   const walk = (dir, rel) => {
@@ -7857,7 +7852,7 @@ function radioScan() {
     }
   };
   walk(RADIO_DIR, '');
-  radioShuffle(out);
+  out.sort((a, b) => a.localeCompare(b));
   _radioPlaylist = out;
 }
 radioScan();
