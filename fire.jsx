@@ -255,7 +255,7 @@ export default function FireApp() {
               ? <p className="fire-note">No active incidents listed. Stay safe out there.</p>
               : sorted.map((it, i) => (
                 <div className="fire-item" key={i}>
-                  <span className="t">{it.title}</span>
+                  <span className="t">{it.title}{it.type ? <span className="fire-item-type"> · {it.type}</span> : null}</span>
                   <span className={'fire-badge ' + badgeFor(it.category)}>{it.category}</span>
                 </div>
               ))}

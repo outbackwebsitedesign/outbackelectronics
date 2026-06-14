@@ -6992,6 +6992,17 @@ function geomCentroid(g) {
 }
 // SA CFS Level → alert category
 const SA_LEVEL_CAT = { 1: 'Information', 2: 'Advice', 3: 'Watch and Act', 4: 'Emergency Warning', 5: 'Emergency Warning' };
+// Normalise any category string to one of the 4 standard fire alert levels
+const STANDARD_FIRE_LEVELS = ['Emergency Warning', 'Watch and Act', 'Advice', 'Information'];
+const STANDARD_LEVEL_SET = new Set(STANDARD_FIRE_LEVELS.map(l => l.toLowerCase()));
+function toAlertLevel(cat) {
+  const c = String(cat).toLowerCase().trim();
+  if (STANDARD_LEVEL_SET.has(c)) return STANDARD_FIRE_LEVELS.find(l => l.toLowerCase() === c);
+  if (/out.of.control|going|uncontrolled|major.emergency|ember.attack/i.test(c)) return 'Emergency Warning';
+  if (/watch.and.act/i.test(c)) return 'Watch and Act';
+  if (/advice|hazard.reduc|planned.burn|burn.off|prescribed.burn|controlled.burn/i.test(c)) return 'Advice';
+  return 'Information'; // catch-all: any unrecognised fire category
+}
 function normalizeFireItem(p, geometry) {
   const coords = geomCentroid(geometry);
   // Title: QLD=WarningTitle, VIC=sourceTitle/name, SA=Location_name, NSW=title, NT="Fire Type"/_eventtype, ACT=title
@@ -7009,9 +7020,12 @@ function normalizeFireItem(p, geometry) {
     const [a, b] = p.Location.split(',').map(Number);
     if (isFinite(a) && isFinite(b)) { lat = a; lon = b; }
   }
+  const rawCat = String(category);
+  const level = toAlertLevel(rawCat);
   return {
     title: String(title).trim().replace(/\s*-\s*$/, '') || 'Incident',
-    category: String(category),
+    category: level,
+    type: rawCat !== level ? rawCat : undefined, // original incident type if different from alert level
     pubDate,
     lat: isFinite(lat) ? lat : null,
     lon: isFinite(lon) ? lon : null,
