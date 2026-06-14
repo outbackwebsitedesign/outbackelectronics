@@ -402,14 +402,15 @@ function GridSerpent({ onBack }) {
 // ══════════════════════════════════════════════════════════════════════════════
 
 const BD_COLS = 10, BD_ROWS = 20;
+const BD_DAS_DELAY = 167, BD_DAS_RATE = 33, BD_LOCK_DELAY = 500;
 const PIECES = [
-  { cells: [[0,0],[1,0],[2,0],[3,0]], color: '#5bc8e8' },
-  { cells: [[0,0],[1,0],[0,1],[1,1]], color: T.ochre   },
-  { cells: [[1,0],[0,1],[1,1],[2,1]], color: '#a855f7' },
-  { cells: [[0,0],[0,1],[1,1],[2,1]], color: T.rust    },
-  { cells: [[2,0],[0,1],[1,1],[2,1]], color: '#f97316' },
-  { cells: [[1,0],[2,0],[0,1],[1,1]], color: '#22c55e' },
-  { cells: [[0,0],[1,0],[1,1],[2,1]], color: '#ef4444' },
+  { cells: [[0,0],[1,0],[2,0],[3,0]], color: '#00e5ff' }, // I
+  { cells: [[0,0],[1,0],[0,1],[1,1]], color: '#ffd740' }, // O
+  { cells: [[1,0],[0,1],[1,1],[2,1]], color: '#e040fb' }, // T
+  { cells: [[0,0],[0,1],[1,1],[2,1]], color: '#448aff' }, // J
+  { cells: [[2,0],[0,1],[1,1],[2,1]], color: '#ff9100' }, // L
+  { cells: [[1,0],[2,0],[0,1],[1,1]], color: '#00e676' }, // S
+  { cells: [[0,0],[1,0],[1,1],[2,1]], color: '#ff5252' }, // Z
 ];
 
 function bdRotate(cells) {
@@ -420,161 +421,381 @@ function bdNorm(cells) {
   const mn = Math.min(...cells.map(c => c[0])), mr = Math.min(...cells.map(c => c[1]));
   return cells.map(([x,y]) => [x-mn, y-mr]);
 }
-function bdRandPiece() { const p = PIECES[Math.floor(Math.random()*PIECES.length)]; return { cells: p.cells.map(c=>[...c]), color: p.color }; }
 function bdCanPlace(board, cells, px, py) {
   return cells.every(([cx,cy]) => { const nx=px+cx,ny=py+cy; if(nx<0||nx>=BD_COLS||ny>=BD_ROWS) return false; if(ny<0) return true; return board[ny][nx]===null; });
 }
 function bdDropInterval(level) { return Math.max(80, 700-(level-1)*60); }
 
-function bdDrawCell(ctx, x, y, w, h, color) {
-  ctx.fillStyle = color; ctx.fillRect(x+1, y+1, w-2, h-2);
-  ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fillRect(x+1, y+1, w-2, 3); ctx.fillRect(x+1, y+1, 3, h-2);
-  ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.fillRect(x+1, y+h-4, w-2, 3); ctx.fillRect(x+w-4, y+1, 3, h-2);
+// 7-bag randomizer
+function bdShuffle7() {
+  const bag = [0,1,2,3,4,5,6];
+  for (let i = 6; i > 0; i--) { const j = Math.floor(Math.random()*(i+1)); [bag[i],bag[j]]=[bag[j],bag[i]]; }
+  return bag;
+}
+function bdDealPiece(bag) {
+  if (bag.length === 0) bag.push(...bdShuffle7());
+  const p = PIECES[bag.shift()];
+  return { cells: p.cells.map(c=>[...c]), color: p.color };
+}
+function bdOrigPiece(color) {
+  const p = PIECES.find(p => p.color === color);
+  return { cells: p.cells.map(c=>[...c]), color: p.color };
+}
+
+function bdDrawCell(ctx, x, y, w, h, color, alpha = 1) {
+  const p = 1;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.shadowColor = color; ctx.shadowBlur = 10;
+  ctx.fillStyle = color;
+  ctx.fillRect(x + p, y + p, w - p * 2, h - p * 2);
+  ctx.shadowBlur = 0;
+  const grad = ctx.createLinearGradient(x, y, x, y + h);
+  grad.addColorStop(0, 'rgba(255,255,255,0.35)');
+  grad.addColorStop(0.5, 'rgba(255,255,255,0.05)');
+  grad.addColorStop(1, 'rgba(0,0,0,0.2)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(x + p, y + p, w - p * 2, h - p * 2);
+  ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1;
+  ctx.strokeRect(x + p + 0.5, y + p + 0.5, w - p * 2 - 1, h - p * 2 - 1);
+  ctx.restore();
 }
 
 function bdInit() {
+  const bag = bdShuffle7();
+  const piece = bdDealPiece(bag);
+  const next  = bdDealPiece(bag);
   return {
     board: Array.from({length:BD_ROWS}, ()=>Array(BD_COLS).fill(null)),
-    piece: bdRandPiece(), px: Math.floor(BD_COLS/2)-1, py: 0,
-    next: bdRandPiece(), score: 0, lines: 0, level: 1,
+    bag, piece, px: Math.floor(BD_COLS/2)-1, py: 0,
+    next, hold: null, holdUsed: false,
+    score: 0, lines: 0, level: 1,
     dead: false, started: false,
+    flashAlpha: 0, shake: 0, clearBanner: null, justCleared: null, lockTimer: 0,
   };
 }
 
 function BlockDrop({ onBack }) {
   const canvasRef  = useRef(null);
   const nextRef    = useRef(null);
+  const holdRef    = useRef(null);
   const st         = useRef(bdInit());
   const lastDrop   = useRef(0);
-  const [score, setScore]   = useState(0);
-  const [lines, setLines]   = useState(0);
-  const [dead, setDead]     = useState(false);
+  const particles  = useRef([]);
+  const dasRef     = useRef({ dir: 0, startTs: 0, lastTs: 0 });
+  const [score, setScore] = useState(0);
+  const [lines, setLines] = useState(0);
+  const [level, setLevel] = useState(1);
+  const [dead, setDead]   = useState(false);
 
   const keys = useKeys(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' ']);
-
   useResizeCanvas(canvasRef);
-
-  // track which keys were already handled to avoid repeat
   const prevKeys = useRef(new Set());
-
   const justPressed = (key) => keys.current.has(key) && !prevKeys.current.has(key);
 
   const lock = useCallback(() => {
     const s = st.current;
     const nb = s.board.map(r=>[...r]);
     s.piece.cells.forEach(([cx,cy])=>{ const nx=s.px+cx,ny=s.py+cy; if(ny>=0) nb[ny][nx]=s.piece.color; });
-    const kept = nb.filter(row=>row.some(c=>c===null));
-    const cleared = BD_ROWS-kept.length;
+    const clearedIdx = [];
+    const kept = nb.filter((row, i) => {
+      if (row.every(c => c !== null)) { clearedIdx.push(i); return false; }
+      return true;
+    });
+    const cleared = clearedIdx.length;
     s.board = [...Array.from({length:cleared},()=>Array(BD_COLS).fill(null)), ...kept];
-    if (cleared>0) {
-      const pts=[0,100,300,500,800][cleared]*s.level;
-      s.score+=pts; s.lines+=cleared; s.level=Math.floor(s.lines/10)+1;
-      setScore(s.score); setLines(s.lines);
+    if (cleared > 0) {
+      const pts = [0,100,300,500,800][cleared] * s.level;
+      s.score += pts; s.lines += cleared;
+      const nl = Math.floor(s.lines/10)+1; if (nl > s.level) s.level = nl;
+      setScore(s.score); setLines(s.lines); setLevel(s.level);
+      s.flashAlpha = cleared >= 4 ? 0.65 : 0.35;
+      s.shake = cleared >= 4 ? 10 : cleared >= 2 ? 3 : 0;
+      s.clearBanner = { text: ['','SINGLE','DOUBLE','TRIPLE','TETRIS!'][cleared], alpha: 2.2, color: cleared >= 4 ? '#ffd740' : cleared >= 3 ? '#ff9100' : '#fff' };
+      s.justCleared = clearedIdx;
     }
-    s.piece=s.next; s.next=bdRandPiece(); s.px=Math.floor(BD_COLS/2)-1; s.py=0;
-    if (!bdCanPlace(s.board,s.piece.cells,s.px,s.py)) { s.dead=true; setDead(true); }
+    s.piece = s.next; s.next = bdDealPiece(s.bag);
+    s.px = Math.floor(BD_COLS/2)-1; s.py = 0;
+    s.holdUsed = false; s.lockTimer = 0;
+    if (!bdCanPlace(s.board, s.piece.cells, s.px, s.py)) { s.dead = true; setDead(true); }
   }, []);
 
   const tick = useCallback((ts) => {
     const s = st.current;
     if (s.dead) return;
 
-    // Snapshot which keys are pressed now vs last frame
     const cur = new Set(keys.current);
-    const prev = prevKeys.current;
 
     if (!s.started) {
       if (cur.size > 0) s.started = true;
       prevKeys.current = cur; return;
     }
 
-    if (justPressed('ArrowLeft'))  { if (bdCanPlace(s.board,s.piece.cells,s.px-1,s.py)) s.px--; }
-    if (justPressed('ArrowRight')) { if (bdCanPlace(s.board,s.piece.cells,s.px+1,s.py)) s.px++; }
+    // DAS: smooth left/right with initial delay then auto-repeat
+    const das = dasRef.current;
+    const leftHeld = cur.has('ArrowLeft'), rightHeld = cur.has('ArrowRight');
+    const newDir = leftHeld ? -1 : rightHeld ? 1 : 0;
+    if (newDir !== das.dir) {
+      das.dir = newDir; das.startTs = ts; das.lastTs = ts;
+      if (newDir !== 0 && bdCanPlace(s.board, s.piece.cells, s.px + newDir, s.py)) s.px += newDir;
+    } else if (newDir !== 0 && ts - das.startTs >= BD_DAS_DELAY && ts - das.lastTs >= BD_DAS_RATE) {
+      das.lastTs = ts;
+      if (bdCanPlace(s.board, s.piece.cells, s.px + newDir, s.py)) s.px += newDir;
+    }
+
+    // Rotate with wall-kick
     if (justPressed('ArrowUp')) {
       const rot = bdNorm(bdRotate(s.piece.cells));
       for (const kick of [0,-1,1,-2,2]) {
-        if (bdCanPlace(s.board,rot,s.px+kick,s.py)) { s.piece={...s.piece,cells:rot}; s.px+=kick; break; }
+        if (bdCanPlace(s.board, rot, s.px+kick, s.py)) { s.piece={...s.piece,cells:rot}; s.px+=kick; break; }
       }
     }
+
+    // Hold (C key)
+    if (justPressed('c') || justPressed('C')) {
+      if (!s.holdUsed) {
+        const stored = bdOrigPiece(s.piece.color);
+        if (s.hold === null) {
+          s.hold = stored; s.piece = s.next; s.next = bdDealPiece(s.bag);
+        } else {
+          s.piece = bdOrigPiece(s.hold.color); s.hold = stored;
+        }
+        s.px = Math.floor(BD_COLS/2)-1; s.py = 0;
+        s.holdUsed = true; s.lockTimer = 0;
+      }
+    }
+
+    // Hard drop
     if (justPressed(' ')) {
       let dy=0; while(bdCanPlace(s.board,s.piece.cells,s.px,s.py+dy+1)) dy++;
       s.score+=dy*2; s.py+=dy; setScore(s.score); lock(); lastDrop.current=ts; prevKeys.current=cur; return;
     }
 
+    // Gravity
     const soft = cur.has('ArrowDown');
     const interval = soft ? 50 : bdDropInterval(s.level);
     if (ts - lastDrop.current >= interval) {
       lastDrop.current = ts;
-      if (bdCanPlace(s.board,s.piece.cells,s.px,s.py+1)) s.py++;
-      else lock();
+      if (bdCanPlace(s.board, s.piece.cells, s.px, s.py+1)) { s.py++; s.lockTimer = 0; }
+    }
+
+    // Lock delay: consistent 500ms window after piece touches ground
+    if (!bdCanPlace(s.board, s.piece.cells, s.px, s.py+1)) {
+      if (s.lockTimer === 0) s.lockTimer = ts;
+      else if (ts - s.lockTimer >= BD_LOCK_DELAY) { lock(); lastDrop.current=ts; prevKeys.current=cur; return; }
+    } else {
+      s.lockTimer = 0;
     }
 
     prevKeys.current = cur;
   }, [lock]);
 
-  const draw = useCallback(() => {
+  const draw = useCallback((ts) => {
     const canvas = canvasRef.current; if (!canvas) return;
     const ncanvas = nextRef.current;
+    const hcanvas = holdRef.current;
     const ctx = canvas.getContext('2d');
-    const W=canvas.width, H=canvas.height;
-    const cw=W/BD_COLS, ch=H/BD_ROWS;
+    const W = canvas.width, H = canvas.height;
+    const cw = W / BD_COLS, ch = H / BD_ROWS;
     const s = st.current;
+    const ptcl = particles.current;
 
-    ctx.fillStyle='#1a1a2e'; ctx.fillRect(0,0,W,H);
-    ctx.strokeStyle='rgba(255,255,255,0.04)'; ctx.lineWidth=1;
-    for(let c=0;c<BD_COLS;c++) for(let r=0;r<BD_ROWS;r++) ctx.strokeRect(c*cw,r*ch,cw,ch);
+    // Spawn particles from just-cleared rows (deferred here so canvas dims are known)
+    if (s.justCleared && s.justCleared.length > 0) {
+      const colors = PIECES.map(p => p.color);
+      for (const row of s.justCleared) {
+        for (let c = 0; c < BD_COLS; c++) {
+          for (let i = 0; i < 4; i++) {
+            ptcl.push({
+              x: (c + Math.random()) * cw, y: (row + 0.5) * ch,
+              vx: (Math.random() - 0.5) * 7, vy: (Math.random() - 0.5) * 7 - 1,
+              life: 1.0, decay: 0.015 + Math.random() * 0.025,
+              size: 2 + Math.random() * 4,
+              color: colors[Math.floor(Math.random() * colors.length)],
+            });
+          }
+        }
+      }
+      s.justCleared = null;
+    }
 
-    s.board.forEach((row,r)=>row.forEach((col,c)=>{ if(col) bdDrawCell(ctx,c*cw,r*ch,cw,ch,col); }));
+    // Screen shake
+    let shakeX = 0, shakeY = 0;
+    if (s.shake > 0) { shakeX=(Math.random()-0.5)*s.shake*2; shakeY=(Math.random()-0.5)*s.shake*2; s.shake--; }
 
-    // Ghost
-    let gy=s.py; while(bdCanPlace(s.board,s.piece.cells,s.px,gy+1)) gy++;
-    if (gy!==s.py) s.piece.cells.forEach(([cx,cy])=>{
-      ctx.fillStyle='rgba(255,255,255,0.12)';
-      ctx.fillRect((s.px+cx)*cw+1,(gy+cy)*ch+1,cw-2,ch-2);
+    ctx.save();
+    ctx.translate(shakeX, shakeY);
+
+    // Background
+    ctx.fillStyle = '#0d0d1a'; ctx.fillRect(-8, -8, W+16, H+16);
+
+    // Grid lines
+    ctx.strokeStyle = 'rgba(100,149,237,0.07)'; ctx.lineWidth = 1;
+    for (let c = 0; c <= BD_COLS; c++) { ctx.beginPath(); ctx.moveTo(c*cw,0); ctx.lineTo(c*cw,H); ctx.stroke(); }
+    for (let r = 0; r <= BD_ROWS; r++) { ctx.beginPath(); ctx.moveTo(0,r*ch); ctx.lineTo(W,r*ch); ctx.stroke(); }
+
+    // Board cells
+    s.board.forEach((row, r) => row.forEach((col, c) => { if (col) bdDrawCell(ctx, c*cw, r*ch, cw, ch, col); }));
+
+    // Ghost piece (neon outline)
+    let gy = s.py;
+    while (bdCanPlace(s.board, s.piece.cells, s.px, gy+1)) gy++;
+    if (gy !== s.py) {
+      s.piece.cells.forEach(([cx, cy]) => {
+        ctx.save();
+        ctx.strokeStyle = s.piece.color; ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.28; ctx.shadowColor = s.piece.color; ctx.shadowBlur = 6;
+        ctx.strokeRect((s.px+cx)*cw+2, (gy+cy)*ch+2, cw-4, ch-4);
+        ctx.restore();
+      });
+    }
+
+    // Active piece
+    s.piece.cells.forEach(([cx, cy]) => {
+      if (s.py+cy >= 0) bdDrawCell(ctx, (s.px+cx)*cw, (s.py+cy)*ch, cw, ch, s.piece.color);
     });
 
-    s.piece.cells.forEach(([cx,cy])=>{
-      if(s.py+cy>=0) bdDrawCell(ctx,(s.px+cx)*cw,(s.py+cy)*ch,cw,ch,s.piece.color);
-    });
+    // Lock delay pulse: piece brightens as lock timer approaches expiry
+    const lockFrac = s.lockTimer > 0 ? Math.min(1, (ts - s.lockTimer) / BD_LOCK_DELAY) : 0;
+    if (lockFrac > 0) {
+      s.piece.cells.forEach(([cx, cy]) => {
+        if (s.py+cy >= 0) {
+          ctx.save();
+          ctx.globalAlpha = lockFrac * 0.5;
+          ctx.fillStyle = '#fff';
+          ctx.fillRect((s.px+cx)*cw+1, (s.py+cy)*ch+1, cw-2, ch-2);
+          ctx.restore();
+        }
+      });
+    }
 
+    // Particles
+    for (let i = ptcl.length-1; i >= 0; i--) {
+      const p = ptcl[i];
+      p.x += p.vx; p.y += p.vy; p.vy += 0.12; p.life -= p.decay;
+      if (p.life <= 0) { ptcl.splice(i, 1); continue; }
+      ctx.save();
+      ctx.globalAlpha = p.life; ctx.shadowColor = p.color; ctx.shadowBlur = 5;
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x - p.size/2, p.y - p.size/2, p.size, p.size);
+      ctx.restore();
+    }
+
+    // Line-clear flash
+    if (s.flashAlpha > 0) {
+      ctx.fillStyle = `rgba(255,255,255,${s.flashAlpha.toFixed(3)})`;
+      ctx.fillRect(0, 0, W, H);
+      s.flashAlpha = Math.max(0, s.flashAlpha - 0.04);
+    }
+
+    // Clear banner ("TETRIS!" / "TRIPLE" / etc.)
+    if (s.clearBanner && s.clearBanner.alpha > 0) {
+      const b = s.clearBanner;
+      const vis = Math.min(1, b.alpha);
+      const fs = Math.max(14, Math.min(W * 0.13, 44));
+      ctx.save();
+      ctx.globalAlpha = vis; ctx.font = `bold ${fs}px Archivo, sans-serif`;
+      ctx.textAlign = 'center'; ctx.shadowColor = b.color; ctx.shadowBlur = 24;
+      ctx.fillStyle = b.color;
+      ctx.fillText(b.text, W/2, H/2 - fs*0.3);
+      ctx.restore();
+      b.alpha -= 0.033; if (b.alpha <= 0) s.clearBanner = null;
+    }
+
+    ctx.restore();
+
+    // Start overlay
     if (!s.started) {
-      ctx.fillStyle='rgba(0,0,0,0.7)'; ctx.fillRect(0,0,W,H);
-      ctx.fillStyle='#fff'; ctx.font=`bold 16px Archivo,sans-serif`; ctx.textAlign='center';
-      ctx.fillText('Press any key to start',W/2,H/2); ctx.textAlign='left';
+      ctx.fillStyle = 'rgba(0,0,0,0.82)'; ctx.fillRect(0, 0, W, H);
+      ctx.textAlign = 'center';
+      const titleFs = Math.max(20, Math.min(W*0.18, 52));
+      ctx.save();
+      ctx.shadowColor = '#00e5ff'; ctx.shadowBlur = 28;
+      ctx.fillStyle = '#00e5ff'; ctx.font = `bold ${titleFs}px Archivo, sans-serif`;
+      ctx.fillText('BLOCK', W/2, H*0.38);
+      ctx.fillText('DROP',  W/2, H*0.38 + titleFs*1.15);
+      ctx.restore();
+      ctx.font = `13px Archivo, sans-serif`;
+      ctx.fillStyle = 'rgba(255,255,255,0.45)';
+      ctx.fillText('Press any key to start', W/2, H*0.65);
+      ctx.textAlign = 'left';
     }
 
     // Next piece preview
     if (ncanvas) {
       const nc = ncanvas.getContext('2d');
-      ncanvas.width=100; ncanvas.height=100;
-      nc.fillStyle=T.bgDeep; nc.fillRect(0,0,100,100);
-      const cells=bdNorm(s.next.cells);
-      const mx=Math.max(...cells.map(c=>c[0]))+1, my=Math.max(...cells.map(c=>c[1]))+1;
-      const cs=Math.min(100/(mx+2),100/(my+2));
-      const ox=(100-mx*cs)/2, oy=(100-my*cs)/2;
-      cells.forEach(([cx,cy])=>bdDrawCell(nc,ox+cx*cs,oy+cy*cs,cs,cs,s.next.color));
+      const NW = ncanvas.width, NH = ncanvas.height;
+      nc.fillStyle = '#0d0d1a'; nc.fillRect(0, 0, NW, NH);
+      const ncells = bdNorm(s.next.cells);
+      const nmx = Math.max(...ncells.map(c=>c[0]))+1, nmy = Math.max(...ncells.map(c=>c[1]))+1;
+      const ncs = Math.min(NW/(nmx+1.2), NH/(nmy+1.2));
+      const nox = (NW - nmx*ncs)/2, noy = (NH - nmy*ncs)/2;
+      ncells.forEach(([cx,cy]) => bdDrawCell(nc, nox+cx*ncs, noy+cy*ncs, ncs, ncs, s.next.color));
+    }
+
+    // Hold piece preview
+    if (hcanvas) {
+      const hc = hcanvas.getContext('2d');
+      const HW = hcanvas.width, HH = hcanvas.height;
+      hc.fillStyle = '#0d0d1a'; hc.fillRect(0, 0, HW, HH);
+      if (s.hold) {
+        const hcells = bdNorm(s.hold.cells);
+        const hmx = Math.max(...hcells.map(c=>c[0]))+1, hmy = Math.max(...hcells.map(c=>c[1]))+1;
+        const hcs = Math.min(HW/(hmx+1.2), HH/(hmy+1.2));
+        const hox = (HW - hmx*hcs)/2, hoy = (HH - hmy*hcs)/2;
+        hcells.forEach(([cx,cy]) => bdDrawCell(hc, hox+cx*hcs, hoy+cy*hcs, hcs, hcs, s.hold.color, s.holdUsed ? 0.3 : 1));
+      }
     }
   }, []);
 
   useGameLoop(tick, draw, 16);
 
   const restart = () => {
-    st.current=bdInit(); lastDrop.current=0; prevKeys.current=new Set();
-    setScore(0); setLines(0); setDead(false);
+    st.current = bdInit(); lastDrop.current = 0; prevKeys.current = new Set();
+    particles.current = []; dasRef.current = { dir:0, startTs:0, lastTs:0 };
+    setScore(0); setLines(0); setLevel(1); setDead(false);
   };
 
+  const linesInLevel = (level - 1) * 10;
+  const linesProgress = lines - linesInLevel;
+  const toNext = Math.max(0, 10 - linesProgress);
+
+  const sideCard = { background:'#161625', border:'1px solid rgba(0,229,255,0.18)', borderRadius:8, padding:12 };
+  const sideLabel = { fontSize:11, fontWeight:700, color:'rgba(255,255,255,0.35)', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:4 };
+
   return (
-    <GameShell name="Block Drop" hint="←→ Move · ↑ Rotate · ↓ Soft · Space Hard drop"
+    <GameShell name="Block Drop" hint="←→ Move · ↑ Rotate · C Hold · ↓ Soft · Space Hard drop"
       hsKey="oe_games_hs_blockdrop" score={score} gameOver={dead} onBack={onBack} onRestart={restart}
       scoreSlots={<><span>Score: <strong>{score}</strong></span><span>Lines: <strong>{lines}</strong></span></>}>
-      <div style={{ flex:1, display:'flex', justifyContent:'center', alignItems:'flex-start', gap:20, padding:16, background:T.bgDeep, height:'100%', boxSizing:'border-box' }}>
+      <div style={{ flex:1, display:'flex', justifyContent:'center', alignItems:'flex-start', gap:20, padding:16, background:'#0a0a12', height:'100%', boxSizing:'border-box' }}>
         <div style={{ position:'relative', display:'flex', height:'100%', alignItems:'stretch' }}>
-          <canvas ref={canvasRef} style={{ display:'block', border:`2px solid ${T.line}`, borderRadius:4, maxHeight:'100%', width:'auto' }} />
+          <canvas ref={canvasRef} style={{
+            display:'block',
+            border:'2px solid rgba(0,229,255,0.25)',
+            borderRadius:4, maxHeight:'100%', width:'auto',
+            boxShadow:'0 0 24px rgba(0,229,255,0.12), 0 0 60px rgba(0,229,255,0.04)',
+          }} />
         </div>
-        <div style={{ display:'flex', flexDirection:'column', gap:12, minWidth:110 }}>
-          <div style={{ background:T.paper, border:`1px solid ${T.line}`, borderRadius:8, padding:12 }}>
-            <div style={{ fontSize:11, fontWeight:700, color:T.ink3, textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:8 }}>Next</div>
-            <canvas ref={nextRef} style={{ display:'block' }} />
+        <div style={{ display:'flex', flexDirection:'column', gap:10, minWidth:120 }}>
+          <div style={sideCard}>
+            <div style={{...sideLabel, marginBottom:8}}>Hold <span style={{fontSize:9,opacity:0.5}}>[C]</span></div>
+            <canvas ref={holdRef} width={100} height={75} style={{ display:'block' }} />
+          </div>
+          <div style={sideCard}>
+            <div style={{...sideLabel, marginBottom:8}}>Next</div>
+            <canvas ref={nextRef} width={100} height={100} style={{ display:'block' }} />
+          </div>
+          <div style={sideCard}>
+            <div style={sideLabel}>Level</div>
+            <div style={{ fontSize:30, fontWeight:700, fontFamily:"'JetBrains Mono',monospace", color:'#00e5ff', textShadow:'0 0 14px rgba(0,229,255,0.55)', lineHeight:1 }}>{level}</div>
+          </div>
+          <div style={sideCard}>
+            <div style={sideLabel}>Lines</div>
+            <div style={{ fontSize:20, fontWeight:700, fontFamily:"'JetBrains Mono',monospace", color:'#fff', marginBottom:8, lineHeight:1 }}>{lines}</div>
+            <div style={{ height:4, background:'rgba(255,255,255,0.07)', borderRadius:2, overflow:'hidden' }}>
+              <div style={{ height:'100%', width:`${Math.min(100,(linesProgress/10)*100)}%`, background:'linear-gradient(90deg,#00e5ff,#e040fb)', borderRadius:2, transition:'width 0.1s' }} />
+            </div>
+            <div style={{ fontSize:10, color:'rgba(255,255,255,0.28)', marginTop:5 }}>{toNext} to next</div>
           </div>
         </div>
       </div>
@@ -1987,7 +2208,6 @@ function Lobby({ onPlay }) {
         <h2 style={{ fontFamily:"'Instrument Serif', serif", fontSize:36, color:T.ink, fontWeight:400 }}>
           Take a break. Play something.
         </h2>
-        <p style={{ color:T.ink3, marginTop:8, fontSize:15 }}>Original games, no installs, no logins.</p>
       </div>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))', gap:20 }}>
         {GAME_REGISTRY.map(g => (
