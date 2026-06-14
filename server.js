@@ -6939,15 +6939,16 @@ const FIRE_STATE_FEEDS = {
 };
 const _fireCache = {};
 // Fetch fire feed as raw text (handles http/https + redirects)
-function fetchFireFeedRaw(url, _depth) {
+function fetchFireFeedRaw(url, extraHeaders, _depth) {
   _depth = _depth || 0;
   if (_depth > 3) return Promise.resolve(null);
   return new Promise((resolve) => {
     const mod = url.startsWith('https') ? https : http;
-    const req = mod.get(url, { timeout: 9000, headers: { 'User-Agent': FEED_UA, 'Accept': 'application/json, application/geo+json, application/xml, application/atom+xml, text/xml, */*' } }, (r) => {
+    const headers = { 'User-Agent': FEED_UA, 'Accept': 'application/json, application/geo+json, application/xml, application/atom+xml, text/xml, */*', ...(extraHeaders || {}) };
+    const req = mod.get(url, { timeout: 9000, headers }, (r) => {
       if (r.statusCode >= 300 && r.statusCode < 400 && r.headers.location) {
         r.resume();
-        return resolve(fetchFireFeedRaw(r.headers.location, _depth + 1));
+        return resolve(fetchFireFeedRaw(r.headers.location, extraHeaders, _depth + 1));
       }
       if (r.statusCode !== 200) { r.resume(); return resolve(null); }
       let buf = '';
@@ -7162,7 +7163,9 @@ async function handleFireStatus(req, res, url) {
   const t = Date.now();
   const cached = _fireCache[state];
   if (!cached || t - cached.ts > 10 * 60 * 1000) {
-    const rawText = await fetchFireFeedRaw(feedUrl);
+    // WA emergency.wa.gov.au requires Referer to return JSON instead of SPA HTML
+    const extraHdrs = state === 'WA' ? { 'Referer': 'https://www.emergency.wa.gov.au/', 'Accept': 'application/json' } : null;
+    const rawText = await fetchFireFeedRaw(feedUrl, extraHdrs);
     let normalized = null;
     if (rawText) {
       const trimmed = rawText.trimStart();
