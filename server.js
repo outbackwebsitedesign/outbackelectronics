@@ -7612,6 +7612,73 @@ const photosServer = createServiceServer({
   },
 });
 
+// ── Swap (8111) — community classifieds (swap.db + swap-files/) ─────────────
+const SWAP_DB = path.join(__dirname, 'swap.db');
+const SWAP_DIR = path.join(__dirname, 'swap-files');
+fs.mkdirSync(SWAP_DIR, { recursive: true });
+function readSwap() { try { const d = JSON.parse(fs.readFileSync(SWAP_DB, 'utf8')); return Array.isArray(d.listings) ? d.listings : []; } catch { return []; } }
+function writeSwap(listings) { atomicWriteFile(SWAP_DB, JSON.stringify({ listings })); }
+const SWAP_CATS = ['For Sale', 'Wanted', 'Free', 'Swap/Trade', 'Services'];
+const swapServer = createServiceServer({
+  htmlEntry: '/dist/swap.html',
+  routes: async (req, res, url) => {
+    if (req.method === 'GET' && url.pathname === '/api/swap/listings') {
+      const cat = url.searchParams.get('cat');
+      let list = readSwap().slice().sort((a, b) => b.ts - a.ts);
+      if (cat && SWAP_CATS.includes(cat)) list = list.filter(l => l.category === cat);
+      const session = getPortalSession(req);
+      const mine = session ? session.id : null;
+      json(res, 200, {
+        categories: SWAP_CATS,
+        listings: list.slice(0, 500).map(l => ({ id: l.id, title: l.title, desc: l.desc, price: l.price, category: l.category, location: l.location, contact: l.contact, sellerName: l.sellerName, hasImage: !!l.imageId, ts: l.ts, own: l.userId === mine })),
+      });
+      return true;
+    }
+    if (req.method === 'GET' && url.pathname === '/api/swap/image') {
+      const l = readSwap().find(x => x.id === url.searchParams.get('id'));
+      if (!l || !l.imagePath || !fs.existsSync(l.imagePath)) { json(res, 404, { error: 'not_found' }); return true; }
+      res.writeHead(200, { 'Content-Type': l.imageType || 'image/jpeg', 'Cache-Control': 'public, max-age=3600', 'X-Content-Type-Options': 'nosniff' });
+      fs.createReadStream(l.imagePath).on('error', () => res.end()).pipe(res); return true;
+    }
+    if (req.method === 'POST' && url.pathname === '/api/swap/post') {
+      const session = getPortalSession(req);
+      if (!session) { json(res, 401, { error: 'login_required' }); return true; }
+      if (publicRateLimited(getIp(req), 'swap_post')) { json(res, 429, { error: 'rate_limited' }); return true; }
+      let b; try { b = await readJson(req, 12e6); } catch { json(res, 400, { error: 'bad_request' }); return true; }
+      const title = String(b.title || '').trim().slice(0, 100);
+      if (!title) { json(res, 422, { error: 'title_required', message: 'A title is required.' }); return true; }
+      const category = SWAP_CATS.includes(b.category) ? b.category : 'For Sale';
+      const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+      let imageId = null, imagePath = null, imageType = null;
+      if (b.imageBase64 && typeof b.imageType === 'string' && b.imageType.toLowerCase().startsWith('image/')) {
+        const buf = Buffer.from(String(b.imageBase64), 'base64');
+        if (buf.length && buf.length <= 8 * 1024 * 1024) {
+          imageType = b.imageType.toLowerCase();
+          const ext = (imageType.split('/')[1] || 'jpg').replace(/[^a-z0-9]/g, '').slice(0, 5) || 'jpg';
+          imagePath = path.join(SWAP_DIR, id + '.' + ext);
+          fs.writeFileSync(imagePath, buf); imageId = id;
+        }
+      }
+      const listings = readSwap();
+      listings.push({ id, userId: session.id, sellerName: session.displayName || session.username, title, desc: String(b.desc || '').trim().slice(0, 2000), price: String(b.price || '').trim().slice(0, 40), category, location: String(b.location || '').trim().slice(0, 80), contact: String(b.contact || '').trim().slice(0, 120), imageId, imagePath, imageType, ts: Date.now() });
+      if (listings.length > 5000) listings.splice(0, listings.length - 5000);
+      writeSwap(listings);
+      json(res, 200, { ok: true, id }); return true;
+    }
+    if (req.method === 'POST' && url.pathname === '/api/swap/delete') {
+      const session = getPortalSession(req);
+      if (!session) { json(res, 401, { error: 'login_required' }); return true; }
+      let b; try { b = await readJson(req); } catch { json(res, 400, { error: 'bad_request' }); return true; }
+      const listings = readSwap(); const i = listings.findIndex(x => x.id === b.id && x.userId === session.id);
+      if (i < 0) { json(res, 404, { error: 'not_found' }); return true; }
+      if (listings[i].imagePath) { try { fs.unlinkSync(listings[i].imagePath); } catch {} }
+      listings.splice(i, 1); writeSwap(listings);
+      json(res, 200, { ok: true }); return true;
+    }
+    return false;
+  },
+});
+
 startServer(mainServer,   MAIN_PORT,   'main  ');
 startServer(discourseRedirectServer, DISCOURSE_REDIRECT_PORT, 'redirect');
 startServer(adminServer,  ADMIN_PORT,  'admin ');
@@ -7628,3 +7695,4 @@ startServer(mapsServer,   MAPS_PORT,   'maps  ');
 startServer(coverageServer, COVERAGE_PORT, 'cover ');
 startServer(driveServer,  DRIVE_PORT,  'drive ');
 startServer(photosServer, PHOTOS_PORT, 'photos');
+startServer(swapServer,   SWAP_PORT,   'swap  ');

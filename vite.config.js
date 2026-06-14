@@ -54,6 +54,7 @@ export default defineConfig({
         coverage: 'coverage.html',
         drive: 'drive.html',
         photos: 'photos.html',
+        swap: 'swap.html',
       },
       output: {
         manualChunks: {
