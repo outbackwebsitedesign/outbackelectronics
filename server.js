@@ -6928,8 +6928,8 @@ const FIRE_STATE_FEEDS = {
   VIC: 'https://emergency.vic.gov.au/public/events-geojson.json',
   // SA CFS — JSON current incidents from ESO
   SA:  'https://data.eso.sa.gov.au/prod/cfs/criimson/cfs_current_incidents.json',
-  // WA DFES — ArcGIS FeatureServer public GeoJSON (emergency.wa.gov.au/data/incident_FCAD.json returns HTML)
-  WA:  'https://services1.arcgis.com/vkTwD8kHw2woKBqV/arcgis/rest/services/ESCAD_Current_Incidents_Public/FeatureServer/0/query?f=geojson&where=1%3D1&outFields=*',
+  // WA DFES — no confirmed public JSON feed yet (ArcGIS vkTwD8kHw2woKBqV serves QLD ESCAD, not WA)
+  WA:  null,
   // TAS TFS — KML current incidents feed
   TAS: 'http://www.fire.tas.gov.au/Show?pageId=bfKml',
   // NT Fire & Rescue — public incident JSON feed
@@ -6994,17 +6994,18 @@ function geomCentroid(g) {
 const SA_LEVEL_CAT = { 1: 'Information', 2: 'Advice', 3: 'Watch and Act', 4: 'Emergency Warning', 5: 'Emergency Warning' };
 function normalizeFireItem(p, geometry) {
   const coords = geomCentroid(geometry);
-  // Title: try known field names across all feeds
-  // QLD: WarningTitle; VIC: sourceTitle/name; SA: Location_name; NSW: title; NT: name
-  const title = p.WarningTitle || p.sourceTitle || p.Location_name || p.title || p.Title || p.name || p.Name || p.headline || p.description || 'Incident';
-  // Category/alert level: QLD: WarningLevel; VIC: category1; SA: Level (int); NSW: category; NT: _category
+  // Title: QLD=WarningTitle, VIC=sourceTitle/name, SA=Location_name, NSW=title, NT="Fire Type"/_eventtype, ACT=title
+  const title = p.WarningTitle || p.sourceTitle || p.Location_name || p['Fire Type'] || p._eventtype
+    || p.title || p.Title || p.name || p.Name || p.headline || p.description || 'Incident';
+  // Alert level: QLD=WarningLevel, NSW=category, VIC=category1, SA=Level(int), NT="Alert Level", ACT=alert_level/_category
   const saLvl = p.Level != null ? SA_LEVEL_CAT[p.Level] : null;
-  const category = p.WarningLevel || p.category || p.Category || p.alertLevel || p.responseLevel || p.category1 || p._category || saLvl || p.type || p.eventType || 'Other';
-  const pubDate = p.ItemDateTimeLocal_ISO || p.pubDate || p.created || p.Updated || p.Date || p.onset || null;
-  // Coordinates: geometry centroid first, then named fields, then SA "lat,lon" Location string
-  let lat = coords?.lat ?? p.Latitude ?? p.lat ?? p.latitude ?? null;
-  let lon = coords?.lon ?? p.Longitude ?? p.lon ?? p.longitude ?? null;
-  if ((lat == null || lon == null) && typeof p.Location === 'string' && p.Location.includes(',')) {
+  const category = p.WarningLevel || p['Alert Level'] || p.alert_level || p.category || p.Category
+    || p.alertLevel || p.responseLevel || p.category1 || p._category || saLvl || p.type || p.eventType || 'Other';
+  const pubDate = p.ItemDateTimeLocal_ISO || p.pubDate || p.created || p.updated || p.Updated || p.Date || p.onset || null;
+  // Coordinates: geometry centroid first, then named fields (may be strings — coerce), then SA "lat,lon" Location string
+  let lat = coords?.lat ?? p.Latitude ?? Number(p.lat ?? p.latitude ?? NaN);
+  let lon = coords?.lon ?? p.Longitude ?? Number(p.lon ?? p.longitude ?? NaN);
+  if ((!isFinite(lat) || !isFinite(lon)) && typeof p.Location === 'string' && p.Location.includes(',')) {
     const [a, b] = p.Location.split(',').map(Number);
     if (isFinite(a) && isFinite(b)) { lat = a; lon = b; }
   }
@@ -7012,8 +7013,8 @@ function normalizeFireItem(p, geometry) {
     title: String(title).trim().replace(/\s*-\s*$/, '') || 'Incident',
     category: String(category),
     pubDate,
-    lat: lat != null && isFinite(lat) ? lat : null,
-    lon: lon != null && isFinite(lon) ? lon : null,
+    lat: isFinite(lat) ? lat : null,
+    lon: isFinite(lon) ? lon : null,
   };
 }
 function normalizeFireData(raw) {
@@ -7021,11 +7022,13 @@ function normalizeFireData(raw) {
   // Accept if: no type field (dedicated fire feed), has known fire alert level, or type mentions fire/burn/etc.
   const FIRE_CATS = new Set(['emergency warning', 'watch and act', 'advice', 'information']);
   function isFireItem(p) {
-    const typeVal = [p.type, p.feedType, p.feedtype, p.eventType, p.category1, p.incident_type, p.IncidentType, p.incidentType]
+    const typeVal = [p.type, p.feedType, p.feedtype, p.eventType, p.category1, p.incident_type,
+                     p.IncidentType, p.incidentType, p._category, p._eventtype, p['Fire Type'], p.GroupedType]
       .filter(Boolean).map(s => String(s).toLowerCase());
     if (!typeVal.length) return true; // no type field — assume dedicated fire feed
-    const cat = String(p.WarningLevel || p.category || p.alertLevel || p.responseLevel || '').toLowerCase().trim();
-    if (FIRE_CATS.has(cat)) return true;
+    // Standard alert level on item → definitely a fire incident
+    const alertCat = String(p.WarningLevel || p['Alert Level'] || p.alert_level || p.category || p.alertLevel || p.responseLevel || '').toLowerCase().trim();
+    if (FIRE_CATS.has(alertCat)) return true;
     return typeVal.some(t => /fire|burn|ember|blaze|bush|grass|smoke|vegetation/i.test(t));
   }
 
@@ -7312,7 +7315,7 @@ const fireServer = createServiceServer({
         if (trimmed.startsWith('<')) {
           const entries = /<kml[\s>]/i.test(trimmed) ? parseFireKml(rawText) : parseFireAtom(rawText);
           normalized = normalizeAtomEntries(entries);
-          parsed = { xmlEntries: entries.slice(0, 3) };
+          parsed = { xmlEntries: entries.slice(0, 2), entryCount: entries.length };
         } else {
           try { parsed = JSON.parse(rawText); normalized = normalizeFireData(parsed); } catch (e) { parseError = e.message; }
         }
