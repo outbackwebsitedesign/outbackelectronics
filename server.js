@@ -7838,6 +7838,44 @@ function radioLoadNext() {
   if (_radioIdx === 0) radioScan();
   _radioTrack = _radioPlaylist[_radioIdx] || null;
   try { _radioBuf = _radioTrack ? fs.readFileSync(path.join(RADIO_DIR, _radioTrack)) : null; _radioPos = 0; } catch { _radioBuf = null; }
+  // Strip a leading ID3v2 tag before streaming. It carries metadata and often
+  // hundreds of KB of embedded cover art — non-audio bytes the browser plays as
+  // silence, producing a long gap at every track change. We send audio frames only.
+  if (_radioBuf && _radioBuf.length >= 10 && _radioBuf[0] === 0x49 && _radioBuf[1] === 0x44 && _radioBuf[2] === 0x33) {
+    const tagSize = 10 + (((_radioBuf[6] & 0x7f) << 21) | ((_radioBuf[7] & 0x7f) << 14) | ((_radioBuf[8] & 0x7f) << 7) | (_radioBuf[9] & 0x7f));
+    if (tagSize > 0 && tagSize < _radioBuf.length) _radioBuf = _radioBuf.slice(tagSize);
+  }
+  // Strip a leading Xing/Info/VBRI header frame. It's a silent frame that only
+  // declares the track's total length. In a concatenated live stream the browser
+  // honours that length and fires `ended` at the end of the track — stopping
+  // playback so the listener has to manually re-tune. Dropping it makes every
+  // track look like part of one endless stream that never "ends".
+  if (_radioBuf) {
+    let p = 0;
+    while (p < _radioBuf.length - 4 && !(_radioBuf[p] === 0xff && (_radioBuf[p + 1] & 0xe0) === 0xe0)) p++;
+    if (p < _radioBuf.length - 4) {
+      const ver = (_radioBuf[p + 1] >> 3) & 3;   // 3=MPEG1, 2=MPEG2, 0=MPEG2.5
+      const layer = (_radioBuf[p + 1] >> 1) & 3; // 1=Layer3 (where Xing lives)
+      const brIdx = (_radioBuf[p + 2] >> 4) & 0xf;
+      const srIdx = (_radioBuf[p + 2] >> 2) & 3;
+      const pad = (_radioBuf[p + 2] >> 1) & 1;
+      if (ver !== 1 && layer === 1 && brIdx !== 0 && brIdx !== 15 && srIdx !== 3) {
+        const brV1 = [0,32,40,48,56,64,80,96,112,128,160,192,224,256,320];
+        const brV2 = [0,8,16,24,32,40,48,56,64,80,96,112,128,144,160];
+        const srTab = { 3: [44100,48000,32000], 2: [22050,24000,16000], 0: [11025,12000,8000] };
+        const kbps = (ver === 3 ? brV1 : brV2)[brIdx];
+        const sr = srTab[ver][srIdx];
+        const spf = ver === 3 ? 1152 : 576;
+        const frameLen = Math.floor((spf / 8) * kbps * 1000 / sr) + pad;
+        if (frameLen > 4 && p + frameLen <= _radioBuf.length) {
+          const head = _radioBuf.toString('latin1', p + 4, p + Math.min(frameLen, 64));
+          if (head.includes('Xing') || head.includes('Info') || head.includes('VBRI')) {
+            _radioBuf = _radioBuf.slice(p + frameLen);
+          }
+        }
+      }
+    }
+  }
   // Pace this track at its real byte rate so the stream matches playback speed
   // regardless of the encode (CBR/VBR, any bitrate).
   if (_radioBuf) {

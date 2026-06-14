@@ -6,18 +6,38 @@ import { TopNav, Footer } from './app-shell.jsx';
 
 export default function RadioApp() {
   const audioRef = useRef(null);
+  const wantOn = useRef(false); // desired state — drives auto-reconnect
   const [playing, setPlaying] = useState(false);
   const [np, setNp] = useState(null);
 
   const poll = () => fetch('/api/radio/nowplaying').then(r => r.json()).then(setNp).catch(() => {});
   useEffect(() => { poll(); const t = setInterval(poll, 10000); return () => clearInterval(t); }, []);
 
-  function tuneIn() {
+  function connect() {
     const a = audioRef.current; if (!a) return;
     a.src = '/stream?t=' + Date.now(); // fresh connection = live edge
-    a.play().then(() => { setPlaying(true); poll(); }).catch(() => setPlaying(false));
+    a.play().then(() => { setPlaying(true); poll(); })
+      .catch(() => { if (wantOn.current) setTimeout(() => { if (wantOn.current) connect(); }, 800); });
+  }
+
+  // Safety net: if the stream ever ends or errors while we're meant to be on
+  // air (track boundary, network blip, decoder hiccup), reconnect at the live
+  // edge automatically instead of leaving the listener stuck on silence.
+  useEffect(() => {
+    const a = audioRef.current; if (!a) return;
+    const onEnded = () => { if (wantOn.current) connect(); };
+    const onError = () => { if (wantOn.current) setTimeout(() => { if (wantOn.current) connect(); }, 800); };
+    a.addEventListener('ended', onEnded);
+    a.addEventListener('error', onError);
+    return () => { a.removeEventListener('ended', onEnded); a.removeEventListener('error', onError); };
+  }, []);
+
+  function tuneIn() {
+    wantOn.current = true;
+    connect();
   }
   function tuneOut() {
+    wantOn.current = false;
     const a = audioRef.current; if (!a) return;
     a.pause(); a.removeAttribute('src'); a.load();
     setPlaying(false);
