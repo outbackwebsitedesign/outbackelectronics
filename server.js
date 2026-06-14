@@ -6954,12 +6954,18 @@ function geomCentroid(g) {
 }
 function normalizeFireItem(p, geometry) {
   const coords = geomCentroid(geometry);
+  // QLD QFD uses PascalCase (WarningTitle, WarningLevel, Latitude, Longitude)
+  const title = p.WarningTitle || p.title || p.Title || p.name || p.Name || p.headline || p.description || p.Location || 'Incident';
+  const category = p.WarningLevel || p.category || p.Category || p.alertLevel || p.responseLevel || p.type || p.eventType || 'Other';
+  const pubDate = p.ItemDateTimeLocal_ISO || p.pubDate || p.created || p.Updated || p.onset || null;
+  const lat = coords?.lat ?? p.Latitude ?? p.lat ?? p.latitude ?? null;
+  const lon = coords?.lon ?? p.Longitude ?? p.lon ?? p.longitude ?? null;
   return {
-    title: String(p.title || p.Title || p.name || p.Name || p.headline || p.description || 'Incident').slice(0, 160),
-    category: String(p.category || p.Category || p.alertLevel || p.responseLevel || p.type || p.eventType || 'Other'),
-    pubDate: p.pubDate || p.created || p.Updated || p.onset || null,
-    lat: coords?.lat ?? p.lat ?? p.latitude ?? null,
-    lon: coords?.lon ?? p.lon ?? p.longitude ?? null,
+    title: String(title).trim().replace(/\s*-\s*$/, '') || 'Incident',
+    category: String(category),
+    pubDate,
+    lat: lat != null && isFinite(lat) ? lat : null,
+    lon: lon != null && isFinite(lon) ? lon : null,
   };
 }
 function normalizeFireData(raw) {
@@ -7020,15 +7026,6 @@ const fireServer = createServiceServer({
   htmlEntry: '/dist/fire.html',
   routes: async (req, res, url) => {
     if (req.method === 'GET' && url.pathname === '/api/fire/status') { await handleFireStatus(req, res, url); return true; }
-    if (req.method === 'GET' && url.pathname === '/api/fire/raw') {
-      const state = (url.searchParams.get('state') || 'QLD').toUpperCase();
-      const feedUrl = FIRE_STATE_FEEDS[state];
-      if (!feedUrl) return json(res, 200, { error: 'no feed' });
-      const raw = await fetchFireFeed(feedUrl);
-      if (!raw) return json(res, 200, { error: 'fetch failed' });
-      const firstFeature = raw.features?.[0] || raw.result?.[0] || raw.incidents?.[0] || raw;
-      return json(res, 200, { keys: Object.keys(raw), firstFeature, totalFeatures: raw.features?.length ?? raw.result?.length ?? raw.incidents?.length });
-    }
     return false;
   },
 });

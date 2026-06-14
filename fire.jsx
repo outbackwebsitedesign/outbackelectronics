@@ -4,9 +4,10 @@ import { useState, useEffect, useRef } from 'react';
 import { TopNav, Footer } from './app-shell.jsx';
 
 const LEVELS = [
-  { key: 'Emergency Warning', cls: 'emergency', badge: 'badge-emergency', color: '#b3231b' },
-  { key: 'Watch and Act',     cls: 'watch',     badge: 'badge-watch',     color: '#c4591a' },
-  { key: 'Advice',            cls: 'advice',    badge: 'badge-advice',    color: '#b08a12' },
+  { key: 'Emergency Warning', cls: 'emergency',   badge: 'badge-emergency',   color: '#b3231b' },
+  { key: 'Watch and Act',     cls: 'watch',       badge: 'badge-watch',       color: '#c4591a' },
+  { key: 'Advice',            cls: 'advice',      badge: 'badge-advice',      color: '#b08a12' },
+  { key: 'Information',       cls: 'information', badge: 'badge-information', color: '#4a7ba0' },
 ];
 
 const STATES = [
