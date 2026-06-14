@@ -7323,7 +7323,12 @@ const fireServer = createServiceServer({
         rawSnippet: rawText ? rawText.slice(0, 500) : null,
         parseError,
         topLevelKeys: parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? Object.keys(parsed) : null,
-        firstItem: Array.isArray(parsed) ? parsed[0] : (parsed?.features?.[0] || parsed?.incidents?.[0] || parsed?.result?.[0] || parsed?.data?.[0]),
+        firstRawItem: (() => {
+          if (!parsed) return null;
+          const f = Array.isArray(parsed) ? parsed[0]
+            : (parsed?.features?.[0] || parsed?.incidents?.features?.[0] || parsed?.incidents?.[0] || parsed?.result?.[0] || parsed?.data?.[0]);
+          return f ? { properties: f?.properties || f, geometry: f?.geometry?.type } : null;
+        })(),
         normalized: normalized ? { total: normalized.total, counts: normalized.counts, firstItem: normalized.items?.[0] } : null,
       });
     }
