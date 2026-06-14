@@ -7205,7 +7205,7 @@ function fetchFeedRaw(url, extraHeaders, _depth) {
       if ([301, 302, 307, 308].includes(r.statusCode) && r.headers.location) { r.resume(); return fetchFeedRaw(r.headers.location, extraHeaders, _depth + 1).then(resolve); }
       if (r.statusCode !== 200) { r.resume(); return resolve(null); }
       let buf = '';
-      r.on('data', c => { buf += c; if (buf.length > 2e6) req.destroy(); });
+      r.on('data', c => { buf += c; if (buf.length > 8e6) req.destroy(); });
       r.on('end', () => resolve(buf));
     });
     req.on('error', () => resolve(null));
