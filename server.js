@@ -6688,7 +6688,8 @@ const aiGatewayServer = http.createServer(async (req, res) => {
       try {
         await enqueueAI(() => ollamaStream('/api/generate', {
           model: AI_VISION_MODEL,
-          prompt: prompt || 'Analyse this electronics image. Identify the component or PCB. Describe any visible damage — burnt components, failed capacitors, cracked traces, corrosion, or physical damage. Provide a diagnosis and recommended repair steps.',
+          system: 'You are an electronics repair technician. Respond only with plain text — no ASCII art, no diagrams, no decorative lines or symbols. Be concise and practical.',
+          prompt: prompt || 'Analyse this electronics image. Identify the component or PCB. Describe any visible damage such as burnt components, failed capacitors, cracked traces, corrosion, or physical damage. Provide a diagnosis and recommended repair steps.',
           images: [b64],
         }, res));
       } catch (e) { if (!res.writableEnded) res.write(`data: ${JSON.stringify({ error: e.message })}\n\n`); }
