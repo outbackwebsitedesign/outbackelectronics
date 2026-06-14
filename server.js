@@ -5578,7 +5578,7 @@ const portalServer = http.createServer(async (req, res) => {
     const sid = randomId();
     portalSessions.set(sid, { id: newUser.id, username: newUser.username, displayName: newUser.displayName, createdAt: newUser.createdAt, expiresAt: now() + PORTAL_SESSION_TTL_MS });
     saveSessionsToDisk(PORTAL_SESSIONS_DB_PATH, portalSessions);
-    res.setHeader('Set-Cookie', sessionCookie('oe_portal_session', sid, Math.floor(PORTAL_SESSION_TTL_MS / 1000), req));
+    res.setHeader('Set-Cookie', customerSessionCookie('oe_portal_session', sid, Math.floor(PORTAL_SESSION_TTL_MS / 1000), req));
     const custTmpl = emailQuoteAccepted({ orderId: order.id, quoteRef: quote.quoteRef || quote.id, customerName: quote.name, grandTotal: order.total });
     sendEmail({ to: quote.email, ...custTmpl });
     const staffTmpl = emailStaffQuoteAccepted({ orderId: order.id, quoteRef: quote.quoteRef || quote.id, name: quote.name, email: quote.email, grandTotal: order.total });
@@ -6614,10 +6614,6 @@ const aiGatewayServer = http.createServer(async (req, res) => {
   try {
     // Session info (for AI frontend to check login state)
     if (req.method === 'GET' && url.pathname === '/api/session') {
-      const cookies = parseCookies(req);
-      const sid = cookies.oe_portal_session;
-      console.log('[ai/session] cookie header:', req.headers.cookie || '(none)');
-      console.log('[ai/session] parsed sid:', sid || '(none)', '| portalSessions size:', portalSessions.size);
       const session = getPortalSession(req);
       if (!session) return json(res, 401, { error: 'not_logged_in' });
       return json(res, 200, { id: session.id, username: session.username, displayName: session.displayName });
