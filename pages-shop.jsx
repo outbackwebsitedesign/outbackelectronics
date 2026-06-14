@@ -2170,29 +2170,37 @@ function inlineMarkdown(text) {
 }
 
 function AIChatPage({ go }) {
-  const [messages, setMessages] = React.useState([
-    { role: 'assistant', content: "G'day! I'm the Outback Electronics AI assistant — running locally on our own hardware, no cloud involved. Ask me anything about electronics repair, troubleshooting, components, or soldering." }
-  ]);
+  const GREETING = "G'day! I'm the Outback Electronics AI assistant — running locally on our own hardware, no cloud involved. Ask me anything about electronics repair, troubleshooting, components, or soldering.";
+  const [messages, setMessages] = React.useState([{ role: 'assistant', content: GREETING }]);
   const [input, setInput] = React.useState('');
   const [streaming, setStreaming] = React.useState(false);
   const [error, setError] = React.useState('');
   const [authRequired, setAuthRequired] = React.useState(false);
+  const [queue, setQueue] = React.useState([]);
   const scrollRef = React.useRef(null);
   const textareaRef = React.useRef(null);
+  const messagesRef = React.useRef(messages);
+  messagesRef.current = messages;
 
   React.useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
-  async function send() {
-    const text = input.trim();
-    if (!text || streaming) return;
-    setInput('');
+  // drain queue when streaming finishes
+  React.useEffect(() => {
+    if (!streaming && queue.length > 0) {
+      const [next, ...rest] = queue;
+      setQueue(rest);
+      doSend(next, messagesRef.current);
+    }
+  }, [streaming]);
+
+  async function doSend(text, currentMessages) {
     setError('');
     setAuthRequired(false);
     const userMsg = { role: 'user', content: text };
-    const history = [...messages, userMsg];
+    const history = [...currentMessages, userMsg];
     setMessages([...history, { role: 'assistant', content: '' }]);
     setStreaming(true);
 
@@ -2245,15 +2253,27 @@ function AIChatPage({ go }) {
     }
   }
 
+  function send() {
+    const text = input.trim();
+    if (!text || authRequired) return;
+    setInput('');
+    if (streaming) {
+      setQueue(q => [...q, text]);
+    } else {
+      doSend(text, messagesRef.current);
+    }
+  }
+
   function onKeyDown(e) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
   }
 
   function clearChat() {
-    setMessages([{ role: 'assistant', content: "G'day! I'm the Outback Electronics AI assistant — running locally on our own hardware, no cloud involved. Ask me anything about electronics repair, troubleshooting, components, or soldering." }]);
+    setMessages([{ role: 'assistant', content: GREETING }]);
     setInput('');
     setError('');
     setAuthRequired(false);
+    setQueue([]);
   }
 
   const portalUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -2321,20 +2341,23 @@ function AIChatPage({ go }) {
                 className="input textarea"
                 rows={2}
                 style={{ flex: 1, resize: 'none', fontSize: 14 }}
-                placeholder={authRequired ? 'Sign in to send a message…' : 'Ask about a repair, component, circuit… (Enter to send, Shift+Enter for new line)'}
+                placeholder={authRequired ? 'Sign in to send a message…' : streaming ? 'Type your next message… (will send when AI finishes)' : 'Ask about a repair, component, circuit… (Enter to send, Shift+Enter for new line)'}
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={onKeyDown}
-                disabled={streaming || authRequired}
+                disabled={authRequired}
               />
-              <button
-                className="btn btn-rust"
-                style={{ height: 56, minWidth: 72, flexShrink: 0 }}
-                onClick={send}
-                disabled={streaming || !input.trim() || authRequired}
-              >
-                {streaming ? '…' : 'Send'}
-              </button>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                <button
+                  className="btn btn-rust"
+                  style={{ height: 56, minWidth: 72 }}
+                  onClick={send}
+                  disabled={!input.trim() || authRequired}
+                >
+                  {streaming ? 'Queue' : 'Send'}
+                </button>
+                {queue.length > 0 && <span style={{ fontSize: 11, color: 'var(--ink-2)' }}>{queue.length} queued</span>}
+              </div>
             </div>
           </div>
 
