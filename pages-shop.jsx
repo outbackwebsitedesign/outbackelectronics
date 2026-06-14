@@ -1264,6 +1264,17 @@ function AIPage({ go }) {
         </div>
       </section>
 
+      <section className="container" style={{paddingTop: 56, paddingBottom: 16}}>
+        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:24, padding:'32px 40px', background:'var(--dark)', border:'1px solid var(--line)'}}>
+          <div>
+            <span className="eyebrow" style={{color:'var(--rust)'}}>TRY IT NOW</span>
+            <h2 className="serif" style={{fontSize:32, color:'var(--paper)', marginTop:8, marginBottom:8}}>Chat with our on-prem AI assistant.</h2>
+            <p style={{fontSize:14, color:'var(--bg-deep)', margin:0, maxWidth:480}}>Ask electronics repair questions, get troubleshooting help, or talk components. Runs entirely on our own hardware — nothing sent to the cloud.</p>
+          </div>
+          <button className="btn btn-rust" style={{flexShrink:0, fontSize:16, padding:'14px 28px'}} onClick={() => go('ai-chat')}>Open AI Chat →</button>
+        </div>
+      </section>
+
       <section className="container" style={{paddingTop: 56, paddingBottom: 56}}>
         <span className="eyebrow">AI IN ACTION</span>
         <h2 className="serif" style={{fontSize: 40, marginTop: 6, marginBottom: 8}}>What it's like to be an AI</h2>
