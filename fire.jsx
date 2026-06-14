@@ -86,15 +86,24 @@ export default function FireApp() {
   useEffect(() => {
     const L = window.L;
     if (!L || !map.current) return;
-    map.current.setView(st.center, st.zoom);
     markers.current?.clearLayers();
-    if (!data?.available) return;
+    if (!data?.available) {
+      map.current.setView(st.center, st.zoom);
+      return;
+    }
+    let hasMarkers = false;
     for (const item of data.items || []) {
       if (item.lat == null || item.lon == null) continue;
       L.circleMarker([item.lat, item.lon], {
         radius: 9, weight: 2, color: '#fff', fillColor: colorFor(item.category), fillOpacity: 0.9,
       }).addTo(markers.current)
         .bindPopup(`<b>${item.title}</b><br><small>${item.category}</small>`);
+      hasMarkers = true;
+    }
+    if (hasMarkers) {
+      map.current.fitBounds(markers.current.getBounds(), { padding: [24, 24] });
+    } else {
+      map.current.setView(st.center, st.zoom);
     }
   }, [data, state]);
 
