@@ -2295,6 +2295,7 @@ function QuoteTokenView({ token, onAccepted }) {
   const [form, setForm] = useState({ username: '', password: '', displayName: '' });
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   useEffect(() => {
     api(`/api/quote/token?token=${encodeURIComponent(token)}`)
@@ -2317,6 +2318,7 @@ function QuoteTokenView({ token, onAccepted }) {
 
   async function handleAccept(e) {
     e.preventDefault();
+    if (!termsAccepted) { setMsg('You must accept the Terms & Conditions, Return Policy, and Privacy Policy to proceed.'); return; }
     setBusy(true); setMsg('');
     const r = await api('/api/quote/accept-token', { method: 'POST', body: JSON.stringify({ token, ...form }) });
     setBusy(false);
@@ -2422,6 +2424,19 @@ function QuoteTokenView({ token, onAccepted }) {
               <label className="field" style={{marginBottom:20}}>
                 <span className="label">Password</span>
                 <input className="input" type="password" placeholder="At least 8 characters" value={form.password} onChange={e => setForm(f => ({...f, password: e.target.value}))} required minLength={8} />
+              </label>
+              <label style={{display:'flex', alignItems:'flex-start', gap:10, marginBottom:16, cursor:'pointer'}}>
+                <input type="checkbox" checked={termsAccepted} onChange={e => { setTermsAccepted(e.target.checked); setMsg(''); }} style={{marginTop:2, flexShrink:0, accentColor:'var(--rust)', width:16, height:16, cursor:'pointer'}} />
+                <span style={{fontSize:13, color:'var(--ink-2)', lineHeight:1.5}}>
+                  I have read and agree to the{' '}
+                  <a href={getSiteUrl() + '/policies/terms-and-conditions'} target="_blank" rel="noopener noreferrer" style={{color:'var(--rust)', fontWeight:600}}>Terms &amp; Conditions</a>
+                  {', '}
+                  <a href={getSiteUrl() + '/policies/return-policy'} target="_blank" rel="noopener noreferrer" style={{color:'var(--rust)', fontWeight:600}}>Return Policy</a>
+                  {', '}
+                  <a href={getSiteUrl() + '/policies/privacy-policy'} target="_blank" rel="noopener noreferrer" style={{color:'var(--rust)', fontWeight:600}}>Privacy Policy</a>
+                  {', and '}
+                  <a href={getSiteUrl() + '/policies'} target="_blank" rel="noopener noreferrer" style={{color:'var(--rust)', fontWeight:600}}>all site policies</a>.
+                </span>
               </label>
               {msg && <div className="alert alert-error" style={{marginBottom:14}}>{msg}</div>}
               <div style={{display:'flex', gap:12, alignItems:'center'}}>
