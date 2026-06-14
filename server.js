@@ -6928,8 +6928,8 @@ const FIRE_STATE_FEEDS = {
   VIC: 'https://emergency.vic.gov.au/public/events-geojson.json',
   // SA CFS — JSON current incidents from ESO
   SA:  'https://data.eso.sa.gov.au/prod/cfs/criimson/cfs_current_incidents.json',
-  // WA DFES — Emergency WA public incident JSON
-  WA:  'https://www.emergency.wa.gov.au/data/incident_FCAD.json',
+  // WA DFES — ArcGIS FeatureServer public GeoJSON (emergency.wa.gov.au/data/incident_FCAD.json returns HTML)
+  WA:  'https://services1.arcgis.com/vkTwD8kHw2woKBqV/arcgis/rest/services/ESCAD_Current_Incidents_Public/FeatureServer/0/query?f=geojson&where=1%3D1&outFields=*',
   // TAS TFS — KML current incidents feed
   TAS: 'http://www.fire.tas.gov.au/Show?pageId=bfKml',
   // NT Fire & Rescue — public incident JSON feed
@@ -6990,14 +6990,24 @@ function geomCentroid(g) {
   if (g.type === 'GeometryCollection') { for (const sub of g.geometries || []) { const c = geomCentroid(sub); if (c) return c; } }
   return null;
 }
+// SA CFS Level → alert category
+const SA_LEVEL_CAT = { 1: 'Information', 2: 'Advice', 3: 'Watch and Act', 4: 'Emergency Warning', 5: 'Emergency Warning' };
 function normalizeFireItem(p, geometry) {
   const coords = geomCentroid(geometry);
-  // QLD QFD uses PascalCase (WarningTitle, WarningLevel, Latitude, Longitude)
-  const title = p.WarningTitle || p.title || p.Title || p.name || p.Name || p.headline || p.description || p.Location || 'Incident';
-  const category = p.WarningLevel || p.category || p.Category || p.alertLevel || p.responseLevel || p.type || p.eventType || 'Other';
-  const pubDate = p.ItemDateTimeLocal_ISO || p.pubDate || p.created || p.Updated || p.onset || null;
-  const lat = coords?.lat ?? p.Latitude ?? p.lat ?? p.latitude ?? null;
-  const lon = coords?.lon ?? p.Longitude ?? p.lon ?? p.longitude ?? null;
+  // Title: try known field names across all feeds
+  // QLD: WarningTitle; VIC: sourceTitle/name; SA: Location_name; NSW: title; NT: name
+  const title = p.WarningTitle || p.sourceTitle || p.Location_name || p.title || p.Title || p.name || p.Name || p.headline || p.description || 'Incident';
+  // Category/alert level: QLD: WarningLevel; VIC: category1; SA: Level (int); NSW: category; NT: _category
+  const saLvl = p.Level != null ? SA_LEVEL_CAT[p.Level] : null;
+  const category = p.WarningLevel || p.category || p.Category || p.alertLevel || p.responseLevel || p.category1 || p._category || saLvl || p.type || p.eventType || 'Other';
+  const pubDate = p.ItemDateTimeLocal_ISO || p.pubDate || p.created || p.Updated || p.Date || p.onset || null;
+  // Coordinates: geometry centroid first, then named fields, then SA "lat,lon" Location string
+  let lat = coords?.lat ?? p.Latitude ?? p.lat ?? p.latitude ?? null;
+  let lon = coords?.lon ?? p.Longitude ?? p.lon ?? p.longitude ?? null;
+  if ((lat == null || lon == null) && typeof p.Location === 'string' && p.Location.includes(',')) {
+    const [a, b] = p.Location.split(',').map(Number);
+    if (isFinite(a) && isFinite(b)) { lat = a; lon = b; }
+  }
   return {
     title: String(title).trim().replace(/\s*-\s*$/, '') || 'Incident',
     category: String(category),
@@ -7055,16 +7065,29 @@ function normalizeFireData(raw) {
     }
     return { available: true, total: filtered.length, counts, items };
   }
-  // NT PFES — direct array of incidents or { data: [...] }
+  // NT PFES — { incidents: { type: "FeatureCollection", features: [...] } } — nested GeoJSON
+  const ntFeats = Array.isArray(raw?.incidents?.features) ? raw.incidents.features : null;
+  if (ntFeats) {
+    const filtered = ntFeats.filter(f => isFireItem(f.properties || {}));
+    const counts = {}, items = [];
+    for (const f of filtered) {
+      const item = normalizeFireItem(f.properties || {}, f.geometry);
+      counts[item.category] = (counts[item.category] || 0) + 1;
+      if (items.length < 40) items.push(item);
+    }
+    return { available: true, total: filtered.length, counts, items };
+  }
+  // SA CFS direct JSON array (and any other flat-array feed)
   const rawArr = Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : Array.isArray(raw?.incidents_list) ? raw.incidents_list : null;
   if (rawArr) {
+    const filtered = rawArr.filter(i => isFireItem(i));
     const counts = {}, items = [];
-    for (const i of rawArr) {
+    for (const i of filtered) {
       const item = normalizeFireItem(i, null);
       counts[item.category] = (counts[item.category] || 0) + 1;
       if (items.length < 40) items.push(item);
     }
-    return { available: true, total: rawArr.length, counts, items };
+    return { available: true, total: filtered.length, counts, items };
   }
   return null;
 }
