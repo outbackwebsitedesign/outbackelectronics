@@ -7232,6 +7232,7 @@ function arcGisMercCentroid(paths) {
   return mercToLatLon(mx, my);
 }
 // QLD Traffic API GeoJSON — EPSG:7844 geographic (lat/lon already), MultiLineString
+// Properties are nested: description at root, road_name inside road_summary{}
 function parseQLDClosures(raw) {
   if (!Array.isArray(raw?.features)) return null;
   const items = [];
@@ -7239,7 +7240,11 @@ function parseQLDClosures(raw) {
     const p = f.properties || {};
     const coords = geomCentroid(f.geometry);
     if (!coords) continue;
-    const title = String(p.description || p.road_name || p.location_description || p.event_type || 'Road Closure').slice(0, 200);
+    const rs = p.road_summary || {};
+    const road = rs.road_name || '';
+    const locality = rs.locality || '';
+    const desc = (p.description || '').trim();
+    const title = (desc || [road, locality].filter(Boolean).join(', ') || 'Road Closure').slice(0, 200);
     items.push({ title, type: 'road_closure', lat: coords.lat, lon: coords.lon });
   }
   return { available: true, total: items.length, items };
