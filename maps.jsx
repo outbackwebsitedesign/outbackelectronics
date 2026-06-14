@@ -1,83 +1,103 @@
-// Maps — an interactive outback map (Leaflet via CDN + OSM tiles). Seed POIs
-// for the region plus your own pins (saved locally), and a place search via
-// OpenStreetMap's Nominatim. Drop a pin by clicking the map.
-import { useEffect, useRef, useState } from 'react';
-import { TopNav, Footer } from './app-shell.jsx';
+// Maps — an interactive outback map (Leaflet via CDN + OSM tiles). Nothing is
+// hardcoded: the workshop marker is geocoded from the shop address in settings
+// (/api/shop-info), and fuel/water/camp POIs are pulled live from OpenStreetMap
+// (Overpass) for whatever's in view. Your own pins are saved on-device.
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { TopNav, Footer, useShopInfo } from './app-shell.jsx';
 
 const CATS = {
   shop:  { label: 'Workshop', color: '#b5451b' },
   fuel:  { label: 'Fuel',     color: '#1f88f5' },
   water: { label: 'Water',    color: '#2b8fb3' },
   camp:  { label: 'Camp',     color: '#4f6b3e' },
-  mech:  { label: 'Repairs',  color: '#d39a37' },
   pin:   { label: 'My pins',  color: '#7a1fa2' },
 };
-
-// Seed directory for the Riverina/Murray region — curate/expand over time.
-const POIS = [
-  { name: 'Outback Electronics', cat: 'shop',  lat: -35.952, lon: 144.852, meta: '183 Peericoota Forest Rd, Moama · by appointment' },
-  { name: 'Moama fuel', cat: 'fuel',  lat: -35.905, lon: 144.762, meta: 'Servo · Moama township' },
-  { name: 'Echuca fuel', cat: 'fuel',  lat: -36.131, lon: 144.751, meta: 'Servo · Echuca' },
-  { name: 'Moama rest area', cat: 'water', lat: -35.912, lon: 144.771, meta: 'Town water · toilets' },
-  { name: 'Murray River camp', cat: 'camp',  lat: -35.926, lon: 144.808, meta: 'Riverside camping' },
-  { name: 'Barmah NP camp', cat: 'camp',  lat: -35.876, lon: 144.974, meta: 'Bush camping · forest' },
-  { name: 'Echuca auto repairs', cat: 'mech',  lat: -36.140, lon: 144.744, meta: 'Mechanic · Echuca' },
-];
+const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const catOf = (t) => t.amenity === 'fuel' ? 'fuel' : t.amenity === 'drinking_water' ? 'water' : (t.tourism === 'camp_site' || t.tourism === 'caravan_site') ? 'camp' : null;
 
 export default function MapsApp() {
-  const mapEl = useRef(null);
-  const map = useRef(null);
-  const group = useRef(null);
-  const [on, setOn] = useState({ shop: true, fuel: true, water: true, camp: true, mech: true, pin: true });
+  const info = useShopInfo();
+  const mapEl = useRef(null), map = useRef(null), group = useRef(null), timer = useRef(null);
+  const [shop, setShop] = useState(null);
+  const [pois, setPois] = useState([]);
   const [pins, setPins] = useState(() => { try { return JSON.parse(localStorage.getItem('oe_map_pins') || '[]'); } catch { return []; } });
+  const [on, setOn] = useState({ shop: true, fuel: true, water: true, camp: true, pin: true });
+  const [status, setStatus] = useState('');
   const [q, setQ] = useState('');
+
+  const runOverpass = useCallback(async () => {
+    const m = map.current;
+    if (!m) return;
+    if (m.getZoom() < 10) { setPois([]); setStatus('Zoom in to load fuel, water & camps'); return; }
+    const b = m.getBounds();
+    const bbox = `${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()}`;
+    const query = `[out:json][timeout:20];(node["amenity"="fuel"](${bbox});node["amenity"="drinking_water"](${bbox});node["tourism"="camp_site"](${bbox});node["tourism"="caravan_site"](${bbox}););out body 120;`;
+    setStatus('Loading places…');
+    try {
+      const r = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(query) }).then(r => r.json());
+      const list = (r.elements || []).map(el => ({ id: el.id, lat: el.lat, lon: el.lon, cat: catOf(el.tags || {}), name: (el.tags && el.tags.name) || null })).filter(p => p.cat && p.lat && p.lon);
+      setPois(list);
+      setStatus(list.length ? `${list.length} places in view` : 'No fuel/water/camps mapped here');
+    } catch { setStatus('Live places unavailable right now'); }
+  }, []);
+
+  const schedule = useCallback(() => { if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(runOverpass, 700); }, [runOverpass]);
 
   // Init map once
   useEffect(() => {
     const L = window.L;
     if (!L || map.current || !mapEl.current) return;
-    const m = L.map(mapEl.current).setView([-35.95, 144.85], 7);
+    const m = L.map(mapEl.current).setView([-35.95, 144.85], 6);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap contributors' }).addTo(m);
     group.current = L.layerGroup().addTo(m);
     map.current = m;
     m.on('click', (e) => {
       const name = window.prompt('Name this pin:');
       if (!name) return;
-      setPins(prev => {
-        const next = [...prev, { name: name.slice(0, 60), lat: e.latlng.lat, lon: e.latlng.lng }];
-        try { localStorage.setItem('oe_map_pins', JSON.stringify(next)); } catch {}
-        return next;
-      });
+      setPins(prev => { const next = [...prev, { name: name.slice(0, 60), lat: e.latlng.lat, lon: e.latlng.lng }]; try { localStorage.setItem('oe_map_pins', JSON.stringify(next)); } catch {} return next; });
     });
-  }, []);
+    m.on('moveend', schedule);
+    schedule();
+  }, [schedule]);
 
-  // (Re)draw markers when filters or pins change
+  // Workshop marker — geocoded from the shop address in settings (never hardcoded)
+  useEffect(() => {
+    if (!info || shop) return;
+    const s = info.shop || {};
+    const addr = [s.address, s.suburb, s.state, s.postcode].filter(Boolean).join(', ');
+    if (!addr) return;
+    fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(addr + ', Australia')}`, { headers: { Accept: 'application/json' } })
+      .then(r => r.json())
+      .then(d => { if (d && d[0]) { const lat = parseFloat(d[0].lat), lon = parseFloat(d[0].lon); setShop({ lat, lon, name: s.name || 'Workshop', meta: addr }); if (map.current) map.current.setView([lat, lon], 11); } })
+      .catch(() => {});
+  }, [info, shop]);
+
+  // Draw all markers
   useEffect(() => {
     const L = window.L;
-    if (!L || !map.current || !group.current) return;
+    if (!L || !group.current) return;
     group.current.clearLayers();
-    const all = [...POIS, ...pins.map(p => ({ ...p, cat: 'pin', meta: p.meta || 'Saved pin' }))];
-    for (const p of all) {
-      if (!on[p.cat]) continue;
+    const items = [];
+    if (shop && on.shop) items.push({ ...shop, cat: 'shop' });
+    for (const p of pois) if (on[p.cat]) items.push({ ...p, name: p.name || CATS[p.cat].label, meta: CATS[p.cat].label });
+    for (const p of pins) if (on.pin) items.push({ ...p, cat: 'pin', meta: 'Saved pin' });
+    for (const p of items) {
       const color = (CATS[p.cat] || {}).color || '#333';
-      L.circleMarker([p.lat, p.lon], { radius: 7, weight: 2, color: '#fff', fillColor: color, fillOpacity: 1 })
+      L.circleMarker([p.lat, p.lon], { radius: p.cat === 'shop' ? 9 : 6, weight: 2, color: '#fff', fillColor: color, fillOpacity: 1 })
         .addTo(group.current)
-        .bindPopup(`<b>${p.name}</b><br>${p.meta || ''}`);
+        .bindPopup(`<b>${esc(p.name || '')}</b>${p.meta ? '<br>' + esc(p.meta) : ''}`);
     }
-  }, [on, pins]);
+  }, [shop, pois, pins, on]);
 
-  const flyTo = (p) => { if (map.current) { map.current.setView([p.lat, p.lon], 13); } };
-
+  const flyTo = (p) => { if (map.current) map.current.setView([p.lat, p.lon], 14); };
   const search = async (e) => {
     e.preventDefault();
     if (!q.trim()) return;
     try {
       const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q + ' Australia')}`, { headers: { Accept: 'application/json' } }).then(r => r.json());
       if (r && r[0] && map.current) map.current.setView([parseFloat(r[0].lat), parseFloat(r[0].lon)], 12);
-    } catch { /* offline / blocked — ignore */ }
+    } catch {}
   };
-
-  const visiblePois = [...POIS, ...pins.map(p => ({ ...p, cat: 'pin', meta: p.meta || 'Saved pin' }))].filter(p => on[p.cat]);
 
   return (
     <>
@@ -96,11 +116,10 @@ export default function MapsApp() {
               </span>
             ))}
           </div>
-          {visiblePois.map((p, i) => (
-            <div className="poi-item" key={i} onClick={() => flyTo(p)}>
-              <div className="n">{p.name}</div>
-              <div className="m">{p.meta}</div>
-            </div>
+          <p className="maps-hint">{status || 'Live fuel, water and camp sites from OpenStreetMap.'}</p>
+          {shop ? <div className="poi-item" onClick={() => flyTo(shop)}><div className="n">{shop.name}</div><div className="m">{shop.meta}</div></div> : null}
+          {pins.map((p, i) => (
+            <div className="poi-item" key={i} onClick={() => flyTo(p)}><div className="n">{p.name}</div><div className="m">Saved pin</div></div>
           ))}
           <p className="maps-hint">Tip: click anywhere on the map to drop and name your own pin. Pins are saved on this device.</p>
         </aside>

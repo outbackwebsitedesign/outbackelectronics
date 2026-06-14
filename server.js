@@ -73,6 +73,7 @@ const PUBLIC_CSP = "default-src 'self'; " +
   "connect-src 'self' " +
     "https://portal.outbackelectronics.com.au " +
     "https://nominatim.openstreetmap.org " +
+    "https://overpass-api.de " +
     "wss://*.tawk.to https://*.tawk.to https://va.tawk.to " +
     "https://cloudflareinsights.com " +
     "https://*.googlesyndication.com https://*.doubleclick.net https://securepubads.g.doubleclick.net " +
