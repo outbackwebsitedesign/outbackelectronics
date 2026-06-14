@@ -22,7 +22,10 @@ const forumDb = read('forum.db');
 const forumUsers = forumDb.users || [];
 
 let usersDb;
-try { usersDb = read('users.db'); } catch { usersDb = { users: [] }; }
+try {
+  const raw = fs.readFileSync(path.join(BASE, 'users.db'), 'utf8');
+  usersDb = JSON.parse(raw);
+} catch { usersDb = { users: [] }; }
 const users = usersDb.users || [];
 
 console.log(`forum.db:  ${forumUsers.length} users`);
