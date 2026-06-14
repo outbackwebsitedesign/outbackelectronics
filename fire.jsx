@@ -11,7 +11,7 @@ const LEVELS = [
 ];
 
 const STATES = [
-  { key: 'QLD', label: 'Queensland',         service: 'QFES',     center: [-22.5, 144.0], zoom: 6,
+  { key: 'QLD', label: 'Queensland',         service: 'QFD',      center: [-22.5, 144.0], zoom: 6,
     officialLabel: 'QFES Current Incidents',  officialUrl: 'https://www.qfes.qld.gov.au/Current-Incidents',
     banLabel: 'Fire danger ratings',          banUrl: 'https://www.ruralfire.qld.gov.au/Fire_Information/Pages/FireDangerRatings.aspx',
     trafficLabel: 'Traffic QLD',              trafficUrl: 'https://www.131940.com.au/' },
