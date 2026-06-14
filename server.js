@@ -7256,8 +7256,56 @@ function parseFDR(xml) {
   const rating = ratings.reduce((mx, r) => (FDR_RANK[r] ?? -1) > (FDR_RANK[mx] ?? -1) ? r : mx);
   const banM = /<(?:TotalFireBanToday|FireBanToday|TFBToday|total.?fire.?ban)[^>]*>([^<]+)</i.exec(xml);
   const fireban = banM ? /yes|true|1/i.test(banM[1]) : false;
-  return { rating, fireBan: fireban, districts: ratings.length };
+  return { rating, fireBan: fireban, districtCount: ratings.length };
 }
+// Parse NSW RFS fdrToban.xml into per-district array
+function parseNSWFDRDistricts(xml) {
+  const districts = [];
+  const re = /<District[^>]*>([\s\S]*?)<\/District>/gi;
+  let m;
+  while ((m = re.exec(xml)) !== null) {
+    const b = m[1];
+    const name = (/<Name[^>]*>([\s\S]*?)<\/Name>/i.exec(b) || [])[1]?.replace(/<[^>]+>/g, '').trim();
+    const fdrRaw = (/<FDR[^>]*>([\s\S]*?)<\/FDR>/i.exec(b) || [])[1]?.replace(/<[^>]+>/g, '').trim();
+    const banRaw = (/<TotalFireBanToday[^>]*>([\s\S]*?)<\/TotalFireBanToday>/i.exec(b) || [])[1]?.trim();
+    if (name) districts.push({ name, rating: normFDR(fdrRaw) || fdrRaw || 'No Rating', fireBan: /yes|true|1/i.test(banRaw || '') });
+  }
+  return districts;
+}
+// Parse BOM fire weather XML into per-district array (QLD/VIC/SA/WA/TAS/NT)
+function parseBOMFDRDistricts(xml) {
+  const districts = [];
+  const areaRe = /<area\b([^>]*)>([\s\S]*?)<\/area>/gi;
+  let m;
+  while ((m = areaRe.exec(xml)) !== null) {
+    const attrs = m[1], block = m[2];
+    const desc = (/\bdescription="([^"]+)"/i.exec(attrs) || [])[1];
+    if (!desc) continue;
+    const atype = (/\btype="([^"]+)"/i.exec(attrs) || [])[1] || '';
+    if (/^state$/i.test(atype)) continue;
+    const fpMatch = /<forecast-period\b[^>]+index="0"[^>]*>([\s\S]*?)<\/forecast-period>/i.exec(block);
+    if (!fpMatch) continue;
+    const fdrRaw = (/<element[^>]+type="fire_danger[^"]*"[^>]*>([^<]+)<\/element>/i.exec(fpMatch[1]) || [])[1]?.trim();
+    if (!fdrRaw) continue;
+    districts.push({ name: desc, rating: normFDR(fdrRaw) || fdrRaw, fireBan: false });
+  }
+  return districts;
+}
+// Parse SA CFS fire bans RSS — returns Set of district names with a ban in effect
+function parseSACFSBanDistricts(xml) {
+  const banned = new Set();
+  const re = /<item[^>]*>([\s\S]*?)<\/item>/gi;
+  let m;
+  while ((m = re.exec(xml)) !== null) {
+    const raw = (/<title[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/i.exec(m[1]) || [])[1] || '';
+    const title = raw.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').trim();
+    const dm = /total\s+fire\s+ban[\s:–\-]+(.+)/i.exec(title);
+    if (dm) banned.add(dm[1].trim());
+    else if (/total\s+fire\s+ban/i.test(title)) banned.add(title);
+  }
+  return banned;
+}
+const SA_CFS_BAN_URL = 'https://www.cfs.sa.gov.au/fire_bans_rss/index.jsp';
 const _fdrCache = {};
 async function handleFDRStatus(req, res, url) {
   const state = (url.searchParams.get('state') || 'QLD').toUpperCase();
@@ -7268,7 +7316,26 @@ async function handleFDRStatus(req, res, url) {
   if (!cached || t - cached.ts > 30 * 60 * 1000) {
     const xml = await fetchFeedRaw(feedUrl);
     const parsed = xml ? parseFDR(xml) : null;
-    if (parsed) _fdrCache[state] = { ts: t, data: parsed };
+    let districts = [];
+    if (xml) {
+      districts = (state === 'NSW' || state === 'ACT')
+        ? parseNSWFDRDistricts(xml)
+        : parseBOMFDRDistricts(xml);
+    }
+    if (state === 'SA') {
+      const cfsXml = await fetchFeedRaw(SA_CFS_BAN_URL);
+      if (cfsXml) {
+        const banned = parseSACFSBanDistricts(cfsXml);
+        for (const d of districts) {
+          if (banned.has(d.name)) d.fireBan = true;
+        }
+        // Add any CFS ban districts not found in BOM data
+        for (const name of banned) {
+          if (!districts.find(d => d.name === name)) districts.push({ name, rating: null, fireBan: true });
+        }
+      }
+    }
+    if (parsed) _fdrCache[state] = { ts: t, data: { ...parsed, districts } };
   }
   const entry = _fdrCache[state];
   if (!entry) return json(res, 200, { available: false });

@@ -46,6 +46,7 @@ const FDR_COLORS = {
   'Low-Moderate': '#4a7ba0',
   'No Rating':    '#555',
 };
+const FDR_RANK = { 'Low-Moderate': 0, Moderate: 1, High: 2, 'Very High': 3, Severe: 4, Extreme: 5, Catastrophic: 6 };
 
 const ROAD_COLORS = {
   accident:    '#b3231b',
@@ -213,6 +214,26 @@ export default function FireApp() {
             {fdrBan && (
               <div className="fdr-ban">TOTAL FIRE BAN IN EFFECT</div>
             )}
+          </div>
+        )}
+        {fdr?.available && fdr?.districts?.length > 0 && (
+          <div className="fdr-districts">
+            <div className="fdr-districts-head">Fire danger by district</div>
+            {[...fdr.districts]
+              .sort((a, b) => {
+                if (a.fireBan !== b.fireBan) return a.fireBan ? -1 : 1;
+                return (FDR_RANK[b.rating] ?? -1) - (FDR_RANK[a.rating] ?? -1);
+              })
+              .map((d, i) => (
+                <div className="fdr-district-row" key={i}>
+                  <span className="fdr-district-name">{d.name}</span>
+                  <span className="fdr-district-badges">
+                    {d.fireBan && <span className="fdr-district-ban">FIRE BAN</span>}
+                    {d.rating && <span className="fdr-district-rating" style={{ color: FDR_COLORS[d.rating] || '#555' }}>{d.rating}</span>}
+                  </span>
+                </div>
+              ))
+            }
           </div>
         )}
         {fdr && !fdr.available && (
