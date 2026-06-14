@@ -2369,7 +2369,7 @@ const mainServer = http.createServer(async (req, res) => {
     return json(res, 200, { token });
   }
 
-  if (['POST', 'PATCH', 'DELETE'].includes(req.method) && url.pathname !== '/api/stripe/webhook' && url.pathname !== '/api/analytics/event') {
+  if (['POST', 'PATCH', 'DELETE'].includes(req.method) && url.pathname !== '/api/stripe/webhook' && url.pathname !== '/api/analytics/event' && url.pathname !== '/api/ai-chat') {
     if (!verifyCsrf(req, res)) return;
   }
 

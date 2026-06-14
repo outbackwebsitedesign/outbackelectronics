@@ -2131,10 +2131,9 @@ function AIChatPage({ go }) {
     setStreaming(true);
 
     try {
-      const csrf = window.getCsrf ? window.getCsrf() : '';
       const res = await fetch('/api/ai-chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ messages: history }),
       });
