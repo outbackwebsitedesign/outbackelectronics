@@ -2131,14 +2131,19 @@ function renderMarkdown(text) {
       out.push(<ul key={i} style={{ paddingLeft: 20, margin: '4px 0' }}>{items.map((t, j) => <li key={j} style={{ marginBottom: 4 }}>{inlineMarkdown(t)}</li>)}</ul>);
       continue;
     }
-    // ordered list (allow blank lines and sub-bullet continuations between items)
+    // ordered list (allow blank lines between title, sub-bullets, and next item)
     if (/^\d+\. /.test(line)) {
       const items = [];
       while (i < lines.length) {
         if (/^\d+\. /.test(lines[i])) {
           const text = [lines[i].replace(/^\d+\. /, '')];
           i++;
-          while (i < lines.length && /^[-*] /.test(lines[i])) { text.push('• ' + lines[i].slice(2)); i++; }
+          // collect sub-bullets, skipping blank lines before them
+          while (i < lines.length) {
+            if (/^[-*] /.test(lines[i])) { text.push('• ' + lines[i].slice(2)); i++; }
+            else if (!lines[i].trim() && i + 1 < lines.length && /^[-*] /.test(lines[i + 1])) { i++; }
+            else break;
+          }
           items.push(text);
         } else if (!lines[i].trim() && i + 1 < lines.length && /^\d+\. /.test(lines[i + 1])) { i++; }
         else break;
