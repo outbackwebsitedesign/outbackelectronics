@@ -31,6 +31,7 @@ const PORTAL_PORT = process.env.PORTAL_PORT || 8083;
 const GAMES_PORT  = process.env.GAMES_PORT  || 8084;
 const TOOLS_PORT  = process.env.TOOLS_PORT  || 8085;
 const WEATHER_PORT = process.env.WEATHER_PORT || 8089;
+const AI_GATEWAY_PORT = process.env.AI_GATEWAY_PORT || 8091;
 
 const FORUM_PUBLIC_URL = process.env.FORUM_PUBLIC_URL || 'https://forum.outbackelectronics.com.au';
 const DISCOURSE_CONNECT_SECRET = process.env.DISCOURSE_CONNECT_SECRET || '';
@@ -147,6 +148,7 @@ const PORTAL_SESSIONS_DB_PATH = path.join(__dirname, 'portal-sessions.db');
 const RESET_TOKENS_DB_PATH = path.join(__dirname, 'password-reset-tokens.db');
 const CARTS_DB_PATH = path.join(__dirname, 'carts.db');
 const STOCK_NOTIFY_DB_PATH = path.join(__dirname, 'stock-notify.db');
+const RAG_CACHE_DB_PATH = path.join(__dirname, 'rag-cache.db');
 const RESET_TOKEN_TTL_MS = 1000 * 60 * 60; // 1 hour
 function _defaultSubUrl(base, port, sub) {
   if (/^https?:\/\/(localhost|127\.|0\.0\.0\.0)(:\d+)?/.test(base))
@@ -3630,52 +3632,20 @@ const mainServer = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/ai-chat') {
-    const session = getPortalSession(req);
-    if (!session) return json(res, 401, { error: 'login_required' });
-    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
-    const messages = Array.isArray(body?.messages) ? body.messages : [];
-    if (!messages.length) return json(res, 422, { error: 'messages_required' });
-    const payload = JSON.stringify({
-      model: 'qwen2.5:1.5b',
-      stream: true,
-      messages: [
-        {
-          role: 'system',
-          content: `You are the Outback Electronics AI assistant — a helpful, knowledgeable electronics technician and advisor. You help customers with electronics repair questions, troubleshooting, parts selection, soldering tips, circuit theory, and general DIY electronics guidance. Outback Electronics is a small Australian electronics repair and parts shop based in the outback. Be concise, practical, and friendly. If a repair is complex or risky, recommend booking a professional repair through Outback Electronics. Do not discuss topics unrelated to electronics, technology, or the shop.`
-        },
-        ...messages.slice(-20).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content).slice(0, 4000) }))
-      ],
+    // Proxy to AI gateway (adds RAG, queue, rate limiting)
+    const rawBody = await new Promise((resolve, reject) => {
+      let b = ''; req.on('data', c => b += c); req.on('end', () => resolve(b)); req.on('error', reject);
     });
     await new Promise((resolve) => {
-      const ollamaReq = http.request({ hostname: '127.0.0.1', port: 11434, path: '/api/chat', method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }, timeout: 120000 }, (ollamaRes) => {
-        if (ollamaRes.statusCode !== 200) {
-          json(res, 502, { error: 'ai_error' });
-          ollamaRes.resume();
-          return resolve();
-        }
-        res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
-        let buf = '';
-        ollamaRes.on('data', (chunk) => {
-          buf += chunk.toString();
-          const lines = buf.split('\n');
-          buf = lines.pop();
-          for (const line of lines) {
-            if (!line.trim()) continue;
-            try {
-              const obj = JSON.parse(line);
-              const token = obj?.message?.content ?? '';
-              if (token) res.write(`data: ${JSON.stringify({ token })}\n\n`);
-              if (obj.done) res.write('data: [DONE]\n\n');
-            } catch { /* partial line */ }
-          }
-        });
-        ollamaRes.on('end', () => { res.end(); resolve(); });
-        ollamaRes.on('error', () => { if (!res.headersSent) json(res, 502, { error: 'ai_error' }); else res.end(); resolve(); });
+      const proxyReq = http.request({ hostname: '127.0.0.1', port: AI_GATEWAY_PORT, path: '/api/chat', method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(rawBody), 'Cookie': req.headers.cookie || '' }, timeout: 120000 }, (proxyRes) => {
+        res.writeHead(proxyRes.statusCode, proxyRes.headers);
+        proxyRes.pipe(res);
+        proxyRes.on('end', resolve);
+        proxyRes.on('error', resolve);
       });
-      ollamaReq.on('timeout', () => { ollamaReq.destroy(); json(res, 504, { error: 'ai_timeout', message: 'AI took too long to respond. Please try again.' }); resolve(); });
-      ollamaReq.on('error', () => { if (!res.headersSent) json(res, 503, { error: 'ai_unavailable', message: 'AI service is currently offline.' }); resolve(); });
-      ollamaReq.write(payload);
-      ollamaReq.end();
+      proxyReq.on('error', () => { if (!res.headersSent) json(res, 503, { error: 'ai_unavailable', message: 'AI service is currently offline.' }); resolve(); });
+      proxyReq.on('timeout', () => { proxyReq.destroy(); if (!res.headersSent) json(res, 504, { error: 'ai_timeout', message: 'AI took too long to respond. Please try again.' }); resolve(); });
+      proxyReq.write(rawBody); proxyReq.end();
     });
     return;
   }
@@ -6481,6 +6451,254 @@ backfillJobEmails();
   setTimeout(tick, msUntilMidnight() + 1000);
 })();
 
+// ── AI Gateway ────────────────────────────────────────────────────────────────
+
+const AI_CHAT_MODEL   = 'qwen2.5:1.5b';
+const AI_VISION_MODEL = 'llava-phi3';
+const AI_EMBED_MODEL  = 'nomic-embed-text';
+const AI_RATE_WINDOW  = 5 * 60 * 1000; // 5 minutes
+const AI_RATE_MAX     = 15;
+
+// ── Request queue (serialise Ollama calls) ────────────────────────────────────
+let _aiQueueRunning = false;
+const _aiQueue = [];
+function enqueueAI(fn) {
+  return new Promise((resolve, reject) => {
+    _aiQueue.push({ fn, resolve, reject });
+    _drainAIQueue();
+  });
+}
+async function _drainAIQueue() {
+  if (_aiQueueRunning || _aiQueue.length === 0) return;
+  _aiQueueRunning = true;
+  const { fn, resolve, reject } = _aiQueue.shift();
+  try { resolve(await fn()); } catch (e) { reject(e); } finally {
+    _aiQueueRunning = false;
+    _drainAIQueue();
+  }
+}
+
+// ── Per-user rate limiter ─────────────────────────────────────────────────────
+const _aiRateLimits = new Map();
+function checkAIRateLimit(userId) {
+  const now = Date.now();
+  const entry = _aiRateLimits.get(userId) || { count: 0, start: now };
+  if (now - entry.start > AI_RATE_WINDOW) { entry.count = 0; entry.start = now; }
+  if (entry.count >= AI_RATE_MAX) return false;
+  entry.count++;
+  _aiRateLimits.set(userId, entry);
+  return true;
+}
+
+// ── Ollama helpers ────────────────────────────────────────────────────────────
+function ollamaGet(path) {
+  return new Promise((resolve, reject) => {
+    const req = http.request({ hostname: '127.0.0.1', port: 11434, path, method: 'GET', timeout: 8000 }, res => {
+      let d = ''; res.on('data', c => d += c); res.on('end', () => { try { resolve(JSON.parse(d)); } catch { resolve({}); } });
+    });
+    req.on('error', reject); req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); }); req.end();
+  });
+}
+
+function ollamaPost(path, payload, timeoutMs = 30000) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify(payload);
+    const req = http.request({ hostname: '127.0.0.1', port: 11434, path, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }, timeout: timeoutMs }, res => {
+      let d = ''; res.on('data', c => d += c); res.on('end', () => { try { resolve({ ok: res.statusCode === 200, body: JSON.parse(d) }); } catch { resolve({ ok: false, body: {} }); } });
+    });
+    req.on('error', reject); req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+    req.write(body); req.end();
+  });
+}
+
+function ollamaStream(apiPath, payload, res) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({ ...payload, stream: true });
+    const req = http.request({ hostname: '127.0.0.1', port: 11434, path: apiPath, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }, timeout: 120000 }, (ores) => {
+      if (ores.statusCode !== 200) { ores.resume(); return reject(new Error(`ollama:${ores.statusCode}`)); }
+      let buf = '';
+      ores.on('data', chunk => {
+        buf += chunk.toString();
+        const lines = buf.split('\n'); buf = lines.pop();
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const obj = JSON.parse(line);
+            const token = obj?.message?.content ?? obj?.response ?? '';
+            if (token && !res.writableEnded) res.write(`data: ${JSON.stringify({ token })}\n\n`);
+            if (obj.done && !res.writableEnded) res.write('data: [DONE]\n\n');
+          } catch { }
+        }
+      });
+      ores.on('end', resolve); ores.on('error', reject);
+    });
+    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+    req.on('error', reject);
+    req.write(body); req.end();
+  });
+}
+
+// ── RAG engine ────────────────────────────────────────────────────────────────
+let _ragDocs = [];
+let _ragReady = false;
+let _ragBuilding = false;
+
+function cosineSim(a, b) {
+  let dot = 0, na = 0, nb = 0;
+  for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
+  return dot / (Math.sqrt(na) * Math.sqrt(nb) || 1);
+}
+
+async function getEmbedding(text) {
+  const r = await ollamaPost('/api/embeddings', { model: AI_EMBED_MODEL, prompt: text.slice(0, 2000) }, 30000);
+  if (!r.ok || !r.body.embedding) throw new Error('embed failed');
+  return r.body.embedding;
+}
+
+async function buildRagIndex() {
+  if (_ragBuilding) return;
+  _ragBuilding = true;
+  console.log('[ai] building RAG index…');
+  let cache = {};
+  try { cache = JSON.parse(fs.readFileSync(RAG_CACHE_DB_PATH, 'utf8')); } catch { }
+  const docs = [];
+
+  const products = readProducts().filter(p => p.status === 'published');
+  for (const p of products) {
+    const text = `Product: ${p.name}. Category: ${p.category || ''}. Brand: ${p.brand || ''}. Condition: ${p.cond || ''}. Price: $${p.priceAud || '?'} AUD. ${p.description || ''}`.slice(0, 1500);
+    const key = `prod-${p.id}`;
+    let emb = cache[key];
+    if (!emb) { try { emb = await getEmbedding(text); cache[key] = emb; } catch { continue; } }
+    docs.push({ id: p.id, type: 'product', title: p.name, text, emb });
+  }
+
+  const tutorials = readTutorials().filter(t => t.status === 'Published');
+  for (const t of tutorials) {
+    const body = (t.body || t.content || '').replace(/<[^>]+>/g, '').slice(0, 600);
+    const text = `Tutorial: ${t.title}. Category: ${t.cat || ''}. Difficulty: ${t.difficulty || ''}. ${body}`.slice(0, 1500);
+    const key = `tut-${t.id}`;
+    let emb = cache[key];
+    if (!emb) { try { emb = await getEmbedding(text); cache[key] = emb; } catch { continue; } }
+    docs.push({ id: t.id, type: 'tutorial', title: t.title, text, emb });
+  }
+
+  try { atomicWriteFile(RAG_CACHE_DB_PATH, JSON.stringify(cache)); } catch { }
+  _ragDocs = docs;
+  _ragReady = true;
+  _ragBuilding = false;
+  console.log(`[ai] RAG index ready — ${docs.length} documents`);
+}
+
+async function ragSearch(query, topK = 4) {
+  if (!_ragReady || !_ragDocs.length) return [];
+  try {
+    const qEmb = await getEmbedding(query);
+    return _ragDocs
+      .map(d => ({ ...d, score: cosineSim(qEmb, d.emb) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, topK);
+  } catch { return []; }
+}
+
+const AI_SYSTEM_PROMPT = `You are the Outback Electronics AI assistant — a helpful, knowledgeable electronics technician and advisor. You help customers with repair questions, troubleshooting, parts selection, soldering tips, circuit theory, and general DIY electronics. Outback Electronics is a small Australian electronics repair and parts shop. Be concise and practical. When relevant products or tutorials from the catalogue are provided below, reference them by name. If a repair is beyond DIY, recommend booking a professional service through Outback Electronics.`;
+
+// ── AI Gateway server ─────────────────────────────────────────────────────────
+const aiGatewayServer = http.createServer(async (req, res) => {
+  const url = new URL(req.url, `http://${req.headers.host}`);
+
+  res.setHeader('Access-Control-Allow-Origin', (req.headers.origin || '').includes('outbackelectronics') ? req.headers.origin : '');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
+
+  try {
+    // Health / status
+    if (req.method === 'GET' && url.pathname === '/health') {
+      return json(res, 200, { ok: true, ragReady: _ragReady, ragDocs: _ragDocs.length, queue: _aiQueue.length });
+    }
+
+    // Available models
+    if (req.method === 'GET' && url.pathname === '/api/models') {
+      try {
+        const data = await ollamaGet('/api/tags');
+        return json(res, 200, { models: (data.models || []).map(m => ({ name: m.name, size: m.size })), ragReady: _ragReady, queue: _aiQueue.length });
+      } catch { return json(res, 503, { error: 'ollama_unavailable' }); }
+    }
+
+    // RAG index status + manual rebuild trigger
+    if (req.method === 'GET' && url.pathname === '/api/rag/status') {
+      return json(res, 200, { ready: _ragReady, building: _ragBuilding, docs: _ragDocs.length });
+    }
+    if (req.method === 'POST' && url.pathname === '/api/rag/rebuild') {
+      const session = getPortalSession(req);
+      if (!session) return json(res, 401, { error: 'login_required' });
+      buildRagIndex().catch(e => console.error('[ai] RAG rebuild error:', e));
+      return json(res, 202, { ok: true, message: 'RAG rebuild started' });
+    }
+
+    // Chat (text)
+    if (req.method === 'POST' && url.pathname === '/api/chat') {
+      const session = getPortalSession(req);
+      if (!session) return json(res, 401, { error: 'login_required' });
+      if (!checkAIRateLimit(session.id)) return json(res, 429, { error: 'rate_limited', message: 'Too many requests. Please wait a few minutes.' });
+      let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+      const messages = Array.isArray(body?.messages) ? body.messages : [];
+      if (!messages.length) return json(res, 422, { error: 'messages_required' });
+
+      const lastUser = [...messages].reverse().find(m => m.role === 'user');
+      let contextBlock = '';
+      if (lastUser) {
+        const hits = await ragSearch(lastUser.content, 4);
+        if (hits.length) contextBlock = '\n\nRelevant catalogue context:\n' + hits.map(h => `[${h.type.toUpperCase()}] ${h.title}: ${h.text.slice(0, 300)}`).join('\n\n');
+      }
+
+      res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
+      try {
+        await enqueueAI(() => ollamaStream('/api/chat', {
+          model: AI_CHAT_MODEL,
+          messages: [
+            { role: 'system', content: AI_SYSTEM_PROMPT + contextBlock },
+            ...messages.slice(-20).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content).slice(0, 4000) })),
+          ],
+        }, res));
+      } catch (e) { if (!res.writableEnded) res.write(`data: ${JSON.stringify({ error: e.message })}\n\n`); }
+      if (!res.writableEnded) res.end();
+      return;
+    }
+
+    // Vision (board photo → diagnosis)
+    if (req.method === 'POST' && url.pathname === '/api/vision') {
+      const session = getPortalSession(req);
+      if (!session) return json(res, 401, { error: 'login_required' });
+      if (!checkAIRateLimit(session.id)) return json(res, 429, { error: 'rate_limited', message: 'Too many requests. Please wait a few minutes.' });
+      let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+      const { image, prompt } = body || {};
+      if (!image) return json(res, 422, { error: 'image_required' });
+      const b64 = image.replace(/^data:image\/[a-z]+;base64,/, '');
+      if (!b64 || b64.length > 10 * 1024 * 1024) return json(res, 413, { error: 'image_too_large' });
+
+      res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
+      try {
+        await enqueueAI(() => ollamaStream('/api/generate', {
+          model: AI_VISION_MODEL,
+          prompt: prompt || 'Analyse this electronics image. Identify the component or PCB. Describe any visible damage — burnt components, failed capacitors, cracked traces, corrosion, or physical damage. Provide a diagnosis and recommended repair steps.',
+          images: [b64],
+        }, res));
+      } catch (e) { if (!res.writableEnded) res.write(`data: ${JSON.stringify({ error: e.message })}\n\n`); }
+      if (!res.writableEnded) res.end();
+      return;
+    }
+
+    json(res, 404, { error: 'not_found' });
+  } catch (err) {
+    console.error('[aiGateway] error:', err);
+    if (!res.headersSent) json(res, 500, { error: 'server_error' });
+  }
+});
+
+// Build RAG index 5s after startup (non-blocking)
+setTimeout(() => buildRagIndex().catch(e => console.error('[ai] RAG build error:', e)), 5000);
+
 startServer(mainServer,   MAIN_PORT,   'main  ');
 startServer(discourseRedirectServer, DISCOURSE_REDIRECT_PORT, 'redirect');
 startServer(adminServer,  ADMIN_PORT,  'admin ');
@@ -6488,3 +6706,4 @@ startServer(portalServer, PORTAL_PORT, 'portal');
 startServer(gamesServer,  GAMES_PORT,  'games ');
 startServer(toolsServer,  TOOLS_PORT,  'tools ');
 startServer(weatherServer, WEATHER_PORT, 'weather');
+startServer(aiGatewayServer, AI_GATEWAY_PORT, 'ai    ');
