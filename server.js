@@ -7217,6 +7217,7 @@ function fetchFeedJSON(url, extraHeaders) { return fetchFeedRaw(url, extraHeader
 
 // ── Road closures ─────────────────────────────────────────────────────────────
 const QLDTRAFFIC_API_KEY = process.env.QLDTRAFFIC_API_KEY || '3e83add325cbb69ac4d8e5bf433d770b';
+const VIC_OPENDATA_KEY   = process.env.VIC_OPENDATA_KEY   || '';
 // Web Mercator (EPSG:3857) → WGS84 — WA and SA ArcGIS services return projected coords
 function mercToLatLon(x, y) {
   const lon = (x / 20037508.342) * 180;
@@ -7313,9 +7314,33 @@ function parseNTObstructions(raw) {
   }
   return { available: true, total: items.length, items };
 }
+// VIC Open Data — planned + unplanned road disruptions (GeoJSON, GeometryCollection geometry)
+// Requires VIC_OPENDATA_KEY env var (Ocp-Apim-Subscription-Key from api.opendata.transport.vic.gov.au)
+function parseVICDisruptions(raw) {
+  if (!Array.isArray(raw?.features)) return null;
+  const items = [];
+  for (const f of raw.features) {
+    const p = f.properties || {};
+    const coords = geomCentroid(f.geometry);
+    if (!coords) continue;
+    const title = String(
+      p.heading || p.title || p.description || p.suburb || p.location || p.disruption_type || 'Road Disruption'
+    ).slice(0, 200);
+    items.push({ title, type: 'road_closure', lat: coords.lat, lon: coords.lon });
+  }
+  return { available: true, total: items.length, items };
+}
 const ROAD_FEEDS = {
   QLD: { url: `https://api.qldtraffic.qld.gov.au/v2/events?apikey=${QLDTRAFFIC_API_KEY}&event_type=road_closure`, parse: parseQLDClosures, qldAuth: true },
   NSW: { url: 'https://data.livetraffic.com/traffic/hazards/incident.json', parse: parseNSWClosures },
+  VIC: {
+    urls: [
+      'https://api.opendata.transport.vic.gov.au/opendata/roads/disruptions/planned/v1/?format=geojson',
+      'https://api.opendata.transport.vic.gov.au/opendata/roads/disruptions/unplanned/v3/?format=geojson',
+    ],
+    parse: parseVICDisruptions,
+    vicAuth: true,
+  },
   SA:  { url: "https://maps.sa.gov.au/arcgis/rest/services/DPTIExtTransport/TrafficSAOpenData/MapServer/1/query?where=PLOT_TYPE+%3D+%27RD_CLOSURE%27&outFields=PLOT_DETAILS%2CLOCAL_ROAD_NAME%2CSTART_SUBURB%2CEND_SUBURB&f=json", parse: parseSAClosures },
   WA:  { url: 'https://services2.arcgis.com/cHGEnmsJ165IBJRM/arcgis/rest/services/WebEoc_RoadClosures/FeatureServer/4/query?where=1%3D1&outFields=Location%2CIncidentTy%2CClosureTyp%2CRoad%2CTrafficImp%2CRegion&f=json', parse: parseWAClosures },
   NT:  { url: 'https://roadreport.nt.gov.au/api/Obstruction/GetAll', parse: parseNTObstructions },

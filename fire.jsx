@@ -96,7 +96,7 @@ export default function FireApp() {
   useEffect(() => {
     const L = window.L;
     if (!L || map.current || !mapEl.current) return;
-    const m = L.map(mapEl.current).fitBounds(st.bounds);
+    const m = L.map(mapEl.current).setView([-25, 133], 4);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19, attribution: '© OpenStreetMap contributors',
     }).addTo(m);
