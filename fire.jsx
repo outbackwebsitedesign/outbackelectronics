@@ -11,28 +11,28 @@ const LEVELS = [
 ];
 
 const STATES = [
-  { key: 'QLD', label: 'Queensland',         service: 'QFD',      center: [-22.5, 144.0], zoom: 6,
+  { key: 'QLD', label: 'Queensland',         service: 'QFD',       bounds: [[-29.2, 138.0], [-10.5, 153.6]],
     officialLabel: 'QFD Current Incidents',   officialUrl: 'https://www.fire.qld.gov.au/Current-Incidents',
     trafficLabel: 'Traffic QLD',              trafficUrl: 'https://www.131940.com.au/' },
-  { key: 'NSW', label: 'New South Wales',    service: 'RFS',      center: [-32.0, 147.0], zoom: 6,
+  { key: 'NSW', label: 'New South Wales',    service: 'RFS',        bounds: [[-37.5, 141.0], [-28.2, 153.6]],
     officialLabel: 'RFS Fires Near Me',       officialUrl: 'https://www.rfs.nsw.gov.au/fire-information/fires-near-me',
     trafficLabel: 'Live Traffic NSW',         trafficUrl: 'https://www.livetraffic.com/' },
-  { key: 'VIC', label: 'Victoria',           service: 'CFA / FRV', center: [-37.0, 144.5], zoom: 7,
+  { key: 'VIC', label: 'Victoria',           service: 'CFA / FRV',  bounds: [[-39.2, 140.9], [-33.9, 149.9]],
     officialLabel: 'Emergency Victoria',      officialUrl: 'https://www.emergency.vic.gov.au/',
     trafficLabel: 'VicRoads traffic',         trafficUrl: 'https://www.vicroads.vic.gov.au/traffic-and-road-conditions' },
-  { key: 'SA',  label: 'South Australia',    service: 'CFS',      center: [-30.0, 135.5], zoom: 6,
+  { key: 'SA',  label: 'South Australia',    service: 'CFS',        bounds: [[-38.1, 129.0], [-26.0, 141.0]],
     officialLabel: 'CFS warnings',            officialUrl: 'https://www.cfs.sa.gov.au/warnings-and-incidents/',
     trafficLabel: 'Traffic SA',               trafficUrl: 'https://traffic.sa.gov.au/' },
-  { key: 'WA',  label: 'Western Australia',  service: 'DFES',     center: [-26.0, 121.5], zoom: 5,
+  { key: 'WA',  label: 'Western Australia',  service: 'DFES',       bounds: [[-35.1, 113.2], [-13.7, 129.0]],
     officialLabel: 'Emergency WA',            officialUrl: 'https://www.emergency.wa.gov.au/',
     trafficLabel: 'Main Roads WA',            trafficUrl: 'https://www.mainroads.wa.gov.au/traffic-travel/traffic-information/' },
-  { key: 'TAS', label: 'Tasmania',           service: 'TFS',      center: [-42.0, 146.5], zoom: 7,
+  { key: 'TAS', label: 'Tasmania',           service: 'TFS',        bounds: [[-43.6, 144.6], [-39.5, 148.5]],
     officialLabel: 'TFS current incidents',   officialUrl: 'https://www.fire.tas.gov.au/Show?pageId=current-incidents',
     trafficLabel: 'Transport Tasmania',       trafficUrl: 'https://www.transport.tas.gov.au/road/road_safety/traffic_updates' },
-  { key: 'NT',  label: 'Northern Territory', service: 'NTFRS',    center: [-20.0, 133.0], zoom: 6,
+  { key: 'NT',  label: 'Northern Territory', service: 'NTFRS',      bounds: [[-26.0, 129.0], [-10.9, 138.0]],
     officialLabel: 'NT Fire & Rescue',        officialUrl: 'https://pfes.nt.gov.au/',
     trafficLabel: 'NT road conditions',       trafficUrl: 'https://roadconditions.pfes.nt.gov.au/' },
-  { key: 'ACT', label: 'ACT',                service: 'ACT ESA',  center: [-35.3, 149.1], zoom: 9,
+  { key: 'ACT', label: 'ACT',                service: 'ACT ESA',    bounds: [[-35.92, 148.76], [-35.12, 149.40]],
     officialLabel: 'ACT ESA warnings',        officialUrl: 'https://esa.act.gov.au/cbr-be-ready/warnings-and-incidents',
     trafficLabel: 'ACT traffic',              trafficUrl: 'https://www.tccs.act.gov.au/roads-and-paths/travel-and-traffic' },
 ];
@@ -96,7 +96,7 @@ export default function FireApp() {
   useEffect(() => {
     const L = window.L;
     if (!L || map.current || !mapEl.current) return;
-    const m = L.map(mapEl.current).setView(st.center, st.zoom);
+    const m = L.map(mapEl.current).fitBounds(st.bounds);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19, attribution: '© OpenStreetMap contributors',
     }).addTo(m);
@@ -112,7 +112,7 @@ export default function FireApp() {
 
     if (layer === 'roads') {
       if (!roads?.available) {
-        map.current.setView(st.center, st.zoom);
+        map.current.fitBounds(st.bounds, { padding: [10, 10] });
         return;
       }
       let hasMarkers = false;
@@ -128,7 +128,7 @@ export default function FireApp() {
       if (hasMarkers) {
         map.current.fitBounds(markers.current.getBounds(), { padding: [24, 24] });
       } else {
-        map.current.setView(st.center, st.zoom);
+        map.current.fitBounds(st.bounds, { padding: [10, 10] });
       }
       return;
     }
