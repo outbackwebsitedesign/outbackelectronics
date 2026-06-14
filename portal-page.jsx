@@ -63,6 +63,10 @@ function StatusTag({ status, label }) {
 
 // ── Login ─────────────────────────────────────────────────────────────────────
 
+function hasPendingDiscourseSso() {
+  return document.cookie.split(';').some(c => c.trim().startsWith('oe_discourse_sso='));
+}
+
 function LoginPage({ onLogin }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -77,8 +81,10 @@ function LoginPage({ onLogin }) {
     setError(''); setBusy(true);
     const r = await api('/api/portal/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
     setBusy(false);
-    if (r.ok) { onLogin(r.user); }
-    else { setError(r.message || 'Invalid email or password.'); }
+    if (r.ok) {
+      if (hasPendingDiscourseSso()) { window.location.href = '/discourse/sso'; return; }
+      onLogin(r.user);
+    } else { setError(r.message || 'Invalid email or password.'); }
   }
 
   return (
@@ -171,8 +177,10 @@ function RegisterForm({ onLogin, onBack }) {
     setError(''); setBusy(true);
     const r = await api('/api/portal/auth/register', { method: 'POST', body: JSON.stringify({ firstName, lastName, email, phone, address, username, password }) });
     setBusy(false);
-    if (r.ok) { onLogin(r.user); }
-    else { setError(r.message || 'Registration failed.'); }
+    if (r.ok) {
+      if (hasPendingDiscourseSso()) { window.location.href = '/discourse/sso'; return; }
+      onLogin(r.user);
+    } else { setError(r.message || 'Registration failed.'); }
   }
 
   const strength = password.length === 0 ? null

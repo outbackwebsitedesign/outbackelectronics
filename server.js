@@ -32,6 +32,9 @@ const GAMES_PORT  = process.env.GAMES_PORT  || 8084;
 const TOOLS_PORT  = process.env.TOOLS_PORT  || 8085;
 const WEATHER_PORT = process.env.WEATHER_PORT || 8089;
 
+const FORUM_PUBLIC_URL = process.env.FORUM_PUBLIC_URL || 'https://forum.outbackelectronics.com.au';
+const DISCOURSE_CONNECT_SECRET = process.env.DISCOURSE_CONNECT_SECRET || '';
+
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
 const ADMIN_PASSWORD_RAW = process.env.ADMIN_PASSWORD || '';
 const SESSION_TTL_MS = 1000 * 60 * 60 * 8;
@@ -3636,8 +3639,6 @@ const mainServer = http.createServer(async (req, res) => {
 // ── Discourse redirect server (8081) ─────────────────────────────────────────
 // Redirects discourse.outbackelectronics.com.au → forum.outbackelectronics.com.au
 
-const FORUM_PUBLIC_URL = process.env.FORUM_PUBLIC_URL || 'https://forum.outbackelectronics.com.au';
-
 const discourseRedirectServer = http.createServer((req, res) => {
   const target = FORUM_PUBLIC_URL + (req.url || '/');
   res.writeHead(301, { Location: target });
@@ -5224,6 +5225,93 @@ const portalServer = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/portal/auth/register') return handleCustomerRegister(req, res);
   if (req.method === 'POST' && url.pathname === '/api/portal/auth/login')    return handleCustomerLogin(req, res);
   if (req.method === 'POST' && url.pathname === '/api/portal/auth/logout')   return handleCustomerLogout(req, res);
+
+  // ── DiscourseConnect SSO provider ────────────────────────────────────────────
+  // Discourse admin → Settings → Login → "Enable DiscourseConnect" + set
+  // "DiscourseConnect URL" to https://portal.outbackelectronics.com.au/discourse/sso
+  // and "DiscourseConnect Secret" to the value of DISCOURSE_CONNECT_SECRET.
+  if (req.method === 'GET' && url.pathname === '/discourse/sso') {
+    if (!DISCOURSE_CONNECT_SECRET) {
+      res.writeHead(503, { 'Content-Type': 'text/plain' });
+      return res.end('DiscourseConnect is not configured on this server.');
+    }
+
+    function discourseHmac(payload) {
+      return crypto.createHmac('sha256', DISCOURSE_CONNECT_SECRET).update(payload).digest('hex');
+    }
+
+    const rawSso = url.searchParams.get('sso');
+    const rawSig = url.searchParams.get('sig');
+
+    let ssoPayload, sigValue;
+
+    if (rawSso && rawSig) {
+      // Validate the signature from Discourse before doing anything else
+      if (discourseHmac(rawSso) !== rawSig) {
+        res.writeHead(403, { 'Content-Type': 'text/plain' });
+        return res.end('Invalid SSO signature.');
+      }
+      ssoPayload = rawSso;
+      sigValue = rawSig;
+    } else {
+      // No params — try to resume from a pending-SSO cookie set during a prior visit
+      const pending = parseCookies(req).oe_discourse_sso;
+      if (!pending) { res.writeHead(302, { Location: '/' }); return res.end(); }
+      try {
+        const p = JSON.parse(Buffer.from(pending, 'base64url').toString('utf8'));
+        ssoPayload = p.sso; sigValue = p.sig;
+        if (!ssoPayload || !sigValue) throw new Error('incomplete');
+      } catch {
+        res.writeHead(302, { Location: '/' }); return res.end();
+      }
+    }
+
+    const session = getPortalSession(req);
+
+    if (!session) {
+      // Not logged in — park the SSO params in a short-lived cookie and send to login
+      const pendingData = Buffer.from(JSON.stringify({ sso: ssoPayload, sig: sigValue })).toString('base64url');
+      const cookieParts = [`oe_discourse_sso=${pendingData}`, 'HttpOnly', 'Path=/', 'Max-Age=600', 'SameSite=Lax'];
+      if (isSecureRequest(req)) cookieParts.push('Secure');
+      res.setHeader('Set-Cookie', cookieParts.join('; '));
+      res.writeHead(302, { Location: '/' });
+      return res.end();
+    }
+
+    // Logged in — look up the full user record (session doesn't store email)
+    const user = readUsers().find(u => u.id === session.id);
+    if (!user || !user.email) {
+      res.writeHead(302, { Location: '/?sso_error=1' }); return res.end();
+    }
+
+    // Decode the nonce Discourse sent; it must be echoed back unchanged
+    let nonce;
+    try {
+      nonce = new URLSearchParams(Buffer.from(ssoPayload, 'base64').toString('utf8')).get('nonce');
+    } catch { nonce = null; }
+    if (!nonce) { res.writeHead(400, { 'Content-Type': 'text/plain' }); return res.end('Missing nonce.'); }
+
+    // Build the DiscourseConnect response payload and sign it
+    const responseParams = new URLSearchParams({
+      nonce,
+      email:              user.email,
+      external_id:        user.id,
+      username:           user.username,
+      name:               user.displayName || user.username,
+      require_activation: 'false',
+    });
+    const responsePayload = Buffer.from(responseParams.toString()).toString('base64');
+    const responseSig     = discourseHmac(responsePayload);
+
+    // Clear the pending-SSO cookie now that we're done with it
+    const clearParts = ['oe_discourse_sso=', 'HttpOnly', 'Path=/', 'Max-Age=0', 'SameSite=Lax'];
+    if (isSecureRequest(req)) clearParts.push('Secure');
+    res.setHeader('Set-Cookie', clearParts.join('; '));
+
+    const location = `${FORUM_PUBLIC_URL}/session/sso_login?sso=${encodeURIComponent(responsePayload)}&sig=${responseSig}`;
+    res.writeHead(302, { Location: location });
+    return res.end();
+  }
 
   if (req.method === 'PATCH' && url.pathname === '/api/portal/profile') {
     const session = getPortalSession(req);
