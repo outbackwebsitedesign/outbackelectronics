@@ -6917,11 +6917,16 @@ const skyServer = createServiceServer({
 
 // ── Fire (8109) — live bushfire incidents by state, cached per state ──────────
 const FIRE_STATE_FEEDS = {
-  QLD: 'https://www.qfes.qld.gov.au/data/alerts/bushfireAlert.json',
+  // NSW RFS — confirmed GeoJSON FeatureCollection
   NSW: 'https://www.rfs.nsw.gov.au/feeds/majorIncidents.json',
-  VIC: 'https://data.emergency.vic.gov.au/Show?pageId=getAll',
-  WA:  'https://www.emergency.wa.gov.au/feeds/waemergency.json',
-  SA:  null,
+  // QLD Fire Department (formerly QFES, renamed 01/07/2024) — GeoJSON via PSBA GIS portal (S3-backed)
+  QLD: 'https://publiccontent.gis.psba.qld.gov.au/content/Feeds/BushfireCurrentIncidents/bushfireAlert.json',
+  // VIC Emergency Management — JSON incident feed (all incident types, filter for fire)
+  VIC: 'https://data.emergency.vic.gov.au/Show?pageId=getIncidentJSON',
+  // SA CFS — JSON current incidents from ESO
+  SA:  'https://data.eso.sa.gov.au/prod/cfs/criimson/cfs_current_incidents.json',
+  // WA DFES new feeds require an access application — no public URL
+  WA:  null,
   TAS: null,
   NT:  null,
   ACT: null,
@@ -6947,43 +6952,49 @@ function geomCentroid(g) {
   if (g.type === 'GeometryCollection') { for (const sub of g.geometries || []) { const c = geomCentroid(sub); if (c) return c; } }
   return null;
 }
+function normalizeFireItem(p, geometry) {
+  const coords = geomCentroid(geometry);
+  return {
+    title: String(p.title || p.Title || p.name || p.Name || p.headline || p.description || 'Incident').slice(0, 160),
+    category: String(p.category || p.Category || p.alertLevel || p.responseLevel || p.type || p.eventType || 'Other'),
+    pubDate: p.pubDate || p.created || p.Updated || p.onset || null,
+    lat: coords?.lat ?? p.lat ?? p.latitude ?? null,
+    lon: coords?.lon ?? p.lon ?? p.longitude ?? null,
+  };
+}
 function normalizeFireData(raw) {
-  // GeoJSON FeatureCollection (NSW RFS, QLD QFES, WA DFES)
+  // GeoJSON FeatureCollection — NSW RFS, QLD QFD
   const feats = Array.isArray(raw?.features) ? raw.features : null;
   if (feats) {
     const counts = {}, items = [];
     for (const f of feats) {
-      const p = f.properties || {};
-      const cat = String(p.category || p.Category || p.alertLevel || p.type || 'Other');
-      counts[cat] = (counts[cat] || 0) + 1;
-      if (items.length < 40) {
-        const coords = geomCentroid(f.geometry);
-        items.push({
-          title: String(p.title || p.Title || p.name || p.Name || 'Incident').slice(0, 160),
-          category: cat,
-          pubDate: p.pubDate || p.created || p.Updated || null,
-          lat: coords?.lat ?? null,
-          lon: coords?.lon ?? null,
-        });
-      }
+      const item = normalizeFireItem(f.properties || {}, f.geometry);
+      counts[item.category] = (counts[item.category] || 0) + 1;
+      if (items.length < 40) items.push(item);
     }
     return { available: true, total: feats.length, counts, items };
   }
-  // VIC Emergency: { result: [...] }
+  // VIC Emergency getIncidentJSON: { result: [...] } — filter for fire types
   const result = Array.isArray(raw?.result) ? raw.result : null;
   if (result) {
-    const fire = result.filter(i => /fire|burn/i.test(i.type || i.feedType || ''));
+    const fire = result.filter(i => /fire|burn/i.test(i.type || i.feedType || i.eventType || ''));
     const counts = {}, items = [];
     for (const i of fire) {
-      const cat = String(i.feedType || i.type || 'Other');
-      counts[cat] = (counts[cat] || 0) + 1;
-      if (items.length < 40) items.push({
-        title: String(i.title || i.sourceTitle || 'Incident').slice(0, 160),
-        category: cat,
-        pubDate: i.updated || null,
-        lat: i.lat ?? i.latitude ?? null,
-        lon: i.lon ?? i.longitude ?? null,
-      });
+      const item = normalizeFireItem(i, null);
+      counts[item.category] = (counts[item.category] || 0) + 1;
+      if (items.length < 40) items.push(item);
+    }
+    return { available: true, total: fire.length, counts, items };
+  }
+  // SA CFS cfs_current_incidents.json: { incidents: [...] }
+  const incidents = Array.isArray(raw?.incidents) ? raw.incidents : null;
+  if (incidents) {
+    const fire = incidents.filter(i => /fire|burn/i.test(i.type || i.incidentType || ''));
+    const counts = {}, items = [];
+    for (const i of fire) {
+      const item = normalizeFireItem(i, null);
+      counts[item.category] = (counts[item.category] || 0) + 1;
+      if (items.length < 40) items.push(item);
     }
     return { available: true, total: fire.length, counts, items };
   }
