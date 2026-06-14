@@ -6915,6 +6915,9 @@ const skyServer = createServiceServer({
   },
 });
 
+// ── Fire (8109) — shared browser-like UA to pass BOM / state service blocks ──
+const FEED_UA = 'Mozilla/5.0 (compatible; OutbackElectronics/1.0; +https://outbackelectronics.com.au)';
+
 // ── Fire (8109) — live bushfire incidents by state, cached per state ──────────
 const FIRE_STATE_FEEDS = {
   // NSW RFS — confirmed GeoJSON FeatureCollection
@@ -6941,7 +6944,7 @@ function fetchFireFeedRaw(url, _depth) {
   if (_depth > 3) return Promise.resolve(null);
   return new Promise((resolve) => {
     const mod = url.startsWith('https') ? https : http;
-    const req = mod.get(url, { timeout: 9000, headers: { 'User-Agent': 'OutbackElectronics/1.0', 'Accept': 'application/json, application/xml, application/atom+xml, text/xml, */*' } }, (r) => {
+    const req = mod.get(url, { timeout: 9000, headers: { 'User-Agent': FEED_UA, 'Accept': 'application/json, application/xml, application/atom+xml, text/xml, */*' } }, (r) => {
       if (r.statusCode >= 300 && r.statusCode < 400 && r.headers.location) {
         r.resume();
         return resolve(fetchFireFeedRaw(r.headers.location, _depth + 1));
@@ -7142,11 +7145,13 @@ async function handleFireStatus(req, res, url) {
 }
 
 // ── Fire Danger Ratings + Roads — shared raw fetcher (http or https) ─────────
-function fetchFeedRaw(url) {
+function fetchFeedRaw(url, extraHeaders, _depth) {
+  _depth = _depth || 0;
+  if (_depth > 4) return Promise.resolve(null);
   return new Promise((resolve) => {
     const lib = url.startsWith('https') ? https : http;
-    const req = lib.get(url, { timeout: 8000, headers: { 'User-Agent': 'OutbackElectronics/1.0' } }, (r) => {
-      if ([301, 302, 307, 308].includes(r.statusCode) && r.headers.location) { r.resume(); return fetchFeedRaw(r.headers.location).then(resolve); }
+    const req = lib.get(url, { timeout: 9000, headers: { 'User-Agent': FEED_UA, 'Accept': 'application/xml,application/json,text/xml,*/*', ...extraHeaders } }, (r) => {
+      if ([301, 302, 307, 308].includes(r.statusCode) && r.headers.location) { r.resume(); return fetchFeedRaw(r.headers.location, extraHeaders, _depth + 1).then(resolve); }
       if (r.statusCode !== 200) { r.resume(); return resolve(null); }
       let buf = '';
       r.on('data', c => { buf += c; if (buf.length > 2e6) req.destroy(); });
@@ -7156,37 +7161,53 @@ function fetchFeedRaw(url) {
     req.on('timeout', () => { req.destroy(); resolve(null); });
   });
 }
-function fetchFeedJSON(url) { return fetchFeedRaw(url).then(s => { if (!s) return null; try { return JSON.parse(s); } catch { return null; } }); }
+function fetchFeedJSON(url, extraHeaders) { return fetchFeedRaw(url, extraHeaders).then(s => { if (!s) return null; try { return JSON.parse(s); } catch { return null; } }); }
 
 // ── Fire Danger Ratings (BOM XML + NSW RFS XML) ───────────────────────────────
 const FDR_FEEDS = {
-  NSW: 'http://www.rfs.nsw.gov.au/feeds/fdrToban.xml',
-  ACT: 'http://www.rfs.nsw.gov.au/feeds/fdrToban.xml',
-  QLD: 'http://www.bom.gov.au/fwo/IDQ65176/IDQ65176.xml',
-  VIC: 'http://www.bom.gov.au/fwo/IDV18556/IDV18556.xml',
-  SA:  'http://www.bom.gov.au/fwo/IDS10080/IDS10080.xml',
-  WA:  'http://www.bom.gov.au/fwo/IDW15101/IDW15101.xml',
-  TAS: 'http://www.bom.gov.au/fwo/IDT13150/IDT13150.xml',
-  NT:  'http://www.bom.gov.au/fwo/IDD10730/IDD10730.xml',
+  NSW: 'https://www.rfs.nsw.gov.au/feeds/fdrToban.xml',
+  ACT: 'https://www.rfs.nsw.gov.au/feeds/fdrToban.xml',
+  // BOM fire weather outlook XML products (no subdirectory — flat /fwo/ path)
+  QLD: 'http://www.bom.gov.au/fwo/IDQ65176.xml',
+  VIC: 'http://www.bom.gov.au/fwo/IDV18556.xml',
+  SA:  'http://www.bom.gov.au/fwo/IDS10080.xml',
+  WA:  'http://www.bom.gov.au/fwo/IDW15101.xml',
+  TAS: 'http://www.bom.gov.au/fwo/IDT13150.xml',
+  NT:  'http://www.bom.gov.au/fwo/IDD10730.xml',
 };
-const FDR_RANK = { Moderate: 1, High: 2, 'Very High': 3, Severe: 4, Extreme: 5, Catastrophic: 6 };
+// Normalise BOM/RFS rating strings to display names
+const FDR_NORM = {
+  'low-moderate': 'Low-Moderate', 'low moderate': 'Low-Moderate', 'moderate': 'Moderate',
+  'high': 'High', 'very high': 'Very High', 'veryhigh': 'Very High',
+  'severe': 'Severe', 'extreme': 'Extreme', 'catastrophic': 'Catastrophic',
+};
+const FDR_RANK = { 'Low-Moderate': 0, Moderate: 1, High: 2, 'Very High': 3, Severe: 4, Extreme: 5, Catastrophic: 6 };
+function normFDR(raw) { return FDR_NORM[String(raw).toLowerCase().trim()] || null; }
 function parseFDR(xml) {
   if (!xml) return null;
   const ratings = [];
-  for (const p of [
-    /<(?:FireDangerRating|OverallFireDangerRating|FDR)>([^<]+)</gi,
-    /<element[^>]+type="fire_danger(?:_class)?"[^>]*>([^<]+)<\/element>/gi,
+  // BOM fire weather forecast XML — <element type="fire_danger_class">Very High</element>
+  // Also catches: fire_danger, fire_danger_index etc.
+  const patterns = [
+    /<element[^>]+type="fire_danger[^"]*"[^>]*>([^<]+)<\/element>/gi,
+    /<(?:FireDangerRating|OverallFireDangerRating|FDR|fire-danger-rating|DangerLevel)>([^<]+)<\//gi,
     /firedanger-rating="([^"]+)"/gi,
-  ]) {
-    let m; const re = new RegExp(p.source, 'gi');
-    while ((m = re.exec(xml)) !== null) { const r = m[1].trim(); if (FDR_RANK[r]) ratings.push(r); }
+    /danger[_-]?(?:class|rating|level)[=">:]+\s*["']?([A-Za-z\s-]+?)["'\s<]/gi,
+  ];
+  for (const pattern of patterns) {
+    const re = new RegExp(pattern.source, 'gi');
+    let m;
+    while ((m = re.exec(xml)) !== null) {
+      const norm = normFDR(m[1]);
+      if (norm) ratings.push(norm);
+    }
     if (ratings.length) break;
   }
   if (!ratings.length) return null;
-  const rating = ratings.reduce((mx, r) => FDR_RANK[r] > FDR_RANK[mx] ? r : mx);
-  const banM = /<(?:TotalFireBanToday|FireBanToday|TFBToday)[^>]*>([^<]+)</i.exec(xml);
-  const fireban = banM ? /yes|true/i.test(banM[1]) : false;
-  return { rating, fireban, districts: ratings.length };
+  const rating = ratings.reduce((mx, r) => (FDR_RANK[r] ?? -1) > (FDR_RANK[mx] ?? -1) ? r : mx);
+  const banM = /<(?:TotalFireBanToday|FireBanToday|TFBToday|total.?fire.?ban)[^>]*>([^<]+)</i.exec(xml);
+  const fireban = banM ? /yes|true|1/i.test(banM[1]) : false;
+  return { rating, fireBan: fireban, districts: ratings.length };
 }
 const _fdrCache = {};
 async function handleFDRStatus(req, res, url) {
@@ -7206,9 +7227,11 @@ async function handleFDRStatus(req, res, url) {
 }
 
 // ── Roads layer ───────────────────────────────────────────────────────────────
+// Public key (100 req/min limit) — override with QLDTRAFFIC_API_KEY env var for higher limits
+const QLDTRAFFIC_API_KEY = process.env.QLDTRAFFIC_API_KEY || '3e83add325cbb69ac4d8e5bf433d770b';
 const ROAD_FEEDS = {
-  QLD: 'https://api.qldtraffic.qld.gov.au/v1/events/unplanned',
-  NSW: 'http://data.livetraffic.com/traffic/hazards/incident.json',
+  QLD: `https://api.qldtraffic.qld.gov.au/v2/events?apikey=${QLDTRAFFIC_API_KEY}`,
+  NSW: 'https://data.livetraffic.com/traffic/hazards/incident.json',
 };
 function normalizeRoadData(raw) {
   if (!Array.isArray(raw?.features)) return null;
@@ -7231,7 +7254,10 @@ async function handleRoadsStatus(req, res, url) {
   const t = Date.now();
   const cached = _roadCache[state];
   if (!cached || t - cached.ts > 5 * 60 * 1000) {
-    const raw = await fetchFeedJSON(feedUrl);
+    // Pass API key as both header and query param to support all auth styles
+    const extraHeaders = (state === 'QLD' && QLDTRAFFIC_API_KEY)
+      ? { 'Authorization': `apikey ${QLDTRAFFIC_API_KEY}` } : {};
+    const raw = await fetchFeedJSON(feedUrl, extraHeaders);
     const normalized = raw ? normalizeRoadData(raw) : null;
     if (normalized) _roadCache[state] = { ts: t, data: normalized };
   }
