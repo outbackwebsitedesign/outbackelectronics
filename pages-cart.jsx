@@ -84,6 +84,7 @@ function OrderCancelledPage({ go }) {
 function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart }) {
   const [checkingOut, setCheckingOut] = useState(false);
   const [error, setError] = useState(null);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [gcInput, setGcInput] = useState('');
   const [gc, setGc] = useState(null);
   const [gcError, setGcError] = useState(null);
@@ -253,6 +254,10 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
 
   const checkout = async () => {
     if (cart.length === 0) return;
+    if (!termsAccepted) {
+      setError('Please accept the Terms & Conditions and Privacy Policy before proceeding to checkout.');
+      return;
+    }
     const hasPhysical = cart.some(i => !i.digital);
     if (hasPhysical && !selectedShipping) {
       setError('Please get a shipping quote and select a shipping method before checkout.');
@@ -513,6 +518,17 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
                 </div>
               )}
 
+              <label style={{display:'flex', alignItems:'flex-start', gap:10, marginBottom:12, cursor:'pointer'}}>
+                <input type="checkbox" checked={termsAccepted} onChange={e => { setTermsAccepted(e.target.checked); setError(null); }} style={{marginTop:2, flexShrink:0, accentColor:'var(--rust)', width:15, height:15, cursor:'pointer'}} />
+                <span style={{fontSize:12, color:'var(--ink-2)', lineHeight:1.5}}>
+                  I agree to the{' '}
+                  <a href="/policies/terms-and-conditions" target="_blank" rel="noopener noreferrer" style={{color:'var(--rust)', fontWeight:600}}>Terms &amp; Conditions</a>
+                  {', '}
+                  <a href="/policies/privacy-policy" target="_blank" rel="noopener noreferrer" style={{color:'var(--rust)', fontWeight:600}}>Privacy Policy</a>
+                  {', and '}
+                  <a href="/policies" target="_blank" rel="noopener noreferrer" style={{color:'var(--rust)', fontWeight:600}}>all policies</a>.
+                </span>
+              </label>
               <ErrorText style={{marginBottom:12}}>{error}</ErrorText>
               <button className="btn btn-rust" style={{width:'100%', justifyContent:'center', gap:8}} onClick={checkout} disabled={checkingOut} aria-busy={checkingOut}>
                 {checkingOut ? <><span className="spinner" aria-hidden="true" /> Redirecting…</> : `Checkout — $${total.toLocaleString('en-AU', {minimumFractionDigits:2})}${selectedShipping ? '' : cart.some(i=>!i.digital) ? ' + shipping' : ''}`}
