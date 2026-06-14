@@ -6921,28 +6921,63 @@ const FIRE_STATE_FEEDS = {
   NSW: 'https://www.rfs.nsw.gov.au/feeds/majorIncidents.json',
   // QLD Fire Department (formerly QFES, renamed 01/07/2024) — GeoJSON via PSBA GIS portal (S3-backed)
   QLD: 'https://publiccontent.gis.psba.qld.gov.au/content/Feeds/BushfireCurrentIncidents/bushfireAlert.json',
-  // VIC Emergency Management — JSON incident feed (all incident types, filter for fire)
-  VIC: 'https://data.emergency.vic.gov.au/Show?pageId=getIncidentJSON',
+  // VIC Emergency Management — public GeoJSON feed
+  VIC: 'https://emergency.vic.gov.au/public/events-geojson.json',
   // SA CFS — JSON current incidents from ESO
   SA:  'https://data.eso.sa.gov.au/prod/cfs/criimson/cfs_current_incidents.json',
-  // WA DFES new feeds require an access application — no public URL
-  WA:  null,
-  TAS: null,
-  NT:  null,
-  ACT: null,
+  // WA DFES — ArcGIS public FeatureServer GeoJSON
+  WA:  'https://services1.arcgis.com/vkTwD8kHw2woKBqV/arcgis/rest/services/ESCAD_Current_Incidents_Public/FeatureServer/0/query?f=geojson&where=1%3D1&outFields=*',
+  // TAS TFS — KML current incidents feed
+  TAS: 'http://www.fire.tas.gov.au/Show?pageId=bfKml',
+  // NT Fire & Rescue — public incident JSON feed
+  NT:  'https://www.pfes.nt.gov.au/incidentmap/json/incidents.json',
+  // ACT ESA — Atom/GeoRSS incident feed
+  ACT: 'https://esa.act.gov.au/act-gov-esa/incidents/feed',
 };
 const _fireCache = {};
-function fetchFireFeed(url) {
+// Fetch fire feed as raw text (handles http/https + redirects)
+function fetchFireFeedRaw(url, _depth) {
+  _depth = _depth || 0;
+  if (_depth > 3) return Promise.resolve(null);
   return new Promise((resolve) => {
-    const req = https.get(url, { timeout: 7000, headers: { 'User-Agent': 'OutbackElectronics/1.0' } }, (r) => {
+    const mod = url.startsWith('https') ? https : http;
+    const req = mod.get(url, { timeout: 9000, headers: { 'User-Agent': 'OutbackElectronics/1.0', 'Accept': 'application/json, application/xml, application/atom+xml, text/xml, */*' } }, (r) => {
+      if (r.statusCode >= 300 && r.statusCode < 400 && r.headers.location) {
+        r.resume();
+        return resolve(fetchFireFeedRaw(r.headers.location, _depth + 1));
+      }
       if (r.statusCode !== 200) { r.resume(); return resolve(null); }
       let buf = '';
       r.on('data', c => { buf += c; if (buf.length > 5e6) req.destroy(); });
-      r.on('end', () => { try { resolve(JSON.parse(buf)); } catch { resolve(null); } });
+      r.on('end', () => resolve(buf || null));
     });
     req.on('error', () => resolve(null));
     req.on('timeout', () => { req.destroy(); resolve(null); });
   });
+}
+// Parse ACT ESA Atom/GeoRSS feed into normalised fire data
+function parseFireAtom(xml) {
+  const entries = [];
+  const entryRe = /<entry[^>]*>([\s\S]*?)<\/entry>/gi;
+  let m;
+  while ((m = entryRe.exec(xml)) !== null) {
+    const block = m[1];
+    const title = (/<title[^>]*>([\s\S]*?)<\/title>/i.exec(block) || [])[1] || 'Incident';
+    const cat = (/<category[^>]*term=["']([^"']+)["']/i.exec(block) || [])[1] ||
+                (/<[a-z]*:alertLevel[^>]*>([\s\S]*?)<\/[^>]+>/i.exec(block) || [])[1] ||
+                (/<[a-z]*:severity[^>]*>([\s\S]*?)<\/[^>]+>/i.exec(block) || [])[1] || 'Information';
+    const pointStr = (/<georss:point[^>]*>([\s\S]*?)<\/georss:point>/i.exec(block) || [])[1] || '';
+    const [latStr, lonStr] = pointStr.trim().split(/\s+/);
+    const lat = parseFloat(latStr);
+    const lon = parseFloat(lonStr);
+    entries.push({
+      title: title.replace(/<[^>]+>/g, '').trim(),
+      category: cat.replace(/<[^>]+>/g, '').trim(),
+      lat: isFinite(lat) ? lat : null,
+      lon: isFinite(lon) ? lon : null,
+    });
+  }
+  return entries;
 }
 function geomCentroid(g) {
   if (!g) return null;
@@ -6969,16 +7004,23 @@ function normalizeFireItem(p, geometry) {
   };
 }
 function normalizeFireData(raw) {
-  // GeoJSON FeatureCollection — NSW RFS, QLD QFD
+  // GeoJSON FeatureCollection — NSW RFS, QLD QFD, VIC, WA ArcGIS
   const feats = Array.isArray(raw?.features) ? raw.features : null;
   if (feats) {
+    // Some feeds (VIC) contain all emergency types — filter to fire/burn if a type field exists on most features
+    const hasType = feats.some(f => f.properties?.type || f.properties?.feedType || f.properties?.eventType || f.properties?.category1);
+    const filtered = hasType ? feats.filter(f => {
+      const p = f.properties || {};
+      const t = String(p.type || p.feedType || p.eventType || p.category1 || p.incident_type || p.IncidentType || '');
+      return !t || /fire|burn|ember|blaze/i.test(t);
+    }) : feats;
     const counts = {}, items = [];
-    for (const f of feats) {
+    for (const f of filtered) {
       const item = normalizeFireItem(f.properties || {}, f.geometry);
       counts[item.category] = (counts[item.category] || 0) + 1;
       if (items.length < 40) items.push(item);
     }
-    return { available: true, total: feats.length, counts, items };
+    return { available: true, total: filtered.length, counts, items };
   }
   // VIC Emergency getIncidentJSON: { result: [...] } — filter for fire types
   const result = Array.isArray(raw?.result) ? raw.result : null;
@@ -7004,7 +7046,64 @@ function normalizeFireData(raw) {
     }
     return { available: true, total: fire.length, counts, items };
   }
+  // NT PFES — direct array of incidents or { data: [...] }
+  const rawArr = Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : Array.isArray(raw?.incidents_list) ? raw.incidents_list : null;
+  if (rawArr) {
+    const counts = {}, items = [];
+    for (const i of rawArr) {
+      const item = normalizeFireItem(i, null);
+      counts[item.category] = (counts[item.category] || 0) + 1;
+      if (items.length < 40) items.push(item);
+    }
+    return { available: true, total: rawArr.length, counts, items };
+  }
   return null;
+}
+// Parse TFS KML feed into normalised fire data
+function parseFireKml(xml) {
+  const entries = [];
+  const pmRe = /<Placemark[^>]*>([\s\S]*?)<\/Placemark>/gi;
+  let m;
+  while ((m = pmRe.exec(xml)) !== null) {
+    const block = m[1];
+    const title = (/<name[^>]*>([\s\S]*?)<\/name>/i.exec(block) || [])[1] || 'Incident';
+    // Try ExtendedData for alertLevel / category
+    let category = 'Information';
+    const edMatch = /<Data\s+name=["'](?:alertLevel|category|status|Type)["'][^>]*>[\s\S]*?<value[^>]*>([\s\S]*?)<\/value>/i.exec(block);
+    if (edMatch) category = edMatch[1].trim();
+    // Coordinates: Point or first ring of Polygon
+    let lat = null, lon = null;
+    const ptMatch = /<Point[^>]*>[\s\S]*?<coordinates[^>]*>([\s\S]*?)<\/coordinates>/i.exec(block);
+    if (ptMatch) {
+      const [lonS, latS] = ptMatch[1].trim().split(',');
+      lon = parseFloat(lonS); lat = parseFloat(latS);
+    } else {
+      const polyMatch = /<coordinates[^>]*>([\s\S]*?)<\/coordinates>/i.exec(block);
+      if (polyMatch) {
+        const tuples = polyMatch[1].trim().split(/\s+/);
+        const lons = [], lats = [];
+        for (const t of tuples) { const [lo, la] = t.split(','); if (isFinite(+lo) && isFinite(+la)) { lons.push(+lo); lats.push(+la); } }
+        if (lons.length) { lon = lons.reduce((s, v) => s + v, 0) / lons.length; lat = lats.reduce((s, v) => s + v, 0) / lats.length; }
+      }
+    }
+    entries.push({
+      title: title.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').trim(),
+      category: category.replace(/<[^>]+>/g, '').trim(),
+      lat: isFinite(lat) ? lat : null,
+      lon: isFinite(lon) ? lon : null,
+    });
+  }
+  return entries;
+}
+// normalizeFireData for pre-parsed Atom/KML entries (ACT ESA + TAS TFS)
+function normalizeAtomEntries(entries) {
+  if (!entries.length) return { available: true, total: 0, counts: {}, items: [] };
+  const counts = {}, items = [];
+  for (const i of entries) {
+    counts[i.category] = (counts[i.category] || 0) + 1;
+    if (items.length < 40) items.push(i);
+  }
+  return { available: true, total: entries.length, counts, items };
 }
 async function handleFireStatus(req, res, url) {
   const state = (url.searchParams.get('state') || 'QLD').toUpperCase();
@@ -7014,18 +7113,139 @@ async function handleFireStatus(req, res, url) {
   const t = Date.now();
   const cached = _fireCache[state];
   if (!cached || t - cached.ts > 10 * 60 * 1000) {
-    const raw = await fetchFireFeed(feedUrl);
-    const normalized = raw ? normalizeFireData(raw) : null;
+    const rawText = await fetchFireFeedRaw(feedUrl);
+    let normalized = null;
+    if (rawText) {
+      const trimmed = rawText.trimStart();
+      if (trimmed.startsWith('<')) {
+        // KML feed (TAS TFS) — detect by <kml or <Folder or <Placemark at root level
+        if (/<kml[\s>]/i.test(trimmed) || /<Folder[\s>]/i.test(trimmed.slice(0, 500))) {
+          const entries = parseFireKml(rawText);
+          normalized = normalizeAtomEntries(entries);
+        } else {
+          // Atom/GeoRSS feed (ACT ESA)
+          const entries = parseFireAtom(rawText);
+          normalized = normalizeAtomEntries(entries);
+        }
+      } else {
+        try {
+          const parsed = JSON.parse(rawText);
+          normalized = normalizeFireData(parsed);
+        } catch { /* ignore */ }
+      }
+    }
     if (normalized) _fireCache[state] = { ts: t, data: normalized };
   }
   const entry = _fireCache[state];
   if (!entry) return json(res, 200, { available: false });
   return json(res, 200, { ...entry.data, updated: entry.ts });
 }
+
+// ── Fire Danger Ratings + Roads — shared raw fetcher (http or https) ─────────
+function fetchFeedRaw(url) {
+  return new Promise((resolve) => {
+    const lib = url.startsWith('https') ? https : http;
+    const req = lib.get(url, { timeout: 8000, headers: { 'User-Agent': 'OutbackElectronics/1.0' } }, (r) => {
+      if ([301, 302, 307, 308].includes(r.statusCode) && r.headers.location) { r.resume(); return fetchFeedRaw(r.headers.location).then(resolve); }
+      if (r.statusCode !== 200) { r.resume(); return resolve(null); }
+      let buf = '';
+      r.on('data', c => { buf += c; if (buf.length > 2e6) req.destroy(); });
+      r.on('end', () => resolve(buf));
+    });
+    req.on('error', () => resolve(null));
+    req.on('timeout', () => { req.destroy(); resolve(null); });
+  });
+}
+function fetchFeedJSON(url) { return fetchFeedRaw(url).then(s => { if (!s) return null; try { return JSON.parse(s); } catch { return null; } }); }
+
+// ── Fire Danger Ratings (BOM XML + NSW RFS XML) ───────────────────────────────
+const FDR_FEEDS = {
+  NSW: 'http://www.rfs.nsw.gov.au/feeds/fdrToban.xml',
+  ACT: 'http://www.rfs.nsw.gov.au/feeds/fdrToban.xml',
+  QLD: 'http://www.bom.gov.au/fwo/IDQ65176/IDQ65176.xml',
+  VIC: 'http://www.bom.gov.au/fwo/IDV18556/IDV18556.xml',
+  SA:  'http://www.bom.gov.au/fwo/IDS10080/IDS10080.xml',
+  WA:  'http://www.bom.gov.au/fwo/IDW15101/IDW15101.xml',
+  TAS: 'http://www.bom.gov.au/fwo/IDT13150/IDT13150.xml',
+  NT:  'http://www.bom.gov.au/fwo/IDD10730/IDD10730.xml',
+};
+const FDR_RANK = { Moderate: 1, High: 2, 'Very High': 3, Severe: 4, Extreme: 5, Catastrophic: 6 };
+function parseFDR(xml) {
+  if (!xml) return null;
+  const ratings = [];
+  for (const p of [
+    /<(?:FireDangerRating|OverallFireDangerRating|FDR)>([^<]+)</gi,
+    /<element[^>]+type="fire_danger(?:_class)?"[^>]*>([^<]+)<\/element>/gi,
+    /firedanger-rating="([^"]+)"/gi,
+  ]) {
+    let m; const re = new RegExp(p.source, 'gi');
+    while ((m = re.exec(xml)) !== null) { const r = m[1].trim(); if (FDR_RANK[r]) ratings.push(r); }
+    if (ratings.length) break;
+  }
+  if (!ratings.length) return null;
+  const rating = ratings.reduce((mx, r) => FDR_RANK[r] > FDR_RANK[mx] ? r : mx);
+  const banM = /<(?:TotalFireBanToday|FireBanToday|TFBToday)[^>]*>([^<]+)</i.exec(xml);
+  const fireban = banM ? /yes|true/i.test(banM[1]) : false;
+  return { rating, fireban, districts: ratings.length };
+}
+const _fdrCache = {};
+async function handleFDRStatus(req, res, url) {
+  const state = (url.searchParams.get('state') || 'QLD').toUpperCase();
+  const feedUrl = FDR_FEEDS[state];
+  if (!feedUrl) return json(res, 200, { available: false });
+  const t = Date.now();
+  const cached = _fdrCache[state];
+  if (!cached || t - cached.ts > 30 * 60 * 1000) {
+    const xml = await fetchFeedRaw(feedUrl);
+    const parsed = xml ? parseFDR(xml) : null;
+    if (parsed) _fdrCache[state] = { ts: t, data: parsed };
+  }
+  const entry = _fdrCache[state];
+  if (!entry) return json(res, 200, { available: false });
+  return json(res, 200, { available: true, ...entry.data, updated: entry.ts });
+}
+
+// ── Roads layer ───────────────────────────────────────────────────────────────
+const ROAD_FEEDS = {
+  QLD: 'https://api.qldtraffic.qld.gov.au/v1/events/unplanned',
+  NSW: 'http://data.livetraffic.com/traffic/hazards/incident.json',
+};
+function normalizeRoadData(raw) {
+  if (!Array.isArray(raw?.features)) return null;
+  const items = [];
+  for (const f of raw.features) {
+    const p = f.properties || {};
+    const coords = geomCentroid(f.geometry);
+    if (!coords) continue;
+    const title = String(p.description || p.headline || p.displayName || p.event_type || p.title || p.type || 'Incident').slice(0, 160);
+    const type = String(p.event_type || p.incidentKind || p.type || p.category || 'other').toLowerCase();
+    items.push({ title, type, lat: coords.lat, lon: coords.lon });
+  }
+  return { available: true, total: raw.features.length, items };
+}
+const _roadCache = {};
+async function handleRoadsStatus(req, res, url) {
+  const state = (url.searchParams.get('state') || 'QLD').toUpperCase();
+  const feedUrl = ROAD_FEEDS[state];
+  if (!feedUrl) return json(res, 200, { available: false });
+  const t = Date.now();
+  const cached = _roadCache[state];
+  if (!cached || t - cached.ts > 5 * 60 * 1000) {
+    const raw = await fetchFeedJSON(feedUrl);
+    const normalized = raw ? normalizeRoadData(raw) : null;
+    if (normalized) _roadCache[state] = { ts: t, data: normalized };
+  }
+  const entry = _roadCache[state];
+  if (!entry) return json(res, 200, { available: false });
+  return json(res, 200, { ...entry.data, updated: entry.ts });
+}
+
 const fireServer = createServiceServer({
   htmlEntry: '/dist/fire.html',
   routes: async (req, res, url) => {
     if (req.method === 'GET' && url.pathname === '/api/fire/status') { await handleFireStatus(req, res, url); return true; }
+    if (req.method === 'GET' && url.pathname === '/api/fire/fdr')    { await handleFDRStatus(req, res, url); return true; }
+    if (req.method === 'GET' && url.pathname === '/api/fire/roads')  { await handleRoadsStatus(req, res, url); return true; }
     return false;
   },
 });
