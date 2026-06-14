@@ -7786,13 +7786,27 @@ function radioLoadNext() {
   if (!_radioPlaylist.length) radioScan();
   if (!_radioPlaylist.length) { _radioBuf = null; _radioTrack = null; return; }
   _radioIdx = (_radioIdx + 1) % _radioPlaylist.length;
-  if (_radioIdx === 0) radioScan(); // pick up newly-added tracks each loop
+  if (_radioIdx === 0) radioScan();
   _radioTrack = _radioPlaylist[_radioIdx] || null;
   try { _radioBuf = _radioTrack ? fs.readFileSync(path.join(RADIO_DIR, _radioTrack)) : null; _radioPos = 0; } catch { _radioBuf = null; }
 }
-// Clock always ticks so the preload buffer is warm even before the first listener
-// connects. Pace is 1.15× real-time — slightly faster than playback speed so the
-// browser's buffer stays ahead of the decoder and event-loop jitter can't starve it.
+// Start the broadcast immediately at server start from a random playlist position
+// so restarts don't always land on track 1, and the preload warms up straight away.
+if (_radioPlaylist.length) {
+  _radioIdx = Math.floor(Math.random() * _radioPlaylist.length) - 1;
+  radioLoadNext();
+  // Seed the preload buffer with ~30 s from mid-track so the very first
+  // listener gets a burst even if they connect within seconds of startup.
+  if (_radioBuf) {
+    const seedStart = Math.floor(_radioBuf.length * 0.4);
+    const seedEnd = Math.min(seedStart + RADIO_BYTES_PER_SEC * 30, _radioBuf.length);
+    radioPreloadAppend(_radioBuf.slice(seedStart, seedEnd));
+    _radioPos = seedEnd < _radioBuf.length ? seedEnd : _radioBuf.length;
+  }
+}
+// Clock ticks 24/7 regardless of listeners.
+// Pace is 1.15× real-time so the browser's buffer stays comfortably ahead of
+// the decoder and event-loop jitter can't starve it between ticks.
 const RADIO_TICK_MS = 250;
 const RADIO_CHUNK_BYTES = Math.round(RADIO_BYTES_PER_SEC * 1.15 / (1000 / RADIO_TICK_MS));
 setInterval(() => {
