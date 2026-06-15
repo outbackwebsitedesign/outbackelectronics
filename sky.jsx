@@ -303,8 +303,25 @@ const fmtDuration = mins => `${Math.floor(mins / 60)}h ${mins % 60}m`;
 // ── Component ──────────────────────────────────────────────────────────────
 export default function SkyApp() {
   const [loc, setLoc] = useState(LOCATIONS[0]);
+  const [geoLoc, setGeoLoc] = useState(null);   // {lat, lon, label}
+  const [geoState, setGeoState] = useState('idle'); // 'idle'|'loading'|'error'
   const [aurora, setAurora] = useState(null);
   const [now, setNow] = useState(new Date());
+
+  const activeLoc = geoLoc || loc;
+
+  function detectLocation() {
+    if (!navigator.geolocation) { setGeoState('error'); return; }
+    setGeoState('loading');
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        setGeoLoc({ lat: pos.coords.latitude, lon: pos.coords.longitude, label: 'My Location' });
+        setGeoState('idle');
+      },
+      () => setGeoState('error'),
+      { timeout: 8000 },
+    );
+  }
 
   useEffect(() => {
     fetch('/api/sky/aurora').then(r => r.json()).then(setAurora).catch(() => setAurora({ available: false }));
@@ -317,13 +334,13 @@ export default function SkyApp() {
 
   // ── Sun events ──────────────────────────────────────────────────────────
   const sunEvents = useMemo(() => ({
-    civil:  sunEvent(now, loc.lat, loc.lon, 6),
-    naut:   sunEvent(now, loc.lat, loc.lon, 12),
-    astro:  sunEvent(now, loc.lat, loc.lon, 18),
-    day:    sunEvent(now, loc.lat, loc.lon, -0.833),
-    noon:   solarNoon(now, loc.lat, loc.lon),
-    alt:    sunAltitude(now, loc.lat, loc.lon),
-  }), [loc, now.toDateString()]);
+    civil:  sunEvent(now, activeLoc.lat, activeLoc.lon, 6),
+    naut:   sunEvent(now, activeLoc.lat, activeLoc.lon, 12),
+    astro:  sunEvent(now, activeLoc.lat, activeLoc.lon, 18),
+    day:    sunEvent(now, activeLoc.lat, activeLoc.lon, -0.833),
+    noon:   solarNoon(now, activeLoc.lat, activeLoc.lon),
+    alt:    sunAltitude(now, activeLoc.lat, activeLoc.lon),
+  }), [activeLoc, now.toDateString()]);
 
   const dayLength = useMemo(() => {
     if (!sunEvents.day.rise || !sunEvents.day.set) return null;
@@ -332,7 +349,7 @@ export default function SkyApp() {
 
   // ── Moon ────────────────────────────────────────────────────────────────
   const moon = useMemo(() => moonPhase(now), [now.toDateString()]);
-  const moonRS = useMemo(() => moonRiseSet(now, loc.lat, loc.lon), [loc, now.toDateString()]);
+  const moonRS = useMemo(() => moonRiseSet(now, activeLoc.lat, activeLoc.lon), [activeLoc, now.toDateString()]);
   const moonPos = useMemo(() => moonPosition(now), [now.toDateString()]);
   const nextPhases = useMemo(() => nextMoonPhases(now), [now.toDateString()]);
   const [rateLabel, rateClass] = rating(moon.illum);
@@ -341,9 +358,9 @@ export default function SkyApp() {
   const planets = useMemo(() => {
     return Object.keys(PLANET_ELEMS).map(name => ({
       name,
-      ...planetInfo(name, now, loc.lat, loc.lon),
+      ...planetInfo(name, now, activeLoc.lat, activeLoc.lon),
     }));
-  }, [loc, now.toDateString()]);
+  }, [activeLoc, now.toDateString()]);
 
   // ── Other ───────────────────────────────────────────────────────────────
   const kp = aurora?.available ? aurora.kp : null;
@@ -353,7 +370,7 @@ export default function SkyApp() {
     : kp >= 4 ? 'Slight chance in Tasmania'
     : 'Unlikely tonight';
 
-  const gcAlt = useMemo(() => galacticCenterAlt(now, loc.lat, loc.lon), [loc, now.toDateString()]);
+  const gcAlt = useMemo(() => galacticCenterAlt(now, activeLoc.lat, activeLoc.lon), [activeLoc, now.toDateString()]);
   const nextEvents = useMemo(() => nextSolsticesEquinoxes(now), [now.toDateString()]);
   const meteors = useMemo(() => nextMeteorShowers(now), [now.toDateString()]);
 
@@ -367,17 +384,29 @@ export default function SkyApp() {
           <p className="svc-sub">Dark-sky window, moon phase, planets and live aurora forecast for remote Australia. Drag the dome to explore tonight's sky.</p>
         </header>
 
-        <label className="fld sky-tools">
-          <span>Location</span>
-          <select className="input" value={loc.label} onChange={e => setLoc(LOCATIONS.find(l => l.label === e.target.value))}>
-            {LOCATIONS.map(l => <option key={l.label} value={l.label}>{l.label}</option>)}
-          </select>
-        </label>
+        <div className="sky-loc-row">
+          <label className="fld sky-tools" style={{ margin: 0 }}>
+            <span>Location</span>
+            <select className="input" value={loc.label} onChange={e => { setGeoLoc(null); setLoc(LOCATIONS.find(l => l.label === e.target.value)); }}>
+              {LOCATIONS.map(l => <option key={l.label} value={l.label}>{l.label}</option>)}
+            </select>
+          </label>
+          <button
+            className="btn btn-ghost btn-sm sky-geo-btn"
+            onClick={detectLocation}
+            disabled={geoState === 'loading'}
+          >
+            {geoState === 'loading' ? 'Locating…'
+             : geoLoc ? `📍 ${geoLoc.lat.toFixed(2)}°, ${geoLoc.lon.toFixed(2)}°`
+             : '📍 Use my location'}
+          </button>
+          {geoState === 'error' && <span className="sky-sub" style={{ color: 'var(--rust)', fontSize: 12 }}>Location access denied</span>}
+        </div>
 
         {/* 3D Dome */}
         <div className="sky-dome-wrap">
           <Suspense fallback={<div className="sky-dome-loading">Loading star dome…</div>}>
-            <SkyDome lat={loc.lat} lon={loc.lon} date={now} />
+            <SkyDome lat={activeLoc.lat} lon={activeLoc.lon} date={now} />
           </Suspense>
         </div>
 
