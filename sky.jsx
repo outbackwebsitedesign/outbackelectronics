@@ -302,26 +302,32 @@ const fmtDuration = mins => `${Math.floor(mins / 60)}h ${mins % 60}m`;
 
 // ── Component ──────────────────────────────────────────────────────────────
 export default function SkyApp() {
-  const [loc, setLoc] = useState(LOCATIONS[0]);
-  const [geoLoc, setGeoLoc] = useState(null);   // {lat, lon, label}
-  const [geoState, setGeoState] = useState('idle'); // 'idle'|'loading'|'error'
+  const [geoLoc, setGeoLoc] = useState(null);    // {lat, lon, label} from GPS
+  const [search, setSearch] = useState('');       // fallback search text
+  const [manualLoc, setManualLoc] = useState(null); // picked from search
+  const [geoState, setGeoState] = useState('loading'); // 'loading'|'ok'|'denied'
   const [aurora, setAurora] = useState(null);
   const [now, setNow] = useState(new Date());
 
-  const activeLoc = geoLoc || loc;
+  const activeLoc = geoLoc || manualLoc || LOCATIONS[0];
 
-  function detectLocation() {
-    if (!navigator.geolocation) { setGeoState('error'); return; }
-    setGeoState('loading');
+  // Auto-detect on mount
+  useEffect(() => {
+    if (!navigator.geolocation) { setGeoState('denied'); return; }
     navigator.geolocation.getCurrentPosition(
       pos => {
-        setGeoLoc({ lat: pos.coords.latitude, lon: pos.coords.longitude, label: 'My Location' });
-        setGeoState('idle');
+        setGeoLoc({ lat: pos.coords.latitude, lon: pos.coords.longitude, label: null });
+        setGeoState('ok');
       },
-      () => setGeoState('error'),
-      { timeout: 8000 },
+      () => setGeoState('denied'),
+      { timeout: 10000 },
     );
-  }
+  }, []);
+
+  // Search suggestions
+  const suggestions = search.length > 1
+    ? LOCATIONS.filter(l => l.label.toLowerCase().includes(search.toLowerCase()))
+    : [];
 
   useEffect(() => {
     fetch('/api/sky/aurora').then(r => r.json()).then(setAurora).catch(() => setAurora({ available: false }));
@@ -384,23 +390,39 @@ export default function SkyApp() {
           <p className="svc-sub">Dark-sky window, moon phase, planets and live aurora forecast for remote Australia. Drag the dome to explore tonight's sky.</p>
         </header>
 
-        <div className="sky-loc-row">
-          <label className="fld sky-tools" style={{ margin: 0 }}>
-            <span>Location</span>
-            <select className="input" value={loc.label} onChange={e => { setGeoLoc(null); setLoc(LOCATIONS.find(l => l.label === e.target.value)); }}>
-              {LOCATIONS.map(l => <option key={l.label} value={l.label}>{l.label}</option>)}
-            </select>
-          </label>
-          <button
-            className="btn btn-ghost btn-sm sky-geo-btn"
-            onClick={detectLocation}
-            disabled={geoState === 'loading'}
-          >
-            {geoState === 'loading' ? 'Locating…'
-             : geoLoc ? `📍 ${geoLoc.lat.toFixed(2)}°, ${geoLoc.lon.toFixed(2)}°`
-             : '📍 Use my location'}
-          </button>
-          {geoState === 'error' && <span className="sky-sub" style={{ color: 'var(--rust)', fontSize: 12 }}>Location access denied</span>}
+        <div className="sky-loc-bar">
+          <div className="sky-loc-pill">
+            {geoState === 'loading' && <span className="sky-loc-status">Detecting location…</span>}
+            {geoState === 'ok' && geoLoc && !manualLoc && (
+              <span className="sky-loc-status sky-loc-live">
+                📍 {geoLoc.lat.toFixed(4)}°, {geoLoc.lon.toFixed(4)}°
+              </span>
+            )}
+            {(geoState === 'denied' || manualLoc) && (
+              <span className="sky-loc-status">{manualLoc ? manualLoc.label : 'Location unavailable'}</span>
+            )}
+          </div>
+          <div className="sky-loc-search-wrap">
+            <input
+              className="input sky-loc-search"
+              type="text"
+              placeholder="Search location…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              onBlur={() => setTimeout(() => setSearch(''), 200)}
+            />
+            {suggestions.length > 0 && (
+              <div className="sky-loc-suggestions">
+                {suggestions.map(l => (
+                  <button key={l.label} className="sky-loc-suggestion" onMouseDown={() => {
+                    setManualLoc(l);
+                    setGeoLoc(null);
+                    setSearch('');
+                  }}>{l.label}</button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* 3D Dome */}
