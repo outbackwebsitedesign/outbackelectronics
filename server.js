@@ -7487,11 +7487,19 @@ const coverageServer = createServiceServer({
   routes: async (req, res, url) => {
     if (req.method === 'GET' && /^\/api\/coverage\/tile\/\d+\/\d+\/\d+\/\d+$/.test(url.pathname)) {
       const parts = url.pathname.split('/');
-      // /api/coverage/tile/{layerId}/{z}/{y}/{x}
-      const [layerId, z, y, x] = parts.slice(4);
-      const allowedLayers = new Set(['0', '1', '2']);
+      // /api/coverage/tile/{layerId}/{z}/{x}/{y}
+      const [layerId, z, x, y] = parts.slice(4).map(Number);
+      const allowedLayers = new Set([0, 1, 2]);
       if (!allowedLayers.has(layerId)) { res.writeHead(400); res.end(); return true; }
-      const upstream = `https://spatial.infrastructure.gov.au/server/rest/services/Communications/Mobile_Phone_Coverage_by_provider/MapServer/${layerId}/tile/${z}/${y}/${x}`;
+      // Convert tile coords to Web Mercator bbox for ArcGIS export API
+      const earthHalf = 20037508.3428;
+      const tileSize = (earthHalf * 2) / Math.pow(2, z);
+      const minX = -earthHalf + x * tileSize;
+      const maxX = minX + tileSize;
+      const maxY = earthHalf - y * tileSize;
+      const minY = maxY - tileSize;
+      const bbox = `${minX},${minY},${maxX},${maxY}`;
+      const upstream = `https://spatial.infrastructure.gov.au/server/rest/services/Communications/Mobile_Phone_Coverage_by_provider/MapServer/export?bbox=${bbox}&bboxSR=3857&layers=show:${layerId}&size=256,256&imageSR=3857&format=png32&transparent=true&f=image`;
       try {
         const tileRes = await new Promise((resolve, reject) => {
           require('https').get(upstream, { headers: { 'User-Agent': 'OutbackElectronics/1.0' } }, resolve).on('error', reject);

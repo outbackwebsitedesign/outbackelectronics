@@ -28,7 +28,7 @@ export default function CoverageApp() {
     }).addTo(m);
 
     for (const c of CARRIERS) {
-      const layer = L.tileLayer(`${TILE_BASE}/${c.layerId}/{z}/{y}/{x}`, {
+      const layer = L.tileLayer(`${TILE_BASE}/${c.layerId}/{z}/{x}/{y}`, {
         maxZoom: 18,
         opacity: 0.6,
         attribution: '',
