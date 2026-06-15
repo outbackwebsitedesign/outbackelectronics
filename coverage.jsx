@@ -10,8 +10,6 @@ const CARRIERS = [
     mvnos: 'Amaysim · Dodo · Coles Mobile' },
   { id: 'tpg',    label: 'Vodafone', layerId: 0, color: '#e60000',
     mvnos: 'felix · Kogan Mobile' },
-  { id: 'starlink', label: 'Starlink', layerId: null, color: '#7b2fff',
-    mvnos: 'Available everywhere in Australia' },
 ];
 
 const TILE_BASE = '/api/coverage/tile';
@@ -20,7 +18,7 @@ export default function CoverageApp() {
   const mapEl = useRef(null);
   const map = useRef(null);
   const layers = useRef({});
-  const [active, setActive] = useState({ telstra: true, optus: true, tpg: true, starlink: false });
+  const [active, setActive] = useState({ telstra: true, optus: true, tpg: true });
   const [tooltip, setTooltip] = useState(null);
 
   useEffect(() => {
@@ -34,17 +32,9 @@ export default function CoverageApp() {
     }).addTo(m);
 
     for (const c of CARRIERS) {
-      let layer;
-      if (c.layerId !== null) {
-        layer = L.tileLayer(`${TILE_BASE}/${c.layerId}/{z}/{x}/{y}`, {
-          maxZoom: 18, opacity: 0.6, attribution: '',
-        });
-      } else {
-        // Starlink: solid overlay covering all of Australia
-        layer = L.rectangle([[-44.0, 112.9], [-9.9, 154.0]], {
-          color: c.color, weight: 0, fillColor: c.color, fillOpacity: 0.18,
-        });
-      }
+      const layer = L.tileLayer(`${TILE_BASE}/${c.layerId}/{z}/{x}/{y}`, {
+        maxZoom: 18, opacity: 0.6, attribution: '',
+      });
       layer.addTo(m);
       layers.current[c.id] = layer;
     }
