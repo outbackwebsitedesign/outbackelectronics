@@ -4,9 +4,12 @@ import { TopNav, Footer } from './app-shell.jsx';
 // Australian Government spatial service — per-carrier coverage tile layers
 // https://spatial.infrastructure.gov.au/server/rest/services/Communications/Mobile_Phone_Coverage_by_provider/MapServer
 const CARRIERS = [
-  { id: 'telstra',  label: 'Telstra',  layerId: 2, color: '#0066cc' },
-  { id: 'optus',   label: 'Optus',    layerId: 1, color: '#009900' },
-  { id: 'tpg',     label: 'Vodafone', layerId: 0, color: '#e60000' },
+  { id: 'telstra', label: 'Telstra',  layerId: 2, color: '#0066cc',
+    mvnos: 'Boost · Woolworths Mobile · Aldi Mobile' },
+  { id: 'optus',  label: 'Optus',    layerId: 1, color: '#009900',
+    mvnos: 'Amaysim · Dodo · Coles Mobile' },
+  { id: 'tpg',   label: 'Vodafone', layerId: 0, color: '#e60000',
+    mvnos: 'felix · Kogan Mobile' },
 ];
 
 const TILE_BASE = '/api/coverage/tile';
@@ -16,6 +19,7 @@ export default function CoverageApp() {
   const map = useRef(null);
   const layers = useRef({});
   const [active, setActive] = useState({ telstra: true, optus: true, tpg: true });
+  const [tooltip, setTooltip] = useState(null);
 
   useEffect(() => {
     const L = window.L;
@@ -24,7 +28,7 @@ export default function CoverageApp() {
     const m = L.map(mapEl.current).setView([-27, 134], 5);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 18,
-      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors · Coverage data © <a href="https://www.infrastructure.gov.au">Australian Government</a>',
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors · Coverage © <a href="https://www.infrastructure.gov.au">Australian Government</a>',
     }).addTo(m);
 
     for (const c of CARRIERS) {
@@ -59,15 +63,29 @@ export default function CoverageApp() {
           <span className="cov-bar-label">Show</span>
           <div className="cov-chips">
             {CARRIERS.map(c => (
-              <button
-                key={c.id}
-                className={'cov-chip' + (active[c.id] ? ' on' : '')}
-                style={active[c.id] ? { background: c.color, borderColor: c.color } : {}}
-                onClick={() => toggle(c.id)}
-              >
-                {c.label}
-              </button>
+              <div key={c.id} className="cov-chip-wrap">
+                <button
+                  className={'cov-chip' + (active[c.id] ? ' on' : '')}
+                  style={active[c.id] ? { background: c.color, borderColor: c.color } : {}}
+                  onClick={() => toggle(c.id)}
+                  onMouseEnter={() => setTooltip(c.id)}
+                  onMouseLeave={() => setTooltip(null)}
+                >
+                  {c.label}
+                </button>
+                {tooltip === c.id && (
+                  <div className="cov-tooltip">Also: {c.mvnos}</div>
+                )}
+              </div>
             ))}
+            <a
+              className="cov-chip cov-chip-starlink"
+              href="https://www.starlink.com/map"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Starlink ↗
+            </a>
           </div>
           <span className="cov-source">
             Data: <a href="https://www.infrastructure.gov.au/media-communications/phone/mobile-services-and-coverage" target="_blank" rel="noopener noreferrer">Australian Government</a>
