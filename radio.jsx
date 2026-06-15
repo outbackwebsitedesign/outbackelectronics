@@ -32,6 +32,35 @@ export default function RadioApp() {
     return () => { a.removeEventListener('ended', onEnded); a.removeEventListener('error', onError); };
   }, []);
 
+  // Firefox (and some other browsers) can suspend background-tab audio or throttle
+  // the HTTP streaming connection after a few minutes of inactivity. Two fixes:
+  // 1. Register a MediaSession so the browser treats this as intentional media and
+  //    keeps it alive (also gives OS-level media controls for free).
+  // 2. On visibilitychange, if audio has stalled while we wanted it on, reconnect.
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: np?.track || 'Outback Radio',
+      artist: np?.artist || '',
+      album: np?.album || 'Outback FM · Live',
+    });
+  }, [np]);
+
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
+  }, [playing]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      const a = audioRef.current;
+      if (wantOn.current && a && (a.paused || a.ended || a.readyState < 2)) connect();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
+
   function tuneIn() {
     wantOn.current = true;
     connect();
