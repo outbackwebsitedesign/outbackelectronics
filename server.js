@@ -7485,6 +7485,26 @@ const COVERAGE_TECHS = ['5G', '4G', '3G', 'Satellite', 'None'];
 const coverageServer = createServiceServer({
   htmlEntry: '/dist/coverage.html',
   routes: async (req, res, url) => {
+    if (req.method === 'GET' && /^\/api\/coverage\/tile\/\d+\/\d+\/\d+\/\d+$/.test(url.pathname)) {
+      const parts = url.pathname.split('/');
+      // /api/coverage/tile/{layerId}/{z}/{y}/{x}
+      const [layerId, z, y, x] = parts.slice(4);
+      const allowedLayers = new Set(['0', '1', '2']);
+      if (!allowedLayers.has(layerId)) { res.writeHead(400); res.end(); return true; }
+      const upstream = `https://spatial.infrastructure.gov.au/server/rest/services/Communications/Mobile_Phone_Coverage_by_provider/MapServer/${layerId}/tile/${z}/${y}/${x}`;
+      try {
+        const tileRes = await new Promise((resolve, reject) => {
+          require('https').get(upstream, { headers: { 'User-Agent': 'OutbackElectronics/1.0' } }, resolve).on('error', reject);
+        });
+        res.writeHead(tileRes.statusCode, {
+          'Content-Type': tileRes.headers['content-type'] || 'image/png',
+          'Cache-Control': 'public, max-age=86400',
+          'Access-Control-Allow-Origin': '*',
+        });
+        tileRes.pipe(res);
+      } catch { res.writeHead(502); res.end(); }
+      return true;
+    }
     if (req.method === 'GET' && url.pathname === '/api/coverage/reports') {
       json(res, 200, { reports: readCoverage().slice(-3000) });
       return true;

@@ -9,7 +9,7 @@ const CARRIERS = [
   { id: 'tpg',     label: 'Vodafone', layerId: 0, color: '#e60000' },
 ];
 
-const TILE_BASE = 'https://spatial.infrastructure.gov.au/server/rest/services/Communications/Mobile_Phone_Coverage_by_provider/MapServer';
+const TILE_BASE = '/api/coverage/tile';
 
 export default function CoverageApp() {
   const mapEl = useRef(null);
@@ -28,7 +28,7 @@ export default function CoverageApp() {
     }).addTo(m);
 
     for (const c of CARRIERS) {
-      const layer = L.tileLayer(`${TILE_BASE}/${c.layerId}/tile/{z}/{y}/{x}`, {
+      const layer = L.tileLayer(`${TILE_BASE}/${c.layerId}/{z}/{y}/{x}`, {
         maxZoom: 18,
         opacity: 0.6,
         attribution: '',
