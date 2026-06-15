@@ -307,6 +307,8 @@ export default function SkyApp() {
   const [manualLoc, setManualLoc] = useState(null); // picked from search
   const [geoState, setGeoState] = useState('loading'); // 'loading'|'ok'|'denied'
   const [aurora, setAurora] = useState(null);
+  const [issPasses, setIssPasses] = useState(null);
+  const [issPos, setIssPos] = useState(null);
   const [now, setNow] = useState(new Date());
 
   const activeLoc = geoLoc || manualLoc || LOCATIONS[0];
@@ -331,6 +333,24 @@ export default function SkyApp() {
 
   useEffect(() => {
     fetch('/api/sky/aurora').then(r => r.json()).then(setAurora).catch(() => setAurora({ available: false }));
+  }, []);
+
+  // Fetch ISS passes whenever location is known
+  useEffect(() => {
+    const { lat, lon } = activeLoc;
+    fetch(`/api/sky/iss?lat=${lat}&lon=${lon}`)
+      .then(r => r.json()).then(d => setIssPasses(d.ok ? d.passes : []))
+      .catch(() => setIssPasses(null));
+  }, [activeLoc.lat.toFixed(2), activeLoc.lon.toFixed(2)]);
+
+  // Live ISS position every 10 s
+  useEffect(() => {
+    function fetchPos() {
+      fetch('/api/sky/iss?mode=now').then(r => r.json()).then(d => d.ok && setIssPos(d)).catch(() => {});
+    }
+    fetchPos();
+    const t = setInterval(fetchPos, 10000);
+    return () => clearInterval(t);
   }, []);
 
   useEffect(() => {
@@ -428,7 +448,7 @@ export default function SkyApp() {
         {/* 3D Dome */}
         <div className="sky-dome-wrap">
           <Suspense fallback={<div className="sky-dome-loading">Loading star dome…</div>}>
-            <SkyDome lat={activeLoc.lat} lon={activeLoc.lon} date={now} />
+            <SkyDome lat={activeLoc.lat} lon={activeLoc.lon} date={now} issPos={issPos} />
           </Suspense>
         </div>
 
@@ -577,17 +597,50 @@ export default function SkyApp() {
           </div>
         </section>
 
-        {/* Live trackers */}
+        {/* ISS */}
         <section className="sky-section">
-          <h2 className="sky-section-title">Live trackers</h2>
-          <div className="sky-card" style={{ maxWidth: 600 }}>
-            <h3>Spot the ISS &amp; Starlink</h3>
-            <p className="sky-sub" style={{ marginTop: 0 }}>Track satellites passing over your patch in real time:</p>
-            <div className="sky-track">
-              <a className="btn btn-ghost btn-sm" href="https://spotthestation.nasa.gov/sightings/" target="_blank" rel="noopener">ISS sightings →</a>
-              <a className="btn btn-ghost btn-sm" href="https://findstarlink.com/" target="_blank" rel="noopener">Starlink trains →</a>
-              <a className="btn btn-ghost btn-sm" href="https://www.heavens-above.com/" target="_blank" rel="noopener">Heavens-Above →</a>
+          <h2 className="sky-section-title">ISS — International Space Station</h2>
+          <div className="sky-grid">
+            <div className="sky-card">
+              <h3>Live position</h3>
+              {issPos ? (<>
+                <div className="sky-big" style={{ fontSize: 22, marginTop: 4 }}>
+                  {issPos.lat.toFixed(2)}°{issPos.lat >= 0 ? 'N' : 'S'}, {Math.abs(issPos.lon).toFixed(2)}°{issPos.lon >= 0 ? 'E' : 'W'}
+                </div>
+                <div className="sky-line" style={{ marginTop: 10 }}><span>Altitude</span><b>{issPos.alt.toFixed(0)} km</b></div>
+                <p className="sky-sub">Updated every 10 seconds. ISS orbits at ~28,000 km/h.</p>
+              </>) : <p className="sky-sub">Loading…</p>}
             </div>
+
+            <div className="sky-card">
+              <h3>Upcoming passes — {activeLoc.label || `${activeLoc.lat.toFixed(1)}°, ${activeLoc.lon.toFixed(1)}°`}</h3>
+              {issPasses === null && <p className="sky-sub">Loading…</p>}
+              {issPasses && issPasses.length === 0 && <p className="sky-sub">No visible passes in the next 5 days.</p>}
+              {issPasses && issPasses.map((p, i) => {
+                const rise = new Date(p.rise);
+                const isNext = i === 0;
+                return (
+                  <div key={i} className={'iss-pass' + (isNext ? ' iss-pass-next' : '')}>
+                    <div className="iss-pass-head">
+                      <span className="iss-pass-date">
+                        {rise.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })}
+                        {' '}
+                        <b>{rise.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })}</b>
+                      </span>
+                      <span className="iss-pass-el">Max {p.maxEl}°</span>
+                    </div>
+                    <div className="iss-pass-detail">
+                      {Math.floor(p.duration / 60)}m {p.duration % 60}s &nbsp;·&nbsp;
+                      {p.riseDir} → {p.maxDir} → {p.setDir}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="sky-track" style={{ marginTop: 12 }}>
+            <a className="btn btn-ghost btn-sm" href="https://findstarlink.com/" target="_blank" rel="noopener">Starlink trains →</a>
+            <a className="btn btn-ghost btn-sm" href="https://www.heavens-above.com/" target="_blank" rel="noopener">Heavens-Above →</a>
           </div>
         </section>
       </main>

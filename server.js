@@ -6908,10 +6908,133 @@ async function handleSkyAurora(req, res) {
   const level = kp >= 7 ? 'severe' : kp >= 5 ? 'storm' : kp >= 4 ? 'active' : 'quiet';
   return json(res, 200, { available: true, kp, level, time: _auroraCache.data.time });
 }
+
+// ── ISS pass prediction ───────────────────────────────────────────────────
+let _isstle = { ts: 0, tle: null }; // cached TLE lines
+
+function fetchISStle() {
+  return new Promise((resolve) => {
+    const req = https.get('https://celestrak.org/satcat/tle.php?CATNR=25544', { timeout: 8000 }, (r) => {
+      if (r.statusCode !== 200) { r.resume(); return resolve(null); }
+      let buf = '';
+      r.on('data', c => buf += c);
+      r.on('end', () => {
+        const lines = buf.trim().split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+        if (lines.length >= 3) return resolve({ name: lines[0], l1: lines[1], l2: lines[2] });
+        resolve(null);
+      });
+    });
+    req.on('error', () => resolve(null));
+    req.on('timeout', () => { req.destroy(); resolve(null); });
+  });
+}
+
+const _DEG = Math.PI / 180;
+
+function azName(deg) {
+  const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  return dirs[Math.round(((deg % 360) + 360) % 360 / 22.5) % 16];
+}
+
+// Compute upcoming visible ISS passes using satellite.js SGP4
+async function computeISSPasses(lat, lon, alt_m = 10, days = 5) {
+  const now = Date.now();
+  if (!_isstle.tle || now - _isstle.ts > 6 * 3600 * 1000) {
+    const t = await fetchISStle();
+    if (t) _isstle = { ts: now, tle: t };
+  }
+  if (!_isstle.tle) return null;
+
+  let satellite;
+  try { satellite = require('satellite.js'); } catch { return null; }
+  const satrec = satellite.twoline2satrec(_isstle.tle.l1, _isstle.tle.l2);
+  const latR = lat * _DEG, lonR = lon * _DEG;
+  const R_EARTH = 6371; // km
+  const passes = [];
+  const step   = 15 * 1000;        // 15 s step
+  const end    = now + days * 86400 * 1000;
+  const MIN_EL = 10 * _DEG;        // only show passes > 10° max elevation
+
+  let t = now;
+  let inPass = false, passStart, passMax = -Infinity, passMaxAz, passMaxTime, passStartAz;
+
+  while (t < end && passes.length < 6) {
+    const date    = new Date(t);
+    const posVel  = satellite.propagate(satrec, date);
+    if (!posVel.position) { t += step; continue; }
+    const gmst    = satellite.gstime(date);
+    const geo     = satellite.eciToGeodetic(posVel.position, gmst);
+    const obs     = satellite.eciToLookAngles(posVel.position, { latitude: latR, longitude: lonR, height: alt_m / 1000 }, gmst);
+    const el      = obs.elevation;
+    const az      = obs.azimuth;    // radians, north=0 clockwise
+
+    if (el > 0) {
+      if (!inPass) { inPass = true; passStart = t; passStartAz = az / _DEG; passMax = el; passMaxAz = az / _DEG; passMaxTime = t; }
+      if (el > passMax) { passMax = el; passMaxAz = az / _DEG; passMaxTime = t; }
+    } else if (inPass) {
+      inPass = false;
+      if (passMax >= MIN_EL) {
+        passes.push({
+          rise:     new Date(passStart).toISOString(),
+          set:      new Date(t).toISOString(),
+          duration: Math.round((t - passStart) / 1000),
+          maxEl:    Math.round(passMax / _DEG),
+          maxElTime:new Date(passMaxTime).toISOString(),
+          riseAz:   Math.round(passStartAz),
+          riseDir:  azName(passStartAz),
+          setAz:    Math.round(az / _DEG),
+          setDir:   azName(az / _DEG),
+          maxAz:    Math.round(passMaxAz),
+          maxDir:   azName(passMaxAz),
+        });
+      }
+      t += 20 * 60 * 1000; // skip forward past likely re-entry dead zone
+      continue;
+    }
+    t += step;
+  }
+  return passes;
+}
+
+// Current ISS position (geocentric lat/lon/alt)
+async function computeISSNow() {
+  const now = Date.now();
+  if (!_isstle.tle || now - _isstle.ts > 6 * 3600 * 1000) {
+    const t = await fetchISStle();
+    if (t) _isstle = { ts: now, tle: t };
+  }
+  if (!_isstle.tle) return null;
+  let satellite;
+  try { satellite = require('satellite.js'); } catch { return null; }
+  const satrec = satellite.twoline2satrec(_isstle.tle.l1, _isstle.tle.l2);
+  const date   = new Date(now);
+  const posVel = satellite.propagate(satrec, date);
+  if (!posVel.position) return null;
+  const gmst   = satellite.gstime(date);
+  const geo    = satellite.eciToGeodetic(posVel.position, gmst);
+  return {
+    lat: satellite.degreesLat(geo.latitude),
+    lon: satellite.degreesLong(geo.longitude),
+    alt: geo.height,  // km
+  };
+}
+
+async function handleSkyISS(req, res, url) {
+  const lat  = parseFloat(url.searchParams.get('lat') || '-33');
+  const lon  = parseFloat(url.searchParams.get('lon') || '151');
+  const mode = url.searchParams.get('mode') || 'passes';
+  if (mode === 'now') {
+    const pos = await computeISSNow();
+    return json(res, 200, pos ? { ok: true, ...pos } : { ok: false });
+  }
+  const passes = await computeISSPasses(lat, lon);
+  return json(res, 200, passes ? { ok: true, passes } : { ok: false });
+}
 const skyServer = createServiceServer({
   htmlEntry: '/dist/sky.html',
   routes: async (req, res, url) => {
     if (req.method === 'GET' && url.pathname === '/api/sky/aurora') { await handleSkyAurora(req, res); return true; }
+    if (req.method === 'GET' && url.pathname === '/api/sky/iss')    { await handleSkyISS(req, res, url); return true; }
     return false;
   },
 });

@@ -210,7 +210,7 @@ function moonRaDec(jd) {
 }
 
 // ── Main component ─────────────────────────────────────────────────────────
-export default function SkyDome({ lat, lon, date }) {
+export default function SkyDome({ lat, lon, date, issPos }) {
   const mountRef  = useRef(null);
   const overlayRef = useRef(null);
   const stateRef  = useRef({ theta: PI, phi: 0.28, drag:false, lastX:0, lastY:0, fov:80 });
@@ -483,6 +483,39 @@ export default function SkyDome({ lat, lon, date }) {
         for(let i=0;i<=96;i++){ const az=(i/96)*2*PI; const v=hor2xyz(ad*RAD,az,R*0.96); pts.push(v.x,v.y,v.z); }
         const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pts,3));
         scene.add(new THREE.Line(g,gm));
+      }
+    }
+
+    // ── ISS dot (if above horizon) ────────────────────────────────────────
+    if (issPos) {
+      const issAltAz = eq2altaz(issPos.lon < 0 ? issPos.lon + 360 : issPos.lon,
+        issPos.lat, lst, lat);
+      // issPos is geodetic lat/lon — treat as approximate RA/Dec stand-in
+      // (good enough for a rough indicator; proper ECI→AltAz needs TLE propagation)
+      // Actually compute alt/az from ISS geodetic position:
+      const dLat = (issPos.lat - lat) * RAD;
+      const dLon = ((((issPos.lon - lon) % 360) + 540) % 360 - 180) * RAD;
+      const a = Math.sin(dLat/2)**2 + Math.cos(lat*RAD)*Math.cos(issPos.lat*RAD)*Math.sin(dLon/2)**2;
+      const slantDeg = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)) / RAD;
+      const issAlt_km = issPos.alt || 408;
+      const R_E = 6371;
+      // Elevation angle from observer to ISS
+      const elev = Math.atan2(issAlt_km * Math.cos(slantDeg * RAD) - R_E * (1 - Math.cos(slantDeg * RAD)),
+        (R_E + issAlt_km) * Math.sin(slantDeg * RAD));
+      // Azimuth: bearing from observer to ISS ground track
+      const y = Math.sin(dLon) * Math.cos(issPos.lat * RAD);
+      const x = Math.cos(lat*RAD)*Math.sin(issPos.lat*RAD) - Math.sin(lat*RAD)*Math.cos(issPos.lat*RAD)*Math.cos(dLon);
+      const issAzimuth = Math.atan2(y, x);
+      if (elev > 0) {
+        const iv = hor2xyz(elev, issAzimuth, R * 0.93);
+        const issSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+          color: new THREE.Color(0.2, 1.0, 0.5),
+          transparent: true, opacity: 0.9,
+          blending: THREE.AdditiveBlending, sizeAttenuation: true,
+        }));
+        issSprite.position.copy(iv); issSprite.scale.setScalar(20);
+        scene.add(issSprite);
+        planetLabelData.push({ name: '🛸 ISS', v: iv.clone() });
       }
     }
 
