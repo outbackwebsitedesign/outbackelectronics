@@ -639,6 +639,7 @@ export default function SkyApp() {
             </div>
           </div>
           <div className="sky-track" style={{ marginTop: 12 }}>
+            <a className="btn btn-ghost btn-sm" href="https://www.nasa.gov/spot-the-station/#Sightings" target="_blank" rel="noopener">NASA Spot the Station →</a>
             <a className="btn btn-ghost btn-sm" href="https://findstarlink.com/" target="_blank" rel="noopener">Starlink trains →</a>
             <a className="btn btn-ghost btn-sm" href="https://www.heavens-above.com/" target="_blank" rel="noopener">Heavens-Above →</a>
           </div>
