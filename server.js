@@ -2,6 +2,7 @@ const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+let satellite; try { satellite = require('satellite.js'); } catch {}
 const zlib = require('zlib');
 const crypto = require('crypto');
 const sharp = require('sharp');
@@ -6914,13 +6915,20 @@ let _isstle = { ts: 0, tle: null }; // cached TLE lines
 
 function fetchISStle() {
   return new Promise((resolve) => {
-    const req = https.get('https://celestrak.org/satcat/tle.php?CATNR=25544', { timeout: 8000 }, (r) => {
+    // stations.txt includes ISS (ZARYA) as first entry
+    const req = https.get('https://celestrak.org/GEOPDF/stations.txt', { timeout: 10000 }, (r) => {
       if (r.statusCode !== 200) { r.resume(); return resolve(null); }
       let buf = '';
-      r.on('data', c => buf += c);
+      r.on('data', c => { buf += c; if (buf.length > 64000) req.destroy(); });
       r.on('end', () => {
         const lines = buf.trim().split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-        if (lines.length >= 3) return resolve({ name: lines[0], l1: lines[1], l2: lines[2] });
+        // Find ISS: look for a line starting with '1 25544'
+        for (let i = 0; i < lines.length - 1; i++) {
+          if (lines[i].startsWith('1 25544')) {
+            const name = lines[i - 1] || 'ISS';
+            return resolve({ name, l1: lines[i], l2: lines[i + 1] });
+          }
+        }
         resolve(null);
       });
     });
@@ -6943,10 +6951,7 @@ async function computeISSPasses(lat, lon, alt_m = 10, days = 5) {
     const t = await fetchISStle();
     if (t) _isstle = { ts: now, tle: t };
   }
-  if (!_isstle.tle) return null;
-
-  let satellite;
-  try { satellite = require('satellite.js'); } catch { return null; }
+  if (!_isstle.tle || !satellite) return null;
   const satrec = satellite.twoline2satrec(_isstle.tle.l1, _isstle.tle.l2);
   const latR = lat * _DEG, lonR = lon * _DEG;
   const R_EARTH = 6371; // km
@@ -7003,9 +7008,7 @@ async function computeISSNow() {
     const t = await fetchISStle();
     if (t) _isstle = { ts: now, tle: t };
   }
-  if (!_isstle.tle) return null;
-  let satellite;
-  try { satellite = require('satellite.js'); } catch { return null; }
+  if (!_isstle.tle || !satellite) return null;
   const satrec = satellite.twoline2satrec(_isstle.tle.l1, _isstle.tle.l2);
   const date   = new Date(now);
   const posVel = satellite.propagate(satrec, date);

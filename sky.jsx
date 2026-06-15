@@ -338,10 +338,12 @@ export default function SkyApp() {
   // Fetch ISS passes whenever location is known
   useEffect(() => {
     const { lat, lon } = activeLoc;
+    if (lat == null || lon == null) return;
     fetch(`/api/sky/iss?lat=${lat}&lon=${lon}`)
-      .then(r => r.json()).then(d => setIssPasses(d.ok ? d.passes : []))
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(d => setIssPasses(d.ok ? d.passes : []))
       .catch(() => setIssPasses(null));
-  }, [activeLoc.lat.toFixed(2), activeLoc.lon.toFixed(2)]);
+  }, [activeLoc.lat ?? 0, activeLoc.lon ?? 0]);
 
   // Live ISS position every 10 s
   useEffect(() => {
@@ -603,9 +605,9 @@ export default function SkyApp() {
           <div className="sky-grid">
             <div className="sky-card">
               <h3>Live position</h3>
-              {issPos ? (<>
+              {issPos?.lat != null ? (<>
                 <div className="sky-big" style={{ fontSize: 22, marginTop: 4 }}>
-                  {issPos.lat.toFixed(2)}°{issPos.lat >= 0 ? 'N' : 'S'}, {Math.abs(issPos.lon).toFixed(2)}°{issPos.lon >= 0 ? 'E' : 'W'}
+                  {Math.abs(issPos.lat).toFixed(2)}°{issPos.lat >= 0 ? 'N' : 'S'}, {Math.abs(issPos.lon).toFixed(2)}°{issPos.lon >= 0 ? 'E' : 'W'}
                 </div>
                 <div className="sky-line" style={{ marginTop: 10 }}><span>Altitude</span><b>{issPos.alt.toFixed(0)} km</b></div>
                 <p className="sky-sub">Updated every 10 seconds. ISS orbits at ~28,000 km/h.</p>
@@ -613,7 +615,7 @@ export default function SkyApp() {
             </div>
 
             <div className="sky-card">
-              <h3>Upcoming passes — {activeLoc.label || `${activeLoc.lat.toFixed(1)}°, ${activeLoc.lon.toFixed(1)}°`}</h3>
+              <h3>Upcoming passes — {activeLoc.label || (activeLoc.lat != null ? `${activeLoc.lat.toFixed(1)}°, ${activeLoc.lon.toFixed(1)}°` : '…')}</h3>
               {issPasses === null && <p className="sky-sub">Loading…</p>}
               {issPasses && issPasses.length === 0 && <p className="sky-sub">No visible passes in the next 5 days.</p>}
               {issPasses && issPasses.map((p, i) => {
