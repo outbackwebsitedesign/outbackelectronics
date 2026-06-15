@@ -176,6 +176,39 @@ function planetRaDec(name, jd) {
   return { ra, dec };
 }
 
+// ── Sun position ──────────────────────────────────────────────────────────
+function sunRaDec(jd) {
+  const T = (jd - 2451545) / 36525;
+  const L0 = (280.46646 + 36000.76983 * T) % 360;
+  const M  = ((357.52911 + 35999.05029 * T) % 360) * RAD;
+  const C  = (1.914602 - 0.004817*T) * Math.sin(M) + 0.019993 * Math.sin(2*M);
+  const lon = (L0 + C + 360) % 360;
+  const eps = (23.439291 - 0.013004 * T) * RAD;
+  const lRad = lon * RAD;
+  const ra  = ((Math.atan2(Math.cos(eps)*Math.sin(lRad), Math.cos(lRad)) / RAD) + 360) % 360;
+  const dec = Math.asin(Math.sin(eps)*Math.sin(lRad)) / RAD;
+  return { ra, dec };
+}
+
+// ── Moon position ─────────────────────────────────────────────────────────
+function moonRaDec(jd) {
+  const d = jd - 2451545;
+  const L  = ((218.316 + 13.176396 * d) % 360 + 360) % 360;
+  const M  = ((134.963 + 13.064993 * d) % 360 + 360) % 360 * RAD;
+  const F  = ((93.272  + 13.229350 * d) % 360 + 360) % 360 * RAD;
+  const lon = (L + 6.289 * Math.sin(M)) * RAD;
+  const lat = (5.128 * Math.sin(F)) * RAD;
+  const eps = 23.439 * RAD;
+  const ra  = ((Math.atan2(Math.sin(lon)*Math.cos(eps) - Math.tan(lat)*Math.sin(eps), Math.cos(lon)) / RAD) + 360) % 360;
+  const dec = Math.asin(Math.sin(lat)*Math.cos(eps) + Math.cos(lat)*Math.sin(eps)*Math.sin(lon)) / RAD;
+  // Illumination fraction
+  const synodic = 29.530588853;
+  const refNew  = 2451549.5; // known new moon JD
+  const age     = ((jd - refNew) % synodic + synodic) % synodic;
+  const illum   = 0.5 * (1 - Math.cos((2 * PI * age) / synodic));
+  return { ra, dec, illum };
+}
+
 // ── Main component ─────────────────────────────────────────────────────────
 export default function SkyDome({ lat, lon, date }) {
   const mountRef  = useRef(null);
@@ -211,36 +244,120 @@ export default function SkyDome({ lat, lon, date }) {
     const jd  = julianDay(date);
     const lst = lstDeg(date, lon);
 
-    // ── Sky sphere (gradient shader) ──────────────────────────────────────
+    // ── Sun + Moon positions ───────────────────────────────────────────────
+    const sunEq   = sunRaDec(jd);
+    const sunPos  = eq2altaz(sunEq.ra, sunEq.dec, lst, lat);
+    const sunAlt  = sunPos.alt;                          // radians
+    const sunVec  = hor2xyz(sunPos.alt, sunPos.az, 1.0); // unit direction
+    // nightFactor: 1 = full night (sun < -18°), 0 = full day (sun > 0°)
+    const nightFactor = Math.max(0, Math.min(1, -sunAlt / (18 * RAD)));
+    // twilightFactor: peaks at civil twilight zone
+    const twilightFactor = Math.max(0, 1 - Math.abs(sunAlt + 9 * RAD) / (12 * RAD));
+
+    const moonEq  = moonRaDec(jd);
+    const moonPos = eq2altaz(moonEq.ra, moonEq.dec, lst, lat);
+
+    // ── Sky sphere (day/twilight/night shader) ────────────────────────────
     {
       const geo = new THREE.SphereGeometry(R*1.5, 48, 32);
       const mat = new THREE.ShaderMaterial({
         side: THREE.BackSide,
         depthWrite: false,
+        uniforms: {
+          sunDir:    { value: sunVec },
+          sunAlt:    { value: sunAlt },  // radians
+          nightFact: { value: nightFactor },
+        },
         vertexShader: `
-          varying float vAlt;
+          varying vec3 vPos;
           void main() {
-            vAlt = normalize(position).y;
+            vPos = normalize(position);
             gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);
           }
         `,
         fragmentShader: `
-          varying float vAlt;
+          uniform vec3  sunDir;
+          uniform float sunAlt;
+          uniform float nightFact;
+          varying vec3  vPos;
+
           void main() {
-            vec3 zenith  = vec3(0.001, 0.003, 0.014);
-            vec3 mid     = vec3(0.005, 0.010, 0.032);
-            vec3 haze    = vec3(0.012, 0.022, 0.055);
-            float t = clamp(vAlt, -0.15, 1.0);
-            vec3 col = mix(haze, mid, smoothstep(-0.15, 0.0, t));
-            col = mix(col, zenith, smoothstep(0.0, 0.45, t));
-            // Horizon glow (atmosphere at alt ≈ 0)
-            float glow = exp(-vAlt * vAlt / (2.0 * 0.018)) * 0.08;
-            col += vec3(0.04, 0.08, 0.14) * glow;
-            gl_FragColor = vec4(col, 1.0);
+            float alt  = vPos.y;  // -1 (nadir) to +1 (zenith)
+            float altT = clamp(alt, 0.0, 1.0);
+
+            // ── Night sky ──────────────────────────────────────────────
+            vec3 nightZ = vec3(0.001, 0.003, 0.014);
+            vec3 nightH = vec3(0.010, 0.020, 0.050);
+            vec3 night  = mix(nightH, nightZ, smoothstep(0.0, 0.5, altT));
+            night += vec3(0.04, 0.08, 0.14) * exp(-alt*alt / 0.036) * 0.07;
+
+            // ── Day sky (Rayleigh) ─────────────────────────────────────
+            vec3 dayZ   = vec3(0.10, 0.22, 0.60);
+            vec3 dayH   = vec3(0.52, 0.75, 0.95);
+            vec3 day    = mix(dayH, dayZ, smoothstep(0.0, 0.7, altT));
+            // Sun halo (Mie)
+            float dotS  = max(0.0, dot(vPos, sunDir));
+            day += vec3(1.0, 0.95, 0.8) * pow(dotS, 80.0) * 0.6;
+            day += vec3(1.0, 0.85, 0.6) * pow(dotS, 8.0)  * 0.25;
+
+            // ── Twilight ───────────────────────────────────────────────
+            // Sunset/sunrise glow: orange band near horizon opposite to zenith
+            float sunAltCl = clamp(sunAlt, -0.35, 0.0);
+            float twBand   = exp(-(alt - sunAltCl)*(alt - sunAltCl) / 0.025);
+            // Angular distance from sun in horizontal plane
+            float twGlow   = max(0.0, dot(vec3(vPos.x, 0.0, vPos.z), vec3(sunDir.x, 0.0, sunDir.z)));
+            vec3  twCol    = mix(vec3(0.18,0.05,0.22), vec3(0.90,0.35,0.05), twGlow * twGlow);
+            vec3  twilight = mix(night, night + twCol * twBand * 1.2, clamp(1.0-nightFact*1.5, 0.0, 1.0));
+
+            // ── Blend day/twilight/night ───────────────────────────────
+            float dayF = clamp(sunAlt / 0.15, 0.0, 1.0);        // 0→1 as sun 0°→8°
+            float twF  = clamp((sunAlt + 0.31) / 0.31, 0.0, 1.0); // twilight blend
+            vec3  col  = twilight;
+            col = mix(col, day, dayF);
+
+            gl_FragColor = vec4(max(col, vec3(0.0)), 1.0);
           }
         `,
       });
       scene.add(new THREE.Mesh(geo, mat));
+    }
+
+    // ── Sun disc + corona ─────────────────────────────────────────────────
+    if (sunAlt > -0.08) {
+      const sv = hor2xyz(sunPos.alt, sunPos.az, R * 0.94);
+      // Corona glow
+      const corona = new THREE.Sprite(new THREE.SpriteMaterial({
+        color: new THREE.Color(1.0, 0.95, 0.75),
+        transparent: true, opacity: Math.min(1, (sunAlt + 0.08) / 0.15),
+        blending: THREE.AdditiveBlending, sizeAttenuation: true,
+      }));
+      corona.position.copy(sv); corona.scale.setScalar(120);
+      scene.add(corona);
+      // Disc
+      const disc = new THREE.Mesh(
+        new THREE.SphereGeometry(12, 16, 16),
+        new THREE.MeshBasicMaterial({ color: 0xfffde8 }),
+      );
+      disc.position.copy(sv);
+      scene.add(disc);
+    }
+
+    // ── Moon disc ─────────────────────────────────────────────────────────
+    if (moonPos.alt > -0.02) {
+      const mv = hor2xyz(moonPos.alt, moonPos.az, R * 0.94);
+      const moonGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+        color: new THREE.Color(0.92, 0.92, 0.85),
+        transparent: true, opacity: 0.35 * moonEq.illum,
+        blending: THREE.AdditiveBlending, sizeAttenuation: true,
+      }));
+      moonGlow.position.copy(mv); moonGlow.scale.setScalar(60);
+      scene.add(moonGlow);
+      const moonDisc = new THREE.Mesh(
+        new THREE.SphereGeometry(8, 16, 16),
+        new THREE.MeshBasicMaterial({ color: new THREE.Color(0.85 + 0.15*moonEq.illum, 0.88 + 0.12*moonEq.illum, 0.85) }),
+      );
+      moonDisc.position.copy(mv);
+      scene.add(moonDisc);
     }
 
     // ── Milky Way ─────────────────────────────────────────────────────────
@@ -250,7 +367,8 @@ export default function SkyDome({ lat, lon, date }) {
       const geo = new THREE.SphereGeometry(R*0.98, 128, 64);
       const mat = new THREE.MeshBasicMaterial({
         map: mwTex, side: THREE.BackSide,
-        transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 1.0,
+        transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+        opacity: nightFactor,  // hidden during day/twilight
       });
       const mesh = new THREE.Mesh(geo, mat);
       mesh.rotation.y = PI/2;
@@ -287,12 +405,13 @@ export default function SkyDome({ lat, lon, date }) {
       geo.setAttribute('size',     new THREE.Float32BufferAttribute(siz,1));
       geo.setAttribute('bright',   new THREE.Float32BufferAttribute(blr,1));
       const mat = new THREE.ShaderMaterial({
-        uniforms: {},
+        uniforms: { nightFact: { value: nightFactor } },
         vertexShader:`
           attribute float size; attribute vec3 color; attribute float bright;
-          varying vec3 vCol; varying float vBr;
+          uniform float nightFact;
+          varying vec3 vCol; varying float vBr; varying float vNight;
           void main(){
-            vCol=color; vBr=bright;
+            vCol=color; vBr=bright; vNight=nightFact;
             vec4 mv=modelViewMatrix*vec4(position,1.0);
             gl_Position=projectionMatrix*mv;
             gl_PointSize=size*(650.0/-mv.z);
@@ -300,14 +419,14 @@ export default function SkyDome({ lat, lon, date }) {
           }
         `,
         fragmentShader:`
-          varying vec3 vCol; varying float vBr;
+          varying vec3 vCol; varying float vBr; varying float vNight;
           void main(){
             vec2 uv=gl_PointCoord-0.5; float r=dot(uv,uv);
             if(r>0.25) discard;
             float core=exp(-r*28.0);
             float halo=exp(-r*7.0)*0.5;
             float bloom=vBr*exp(-r*2.5)*0.4;
-            float alpha=(core+halo)*0.97;
+            float alpha=(core+halo)*0.97 * vNight;
             vec3 col=vCol*(core*1.5+halo)+vCol*bloom;
             gl_FragColor=vec4(col,alpha);
           }
@@ -366,6 +485,10 @@ export default function SkyDome({ lat, lon, date }) {
         scene.add(new THREE.Line(g,gm));
       }
     }
+
+    // ── Sun / Moon labels ─────────────────────────────────────────────────
+    if (sunAlt > -0.08)  planetLabelData.push({ name: 'Sun',  v: hor2xyz(sunPos.alt,  sunPos.az,  R*0.95) });
+    if (moonPos.alt > 0) planetLabelData.push({ name: 'Moon', v: hor2xyz(moonPos.alt, moonPos.az, R*0.95) });
 
     // ── Labels: bright stars + planets + cardinals ─────────────────────────
     refs.current.labelData       = labelData;
@@ -484,12 +607,13 @@ export default function SkyDome({ lat, lon, date }) {
             textShadow:'0 0 4px #000,0 0 8px #000',
           }}>{s[4]}</span>
         ))}
-        {/* Planet labels */}
-        {Object.keys(PLANET_DEFS).map((name,i)=>(
+        {/* Planet + Sun + Moon labels (7 slots: 5 planets + Sun + Moon) */}
+        {[...Object.keys(PLANET_DEFS), 'Sun', 'Moon'].map((name,i)=>(
           <span key={`pl${i}`} data-sky-label="1" style={{
             position:'absolute', transform:'translate(8px,-50%)',
             fontFamily:'Archivo,sans-serif', fontSize:12, fontWeight:600,
-            color:'#ddc98a', pointerEvents:'none', display:'none', whiteSpace:'nowrap',
+            color: name==='Sun' ? '#ffe066' : name==='Moon' ? '#c8d8e8' : '#ddc98a',
+            pointerEvents:'none', display:'none', whiteSpace:'nowrap',
             textShadow:'0 0 4px #000,0 0 8px #000',
           }}>{name}</span>
         ))}
