@@ -2203,7 +2203,7 @@ function Lobby({ onPlay }) {
   }, []);
 
   return (
-    <div style={{ flex:1, padding:'40px 24px', maxWidth:960, margin:'0 auto', width:'100%' }}>
+    <div style={{ flex:1, overflowY:'auto', padding:'40px 24px', maxWidth:960, margin:'0 auto', width:'100%' }}>
       <div style={{ marginBottom:32, textAlign:'center' }}>
         <h2 style={{ fontFamily:"'Instrument Serif', serif", fontSize:36, color:T.ink, fontWeight:400 }}>
           Take a break. Play something.
@@ -2263,7 +2263,7 @@ function App() {
   }
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', minHeight:'100vh' }}>
+    <div style={{ display:'flex', flexDirection:'column', height:'100vh', overflow:'hidden' }}>
       <header style={css.header}>
         <a href="https://outbackelectronics.com.au" style={css.logoLink} title="Back to Outback Electronics">
           <img src="assets/logo.webp" alt="" style={css.logoImg} onError={e=>{e.target.style.display='none';}} />
