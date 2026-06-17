@@ -7344,7 +7344,7 @@ function fetchFeedJSON(url, extraHeaders) { return fetchFeedRaw(url, extraHeader
 
 // ── Road closures ─────────────────────────────────────────────────────────────
 const QLDTRAFFIC_API_KEY = process.env.QLDTRAFFIC_API_KEY || '3e83add325cbb69ac4d8e5bf433d770b';
-const VIC_OPENDATA_KEY   = process.env.VIC_OPENDATA_KEY   || 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJwWndKa3V1cmxBUDRKZjNYYkdoWkJfMjdzMzM3TTB6YU1uLTdVYW1LekFnIiwiaWF0IjoxNzgxNDI4MDc0fQ.JoU4UbnCIZJ2Mf3xi7rNo8lxTjkeOqWKmp3mQapv23M';
+const VIC_OPENDATA_KEY   = process.env.VIC_OPENDATA_KEY   || '4f4e1541-4f7c-4ab6-b2bd-f4b7e70b7166';
 // Web Mercator (EPSG:3857) → WGS84 — WA and SA ArcGIS services return projected coords
 function mercToLatLon(x, y) {
   const lon = (x / 20037508.342) * 180;
