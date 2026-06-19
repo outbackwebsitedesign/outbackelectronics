@@ -2212,13 +2212,13 @@ function buildInvoicePdf(order, shop) {
     doc.rect(50, tableTop, 495, 22).fill(OCHRE);
     doc.font('Helvetica-Bold').fontSize(10).fillColor('#fff');
     doc.text('Description', colDescX + 6, tableTop + 6);
-    doc.text('Amount', colAmountX, tableTop + 6, { width: 89, align: 'right' });
+    doc.text('Amount', colAmountX, tableTop + 6, { width: 79, align: 'right' });
     let y = tableTop + 22 + 8;
     doc.font('Helvetica').fontSize(10);
     lineItems.forEach((li, i) => {
       if (i % 2 === 1) doc.rect(50, y - 5, 495, 20).fill('#f7f1e8');
       doc.fillColor('#222').text(li.description, colDescX + 6, y, { width: colWidth - 95 - 6 });
-      doc.text(fmtMoney(li.amount), colAmountX, y, { width: 89, align: 'right' });
+      doc.text(fmtMoney(li.amount), colAmountX, y, { width: 79, align: 'right' });
       y += 20;
     });
     doc.moveTo(50, y + 4).lineTo(545, y + 4).strokeColor('#ccc').stroke();
@@ -2227,14 +2227,14 @@ function buildInvoicePdf(order, shop) {
     const paid = (order.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
     const balance = (Number(order.total) || 0) - paid;
     doc.font('Helvetica-Bold').fillColor('#222').text('Total', colDescX + 6, y, { width: colWidth - 95 - 6 });
-    doc.text(fmtMoney(order.total), colAmountX, y, { width: 89, align: 'right' });
+    doc.text(fmtMoney(order.total), colAmountX, y, { width: 79, align: 'right' });
     y += 20;
     doc.font('Helvetica').fillColor('#444').text('Paid', colDescX + 6, y, { width: colWidth - 95 - 6 });
-    doc.text(fmtMoney(paid), colAmountX, y, { width: 89, align: 'right' });
+    doc.text(fmtMoney(paid), colAmountX, y, { width: 79, align: 'right' });
     y += 24;
     doc.rect(50, y - 6, 495, 28).fill(balance > 0 ? '#fbe9e4' : '#eaf3ea');
     doc.font('Helvetica-Bold').fontSize(12).fillColor(balance > 0 ? RUST : '#2e7d32').text('Balance Due', colDescX + 6, y, { width: colWidth - 95 - 6 });
-    doc.text(fmtMoney(balance), colAmountX, y, { width: 89, align: 'right' });
+    doc.text(fmtMoney(balance), colAmountX, y, { width: 79, align: 'right' });
     y += 40;
 
     if (shop.bankBsb || shop.bankAccountNumber) {
