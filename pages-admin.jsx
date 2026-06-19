@@ -1134,19 +1134,25 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
     <Drawer open={true} onClose={onClose} dirty={dirty} title={edit.id ? `Order ${edit.id}` : 'New order'}
       footer={<div className="row-flex" style={{gap:8, justifyContent:'space-between'}}>
         {edit.id
-          ? <button className="btn btn-ghost btn-sm" style={{fontSize:12}}
-              disabled={trackingEmailStatus === 'sending' || !form.email}
-              title={!form.email ? 'Order has no customer email' : 'Send order tracking email to customer'}
-              onClick={async () => {
-                setTrackingEmailStatus('sending');
-                try {
-                  const r = await fetch('/api/admin/orders/send-tracking-email', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: form.id }) });
-                  setTrackingEmailStatus(r.ok ? 'sent' : 'error');
-                } catch { setTrackingEmailStatus('error'); }
-                setTimeout(() => setTrackingEmailStatus(null), 4000);
-              }}>
-              {trackingEmailStatus === 'sending' ? '⏳ Sending…' : trackingEmailStatus === 'sent' ? '✓ Email sent' : trackingEmailStatus === 'error' ? '✗ Failed' : '✉ Send tracking email'}
-            </button>
+          ? <div className="row-flex" style={{gap:8}}>
+              <button className="btn btn-ghost btn-sm" style={{fontSize:12}}
+                onClick={() => window.open(`/api/admin/orders/invoice?id=${encodeURIComponent(form.id)}`, '_blank')}>
+                🖨 Print invoice
+              </button>
+              <button className="btn btn-ghost btn-sm" style={{fontSize:12}}
+                disabled={trackingEmailStatus === 'sending' || !form.email}
+                title={!form.email ? 'Order has no customer email' : 'Send order tracking email to customer'}
+                onClick={async () => {
+                  setTrackingEmailStatus('sending');
+                  try {
+                    const r = await fetch('/api/admin/orders/send-tracking-email', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: form.id }) });
+                    setTrackingEmailStatus(r.ok ? 'sent' : 'error');
+                  } catch { setTrackingEmailStatus('error'); }
+                  setTimeout(() => setTrackingEmailStatus(null), 4000);
+                }}>
+                {trackingEmailStatus === 'sending' ? '⏳ Sending…' : trackingEmailStatus === 'sent' ? '✓ Email sent' : trackingEmailStatus === 'error' ? '✗ Failed' : '✉ Send tracking email'}
+              </button>
+            </div>
           : <span/>
         }
         <div className="row-flex" style={{gap:8}}>

@@ -6,6 +6,7 @@ let satellite; try { satellite = require('satellite.js'); } catch {}
 const zlib = require('zlib');
 const crypto = require('crypto');
 const sharp = require('sharp');
+const PDFDocument = require('pdfkit');
 
 const gzipCache = new Map();
 
@@ -2154,6 +2155,75 @@ function buildPartsFromDraftQuote(dq) {
     parts.push({ id: item.id || ('p-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex')), name: item.description, qty: 1, status: 'pending', orderedAt: null, deliveredAt: null, installedAt: null });
   }
   return parts;
+}
+
+function buildInvoicePdf(order, shop) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: 'A4', margin: 50 });
+    const chunks = [];
+    doc.on('data', c => chunks.push(c));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const fmtMoney = n => `$${(Number(n) || 0).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const shopName = shop.name || 'Outback Electronics';
+    const shopAddress = shop.address || [shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ');
+
+    doc.font('Helvetica-Bold').fontSize(20).text(shopName);
+    doc.font('Helvetica').fontSize(10).fillColor('#444')
+      .text(shopAddress || '')
+      .text(shop.phone || '')
+      .text(shop.email || '')
+      .text(shop.abn ? `ABN: ${shop.abn}` : '');
+    doc.moveDown(1.5);
+
+    doc.fillColor('#000').font('Helvetica-Bold').fontSize(16).text('INVOICE', { align: 'right' });
+    doc.font('Helvetica').fontSize(10).fillColor('#444')
+      .text(`Invoice #: ${order.id}`, { align: 'right' })
+      .text(`Date: ${order.date || ''}`, { align: 'right' });
+    doc.moveDown(1.5);
+
+    doc.fillColor('#000').font('Helvetica-Bold').fontSize(11).text('Bill To');
+    doc.font('Helvetica').fontSize(10).fillColor('#222')
+      .text(order.cust || '')
+      .text(order.email || '')
+      .text(order.phone || '')
+      .text(order.shippingAddress || order.loc || '');
+    doc.moveDown(1.5);
+
+    const lineItems = (order.lineItems && order.lineItems.length)
+      ? order.lineItems.map(li => ({ description: li.description || '', amount: Number(li.amount) || 0 }))
+      : [{ description: order.items || 'Goods / services', amount: Number(order.total) || 0 }];
+
+    const tableTop = doc.y;
+    const colDescX = 50, colAmountX = 460, colWidth = 500;
+    doc.font('Helvetica-Bold').fontSize(10);
+    doc.text('Description', colDescX, tableTop);
+    doc.text('Amount', colAmountX, tableTop, { width: 95, align: 'right' });
+    doc.moveTo(50, tableTop + 16).lineTo(545, tableTop + 16).strokeColor('#ccc').stroke();
+    let y = tableTop + 24;
+    doc.font('Helvetica').fontSize(10);
+    for (const li of lineItems) {
+      doc.fillColor('#222').text(li.description, colDescX, y, { width: colWidth - 95 });
+      doc.text(fmtMoney(li.amount), colAmountX, y, { width: 95, align: 'right' });
+      y += 20;
+    }
+    doc.moveTo(50, y + 4).lineTo(545, y + 4).strokeColor('#ccc').stroke();
+    y += 14;
+
+    const paid = (order.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
+    const balance = (Number(order.total) || 0) - paid;
+    doc.font('Helvetica-Bold').text('Total', colDescX, y, { width: colWidth - 95 });
+    doc.text(fmtMoney(order.total), colAmountX, y, { width: 95, align: 'right' });
+    y += 20;
+    doc.font('Helvetica').fillColor('#444').text('Paid', colDescX, y, { width: colWidth - 95 });
+    doc.text(fmtMoney(paid), colAmountX, y, { width: 95, align: 'right' });
+    y += 20;
+    doc.font('Helvetica-Bold').fillColor(balance > 0 ? '#a33' : '#222').text('Balance Due', colDescX, y, { width: colWidth - 95 });
+    doc.text(fmtMoney(balance), colAmountX, y, { width: 95, align: 'right' });
+
+    doc.end();
+  });
 }
 
 function getPortalUrl() {
@@ -4330,6 +4400,22 @@ const adminServer = http.createServer(async (req, res) => {
       sendEmail({ to: body.email, ...tmpl });
     }
     return json(res, 200, { ok: true, item: body });
+  }
+  if (req.method === 'GET' && url.pathname === '/api/admin/orders/invoice') {
+    const session = requireRole(req, res, 'staff'); if (!session) return;
+    const id = url.searchParams.get('id');
+    const order = readOrders().find(o => o.id === id);
+    if (!order) return json(res, 404, { error: 'not_found' });
+    const { shop } = readSettings();
+    const buffer = await buildInvoicePdf(order, shop);
+    res.writeHead(200, {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="invoice-${order.id}.pdf"`,
+      'Content-Length': buffer.length,
+      'X-Content-Type-Options': 'nosniff',
+    });
+    res.end(buffer);
+    return;
   }
   if (req.method === 'POST' && url.pathname === '/api/admin/orders/refund') {
     const session = requireRole(req, res, 'manager'); if (!session) return;
