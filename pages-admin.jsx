@@ -911,8 +911,20 @@ function orderPaymentStatus(f) {
 // ============================================================
 // OrderDrawer — edit panel for a single order
 // ============================================================
-function OrderDrawer({ edit, expenses, onClose, onRowUpdate, onSave, onExpensesChange }) {
+function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, onExpensesChange, onCustomerCreated }) {
   const [form, setForm] = useState({ ...edit, id: edit.id || edit.suggestedId || '' });
+  const findCustomerMatch = (c) => {
+    const email = (c.email || '').toLowerCase().trim();
+    const name = (c.cust || '').toLowerCase().trim();
+    return (customers || []).find(x =>
+      (email && (x.email || '').toLowerCase().trim() === email) ||
+      (name && (x.name || '').toLowerCase().trim() === name)
+    );
+  };
+  const [selectedCustomerId, setSelectedCustomerId] = useState(() => {
+    const match = findCustomerMatch(edit);
+    return match ? match.id : '';
+  });
   const [payEntry, setPayEntry] = useState({ amount:'', method:'Cash', note:'' });
   const [updateEntry, setUpdateEntry] = useState({ text:'', type:'note' });
   const [expenseEdit, setExpenseEdit] = useState(null);
@@ -1153,6 +1165,17 @@ function OrderDrawer({ edit, expenses, onClose, onRowUpdate, onSave, onExpensesC
                 adminToast(`Order number ${payload.id} was just taken — assigned ${savedItem.id} instead.`);
               }
               savedSnapRef.current = JSON.stringify(savedItem);
+              // If this order was placed against a brand-new customer (no existing
+              // record picked or matched), create that customer record now so they
+              // immediately appear in the Customers list rather than waiting on backfill.
+              if (!selectedCustomerId && form.cust && form.cust.trim() && !findCustomerMatch(form)) {
+                const custPayload = { name: form.cust.trim(), email: form.email || '', phone: form.phone || '', loc: form.loc || '' };
+                const cr = await fetch('/api/admin/customers/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(custPayload) }).catch(()=>null);
+                if (cr && cr.ok) {
+                  const cd = await cr.json();
+                  if (cd.item) onCustomerCreated?.(cd.item);
+                }
+              }
               onSave(savedItem, !edit.id);
             } else {
               adminToast('Save failed — changes not persisted. Please try again.');
@@ -1162,7 +1185,20 @@ function OrderDrawer({ edit, expenses, onClose, onRowUpdate, onSave, onExpensesC
       </div>}
     >
       <label className="field"><span className="label">Order Number<ReqMark/></span><input className="input" aria-required="true" style={{fontFamily:'monospace', fontWeight:700}} value={form.id||''} onChange={e=>setForm({...form,id:e.target.value})} placeholder="e.g. OE-1001"/></label>
-      <label className="field"><span className="label">Customer<ReqMark/></span><input className="input" aria-required="true" value={form.cust||''} onChange={e=>setForm({...form,cust:e.target.value})}/></label>
+      <label className="field"><span className="label">Customer<ReqMark/></span>
+        <select className="select" value={selectedCustomerId} onChange={e => {
+          const id = e.target.value;
+          setSelectedCustomerId(id);
+          if (!id) return; // "+ New customer" — leave fields as typed
+          const c = (customers || []).find(x => x.id === id);
+          if (!c) return;
+          setForm(f => ({ ...f, cust: c.name || f.cust, email: c.email || f.email, phone: c.phone || f.phone, loc: c.loc || f.loc }));
+        }}>
+          <option value="">+ New customer</option>
+          {(customers || []).map(c => <option key={c.id} value={c.id}>{c.name}{c.email ? ` (${c.email})` : ''}</option>)}
+        </select>
+      </label>
+      <label className="field"><span className="label">{selectedCustomerId ? 'Customer name' : 'New customer name'}<ReqMark/></span><input className="input" aria-required="true" value={form.cust||''} onChange={e=>setForm({...form,cust:e.target.value})}/></label>
       <label className="field"><span className="label">Email</span><input className="input" type="email" value={form.email||''} onChange={e=>setForm({...form,email:e.target.value})}/></label>
       <label className="field"><span className="label">Phone</span><input className="input" type="tel" value={form.phone||''} onChange={e=>setForm({...form,phone:e.target.value})}/></label>
       <label className="field"><span className="label">Shipping Address</span><input className="input" value={form.shippingAddress||''} onChange={e=>setForm({...form,shippingAddress:e.target.value})} placeholder="Street, City, State, Postcode"/></label>
@@ -1444,6 +1480,7 @@ function AdminOrders({ search }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expenses, setExpenses] = useState([]);
+  const [customers, setCustomers] = useState([]);
   const [edit, setEdit] = useState(null);
   const [statusTab, setStatusTab] = useState('all');
   const [dateRange, setDateRange] = useState({ from: '', to: '' });
@@ -1452,6 +1489,8 @@ function AdminOrders({ search }) {
       .then(r => r.ok ? r.json() : Promise.reject()).then(d => setRows(d.items || [])).catch(() => setRows([])).finally(() => setLoading(false));
     fetch('/api/admin/expenses', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject()).then(d => setExpenses(d.items || [])).catch(() => {});
+    fetch('/api/admin/customers', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject()).then(d => setCustomers(d.items || [])).catch(() => {});
   }, []);
 
   const q = (search || '').toLowerCase().trim();
@@ -1543,6 +1582,7 @@ function AdminOrders({ search }) {
         <OrderDrawer
           edit={edit}
           expenses={expenses}
+          customers={customers}
           onClose={() => setEdit(null)}
           onRowUpdate={(updated) => setRows(rs => rs.map(r => r.id === (edit.id || updated.id) ? updated : r))}
           onSave={(saved, isNew) => {
@@ -1551,6 +1591,7 @@ function AdminOrders({ search }) {
             setEdit(null);
           }}
           onExpensesChange={setExpenses}
+          onCustomerCreated={(cust) => setCustomers(cs => [...cs, cust])}
         />
       )}
     </div>
