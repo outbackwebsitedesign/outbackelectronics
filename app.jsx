@@ -821,6 +821,16 @@ function App() {
   });
   const [pageParams, setPageParams] = useState(null);
 
+  const POLICY_AUDIENCE_KEYS = ['private', 'commercial', 'seller'];
+  const parsePoliciesPath = (rest) => {
+    const parts = rest.split('/').filter(Boolean);
+    if (parts.length >= 2 && POLICY_AUDIENCE_KEYS.includes(parts[0])) {
+      return { audience: parts[0], slug: decodeURIComponent(parts[1]) };
+    }
+    if (parts.length >= 1) return { slug: decodeURIComponent(parts[0]) };
+    return { slug: 'terms-and-conditions' };
+  };
+
   // Resolve a /product/:id or /service/:id path to its catalog item; marks the
   // params as not-found so detail pages can render a proper 404 view (never blank).
   const resolveDeepLink = (path) => {
@@ -843,8 +853,7 @@ function App() {
   useEffect(() => {
     const path = location.pathname.replace(/^\/+/, '');
     if (path.startsWith('policies/') && !pageParams) {
-      const slug = decodeURIComponent(path.slice('policies/'.length));
-      if (slug) setPageParams({ slug });
+      setPageParams(parsePoliciesPath(path.slice('policies/'.length)));
     } else if ((path.startsWith('product/') || path.startsWith('service/')) && !pageParams) {
       resolveDeepLink(path);
     } else if (path.startsWith('software/') && !pageParams) {
@@ -911,7 +920,7 @@ function App() {
       if (id) target = `/service/${encodeURIComponent(id)}`;
     } else if (page === 'policies') {
       const slug = pageParams?.slug || 'terms-and-conditions';
-      target = `/policies/${slug}`;
+      target = pageParams?.audience ? `/policies/${pageParams.audience}/${slug}` : `/policies/${slug}`;
     } else if (page === 'software' && pageParams?.slug) {
       if (pageParams.os) target = `/software/${pageParams.os}/${pageParams.slug}`;
       else target = `/software/${pageParams.slug}`;
@@ -943,7 +952,7 @@ function App() {
       const path = location.pathname.replace(/^\/+/, '');
       if (path.startsWith('product/')) { setPage('product'); setPageParams(null); resolveDeepLink(path); return; }
       if (path.startsWith('service/')) { setPage('service'); setPageParams(null); resolveDeepLink(path); return; }
-      if (path.startsWith('policies/')) { setPage('policies'); setPageParams({ slug: path.slice('policies/'.length) }); return; }
+      if (path.startsWith('policies/')) { setPage('policies'); setPageParams(parsePoliciesPath(path.slice('policies/'.length))); return; }
       if (path.startsWith('software/')) {
         const rest = path.slice('software/'.length);
         const parts = rest.split('/').filter(Boolean);

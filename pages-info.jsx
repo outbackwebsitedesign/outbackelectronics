@@ -756,7 +756,7 @@ function SellerListingContent({ email }) {
 // INFO FOR SELLERS — INDEX
 // ============================================================
 function SellersPage({ go }) {
-  useEffect(() => { go('policies', { slug: 'seller-terms' }); }, []);
+  useEffect(() => { go('policies', { audience: 'seller', slug: 'terms-and-conditions' }); }, []);
   return null;
 }
 
@@ -1269,7 +1269,7 @@ function CommercialTermsContent({ email, phone, address, abn }) {
       <span className="eyebrow">LEGAL · COMMERCIAL TERMS AND CONDITIONS</span>
       <h2 style={{marginTop:8}}>Terms and Conditions — Commercial Customers</h2>
       <div style={s.mt}>
-        <p style={s.p}>These Commercial Terms and Conditions apply to any purchase from Outback Electronics ('Company', 'we', 'us', or 'our') made by a business, trade, or wholesale account, or otherwise made for the purposes of resupply, business use, or in trade ('Commercial Customer', 'you'). If you are purchasing as a private individual mainly for personal, domestic, or household use, our standard <a href="/policies/terms-and-conditions">Terms and Conditions for Private Customers</a> apply instead.</p>
+        <p style={s.p}>These Commercial Terms and Conditions apply to any purchase from Outback Electronics ('Company', 'we', 'us', or 'our') made by a business, trade, or wholesale account, or otherwise made for the purposes of resupply, business use, or in trade ('Commercial Customer', 'you'). If you are purchasing as a private individual mainly for personal, domestic, or household use, our standard <a href="/policies/private/terms-and-conditions">Terms and Conditions for Private Customers</a> apply instead.</p>
         <p style={s.p}>We are Outback Electronics, a mobile electronics services provider registered in Australia.{abn ? ` Our ABN is ${abn}.` : ''} Our correspondence and returns address is {address}, Australia. You can contact us by phone at <a href={`tel:${(phone||'').replace(/\s/g,'')}`}>{phone}</a> or by email at <a href={`mailto:${email}`}>{email}</a>.</p>
         <p style={{...s.p, fontWeight:600}}>BY PLACING A COMMERCIAL OR TRADE ORDER WITH US, YOU REPRESENT THAT YOU ARE ACQUIRING THE GOODS OR SERVICES FOR BUSINESS USE OR RESUPPLY AND YOU AGREE TO BE BOUND BY THESE COMMERCIAL TERMS IN PLACE OF OUR PRIVATE CUSTOMER TERMS.</p>
       </div>
@@ -1302,7 +1302,7 @@ function CommercialTermsContent({ email, phone, address, abn }) {
       </div>
 
       <div style={s.mt}><h3>7. Returns</h3>
-        <p style={s.p}>Please refer to our <a href="/policies/commercial-returns">Return Policy for Commercial Customers</a>, which forms part of these Commercial Terms.</p>
+        <p style={s.p}>Please refer to our <a href="/policies/commercial/return-policy">Return Policy for Commercial Customers</a>, which forms part of these Commercial Terms.</p>
       </div>
 
       <div style={s.mt}><h3>8. Resupply, Relabelling, and Representations to End Customers</h3>
@@ -1337,7 +1337,7 @@ function CommercialReturnContent({ email, phone, address }) {
     <div>
       <span className="eyebrow">LEGAL · RETURN POLICY — COMMERCIAL CUSTOMERS</span>
       <h2 style={{marginTop:8}}>Return Policy — Commercial Customers</h2>
-      <p style={s.p}>This Return Policy applies to purchases made on a trade, wholesale, or business account. If you are a private customer purchasing mainly for personal or household use, our <a href="/policies/return-policy">standard Return Policy</a> applies instead.</p>
+      <p style={s.p}>This Return Policy applies to purchases made on a trade, wholesale, or business account. If you are a private customer purchasing mainly for personal or household use, our <a href="/policies/private/return-policy">standard Return Policy</a> applies instead.</p>
 
       <div style={s.mt}><h3>Statutory Rights</h3>
         <p style={s.p}>Where the Australian Consumer Law consumer guarantees apply to your purchase (see clause 2 of our Commercial Terms and Conditions), nothing in this policy excludes, restricts, or modifies those rights. For purchases outside the scope of the ACL consumer guarantees, the Commercial Warranty described in our Commercial Terms and Conditions applies in their place.</p>
@@ -1634,10 +1634,10 @@ const POLICY_AUDIENCES = {
   },
   commercial: {
     label: 'Commercial Customer',
-    defaultSlug: 'commercial-terms',
+    defaultSlug: 'terms-and-conditions',
     docs: {
-      'commercial-terms': { title: 'Terms & Conditions', updated: 'June 6, 2026', Component: CommercialTermsContent },
-      'commercial-returns': { title: 'Return Policy', updated: 'June 6, 2026', Component: CommercialReturnContent },
+      'terms-and-conditions': { title: 'Terms & Conditions', updated: 'June 6, 2026', Component: CommercialTermsContent },
+      'return-policy': { title: 'Return Policy', updated: 'June 6, 2026', Component: CommercialReturnContent },
       'custom-work': { title: 'Custom Work & Reverse Engineering', updated: 'June 19, 2026', Component: CustomWorkContent },
       'privacy-policy': { title: 'Privacy Policy', updated: 'June 6, 2026', Component: PrivacyContent },
       'shipping-and-delivery': { title: 'Shipping & Delivery', updated: 'June 6, 2026', Component: ShippingContent },
@@ -1648,14 +1648,24 @@ const POLICY_AUDIENCES = {
   },
   seller: {
     label: 'Seller',
-    defaultSlug: 'seller-terms',
+    defaultSlug: 'terms-and-conditions',
     docs: {
-      'seller-terms': { title: 'OHD001 – Terms and Conditions for Sellers', updated: 'June 6, 2026', Component: SellerTermsContent },
-      'seller-quality': { title: 'OHD002 – Design Quality Standards', updated: 'June 6, 2026', Component: SellerQualityContent },
-      'seller-fees': { title: 'OHD003 – Fees Schedule', updated: 'June 6, 2026', Component: SellerFeesContent },
-      'seller-listing': { title: 'OHD004 – Listing Requirements', updated: 'June 6, 2026', Component: SellerListingContent },
+      'terms-and-conditions': { title: 'OHD001 – Terms and Conditions for Sellers', updated: 'June 6, 2026', Component: SellerTermsContent },
+      'quality-standards': { title: 'OHD002 – Design Quality Standards', updated: 'June 6, 2026', Component: SellerQualityContent },
+      'fees-schedule': { title: 'OHD003 – Fees Schedule', updated: 'June 6, 2026', Component: SellerFeesContent },
+      'listing-requirements': { title: 'OHD004 – Listing Requirements', updated: 'June 6, 2026', Component: SellerListingContent },
     },
   },
+};
+
+// Back-compat for the old single-segment slugs used before audience-scoped URLs existed.
+const LEGACY_POLICY_SLUGS = {
+  'commercial-terms': { audience: 'commercial', slug: 'terms-and-conditions' },
+  'commercial-returns': { audience: 'commercial', slug: 'return-policy' },
+  'seller-terms': { audience: 'seller', slug: 'terms-and-conditions' },
+  'seller-quality': { audience: 'seller', slug: 'quality-standards' },
+  'seller-fees': { audience: 'seller', slug: 'fees-schedule' },
+  'seller-listing': { audience: 'seller', slug: 'listing-requirements' },
 };
 
 function findPolicyAudience(slug) {
@@ -1672,23 +1682,31 @@ function PoliciesPage({ go, pageParams }) {
   const phone = shop.phone;
   const address = fullAddress;
   const abn = shop.abn;
-  const slug = pageParams?.slug || 'terms-and-conditions';
-  const slugAudience = findPolicyAudience(slug);
-  const [audience, setAudience] = useState(slugAudience || 'private');
+
+  // Resolve the incoming params: prefer an explicit two-segment {audience, slug},
+  // fall back to legacy single-segment slugs (some of which moved audience+slug on rename).
+  let rawSlug = pageParams?.slug || 'terms-and-conditions';
+  let urlAudience = pageParams?.audience;
+  if (!urlAudience && LEGACY_POLICY_SLUGS[rawSlug]) {
+    urlAudience = LEGACY_POLICY_SLUGS[rawSlug].audience;
+    rawSlug = LEGACY_POLICY_SLUGS[rawSlug].slug;
+  }
+  const resolvedAudience = (urlAudience && POLICY_AUDIENCES[urlAudience]) ? urlAudience : (findPolicyAudience(rawSlug) || 'private');
+  const [audience, setAudience] = useState(resolvedAudience);
 
   useEffect(() => {
-    if (slugAudience && slugAudience !== audience) setAudience(slugAudience);
-  }, [slug]);
+    if (resolvedAudience !== audience) setAudience(resolvedAudience);
+  }, [resolvedAudience]);
 
-  const goDoc = (s) => go('policies', { slug: s });
+  const goDoc = (a, s) => go('policies', { audience: a, slug: s });
   const onAudienceChange = (next) => {
     setAudience(next);
-    goDoc(POLICY_AUDIENCES[next].defaultSlug);
+    goDoc(next, POLICY_AUDIENCES[next].defaultSlug);
   };
 
   const group = POLICY_AUDIENCES[audience] || POLICY_AUDIENCES.private;
   const DOCS = group.docs;
-  const activeDoc = DOCS[slug] ? slug : group.defaultSlug;
+  const activeDoc = DOCS[rawSlug] ? rawSlug : group.defaultSlug;
   const DocComponent = DOCS[activeDoc].Component;
 
   return (
@@ -1710,7 +1728,7 @@ function PoliciesPage({ go, pageParams }) {
             </select>
             <div className="eyebrow" style={{padding:'0 0 8px 0', marginBottom:4}}>DOCUMENTS</div>
             {Object.entries(DOCS).map(([s, d]) => (
-              <a key={s} href={`/policies/${s}`} className={activeDoc===s?'active':''} aria-current={activeDoc===s ? 'page' : undefined} onClick={(e) => { e.preventDefault(); goDoc(s); }}>{d.title}</a>
+              <a key={s} href={`/policies/${audience}/${s}`} className={activeDoc===s?'active':''} aria-current={activeDoc===s ? 'page' : undefined} onClick={(e) => { e.preventDefault(); goDoc(audience, s); }}>{d.title}</a>
             ))}
           </aside>
           <div className="policy-content">
