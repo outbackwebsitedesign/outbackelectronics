@@ -1143,7 +1143,7 @@ function OrderDrawer({ edit, expenses, onClose, onRowUpdate, onSave, onExpensesC
             if (form.email && !isValidEmail(form.email)) { adminToast('Customer email looks invalid — please check it.'); return; }
             if (form.phone && !isValidPhone(form.phone)) { adminToast('Phone number looks invalid — please check it.'); return; }
             if (Number(form.total) < 0) { adminToast('Order total cannot be negative.'); return; }
-            const payload = { ...form, _originalId: edit.id || form.id };
+            const payload = { ...form, _originalId: edit.id || form.id, _isNew: !edit.id };
             const r = await fetch('/api/admin/orders/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(payload) }).catch(()=>null);
             if (r && r.ok) {
               const d = await r.json();

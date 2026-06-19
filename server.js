@@ -4283,22 +4283,31 @@ const adminServer = http.createServer(async (req, res) => {
     const session = requireRole(req, res, 'manager'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     const orders = readOrders();
+    const isNew = !!body._isNew;
     // _originalId lets the client rename an order's ID — find by original, save with new
-    const lookupId = body._originalId || body.id;
-    const idx = orders.findIndex(o => o.id && o.id === lookupId);
+    const lookupId = isNew ? null : (body._originalId || body.id);
+    const idx = lookupId ? orders.findIndex(o => o.id && o.id === lookupId) : -1;
     const existing = idx >= 0 ? orders[idx] : null;
-    const { draftQuote: _dq, _originalId: _oid, ...bodyToStore } = body;
-    // Check new ID isn't already taken by a different order
-    if (bodyToStore.id && idx >= 0 && bodyToStore.id !== existing.id) {
-      const collision = orders.find((o, i) => i !== idx && o.id === bodyToStore.id);
-      if (collision) return json(res, 409, { error: 'id_taken', message: `Order number ${bodyToStore.id} is already in use.` });
-    }
-    if (idx >= 0) { orders[idx] = bodyToStore; } else {
+    const { draftQuote: _dq, _originalId: _oid, _isNew: _isNewFlag, ...bodyToStore } = body;
+    if (isNew) {
+      // Never treat a same-ID match as "this row" for a brand-new order — another
+      // request (e.g. a customer accepting a quote) may have claimed that number
+      // between the admin opening the drawer and clicking Save.
+      if (bodyToStore.id && orders.some(o => o.id === bodyToStore.id)) {
+        return json(res, 409, { error: 'id_taken', message: `Order number ${bodyToStore.id} was just taken by another order. Please choose a different number and save again.` });
+      }
       if (!bodyToStore.id) {
         const maxN = orders.reduce((max, o) => { const m = String(o.id||'').match(/^OE-(\d+)$/); return m ? Math.max(max, parseInt(m[1])) : max; }, 1000);
         bodyToStore.id = `OE-${maxN + 1}`;
       }
       orders.push(bodyToStore);
+    } else {
+      // Check new ID isn't already taken by a different order
+      if (bodyToStore.id && idx >= 0 && bodyToStore.id !== existing.id) {
+        const collision = orders.find((o, i) => i !== idx && o.id === bodyToStore.id);
+        if (collision) return json(res, 409, { error: 'id_taken', message: `Order number ${bodyToStore.id} is already in use.` });
+      }
+      if (idx >= 0) { orders[idx] = bodyToStore; } else { orders.push(bodyToStore); }
     }
     writeOrders(orders);
     // Financial fields are audited with before/after values so any change to an
