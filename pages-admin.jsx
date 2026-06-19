@@ -929,6 +929,16 @@ function OrderDrawer({ edit, expenses, onClose, onRowUpdate, onSave, onExpensesC
   const savedSnapRef = React.useRef(JSON.stringify({ ...edit }));
   const dirty = JSON.stringify(form) !== savedSnapRef.current;
 
+  // When line items are present they're the source of truth — keep total/items summary in sync.
+  React.useEffect(() => {
+    if (!form.lineItems || form.lineItems.length === 0) return;
+    const lineItemsTotal = Math.round(form.lineItems.reduce((s,i)=>s+(Number(i.amount)||0),0) * 100) / 100;
+    const summary = form.lineItems.map(i => i.description).filter(Boolean).join(', ');
+    if (lineItemsTotal !== Number(form.total) || (summary && summary !== form.items)) {
+      setForm(f => ({ ...f, total: lineItemsTotal, items: summary || f.items }));
+    }
+  }, [form.lineItems]);
+
   const saveNow = async (patch) => {
     const updated = { ...form, ...patch };
     const prevForm = form;
@@ -1153,8 +1163,27 @@ function OrderDrawer({ edit, expenses, onClose, onRowUpdate, onSave, onExpensesC
       <label className="field"><span className="label">Phone</span><input className="input" type="tel" value={form.phone||''} onChange={e=>setForm({...form,phone:e.target.value})}/></label>
       <label className="field"><span className="label">Shipping Address</span><input className="input" value={form.shippingAddress||''} onChange={e=>setForm({...form,shippingAddress:e.target.value})} placeholder="Street, City, State, Postcode"/></label>
       <label className="field"><span className="label">Location</span><input className="input" value={form.loc||''} onChange={e=>setForm({...form,loc:e.target.value})}/></label>
-      <label className="field"><span className="label">Items</span><input className="input" value={form.items||''} onChange={e=>setForm({...form,items:e.target.value})}/></label>
       <label className="field"><span className="label">Date</span><input className="input" value={form.date||''} onChange={e=>setForm({...form,date:e.target.value})}/></label>
+
+      <div className="field">
+        <span className="label">Line items</span>
+        {(form.lineItems||[]).map(li => (
+          <div key={li.id} style={{display:'grid', gridTemplateColumns:'1fr 110px 28px', gap:8, marginBottom:8}}>
+            <input className="input" placeholder="e.g. Custom software development" value={li.description}
+              onChange={e => setForm(f => ({...f, lineItems: f.lineItems.map(x => x.id === li.id ? {...x, description: e.target.value} : x)}))}/>
+            <input className="input" type="number" min="0" step="0.01" placeholder="Price" value={li.amount}
+              onChange={e => setForm(f => ({...f, lineItems: f.lineItems.map(x => x.id === li.id ? {...x, amount: nonNegInput(e.target.value)} : x)}))}/>
+            <button className="btn btn-ghost btn-sm" style={{padding:0, color:'var(--rust)'}}
+              onClick={() => setForm(f => ({...f, lineItems: f.lineItems.filter(x => x.id !== li.id)}))}>✕</button>
+          </div>
+        ))}
+        <button className="btn btn-ghost btn-sm" onClick={() => setForm(f => ({...f, lineItems: [...(f.lineItems||[]), { id: 'li-' + Date.now(), description:'', amount:'' }]}))}>+ Add line item</button>
+        {(form.lineItems||[]).length > 0 && (
+          <div style={{marginTop:8, fontSize:12, color:'var(--ink-3)'}}>Line items total: <strong>${(form.lineItems||[]).reduce((s,i)=>s+(Number(i.amount)||0),0).toLocaleString('en-AU',{minimumFractionDigits:2})}</strong> — order total below is kept in sync.</div>
+        )}
+      </div>
+
+      <label className="field"><span className="label">Items summary</span><input className="input" value={form.items||''} onChange={e=>setForm({...form,items:e.target.value})} placeholder="Shown in order lists"/></label>
 
       <label className="field"><span className="label">Fulfilment</span>
         <select className="select" value={form.fulfilment||'pending'} onChange={e=>setForm({...form,fulfilment:e.target.value})}>
@@ -1262,7 +1291,9 @@ function OrderDrawer({ edit, expenses, onClose, onRowUpdate, onSave, onExpensesC
       </>}
 
       <div style={{borderTop:'1px solid var(--line)', margin:'12px 0 16px'}}/>
-      <label className="field"><span className="label">Order Total (AUD)</span><input className="input" type="number" min="0" step="0.01" value={form.total||''} onChange={e=>setForm({...form,total:Number(e.target.value)})}/></label>
+      <label className="field"><span className="label">Order Total (AUD){(form.lineItems||[]).length > 0 && <span style={{color:'var(--ink-3)', fontWeight:400}}> — set by line items</span>}</span>
+        <input className="input" type="number" min="0" step="0.01" disabled={(form.lineItems||[]).length > 0} value={form.total||''} onChange={e=>setForm({...form,total:Number(e.target.value)})}/>
+      </label>
 
       <div style={{marginBottom:12}}>
         <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8}}>
@@ -1454,7 +1485,7 @@ function AdminOrders({ search }) {
     refunded: rows.filter(r => (r.fulfilment||'pending') === 'refunded').length,
   }), [rows]);
 
-  const blankOrder = () => ({ id:'', cust:'', email:'', phone:'', loc:'', items:'', date: todayOrderDate(), total:0, fulfilment:'pending', payments:[], parts:[], updates:[] });
+  const blankOrder = () => ({ id:'', cust:'', email:'', phone:'', loc:'', items:'', lineItems:[], date: todayOrderDate(), total:0, fulfilment:'pending', payments:[], parts:[], updates:[] });
 
   const openRow = (r) => { setEdit(r); };
 
