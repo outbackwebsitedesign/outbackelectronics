@@ -755,93 +755,9 @@ function SellerListingContent({ email }) {
 // ============================================================
 // INFO FOR SELLERS — INDEX
 // ============================================================
-const SELLER_DOCS = [
-  { id: 'OHD001', title: 'Terms and Conditions for Sellers', Component: SellerTermsContent },
-  { id: 'OHD002', title: 'Design Quality Standards', Component: SellerQualityContent },
-  { id: 'OHD003', title: 'Fees Schedule', Component: SellerFeesContent },
-  { id: 'OHD004', title: 'Listing Requirements', Component: SellerListingContent },
-];
-
 function SellersPage({ go }) {
-  const shop = useShop();
-  const [activeDoc, setActiveDoc] = useState(null);
-  const current = SELLER_DOCS.find(d => d.id === activeDoc);
-
-  const fullAddress = [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(', ');
-  const email = shop.email;
-  const phone = shop.phone;
-  const address = fullAddress;
-  const abn = shop.abn;
-
-  if (current) {
-    const DocComponent = current.Component;
-    return (
-      <>
-        <PageHead
-          crumbs={['Outback', 'Info for Sellers', current.id]}
-          title={current.title}
-        />
-        <section className="container" style={{paddingTop: 8, paddingBottom: 60}}>
-          <button
-            className="btn btn-ghost"
-            style={{marginBottom: 28, fontSize: 13}}
-            onClick={() => setActiveDoc(null)}
-          >
-            ← Back to Information for Sellers
-          </button>
-          <div className="card-paper" style={{padding: '36px 44px', maxWidth: 820}}>
-            <div className="row-flex" style={{alignItems:'center', gap: 12, marginBottom: 24}}>
-              <span className="tag tag-ochre">{current.id}</span>
-            </div>
-            <hr className="thin" style={{margin: '24px 0'}} />
-            <div className="policy-content" style={{fontSize: 14.5, lineHeight: 1.8, color: 'var(--ink-2)'}}>
-              <DocComponent email={email} phone={phone} address={address} abn={abn} />
-            </div>
-          </div>
-        </section>
-      </>
-    );
-  }
-
-  return (
-    <>
-      <PageHead
-        crumbs={['Outback', 'Info for Sellers']}
-        title="Information For Sellers"
-        lead="Everything you need to know about listing and selling your products on the Outback Electronics platform."
-      />
-      <section className="container" style={{paddingTop: 32, paddingBottom: 60}}>
-        <div style={{maxWidth: 680, display: 'grid', gap: 0}}>
-          {SELLER_DOCS.map((doc, i) => (
-            <button
-              key={doc.id}
-              onClick={() => setActiveDoc(doc.id)}
-              style={{
-                display: 'block',
-                width: '100%',
-                textAlign: 'left',
-                background: 'none',
-                border: 'none',
-                borderBottom: i < SELLER_DOCS.length - 1 ? '1px solid var(--line)' : 'none',
-                padding: '22px 0',
-                cursor: 'pointer',
-              }}
-            >
-              <span style={{
-                fontFamily: 'Instrument Serif, serif',
-                fontSize: 20,
-                color: 'var(--rust)',
-                textDecoration: 'underline',
-                textUnderlineOffset: 3,
-              }}>
-                {doc.id} – {doc.title}
-              </span>
-            </button>
-          ))}
-        </div>
-      </section>
-    </>
-  );
+  useEffect(() => { go('policies', { slug: 'seller-terms' }); }, []);
+  return null;
 }
 
 // ============================================================
@@ -1346,6 +1262,196 @@ function ReturnContent({ email, phone, address }) {
   );
 }
 
+function CommercialTermsContent({ email, phone, address, abn }) {
+  const s = {mt: {marginTop:32}, p: {fontSize:15, lineHeight:1.75, marginTop:8}};
+  return (
+    <div>
+      <span className="eyebrow">LEGAL · COMMERCIAL TERMS AND CONDITIONS</span>
+      <h2 style={{marginTop:8}}>Terms and Conditions — Commercial Customers</h2>
+      <div style={s.mt}>
+        <p style={s.p}>These Commercial Terms and Conditions apply to any purchase from Outback Electronics ('Company', 'we', 'us', or 'our') made by a business, trade, or wholesale account, or otherwise made for the purposes of resupply, business use, or in trade ('Commercial Customer', 'you'). If you are purchasing as a private individual mainly for personal, domestic, or household use, our standard <a href="/policies/terms-and-conditions">Terms and Conditions for Private Customers</a> apply instead.</p>
+        <p style={s.p}>We are Outback Electronics, a mobile electronics services provider registered in Australia.{abn ? ` Our ABN is ${abn}.` : ''} Our correspondence and returns address is {address}, Australia. You can contact us by phone at <a href={`tel:${(phone||'').replace(/\s/g,'')}`}>{phone}</a> or by email at <a href={`mailto:${email}`}>{email}</a>.</p>
+        <p style={{...s.p, fontWeight:600}}>BY PLACING A COMMERCIAL OR TRADE ORDER WITH US, YOU REPRESENT THAT YOU ARE ACQUIRING THE GOODS OR SERVICES FOR BUSINESS USE OR RESUPPLY AND YOU AGREE TO BE BOUND BY THESE COMMERCIAL TERMS IN PLACE OF OUR PRIVATE CUSTOMER TERMS.</p>
+      </div>
+
+      <div style={s.mt}><h3>1. Application and Precedence</h3>
+        <p style={s.p}>These Commercial Terms apply to the exclusion of our standard private-customer Terms and Conditions wherever an order is placed on a trade or business account, in quantities or at prices consistent with wholesale or resupply, or where the customer identifies itself as a business at checkout or in account setup. Our Privacy Policy, Cookie Policy, and Acceptable Use Policy apply equally to Commercial Customers and are incorporated by reference.</p>
+      </div>
+
+      <div style={s.mt}><h3>2. Consumer Guarantees and Business Purchases</h3>
+        <p style={s.p}>The Australian Consumer Law ('ACL') consumer guarantees apply to goods and services acquired by a 'consumer' as defined in section 3 of the ACL. Depending on the value and nature of the goods, some business purchases — particularly higher-value purchases, or goods not of a kind ordinarily acquired for personal, domestic, or household use — may fall outside the ACL's consumer guarantee regime and are instead governed by the contractual warranties set out in these Commercial Terms.</p>
+        <p style={s.p}><strong>Nothing in these Commercial Terms excludes, restricts, or modifies any guarantee, right, or remedy that applies as a matter of law and cannot lawfully be excluded</strong>, including any ACL consumer guarantee that does apply to your purchase. Where the ACL consumer guarantees do not apply to your purchase, the warranties in clause 6 below apply in their place.</p>
+      </div>
+
+      <div style={s.mt}><h3>3. Trade Accounts and Credit</h3>
+        <p style={s.p}>Trade accounts may be approved at our discretion. Where a credit account is approved, payment terms (e.g. 14 or 30 days from invoice) will be confirmed in writing at account setup. Invoices not paid by the due date may attract interest at 1.5% per month (or part thereof) on the overdue balance, and we may suspend supply on the account until overdue amounts are paid. We reserve the right to require security, a deposit, or payment in advance for any order, and to vary, suspend, or withdraw credit terms at any time on reasonable notice.</p>
+        <p style={s.p}>Title in goods does not pass to you until payment in full has been received by us in cleared funds. Until title passes, you must store the goods separately, keep them identifiable as our property, and not encumber or sell them other than in the ordinary course of resupply.</p>
+      </div>
+
+      <div style={s.mt}><h3>4. Pricing, Quotes, and Bulk Orders</h3>
+        <p style={s.p}>Trade and wholesale pricing is provided on request and may vary by volume, account history, or negotiated arrangement. Written quotes are valid for 14 days from issue unless otherwise stated and are subject to stock availability at the time of order confirmation. All prices are in Australian Dollars and exclude GST unless stated otherwise; GST will be added where applicable and shown on the tax invoice.</p>
+      </div>
+
+      <div style={s.mt}><h3>5. Delivery and Risk</h3>
+        <p style={s.p}>Estimated delivery times are not guaranteed. Risk in the goods passes to you on delivery to the address you nominate, or on collection if you arrange your own freight or pick-up. You are responsible for inspecting goods on delivery and notifying us in writing of any shortage, transit damage, or discrepancy within 5 business days of delivery; claims made after this period may not be accepted, except to the extent the ACL or other mandatory law requires otherwise.</p>
+      </div>
+
+      <div style={s.mt}><h3>6. Warranty (Where ACL Consumer Guarantees Do Not Apply)</h3>
+        <p style={s.p}>Where the ACL consumer guarantees do not apply to your purchase under clause 2, we warrant that goods supplied will be free from material defects in materials and workmanship for a period of <strong>12 months from the date of delivery</strong> ('Commercial Warranty'), or such other period as agreed in writing for a specific order. Our sole obligation under the Commercial Warranty, at our election, is to repair, replace, or credit the price of any defective goods returned to us at your cost within the warranty period, provided the defect is not the result of misuse, unauthorised modification, incorrect installation, normal wear and tear, or use outside the goods' rated specifications.</p>
+        <p style={s.p}>To the fullest extent permitted by law, the Commercial Warranty is the sole and exclusive remedy for defective goods supplied under these Commercial Terms, and excludes any other warranty, condition, or guarantee, whether express, implied, statutory, or otherwise, except any guarantee that applies as a matter of law and cannot lawfully be excluded.</p>
+      </div>
+
+      <div style={s.mt}><h3>7. Returns</h3>
+        <p style={s.p}>Please refer to our <a href="/policies/commercial-returns">Return Policy for Commercial Customers</a>, which forms part of these Commercial Terms.</p>
+      </div>
+
+      <div style={s.mt}><h3>8. Resupply, Relabelling, and Representations to End Customers</h3>
+        <p style={s.p}>If you resell or resupply our products, you are solely responsible for any representations you make to your own customers about those products, and for complying with the ACL and any other applicable law in respect of your own sales. You must not represent that we warrant, endorse, or are responsible for any modification, integration, relabelling, or bundling you apply to our products. You agree to indemnify us against any claim arising from a representation you make to your customers that is inconsistent with these Commercial Terms or our published product specifications.</p>
+      </div>
+
+      <div style={s.mt}><h3>9. Limitation of Liability</h3>
+        <p style={{...s.p, textTransform:'uppercase', fontSize:13}}>TO THE FULLEST EXTENT PERMITTED BY LAW, OUR TOTAL AGGREGATE LIABILITY TO YOU UNDER OR IN CONNECTION WITH THESE COMMERCIAL TERMS, WHETHER IN CONTRACT, TORT (INCLUDING NEGLIGENCE), OR OTHERWISE, IS LIMITED TO THE PRICE PAID BY YOU FOR THE GOODS OR SERVICES GIVING RISE TO THE CLAIM. WE ARE NOT LIABLE FOR ANY INDIRECT, CONSEQUENTIAL, OR ECONOMIC LOSS, INCLUDING LOSS OF PROFITS, LOSS OF CONTRACTS, OR LOSS OF BUSINESS OPPORTUNITY, ARISING OUT OF OR IN CONNECTION WITH THESE COMMERCIAL TERMS.</p>
+        <p style={s.p}><strong>This limitation does not apply to liability that cannot lawfully be excluded or limited, including liability arising under any ACL consumer guarantee that does apply to your purchase.</strong></p>
+      </div>
+
+      <div style={s.mt}><h3>10. Governing Law and Disputes</h3>
+        <p style={s.p}>These Commercial Terms are governed by the laws of Queensland, Australia. Each party submits to the exclusive jurisdiction of the courts of Queensland in respect of any dispute arising out of or in connection with these Commercial Terms, except where mandatory law provides otherwise.</p>
+      </div>
+
+      <div style={s.mt}><h3>11. Contact Us</h3>
+        <p style={s.p}><strong>Outback Electronics</strong><br/>{address}, Australia<br/>Phone: <a href={`tel:${(phone||'').replace(/\s/g,'')}`}>{phone}</a><br/>Email: <a href={`mailto:${email}`}>{email}</a></p>
+      </div>
+
+      <hr className="thin" style={{marginTop:40}} />
+      <div className="notice" style={{marginTop:24}}>
+        <span className="tag tag-ink">QUESTIONS?</span>
+        <div style={{fontSize:13, color:'var(--ink-2)'}}>Email <strong><a href={`mailto:${email}`}>{email}</a></strong> — we'll get back to you as soon as we can.</div>
+      </div>
+    </div>
+  );
+}
+
+function CommercialReturnContent({ email, phone, address }) {
+  const s = {mt: {marginTop:32}, p: {fontSize:15, lineHeight:1.75, marginTop:8}};
+  return (
+    <div>
+      <span className="eyebrow">LEGAL · RETURN POLICY — COMMERCIAL CUSTOMERS</span>
+      <h2 style={{marginTop:8}}>Return Policy — Commercial Customers</h2>
+      <p style={s.p}>This Return Policy applies to purchases made on a trade, wholesale, or business account. If you are a private customer purchasing mainly for personal or household use, our <a href="/policies/return-policy">standard Return Policy</a> applies instead.</p>
+
+      <div style={s.mt}><h3>Statutory Rights</h3>
+        <p style={s.p}>Where the Australian Consumer Law consumer guarantees apply to your purchase (see clause 2 of our Commercial Terms and Conditions), nothing in this policy excludes, restricts, or modifies those rights. For purchases outside the scope of the ACL consumer guarantees, the Commercial Warranty described in our Commercial Terms and Conditions applies in their place.</p>
+      </div>
+
+      <div style={s.mt}><h3>Faulty or Defective Goods</h3>
+        <p style={s.p}>If goods are defective on arrival or fail within the applicable warranty period, contact us at <a href={`mailto:${email}`}>{email}</a> with your account or invoice number, a description of the fault, and supporting photographs or video where possible. We will assess the claim and, where the goods are confirmed defective, repair, replace, or credit them in accordance with our Commercial Terms and Conditions.</p>
+      </div>
+
+      <div style={s.mt}><h3>Change-of-Mind Returns — No General Right</h3>
+        <p style={s.p}>Unlike our private-customer policy, we do <strong>not</strong> offer a general change-of-mind return right on commercial or trade orders, including bulk and made-to-order stock. Any change-of-mind return is at our sole discretion, must be agreed with us in writing before the goods are sent back, and may be subject to a restocking fee of up to 20% of the invoice value plus return freight, deducted from any credit issued. Goods must be unused, in original packaging, and in resaleable condition to be accepted for a discretionary change-of-mind return.</p>
+      </div>
+
+      <div style={s.mt}><h3>Shortages and Transit Damage</h3>
+        <p style={s.p}>Shortages, incorrect items, or transit damage must be reported in writing within <strong>5 business days</strong> of delivery, with photographic evidence of the goods and packaging as received. Claims reported after this period may not be accepted, except to the extent required by the ACL or other mandatory law.</p>
+      </div>
+
+      <div style={s.mt}><h3>Return Process</h3>
+        <p style={s.p}>Email <a href={`mailto:${email}`}>{email}</a> to obtain a Return Merchandise Authorisation (RMA) number before sending anything back. Goods returned without a prior RMA number may be refused or delayed. Unless the return relates to a confirmed defect or an error on our part, you are responsible for return freight, which must be sent prepaid to:</p>
+        <span style={{display:'block', margin:'8px 0 8px 0', padding:'14px 18px', background:'var(--bg-elev)', border:'1px solid var(--line)', fontSize:14, lineHeight:2}}>
+          <strong>Outback Electronics</strong> — Attn: Trade Returns (RMA # [your number])<br/>
+          {address}, Australia
+        </span>
+      </div>
+
+      <div style={s.mt}><h3>Credits and Refunds</h3>
+        <p style={s.p}>Approved returns are processed as an account credit by default. A refund to your original payment method, or to your nominated bank account for invoiced trade accounts, will be issued on request once the returned goods have been received and inspected. Please allow up to 14 business days for processing.</p>
+      </div>
+
+      <div style={s.mt}><h3>Questions</h3>
+        <p style={s.p}>Phone: <a href={`tel:${(phone||'').replace(/\s/g,'')}`}>{phone}</a><br/>Email: <a href={`mailto:${email}`}>{email}</a></p>
+      </div>
+
+      <hr className="thin" style={{marginTop:40}} />
+      <div className="notice" style={{marginTop:24}}>
+        <span className="tag tag-ink">QUESTIONS?</span>
+        <div style={{fontSize:13, color:'var(--ink-2)'}}>Email <strong><a href={`mailto:${email}`}>{email}</a></strong> — we'll get back to you as soon as we can.</div>
+      </div>
+    </div>
+  );
+}
+
+function CustomWorkContent({ email, phone, address, abn }) {
+  const s = {mt: {marginTop:32}, p: {fontSize:15, lineHeight:1.75, marginTop:8}};
+  return (
+    <div>
+      <span className="eyebrow">LEGAL · CUSTOM WORK AND REVERSE ENGINEERING POLICY</span>
+      <h2 style={{marginTop:8}}>Custom Work and Reverse Engineering Policy</h2>
+      <div style={s.mt}>
+        <p style={s.p}>This policy applies whenever Outback Electronics ('Company', 'we', 'us', or 'our') designs or builds bespoke hardware, writes or modifies custom software or firmware, or performs reverse-engineering work (collectively, 'Custom Work') for a customer ('you'). It applies alongside, and in addition to, our Terms and Conditions (private or commercial, as applicable) and our Acceptable Use Policy.{abn ? ` Our ABN is ${abn}.` : ''} Contact us at <a href={`tel:${(phone||'').replace(/\s/g,'')}`}>{phone}</a> or <a href={`mailto:${email}`}>{email}</a> with any questions before commencing a Custom Work job.</p>
+      </div>
+
+      <div style={s.mt}><h3>1. Quote and Scope</h3>
+        <p style={s.p}>Before we start any Custom Work, we will agree a written quote or statement of work describing the scope, deliverables, fees, and timeline. Work outside this agreed scope ('Change Requests') must be confirmed in writing and may incur additional fees or affect the timeline. Verbal or informal requests made during the course of a job are treated as Change Requests and are not binding until confirmed in writing.</p>
+      </div>
+
+      <div style={s.mt}><h3>2. Ownership of Deliverables — We Retain IP, You Get a Licence</h3>
+        <p style={s.p}>Unless we agree otherwise in writing for a specific job, <strong>we retain ownership of all intellectual property</strong> in the deliverables created in performing Custom Work — including schematics, PCB layouts, firmware, source code, designs, drawings, and documentation ('Deliverables').</p>
+        <p style={s.p}>On payment in full for the job, we grant you a <strong>non-exclusive, non-transferable, perpetual licence</strong> to use, operate, and maintain the Deliverable for your own internal or personal purposes, and to have it repaired or modified by us or (where we provide the necessary materials, such as source files) a third party. This licence does <strong>not</strong> include the right to resell, sublicense, manufacture at volume, distribute, or commercially exploit the Deliverable or any copy or derivative of it. If you want to do any of those things, contact us to discuss a separate commercialisation licence — fees and terms for that are negotiated separately and are not covered by this policy.</p>
+        <p style={s.p}>We may reuse general techniques, methods, and know-how developed during your job in other jobs for other customers. We will not disclose your specific designs, source code, or confidential information to another customer — see clause 6 (Confidentiality). <strong>This reuse right is subject to, and does not override, any separate confidentiality or non-disclosure agreement we have entered into with a third party</strong> (for example, where we are engaged as a subcontractor under an NDA). Where we hold information under such an agreement, we will not use or disclose it in performing work for you, even if it would otherwise qualify as general know-how.</p>
+        <p style={s.p}>No licence is granted, and no Deliverable will be released to you, until the job is paid in full. We may withhold source files, firmware images, or design files (while still providing the finished physical item, where applicable) until payment is received.</p>
+      </div>
+
+      <div style={s.mt}><h3>3. Reverse Engineering — Your Warranty</h3>
+        <p style={s.p}>If you ask us to reverse-engineer an item — including recreating a circuit or board, extracting or decompiling firmware, recovering a design with no remaining documentation, or cloning a part that is no longer manufactured — you warrant to us that:</p>
+        <ul style={{paddingLeft:20, lineHeight:2, marginTop:8}}>
+          <li>you own the item, or are its lawful licensee or authorised user with the right to have it serviced, repaired, or made interoperable with other equipment;</li>
+          <li>the request is for a legitimate purpose such as repair, maintenance, interoperability, or preservation of a product you are entitled to use, and not for unauthorised cloning of a current commercial product for competing manufacture or resale;</li>
+          <li>to the best of your knowledge, the work does not infringe any third party's patent, registered design, copyright, or trade mark, and does not breach the anti-circumvention provisions of the <em>Copyright Act 1968</em> (Cth) or any other applicable law; and</li>
+          <li>you have not misrepresented your relationship to, or rights in, the item.</li>
+        </ul>
+        <p style={s.p}>You indemnify us against any claim, loss, or liability arising from reverse-engineering work we perform at your request where any part of this warranty is false, to the fullest extent permitted by law.</p>
+      </div>
+
+      <div style={s.mt}><h3>4. Our Right to Decline or Stop a Job</h3>
+        <p style={s.p}>We are not lawyers and do not provide legal advice on whether a specific reverse-engineering or custom-build request is lawful in your circumstances. As a matter of our own business discretion, we may decline to accept, or stop work part-way through, any job that appears to us to involve: circumventing a technological protection measure (such as DRM or device locking) for a purpose other than lawful repair or interoperability; cloning a current commercial product for the purpose of competing manufacture or resale; infringing an obvious and apparent patent, registered design, or trade mark; or any other request that raises an apparent red flag for unauthorised use of a third party's intellectual property. Declining or stopping a job under this clause is a business decision, not a legal determination, and does not constitute legal advice to you about the lawfulness of your request. If we stop a job already in progress under this clause, we will refund fees paid for work not yet performed, but are not liable for any other loss arising from the job not being completed.</p>
+        <p style={s.p}>If you would like independent advice on whether a particular reverse-engineering or custom-build request is lawful, you should consult a qualified intellectual property lawyer before asking us to proceed.</p>
+      </div>
+
+      <div style={s.mt}><h3>5. Risks Specific to Custom and Reverse-Engineered Work</h3>
+        <p style={s.p}>Custom hardware, custom software, and reverse-engineered designs are, by their nature, novel, one-off, or recreated without the benefit of original manufacturer documentation, testing, or certification. The following apply in addition to the general disclaimers in our Terms and Conditions and Disclaimer:</p>
+        <ul style={{paddingLeft:20, lineHeight:2, marginTop:8}}>
+          <li><strong>No regulatory certification implied.</strong> Unless we expressly agree in writing to obtain a specific certification (e.g. RCM) for a Deliverable, Custom Work is supplied uncertified. You are responsible for arranging any compliance testing or certification required before deploying a Deliverable commercially or in a regulated environment.</li>
+          <li><strong>ELV/LV scope only.</strong> As with all our services, Custom Work is limited to Extra Low Voltage (≤50 V AC / ≤120 V DC) and Low Voltage equipment. We do not design, build, or reverse-engineer mains-voltage (240 V AC) hardware.</li>
+          <li><strong>Prototype-grade reliability.</strong> One-off and recreated designs may contain faults or limitations not apparent at delivery, including faults inherited from incomplete or imperfect reverse-engineering of the original item. We are not liable for faults arising from the inherent limitations of recreating a design without complete original documentation, beyond the workmanship warranty in clause 7.</li>
+          <li><strong>Not validated for safety-critical or production deployment.</strong> Unless expressly agreed in writing, Custom Work is not validated for use in safety-critical applications or volume production. You should have a Deliverable independently assessed before such use.</li>
+        </ul>
+      </div>
+
+      <div style={s.mt}><h3>6. Confidentiality</h3>
+        <p style={s.p}>We will keep confidential any proprietary information, designs, or materials you provide to us for a Custom Work job, and will not disclose them to other customers or third parties except: as needed to perform the job (e.g. component suppliers); as required by law; or with your written consent. You should clearly mark any materials you consider confidential. This clause survives completion of the job.</p>
+      </div>
+
+      <div style={s.mt}><h3>7. Warranty on Custom Work</h3>
+        <p style={s.p}>We warrant that Custom Work will be performed with due care and skill and will conform to the agreed written scope. For private customers, this is in addition to your rights under the Australian Consumer Law, which are not excluded. For commercial customers, the Commercial Warranty in our Commercial Terms and Conditions applies in place of ACL consumer guarantees where those guarantees do not apply to your purchase. This warranty does not cover faults arising from the inherent limitations described in clause 5, from your own specifications or design input, or from modification or further work by you or a third party after delivery.</p>
+      </div>
+
+      <div style={s.mt}><h3>8. Cancellation</h3>
+        <p style={s.p}>If you cancel a Custom Work job after we have started, you remain liable for fees for work already performed and for any non-returnable materials already ordered for the job. Deposits paid are applied against work performed and are non-refundable to the extent work has commenced, except as required by the Australian Consumer Law.</p>
+      </div>
+
+      <div style={s.mt}><h3>9. Contact Us</h3>
+        <p style={s.p}><strong>Outback Electronics</strong><br/>{address}, Australia<br/>Phone: <a href={`tel:${(phone||'').replace(/\s/g,'')}`}>{phone}</a><br/>Email: <a href={`mailto:${email}`}>{email}</a></p>
+      </div>
+
+      <hr className="thin" style={{marginTop:40}} />
+      <div className="notice" style={{marginTop:24}}>
+        <span className="tag tag-ink">QUESTIONS?</span>
+        <div style={{fontSize:13, color:'var(--ink-2)'}}>Email <strong><a href={`mailto:${email}`}>{email}</a></strong> — we'll get back to you as soon as we can.</div>
+      </div>
+    </div>
+  );
+}
+
 function DisclaimerContent() {
   const s = {mt: {marginTop:32}, p: {fontSize:15, lineHeight:1.75, marginTop:8}};
   return (
@@ -1511,6 +1617,54 @@ function AcceptableUseContent({ email, address, abn }) {
 
 // POLICIES
 // ============================================================
+const POLICY_AUDIENCES = {
+  private: {
+    label: 'Private Customer',
+    defaultSlug: 'terms-and-conditions',
+    docs: {
+      'terms-and-conditions': { title: 'Terms & Conditions', updated: 'June 6, 2026', Component: TermsContent },
+      'privacy-policy': { title: 'Privacy Policy', updated: 'June 6, 2026', Component: PrivacyContent },
+      'shipping-and-delivery': { title: 'Shipping & Delivery', updated: 'June 6, 2026', Component: ShippingContent },
+      'cookie-policy': { title: 'Cookie Policy', updated: 'June 6, 2026', Component: CookieContent },
+      'return-policy': { title: 'Return Policy', updated: 'June 6, 2026', Component: ReturnContent },
+      'custom-work': { title: 'Custom Work & Reverse Engineering', updated: 'June 19, 2026', Component: CustomWorkContent },
+      'disclaimer': { title: 'Disclaimer', updated: 'June 6, 2026', Component: DisclaimerContent },
+      'acceptable-use': { title: 'Acceptable Use Policy', updated: 'June 6, 2026', Component: AcceptableUseContent },
+    },
+  },
+  commercial: {
+    label: 'Commercial Customer',
+    defaultSlug: 'commercial-terms',
+    docs: {
+      'commercial-terms': { title: 'Terms & Conditions', updated: 'June 6, 2026', Component: CommercialTermsContent },
+      'commercial-returns': { title: 'Return Policy', updated: 'June 6, 2026', Component: CommercialReturnContent },
+      'custom-work': { title: 'Custom Work & Reverse Engineering', updated: 'June 19, 2026', Component: CustomWorkContent },
+      'privacy-policy': { title: 'Privacy Policy', updated: 'June 6, 2026', Component: PrivacyContent },
+      'shipping-and-delivery': { title: 'Shipping & Delivery', updated: 'June 6, 2026', Component: ShippingContent },
+      'cookie-policy': { title: 'Cookie Policy', updated: 'June 6, 2026', Component: CookieContent },
+      'disclaimer': { title: 'Disclaimer', updated: 'June 6, 2026', Component: DisclaimerContent },
+      'acceptable-use': { title: 'Acceptable Use Policy', updated: 'June 6, 2026', Component: AcceptableUseContent },
+    },
+  },
+  seller: {
+    label: 'Seller',
+    defaultSlug: 'seller-terms',
+    docs: {
+      'seller-terms': { title: 'OHD001 – Terms and Conditions for Sellers', updated: 'June 6, 2026', Component: SellerTermsContent },
+      'seller-quality': { title: 'OHD002 – Design Quality Standards', updated: 'June 6, 2026', Component: SellerQualityContent },
+      'seller-fees': { title: 'OHD003 – Fees Schedule', updated: 'June 6, 2026', Component: SellerFeesContent },
+      'seller-listing': { title: 'OHD004 – Listing Requirements', updated: 'June 6, 2026', Component: SellerListingContent },
+    },
+  },
+};
+
+function findPolicyAudience(slug) {
+  for (const [key, group] of Object.entries(POLICY_AUDIENCES)) {
+    if (group.docs[slug]) return key;
+  }
+  return null;
+}
+
 function PoliciesPage({ go, pageParams }) {
   const shop = useShop();
   const fullAddress = [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(', ');
@@ -1519,18 +1673,23 @@ function PoliciesPage({ go, pageParams }) {
   const address = fullAddress;
   const abn = shop.abn;
   const slug = pageParams?.slug || 'terms-and-conditions';
-  const goDoc = (s) => go('policies', { slug: s });
+  const slugAudience = findPolicyAudience(slug);
+  const [audience, setAudience] = useState(slugAudience || 'private');
 
-  const DOCS = {
-    'terms-and-conditions': { title: 'Terms & Conditions', updated: 'June 6, 2026' },
-    'privacy-policy': { title: 'Privacy Policy', updated: 'June 6, 2026' },
-    'shipping-and-delivery': { title: 'Shipping & Delivery', updated: 'June 6, 2026' },
-    'cookie-policy': { title: 'Cookie Policy', updated: 'June 6, 2026' },
-    'return-policy': { title: 'Return Policy', updated: 'June 6, 2026' },
-    'disclaimer': { title: 'Disclaimer', updated: 'June 6, 2026' },
-    'acceptable-use': { title: 'Acceptable Use Policy', updated: 'June 6, 2026' },
+  useEffect(() => {
+    if (slugAudience && slugAudience !== audience) setAudience(slugAudience);
+  }, [slug]);
+
+  const goDoc = (s) => go('policies', { slug: s });
+  const onAudienceChange = (next) => {
+    setAudience(next);
+    goDoc(POLICY_AUDIENCES[next].defaultSlug);
   };
-  const activeDoc = DOCS[slug] ? slug : 'terms-and-conditions';
+
+  const group = POLICY_AUDIENCES[audience] || POLICY_AUDIENCES.private;
+  const DOCS = group.docs;
+  const activeDoc = DOCS[slug] ? slug : group.defaultSlug;
+  const DocComponent = DOCS[activeDoc].Component;
 
   return (
     <>
@@ -1539,14 +1698,23 @@ function PoliciesPage({ go, pageParams }) {
       <section className="container" style={{paddingTop: 32, paddingBottom: 60}}>
         <div className="policy-layout">
           <aside className="policy-nav" aria-label="Policy documents">
+            <div className="eyebrow" style={{padding:'0 0 8px 0', marginBottom:4}}>VIEWING AS</div>
+            <select
+              value={audience}
+              onChange={(e) => onAudienceChange(e.target.value)}
+              style={{width:'100%', padding:'10px 12px', marginBottom:20, border:'1px solid var(--line)', borderRadius:6, fontSize:14, background:'var(--bg)', color:'var(--ink)'}}
+            >
+              {Object.entries(POLICY_AUDIENCES).map(([key, g]) => (
+                <option key={key} value={key}>{g.label}</option>
+              ))}
+            </select>
             <div className="eyebrow" style={{padding:'0 0 8px 0', marginBottom:4}}>DOCUMENTS</div>
             {Object.entries(DOCS).map(([s, d]) => (
               <a key={s} href={`/policies/${s}`} className={activeDoc===s?'active':''} aria-current={activeDoc===s ? 'page' : undefined} onClick={(e) => { e.preventDefault(); goDoc(s); }}>{d.title}</a>
             ))}
           </aside>
           <div className="policy-content">
-            {activeDoc === 'terms-and-conditions' ? <TermsContent email={email} phone={phone} address={address} abn={abn} /> : activeDoc === 'privacy-policy' ? <PrivacyContent email={email} phone={phone} address={address} /> : activeDoc === 'shipping-and-delivery' ? <ShippingContent email={email} /> : activeDoc === 'cookie-policy' ? <CookieContent email={email} /> : activeDoc === 'return-policy' ? <ReturnContent email={email} phone={phone} address={address} /> : activeDoc === 'disclaimer' ? <DisclaimerContent /> : <AcceptableUseContent email={email} address={address} abn={abn} />}
-
+            <DocComponent email={email} phone={phone} address={address} abn={abn} />
           </div>
         </div>
       </section>
