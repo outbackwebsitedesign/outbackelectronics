@@ -1321,6 +1321,19 @@ function CommercialTermsContent({ email, phone, address, abn }) {
         <p style={s.p}>If you resell or resupply our products, you are solely responsible for any representations you make to your own customers about those products, and for complying with the ACL and any other applicable law in respect of your own sales. You must not represent that we warrant, endorse, or are responsible for any modification, integration, relabelling, or bundling you apply to our products. You agree to indemnify us against any claim arising from a representation you make to your customers that is inconsistent with these Commercial Terms or our published product specifications.</p>
       </div>
 
+      <div style={s.mt}><h3>8A. Subscriptions</h3>
+        <p style={s.p}>Where you take out a membership, subscription, or recurring trade account billing arrangement with us, it auto-renews on the agreed cycle unless cancelled. A free trial, where offered, is available once per business, regardless of how many accounts or related entities you operate; we may decline a further trial, or convert it to a paid subscription, where we reasonably believe you have already received one. Cancellation takes effect at the end of the current paid period, and you retain access to any tier-gated benefits already paid for until that date. If we discontinue a tier or its benefits, we will give reasonable notice and either migrate you to a comparable tier or credit the unused, already-paid portion of the period on a pro-rata basis.</p>
+      </div>
+
+      <div style={s.mt}><h3>8B. Software and AI Assistant</h3>
+        <p style={s.p}>Any software we supply is offered 'AS IS' without warranty of any kind beyond the Commercial Warranty in clause 6, except where a EULA accompanies the software, in which case the EULA governs to the extent of any inconsistency. Where we provide an AI-powered chat or assistant feature, your input may be transmitted to and processed by a third-party AI service provider to generate a response; do not submit confidential, commercially sensitive, or personal information to it. AI Assistant output is generated automatically, may be inaccurate or incomplete, does not constitute professional or technical advice, and must be independently verified before you rely on it for any business purpose. To the fullest extent permitted by law, we are not liable for any loss arising from your reliance on AI Assistant output or from a firmware/software update, except as required by the ACL where it applies.</p>
+      </div>
+
+      <div style={s.mt}><h3>8C. Security, Penetration-Testing, and Similar Dual-Use Tools</h3>
+        <p style={s.p}>Some software we supply is designed for security research, penetration testing, network diagnostics, or similar dual-use purposes ('Security Tools'). Security Tools are supplied strictly for use on systems and networks your business owns, or for which your business holds documented authorisation (such as a signed penetration-testing engagement letter). You must comply with the <em>Criminal Code Act 1995</em> (Cth), the <em>Cybercrime Act 2001</em> (Cth), and all other applicable laws governing computer access in any jurisdiction in which the Security Tool is used.</p>
+        <p style={s.p}>If we reasonably suspect a Security Tool we have supplied is being used for an unauthorised or unlawful purpose, we may report the matter — including disclosing your business and personal information — to law enforcement, a regulator, or an affected third party without notice. To the fullest extent permitted by law, we are not liable for any loss, claim, fine, or legal liability arising from use of a Security Tool for any illegal, unethical, or unauthorised purpose, and you indemnify us against any such claim.</p>
+      </div>
+
       <div style={s.mt}><h3>9. Limitation of Liability</h3>
         <p style={{...s.p, textTransform:'uppercase', fontSize:13}}>TO THE FULLEST EXTENT PERMITTED BY LAW, OUR TOTAL AGGREGATE LIABILITY TO YOU UNDER OR IN CONNECTION WITH THESE COMMERCIAL TERMS, WHETHER IN CONTRACT, TORT (INCLUDING NEGLIGENCE), OR OTHERWISE, IS LIMITED TO THE PRICE PAID BY YOU FOR THE GOODS OR SERVICES GIVING RISE TO THE CLAIM. WE ARE NOT LIABLE FOR ANY INDIRECT, CONSEQUENTIAL, OR ECONOMIC LOSS, INCLUDING LOSS OF PROFITS, LOSS OF CONTRACTS, OR LOSS OF BUSINESS OPPORTUNITY, ARISING OUT OF OR IN CONNECTION WITH THESE COMMERCIAL TERMS.</p>
         <p style={s.p}><strong>This limitation does not apply to liability that cannot lawfully be excluded or limited, including liability arising under any ACL consumer guarantee that does apply to your purchase.</strong></p>
@@ -1802,6 +1815,8 @@ const POLICY_AUDIENCES = {
       'custom-work': { title: 'Custom Work & Reverse Engineering', updated: 'June 19, 2026', Component: CustomWorkContent },
       'disclaimer': { title: 'Disclaimer', updated: 'June 6, 2026', Component: DisclaimerContent },
       'acceptable-use': { title: 'Acceptable Use Policy', updated: 'June 6, 2026', Component: AcceptableUseContent },
+      'gift-cards-store-credit-rewards': { title: 'Gift Cards, Store Credit & Rewards Terms', updated: 'June 19, 2026', Component: GiftCardStoreCreditContent },
+      'sale-of-goods-to-us': { title: 'Sale of Goods to Us', updated: 'June 19, 2026', Component: SaleOfGoodsToUsContent },
     },
   },
   commercial: {
@@ -1816,6 +1831,8 @@ const POLICY_AUDIENCES = {
       'cookie-policy': { title: 'Cookie Policy', updated: 'June 6, 2026', Component: CookieContent },
       'disclaimer': { title: 'Disclaimer', updated: 'June 6, 2026', Component: DisclaimerContent },
       'acceptable-use': { title: 'Acceptable Use Policy', updated: 'June 6, 2026', Component: AcceptableUseContent },
+      'gift-cards-store-credit-rewards': { title: 'Gift Cards, Store Credit & Rewards Terms', updated: 'June 19, 2026', Component: GiftCardStoreCreditContent },
+      'sale-of-goods-to-us': { title: 'Sale of Goods to Us', updated: 'June 19, 2026', Component: SaleOfGoodsToUsContent },
     },
   },
   seller: {
