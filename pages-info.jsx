@@ -796,9 +796,10 @@ function TermsContent({ email, phone, address, abn }) {
       </div>
       <div style={s.mt}><h3>7. Subscriptions</h3>
         <p style={s.p}><strong>Billing and Renewal:</strong> Subscriptions auto-renew monthly unless cancelled.</p>
-        <p style={s.p}><strong>Free Trial:</strong> New users receive a 14-day free trial; your chosen subscription is charged at the end of the trial.</p>
-        <p style={s.p}><strong>Cancellation:</strong> Cancel anytime via your account; takes effect at end of the current paid period. Questions? Email {email}.</p>
+        <p style={s.p}><strong>Free Trial:</strong> New users receive a 14-day free trial; your chosen subscription is charged at the end of the trial. The free trial is available <strong>once per person</strong>, regardless of how many accounts, email addresses, or payment methods you use. We may decline to extend a further free trial to anyone we reasonably believe has already received one, including where this is identified retrospectively, and may convert a duplicate trial to a paid subscription or cancel it.</p>
+        <p style={s.p}><strong>Cancellation:</strong> Cancel anytime via your account; takes effect at end of the current paid period. You retain access to member-only content, tutorials, and groups gated by your tier until the end of the period you have already paid for, even if you cancel before that date. Questions? Email {email}.</p>
         <p style={s.p}><strong>Fee Changes:</strong> We will communicate price changes in accordance with applicable law.</p>
+        <p style={s.p}><strong>Discontinued Tiers.</strong> If we discontinue a membership tier or its associated benefits, we will give you reasonable notice and either migrate you to a comparable tier or refund the unused, already-paid portion of your current billing period on a pro-rata basis. We are not liable for any other loss arising from a tier being discontinued.</p>
       </div>
       <div style={s.mt}><h3>8. Return / Refunds Policy</h3><p style={s.p}>Please review our Return Policy posted on the Services prior to making any purchases.</p></div>
       <div style={s.mt}><h3>9. Software</h3>
@@ -808,6 +809,12 @@ function TermsContent({ email, phone, address, abn }) {
         <p style={s.p}>You warrant that you will not use any Security Tool to access, damage, intercept, or interfere with any system, network, account, or data without proper authorisation, or for any other unlawful, unethical, or fraudulent purpose. Using a Security Tool against a system without authorisation is a criminal offence in Australia and most other jurisdictions, and we treat it as a serious breach of these Legal Terms.</p>
         <p style={s.p}><strong>Reporting and Disclosure.</strong> If we reasonably suspect that a Security Tool we have supplied is being, or has been, used for an unauthorised, unlawful, or malicious purpose, we reserve the right to report the matter — including disclosing your personal information, purchase records, and any other relevant details — to law enforcement, a relevant regulator, or an affected third party, without further notice to you. This is in addition to, and does not limit, any other rights we have under our Privacy Policy or applicable law to disclose information where required or permitted.</p>
         <p style={s.p}><strong>No Liability for Misuse.</strong> To the fullest extent permitted by law, we are not liable for any loss, damage, claim, fine, penalty, or legal liability arising from your use, or any other person's use, of a Security Tool for any illegal, unethical, or immoral purpose, or otherwise outside the scope of your documented authorisation. You indemnify us against any claim, loss, or liability arising from such use. Nothing in this clause excludes any consumer guarantee that cannot lawfully be excluded under the Australian Consumer Law.</p>
+      </div>
+      <div style={s.mt}><h3>9A. AI Assistant</h3>
+        <p style={s.p}>Where we provide an AI-powered chat or assistant feature ('AI Assistant'), your messages and related data may be transmitted to and processed by a third-party AI service provider in order to generate a response. Do not submit sensitive personal information, payment card details, or confidential information to the AI Assistant.</p>
+        <p style={s.p}><strong>No Professional Advice; Accuracy Not Guaranteed.</strong> Responses from the AI Assistant are generated automatically and may be inaccurate, incomplete, outdated, or entirely fabricated. They do not constitute professional, technical, electrical, legal, or safety advice, and must not be relied upon as a substitute for advice from a qualified professional — particularly for anything involving mains-voltage electricity, lithium battery handling, or safety-critical applications. You are solely responsible for independently verifying any information provided by the AI Assistant before acting on it.</p>
+        <p style={s.p}><strong>Acceptable Use.</strong> You must not use the AI Assistant to generate, request, or attempt to extract content that is illegal, that facilitates unauthorised access to computer systems, that infringes a third party's intellectual property, or that otherwise breaches our Acceptable Use Policy. We may log, monitor, and review AI Assistant interactions to enforce this Policy and may suspend your access to the AI Assistant for breach, without notice.</p>
+        <p style={s.p}><strong>No Liability.</strong> To the fullest extent permitted by law, we are not liable for any loss or damage arising from your reliance on AI Assistant output, including inaccurate information, code, or technical guidance. Nothing in this clause excludes any consumer guarantee that cannot lawfully be excluded under the Australian Consumer Law.</p>
       </div>
       <div style={s.mt}><h3>10. Repair and Technical Services</h3>
         <p style={s.p}><strong>Scope — ELV/LV Equipment Only.</strong> Our Repair Services are limited to Extra Low Voltage (ELV, ≤50 V AC / ≤120 V DC) and Low Voltage (LV) equipment. We do not perform repairs on mains-connected (240 V AC) devices and we are not licensed to do so. Any device submitted for repair that is found to contain mains-voltage components beyond our scope will not be worked on; we will advise you and return the device. Where we provide repair, diagnostic, or technical services within our scope ('Repair Services'), the following additional terms apply alongside your rights under the Australian Consumer Law. By submitting a device for Repair Services, you agree to these terms.</p>
@@ -1236,6 +1243,7 @@ function ReturnContent({ email, phone, address }) {
         <p style={s.p}><em>Our repair services cover ELV (Extra Low Voltage, ≤50 V AC / ≤120 V DC) and LV equipment — including PCs, phones, tablets, microcontroller boards, and embedded systems. We do not repair mains-connected appliances or perform mains wiring.</em></p>
         <p style={s.p}><strong>Repair Warranty Period.</strong> Our repair work is warranted for <strong>90 days from the date of completion</strong>. If the same fault that was repaired reoccurs within the Repair Warranty Period, contact us at <a href={`mailto:${email}`}>{email}</a> and we will re-examine and re-repair at no charge, or provide an alternative remedy as required by the Australian Consumer Law.</p>
         <p style={s.p}><strong>What the Repair Warranty Covers.</strong> The Repair Warranty covers the specific fault addressed in the agreed repair. It does not cover: (a) faults unrelated to the repair performed; (b) damage caused by misuse, accidental damage, liquid ingress, or physical impact after collection; (c) damage caused by a pre-existing condition separate from the agreed repair; or (d) further modification or repair by the customer or a third party after collection from us.</p>
+        <p style={s.p}><strong>Repairs to Second-Hand or Used Devices.</strong> Where the device you submit for repair is itself second-hand or used (including devices purchased from us as 'Used' or 'Refurbished' stock, traded in, or otherwise acquired second-hand), the Repair Warranty above applies to <strong>our repair work only</strong> — it does not extend, restore, or create any warranty over the device as a whole, and does not cover faults, wear, or failures unrelated to the specific repair performed. The device's separate product warranty (if any) is governed by its own terms, including our Return Policy's used/refurbished goods provisions, and is not affected by the existence of a Repair Warranty on unrelated work.</p>
         <p style={s.p}><strong>Your ACL Rights for Repair Services.</strong> If our Repair Services fail to comply with a consumer guarantee under the Australian Consumer Law (e.g., not carried out with due care and skill), you are entitled to a remedy under the ACL, which may include re-performance of the service or compensation for foreseeable loss. These rights apply regardless of, and in addition to, our Repair Warranty.</p>
       </div>
 
@@ -1580,6 +1588,7 @@ function AcceptableUseContent({ email, address, abn }) {
         <p style={s.p}><strong>Dangerous Technical Content:</strong> You must not post any Contribution that: (a) provides instructions for electrical or electronic work that you know or ought reasonably to know is likely to cause injury, death, fire, or property damage if followed; (b) misrepresents the safety ratings, electrical specifications, or compliance status of any component or product; (c) encourages others to perform mains-voltage (240 V AC) electrical work without appropriate qualifications; (d) provides instructions for modifying lithium batteries, battery management systems, or chargers in a manner that creates a fire or explosion risk; or (e) omits material safety warnings that a reasonable person would expect to accompany such technical instructions. Any technical guide, tutorial, or post that involves inherent risk must include a prominent and accurate safety warning. We reserve the right to remove any Contribution that we consider poses a safety risk, without notice.</p>
         <p style={s.p}>You may not use our Services to offer or promote: items that encourage illegal activity; cigarettes, nicotine, alcohol, or controlled substances; regulated weapons, firearms, or ammunition; sexually oriented materials; stolen goods; products or services that do not comply with applicable Australian product safety standards; mains-voltage (240 V AC) circuits or equipment (we list ELV/LV products only); or any transaction requiring pre-approval that has not been obtained.</p>
         <p style={s.p}><strong>Third-Party Sellers:</strong> If you list products for sale on our platform, all customer claims, warranty obligations, and ACL liability for those products rest with you as the seller. You must not represent Outback Electronics as providing any warranty, guarantee, or endorsement for your products. Any product-related dispute from a customer will be referred to you as the seller. Outback Electronics' liability as a platform operator does not extend to the quality, safety, or fitness for purpose of products listed by third-party sellers.</p>
+        <p style={s.p}><strong>Swap &amp; Sell Classifieds:</strong> Our Swap &amp; Sell classifieds feature lets members post free listings to buy, sell, swap, or give away items directly with other members. We are not a party to, and have no liability for, any transaction arising from a Swap &amp; Sell listing — including non-payment, non-delivery, item condition, item authenticity, or any dispute between the parties to the transaction. You deal with other members at your own risk and are responsible for satisfying yourself as to the legitimacy of the other party and the item before exchanging money or goods. By posting or responding to a Swap &amp; Sell listing, you warrant that: you lawfully own the item, or are authorised to sell or give it away, and it is not stolen, counterfeit, or encumbered; the item is not a regulated, prohibited, or restricted good under the categories listed above (including weapons, mains-voltage equipment, or anything requiring a licence you do not hold); and your listing is accurate and not misleading. We may remove any Swap &amp; Sell listing, and may report a listing or user to police or another relevant authority, without notice, where we reasonably suspect stolen goods, fraud, or another unlawful transaction.</p>
       </div>
 
       <div style={s.mt}><h3>Reviews and Ratings</h3>
@@ -1661,6 +1670,110 @@ function GeneralEngagementContent({ email, phone, address, abn }) {
   );
 }
 
+function GiftCardStoreCreditContent({ email, phone, address, abn }) {
+  const s = {mt: {marginTop:32}, p: {fontSize:15, lineHeight:1.75, marginTop:8}};
+  return (
+    <div>
+      <span className="eyebrow">LEGAL · GIFT CARDS, STORE CREDIT &amp; REWARDS</span>
+      <h2 style={{marginTop:8}}>Gift Cards, Store Credit &amp; Rewards Terms</h2>
+      <p style={s.p}>This policy governs gift cards, store credit, and rewards points issued by Outback Electronics ('Company', 'we', 'us', or 'our').{abn ? ` Our ABN is ${abn}.` : ''} It applies alongside our Terms and Conditions and Return Policy.</p>
+
+      <div style={s.mt}><h3>1. Gift Cards</h3>
+        <p style={s.p}><strong>Validity and Expiry.</strong> Gift cards are valid for at least three (3) years from the date of issue, in accordance with the minimum expiry period required by the Australian Consumer Law. We will state the specific expiry date on the gift card or its accompanying record at the time of issue.</p>
+        <p style={s.p}><strong>Not Redeemable for Cash.</strong> Gift cards cannot be redeemed or exchanged for cash, in whole or in part, except where required by law. They can only be applied against the purchase of goods or services from us.</p>
+        <p style={s.p}><strong>Lost or Stolen Cards.</strong> We treat a gift card code as equivalent to cash. We are not responsible for, and will not replace or refund, a gift card that is lost, stolen, or used without your authorisation, except where required by law or where we are reasonably satisfied of fraud on our part.</p>
+        <p style={s.p}><strong>Partial Use and Balance.</strong> If a purchase is less than your gift card balance, the remaining balance stays on the card for future use until it expires. You can check your balance using the balance lookup on our Site or by contacting us.</p>
+        <p style={s.p}><strong>No Resale.</strong> Gift cards may not be resold or on-sold for a profit. We may void a gift card we reasonably believe was obtained fraudulently (for example, through a disputed or charged-back payment) and are not liable for any resulting loss to a subsequent holder who is not the original purchaser.</p>
+      </div>
+
+      <div style={s.mt}><h3>2. Store Credit</h3>
+        <p style={s.p}>Store credit may be issued by us at our discretion (for example, as part of a refund, a trade-in, or a goodwill gesture) or where you have elected to receive store credit instead of a cash refund where both are offered. Store credit:</p>
+        <ul style={{paddingLeft:20, lineHeight:2, marginTop:8}}>
+          <li>is not redeemable for cash and can only be applied against future purchases from us;</li>
+          <li>does not expire unless we tell you otherwise at the time it is issued;</li>
+          <li>is not transferable to another person or account except with our written consent; and</li>
+          <li>may be reversed or adjusted by us where it was issued in error, or where the transaction it relates to is reversed, refunded, or subject to a successful chargeback by the original payment method.</li>
+        </ul>
+        <p style={s.p}>Where store credit was issued as an incentive (for example, a trade-in bonus for accepting credit instead of cash), that bonus amount may be removed if the underlying transaction is later unwound — for example, because the traded-in item was misdescribed, found to be faulty contrary to your description, or found not to be lawfully yours to sell.</p>
+      </div>
+
+      <div style={s.mt}><h3>3. Rewards Points</h3>
+        <p style={s.p}>Rewards points are issued at our discretion as a loyalty benefit and have no cash value. Points may be redeemed for a discount on a future purchase in accordance with the redemption rate displayed in your account at the time of redemption, which we may change going forward without affecting points already earned.</p>
+        <p style={s.p}><strong>Clawback on Refund or Chargeback.</strong> If an order that earned rewards points is later refunded, cancelled, or successfully charged back, we may deduct the points earned on that order from your account, even if you have since redeemed them — in which case your account balance may go negative and must be repaid through future earned points, or we may instead invoice you for the value of the discount obtained using those points, at our discretion.</p>
+        <p style={s.p}><strong>Fraud and Abuse.</strong> We may suspend, adjust, or cancel rewards points, and may close the associated account, where we reasonably suspect the points were earned through fraud, abuse of the program (including the use of multiple accounts), or a breach of these terms.</p>
+        <p style={s.p}>Rewards points have no value if your account is closed for breach of our Terms and Conditions or Acceptable Use Policy, and do not survive the death of the account holder except as required by law.</p>
+      </div>
+
+      <div style={s.mt}><h3>4. Contact Us</h3>
+        <p style={s.p}><strong>Outback Electronics</strong><br/>{address}, Australia<br/>Phone: <a href={`tel:${(phone||'').replace(/\s/g,'')}`}>{phone}</a><br/>Email: <a href={`mailto:${email}`}>{email}</a></p>
+      </div>
+
+      <hr className="thin" style={{marginTop:40}} />
+      <div className="notice" style={{marginTop:24}}>
+        <span className="tag tag-ink">QUESTIONS?</span>
+        <div style={{fontSize:13, color:'var(--ink-2)'}}>Email <strong><a href={`mailto:${email}`}>{email}</a></strong> — we'll get back to you as soon as we can.</div>
+      </div>
+    </div>
+  );
+}
+
+function SaleOfGoodsToUsContent({ email, phone, address, abn }) {
+  const s = {mt: {marginTop:32}, p: {fontSize:15, lineHeight:1.75, marginTop:8}};
+  return (
+    <div>
+      <span className="eyebrow">LEGAL · SALE OF GOODS TO US</span>
+      <h2 style={{marginTop:8}}>Sale of Goods to Us — Trade-In, E-Waste &amp; Consignment</h2>
+      <p style={s.p}>This policy applies whenever you sell, trade in, consign, or otherwise provide used or end-of-life electronics or equipment to Outback Electronics ('Company', 'we', 'us', or 'our') — whether through our outright purchase, consignment, trade credit, or e-waste take-back programs ('Sale Programs').{abn ? ` Our ABN is ${abn}.` : ''} It applies alongside our Terms and Conditions.</p>
+
+      <div style={s.mt}><h3>1. Your Warranties of Title</h3>
+        <p style={s.p}>By offering an item to us under any Sale Program, you warrant that:</p>
+        <ul style={{paddingLeft:20, lineHeight:2, marginTop:8}}>
+          <li>you are the lawful owner of the item, or have the owner's express authority to sell, consign, or dispose of it on their behalf;</li>
+          <li>the item is not stolen, subject to any security interest, lease, finance arrangement, or third-party claim, and is free of any encumbrance;</li>
+          <li>you have removed or disclosed any personal data, account locks (e.g. Find My, BIOS/firmware passwords, cloud activation locks), or other access restrictions that would prevent us from inspecting, testing, refurbishing, or reselling the item; and</li>
+          <li>your description of the item's condition, fault history, and included accessories is accurate and complete to the best of your knowledge.</li>
+        </ul>
+        <p style={s.p}>You indemnify us against any claim, loss, or liability arising from a breach of these warranties, including any claim by a third party asserting an interest in the item.</p>
+      </div>
+
+      <div style={s.mt}><h3>2. Verification and Right to Decline or Report</h3>
+        <p style={s.p}>We may ask you for photo ID and proof of ownership (such as a receipt, warranty card, or account login demonstrating control of the device) before accepting an item, particularly for higher-value items or where the circumstances of the offer raise concern. We may decline to accept any item without giving a reason. Where we reasonably suspect an item offered to us is stolen or otherwise unlawfully obtained, we may refuse the transaction, retain the item, and report the matter — including your personal information and any identification you have provided — to police or another relevant authority, without further notice to you.</p>
+      </div>
+
+      <div style={s.mt}><h3>3. Grading and Pricing</h3>
+        <p style={s.p}>Items are graded (e.g. A/B/C/D) and priced based on our assessment of condition, function, and current resale value at the time of inspection, which may differ from any estimate given before physical inspection. We will confirm the final grade and price with you before completing an outright purchase or trade credit transaction. For consignment, the listing price and commission are agreed separately and set out in our Seller Agreement or consignment terms provided to you at the time.</p>
+        <p style={s.p}>If, after inspection, an item does not match its description (for example, a fault was not disclosed, or an accessory listed as included is missing), we may revise our offer, decline the item, or — where the transaction has already completed — reverse the payment or store credit issued, including any associated bonus (see our Gift Cards, Store Credit &amp; Rewards Terms).</p>
+      </div>
+
+      <div style={s.mt}><h3>4. Outright Purchase</h3>
+        <p style={s.p}>Where we purchase an item outright, ownership transfers to us on payment, and the transaction is final — there is no cooling-off period or right to reverse the sale on your part, except as required by law (for example, where you were misled or the transaction was procured by fraud).</p>
+      </div>
+
+      <div style={s.mt}><h3>5. Consignment</h3>
+        <p style={s.p}>Under consignment, you remain the owner of the item until it sells. We list and sell the item on your behalf for an agreed commission, and remit the net proceeds to you in accordance with the timeframe agreed at the time of listing. If the item does not sell within the agreed listing period, we will offer to return it to you, dispose of it, or relist it at a reduced price, as agreed. We are not liable for loss or damage to a consigned item beyond what is required by law, but will take reasonable care of it while in our possession.</p>
+      </div>
+
+      <div style={s.mt}><h3>6. Trade Credit</h3>
+        <p style={s.p}>Where you elect to receive store credit instead of cash for a trade-in, any bonus applied to the store credit amount is subject to clause 3 (Grading and Pricing) above and our Gift Cards, Store Credit &amp; Rewards Terms, including reversal if the underlying transaction is later found to be based on an inaccurate description or an item you were not entitled to sell.</p>
+      </div>
+
+      <div style={s.mt}><h3>7. E-Waste / No-Value Items</h3>
+        <p style={s.p}>Items accepted for recycling or disposal with no resale value are accepted on the basis that you are surrendering ownership to us at no charge, for responsible recycling or disposal. The warranties in clause 1 still apply.</p>
+      </div>
+
+      <div style={s.mt}><h3>8. Contact Us</h3>
+        <p style={s.p}><strong>Outback Electronics</strong><br/>{address}, Australia<br/>Phone: <a href={`tel:${(phone||'').replace(/\s/g,'')}`}>{phone}</a><br/>Email: <a href={`mailto:${email}`}>{email}</a></p>
+      </div>
+
+      <hr className="thin" style={{marginTop:40}} />
+      <div className="notice" style={{marginTop:24}}>
+        <span className="tag tag-ink">QUESTIONS?</span>
+        <div style={{fontSize:13, color:'var(--ink-2)'}}>Email <strong><a href={`mailto:${email}`}>{email}</a></strong> — we'll get back to you as soon as we can.</div>
+      </div>
+    </div>
+  );
+}
+
 // POLICIES
 // ============================================================
 const POLICY_AUDIENCES = {
@@ -1673,6 +1786,8 @@ const POLICY_AUDIENCES = {
       'cookie-policy': { title: 'Cookie Policy', updated: 'June 6, 2026', Component: CookieContent },
       'acceptable-use': { title: 'Acceptable Use Policy', updated: 'June 6, 2026', Component: AcceptableUseContent },
       'disclaimer': { title: 'Disclaimer', updated: 'June 6, 2026', Component: DisclaimerContent },
+      'gift-cards-store-credit-rewards': { title: 'Gift Cards, Store Credit & Rewards Terms', updated: 'June 19, 2026', Component: GiftCardStoreCreditContent },
+      'sale-of-goods-to-us': { title: 'Sale of Goods to Us', updated: 'June 19, 2026', Component: SaleOfGoodsToUsContent },
     },
   },
   private: {
