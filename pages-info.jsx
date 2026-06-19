@@ -1616,9 +1616,61 @@ function AcceptableUseContent({ email, address, abn }) {
   );
 }
 
+function GeneralEngagementContent({ email, phone, address, abn }) {
+  const s = {mt: {marginTop:32}, p: {fontSize:15, lineHeight:1.75, marginTop:8}};
+  return (
+    <div>
+      <span className="eyebrow">LEGAL · GENERAL TERMS OF ENGAGEMENT</span>
+      <h2 style={{marginTop:8}}>General Terms of Engagement</h2>
+      <p style={s.p}>This document applies to <strong>every</strong> person or business that interacts with Outback Electronics ('Company', 'we', 'us', or 'our') in any capacity — private customer, commercial customer, seller, or otherwise.{abn ? ` Our ABN is ${abn}.` : ''}</p>
+
+      <div style={s.mt}><h3>Commencement Is Acceptance</h3>
+        <p style={s.p}>By doing any of the following, you accept and agree to be bound by all of our policies that apply to that activity (for example, our Terms and Conditions, Privacy Policy, Return Policy, Acceptable Use Policy, and — where relevant — our Custom Work and Reverse Engineering Policy, Seller Agreement, or Commercial Terms and Conditions):</p>
+        <ul style={{paddingLeft:20, lineHeight:2, marginTop:8}}>
+          <li>placing an order, paying a deposit, or paying for goods or services;</li>
+          <li>submitting a repair, quote, or custom work request, or handing over a device or materials to us;</li>
+          <li>creating an account on our Site, forum, customer portal, or seller dashboard;</li>
+          <li>listing a product for sale on our platform as a seller;</li>
+          <li>otherwise using our Site, services, or facilities.</li>
+        </ul>
+        <p style={s.p}>You do not need to separately sign or click-accept each individual policy for it to apply — commencing the relevant activity is itself your acceptance, in the same way that walking into a shop and placing an order implies acceptance of that shop's standard terms of trade. Where we ask you to expressly sign or click-accept a specific document (for example, a quote, a non-disclosure agreement, or a seller agreement), that document applies in addition to, and to the extent of any inconsistency prevails over, this general statement.</p>
+      </div>
+
+      <div style={s.mt}><h3>Which Policies Apply to You</h3>
+        <p style={s.p}>Use the audience selector on this page to view the specific documents that apply to your relationship with us (private customer, commercial customer, or seller). Some documents — such as our Privacy Policy, Cookie Policy, and Acceptable Use Policy — apply to everyone regardless of audience. Others — such as our Commercial Terms and Conditions or Seller Agreement — apply only where that relationship exists.</p>
+      </div>
+
+      <div style={s.mt}><h3>Updates to Our Policies</h3>
+        <p style={s.p}>We may update any of our policies from time to time. Continuing to engage with us after an update takes effect constitutes acceptance of the updated policy. Material changes will be dated on the relevant document.</p>
+      </div>
+
+      <div style={s.mt}><h3>Contact Us</h3>
+        <p style={s.p}><strong>Outback Electronics</strong><br/>{address}, Australia<br/>Phone: <a href={`tel:${(phone||'').replace(/\s/g,'')}`}>{phone}</a><br/>Email: <a href={`mailto:${email}`}>{email}</a></p>
+      </div>
+
+      <hr className="thin" style={{marginTop:40}} />
+      <div className="notice" style={{marginTop:24}}>
+        <span className="tag tag-ink">QUESTIONS?</span>
+        <div style={{fontSize:13, color:'var(--ink-2)'}}>Email <strong><a href={`mailto:${email}`}>{email}</a></strong> — we'll get back to you as soon as we can.</div>
+      </div>
+    </div>
+  );
+}
+
 // POLICIES
 // ============================================================
 const POLICY_AUDIENCES = {
+  all: {
+    label: 'All Customers',
+    defaultSlug: 'terms-of-engagement',
+    docs: {
+      'terms-of-engagement': { title: 'General Terms of Engagement', updated: 'June 19, 2026', Component: GeneralEngagementContent },
+      'privacy-policy': { title: 'Privacy Policy', updated: 'June 6, 2026', Component: PrivacyContent },
+      'cookie-policy': { title: 'Cookie Policy', updated: 'June 6, 2026', Component: CookieContent },
+      'acceptable-use': { title: 'Acceptable Use Policy', updated: 'June 6, 2026', Component: AcceptableUseContent },
+      'disclaimer': { title: 'Disclaimer', updated: 'June 6, 2026', Component: DisclaimerContent },
+    },
+  },
   private: {
     label: 'Private Customer',
     defaultSlug: 'terms-and-conditions',
