@@ -1429,6 +1429,7 @@ function CustomWorkContent({ email, phone, address, abn }) {
 
       <div style={s.mt}><h3>6. Confidentiality</h3>
         <p style={s.p}>We will keep confidential any proprietary information, designs, or materials you provide to us for a Custom Work job, and will not disclose them to other customers or third parties except: as needed to perform the job (e.g. component suppliers); as required by law; or with your written consent. You should clearly mark any materials you consider confidential. This clause survives completion of the job.</p>
+        <p style={s.p}>Where you and we have entered into a separate non-disclosure agreement for a job, we will only disclose information covered by that agreement where we are legally compelled to do so — for example, in response to a court order, subpoena, summons, or other binding legal process (including being required to give evidence or testimony in connection with legal proceedings involving you). Where legally permitted to do so, we will give you reasonable notice before making any such disclosure so you have the opportunity to object or seek a protective order. We will not disclose NDA-covered information on the basis of an informal request, a request from a party other than a court or regulator with legal authority to compel disclosure, or our own discretion.</p>
       </div>
 
       <div style={s.mt}><h3>7. Warranty on Custom Work</h3>
