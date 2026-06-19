@@ -353,6 +353,10 @@ function readOrders() {
   try { const p = JSON.parse(cachedReadFile(ORDERS_DB_PATH)); return Array.isArray(p.orders) ? p.orders : []; } catch { return []; }
 }
 function writeOrders(orders) { atomicWriteFile(ORDERS_DB_PATH, JSON.stringify({ orders }, null, 2)); }
+function nextOrderId(orders) {
+  const maxN = orders.reduce((max, o) => { const m = String(o.id || '').match(/^OE-(\d+)$/); return m ? Math.max(max, parseInt(m[1])) : max; }, 0);
+  return `OE-${String(maxN + 1).padStart(4, '0')}`;
+}
 
 function readCustomers() {
   try {
@@ -2901,8 +2905,7 @@ const mainServer = http.createServer(async (req, res) => {
         const gcIdx = gcList.findIndex(c => c.code === gcCodeNorm && !c.isVoid && c.balance >= gcDiscount);
         if (gcIdx < 0) return null; // balance already spent by a concurrent request
         const allOrders = readOrders();
-        const maxNum = allOrders.reduce((max, o) => { const m = String(o.id || '').match(/^OE-(\d+)$/); return m ? Math.max(max, parseInt(m[1])) : max; }, 1000);
-        const newOrderId = `OE-${maxNum + 1}`;
+        const newOrderId = nextOrderId(allOrders);
         gcList[gcIdx].balance = Math.max(0, Math.round((gcList[gcIdx].balance - gcDiscount) * 100) / 100);
         gcList[gcIdx].redemptions = [...(gcList[gcIdx].redemptions || []), { orderId: newOrderId, amount: gcDiscount, date: new Date().toISOString() }];
         writeGiftCards(gcList);
@@ -3192,9 +3195,8 @@ const mainServer = http.createServer(async (req, res) => {
         if (orders.find(o => o.stripeSessionId === session.id)) return null; // already processed (idempotent)
 
         // Generate a collision-free order ID from the freshly-read list.
-        const maxNum = orders.reduce((max, o) => { const m = String(o.id || '').match(/^OE-(\d+)$/); return m ? Math.max(max, parseInt(m[1])) : max; }, 1000);
         const order = {
-          id: `OE-${maxNum + 1}`,
+          id: nextOrderId(orders),
           warrantyToken: crypto.randomBytes(16).toString('hex'),
           stripeSessionId: session.id,
           stripePaymentIntent: session.payment_intent || '',
@@ -4294,12 +4296,8 @@ const adminServer = http.createServer(async (req, res) => {
       // request (e.g. a customer accepting a quote) may have claimed that number
       // between the admin opening the drawer and clicking Save. If so, silently
       // reassign the next free number rather than overwriting the other order.
-      const nextFreeId = () => {
-        const maxN = orders.reduce((max, o) => { const m = String(o.id||'').match(/^OE-(\d+)$/); return m ? Math.max(max, parseInt(m[1])) : max; }, 1000);
-        return `OE-${maxN + 1}`;
-      };
       if (!bodyToStore.id || orders.some(o => o.id === bodyToStore.id)) {
-        bodyToStore.id = nextFreeId();
+        bodyToStore.id = nextOrderId(orders);
       }
       orders.push(bodyToStore);
     } else {
@@ -5615,7 +5613,7 @@ const portalServer = http.createServer(async (req, res) => {
     const dq = quote.draftQuote || {};
     const nowStr = new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
     const order = {
-      id: 'OE-' + (readOrders().reduce((mx,o) => { const m=String(o.id||'').match(/^OE-(\d+)$/); return m?Math.max(mx,parseInt(m[1])):mx; }, 1000) + 1),
+      id: nextOrderId(readOrders()),
       warrantyToken: crypto.randomBytes(16).toString('hex'),
       cust: quote.name,
       email: quote.email,
@@ -5692,7 +5690,7 @@ const portalServer = http.createServer(async (req, res) => {
     const dq = quote.draftQuote || {};
     const now = new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
     const order = {
-      id: 'OE-' + (readOrders().reduce((mx,o) => { const m=String(o.id||'').match(/^OE-(\d+)$/); return m?Math.max(mx,parseInt(m[1])):mx; }, 1000) + 1),
+      id: nextOrderId(readOrders()),
       warrantyToken: crypto.randomBytes(16).toString('hex'),
       cust: quote.name,
       email: quote.email,

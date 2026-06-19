@@ -1490,8 +1490,8 @@ function AdminOrders({ search }) {
   }), [rows]);
 
   const nextOrderId = () => {
-    const maxN = rows.reduce((max, o) => { const m = String(o.id || '').match(/^OE-(\d+)$/); return m ? Math.max(max, parseInt(m[1])) : max; }, 1000);
-    return `OE-${maxN + 1}`;
+    const maxN = rows.reduce((max, o) => { const m = String(o.id || '').match(/^OE-(\d+)$/); return m ? Math.max(max, parseInt(m[1])) : max; }, 0);
+    return `OE-${String(maxN + 1).padStart(4, '0')}`;
   };
 
   const blankOrder = () => ({ id:'', suggestedId: nextOrderId(), cust:'', email:'', phone:'', loc:'', items:'', lineItems:[], date: todayOrderDate(), total:0, fulfilment:'pending', payments:[], parts:[], updates:[] });
