@@ -1148,8 +1148,12 @@ function OrderDrawer({ edit, expenses, onClose, onRowUpdate, onSave, onExpensesC
             if (r && r.ok) {
               const d = await r.json();
               if (d.error) { adminToast(d.message || 'Save failed'); return; }
-              savedSnapRef.current = JSON.stringify(d.item || form);
-              onSave(d.item || form, !edit.id);
+              const savedItem = d.item || form;
+              if (!edit.id && savedItem.id && savedItem.id !== payload.id) {
+                adminToast(`Order number ${payload.id} was just taken — assigned ${savedItem.id} instead.`);
+              }
+              savedSnapRef.current = JSON.stringify(savedItem);
+              onSave(savedItem, !edit.id);
             } else {
               adminToast('Save failed — changes not persisted. Please try again.');
             }

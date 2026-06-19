@@ -4292,13 +4292,14 @@ const adminServer = http.createServer(async (req, res) => {
     if (isNew) {
       // Never treat a same-ID match as "this row" for a brand-new order — another
       // request (e.g. a customer accepting a quote) may have claimed that number
-      // between the admin opening the drawer and clicking Save.
-      if (bodyToStore.id && orders.some(o => o.id === bodyToStore.id)) {
-        return json(res, 409, { error: 'id_taken', message: `Order number ${bodyToStore.id} was just taken by another order. Please choose a different number and save again.` });
-      }
-      if (!bodyToStore.id) {
+      // between the admin opening the drawer and clicking Save. If so, silently
+      // reassign the next free number rather than overwriting the other order.
+      const nextFreeId = () => {
         const maxN = orders.reduce((max, o) => { const m = String(o.id||'').match(/^OE-(\d+)$/); return m ? Math.max(max, parseInt(m[1])) : max; }, 1000);
-        bodyToStore.id = `OE-${maxN + 1}`;
+        return `OE-${maxN + 1}`;
+      };
+      if (!bodyToStore.id || orders.some(o => o.id === bodyToStore.id)) {
+        bodyToStore.id = nextFreeId();
       }
       orders.push(bodyToStore);
     } else {
