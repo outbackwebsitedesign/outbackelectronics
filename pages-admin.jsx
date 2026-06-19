@@ -912,7 +912,7 @@ function orderPaymentStatus(f) {
 // OrderDrawer — edit panel for a single order
 // ============================================================
 function OrderDrawer({ edit, expenses, onClose, onRowUpdate, onSave, onExpensesChange }) {
-  const [form, setForm] = useState({...edit});
+  const [form, setForm] = useState({ ...edit, id: edit.id || edit.suggestedId || '' });
   const [payEntry, setPayEntry] = useState({ amount:'', method:'Cash', note:'' });
   const [updateEntry, setUpdateEntry] = useState({ text:'', type:'note' });
   const [expenseEdit, setExpenseEdit] = useState(null);
@@ -1485,7 +1485,12 @@ function AdminOrders({ search }) {
     refunded: rows.filter(r => (r.fulfilment||'pending') === 'refunded').length,
   }), [rows]);
 
-  const blankOrder = () => ({ id:'', cust:'', email:'', phone:'', loc:'', items:'', lineItems:[], date: todayOrderDate(), total:0, fulfilment:'pending', payments:[], parts:[], updates:[] });
+  const nextOrderId = () => {
+    const maxN = rows.reduce((max, o) => { const m = String(o.id || '').match(/^OE-(\d+)$/); return m ? Math.max(max, parseInt(m[1])) : max; }, 1000);
+    return `OE-${maxN + 1}`;
+  };
+
+  const blankOrder = () => ({ id:'', suggestedId: nextOrderId(), cust:'', email:'', phone:'', loc:'', items:'', lineItems:[], date: todayOrderDate(), total:0, fulfilment:'pending', payments:[], parts:[], updates:[] });
 
   const openRow = (r) => { setEdit(r); };
 
