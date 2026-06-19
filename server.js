@@ -2165,25 +2165,37 @@ function buildInvoicePdf(order, shop) {
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
 
+    const RUST = '#b5451b';
+    const OCHRE = '#d39a37';
     const fmtMoney = n => `$${(Number(n) || 0).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    const shopName = shop.name || 'Outback Electronics';
-    const shopAddress = shop.address || [shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ');
+    const shopName = shop.tradingName || shop.name || 'Outback Electronics';
+    const shopAddress = shop.address || [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ');
+    const logoPath = path.join(__dirname, 'assets', 'logo.png');
+    const hasLogo = fs.existsSync(logoPath);
 
-    doc.font('Helvetica-Bold').fontSize(20).text(shopName);
-    doc.font('Helvetica').fontSize(10).fillColor('#444')
-      .text(shopAddress || '')
-      .text(shop.phone || '')
-      .text(shop.email || '')
-      .text(shop.abn ? `ABN: ${shop.abn}` : '');
-    doc.moveDown(1.5);
+    // Header band
+    doc.rect(0, 0, doc.page.width, 110).fill(RUST);
+    if (hasLogo) {
+      try { doc.image(logoPath, 50, 22, { width: 66 }); } catch {}
+    }
+    doc.fillColor('#fff').font('Helvetica-Bold').fontSize(20).text(shopName, hasLogo ? 130 : 50, 30, { width: 280 });
+    doc.font('Helvetica').fontSize(9).fillColor('#fde6d6')
+      .text(shopAddress || '', hasLogo ? 130 : 50, 56, { width: 280 })
+      .text([shop.phone, shop.email].filter(Boolean).join('  ·  '), hasLogo ? 130 : 50, 70, { width: 280 });
 
-    doc.fillColor('#000').font('Helvetica-Bold').fontSize(16).text('INVOICE', { align: 'right' });
-    doc.font('Helvetica').fontSize(10).fillColor('#444')
-      .text(`Invoice #: ${order.id}`, { align: 'right' })
-      .text(`Date: ${order.date || ''}`, { align: 'right' });
-    doc.moveDown(1.5);
+    doc.font('Helvetica-Bold').fontSize(26).fillColor('#fff').text('INVOICE', 0, 30, { width: 545, align: 'right' });
+    doc.font('Helvetica').fontSize(10).fillColor('#fde6d6')
+      .text(`Invoice #: ${order.id}`, 0, 64, { width: 545, align: 'right' })
+      .text(`Date: ${order.date || ''}`, 0, 78, { width: 545, align: 'right' });
 
-    doc.fillColor('#000').font('Helvetica-Bold').fontSize(11).text('Bill To');
+    doc.fillColor('#000');
+    doc.y = 140;
+
+    if (shop.abn) {
+      doc.font('Helvetica').fontSize(9).fillColor('#888').text(`ABN: ${shop.abn}`, 50, 140, { width: 495, align: 'right' });
+    }
+
+    doc.font('Helvetica-Bold').fontSize(11).fillColor(RUST).text('Bill To', 50, 150);
     doc.font('Helvetica').fontSize(10).fillColor('#222')
       .text(order.cust || '')
       .text(order.email || '')
@@ -2197,30 +2209,47 @@ function buildInvoicePdf(order, shop) {
 
     const tableTop = doc.y;
     const colDescX = 50, colAmountX = 460, colWidth = 500;
-    doc.font('Helvetica-Bold').fontSize(10);
-    doc.text('Description', colDescX, tableTop);
-    doc.text('Amount', colAmountX, tableTop, { width: 95, align: 'right' });
-    doc.moveTo(50, tableTop + 16).lineTo(545, tableTop + 16).strokeColor('#ccc').stroke();
-    let y = tableTop + 24;
+    doc.rect(50, tableTop, 495, 22).fill(OCHRE);
+    doc.font('Helvetica-Bold').fontSize(10).fillColor('#fff');
+    doc.text('Description', colDescX + 6, tableTop + 6);
+    doc.text('Amount', colAmountX, tableTop + 6, { width: 89, align: 'right' });
+    let y = tableTop + 22 + 8;
     doc.font('Helvetica').fontSize(10);
-    for (const li of lineItems) {
-      doc.fillColor('#222').text(li.description, colDescX, y, { width: colWidth - 95 });
-      doc.text(fmtMoney(li.amount), colAmountX, y, { width: 95, align: 'right' });
+    lineItems.forEach((li, i) => {
+      if (i % 2 === 1) doc.rect(50, y - 5, 495, 20).fill('#f7f1e8');
+      doc.fillColor('#222').text(li.description, colDescX + 6, y, { width: colWidth - 95 - 6 });
+      doc.text(fmtMoney(li.amount), colAmountX, y, { width: 89, align: 'right' });
       y += 20;
-    }
+    });
     doc.moveTo(50, y + 4).lineTo(545, y + 4).strokeColor('#ccc').stroke();
     y += 14;
 
     const paid = (order.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
     const balance = (Number(order.total) || 0) - paid;
-    doc.font('Helvetica-Bold').text('Total', colDescX, y, { width: colWidth - 95 });
-    doc.text(fmtMoney(order.total), colAmountX, y, { width: 95, align: 'right' });
+    doc.font('Helvetica-Bold').fillColor('#222').text('Total', colDescX + 6, y, { width: colWidth - 95 - 6 });
+    doc.text(fmtMoney(order.total), colAmountX, y, { width: 89, align: 'right' });
     y += 20;
-    doc.font('Helvetica').fillColor('#444').text('Paid', colDescX, y, { width: colWidth - 95 });
-    doc.text(fmtMoney(paid), colAmountX, y, { width: 95, align: 'right' });
-    y += 20;
-    doc.font('Helvetica-Bold').fillColor(balance > 0 ? '#a33' : '#222').text('Balance Due', colDescX, y, { width: colWidth - 95 });
-    doc.text(fmtMoney(balance), colAmountX, y, { width: 95, align: 'right' });
+    doc.font('Helvetica').fillColor('#444').text('Paid', colDescX + 6, y, { width: colWidth - 95 - 6 });
+    doc.text(fmtMoney(paid), colAmountX, y, { width: 89, align: 'right' });
+    y += 24;
+    doc.rect(50, y - 6, 495, 28).fill(balance > 0 ? '#fbe9e4' : '#eaf3ea');
+    doc.font('Helvetica-Bold').fontSize(12).fillColor(balance > 0 ? RUST : '#2e7d32').text('Balance Due', colDescX + 6, y, { width: colWidth - 95 - 6 });
+    doc.text(fmtMoney(balance), colAmountX, y, { width: 89, align: 'right' });
+    y += 40;
+
+    if (shop.bankBsb || shop.bankAccountNumber) {
+      doc.font('Helvetica-Bold').fontSize(10).fillColor(RUST).text('Payment Details', 50, y);
+      y += 16;
+      doc.font('Helvetica').fontSize(10).fillColor('#222');
+      if (shop.bankAccountName) { doc.text(`Account name: ${shop.bankAccountName}`, 50, y); y += 14; }
+      if (shop.bankBsb) { doc.text(`BSB: ${shop.bankBsb}`, 50, y); y += 14; }
+      if (shop.bankAccountNumber) { doc.text(`Account number: ${shop.bankAccountNumber}`, 50, y); y += 14; }
+      doc.text(`Reference: ${order.id}`, 50, y);
+      y += 30;
+    }
+
+    doc.font('Helvetica-Oblique').fontSize(12).fillColor(RUST)
+      .text('Thanks for your order — we appreciate your business!', 50, y, { width: 495, align: 'center' });
 
     doc.end();
   });

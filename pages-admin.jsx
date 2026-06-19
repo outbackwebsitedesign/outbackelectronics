@@ -5367,6 +5367,12 @@ function SettingsGeneralTab({ shop, setShop, savedShop, announcement, setAnnounc
             </div>
           )}
         </label>
+        <span className="eyebrow" style={{marginTop:20, display:'block'}}>Bank Details (for invoices)</span>
+        <label className="field" style={{marginTop:12}}><span className="label">Account name</span><input className="input" value={shop.bankAccountName||''} onChange={(e) => setShop({ ...shop, bankAccountName: e.target.value })} placeholder="e.g. Outback Electronics Pty Ltd"/></label>
+        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:8}}>
+          <label className="field"><span className="label">BSB</span><input className="input" value={shop.bankBsb||''} onChange={(e) => setShop({ ...shop, bankBsb: e.target.value })} placeholder="e.g. 123-456"/></label>
+          <label className="field"><span className="label">Account number</span><input className="input" value={shop.bankAccountNumber||''} onChange={(e) => setShop({ ...shop, bankAccountNumber: e.target.value })} placeholder="e.g. 12345678"/></label>
+        </div>
         <div className="row-flex" style={{gap:8, marginTop:12}}>
           <button className="btn btn-rust btn-sm" disabled={!shopDirty || sectionBusy==='shop'}>{sectionBusy==='shop'?'Saving…':'Save'}</button>
           <button type="button" className="btn btn-ghost btn-sm" disabled={!shopDirty || sectionBusy==='shop'} onClick={() => setShop(savedShop)}>Cancel</button>
@@ -5671,6 +5677,9 @@ function AdminSettingsFull({ sessionInfo = {} }) {
     siteUrl: '',
     acknowledgmentPeople: '',
     acknowledgmentCountry: '',
+    bankAccountName: '',
+    bankBsb: '',
+    bankAccountNumber: '',
   }), []);
   const defaultAnnouncement = useMemo(() => ({ text: '', enabled: false, expiresAt: '' }), []);
   const defaultSiteContent = useMemo(() => ({ aiHeading: '', aiBody: '', aiEnabled: false, workshopBlurb: '' }), []);
@@ -5760,6 +5769,9 @@ function AdminSettingsFull({ sessionInfo = {} }) {
         siteUrl: (payload.shop?.siteUrl || '').trim(),
         acknowledgmentPeople: (payload.shop?.acknowledgmentPeople || '').trim(),
         acknowledgmentCountry: (payload.shop?.acknowledgmentCountry || '').trim(),
+        bankAccountName: (payload.shop?.bankAccountName || '').trim(),
+        bankBsb: (payload.shop?.bankBsb || '').trim(),
+        bankAccountNumber: (payload.shop?.bankAccountNumber || '').trim(),
       },
       announcement: {
         text: (payload.announcement?.text || '').trim(),
