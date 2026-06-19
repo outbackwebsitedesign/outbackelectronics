@@ -2228,6 +2228,7 @@ function AboutPage({ go }) {
             <button className="btn btn-rust" onClick={() => go('quote')}>Get a Quote</button>
             <button className="btn btn-ghost" onClick={() => go('contact')}>Contact us</button>
             <button className="btn btn-ghost" onClick={() => go('services')}>Our Services</button>
+            <button className="btn btn-ghost" onClick={() => go('capability-statement')}>Capability Statement</button>
           </div>
           <div className="card-paper" style={{ padding: 28, background: 'var(--dark)', color: 'var(--paper)' }}>
             <div className="eyebrow" style={{ color: 'var(--ochre)', marginBottom: 12 }}>FIND US</div>
@@ -2236,6 +2237,149 @@ function AboutPage({ go }) {
               {shop?.phone && <div style={{ marginTop: 6 }}>{shop.phone}</div>}
               <div style={{ marginTop: 6, color: 'var(--ink-3)', fontSize: 13 }}>No public access — appointment only.</div>
             </div>
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
+
+// ============================================================
+// CAPABILITY STATEMENT (verbatim content of the printed/PDF document)
+// ============================================================
+function CapabilityStatementTable({ rows }) {
+  return (
+    <div style={{ overflowX: 'auto', marginBottom: 28 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14.5 }}>
+        <thead>
+          <tr style={{ background: 'var(--dark)', color: 'var(--paper)' }}>
+            <th style={{ textAlign: 'left', padding: '10px 14px', fontWeight: 600 }}>Service Area</th>
+            <th style={{ textAlign: 'left', padding: '10px 14px', fontWeight: 600 }}>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(([area, desc], i) => (
+            <tr key={i} style={{ borderBottom: '1px solid var(--line)' }}>
+              <td style={{ padding: '10px 14px', fontWeight: 600, whiteSpace: 'nowrap', verticalAlign: 'top' }}>{area}</td>
+              <td style={{ padding: '10px 14px', color: 'var(--ink-2)', lineHeight: 1.6 }}>{desc}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function CapabilityStatementPage({ go }) {
+  const shop = window.__ShopContext__ ? React.useContext(window.__ShopContext__) : {};
+  const phone = shop?.phone || '0497 522 768';
+  const email = shop?.email || 'outbackhutelectronics@gmail.com';
+  const abn = shop?.abn || '99 496 591 295';
+  const address = '137B Thistle Street, Blackall QLD 4472';
+
+  return (
+    <>
+      <PageHead crumbs={['Outback', 'Capability Statement']} title="Capability Statement"
+        lead="Full-Service Electronics & Technology Provider — Blackall, QLD. By appointment only." />
+      <section className="container" style={{ paddingTop: 32, paddingBottom: 64 }}>
+        <div style={{ maxWidth: 880, margin: '0 auto' }}>
+
+          <div className="card-paper" style={{ padding: 24, marginBottom: 32, display: 'flex', flexWrap: 'wrap', gap: 24 }}>
+            <div>
+              <div className="eyebrow" style={{ color: 'var(--ochre)' }}>Contact</div>
+              <div style={{ lineHeight: 1.8 }}>{phone}<br />{email}</div>
+            </div>
+            <div>
+              <div className="eyebrow" style={{ color: 'var(--ochre)' }}>Web</div>
+              <div style={{ lineHeight: 1.8 }}>outbackelectronics.com.au<br />By Appointment Only</div>
+            </div>
+            <div>
+              <div className="eyebrow" style={{ color: 'var(--ochre)' }}>Location</div>
+              <div style={{ lineHeight: 1.8 }}>{address}</div>
+            </div>
+          </div>
+
+          <h2 className="serif" style={{ fontSize: 24, marginBottom: 14 }}>Business Overview</h2>
+          <p style={{ color: 'var(--ink-2)', lineHeight: 1.8, marginBottom: 16 }}>
+            Outback Electronics is a full-service electronics and technology provider based in Blackall, Queensland. The business covers the complete spectrum — consumer device repair, custom embedded hardware, PCB design, SCADA and industrial control, software development, web hosting, cybersecurity, digital forensics, and technical consulting. If it involves electronics, hardware, or software, Outback Electronics can handle it.
+          </p>
+          <p style={{ color: 'var(--ink-2)', lineHeight: 1.8, marginBottom: 32 }}>
+            Commercial, agricultural, and research clients can engage Outback Electronics for end-to-end project delivery: from initial requirements through circuit design, PCB layout, firmware, software, and documentation. Mobile and FIFO field service is available across the Central West region.
+          </p>
+
+          <h2 className="serif" style={{ fontSize: 24, marginBottom: 14 }}>Hardware, Repair &amp; Installation</h2>
+          <CapabilityStatementTable rows={[
+            ['Electronics & PCB Repair', 'Component-level SMD rework, diagnostics, through-hole and surface mount soldering. Fault diagnosis on consumer, commercial, and industrial electronics.'],
+            ['PC Repair & Custom Builds', 'Desktop and laptop fault diagnosis, OS repair, clone migration, malware removal, hardware upgrades, and full custom PC builds to specification.'],
+            ['Phone & Tablet Repair', 'Screen replacement, charging port repair, battery replacement, water damage assessment, and software recovery on iOS and Android devices.'],
+            ['Game Console Repair', 'Fault diagnosis and repair of PlayStation, Xbox, Nintendo, and handheld gaming devices including HDMI port repair, disc drive faults, and overheating remediation.'],
+            ['TV & AV Equipment', 'Flat panel TV repair, power supply and backlight faults, AV receiver and home theatre equipment diagnosis and repair.'],
+            ['CB & Radio Equipment', 'Transmit/receive fault diagnosis, RF section inspection and repair, antenna system assessment, and field comms equipment servicing.'],
+            ['Drone & RC Equipment', 'ESC, flight controller, and motor diagnosis. Firmware flashing, calibration, and repair of consumer and hobbyist drones and RC vehicles.'],
+            ['Solar & 12V Systems', 'Solar panel system assessment, charge controller configuration, dual battery system design and installation, 12V DC wiring and fault diagnosis for vehicles and off-grid setups.'],
+            ['UPS & Power Backup', 'UPS selection, installation, battery replacement, and runtime testing for residential and commercial applications.'],
+            ['Appliance Repair', 'Diagnosis and repair of household appliances at component level where viable, including washing machines, dryers, refrigerators, and small appliances.'],
+            ['Audio Electronics', 'Amplifier, receiver, and speaker crossover repair. Component-level fault diagnosis on hi-fi and PA equipment.'],
+          ]} />
+
+          <h2 className="serif" style={{ fontSize: 24, marginBottom: 14 }}>Custom Development &amp; Engineering</h2>
+          <CapabilityStatementTable rows={[
+            ['Custom Embedded Systems', 'End-to-end embedded hardware development: requirements through to finished product. AVR, ARM, ESP32, and custom silicon. Suitable for agricultural, industrial, medical, and research applications.'],
+            ['Custom PCB Design', 'Schematic capture and PCB layout (KiCad) for client-specified end goals. Client provides the problem; Outback Electronics designs the circuit.'],
+            ['Hardware-Software Integration', 'Software development that interfaces directly with external hardware — instruments, sensors, controllers, and industrial devices. Examples include viscometer interfaces, data loggers, and custom instrument front-ends.'],
+            ['Digital Forensics', 'Data recovery and forensic analysis from computers, phones, storage media, and embedded devices. Deleted file recovery, fault diagnosis, and evidence-grade documentation where required.'],
+            ['Reverse Engineering', 'Hardware and firmware reverse engineering for compatibility, repair, legacy system support, or security assessment purposes.'],
+            ['IoT & Home Automation', 'Design and deployment of IoT sensor networks, smart home systems, and remote monitoring solutions. Custom firmware and cloud/local integration.'],
+            ['SCADA & Industrial Control', 'SCADA system design, integration, and troubleshooting. PLC interfacing, sensor integration, and industrial control system development for remote and rural applications.'],
+            ['Product Prototyping', 'Full prototype development for client product concepts — from circuit design and PCB layout through to enclosure, firmware, and production-ready documentation.'],
+          ]} />
+
+          <h2 className="serif" style={{ fontSize: 24, marginBottom: 14 }}>Software, Web &amp; Systems</h2>
+          <CapabilityStatementTable rows={[
+            ['Windows / Mac / Linux Software', 'Cross-platform desktop application development, system utilities, automation tools, and software that interfaces with external hardware or instruments.'],
+            ['Mobile App Development', 'Android and iOS application development for consumer, business, and hardware-interfacing purposes.'],
+            ['Web Development', 'Front-end and back-end web development. Custom HTML/CSS/JS, Node.js/Express, and full-stack application builds.'],
+            ['Web Hosting', 'Self-hosted and managed web hosting solutions. Domain configuration, SSL, Cloudflare integration, and ongoing maintenance.'],
+            ['Database Design & Administration', 'Relational and NoSQL database design, deployment, and administration. MySQL/MariaDB, PostgreSQL, and embedded database solutions.'],
+            ['API Development & Integration', 'REST and custom API design, development, and third-party API integration for web and hardware-interfacing applications.'],
+            ['Automation & Scripting', 'Workflow automation, scripting (Python, Bash, Node.js), scheduled tasks, and system integration across platforms.'],
+            ['AI & Machine Learning Integration', 'Integration of AI/ML models into software applications and hardware systems. Local inference, API-based AI integration, and custom model deployment.'],
+            ['Cybersecurity & Pen Testing', 'Security assessment, penetration testing, vulnerability analysis, and hardening recommendations for web applications, networks, and embedded systems.'],
+            ['Networking & WiFi', 'Home and business network design, WiFi optimisation, router and switch configuration, VLAN setup, and fault diagnosis.'],
+            ['CCTV & Security Systems', 'IP and analogue camera system installation, configuration, fault diagnosis, NVR/DVR setup, and remote viewing configuration.'],
+          ]} />
+
+          <h2 className="serif" style={{ fontSize: 24, marginBottom: 14 }}>Consulting &amp; Professional Services</h2>
+          <CapabilityStatementTable rows={[
+            ['Technical Consulting', 'Expert advice on electronics, software, infrastructure, and technology strategy for businesses, farms, and organisations operating in remote and regional settings.'],
+            ['Equipment Sourcing & Procurement', 'Specification and sourcing of electronics components, IT hardware, and specialised equipment. Supplier identification and procurement support.'],
+            ['Documentation & Technical Writing', 'User manuals, technical specifications, wiring diagrams, system documentation, and compliance documentation for hardware and software products.'],
+            ['Remote & Field Service', 'Mobile pickup and drop-off across the Blackall region. On-site assessment and FIFO/remote site visits by arrangement for commercial and pastoral clients.'],
+          ]} />
+
+          <h2 className="serif" style={{ fontSize: 24, marginBottom: 14 }}>Key Differentiators</h2>
+          <CapabilityStatementTable rows={[
+            ['Full-Spectrum Capability', 'One provider from consumer device repair through to custom embedded hardware, SCADA systems, software development, and web hosting. No need to source multiple specialists.'],
+            ['Component-Level Repair', 'Full SMD rework capability. Diagnoses and repairs at component level rather than defaulting to board or unit replacement, reducing cost significantly.'],
+            ['Hardware + Software', 'Rare combination of deep hardware engineering and full-stack software development. Able to build complete systems end-to-end including the physical circuit, firmware, and user-facing software.'],
+            ['Regional Availability', 'Based in Blackall — delivering specialist capability to the Central West and surrounding regions where these services are otherwise absent locally.'],
+            ['Flexible Engagement', 'Appointment-based with mobile pickup/drop-off. FIFO and remote site visits available for commercial and pastoral clients. Work quoted promptly and transparently.'],
+          ]} />
+
+          <div className="card-paper" style={{ padding: 24, marginTop: 8, background: 'var(--dark)', color: 'var(--paper)', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 16 }}>OUTBACK ELECTRONICS</div>
+              <div style={{ color: 'var(--ink-3)', fontSize: 13, marginTop: 4 }}>outbackelectronics.com.au | {phone}</div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 13 }}>{address}</div>
+              <div style={{ color: 'var(--ink-3)', fontSize: 13, marginTop: 4 }}>ABN: {abn}</div>
+            </div>
+          </div>
+
+          <div className="row-flex" style={{ gap: 12, flexWrap: 'wrap', marginTop: 32 }}>
+            <button className="btn btn-rust" onClick={() => go('quote')}>Get a Quote</button>
+            <button className="btn btn-ghost" onClick={() => go('contact')}>Contact us</button>
           </div>
         </div>
       </section>
@@ -2651,6 +2795,7 @@ window.OE_PAGES = Object.assign(window.OE_PAGES || {}, {
   policies: PoliciesPage,
   register: WarrantyRegisterPage,
   about: AboutPage,
+  'capability-statement': CapabilityStatementPage,
   'humanly-ai': HumanlyAIPage,
   repairs: null, // resolved dynamically — alias to services
 });
