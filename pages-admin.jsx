@@ -1086,6 +1086,15 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
 
   const linkedExpenses = expenses.filter(e => e.jobId && e.jobId === form.id);
   const partsCost = linkedExpenses.reduce((s, e) => s + (e.partStatus === 'returned' ? 0 : (Number(e.amount) || 0)), 0);
+
+  // Self-heal orders saved before parts-margin auto line items existed: if the
+  // linked expenses imply a different parts charge than what's on the order,
+  // bring it into sync once on open rather than leaving it stale forever.
+  React.useEffect(() => {
+    const expectedCharge = Math.round(partsCost * (1 + PARTS_MARGIN) * 100) / 100;
+    const existingCharge = Number((form.lineItems || []).find(li => li.id === 'parts-auto')?.amount) || 0;
+    if (expectedCharge !== existingCharge) recalcTotal(expenses);
+  }, [form.id]);
   const returnedCost = linkedExpenses.reduce((s, e) => s + (e.partStatus === 'returned' ? (Number(e.amount) || 0) : 0), 0);
   const profit = (Number(form.total) || 0) - partsCost;
 
