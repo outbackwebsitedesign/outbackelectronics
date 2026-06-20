@@ -1013,9 +1013,17 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
 
   const recalcTotal = (expList) => {
     const cost = expList.filter(e => e.jobId && e.jobId === form.id).reduce((s, e) => s + (e.partStatus === 'returned' ? 0 : (Number(e.amount) || 0)), 0);
-    const newTotal = Math.round(cost * (1 + PARTS_MARGIN) * 100) / 100;
-    setForm(f => ({ ...f, total: newTotal }));
-    saveNow({ total: newTotal });
+    const partsCharge = Math.round(cost * (1 + PARTS_MARGIN) * 100) / 100;
+    setForm(f => {
+      const others = (f.lineItems || []).filter(li => li.id !== 'parts-auto');
+      const lineItems = partsCharge > 0
+        ? [...others, { id: 'parts-auto', description: 'Parts (incl. margin)', amount: partsCharge }]
+        : others;
+      const newTotal = Math.round(lineItems.reduce((s, i) => s + (Number(i.amount) || 0), 0) * 100) / 100;
+      const updated = { ...f, lineItems, total: newTotal, items: lineItems.map(i => i.description).filter(Boolean).join(', ') || f.items };
+      saveNow(updated);
+      return updated;
+    });
   };
 
   const saveExpense = async (exp) => {
