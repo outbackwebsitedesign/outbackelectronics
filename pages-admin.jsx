@@ -911,7 +911,7 @@ function orderPaymentStatus(f) {
 // ============================================================
 // OrderDrawer — edit panel for a single order
 // ============================================================
-function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, onExpensesChange, onCustomerCreated }) {
+function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, onExpensesChange, onCustomerCreated, onDelete, sessionInfo = {} }) {
   const [form, setForm] = useState({ ...edit, id: edit.id || edit.suggestedId || '' });
   const findCustomerMatch = (c) => {
     const email = (c.email || '').toLowerCase().trim();
@@ -926,6 +926,21 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
     return match ? match.id : '';
   });
   const [payEntry, setPayEntry] = useState({ amount:'', method:'Cash', note:'' });
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const canDeleteOrder = (ROLE_LEVELS[sessionInfo.role] ?? 0) >= ROLE_LEVELS.manager;
+  const deleteOrderNow = async () => {
+    const ok = await adminConfirm(
+      `This will permanently delete order ${form.id} for ${form.cust || 'this customer'} and cannot be undone.`,
+      { title: 'Delete order', confirmLabel: 'Delete order', danger: true }
+    );
+    if (!ok) return;
+    setDeleteBusy(true);
+    const r = await fetch('/api/admin/orders/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: form.id }) }).catch(()=>null);
+    setDeleteBusy(false);
+    if (!r || !r.ok) { adminToast('Failed to delete order.'); return; }
+    onDelete?.(form.id);
+    onClose();
+  };
   const [updateEntry, setUpdateEntry] = useState({ text:'', type:'note' });
   const [expenseEdit, setExpenseEdit] = useState(null);
   const [expenseForm, setExpenseForm] = useState({});
@@ -1160,6 +1175,11 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
                 }}>
                 {trackingEmailStatus === 'sending' ? '⏳ Sending…' : trackingEmailStatus === 'sent' ? '✓ Email sent' : trackingEmailStatus === 'error' ? '✗ Failed' : '✉ Send tracking email'}
               </button>
+              {canDeleteOrder && (
+                <button className="btn btn-ghost btn-sm" style={{fontSize:12, color:'var(--rust)'}} disabled={deleteBusy} onClick={deleteOrderNow}>
+                  {deleteBusy ? '⏳ Deleting…' : '🗑 Delete order'}
+                </button>
+              )}
             </div>
           : <span/>
         }
@@ -1490,7 +1510,7 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
 // ============================================================
 // ORDERS
 // ============================================================
-function AdminOrders({ search }) {
+function AdminOrders({ search, sessionInfo }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expenses, setExpenses] = useState([]);
@@ -1597,6 +1617,7 @@ function AdminOrders({ search }) {
           edit={edit}
           expenses={expenses}
           customers={customers}
+          sessionInfo={sessionInfo}
           onClose={() => setEdit(null)}
           onRowUpdate={(updated) => setRows(rs => rs.map(r => r.id === (edit.id || updated.id) ? updated : r))}
           onSave={(saved, isNew) => {
@@ -1606,6 +1627,7 @@ function AdminOrders({ search }) {
           }}
           onExpensesChange={setExpenses}
           onCustomerCreated={(cust) => setCustomers(cs => [...cs, cust])}
+          onDelete={(id) => setRows(rs => rs.filter(r => r.id !== id))}
         />
       )}
     </div>
