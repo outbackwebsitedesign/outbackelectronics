@@ -1096,7 +1096,9 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
     if (expectedCharge !== existingCharge) recalcTotal(expenses);
   }, [form.id]);
   const returnedCost = linkedExpenses.reduce((s, e) => s + (e.partStatus === 'returned' ? (Number(e.amount) || 0) : 0), 0);
-  const profit = (Number(form.total) || 0) - partsCost;
+  const amountPaid = orderAmountPaid(form);
+  const profitRevenue = amountPaid > 0 ? amountPaid : (Number(form.total) || 0);
+  const profit = profitRevenue - partsCost;
 
   const partStatusColors = { ordered:{bg:'#dceaf5',fg:'#1668c8'}, arrived:{bg:'#fff4d6',fg:'#7a5d10'}, installed:{bg:'#d8e7d0',fg:'#345526'}, returned:{bg:'#f3d5c5',fg:'#7a3a18'} };
 
@@ -1421,10 +1423,11 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
         {linkedExpenses.length > 0 && (
           <div style={{display:'flex', gap:24, padding:'10px 14px', background: profit >= 0 ? '#d8e7d0' : '#f3d5c5', marginTop:4, flexWrap:'wrap'}}>
             <div><div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>ORDER TOTAL</div><div className="mono" style={{fontSize:14, fontWeight:600, color:'var(--ink-1)'}}>${(Number(form.total)||0).toLocaleString('en-AU',{minimumFractionDigits:2})}</div></div>
+            <div><div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>PAID</div><div className="mono" style={{fontSize:14, fontWeight:600, color:'var(--ink-1)'}}>${amountPaid.toLocaleString('en-AU',{minimumFractionDigits:2})}</div></div>
             <div><div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>PARTS COST</div><div className="mono" style={{fontSize:14, fontWeight:600, color:'var(--rust)'}}>-${partsCost.toLocaleString('en-AU',{minimumFractionDigits:2})}</div></div>
             {returnedCost > 0 && <div><div className="mono" style={{fontSize:10, color:'#345526'}}>RETURNED</div><div className="mono" style={{fontSize:14, fontWeight:600, color:'#345526'}}>+${returnedCost.toLocaleString('en-AU',{minimumFractionDigits:2})}</div></div>}
             <div><div className="mono" style={{fontSize:10, color: profit >= 0 ? '#345526' : '#7a3a18'}}>PROFIT</div><div className="mono" style={{fontSize:14, fontWeight:600, color: profit >= 0 ? '#345526' : '#7a3a18'}}>${profit.toLocaleString('en-AU',{minimumFractionDigits:2})}</div></div>
-            <div><div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>MARGIN</div><div className="mono" style={{fontSize:14, fontWeight:600, color:'var(--ink-2)'}}>{form.total ? Math.round(profit / Number(form.total) * 100) : 0}%</div></div>
+            <div><div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>MARGIN</div><div className="mono" style={{fontSize:14, fontWeight:600, color:'var(--ink-2)'}}>{profitRevenue ? Math.round(profit / profitRevenue * 100) : 0}%</div></div>
           </div>
         )}
       </div>
