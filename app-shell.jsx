@@ -132,7 +132,7 @@ export function TopNav({ current }) {
       <div className="container">
         <div className="row">
           <a className="logo" href={hubHref}>
-            <span className="logo-mark"><img src="assets/logo.webp" alt={shopName} onError={e => { e.target.style.display = 'none'; }} /></span>
+            <span className="logo-mark"><img src="/assets/logo.webp" alt={shopName} onError={e => { e.target.style.display = 'none'; }} /></span>
             <span className="logo-text">
               <span className="name">{shopName}</span>
               <span className="sub">Field Network</span>
@@ -163,7 +163,7 @@ export function Footer() {
       <div className="container">
         <div className="oe-footer-top">
           <a className="logo" href={hubHref}>
-            <span className="logo-mark sm"><img src="assets/logo.webp" alt="" onError={e => { e.target.style.display = 'none'; }} /></span>
+            <span className="logo-mark sm"><img src="/assets/logo.webp" alt="" onError={e => { e.target.style.display = 'none'; }} /></span>
             <span className="logo-text">
               <span className="name">{name}</span>
               <span className="sub">Field Network</span>

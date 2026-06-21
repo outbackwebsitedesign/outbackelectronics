@@ -212,7 +212,7 @@ function AdminLogin({ onAuth, siteUrl }) {
       <div style={{width:'100%', maxWidth: 420}}>
         <div style={{display:'flex', alignItems:'center', gap:12, marginBottom: 28}}>
           <div className="logo-mark sm" style={{background:'#000'}}>
-            <img src="assets/logo.webp" alt="" style={{height:28}}/>
+            <img src="/assets/logo.webp" alt="" style={{height:28}}/>
           </div>
           <div>
             <div style={{fontFamily:'JetBrains Mono, monospace', fontSize:11, letterSpacing:'.18em', color:'var(--ochre)'}}>OUTBACK · OPERATIONS</div>
@@ -442,7 +442,7 @@ function AdminSidebar({ section, setSection, onSignOut, role, username }) {
       }} className={mobileOpen ? 'admin-sidebar admin-sidebar-open' : 'admin-sidebar'}>
         <div style={{padding:'18px 18px 14px', borderBottom:'1px solid #2a241c', display:'flex', gap:10, alignItems:'center'}}>
           <div className="logo-mark sm" style={{background:'#000', padding:'3px 6px', height:32}}>
-            <img src="assets/logo.webp" alt="" style={{height:24}}/>
+            <img src="/assets/logo.webp" alt="" style={{height:24}}/>
           </div>
           <div>
             <div style={{fontFamily:'JetBrains Mono, monospace', fontSize:9.5, letterSpacing:'.18em', color:'var(--ochre)'}}>OUTBACK · OPS</div>

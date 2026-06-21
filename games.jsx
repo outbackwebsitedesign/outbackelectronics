@@ -2266,7 +2266,7 @@ function App() {
     <div style={{ display:'flex', flexDirection:'column', height:'100vh', overflow:'hidden' }}>
       <header style={css.header}>
         <a href="https://outbackelectronics.com.au" style={css.logoLink} title="Back to Outback Electronics">
-          <img src="assets/logo.webp" alt="" style={css.logoImg} onError={e=>{e.target.style.display='none';}} />
+          <img src="/assets/logo.webp" alt="" style={css.logoImg} onError={e=>{e.target.style.display='none';}} />
           <span style={css.siteName}>Outback Electronics</span>
         </a>
         <div style={{ flex:1 }} />

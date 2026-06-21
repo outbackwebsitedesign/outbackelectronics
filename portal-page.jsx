@@ -92,7 +92,7 @@ function LoginPage({ onLogin }) {
       <div className="login-box">
         <div className="login-logo">
           <div className="login-logo-mark">
-            <img src="assets/logo.webp" alt="Outback Electronics" />
+            <img src="/assets/logo.webp" alt="Outback Electronics" />
           </div>
           <div>
             <div style={{fontWeight:700, fontSize:15, color:'var(--ink)'}}>Outback Electronics</div>
@@ -325,7 +325,7 @@ function ResetPasswordForm({ token, onDone }) {
   if (msg) return (
     <div className="login-wrap">
       <div className="login-box">
-        <div className="login-logo"><div className="login-logo-mark"><img src="assets/logo.webp" alt="Outback Electronics" /></div><div><div style={{fontWeight:700, fontSize:15, color:'var(--ink)'}}>Outback Electronics</div><div className="eyebrow" style={{marginTop:3}}>Customer Portal</div></div></div>
+        <div className="login-logo"><div className="login-logo-mark"><img src="/assets/logo.webp" alt="Outback Electronics" /></div><div><div style={{fontWeight:700, fontSize:15, color:'var(--ink)'}}>Outback Electronics</div><div className="eyebrow" style={{marginTop:3}}>Customer Portal</div></div></div>
         <div className="alert alert-success" style={{marginBottom:16}}>{msg}</div>
         <button className="btn btn-rust" onClick={onDone} style={{width:'100%', justifyContent:'center'}}>Sign in →</button>
       </div>
@@ -335,7 +335,7 @@ function ResetPasswordForm({ token, onDone }) {
   return (
     <div className="login-wrap">
       <div className="login-box">
-        <div className="login-logo"><div className="login-logo-mark"><img src="assets/logo.webp" alt="Outback Electronics" /></div><div><div style={{fontWeight:700, fontSize:15, color:'var(--ink)'}}>Outback Electronics</div><div className="eyebrow" style={{marginTop:3}}>Customer Portal</div></div></div>
+        <div className="login-logo"><div className="login-logo-mark"><img src="/assets/logo.webp" alt="Outback Electronics" /></div><div><div style={{fontWeight:700, fontSize:15, color:'var(--ink)'}}>Outback Electronics</div><div className="eyebrow" style={{marginTop:3}}>Customer Portal</div></div></div>
         <h2 style={{fontFamily:'Instrument Serif, serif', fontWeight:400, fontSize:28, marginBottom:20}}>Choose new password</h2>
         {error && <div className="alert alert-error">{error}</div>}
         <form onSubmit={handleSubmit}>
@@ -421,7 +421,7 @@ function PortalNav({ user, tab, setTab, onLogout }) {
         <div className="container row">
           <a href={getSiteUrl()} className="logo">
             <div className="logo-mark">
-              <img src="assets/logo.webp" alt="Outback Electronics" />
+              <img src="/assets/logo.webp" alt="Outback Electronics" />
             </div>
             <div className="logo-text">
               <div className="name">Outback Electronics</div>
