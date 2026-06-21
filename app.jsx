@@ -343,7 +343,7 @@ const externalHref = (id) => EXTERNAL_LINKS[id] ? EXTERNAL_LINKS[id]() : null;
 const UTILITY_PAGES = [
   { id: 'quote', label: 'Request a Quote' },
   { id: 'gift-cards', label: 'Gift Cards' },
-  { id: 'sellers', label: 'Info for Sellers' },
+  { id: 'about', label: 'About' },
   { id: 'sell-gear', label: 'Sell Your Gear' },
   { id: 'contact', label: 'Contact' },
   { id: 'policies', label: 'Policies' },
@@ -645,7 +645,7 @@ function Footer({ go }) {
               <li><a href="/tutorials" onClick={(e) => { e.preventDefault(); go('tutorials'); }}>Tutorials</a></li>
               <li><a href="/groups" onClick={(e) => { e.preventDefault(); go('groups'); }}>Groups</a></li>
               <li><a href="/memberships" onClick={(e) => { e.preventDefault(); go('memberships'); }}>Memberships</a></li>
-              <li><a href="/sellers" onClick={(e) => { e.preventDefault(); go('sellers'); }}>Info for Sellers</a></li>
+              <li><a href="/about" onClick={(e) => { e.preventDefault(); go('about'); }}>About</a></li>
               <li><a href="/sell-gear" onClick={(e) => { e.preventDefault(); go('sell-gear'); }}>Sell Your Gear</a></li>
             </ul>
           </div>
