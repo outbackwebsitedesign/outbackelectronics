@@ -2318,7 +2318,7 @@ function CapabilityStatementPage({ go }) {
             ['Drone & RC Equipment', 'ESC, flight controller, and motor diagnosis. Firmware flashing, calibration, and repair of consumer and hobbyist drones and RC vehicles.'],
             ['Solar & 12V Systems', 'Solar panel system assessment, charge controller configuration, dual battery system design and installation, 12V DC wiring and fault diagnosis for vehicles and off-grid setups.'],
             ['UPS & Power Backup', 'UPS selection, installation, battery replacement, and runtime testing for residential and commercial applications.'],
-            ['Appliance Repair', 'Diagnosis and repair of household appliances at component level where viable, including washing machines, dryers, refrigerators, and small appliances.'],
+            ['Appliance Repair', 'Diagnosis and repair of household appliances at component level where viable, including washing machines, dryers, refrigerators, and small appliances. Excludes work on 240V mains-connected circuits.'],
             ['Audio Electronics', 'Amplifier, receiver, and speaker crossover repair. Component-level fault diagnosis on hi-fi and PA equipment.'],
           ]} />
 
