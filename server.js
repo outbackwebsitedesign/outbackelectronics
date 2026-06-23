@@ -2,6 +2,7 @@ const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+const { execFile } = require('child_process');
 let satellite; try { satellite = require('satellite.js'); } catch {}
 const zlib = require('zlib');
 const crypto = require('crypto');
@@ -6203,6 +6204,31 @@ function broadcastWeatherReading(reading) {
   }
 }
 
+// ── UPS stats (via NUT's `upsc` client) ───────────────────────────────────────
+
+const UPS_NAME = process.env.UPS_NAME || 'ups';
+let upsStatsCache = { data: null, error: null, ts: 0 };
+
+function readUpsStats() {
+  return new Promise((resolve) => {
+    if (Date.now() - upsStatsCache.ts < 5000) return resolve(upsStatsCache);
+    execFile('upsc', [UPS_NAME], { timeout: 5000 }, (err, stdout) => {
+      if (err) {
+        upsStatsCache = { data: null, error: 'upsc_failed', ts: Date.now() };
+        return resolve(upsStatsCache);
+      }
+      const data = {};
+      for (const line of stdout.split('\n')) {
+        const idx = line.indexOf(':');
+        if (idx === -1) continue;
+        data[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
+      }
+      upsStatsCache = { data, error: null, ts: Date.now() };
+      resolve(upsStatsCache);
+    });
+  });
+}
+
 // ── Weather server (8089) ────────────────────────────────────────────────────
 
 const weatherServer = http.createServer(async (req, res) => {
@@ -6392,6 +6418,13 @@ const weatherServer = http.createServer(async (req, res) => {
     weatherSseClients.add(res);
     req.on('close', () => weatherSseClients.delete(res));
     return;
+  }
+
+  // UPS / server power stats
+  if (req.method === 'GET' && url.pathname === '/api/server/stats') {
+    const { data, error } = await readUpsStats();
+    if (error) return json(res, 502, { error });
+    return json(res, 200, { ups: data, ts: Date.now() });
   }
 
   return serveStatic(req, res, url.pathname, '/dist/weather.html', null);

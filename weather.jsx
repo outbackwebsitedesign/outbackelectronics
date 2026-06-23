@@ -1174,6 +1174,74 @@ function AddSensorModal({ onClose }) {
   );
 }
 
+function ServerStatsRow({ label, value }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 13 }}>
+      <span style={{ color: 'var(--ink-2)' }}>{label}</span>
+      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>{value}</span>
+    </div>
+  );
+}
+
+const UPS_FIELDS = [
+  { key: 'ups.status', label: 'Status' },
+  { key: 'battery.charge', label: 'Battery Charge', unit: '%' },
+  { key: 'battery.voltage', label: 'Battery Voltage', unit: 'V' },
+  { key: 'input.voltage', label: 'Input Voltage', unit: 'V' },
+  { key: 'output.voltage', label: 'Output Voltage', unit: 'V' },
+  { key: 'input.frequency', label: 'Input Frequency', unit: 'Hz' },
+  { key: 'ups.load', label: 'Load', unit: '%' },
+  { key: 'ups.type', label: 'UPS Type' },
+];
+
+function ServerStatsPage() {
+  const [stats, setStats] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const load = () => {
+      fetch('/api/server/stats')
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(d => { setStats(d.ups); setError(null); })
+        .catch(() => setError('Could not reach UPS — server may be on battery or unreachable.'));
+    };
+    load();
+    const t = setInterval(load, 10000);
+    return () => clearInterval(t);
+  }, []);
+
+  return (
+    <>
+      <div className="page-head">
+        <div className="container">
+          <div className="crumbs eyebrow">
+            <span>Outback</span>
+            <span style={{ color: 'var(--ink-3)' }}>/</span>
+            <span>Server Stats</span>
+          </div>
+          <h1>Server Stats</h1>
+          <p className="lead">Live UPS status for the server hosting this site.</p>
+        </div>
+      </div>
+      <div className="container" style={{ flex: 1, paddingTop: 32, paddingBottom: 48 }}>
+        {error && (
+          <div style={{ marginBottom: 16, padding: '12px 16px', background: '#f3d5c5', border: '1px solid #e8b898', color: '#7a3a18', fontSize: 13 }}>
+            {error}
+          </div>
+        )}
+        {stats && (
+          <div className="card" style={{ padding: '20px 24px', maxWidth: 480 }}>
+            {UPS_FIELDS.filter(f => stats[f.key] !== undefined).map(f => (
+              <ServerStatsRow key={f.key} label={f.label} value={`${stats[f.key]}${f.unit ? ' ' + f.unit : ''}`} />
+            ))}
+          </div>
+        )}
+        {!stats && !error && <div style={{ color: 'var(--ink-3)', fontSize: 13 }}>Loading…</div>}
+      </div>
+    </>
+  );
+}
+
 function WeatherDashboard() {
   const [latest, setLatest] = useState(null);
   const [history, setHistory] = useState([]);
@@ -1253,6 +1321,10 @@ function WeatherDashboard() {
     const t = setInterval(() => setTick(n => n + 1), 1000);
     return () => clearInterval(t);
   }, []);
+
+  if (window.location.pathname.replace(/\/+$/, '') === '/server/stats') {
+    return <ServerStatsPage />;
+  }
 
   const data = latest?.data || {};
   const derivedData = computeDerived(data);
