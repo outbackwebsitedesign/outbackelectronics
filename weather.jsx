@@ -337,7 +337,7 @@ const QUICK_RANGES = [
   { label: '30d', hours: 24 * 30 },
 ];
 
-function ReadingDetail({ def, stationId, onBack }) {
+function ReadingDetail({ def, stationId, onBack, apiBase = '/api/weather', isDerivedKey = false, yDomains = Y_DOMAINS }) {
   const [history, setHistory] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -348,7 +348,7 @@ function ReadingDetail({ def, stationId, onBack }) {
 
   // Load available years once
   useEffect(() => {
-    fetch('/api/weather/years').then(r => r.json()).then(d => {
+    fetch(`${apiBase}/years`).then(r => r.json()).then(d => {
       const ys = d.years || [];
       setYears(ys);
       if (ys.length > 0 && !selectedYear) setSelectedYear(ys[0]);
@@ -360,8 +360,8 @@ function ReadingDetail({ def, stationId, onBack }) {
     const sq2 = sid ? `?station=${encodeURIComponent(sid)}` : '';
     setLoading(true);
     Promise.all([
-      fetch(`/api/weather/history?hours=${h}${sq}`).then(r => r.json()).catch(() => ({ readings: [] })),
-      fetch(`/api/weather/stats${sq2}`).then(r => r.json()).catch(() => ({ stats: {} })),
+      fetch(`${apiBase}/history?hours=${h}${sq}`).then(r => r.json()).catch(() => ({ readings: [] })),
+      fetch(`${apiBase}/stats${sq2}`).then(r => r.json()).catch(() => ({ stats: {} })),
     ]).then(([hist, st]) => {
       setHistory(hist.readings || []);
       setStats(st.stats || {});
@@ -376,8 +376,8 @@ function ReadingDetail({ def, stationId, onBack }) {
     const sq2 = sid ? `&station=${encodeURIComponent(sid)}` : '';
     setLoading(true);
     Promise.all([
-      fetch(`/api/weather/history?from=${from}&to=${to}${sq}`).then(r => r.json()).catch(() => ({ readings: [] })),
-      fetch(`/api/weather/stats?from=${from}&to=${to}${sq2}`).then(r => r.json()).catch(() => ({ stats: {} })),
+      fetch(`${apiBase}/history?from=${from}&to=${to}${sq}`).then(r => r.json()).catch(() => ({ readings: [] })),
+      fetch(`${apiBase}/stats?from=${from}&to=${to}${sq2}`).then(r => r.json()).catch(() => ({ stats: {} })),
     ]).then(([hist, st]) => {
       setHistory(hist.readings || []);
       setStats(st.stats || {});
@@ -391,7 +391,7 @@ function ReadingDetail({ def, stationId, onBack }) {
 
     // SSE — append new readings instantly when in live range mode
     if (mode !== 'range') return;
-    const es = new EventSource('/api/weather/stream');
+    const es = new EventSource(`${apiBase}/stream`);
     es.onmessage = (e) => {
       try {
         const reading = JSON.parse(e.data);
@@ -403,10 +403,8 @@ function ReadingDetail({ def, stationId, onBack }) {
     return () => es.close();
   }, [mode, hours, selectedYear, stationId]);
 
-  const isDerived = DERIVED.some(d => d.key === def.key);
-
   // Derived values are calculated live — no stored history to graph
-  if (isDerived) return null;
+  if (isDerivedKey) return null;
 
   const points = history
     .filter(r => r.data && r.data[def.key] !== undefined)
@@ -475,7 +473,7 @@ function ReadingDetail({ def, stationId, onBack }) {
             toTs={mode === 'year' && selectedYear
               ? new Date(selectedYear + 1, 0, 1).getTime() - 1
               : Date.now()}
-            yDomain={Y_DOMAINS[def.key] || null}
+            yDomain={yDomains[def.key] || null}
           />
         )}
       </div>
@@ -1174,41 +1172,157 @@ function AddSensorModal({ onClose }) {
   );
 }
 
-function ServerStatsRow({ label, value }) {
+// ── UPS / server power dashboard ───────────────────────────────────────────────
+
+const UPS_READINGS = [
+  { key: 'battery_charge',  label: 'Battery Charge',  unit: '%',  group: 'battery' },
+  { key: 'battery_voltage', label: 'Battery Voltage', unit: 'V',  group: 'battery' },
+  { key: 'input_voltage',   label: 'Input Voltage',   unit: 'V',  group: 'power' },
+  { key: 'output_voltage',  label: 'Output Voltage',  unit: 'V',  group: 'power' },
+  { key: 'input_frequency', label: 'Input Frequency', unit: 'Hz', group: 'power' },
+  { key: 'load',            label: 'Load',            unit: '%',  group: 'power' },
+];
+
+const UPS_GROUPS = [
+  { key: 'battery', label: 'Battery' },
+  { key: 'power',   label: 'Power' },
+];
+
+const UPS_Y_DOMAINS = {
+  battery_charge:  [0, 100],
+  battery_voltage: [20, 30],
+  input_voltage:   [200, 260],
+  output_voltage:  [200, 260],
+  input_frequency: [45, 55],
+  load:            [0, 100],
+};
+
+const UPS_STATUS_LABELS = { OL: 'On Line', OB: 'On Battery', LB: 'Low Battery', RB: 'Replace Battery', CHRG: 'Charging', DISCHRG: 'Discharging' };
+
+function UpsStatus({ latest, deviceInfo }) {
+  const online = latest && (Date.now() - latest.ts < UPS_POLL_FRESHNESS_MS);
+  const codes = (latest?.status || '').split(' ').filter(Boolean);
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 13 }}>
-      <span style={{ color: 'var(--ink-2)' }}>{label}</span>
-      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>{value}</span>
+    <div className="card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+      <div style={{
+        width: 10, height: 10, borderRadius: '50%',
+        background: online ? 'var(--eucalyptus)' : 'var(--rust)',
+        boxShadow: online ? '0 0 8px rgba(79,107,62,0.5)' : 'none',
+      }} />
+      <span style={{ fontWeight: 600, fontSize: 14 }}>
+        {deviceInfo?.['ups.type'] || 'UPS'} — {online ? 'Online' : 'Offline'}
+      </span>
+      {codes.map(c => (
+        <span key={c} className="tag" style={{ marginLeft: codes[0] === c ? 4 : 0 }}>{UPS_STATUS_LABELS[c] || c}</span>
+      ))}
+      {deviceInfo?.['device.type'] && (
+        <span className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', marginLeft: 'auto' }}>
+          {deviceInfo['driver.name']} {deviceInfo['driver.version']}
+        </span>
+      )}
     </div>
   );
 }
 
-const UPS_FIELDS = [
-  { key: 'ups.status', label: 'Status' },
-  { key: 'battery.charge', label: 'Battery Charge', unit: '%' },
-  { key: 'battery.voltage', label: 'Battery Voltage', unit: 'V' },
-  { key: 'input.voltage', label: 'Input Voltage', unit: 'V' },
-  { key: 'output.voltage', label: 'Output Voltage', unit: 'V' },
-  { key: 'input.frequency', label: 'Input Frequency', unit: 'Hz' },
-  { key: 'ups.load', label: 'Load', unit: '%' },
-  { key: 'ups.type', label: 'UPS Type' },
-];
+const UPS_POLL_FRESHNESS_MS = 90000; // 3x the default poll interval
 
 function ServerStatsPage() {
-  const [stats, setStats] = useState(null);
+  const [latest, setLatest] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [deviceInfo, setDeviceInfo] = useState(null);
   const [error, setError] = useState(null);
+  const [tick, setTick] = useState(0);
+
+  // URL routing under /server/stats — e.g. /server/stats/battery_charge
+  const PREFIX = '/server/stats';
+  const keyFromPath = () => {
+    const seg = window.location.pathname.slice(PREFIX.length).replace(/^\/+/, '').replace(/\/+$/, '');
+    return seg || null;
+  };
+  const [detailKey, setDetailKeyState] = useState(keyFromPath);
+  const setDetailKey = (key) => {
+    const p = key ? `${PREFIX}/${key}` : PREFIX;
+    window.history.pushState({ key }, '', p);
+    setDetailKeyState(key);
+  };
 
   useEffect(() => {
-    const load = () => {
-      fetch('/api/server/stats')
-        .then(r => r.ok ? r.json() : Promise.reject())
-        .then(d => { setStats(d.ups); setError(null); })
-        .catch(() => setError('Could not reach UPS — server may be on battery or unreachable.'));
+    const onPop = () => setDetailKeyState(keyFromPath());
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/server/stats')
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setDeviceInfo(d.ups))
+      .catch(() => {});
+
+    fetch('/api/ups/history?hours=24')
+      .then(r => r.json())
+      .then(d => { if (d.readings) setHistory(d.readings); })
+      .catch(() => {});
+
+    fetch('/api/ups/latest')
+      .then(r => r.json())
+      .then(d => { if (d.reading) { setLatest(d.reading); setError(null); } })
+      .catch(() => setError('Could not reach the UPS data feed'));
+
+    const es = new EventSource('/api/ups/stream');
+    es.onmessage = (e) => {
+      try {
+        const reading = JSON.parse(e.data);
+        setLatest(reading);
+        setError(null);
+        setHistory(prev => [...prev, reading]);
+      } catch {}
     };
-    load();
-    const t = setInterval(load, 10000);
+    es.onerror = () => setError('Could not reach the UPS data feed');
+    return () => es.close();
+  }, []);
+
+  useEffect(() => {
+    const t = setInterval(() => setTick(n => n + 1), 1000);
     return () => clearInterval(t);
   }, []);
+
+  const data = latest?.data || {};
+  const hasAnyData = Object.keys(data).length > 0;
+  const visibleGroups = UPS_GROUPS.filter(g =>
+    !hasAnyData || UPS_READINGS.some(r => r.group === g.key && data[r.key] !== undefined)
+  );
+
+  const detailDef = detailKey
+    ? (UPS_READINGS.find(r => r.key === detailKey) || {
+        key: detailKey,
+        label: detailKey.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+        unit: '',
+        group: 'custom',
+      })
+    : null;
+
+  if (detailDef) {
+    return (
+      <>
+        <div className="page-head">
+          <div className="container">
+            <div className="crumbs eyebrow">
+              <span onClick={() => setDetailKey(null)} style={{ cursor: 'pointer' }}>Outback</span>
+              <span style={{ color: 'var(--ink-3)' }}>/</span>
+              <span onClick={() => setDetailKey(null)} style={{ cursor: 'pointer' }}>Server Stats</span>
+              <span style={{ color: 'var(--ink-3)' }}>/</span>
+              <span>{detailDef.label}</span>
+            </div>
+            <h1>{detailDef.label}</h1>
+            <p className="lead">{detailDef.unit}</p>
+          </div>
+        </div>
+        <div className="container" style={{ flex: 1, paddingTop: 32, paddingBottom: 48 }}>
+          <ReadingDetail def={detailDef} onBack={() => setDetailKey(null)} apiBase="/api/ups" yDomains={UPS_Y_DOMAINS} />
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -1220,23 +1334,37 @@ function ServerStatsPage() {
             <span>Server Stats</span>
           </div>
           <h1>Server Stats</h1>
-          <p className="lead">Live UPS status for the server hosting this site.</p>
+          <p className="lead">Live UPS status and power history for the server hosting this site.</p>
         </div>
       </div>
+
       <div className="container" style={{ flex: 1, paddingTop: 32, paddingBottom: 48 }}>
+        <UpsStatus latest={latest} deviceInfo={deviceInfo} />
+
         {error && (
-          <div style={{ marginBottom: 16, padding: '12px 16px', background: '#f3d5c5', border: '1px solid #e8b898', color: '#7a3a18', fontSize: 13 }}>
+          <div style={{ marginTop: 16, padding: '12px 16px', background: '#f3d5c5', border: '1px solid #e8b898', color: '#7a3a18', fontSize: 13 }}>
             {error}
           </div>
         )}
-        {stats && (
-          <div className="card" style={{ padding: '20px 24px', maxWidth: 480 }}>
-            {UPS_FIELDS.filter(f => stats[f.key] !== undefined).map(f => (
-              <ServerStatsRow key={f.key} label={f.label} value={`${stats[f.key]}${f.unit ? ' ' + f.unit : ''}`} />
-            ))}
-          </div>
-        )}
-        {!stats && !error && <div style={{ color: 'var(--ink-3)', fontSize: 13 }}>Loading…</div>}
+
+        <div style={{ marginTop: 32 }}>
+          {visibleGroups.map(g => {
+            const groupReadings = UPS_READINGS.filter(r => r.group === g.key);
+            const visible = hasAnyData ? groupReadings.filter(r => data[r.key] !== undefined) : groupReadings;
+            if (visible.length === 0) return null;
+            return (
+              <div key={g.key} style={{ marginBottom: 32 }}>
+                <h2 style={{ fontSize: 18, marginBottom: 16 }}>{g.label}</h2>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 }}>
+                  {visible.map(def => (
+                    <ReadingCard key={def.key} def={def} value={data[def.key] ?? null} ts={latest?.ts}
+                      onClick={() => setDetailKey(def.key)} />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </>
   );
@@ -1322,7 +1450,7 @@ function WeatherDashboard() {
     return () => clearInterval(t);
   }, []);
 
-  if (window.location.pathname.replace(/\/+$/, '') === '/server/stats') {
+  if (window.location.pathname === '/server/stats' || window.location.pathname.startsWith('/server/stats/')) {
     return <ServerStatsPage />;
   }
 
@@ -1387,7 +1515,7 @@ function WeatherDashboard() {
               )}
             </div>
           ) : (
-            <ReadingDetail def={detailDef} stationId={activeStation} onBack={() => setDetailKey(null)} />
+            <ReadingDetail def={detailDef} stationId={activeStation} onBack={() => setDetailKey(null)} isDerivedKey={DERIVED.some(d => d.key === detailDef.key)} />
           )}
         </div>
       </>
