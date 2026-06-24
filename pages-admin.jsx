@@ -1034,7 +1034,7 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
     setForm(f => {
       const others = (f.lineItems || []).filter(li => li.id !== 'parts-auto');
       const lineItems = partsCharge > 0
-        ? [...others, { id: 'parts-auto', description: 'Parts (incl. margin)', amount: partsCharge }]
+        ? [...others, { id: 'parts-auto', description: 'Parts', amount: partsCharge }]
         : others;
       const newTotal = Math.round(lineItems.reduce((s, i) => s + liTotal(i), 0) * 100) / 100;
       const updated = { ...f, lineItems, total: newTotal, items: lineItems.map(i => i.description).filter(Boolean).join(', ') || f.items };
