@@ -2,6 +2,7 @@ const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+const { execFile } = require('child_process');
 let satellite; try { satellite = require('satellite.js'); } catch {}
 const zlib = require('zlib');
 const crypto = require('crypto');
@@ -6203,6 +6204,92 @@ function broadcastWeatherReading(reading) {
   }
 }
 
+// ── UPS stats (via NUT's `upsc` client) ───────────────────────────────────────
+
+const UPS_NAME = process.env.UPS_NAME || 'ups';
+const UPS_DB = path.join(__dirname, 'ups.db');
+const UPS_POLL_INTERVAL_MS = parseInt(process.env.UPS_POLL_INTERVAL_MS || '30000', 10);
+let upsStatsCache = { data: null, error: null, ts: 0 };
+
+// Raw upsc key → our flattened time-series key (numeric fields only)
+const UPS_FIELD_MAP = {
+  'battery.charge': 'battery_charge',
+  'battery.voltage': 'battery_voltage',
+  'input.voltage': 'input_voltage',
+  'output.voltage': 'output_voltage',
+  'input.frequency': 'input_frequency',
+  'ups.load': 'load',
+};
+
+function execUpsc() {
+  return new Promise((resolve) => {
+    execFile('upsc', [UPS_NAME], { timeout: 5000 }, (err, stdout) => {
+      if (err) return resolve(null);
+      const data = {};
+      for (const line of stdout.split('\n')) {
+        const idx = line.indexOf(':');
+        if (idx === -1) continue;
+        data[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
+      }
+      resolve(data);
+    });
+  });
+}
+
+function readUpsStats() {
+  return new Promise(async (resolve) => {
+    if (Date.now() - upsStatsCache.ts < 5000) return resolve(upsStatsCache);
+    const data = await execUpsc();
+    upsStatsCache = data ? { data, error: null, ts: Date.now() } : { data: null, error: 'upsc_failed', ts: Date.now() };
+    resolve(upsStatsCache);
+  });
+}
+
+function readUpsDb() {
+  try { return JSON.parse(fs.readFileSync(UPS_DB, 'utf8')); }
+  catch { return { readings: [] }; }
+}
+
+function writeUpsDb(data) {
+  const tmp = UPS_DB + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(data));
+  fs.renameSync(tmp, UPS_DB);
+}
+
+const upsSseClients = new Set();
+
+function broadcastUpsReading(reading) {
+  const payload = `data: ${JSON.stringify(reading)}\n\n`;
+  for (const res of upsSseClients) {
+    try { res.write(payload); } catch { upsSseClients.delete(res); }
+  }
+}
+
+function appendUpsReading(reading) {
+  const db = readUpsDb();
+  db.readings.push(reading);
+  writeUpsDb(db);
+  broadcastUpsReading(reading);
+}
+
+async function pollUps() {
+  const raw = await execUpsc();
+  if (!raw) return;
+  const data = {};
+  for (const [rawKey, ourKey] of Object.entries(UPS_FIELD_MAP)) {
+    const v = parseFloat(raw[rawKey]);
+    if (!isNaN(v)) data[ourKey] = v;
+  }
+  // This UPS's nutdrv_qx (Mustek protocol) driver only sporadically manages to read load off
+  // the wire — most polls come back 0 even though the server is always drawing some load.
+  // A 0 is noise, not a real reading, so drop it and let the last real reading stand.
+  if (data.load === 0) delete data.load;
+  appendUpsReading({ ts: Date.now(), status: raw['ups.status'] || null, data });
+}
+
+setInterval(pollUps, UPS_POLL_INTERVAL_MS);
+pollUps();
+
 // ── Weather server (8089) ────────────────────────────────────────────────────
 
 const weatherServer = http.createServer(async (req, res) => {
@@ -6391,6 +6478,83 @@ const weatherServer = http.createServer(async (req, res) => {
     res.write(': connected\n\n');
     weatherSseClients.add(res);
     req.on('close', () => weatherSseClients.delete(res));
+    return;
+  }
+
+  // UPS / server power stats — raw current snapshot (all upsc fields, incl. static device info)
+  if (req.method === 'GET' && url.pathname === '/api/server/stats') {
+    const { data, error } = await readUpsStats();
+    if (error) return json(res, 502, { error });
+    return json(res, 200, { ups: data, ts: Date.now() });
+  }
+
+  // Latest stored UPS reading (time-series)
+  if (req.method === 'GET' && url.pathname === '/api/ups/latest') {
+    const db = readUpsDb();
+    const last = db.readings.length ? db.readings[db.readings.length - 1] : null;
+    return json(res, 200, { reading: last });
+  }
+
+  // Historical UPS readings
+  if (req.method === 'GET' && url.pathname === '/api/ups/history') {
+    const hours = parseInt(url.searchParams.get('hours') || '24', 10) || 24;
+    const from  = url.searchParams.get('from') ? parseInt(url.searchParams.get('from'), 10) : null;
+    const to    = url.searchParams.get('to')   ? parseInt(url.searchParams.get('to'),   10) : null;
+    const since = from || (Date.now() - hours * 3600000);
+    const until = to || null;
+    const db = readUpsDb();
+    let filtered = db.readings.filter(r => r.ts > since);
+    if (until) filtered = filtered.filter(r => r.ts <= until);
+    let result = filtered;
+    if (filtered.length > 1000) {
+      const step = Math.ceil(filtered.length / 1000);
+      result = filtered.filter((_, i) => i % step === 0);
+    }
+    return json(res, 200, { readings: result, count: filtered.length });
+  }
+
+  // Stats — min/avg/max per key
+  if (req.method === 'GET' && url.pathname === '/api/ups/stats') {
+    const from = url.searchParams.get('from') ? parseInt(url.searchParams.get('from'), 10) : null;
+    const to   = url.searchParams.get('to')   ? parseInt(url.searchParams.get('to'),   10) : null;
+    const db = readUpsDb();
+    let readings = db.readings;
+    if (from) readings = readings.filter(r => r.ts >= from);
+    if (to)   readings = readings.filter(r => r.ts <= to);
+    const stats = {};
+    for (const r of readings) {
+      for (const [k, v] of Object.entries(r.data || {})) {
+        if (typeof v !== 'number') continue;
+        if (!stats[k]) stats[k] = { min: v, max: v, sum: 0, count: 0 };
+        if (v < stats[k].min) stats[k].min = v;
+        if (v > stats[k].max) stats[k].max = v;
+        stats[k].sum += v;
+        stats[k].count += 1;
+      }
+    }
+    for (const s of Object.values(stats)) { s.avg = s.count ? s.sum / s.count : null; delete s.sum; }
+    return json(res, 200, { stats, count: readings.length });
+  }
+
+  // Available years in the UPS DB
+  if (req.method === 'GET' && url.pathname === '/api/ups/years') {
+    const db = readUpsDb();
+    const yearSet = new Set();
+    for (const r of db.readings) { yearSet.add(new Date(r.ts).getFullYear()); }
+    return json(res, 200, { years: [...yearSet].sort((a, b) => b - a) });
+  }
+
+  // SSE stream of UPS readings
+  if (req.method === 'GET' && url.pathname === '/api/ups/stream') {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+    });
+    res.write(': connected\n\n');
+    upsSseClients.add(res);
+    req.on('close', () => upsSseClients.delete(res));
     return;
   }
 
