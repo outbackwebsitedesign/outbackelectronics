@@ -910,6 +910,86 @@ function orderPaymentStatus(f) {
   return 'unpaid';
 }
 
+const PART_STATUS_COLORS = { ordered:{bg:'#dceaf5',fg:'#1668c8'}, arrived:{bg:'#fff4d6',fg:'#7a5d10'}, installed:{bg:'#d8e7d0',fg:'#345526'}, returned:{bg:'#f3d5c5',fg:'#7a3a18'} };
+
+function QuantityInput({ value, onCommit }) {
+  const [text, setText] = React.useState(String(value || 1));
+  React.useEffect(() => { setText(String(value || 1)); }, [value]);
+  return (
+    <input className="input" type="number" min="1" step="1" value={text}
+      onChange={ev => { setText(ev.target.value); }}
+      onBlur={() => onCommit(Math.max(1, parseInt(text) || 1))}
+    />
+  );
+}
+
+function ExpenseRow({ e, isEditing, expenseForm, setExpenseForm, setExpenseEdit, saveExpense, deleteExpense }) {
+  const ef = isEditing ? expenseForm : e;
+  if (isEditing) return (
+    <div style={{padding:'12px', background:'var(--paper)', border:'1px solid var(--ochre)', marginBottom:6}}>
+      <div className="grid-2" style={{gap:10, marginBottom:10}}>
+        <label className="field" style={{margin:0}}><span className="label">Description</span><input className="input" value={ef.description||''} onChange={ev=>setExpenseForm(f=>({...f,description:ev.target.value}))}/></label>
+        <label className="field" style={{margin:0}}><span className="label">Amount (AUD, per item)</span><input className="input" type="number" min="0" step="0.01" value={ef.amount||''} onChange={ev=>setExpenseForm(f=>({...f,amount:nonNegInput(ev.target.value)}))}/></label>
+      </div>
+      <div className="grid-2" style={{gap:10, marginBottom:10}}>
+        <label className="field" style={{margin:0}}><span className="label">Quantity</span>
+          <QuantityInput value={ef.quantity} onCommit={q => setExpenseForm(f=>({...f,quantity:q}))}/>
+        </label>
+        <label className="field" style={{margin:0}}><span className="label">Category</span>
+          <select className="select" value={ef.category||'parts'} onChange={ev=>setExpenseForm(f=>({...f,category:ev.target.value}))}>
+            {['tools','equipment','parts','software','other'].map(c=><option key={c}>{c}</option>)}
+          </select>
+        </label>
+      </div>
+      <div className="grid-2" style={{gap:10, marginBottom:10}}>
+        <label className="field" style={{margin:0}}><span className="label">Part status</span>
+          <select className="select" value={ef.partStatus||''} onChange={ev=>setExpenseForm(f=>({...f,partStatus:ev.target.value}))}>
+            <option value="">— N/A —</option>
+            {['ordered','arrived','installed','returned'].map(s=><option key={s}>{s}</option>)}
+          </select>
+        </label>
+      </div>
+      <div className="grid-2" style={{gap:10, marginBottom:10}}>
+        <label className="field" style={{margin:0}}><span className="label">Date</span><input className="input" value={ef.date||''} onChange={ev=>setExpenseForm(f=>({...f,date:ev.target.value}))}/></label>
+        <label className="field" style={{margin:0}}><span className="label">Notes</span><input className="input" value={ef.notes||''} onChange={ev=>setExpenseForm(f=>({...f,notes:ev.target.value}))}/></label>
+      </div>
+      <label style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',marginBottom:12,fontSize:13}}>
+        <input type="checkbox" checked={!!ef.isSecondHand} onChange={ev=>setExpenseForm(f=>({...f,isSecondHand:ev.target.checked}))} style={{width:15,height:15}}/>
+        Second-hand
+      </label>
+      <div style={{display:'flex', gap:8}}>
+        <button className="btn btn-sm" onClick={() => saveExpense(ef)}>Save</button>
+        <button className="btn btn-ghost btn-sm" onClick={() => { setExpenseEdit(null); setExpenseForm({}); }}>Cancel</button>
+        <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)', marginLeft:'auto'}} onClick={() => deleteExpense(e.id)}>Delete</button>
+      </div>
+    </div>
+  );
+  return (
+    <div key={e.id} role="button" tabIndex={0} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 12px', background:'var(--bg-elev)', border:'1px solid var(--line)', marginBottom:6, cursor:'pointer', gap:10}}
+      onClick={() => { setExpenseEdit(e.id); setExpenseForm({...e}); }}
+      onKeyDown={e2 => { if (e2.key==='Enter'||e2.key===' ') { e2.preventDefault(); setExpenseEdit(e.id); setExpenseForm({...e}); } }}>
+      <div style={{flex:1, minWidth:0}}>
+        <span style={{fontSize:13, fontWeight:500}}>{e.description}</span>
+        {Number(e.quantity) > 1 && <span className="mono" style={{fontSize:10, color:'var(--ink-3)', marginLeft:8}}>×{e.quantity}</span>}
+        {e.category && <span className="mono" style={{fontSize:10, color:'var(--ink-3)', marginLeft:8}}>{e.category.toUpperCase()}</span>}
+        {e.partStatus && (() => { const s = PART_STATUS_COLORS[e.partStatus]; return <span className="tag" style={{background:s?.bg,color:s?.fg,borderColor:s?.bg,marginLeft:8,fontSize:10}}>{e.partStatus.toUpperCase()}</span>; })()}
+        {e.notes && <div style={{fontSize:11, color:'var(--ink-3)', marginTop:2}}>{e.notes}</div>}
+      </div>
+      <div style={{display:'flex', gap:12, alignItems:'center', flexShrink:0}}>
+        <span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>{e.date}</span>
+        {e.partStatus === 'returned'
+          ? <span className="mono" style={{fontWeight:600}}>
+              <span style={{textDecoration:'line-through', color:'var(--ink-3)', marginRight:6}}>-${expTotal(e).toLocaleString('en-AU',{minimumFractionDigits:2})}</span>
+              <span style={{color:'#345526'}}>$0.00</span>
+            </span>
+          : <span className="mono" style={{fontWeight:600, color:'var(--rust)'}}>-${expTotal(e).toLocaleString('en-AU',{minimumFractionDigits:2})}</span>
+        }
+        <span style={{fontSize:12, color:'var(--ink-3)'}}>✎</span>
+      </div>
+    </div>
+  );
+}
+
 // ============================================================
 // OrderDrawer — edit panel for a single order
 // ============================================================
@@ -1101,74 +1181,6 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
   const amountPaid = orderAmountPaid(form);
   const profitRevenue = amountPaid > 0 ? amountPaid : (Number(form.total) || 0);
   const profit = profitRevenue - partsCost;
-
-  const partStatusColors = { ordered:{bg:'#dceaf5',fg:'#1668c8'}, arrived:{bg:'#fff4d6',fg:'#7a5d10'}, installed:{bg:'#d8e7d0',fg:'#345526'}, returned:{bg:'#f3d5c5',fg:'#7a3a18'} };
-
-  const ExpenseRow = ({ e }) => {
-    const isEditing = expenseEdit === e.id;
-    const ef = isEditing ? expenseForm : e;
-    if (isEditing) return (
-      <div style={{padding:'12px', background:'var(--paper)', border:'1px solid var(--ochre)', marginBottom:6}}>
-        <div className="grid-2" style={{gap:10, marginBottom:10}}>
-          <label className="field" style={{margin:0}}><span className="label">Description</span><input className="input" value={ef.description||''} onChange={ev=>setExpenseForm(f=>({...f,description:ev.target.value}))}/></label>
-          <label className="field" style={{margin:0}}><span className="label">Amount (AUD, per item)</span><input className="input" type="number" min="0" step="0.01" value={ef.amount||''} onChange={ev=>setExpenseForm(f=>({...f,amount:nonNegInput(ev.target.value)}))}/></label>
-        </div>
-        <div className="grid-2" style={{gap:10, marginBottom:10}}>
-          <label className="field" style={{margin:0}}><span className="label">Quantity</span><input className="input" type="number" min="1" step="1" value={ef.quantity||1} onChange={ev=>setExpenseForm(f=>({...f,quantity:Math.max(1, parseInt(ev.target.value)||1)}))}/></label>
-          <label className="field" style={{margin:0}}><span className="label">Category</span>
-            <select className="select" value={ef.category||'parts'} onChange={ev=>setExpenseForm(f=>({...f,category:ev.target.value}))}>
-              {['tools','equipment','parts','software','other'].map(c=><option key={c}>{c}</option>)}
-            </select>
-          </label>
-        </div>
-        <div className="grid-2" style={{gap:10, marginBottom:10}}>
-          <label className="field" style={{margin:0}}><span className="label">Part status</span>
-            <select className="select" value={ef.partStatus||''} onChange={ev=>setExpenseForm(f=>({...f,partStatus:ev.target.value}))}>
-              <option value="">— N/A —</option>
-              {['ordered','arrived','installed','returned'].map(s=><option key={s}>{s}</option>)}
-            </select>
-          </label>
-        </div>
-        <div className="grid-2" style={{gap:10, marginBottom:10}}>
-          <label className="field" style={{margin:0}}><span className="label">Date</span><input className="input" value={ef.date||''} onChange={ev=>setExpenseForm(f=>({...f,date:ev.target.value}))}/></label>
-          <label className="field" style={{margin:0}}><span className="label">Notes</span><input className="input" value={ef.notes||''} onChange={ev=>setExpenseForm(f=>({...f,notes:ev.target.value}))}/></label>
-        </div>
-        <label style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',marginBottom:12,fontSize:13}}>
-          <input type="checkbox" checked={!!ef.isSecondHand} onChange={ev=>setExpenseForm(f=>({...f,isSecondHand:ev.target.checked}))} style={{width:15,height:15}}/>
-          Second-hand
-        </label>
-        <div style={{display:'flex', gap:8}}>
-          <button className="btn btn-sm" onClick={() => saveExpense(ef)}>Save</button>
-          <button className="btn btn-ghost btn-sm" onClick={() => { setExpenseEdit(null); setExpenseForm({}); }}>Cancel</button>
-          <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)', marginLeft:'auto'}} onClick={() => deleteExpense(e.id)}>Delete</button>
-        </div>
-      </div>
-    );
-    return (
-      <div key={e.id} role="button" tabIndex={0} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 12px', background:'var(--bg-elev)', border:'1px solid var(--line)', marginBottom:6, cursor:'pointer', gap:10}}
-        onClick={() => { setExpenseEdit(e.id); setExpenseForm({...e}); }}
-        onKeyDown={e2 => { if (e2.key==='Enter'||e2.key===' ') { e2.preventDefault(); setExpenseEdit(e.id); setExpenseForm({...e}); } }}>
-        <div style={{flex:1, minWidth:0}}>
-          <span style={{fontSize:13, fontWeight:500}}>{e.description}</span>
-          {Number(e.quantity) > 1 && <span className="mono" style={{fontSize:10, color:'var(--ink-3)', marginLeft:8}}>×{e.quantity}</span>}
-          {e.category && <span className="mono" style={{fontSize:10, color:'var(--ink-3)', marginLeft:8}}>{e.category.toUpperCase()}</span>}
-          {e.partStatus && (() => { const s = partStatusColors[e.partStatus]; return <span className="tag" style={{background:s?.bg,color:s?.fg,borderColor:s?.bg,marginLeft:8,fontSize:10}}>{e.partStatus.toUpperCase()}</span>; })()}
-          {e.notes && <div style={{fontSize:11, color:'var(--ink-3)', marginTop:2}}>{e.notes}</div>}
-        </div>
-        <div style={{display:'flex', gap:12, alignItems:'center', flexShrink:0}}>
-          <span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>{e.date}</span>
-          {e.partStatus === 'returned'
-            ? <span className="mono" style={{fontWeight:600}}>
-                <span style={{textDecoration:'line-through', color:'var(--ink-3)', marginRight:6}}>-${expTotal(e).toLocaleString('en-AU',{minimumFractionDigits:2})}</span>
-                <span style={{color:'#345526'}}>$0.00</span>
-              </span>
-            : <span className="mono" style={{fontWeight:600, color:'var(--rust)'}}>-${expTotal(e).toLocaleString('en-AU',{minimumFractionDigits:2})}</span>
-          }
-          <span style={{fontSize:12, color:'var(--ink-3)'}}>✎</span>
-        </div>
-      </div>
-    );
-  };
 
   return (
     <Drawer open={true} onClose={onClose} dirty={dirty} title={edit.id ? `Order ${edit.id}` : 'New order'}
@@ -1394,7 +1406,10 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
           {expenseEdit !== 'new' && <button className="btn btn-ghost btn-sm" style={{fontSize:11}} onClick={() => { setExpenseEdit('new'); setExpenseForm(blankExpense(form.id)); }}>+ Add expense</button>}
         </div>
         {linkedExpenses.length === 0 && expenseEdit !== 'new' && <div className="mono" style={{fontSize:11, color:'var(--ink-3)', marginBottom:8}}>No expenses linked.</div>}
-        {linkedExpenses.map(e => <ExpenseRow key={e.id} e={e} />)}
+        {linkedExpenses.map(e => (
+          <ExpenseRow key={e.id} e={e} isEditing={expenseEdit === e.id} expenseForm={expenseForm}
+            setExpenseForm={setExpenseForm} setExpenseEdit={setExpenseEdit} saveExpense={saveExpense} deleteExpense={deleteExpense} />
+        ))}
         {expenseEdit === 'new' && (
           <div style={{padding:'12px', background:'var(--paper)', border:'1px solid var(--ochre)', marginBottom:6}}>
             <div className="grid-2" style={{gap:10, marginBottom:10}}>
@@ -1402,7 +1417,9 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
               <label className="field" style={{margin:0}}><span className="label">Amount (AUD, per item)</span><input className="input" type="number" min="0" step="0.01" value={expenseForm.amount||''} onChange={e=>setExpenseForm(f=>({...f,amount:nonNegInput(e.target.value)}))}/></label>
             </div>
             <div className="grid-2" style={{gap:10, marginBottom:10}}>
-              <label className="field" style={{margin:0}}><span className="label">Quantity</span><input className="input" type="number" min="1" step="1" value={expenseForm.quantity||1} onChange={e=>setExpenseForm(f=>({...f,quantity:Math.max(1, parseInt(e.target.value)||1)}))}/></label>
+              <label className="field" style={{margin:0}}><span className="label">Quantity</span>
+                <QuantityInput value={expenseForm.quantity} onCommit={q => setExpenseForm(f=>({...f,quantity:q}))}/>
+              </label>
               <label className="field" style={{margin:0}}><span className="label">Category</span>
                 <select className="select" value={expenseForm.category||'parts'} onChange={e=>setExpenseForm(f=>({...f,category:e.target.value}))}>
                   {['tools','equipment','parts','software','other'].map(c=><option key={c}>{c}</option>)}
@@ -5003,7 +5020,9 @@ function AdminExpenses() {
                 {['tools','equipment','parts','software','other'].map(c => <option key={c}>{c}</option>)}
               </select>
             </label>
-            <label className="field"><span className="label">Quantity</span><input className="input" type="number" min="1" step="1" value={form.quantity||1} onChange={e=>setForm({...form,quantity:Math.max(1, parseInt(e.target.value)||1)})}/></label>
+            <label className="field"><span className="label">Quantity</span>
+              <QuantityInput value={form.quantity} onCommit={q => setForm(f=>({...f,quantity:q}))}/>
+            </label>
           </div>
           <div className="grid-2" style={{gap:14}}>
             <label className="field"><span className="label">Amount (AUD, per item)</span><input className="input" type="number" step="0.01" value={form.amount||0} onChange={e=>setForm({...form,amount:Number(e.target.value)})}/></label>
