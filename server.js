@@ -6280,6 +6280,10 @@ async function pollUps() {
     const v = parseFloat(raw[rawKey]);
     if (!isNaN(v)) data[ourKey] = v;
   }
+  // This UPS's nutdrv_qx (Mustek protocol) driver only sporadically manages to read load off
+  // the wire — most polls come back 0 even though the server is always drawing some load.
+  // A 0 is noise, not a real reading, so drop it and let the last real reading stand.
+  if (data.load === 0) delete data.load;
   appendUpsReading({ ts: Date.now(), status: raw['ups.status'] || null, data });
 }
 

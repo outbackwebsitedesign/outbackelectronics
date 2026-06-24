@@ -1286,7 +1286,11 @@ function ServerStatsPage() {
     return () => clearInterval(t);
   }, []);
 
-  const data = latest?.data || {};
+  // Back-fill from history: some fields (e.g. load, on this UPS) only get a real
+  // reading sporadically, so the latest snapshot alone can be missing them.
+  const data = {};
+  for (const r of history) Object.assign(data, r.data || {});
+  Object.assign(data, latest?.data || {});
   const hasAnyData = Object.keys(data).length > 0;
   const visibleGroups = UPS_GROUPS.filter(g =>
     !hasAnyData || UPS_READINGS.some(r => r.group === g.key && data[r.key] !== undefined)
