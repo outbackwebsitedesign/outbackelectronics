@@ -891,6 +891,7 @@ const ORDER_FULFILMENT_MAP = {
   refunded:  { bg:'#f3d5c5', fg:'#7a3a18' },
 };
 function liTotal(i) { return (Number(i.amount) || 0) * (Number(i.qty) || 1); }
+function expTotal(e) { return (Number(e.amount) || 0) * (Number(e.quantity) || 1); }
 function orderAmountPaid(f) {
   return Math.round((f.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0) * 100) / 100;
 }
@@ -1028,7 +1029,7 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
   const blankExpense = (jobId) => ({ description:'', category:'parts', amount:'', quantity:1, date: new Date().toLocaleDateString('en-AU', {day:'2-digit',month:'2-digit',year:'numeric'}), receipt:null, jobId: jobId||'', notes:'', isSecondHand:false, partStatus:'' });
 
   const recalcTotal = (expList) => {
-    const cost = expList.filter(e => e.jobId && e.jobId === form.id).reduce((s, e) => s + (e.partStatus === 'returned' ? 0 : (Number(e.amount) || 0)), 0);
+    const cost = expList.filter(e => e.jobId && e.jobId === form.id).reduce((s, e) => s + (e.partStatus === 'returned' ? 0 : expTotal(e)), 0);
     const partsCharge = Math.round(cost * (1 + PARTS_MARGIN) * 100) / 100;
     setForm(f => {
       const others = (f.lineItems || []).filter(li => li.id !== 'parts-auto');
@@ -1086,7 +1087,7 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
   const removeUpdate = (i) => setForm(f => ({ ...f, updates: (f.updates || []).filter((_,idx) => idx !== i) }));
 
   const linkedExpenses = expenses.filter(e => e.jobId && e.jobId === form.id);
-  const partsCost = linkedExpenses.reduce((s, e) => s + (e.partStatus === 'returned' ? 0 : (Number(e.amount) || 0)), 0);
+  const partsCost = linkedExpenses.reduce((s, e) => s + (e.partStatus === 'returned' ? 0 : expTotal(e)), 0);
 
   // Self-heal orders saved before parts-margin auto line items existed: if the
   // linked expenses imply a different parts charge than what's on the order,
@@ -1096,7 +1097,7 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
     const existingCharge = Number((form.lineItems || []).find(li => li.id === 'parts-auto')?.amount) || 0;
     if (expectedCharge !== existingCharge) recalcTotal(expenses);
   }, [form.id]);
-  const returnedCost = linkedExpenses.reduce((s, e) => s + (e.partStatus === 'returned' ? (Number(e.amount) || 0) : 0), 0);
+  const returnedCost = linkedExpenses.reduce((s, e) => s + (e.partStatus === 'returned' ? expTotal(e) : 0), 0);
   const amountPaid = orderAmountPaid(form);
   const profitRevenue = amountPaid > 0 ? amountPaid : (Number(form.total) || 0);
   const profit = profitRevenue - partsCost;
@@ -1110,7 +1111,7 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
       <div style={{padding:'12px', background:'var(--paper)', border:'1px solid var(--ochre)', marginBottom:6}}>
         <div className="grid-2" style={{gap:10, marginBottom:10}}>
           <label className="field" style={{margin:0}}><span className="label">Description</span><input className="input" value={ef.description||''} onChange={ev=>setExpenseForm(f=>({...f,description:ev.target.value}))}/></label>
-          <label className="field" style={{margin:0}}><span className="label">Amount (AUD, total)</span><input className="input" type="number" min="0" step="0.01" value={ef.amount||''} onChange={ev=>setExpenseForm(f=>({...f,amount:nonNegInput(ev.target.value)}))}/></label>
+          <label className="field" style={{margin:0}}><span className="label">Amount (AUD, per item)</span><input className="input" type="number" min="0" step="0.01" value={ef.amount||''} onChange={ev=>setExpenseForm(f=>({...f,amount:nonNegInput(ev.target.value)}))}/></label>
         </div>
         <div className="grid-2" style={{gap:10, marginBottom:10}}>
           <label className="field" style={{margin:0}}><span className="label">Quantity</span><input className="input" type="number" min="1" step="1" value={ef.quantity||1} onChange={ev=>setExpenseForm(f=>({...f,quantity:Math.max(1, parseInt(ev.target.value)||1)}))}/></label>
@@ -1158,10 +1159,10 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
           <span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>{e.date}</span>
           {e.partStatus === 'returned'
             ? <span className="mono" style={{fontWeight:600}}>
-                <span style={{textDecoration:'line-through', color:'var(--ink-3)', marginRight:6}}>-${(Number(e.amount)||0).toLocaleString('en-AU',{minimumFractionDigits:2})}</span>
+                <span style={{textDecoration:'line-through', color:'var(--ink-3)', marginRight:6}}>-${expTotal(e).toLocaleString('en-AU',{minimumFractionDigits:2})}</span>
                 <span style={{color:'#345526'}}>$0.00</span>
               </span>
-            : <span className="mono" style={{fontWeight:600, color:'var(--rust)'}}>-${(Number(e.amount)||0).toLocaleString('en-AU',{minimumFractionDigits:2})}</span>
+            : <span className="mono" style={{fontWeight:600, color:'var(--rust)'}}>-${expTotal(e).toLocaleString('en-AU',{minimumFractionDigits:2})}</span>
           }
           <span style={{fontSize:12, color:'var(--ink-3)'}}>✎</span>
         </div>
@@ -1398,7 +1399,7 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
           <div style={{padding:'12px', background:'var(--paper)', border:'1px solid var(--ochre)', marginBottom:6}}>
             <div className="grid-2" style={{gap:10, marginBottom:10}}>
               <label className="field" style={{margin:0}}><span className="label">Description</span><input className="input" value={expenseForm.description||''} onChange={e=>setExpenseForm(f=>({...f,description:e.target.value}))} autoFocus/></label>
-              <label className="field" style={{margin:0}}><span className="label">Amount (AUD, total)</span><input className="input" type="number" min="0" step="0.01" value={expenseForm.amount||''} onChange={e=>setExpenseForm(f=>({...f,amount:nonNegInput(e.target.value)}))}/></label>
+              <label className="field" style={{margin:0}}><span className="label">Amount (AUD, per item)</span><input className="input" type="number" min="0" step="0.01" value={expenseForm.amount||''} onChange={e=>setExpenseForm(f=>({...f,amount:nonNegInput(e.target.value)}))}/></label>
             </div>
             <div className="grid-2" style={{gap:10, marginBottom:10}}>
               <label className="field" style={{margin:0}}><span className="label">Quantity</span><input className="input" type="number" min="1" step="1" value={expenseForm.quantity||1} onChange={e=>setExpenseForm(f=>({...f,quantity:Math.max(1, parseInt(e.target.value)||1)}))}/></label>
@@ -4907,7 +4908,7 @@ function AdminExpenses() {
   }, []);
 
   const openRow = (r) => { setEdit(r); setForm({...r}); };
-  const openNew = () => { setEdit({}); setForm({ description:'', category:'tools', amount:0, date:'', receipt:null, jobId:'', notes:'', isSecondHand:false, partStatus:'' }); };
+  const openNew = () => { setEdit({}); setForm({ description:'', category:'tools', amount:0, quantity:1, date:'', receipt:null, jobId:'', notes:'', isSecondHand:false, partStatus:'' }); };
 
   const save = async () => {
     const r = await fetch('/api/admin/expenses/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(form) }).catch(()=>null);
@@ -4946,7 +4947,7 @@ function AdminExpenses() {
   };
   const sorted = [...rows].sort((a, b) => parseDate(b.date) - parseDate(a.date));
   const visible = catFilter === 'all' ? sorted : sorted.filter(r => (r.category || 'other') === catFilter);
-  const total = visible.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+  const total = visible.reduce((s, e) => s + expTotal(e), 0);
 
   return (
     <div style={{padding:32}}>
@@ -4974,7 +4975,8 @@ function AdminExpenses() {
             const s = sc[r.partStatus] || {bg:'var(--bg-deep)',fg:'var(--ink-2)'};
             return <span className="tag" style={{background:s.bg,color:s.fg,borderColor:s.bg}}>{r.partStatus.toUpperCase()}</span>;
           }},
-          { key:'amount', label:'Amount', w:'110px', render:r => <span className="mono" style={{fontWeight:600,color:'var(--rust)'}}>-${(r.amount||0).toLocaleString('en-AU',{minimumFractionDigits:2})}</span> },
+          { key:'quantity', label:'Qty', w:'60px', render:r => <span className="mono" style={{fontSize:12,color:'var(--ink-2)'}}>×{Number(r.quantity)||1}</span> },
+          { key:'amount', label:'Amount', w:'110px', render:r => <span className="mono" style={{fontWeight:600,color:'var(--rust)'}}>-${expTotal(r).toLocaleString('en-AU',{minimumFractionDigits:2})}</span> },
           { key:'date', label:'Date', w:'120px', render:r => <span className="mono" style={{fontSize:11,color:'var(--ink-2)'}}>{r.date||'—'}</span> },
           { key:'jobId', label:'Linked job', w:'140px', render:r => r.jobId ? <span className="mono" style={{fontSize:11,color:'var(--rust)'}}>{r.jobId}</span> : <span style={{color:'var(--ink-3)'}}>—</span> },
           { key:'receipt', label:'Receipt', w:'90px', render:r => r.receipt ? <a href={r.receipt} target="_blank" rel="noopener noreferrer" style={{color:'var(--rust)',fontSize:12}}>View ↗</a> : <span style={{color:'var(--ink-3)'}}>—</span> },
@@ -5001,7 +5003,11 @@ function AdminExpenses() {
                 {['tools','equipment','parts','software','other'].map(c => <option key={c}>{c}</option>)}
               </select>
             </label>
-            <label className="field"><span className="label">Amount (AUD)</span><input className="input" type="number" step="0.01" value={form.amount||0} onChange={e=>setForm({...form,amount:Number(e.target.value)})}/></label>
+            <label className="field"><span className="label">Quantity</span><input className="input" type="number" min="1" step="1" value={form.quantity||1} onChange={e=>setForm({...form,quantity:Math.max(1, parseInt(e.target.value)||1)})}/></label>
+          </div>
+          <div className="grid-2" style={{gap:14}}>
+            <label className="field"><span className="label">Amount (AUD, per item)</span><input className="input" type="number" step="0.01" value={form.amount||0} onChange={e=>setForm({...form,amount:Number(e.target.value)})}/></label>
+            <label className="field"><span className="label">Total</span><input className="input" disabled value={`$${expTotal(form).toLocaleString('en-AU',{minimumFractionDigits:2})}`}/></label>
           </div>
           <label className="field"><span className="label">Date</span><input className="input" value={form.date||''} onChange={e=>setForm({...form,date:e.target.value})}/></label>
           <label className="field"><span className="label">Link to job</span>
