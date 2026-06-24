@@ -890,6 +890,7 @@ const ORDER_FULFILMENT_MAP = {
   fulfilled: { bg:'#d8e7d0', fg:'#345526' },
   refunded:  { bg:'#f3d5c5', fg:'#7a3a18' },
 };
+function liTotal(i) { return (Number(i.amount) || 0) * (Number(i.qty) || 1); }
 function orderAmountPaid(f) {
   return Math.round((f.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0) * 100) / 100;
 }
@@ -959,7 +960,7 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
   // When line items are present they're the source of truth — keep total/items summary in sync.
   React.useEffect(() => {
     if (!form.lineItems || form.lineItems.length === 0) return;
-    const lineItemsTotal = Math.round(form.lineItems.reduce((s,i)=>s+(Number(i.amount)||0),0) * 100) / 100;
+    const lineItemsTotal = Math.round(form.lineItems.reduce((s,i)=>s+liTotal(i),0) * 100) / 100;
     const summary = form.lineItems.map(i => i.description).filter(Boolean).join(', ');
     if (lineItemsTotal !== Number(form.total) || (summary && summary !== form.items)) {
       setForm(f => ({ ...f, total: lineItemsTotal, items: summary || f.items }));
@@ -1024,7 +1025,7 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
   };
 
   const PARTS_MARGIN = 0.20;
-  const blankExpense = (jobId) => ({ description:'', category:'parts', amount:'', date: new Date().toLocaleDateString('en-AU', {day:'2-digit',month:'2-digit',year:'numeric'}), receipt:null, jobId: jobId||'', notes:'', isSecondHand:false, partStatus:'' });
+  const blankExpense = (jobId) => ({ description:'', category:'parts', amount:'', quantity:1, date: new Date().toLocaleDateString('en-AU', {day:'2-digit',month:'2-digit',year:'numeric'}), receipt:null, jobId: jobId||'', notes:'', isSecondHand:false, partStatus:'' });
 
   const recalcTotal = (expList) => {
     const cost = expList.filter(e => e.jobId && e.jobId === form.id).reduce((s, e) => s + (e.partStatus === 'returned' ? 0 : (Number(e.amount) || 0)), 0);
@@ -1034,7 +1035,7 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
       const lineItems = partsCharge > 0
         ? [...others, { id: 'parts-auto', description: 'Parts (incl. margin)', amount: partsCharge }]
         : others;
-      const newTotal = Math.round(lineItems.reduce((s, i) => s + (Number(i.amount) || 0), 0) * 100) / 100;
+      const newTotal = Math.round(lineItems.reduce((s, i) => s + liTotal(i), 0) * 100) / 100;
       const updated = { ...f, lineItems, total: newTotal, items: lineItems.map(i => i.description).filter(Boolean).join(', ') || f.items };
       saveNow(updated);
       return updated;
@@ -1109,14 +1110,17 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
       <div style={{padding:'12px', background:'var(--paper)', border:'1px solid var(--ochre)', marginBottom:6}}>
         <div className="grid-2" style={{gap:10, marginBottom:10}}>
           <label className="field" style={{margin:0}}><span className="label">Description</span><input className="input" value={ef.description||''} onChange={ev=>setExpenseForm(f=>({...f,description:ev.target.value}))}/></label>
-          <label className="field" style={{margin:0}}><span className="label">Amount (AUD)</span><input className="input" type="number" min="0" step="0.01" value={ef.amount||''} onChange={ev=>setExpenseForm(f=>({...f,amount:nonNegInput(ev.target.value)}))}/></label>
+          <label className="field" style={{margin:0}}><span className="label">Amount (AUD, total)</span><input className="input" type="number" min="0" step="0.01" value={ef.amount||''} onChange={ev=>setExpenseForm(f=>({...f,amount:nonNegInput(ev.target.value)}))}/></label>
         </div>
         <div className="grid-2" style={{gap:10, marginBottom:10}}>
+          <label className="field" style={{margin:0}}><span className="label">Quantity</span><input className="input" type="number" min="1" step="1" value={ef.quantity||1} onChange={ev=>setExpenseForm(f=>({...f,quantity:Math.max(1, parseInt(ev.target.value)||1)}))}/></label>
           <label className="field" style={{margin:0}}><span className="label">Category</span>
             <select className="select" value={ef.category||'parts'} onChange={ev=>setExpenseForm(f=>({...f,category:ev.target.value}))}>
               {['tools','equipment','parts','software','other'].map(c=><option key={c}>{c}</option>)}
             </select>
           </label>
+        </div>
+        <div className="grid-2" style={{gap:10, marginBottom:10}}>
           <label className="field" style={{margin:0}}><span className="label">Part status</span>
             <select className="select" value={ef.partStatus||''} onChange={ev=>setExpenseForm(f=>({...f,partStatus:ev.target.value}))}>
               <option value="">— N/A —</option>
@@ -1145,6 +1149,7 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
         onKeyDown={e2 => { if (e2.key==='Enter'||e2.key===' ') { e2.preventDefault(); setExpenseEdit(e.id); setExpenseForm({...e}); } }}>
         <div style={{flex:1, minWidth:0}}>
           <span style={{fontSize:13, fontWeight:500}}>{e.description}</span>
+          {Number(e.quantity) > 1 && <span className="mono" style={{fontSize:10, color:'var(--ink-3)', marginLeft:8}}>×{e.quantity}</span>}
           {e.category && <span className="mono" style={{fontSize:10, color:'var(--ink-3)', marginLeft:8}}>{e.category.toUpperCase()}</span>}
           {e.partStatus && (() => { const s = partStatusColors[e.partStatus]; return <span className="tag" style={{background:s?.bg,color:s?.fg,borderColor:s?.bg,marginLeft:8,fontSize:10}}>{e.partStatus.toUpperCase()}</span>; })()}
           {e.notes && <div style={{fontSize:11, color:'var(--ink-3)', marginTop:2}}>{e.notes}</div>}
@@ -1253,18 +1258,20 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
       <div className="field">
         <span className="label">Line items</span>
         {(form.lineItems||[]).map(li => (
-          <div key={li.id} style={{display:'grid', gridTemplateColumns:'1fr 110px 28px', gap:8, marginBottom:8}}>
+          <div key={li.id} style={{display:'grid', gridTemplateColumns:'1fr 60px 110px 28px', gap:8, marginBottom:8}}>
             <input className="input" placeholder="e.g. Custom software development" value={li.description}
               onChange={e => setForm(f => ({...f, lineItems: f.lineItems.map(x => x.id === li.id ? {...x, description: e.target.value} : x)}))}/>
-            <input className="input" type="number" min="0" step="0.01" placeholder="Price" value={li.amount}
+            <input className="input" type="number" min="1" step="1" placeholder="Qty" value={li.qty||1}
+              onChange={e => setForm(f => ({...f, lineItems: f.lineItems.map(x => x.id === li.id ? {...x, qty: Math.max(1, parseInt(e.target.value)||1)} : x)}))}/>
+            <input className="input" type="number" min="0" step="0.01" placeholder="Price ea." value={li.amount}
               onChange={e => setForm(f => ({...f, lineItems: f.lineItems.map(x => x.id === li.id ? {...x, amount: nonNegInput(e.target.value)} : x)}))}/>
             <button className="btn btn-ghost btn-sm" style={{padding:0, color:'var(--rust)'}}
               onClick={() => setForm(f => ({...f, lineItems: f.lineItems.filter(x => x.id !== li.id)}))}>✕</button>
           </div>
         ))}
-        <button className="btn btn-ghost btn-sm" onClick={() => setForm(f => ({...f, lineItems: [...(f.lineItems||[]), { id: 'li-' + Date.now(), description:'', amount:'' }]}))}>+ Add line item</button>
+        <button className="btn btn-ghost btn-sm" onClick={() => setForm(f => ({...f, lineItems: [...(f.lineItems||[]), { id: 'li-' + Date.now(), description:'', amount:'', qty:1 }]}))}>+ Add line item</button>
         {(form.lineItems||[]).length > 0 && (
-          <div style={{marginTop:8, fontSize:12, color:'var(--ink-3)'}}>Line items total: <strong>${(form.lineItems||[]).reduce((s,i)=>s+(Number(i.amount)||0),0).toLocaleString('en-AU',{minimumFractionDigits:2})}</strong> — order total below is kept in sync.</div>
+          <div style={{marginTop:8, fontSize:12, color:'var(--ink-3)'}}>Line items total: <strong>${(form.lineItems||[]).reduce((s,i)=>s+liTotal(i),0).toLocaleString('en-AU',{minimumFractionDigits:2})}</strong> — order total below is kept in sync.</div>
         )}
       </div>
 
@@ -1391,9 +1398,10 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
           <div style={{padding:'12px', background:'var(--paper)', border:'1px solid var(--ochre)', marginBottom:6}}>
             <div className="grid-2" style={{gap:10, marginBottom:10}}>
               <label className="field" style={{margin:0}}><span className="label">Description</span><input className="input" value={expenseForm.description||''} onChange={e=>setExpenseForm(f=>({...f,description:e.target.value}))} autoFocus/></label>
-              <label className="field" style={{margin:0}}><span className="label">Amount (AUD)</span><input className="input" type="number" min="0" step="0.01" value={expenseForm.amount||''} onChange={e=>setExpenseForm(f=>({...f,amount:nonNegInput(e.target.value)}))}/></label>
+              <label className="field" style={{margin:0}}><span className="label">Amount (AUD, total)</span><input className="input" type="number" min="0" step="0.01" value={expenseForm.amount||''} onChange={e=>setExpenseForm(f=>({...f,amount:nonNegInput(e.target.value)}))}/></label>
             </div>
             <div className="grid-2" style={{gap:10, marginBottom:10}}>
+              <label className="field" style={{margin:0}}><span className="label">Quantity</span><input className="input" type="number" min="1" step="1" value={expenseForm.quantity||1} onChange={e=>setExpenseForm(f=>({...f,quantity:Math.max(1, parseInt(e.target.value)||1)}))}/></label>
               <label className="field" style={{margin:0}}><span className="label">Category</span>
                 <select className="select" value={expenseForm.category||'parts'} onChange={e=>setExpenseForm(f=>({...f,category:e.target.value}))}>
                   {['tools','equipment','parts','software','other'].map(c=><option key={c}>{c}</option>)}
@@ -1811,14 +1819,15 @@ function QuoteCreator({ context, onBack, onQuoteSent }) {
   const hw = form.hardwareItems;
   const hardwareTotal = hw.reduce((s, i) => s + (parseFloat(i.basePrice) || 0) * (parseInt(i.qty) || 1) * (1 + HARDWARE_MARGIN), 0);
   const pcBuildFee = form.pcBuild ? (parseFloat(form.pcHours) || 0) * PC_BUILD_RATE : 0;
-  const otherTotal = form.otherItems.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+  const otherItemTotal = (i) => (parseFloat(i.amount) || 0) * (parseInt(i.qty) || 1);
+  const otherTotal = form.otherItems.reduce((s, i) => s + otherItemTotal(i), 0);
   const grandTotal = Math.round((hardwareTotal + pcBuildFee + otherTotal) * 100) / 100;
 
   const addHw = () => setForm(f => ({ ...f, hardwareItems: [...f.hardwareItems, { id: 'h' + Date.now(), name: '', qty: 1, basePrice: '' }] }));
   const updHw = (id, patch) => setForm(f => ({ ...f, hardwareItems: f.hardwareItems.map(i => i.id === id ? { ...i, ...patch } : i) }));
   const remHw = (id) => setForm(f => ({ ...f, hardwareItems: f.hardwareItems.filter(i => i.id !== id) }));
 
-  const addOther = () => setForm(f => ({ ...f, otherItems: [...f.otherItems, { id: 'o' + Date.now(), description: '', amount: '' }] }));
+  const addOther = () => setForm(f => ({ ...f, otherItems: [...f.otherItems, { id: 'o' + Date.now(), description: '', amount: '', qty: 1 }] }));
   const updOther = (id, patch) => setForm(f => ({ ...f, otherItems: f.otherItems.map(i => i.id === id ? { ...i, ...patch } : i) }));
   const remOther = (id) => setForm(f => ({ ...f, otherItems: f.otherItems.filter(i => i.id !== id) }));
 
@@ -2000,11 +2009,12 @@ function QuoteCreator({ context, onBack, onQuoteSent }) {
             </div>
             <div style={{ display: 'grid', gap: 8 }}>
               {form.otherItems.map(item => (
-                <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '1fr 150px 28px', gap: 8, alignItems: 'center' }}>
+                <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '1fr 60px 150px 28px', gap: 8, alignItems: 'center' }}>
                   <input className="input" placeholder="e.g. Cable management, OS installation" value={item.description} onChange={e => updOther(item.id, { description: e.target.value })} />
+                  <input className="input" type="number" min="1" step="1" placeholder="Qty" value={item.qty || 1} onChange={e => updOther(item.id, { qty: Math.max(1, parseInt(e.target.value) || 1) })} />
                   <div style={{ position: 'relative' }}>
                     <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--ink-2)', pointerEvents: 'none' }}>$</span>
-                    <input className="input" type="number" min="0" step="0.01" placeholder="0.00" value={item.amount} onChange={e => updOther(item.id, { amount: nonNegInput(e.target.value) })} style={{ paddingLeft: 22 }} />
+                    <input className="input" type="number" min="0" step="0.01" placeholder="0.00 ea." value={item.amount} onChange={e => updOther(item.id, { amount: nonNegInput(e.target.value) })} style={{ paddingLeft: 22 }} />
                   </div>
                   <button className="icon-btn" style={{ width: 24, height: 24, fontSize: 16, color: 'var(--ink-3)' }} onClick={() => remOther(item.id)}>×</button>
                 </div>
@@ -2044,8 +2054,8 @@ function QuoteCreator({ context, onBack, onQuoteSent }) {
               )}
               {form.otherItems.filter(i => parseFloat(i.amount) > 0).map((item, idx) => (
                 <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                  <span style={{ color: 'rgba(244,237,225,.65)', flex: 1, marginRight: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.description || 'Other'}</span>
-                  <span className="mono">${fmtAUD(parseFloat(item.amount) || 0)}</span>
+                  <span style={{ color: 'rgba(244,237,225,.65)', flex: 1, marginRight: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.description || 'Other'}{(parseInt(item.qty) || 1) > 1 ? ` × ${parseInt(item.qty)}` : ''}</span>
+                  <span className="mono">${fmtAUD(otherItemTotal(item))}</span>
                 </div>
               ))}
               <div style={{ borderTop: '1px solid rgba(255,255,255,.15)', paddingTop: 12, marginTop: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
@@ -2066,7 +2076,7 @@ function QuoteCreator({ context, onBack, onQuoteSent }) {
                   return { label: (i.name || '(item)') + (qty > 1 ? ` × ${qty}` : ''), amount: base * qty * (1 + HARDWARE_MARGIN) };
                 }),
                 ...(form.pcBuild && pcBuildFee > 0 ? [{ label: 'Custom PC Build', amount: pcBuildFee }] : []),
-                ...form.otherItems.filter(i => i.description || i.amount).map(i => ({ label: i.description || '(item)', amount: parseFloat(i.amount) || 0 })),
+                ...form.otherItems.filter(i => i.description || i.amount).map(i => ({ label: (i.description || '(item)') + ((parseInt(i.qty) || 1) > 1 ? ` × ${parseInt(i.qty)}` : ''), amount: otherItemTotal(i) })),
               ].map((row, idx, arr) => (
                 <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: idx < arr.length - 1 ? '1px dashed var(--line)' : 'none' }}>
                   <span style={{ flex: 1, marginRight: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.label}</span>

@@ -585,7 +585,7 @@ function OrderDetail({ o, onPay, paying, onCollapse }) {
       return { label: i.name + (qty > 1 ? ` × ${qty}` : ''), amount: (parseFloat(i.basePrice) || 0) * qty * 1.02 };
     }),
     ...(dq.pcBuild && dq.pcBuildFee > 0 ? [{ label: 'Custom PC Build', amount: dq.pcBuildFee }] : []),
-    ...(dq.otherItems || []).filter(i => i.description).map(i => ({ label: i.description, amount: parseFloat(i.amount) || 0 })),
+    ...(dq.otherItems || []).filter(i => i.description).map(i => { const qty = parseInt(i.qty) || 1; return { label: i.description + (qty > 1 ? ` × ${qty}` : ''), amount: (parseFloat(i.amount) || 0) * qty }; }),
   ];
   const paid = (o.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
   const outstanding = o.total != null ? Math.max(0, Number(o.total) - paid) : null;
@@ -1071,7 +1071,7 @@ function QuotesTab({ user, onOrderCreated, highlightRef }) {
               return { label: i.name + (qty > 1 ? ` × ${qty}` : ''), amount: (parseFloat(i.basePrice) || 0) * qty * 1.02 };
             }),
             ...(dq.pcBuild && dq.pcBuildFee > 0 ? [{ label: 'Custom PC Build', amount: dq.pcBuildFee }] : []),
-            ...(dq.otherItems || []).filter(i => i.description).map(i => ({ label: i.description, amount: parseFloat(i.amount) || 0 })),
+            ...(dq.otherItems || []).filter(i => i.description).map(i => { const qty = parseInt(i.qty) || 1; return { label: i.description + (qty > 1 ? ` × ${qty}` : ''), amount: (parseFloat(i.amount) || 0) * qty }; }),
           ];
           const validUntil = dq.validDays ? new Date(Date.now() + dq.validDays * 86400000).toLocaleDateString('en-AU', { day:'numeric', month:'long', year:'numeric' }) : null;
           const isHighlighted = highlightRef && (q.quoteRef === highlightRef || q.id === highlightRef);
@@ -2317,7 +2317,7 @@ function QuoteTokenView({ token, onAccepted }) {
       return { label: i.name + (qty > 1 ? ` × ${qty}` : ''), amount: (parseFloat(i.basePrice) || 0) * qty * 1.02 };
     }),
     ...(quote.pcBuild && quote.pcBuildFee > 0 ? [{ label: 'Custom PC Build', amount: quote.pcBuildFee }] : []),
-    ...(quote.otherItems || []).filter(i => i.description).map(i => ({ label: i.description, amount: parseFloat(i.amount) || 0 })),
+    ...(quote.otherItems || []).filter(i => i.description).map(i => { const qty = parseInt(i.qty) || 1; return { label: i.description + (qty > 1 ? ` × ${qty}` : ''), amount: (parseFloat(i.amount) || 0) * qty }; }),
   ] : [];
 
   const validUntil = quote?.validDays

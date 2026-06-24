@@ -1650,7 +1650,10 @@ function emailQuoteFormal({ quoteRef, quoteId, quoteToken, customerName, validDa
       return { label: i.name + (qty > 1 ? ` × ${qty}` : ''), amount: base * qty * 1.02 };
     }),
     ...(pcBuild && pcBuildFee > 0 ? [{ label: 'Custom PC Build', amount: pcBuildFee }] : []),
-    ...(otherItems || []).filter(i => i.description).map(i => ({ label: i.description, amount: parseFloat(i.amount) || 0 })),
+    ...(otherItems || []).filter(i => i.description).map(i => {
+      const qty = parseInt(i.qty) || 1;
+      return { label: i.description + (qty > 1 ? ` × ${qty}` : ''), amount: (parseFloat(i.amount) || 0) * qty };
+    }),
   ];
 
   const rows = lineItems.map(item =>
@@ -2153,7 +2156,7 @@ function buildPartsFromDraftQuote(dq) {
   }
   for (const item of (dq.otherItems || [])) {
     if (!item.description) continue;
-    parts.push({ id: item.id || ('p-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex')), name: item.description, qty: 1, status: 'pending', orderedAt: null, deliveredAt: null, installedAt: null });
+    parts.push({ id: item.id || ('p-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex')), name: item.description, qty: parseInt(item.qty) || 1, status: 'pending', orderedAt: null, deliveredAt: null, installedAt: null });
   }
   return parts;
 }
@@ -2205,7 +2208,7 @@ function buildInvoicePdf(order, shop) {
     doc.moveDown(1.5);
 
     const lineItems = (order.lineItems && order.lineItems.length)
-      ? order.lineItems.map(li => ({ description: li.description || '', amount: Number(li.amount) || 0 }))
+      ? order.lineItems.map(li => { const qty = parseInt(li.qty) || 1; return { description: (li.description || '') + (qty > 1 ? ` × ${qty}` : ''), amount: (Number(li.amount) || 0) * qty }; })
       : [{ description: order.items || 'Goods / services', amount: Number(order.total) || 0 }];
 
     const tableTop = doc.y;
