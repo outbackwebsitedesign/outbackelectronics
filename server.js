@@ -1519,7 +1519,7 @@ const MAIN_SPA_ROUTES = new Set([
   'order-success', 'order-cancelled',
   'cart',
   'register',
-  'about', 'repairs', 'humanly-ai',
+  'about', 'repairs', 'humanly-ai', 'capability-statement',
 ]);
 
 // ── Email ─────────────────────────────────────────────────────────────────────
