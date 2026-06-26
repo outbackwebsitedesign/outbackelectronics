@@ -234,6 +234,148 @@ function QuotePage({ go, pageParams }) {
 }
 
 // ============================================================
+// BOOK A REPAIR / APPOINTMENT
+// ============================================================
+const BOOKING_TYPES = [
+  { v: 'dropoff',     l: 'Repair drop-off',  d: 'Bring your device to the bench.' },
+  { v: 'appointment', l: 'In-store appointment', d: 'A general consultation or service slot.' },
+  { v: 'callout',     l: 'On-site callout',  d: 'We come to you — travel fees may apply.' },
+];
+
+function BookingPage({ go }) {
+  const shop = useShop();
+  const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
+  const [bookingId, setBookingId] = useState(null);
+
+  const [form, setForm] = useState({
+    type: 'dropoff',
+    name: '',
+    email: '',
+    phone: '',
+    preferredDate: '',
+    preferredTime: '',
+    device: '',
+    address: '',
+    notes: '',
+  });
+
+  const update = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  if (submitted) {
+    return (
+      <>
+        <PageHead crumbs={['Outback','Book']} title="Booking received." lead="We'll confirm the date and time by email — usually within a business day." />
+        <section className="container" style={{paddingTop: 32, paddingBottom: 60}}>
+          <div className="card-paper" style={{padding: 40, maxWidth: 640}}>
+            <div className="row-flex"><span className="tag tag-euc">BOOKING · {bookingId ? `#${bookingId}` : 'SUBMITTED'}</span></div>
+            <h3 className="serif" style={{fontSize: 36, marginTop: 14}}>Thanks{form.name && `, ${form.name.split(' ')[0]}`}.</h3>
+            <p style={{marginTop: 12, color:'var(--ink-2)'}}>We've logged your request. If we need more info we'll email; if it's urgent and you left a phone number, we'll call.</p>
+            <div className="term" style={{marginTop:24}}>
+              <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom: 6}}>// YOUR BOOKING</div>
+              <div>type     : {BOOKING_TYPES.find(t => t.v === form.type)?.l || form.type}</div>
+              <div>date     : {form.preferredDate}{form.preferredTime ? ` · ${form.preferredTime}` : ''}</div>
+              <div>device   : {form.device || '—'}</div>
+            </div>
+            <div className="row-flex" style={{marginTop:24}}>
+              <button className="btn" onClick={() => setSubmitted(false)}>Book another</button>
+              <button className="btn btn-ghost" onClick={() => go('home')}>Back to home</button>
+            </div>
+          </div>
+        </section>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <PageHead crumbs={['Outback','Book']} title="Book a Repair or Appointment"
+        lead="Drop your device at the bench, book an in-store slot, or get a callout — pick what fits." />
+      <section className="container" style={{paddingTop: 32, paddingBottom: 60, display:'grid', gridTemplateColumns:'1fr 320px', gap: 48}}>
+        <form onSubmit={async (e) => {
+          e.preventDefault();
+          setSubmitError(null);
+          setSubmitting(true);
+          try {
+            const res = await fetch('/api/bookings/request', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() },
+              body: JSON.stringify(form),
+            });
+            if (!res.ok) throw new Error('server_error');
+            const data = await res.json().catch(() => ({}));
+            setBookingId(data.id || null);
+            setSubmitted(true);
+          } catch {
+            setSubmitError('Something went wrong — please try again or call us directly.');
+          } finally {
+            setSubmitting(false);
+          }
+        }}>
+          <div className="card-paper" style={{padding: 32}}>
+            <span className="eyebrow">01 · WHAT KIND OF BOOKING?</span>
+            <div className="row-flex" style={{marginTop: 12, gap:8, flexWrap:'wrap'}}>
+              {BOOKING_TYPES.map(t => (
+                <button type="button" key={t.v} className={`btn btn-sm ${form.type===t.v?'btn-rust':'btn-ghost'}`} onClick={() => update('type', t.v)}>{t.l}</button>
+              ))}
+            </div>
+            <p style={{fontSize:13, color:'var(--ink-2)', marginTop:10}}>{BOOKING_TYPES.find(t => t.v === form.type)?.d}</p>
+
+            <hr className="thin" />
+            <span className="eyebrow">02 · YOUR DETAILS</span>
+            <div className="grid-2" style={{gap:16, marginTop: 12}}>
+              <label className="field"><span className="label">Name</span><input required className="input" value={form.name} onChange={e => update('name', e.target.value)} placeholder="Your name" /></label>
+              <label className="field"><span className="label">Email</span><input required type="email" className="input" value={form.email} onChange={e => update('email', e.target.value)} placeholder="your@email.com" /></label>
+            </div>
+            <label className="field"><span className="label">Phone (optional)</span><input className="input" value={form.phone} onChange={e => update('phone', e.target.value)} placeholder="04xx xxx xxx" /></label>
+
+            <hr className="thin" />
+            <span className="eyebrow">03 · WHEN</span>
+            <div className="grid-2" style={{gap:16, marginTop: 12}}>
+              <label className="field"><span className="label">Preferred date</span><input required type="date" className="input" value={form.preferredDate} onChange={e => update('preferredDate', e.target.value)} /></label>
+              <label className="field"><span className="label">Preferred time (optional)</span><input type="time" className="input" value={form.preferredTime} onChange={e => update('preferredTime', e.target.value)} /></label>
+            </div>
+
+            {form.type === 'callout' && (
+              <label className="field"><span className="label">Address</span><input required className="input" value={form.address} onChange={e => update('address', e.target.value)} placeholder="Street, town" /></label>
+            )}
+
+            <hr className="thin" />
+            <span className="eyebrow">04 · DEVICE &amp; NOTES</span>
+            <label className="field"><span className="label">Device (optional)</span><input className="input" value={form.device} onChange={e => update('device', e.target.value)} placeholder="e.g. Dell XPS 15, won't boot" /></label>
+            <label className="field">
+              <span className="label">Notes (optional)</span>
+              <textarea className="textarea" value={form.notes} onChange={e => update('notes', e.target.value)} placeholder="Anything else we should know." style={{minHeight: 100}} />
+              <div style={{display:'flex', justifyContent:'flex-end', marginTop:4}}>
+                <span className="mono" style={{fontSize:10, color: form.notes.length > 1800 ? 'var(--rust)' : 'var(--ink-3)'}}>{form.notes.length} / 2000</span>
+              </div>
+            </label>
+
+            <hr className="thin" />
+            <ErrorText style={{marginBottom: 12}}>{submitError}</ErrorText>
+            <div className="row-flex" style={{justifyContent:'space-between'}}>
+              <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>WE CONFIRM BY EMAIL · BY APPOINTMENT ONLY</span>
+              <button className="btn btn-rust" type="submit" disabled={submitting}>{submitting ? 'Booking…' : 'Book now →'}</button>
+            </div>
+          </div>
+        </form>
+
+        <aside>
+          <div className="card" style={{padding: 22}}>
+            <span className="tag tag-rust">PHONE FIRST</span>
+            <h3 className="serif" style={{fontSize:28, marginTop:12, lineHeight:1.05}}>Or just call.</h3>
+            <p style={{marginTop:8, fontSize:13, color:'var(--ink-2)'}}>Need it sooner than the next available slot? Call us directly.</p>
+            <a href={`tel:${(shop.phone||'').replace(/\s/g,'')}`} className="serif" style={{fontSize:32, marginTop:14, color:'var(--rust)', textDecoration:'none', display:'block'}}>{shop.phone}</a>
+            <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:6}}>BY APPOINTMENT ONLY</div>
+          </div>
+        </aside>
+      </section>
+    </>
+  );
+}
+
+// ============================================================
 // CONTACT
 // ============================================================
 function ContactPage({ go }) {
@@ -2789,6 +2931,7 @@ function HumanlyAIPage({ go }) {
 
 window.OE_PAGES = Object.assign(window.OE_PAGES || {}, {
   quote: QuotePage,
+  book: BookingPage,
   contact: ContactPage,
   sellers: SellersPage,
   'sell-gear': SellGearPage,

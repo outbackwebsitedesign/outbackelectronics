@@ -342,6 +342,7 @@ const isExternalLink = (id) => Object.prototype.hasOwnProperty.call(EXTERNAL_LIN
 const externalHref = (id) => EXTERNAL_LINKS[id] ? EXTERNAL_LINKS[id]() : null;
 const UTILITY_PAGES = [
   { id: 'quote', label: 'Request a Quote' },
+  { id: 'book', label: 'Book a Repair' },
   { id: 'gift-cards', label: 'Gift Cards' },
   { id: 'about', label: 'About' },
   { id: 'sell-gear', label: 'Sell Your Gear' },
@@ -886,6 +887,7 @@ function App() {
     tutorials:    'Tutorials from the Outback Electronics workshop — repairs, builds, and troubleshooting guides.',
     groups:       'Community groups at Outback Electronics — meet other remote-area tinkerers.',
     quote:        'Request a quote from Outback Electronics — tell us the use case in plain English, our techs will spec it, price it, and ship it.',
+    book:         'Book a repair drop-off, in-store appointment, or on-site callout with Outback Electronics.',
     'gift-cards': 'Outback Electronics gift cards — redeemable on products and services, sent by email instantly, never expire.',
     contact:      'Contact Outback Electronics — appointment-only workshop serving remote NT, SA and WA.',
     cart:         'Your Outback Electronics cart — review items, get a shipping quote, and check out securely via Stripe.',

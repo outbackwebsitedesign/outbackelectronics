@@ -260,6 +260,7 @@ const NAV_ICONS = {
   repairs:      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>,
   quotes:       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>,
   ewaste:       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>,
+  bookings:     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
   products:     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="2" y="3" width="7" height="7"/><rect x="15" y="3" width="7" height="7"/><rect x="15" y="14" width="7" height="7"/><rect x="2" y="14" width="7" height="7"/></svg>,
   services:     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.42 1.42M5.35 18.65l-1.42 1.42M22 12h-2M4 12H2M19.07 19.07l-1.42-1.42M5.35 5.35L3.93 3.93M12 22v-2M12 4V2"/></svg>,
   software:     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>,
@@ -287,6 +288,7 @@ const ADMIN_SECTIONS = [
     { id:'repairs',   label:'Repair Jobs',   minRole:'staff', excludeRoles:['seller'] },
     { id:'quotes',    label:'Quotes Inbox',  minRole:'staff', excludeRoles:['seller'] },
     { id:'ewaste',    label:'eWaste Intake', minRole:'technician' },
+    { id:'bookings',  label:'Bookings',      minRole:'owner' },
   ]},
   { group:'CATALOG', items: [
     { id:'products',  label:'Products',         minRole:'seller' },
@@ -2309,6 +2311,92 @@ function AdminQuotes() {
             <select className="select" value={assignee} onChange={e => setAssignee(e.target.value)}>
               <option value="">— select staff —</option>
               {staffMembers.map(s => <option key={s.id} value={s.name}>{s.name}{s.role ? ` · ${s.role}` : ''}</option>)}
+            </select>
+          </label>
+        </Drawer>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// BOOKINGS
+// ============================================================
+function AdminBookings() {
+  const [bookings, setBookings] = useState([]);
+  const [edit, setEdit] = useState(null);
+  const [form, setForm] = useState({});
+
+  useEffect(() => {
+    fetch('/api/admin/bookings', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject()).then(d => setBookings(d.items || [])).catch(() => setBookings([]));
+  }, []);
+
+  const open = (b) => { setEdit(b); setForm({ status: b.status || 'new' }); };
+
+  const statusMap = {
+    'new':       { bg:'var(--rust)', fg:'#fff' },
+    'pending':   { bg:'var(--rust)', fg:'#fff' },
+    'confirmed': { bg:'var(--ochre)', fg:'var(--dark)' },
+    'completed': { bg:'#d8e7d0', fg:'#345526' },
+    'cancelled': { bg:'var(--bg-deep)', fg:'var(--ink-2)' },
+  };
+
+  const typeLabel = { dropoff: 'Drop-off', appointment: 'Appointment', callout: 'Callout' };
+
+  return (
+    <div style={{padding:32, display:'grid', gap:24}}>
+      <Table
+        columns={[
+          { key:'id', label:'#', w:'120px', render:r => <span className="mono" style={{fontSize:11, color:'var(--rust)'}}>{r.id}</span> },
+          { key:'type', label:'Type', w:'120px', render:r => <span className="tag tag-outline">{(typeLabel[r.type] || (r.serviceName ? 'Portal' : r.type) || '—').toUpperCase()}</span> },
+          { key:'name', label:'Name', w:'1.5fr', render:r => r.name || r.username || '—' },
+          { key:'when', label:'When', w:'160px', render:r => <span className="mono" style={{fontSize:11}}>{r.preferredDate || r.date || '—'}{(r.preferredTime || r.time) ? ` · ${r.preferredTime || r.time}` : ''}</span> },
+          { key:'device', label:'Device / Service', w:'1.5fr', render:r => <span style={{fontSize:13, color:'var(--ink-2)'}}>{r.device || r.serviceName || '—'}</span> },
+          { key:'status', label:'Status', w:'120px', render:r => <StatusPill value={r.status || 'new'} map={statusMap} /> },
+        ]}
+        rows={bookings}
+        onRowClick={open}
+      />
+      {bookings.length === 0 && <div style={{ padding: 24, background: 'var(--paper)', border: '1px solid var(--line)', fontSize: 13, color: 'var(--ink-2)', textAlign: 'center' }}>No bookings yet.</div>}
+
+      {edit !== null && (
+        <Drawer open={true} onClose={() => setEdit(null)} title={`Booking ${edit.id}`}
+          footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
+            <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={async () => {
+              if (!(await adminConfirm(`Delete booking ${edit.id}? This cannot be undone.`, { title: 'Delete booking', confirmLabel: 'Delete', danger: true }))) return;
+              const r = await fetch('/api/admin/bookings/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: edit.id }) }).catch(()=>null);
+              if (!r || !r.ok) { adminToast('Failed to delete booking.'); return; }
+              setBookings(bs => bs.filter(b => b.id !== edit.id));
+              setEdit(null);
+            }}>Delete</button>
+            <div className="row-flex" style={{gap:8}}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setEdit(null)}>Cancel</button>
+              <button className="btn btn-sm" onClick={async () => {
+                const r = await fetch('/api/admin/bookings/update', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: edit.id, status: form.status }) }).catch(()=>null);
+                if (r && r.ok) {
+                  const d = await r.json();
+                  setBookings(bs => bs.map(b => b.id === edit.id ? d.booking : b));
+                  setEdit(null);
+                } else {
+                  adminToast('Failed to save booking — changes not persisted.');
+                }
+              }}>Save</button>
+            </div>
+          </div>}
+        >
+          <div className="term" style={{marginBottom:16}}>
+            <div>name     : {edit.name || edit.username || '—'}</div>
+            <div>email    : {edit.email || '—'}</div>
+            <div>phone    : {edit.phone || '—'}</div>
+            <div>when     : {edit.preferredDate || edit.date || '—'}{(edit.preferredTime || edit.time) ? ` · ${edit.preferredTime || edit.time}` : ''}</div>
+            <div>device   : {edit.device || edit.serviceName || '—'}</div>
+            {edit.address && <div>address  : {edit.address}</div>}
+            {edit.notes && <div>notes    : {edit.notes}</div>}
+          </div>
+          <label className="field"><span className="label">Status</span>
+            <select className="select" value={form.status||'new'} onChange={e=>setForm({...form,status:e.target.value})}>
+              {['new','pending','confirmed','completed','cancelled'].map(s => <option key={s}>{s}</option>)}
             </select>
           </label>
         </Drawer>
@@ -6345,6 +6433,7 @@ const ADMIN_VIEWS = {
   repairs:    { c: AdminRepairs,    t:'Repair Jobs' },
   quotes:     { c: AdminQuotes,     t:'Quotes Inbox' },
   ewaste:     { c: AdminEwaste,     t:'eWaste Intake' },
+  bookings:   { c: AdminBookings,   t:'Bookings' },
   products:   { c: AdminProducts,   t:'Products' },
   services:   { c: AdminServices,   t:'Services' },
   software:   { c: AdminSoftware,   t:'Software' },
@@ -6365,7 +6454,7 @@ const ADMIN_VIEWS = {
 };
 
 const ADMIN_ALL_IDS = new Set([
-  'overview','orders','repairs','quotes','ewaste',
+  'overview','orders','repairs','quotes','ewaste','bookings',
   'products','services','software','tutorials','ai',
   'groups','customers','sellers',
   'memberships','gift-cards','rewards','expenses','policies','seller-billing','settings','audit-log',

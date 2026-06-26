@@ -90,7 +90,7 @@ const PUBLIC_CSP = "default-src 'self'; " +
 const HSTS_VALUE = 'max-age=31536000; includeSubDomains';
 const PERMISSIONS_POLICY = 'camera=(), microphone=(), geolocation=(), payment=(), usb=()';
 const PUBLIC_RATE_WINDOW_MS = 1000 * 60 * 10;
-const PUBLIC_RATE_LIMITS = { analytics: 120, checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10, 'forgot-password': 5, 'reset-password': 10, 'gift-card/apply': 10, 'gift-card/balance': 5, 'warranty/order-lookup': 10, 'cart/get': 20, 'weather_register': 3, 'stock-notify': 5, 'membership': 10, 'order-token': 30 };
+const PUBLIC_RATE_LIMITS = { analytics: 120, checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10, 'forgot-password': 5, 'reset-password': 10, 'gift-card/apply': 10, 'gift-card/balance': 5, 'warranty/order-lookup': 10, 'cart/get': 20, 'weather_register': 3, 'stock-notify': 5, 'membership': 10, 'order-token': 30, 'bookings/request': 10 };
 
 fs.mkdirSync(path.join(__dirname, 'assets/uploads'), { recursive: true });
 fs.mkdirSync(path.join(__dirname, 'assets/uploads/software'), { recursive: true });
@@ -3637,6 +3637,36 @@ const mainServer = http.createServer(async (req, res) => {
     return json(res, 201, { ok: true, id: quote.id });
   }
 
+  if (req.method === 'POST' && url.pathname === '/api/bookings/request') {
+    if (publicRateLimited(getIp(req), 'bookings/request')) return json(res, 429, { error: 'too_many_requests' });
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const { type, name, email, phone, preferredDate, preferredTime, device, address, notes } = body || {};
+    const BOOKING_TYPES = ['dropoff', 'appointment', 'callout'];
+    if (!name || !email || !preferredDate) return json(res, 422, { error: 'missing_fields' });
+    if (!BOOKING_TYPES.includes(type)) return json(res, 422, { error: 'invalid_type' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())) return json(res, 422, { error: 'invalid_email', message: 'Email address is invalid.' });
+    if (type === 'callout' && !String(address || '').trim()) return json(res, 422, { error: 'missing_address', message: 'Address is required for an on-site callout.' });
+    if (String(notes || '').trim().length > 2000) return json(res, 422, { error: 'notes_too_long', message: 'Notes must be 2000 characters or fewer.' });
+    const db = readBookings();
+    const booking = {
+      id: 'bkg-' + Date.now(),
+      type,
+      name: String(name).trim(),
+      email: String(email).trim(),
+      phone: String(phone || '').trim(),
+      preferredDate: String(preferredDate).trim(),
+      preferredTime: String(preferredTime || '').trim(),
+      device: String(device || '').trim(),
+      address: String(address || '').trim(),
+      notes: String(notes || '').trim(),
+      status: 'new',
+      createdAt: new Date().toISOString(),
+    };
+    db.bookings.push(booking);
+    writeBookings(db);
+    return json(res, 201, { ok: true, id: booking.id });
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/warranty/order-lookup') {
     if (publicRateLimited(getIp(req), 'warranty/order-lookup')) return json(res, 429, { error: 'too_many_requests' });
     const tokenParam = (url.searchParams.get('token') || '').trim();
@@ -4684,6 +4714,15 @@ const adminServer = http.createServer(async (req, res) => {
     writeCustomers(customers);
     auditAdminAction({ req, session, action: 'customer.merge', result: { status: 'ok', changed: { keepId, deleteId } } });
     return json(res, 200, { ok: true, item: customers[customers.findIndex(c => c.id === keepId)] });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/bookings/delete') {
+    const session = requireAdmin(req, res); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const db = readBookings();
+    db.bookings = db.bookings.filter(b => b.id !== body.id);
+    writeBookings(db);
+    return json(res, 200, { ok: true });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/admin/quotes/save') {
