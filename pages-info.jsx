@@ -242,7 +242,7 @@ const BOOKING_TYPES = [
   { v: 'callout',     l: 'On-site callout',  d: 'We come to you — travel fees may apply.' },
 ];
 
-function BookingPage({ go }) {
+function BookingPage({ go, pageParams }) {
   const shop = useShop();
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -250,7 +250,7 @@ function BookingPage({ go }) {
   const [bookingId, setBookingId] = useState(null);
 
   const [form, setForm] = useState({
-    type: 'dropoff',
+    type: pageParams?.type || 'dropoff',
     name: '',
     email: '',
     phone: '',
@@ -262,6 +262,16 @@ function BookingPage({ go }) {
   });
 
   const update = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  useEffect(() => {
+    if (pageParams?.type) update('type', pageParams.type);
+  }, [pageParams?.type]);
+
+  const pageCopy = {
+    dropoff:     { title: 'Book a Repair Drop-off',  lead: "Bring your device to the bench. Pick a date and we'll have a slot ready." },
+    appointment: { title: 'Book an In-Store Appointment', lead: 'A general consultation or service slot — pick what fits.' },
+    callout:     { title: 'Book an On-Site Callout',  lead: 'We come to you. Travel fees may apply depending on distance.' },
+  }[form.type] || { title: 'Book a Repair or Appointment', lead: 'Drop your device at the bench, book an in-store slot, or get a callout — pick what fits.' };
 
   if (submitted) {
     return (
@@ -290,8 +300,7 @@ function BookingPage({ go }) {
 
   return (
     <>
-      <PageHead crumbs={['Outback','Book']} title="Book a Repair or Appointment"
-        lead="Drop your device at the bench, book an in-store slot, or get a callout — pick what fits." />
+      <PageHead crumbs={['Outback','Book']} title={pageCopy.title} lead={pageCopy.lead} />
       <section className="container" style={{paddingTop: 32, paddingBottom: 60, display:'grid', gridTemplateColumns:'1fr 320px', gap: 48}}>
         <form onSubmit={async (e) => {
           e.preventDefault();
@@ -317,7 +326,7 @@ function BookingPage({ go }) {
             <span className="eyebrow">01 · WHAT KIND OF BOOKING?</span>
             <div className="row-flex" style={{marginTop: 12, gap:8, flexWrap:'wrap'}}>
               {BOOKING_TYPES.map(t => (
-                <button type="button" key={t.v} className={`btn btn-sm ${form.type===t.v?'btn-rust':'btn-ghost'}`} onClick={() => update('type', t.v)}>{t.l}</button>
+                <button type="button" key={t.v} className={`btn btn-sm ${form.type===t.v?'btn-rust':'btn-ghost'}`} onClick={() => go('book', { type: t.v })}>{t.l}</button>
               ))}
             </div>
             <p style={{fontSize:13, color:'var(--ink-2)', marginTop:10}}>{BOOKING_TYPES.find(t => t.v === form.type)?.d}</p>

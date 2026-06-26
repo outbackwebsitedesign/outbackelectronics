@@ -817,10 +817,19 @@ function App() {
     if (path.startsWith('service/')) return 'service';
     if (path.startsWith('policies/')) return 'policies';
     if (path.startsWith('software/')) return 'software';
+    if (path.startsWith('book/')) return 'book';
     const resolved = PAGE_ALIASES_INIT[path] || path;
     return KNOWN_PAGES.includes(resolved) ? resolved : 'home';
   });
   const [pageParams, setPageParams] = useState(null);
+
+  // /book/repair, /book/general, /book/callout — deep links to specific booking types
+  const BOOK_SLUG_TO_TYPE = { repair: 'dropoff', general: 'appointment', callout: 'callout' };
+  const BOOK_TYPE_TO_SLUG = { dropoff: 'repair', appointment: 'general', callout: 'callout' };
+  const parseBookPath = (rest) => {
+    const slug = rest.split('/').filter(Boolean)[0];
+    return { type: BOOK_SLUG_TO_TYPE[slug] || 'dropoff' };
+  };
 
   const POLICY_AUDIENCE_KEYS = ['private', 'commercial', 'seller'];
   const parsePoliciesPath = (rest) => {
@@ -862,6 +871,8 @@ function App() {
       const parts = rest.split('/').filter(Boolean);
       if (parts.length === 1) setPageParams({ slug: decodeURIComponent(parts[0]) });
       else if (parts.length >= 2) setPageParams({ os: parts[0], slug: decodeURIComponent(parts[1]) });
+    } else if (path.startsWith('book/') && !pageParams) {
+      setPageParams(parseBookPath(path.slice('book/'.length)));
     }
   }, []);
   const [cart, setCart] = useState(() => {
@@ -926,6 +937,8 @@ function App() {
     } else if (page === 'software' && pageParams?.slug) {
       if (pageParams.os) target = `/software/${pageParams.os}/${pageParams.slug}`;
       else target = `/software/${pageParams.slug}`;
+    } else if (page === 'book') {
+      target = `/book/${BOOK_TYPE_TO_SLUG[pageParams?.type] || 'repair'}`;
     }
     if (location.pathname !== target) window.history.pushState({}, '', target);
     window.scrollTo({top:0, behavior:'smooth'});
@@ -964,6 +977,7 @@ function App() {
         else setPageParams(null);
         return;
       }
+      if (path.startsWith('book/')) { setPage('book'); setPageParams(parseBookPath(path.slice('book/'.length))); return; }
       if (KNOWN_PAGES.includes(path)) { setPage(path); setPageParams(null); }
     };
     window.addEventListener('popstate', onPop);
