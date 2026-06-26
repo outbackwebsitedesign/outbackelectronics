@@ -264,6 +264,9 @@ function BookingPage({ go, pageParams }) {
     device: '',
     address: '',
     notes: '',
+    durationMinutes: 60,
+    lat: null,
+    lng: null,
   });
 
   const update = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -274,8 +277,14 @@ function BookingPage({ go, pageParams }) {
 
   useEffect(() => {
     if (!form.preferredDate) { setSlotInfo(null); return; }
+    if (form.type === 'callout' && form.address && (form.lat == null || form.lng == null)) return;
     setSlotsLoading(true);
-    fetch(`/api/availability/slots?date=${encodeURIComponent(form.preferredDate)}`)
+    const params = new URLSearchParams({ date: form.preferredDate, durationMinutes: String(form.durationMinutes) });
+    if (form.type === 'callout' && form.lat != null && form.lng != null) {
+      params.set('lat', String(form.lat));
+      params.set('lng', String(form.lng));
+    }
+    fetch(`/api/availability/slots?${params.toString()}`)
       .then(r => r.json())
       .then(d => {
         setSlotInfo(d);
@@ -283,10 +292,10 @@ function BookingPage({ go, pageParams }) {
       })
       .catch(() => setSlotInfo({ closed: true, slots: [] }))
       .finally(() => setSlotsLoading(false));
-  }, [form.preferredDate]);
+  }, [form.preferredDate, form.durationMinutes, form.lat, form.lng, form.type]);
 
   useEffect(() => {
-    if (form.type !== 'callout' || !form.address || form.address.trim().length < 3) { setCalloutInfo(null); return; }
+    if (form.type !== 'callout' || !form.address || form.address.trim().length < 3) { setCalloutInfo(null); update('lat', null); update('lng', null); return; }
     const t = setTimeout(async () => {
       setAddrGeocoding(true);
       try {
@@ -296,11 +305,15 @@ function BookingPage({ go, pageParams }) {
         );
         const geoData = await geoRes.json();
         if (geoData[0]) {
+          update('lat', parseFloat(geoData[0].lat));
+          update('lng', parseFloat(geoData[0].lon));
           const feeRes = await fetch(`/api/callout-fee?lat=${encodeURIComponent(geoData[0].lat)}&lng=${encodeURIComponent(geoData[0].lon)}`);
           const info = await feeRes.json();
           setCalloutInfo(info);
         } else {
           setCalloutInfo(null);
+          update('lat', null);
+          update('lng', null);
         }
       } catch { setCalloutInfo(null); }
       finally { setAddrGeocoding(false); }
@@ -393,6 +406,20 @@ function BookingPage({ go, pageParams }) {
                 </select>
               </label>
             </div>
+            <label className="field" style={{marginTop:12}}>
+              <span className="label">How long will this take?</span>
+              <select className="select" value={form.durationMinutes} onChange={e => update('durationMinutes', parseInt(e.target.value, 10))}>
+                <option value={30}>30 minutes</option>
+                <option value={60}>1 hour</option>
+                <option value={90}>1.5 hours</option>
+                <option value={120}>2 hours</option>
+                <option value={180}>3 hours</option>
+                <option value={240}>4 hours</option>
+                <option value={360}>6 hours</option>
+                <option value={480}>8 hours</option>
+                <option value={600}>10 hours</option>
+              </select>
+            </label>
             {form.preferredDate && !slotsLoading && slotInfo && slotInfo.closed && (
               <div style={{marginTop:4, marginBottom:4, padding:'8px 12px', fontSize:13, border:'1px solid var(--rust)', background:'var(--bg-elev)', color:'var(--rust)'}}>
                 We're not taking online bookings on that date. Please call us to arrange a time.

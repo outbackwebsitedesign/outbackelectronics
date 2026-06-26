@@ -100,6 +100,8 @@ const STRIPE_SECRET_KEY       = process.env.STRIPE_SECRET_KEY       || '';
 const STRIPE_WEBHOOK_SECRET   = process.env.STRIPE_WEBHOOK_SECRET   || '';
 const STRIPE_PUBLISHABLE_KEY  = process.env.STRIPE_PUBLISHABLE_KEY  || '';
 const AUSPOST_API_KEY         = process.env.AUSPOST_API_KEY         || '';
+const ORS_API_KEY            = process.env.ORS_API_KEY            || '';
+const SHOP_LAT = -24.4235, SHOP_LNG = 145.4693;
 const SITE_URL              = process.env.SITE_URL              || 'http://localhost:8080';
 const ADMIN_URL             = process.env.ADMIN_URL             || (/^https?:\/\/(localhost|127\.|0\.0\.0\.0)(:\d+)?/.test(SITE_URL) ? SITE_URL.replace(/(:\d+)?(\/|$)/, ':8082$2') : SITE_URL.replace(/^(https?:\/\/)/, '$1admin.'));
 
@@ -645,6 +647,15 @@ function readBookings() {
 }
 function writeBookings(data) { atomicWriteFile(BOOKINGS_DB_PATH, JSON.stringify(data, null, 2)); }
 
+function unblockBookingSlots(booking) {
+  if (!booking || !Array.isArray(booking.blockedSlots) || booking.blockedSlots.length === 0) return;
+  const avail = readAvailability();
+  const remaining = (avail.blockedSlots[booking.preferredDate] || []).filter(s => !booking.blockedSlots.includes(s));
+  if (remaining.length) avail.blockedSlots[booking.preferredDate] = remaining;
+  else delete avail.blockedSlots[booking.preferredDate];
+  writeAvailability(avail);
+}
+
 const DEFAULT_OPERATING_HOURS = {
   mon: { closed: false, open: '09:00', close: '17:00' },
   tue: { closed: false, open: '09:00', close: '17:00' },
@@ -671,26 +682,60 @@ function readAvailability() {
 }
 function writeAvailability(data) { atomicWriteFile(AVAILABILITY_DB_PATH, JSON.stringify(data, null, 2)); }
 
-// Returns { closed, reason, slots: ['09:00', ...] } for a given YYYY-MM-DD date.
-function computeSlotsForDate(dateStr) {
-  const avail = readAvailability();
+function minutesToHHMM(m) {
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+}
+function hhmmToMinutes(t) {
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+}
+
+function getDayHours(avail, dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
-  if (isNaN(d.getTime())) return { closed: true, reason: 'invalid_date', slots: [] };
-  if (avail.blockedDates.includes(dateStr)) return { closed: true, reason: 'blocked', slots: [] };
+  if (isNaN(d.getTime())) return null;
+  if (avail.blockedDates.includes(dateStr)) return null;
   const dayKey = WEEKDAY_KEYS[d.getDay()];
   const hours = avail.operatingHours[dayKey];
-  if (!hours || hours.closed) return { closed: true, reason: 'outside_hours', slots: [] };
-  const blocked = new Set(avail.blockedSlots[dateStr] || []);
-  const [openH, openM] = hours.open.split(':').map(Number);
-  const [closeH, closeM] = hours.close.split(':').map(Number);
-  const startMin = openH * 60 + openM;
-  const endMin = closeH * 60 + closeM;
+  if (!hours || hours.closed) return null;
+  return { openMin: hhmmToMinutes(hours.open), closeMin: hhmmToMinutes(hours.close) };
+}
+
+// The grid-aligned slots (clipped to operating hours) occupied by a booking that starts
+// at `startTime`, runs `durationMinutes`, and needs `travelMinutesEach` of driving on
+// each side. Travel time outside operating hours isn't represented in the grid and
+// doesn't need blocking — only the portion that overlaps the open/close window does.
+function getBlockSlots(avail, dateStr, startTime, durationMinutes, travelMinutesEach) {
+  const dayHours = getDayHours(avail, dateStr);
+  if (!dayHours) return null;
+  const { openMin, closeMin } = dayHours;
+  const startMin = hhmmToMinutes(startTime);
+  const blockStart = startMin - travelMinutesEach;
+  const blockEnd = startMin + durationMinutes + travelMinutesEach;
+  const clippedStart = Math.max(openMin, Math.floor((Math.max(blockStart, openMin) - openMin) / SLOT_MINUTES) * SLOT_MINUTES + openMin);
+  const clippedEnd = Math.min(closeMin, Math.ceil((Math.min(blockEnd, closeMin) - openMin) / SLOT_MINUTES) * SLOT_MINUTES + openMin);
   const slots = [];
-  for (let m = startMin; m < endMin; m += SLOT_MINUTES) {
-    const hh = String(Math.floor(m / 60)).padStart(2, '0');
-    const mm = String(m % 60).padStart(2, '0');
-    const t = `${hh}:${mm}`;
-    if (!blocked.has(t)) slots.push(t);
+  for (let m = clippedStart; m < clippedEnd; m += SLOT_MINUTES) slots.push(minutesToHHMM(m));
+  return slots;
+}
+
+// Returns { closed, reason, slots: ['09:00', ...] } — valid booking *start* times for a
+// given YYYY-MM-DD date, given how long the job itself takes and how much driving time
+// (each way) needs to be blocked around it.
+function computeSlotsForDate(dateStr, { durationMinutes = SLOT_MINUTES, travelMinutesEach = 0 } = {}) {
+  const avail = readAvailability();
+  const dayHours = getDayHours(avail, dateStr);
+  if (!dayHours) {
+    const d = new Date(dateStr + 'T00:00:00');
+    if (isNaN(d.getTime())) return { closed: true, reason: 'invalid_date', slots: [] };
+    return { closed: true, reason: avail.blockedDates.includes(dateStr) ? 'blocked' : 'outside_hours', slots: [] };
+  }
+  const { openMin, closeMin } = dayHours;
+  const blocked = new Set(avail.blockedSlots[dateStr] || []);
+  const slots = [];
+  for (let m = openMin; m + durationMinutes <= closeMin; m += SLOT_MINUTES) {
+    const t = minutesToHHMM(m);
+    const need = getBlockSlots(avail, dateStr, t, durationMinutes, travelMinutesEach) || [];
+    if (need.every(s => !blocked.has(s))) slots.push(t);
   }
   return { closed: slots.length === 0, reason: slots.length === 0 ? 'fully_blocked' : null, slots };
 }
@@ -2089,6 +2134,79 @@ function getAuspostKey() {
     const entry = s.integrations.find(r => r[0] === 'AusPost');
     return entry?.[3]?.apiKey || AUSPOST_API_KEY;
   } catch { return AUSPOST_API_KEY; }
+}
+
+// Geocodes a free-text address via Nominatim. Used server-side for the shop's own
+// address (stored as a string in settings.db, not lat/lng) so distance/travel-time
+// calculations have coordinates to work with.
+function geocodeAddress(address) {
+  return new Promise((resolve) => {
+    const path = `/search?format=json&limit=1&q=${encodeURIComponent(address)}`;
+    const req = https.request({ hostname: 'nominatim.openstreetmap.org', path, method: 'GET', headers: { 'User-Agent': 'OutbackElectronics/1.0' } }, (res) => {
+      let data = '';
+      res.on('data', d => { data += d; });
+      res.on('end', () => {
+        try {
+          const arr = JSON.parse(data);
+          const lat = parseFloat(arr?.[0]?.lat);
+          const lng = parseFloat(arr?.[0]?.lon);
+          resolve(Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null);
+        } catch { resolve(null); }
+      });
+    });
+    req.on('error', () => resolve(null));
+    req.setTimeout(8000, () => { req.destroy(); resolve(null); });
+    req.end();
+  });
+}
+
+let _shopCoordsCache = { address: '', coords: null };
+// Resolves the shop's lat/lng from its address in settings.db, geocoding (and caching)
+// on first use or whenever the saved address changes. Falls back to a fixed Blackall
+// coordinate if no address is set or geocoding fails.
+async function getShopCoords() {
+  const settings = readSettings();
+  const address = String(settings?.shop?.address || '').trim();
+  if (!address) return { lat: SHOP_LAT, lng: SHOP_LNG };
+  if (_shopCoordsCache.address === address && _shopCoordsCache.coords) return _shopCoordsCache.coords;
+  const coords = await geocodeAddress(address);
+  if (coords) {
+    _shopCoordsCache = { address, coords };
+    return coords;
+  }
+  return { lat: SHOP_LAT, lng: SHOP_LNG };
+}
+
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// Driving minutes (one-way) between two points. Uses OpenRouteService when configured,
+// otherwise falls back to a straight-line-distance / 70km/h estimate.
+function getDrivingMinutes(lat1, lng1, lat2, lng2) {
+  const fallback = () => Math.round((haversineKm(lat1, lng1, lat2, lng2) / 70) * 60);
+  if (!ORS_API_KEY) return Promise.resolve(fallback());
+  return new Promise((resolve) => {
+    const path = `/v2/directions/driving-car?api_key=${encodeURIComponent(ORS_API_KEY)}&start=${lng1},${lat1}&end=${lng2},${lat2}`;
+    const req = https.request({ hostname: 'api.openrouteservice.org', path, method: 'GET' }, (res) => {
+      let data = '';
+      res.on('data', d => { data += d; });
+      res.on('end', () => {
+        try {
+          const body = JSON.parse(data);
+          const seconds = body?.features?.[0]?.properties?.segments?.[0]?.duration;
+          resolve(Number.isFinite(seconds) ? Math.round(seconds / 60) : fallback());
+        } catch { resolve(fallback()); }
+      });
+    });
+    req.on('error', () => resolve(fallback()));
+    req.setTimeout(8000, () => { req.destroy(); resolve(fallback()); });
+    req.end();
+  });
 }
 
 function auspostTrackingRequest(trackingNumber) {
@@ -3641,17 +3759,13 @@ const mainServer = http.createServer(async (req, res) => {
 
   // ── Callout fee estimate (keeps pricing constants server-side) ───────────────
   if (req.method === 'GET' && url.pathname === '/api/callout-fee') {
-    const SHOP_LAT = -24.4235, SHOP_LNG = 145.4693;
     const FREE_KM = 10, LOCAL_CAP_KM = 200, HIVAL_THRESHOLD = 10000;
     const FUEL_RATE = 240 / 400, KM_PER_DAY = 480, DAILY_RATE = 150, DAILY_THRESHOLD_KM = 400;
     const lat = parseFloat(url.searchParams.get('lat'));
     const lng = parseFloat(url.searchParams.get('lng'));
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return json(res, 422, { error: 'invalid_coords' });
-    const R = 6371;
-    const dLat = (lat - SHOP_LAT) * Math.PI / 180;
-    const dLng = (lng - SHOP_LNG) * Math.PI / 180;
-    const a = Math.sin(dLat/2)**2 + Math.cos(SHOP_LAT*Math.PI/180) * Math.cos(lat*Math.PI/180) * Math.sin(dLng/2)**2;
-    const distKm = Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+    const shop = await getShopCoords();
+    const distKm = Math.round(haversineKm(shop.lat, shop.lng, lat, lng));
     const fuel = distKm > FREE_KM ? distKm * FUEL_RATE : 0;
     const days = distKm > DAILY_THRESHOLD_KM ? Math.ceil(distKm / KM_PER_DAY) : 0;
     const fee = distKm <= FREE_KM ? 0 : Math.round(fuel + days * 2 * DAILY_RATE);
@@ -3691,25 +3805,54 @@ const mainServer = http.createServer(async (req, res) => {
   if (req.method === 'GET' && url.pathname === '/api/availability/slots') {
     const dateParam = (url.searchParams.get('date') || '').trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateParam)) return json(res, 422, { error: 'invalid_date' });
-    const result = computeSlotsForDate(dateParam);
-    return json(res, 200, result);
+    const durationMinutes = Math.max(SLOT_MINUTES, parseInt(url.searchParams.get('durationMinutes'), 10) || SLOT_MINUTES);
+    const lat = parseFloat(url.searchParams.get('lat'));
+    const lng = parseFloat(url.searchParams.get('lng'));
+    let travelMinutesEach = 0;
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      const shop = await getShopCoords();
+      travelMinutesEach = await getDrivingMinutes(shop.lat, shop.lng, lat, lng);
+    }
+    const result = computeSlotsForDate(dateParam, { durationMinutes, travelMinutesEach });
+    return json(res, 200, { ...result, travelMinutesEach });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/bookings/request') {
     if (publicRateLimited(getIp(req), 'bookings/request')) return json(res, 429, { error: 'too_many_requests' });
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
-    const { type, name, email, phone, preferredDate, preferredTime, device, address, notes } = body || {};
+    const { type, name, email, phone, preferredDate, preferredTime, device, address, notes, durationMinutes: rawDuration, lat: rawLat, lng: rawLng } = body || {};
     const BOOKING_TYPES = ['dropoff', 'appointment', 'callout'];
     if (!name || !email || !preferredDate) return json(res, 422, { error: 'missing_fields' });
     if (!BOOKING_TYPES.includes(type)) return json(res, 422, { error: 'invalid_type' });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())) return json(res, 422, { error: 'invalid_email', message: 'Email address is invalid.' });
     if (type === 'callout' && !String(address || '').trim()) return json(res, 422, { error: 'missing_address', message: 'Address is required for an on-site callout.' });
     if (String(notes || '').trim().length > 2000) return json(res, 422, { error: 'notes_too_long', message: 'Notes must be 2000 characters or fewer.' });
-    const slotInfo = computeSlotsForDate(String(preferredDate).trim());
+    const durationMinutes = Math.max(SLOT_MINUTES, parseInt(rawDuration, 10) || SLOT_MINUTES);
+    const lat = parseFloat(rawLat);
+    const lng = parseFloat(rawLng);
+    let travelMinutesEach = 0;
+    if (type === 'callout') {
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return json(res, 422, { error: 'missing_coords', message: 'Could not pin down your address on the map — please re-enter it.' });
+      const shop = await getShopCoords();
+      travelMinutesEach = await getDrivingMinutes(shop.lat, shop.lng, lat, lng);
+    }
+    const dateStr = String(preferredDate).trim();
+    const slotInfo = computeSlotsForDate(dateStr, { durationMinutes, travelMinutesEach });
     if (slotInfo.closed) return json(res, 422, { error: 'date_unavailable', message: 'We are not available on that date — please call us to arrange a booking.' });
     const preferredTimeTrimmed = String(preferredTime || '').trim();
     if (preferredTimeTrimmed && !slotInfo.slots.includes(preferredTimeTrimmed)) {
       return json(res, 422, { error: 'time_unavailable', message: 'That time is no longer available — please pick another slot.' });
+    }
+    let blockedSlots = [];
+    if (preferredTimeTrimmed) {
+      const avail = readAvailability();
+      blockedSlots = getBlockSlots(avail, dateStr, preferredTimeTrimmed, durationMinutes, travelMinutesEach) || [];
+      if (blockedSlots.length) {
+        const existing = new Set(avail.blockedSlots[dateStr] || []);
+        for (const s of blockedSlots) existing.add(s);
+        avail.blockedSlots[dateStr] = Array.from(existing);
+        writeAvailability(avail);
+      }
     }
     const db = readBookings();
     const booking = {
@@ -3718,11 +3861,14 @@ const mainServer = http.createServer(async (req, res) => {
       name: String(name).trim(),
       email: String(email).trim(),
       phone: String(phone || '').trim(),
-      preferredDate: String(preferredDate).trim(),
-      preferredTime: String(preferredTime || '').trim(),
+      preferredDate: dateStr,
+      preferredTime: preferredTimeTrimmed,
+      durationMinutes,
+      travelMinutesEach,
       device: String(device || '').trim(),
       address: String(address || '').trim(),
       notes: String(notes || '').trim(),
+      blockedSlots,
       status: 'new',
       createdAt: new Date().toISOString(),
     };
@@ -4784,6 +4930,8 @@ const adminServer = http.createServer(async (req, res) => {
     const session = requireAdmin(req, res); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     const db = readBookings();
+    const removed = db.bookings.find(b => b.id === body.id);
+    if (removed) unblockBookingSlots(removed);
     db.bookings = db.bookings.filter(b => b.id !== body.id);
     writeBookings(db);
     return json(res, 200, { ok: true });
@@ -5441,6 +5589,7 @@ const adminServer = http.createServer(async (req, res) => {
     const db = readBookings();
     const idx = db.bookings.findIndex(b => b.id === id);
     if (idx < 0) return json(res, 404, { error: 'not_found' });
+    if (status === 'cancelled' && db.bookings[idx].status !== 'cancelled') unblockBookingSlots(db.bookings[idx]);
     db.bookings[idx] = { ...db.bookings[idx], status };
     writeBookings(db);
     return json(res, 200, { ok: true, booking: db.bookings[idx] });
