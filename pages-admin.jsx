@@ -261,6 +261,7 @@ const NAV_ICONS = {
   quotes:       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>,
   ewaste:       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>,
   bookings:     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
+  availability: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 14h2M8 17h2M14 14h2M14 17h2"/></svg>,
   products:     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="2" y="3" width="7" height="7"/><rect x="15" y="3" width="7" height="7"/><rect x="15" y="14" width="7" height="7"/><rect x="2" y="14" width="7" height="7"/></svg>,
   services:     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.42 1.42M5.35 18.65l-1.42 1.42M22 12h-2M4 12H2M19.07 19.07l-1.42-1.42M5.35 5.35L3.93 3.93M12 22v-2M12 4V2"/></svg>,
   software:     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>,
@@ -289,6 +290,7 @@ const ADMIN_SECTIONS = [
     { id:'quotes',    label:'Quotes Inbox',  minRole:'staff', excludeRoles:['seller'] },
     { id:'ewaste',    label:'eWaste Intake', minRole:'technician' },
     { id:'bookings',  label:'Bookings',      minRole:'owner' },
+    { id:'availability', label:'Availability', minRole:'owner' },
   ]},
   { group:'CATALOG', items: [
     { id:'products',  label:'Products',         minRole:'seller' },
@@ -2399,6 +2401,171 @@ function AdminBookings() {
               {['new','pending','confirmed','completed','cancelled'].map(s => <option key={s}>{s}</option>)}
             </select>
           </label>
+        </Drawer>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// AVAILABILITY
+// ============================================================
+const WEEKDAY_DEFS = [
+  { k:'mon', l:'Monday' }, { k:'tue', l:'Tuesday' }, { k:'wed', l:'Wednesday' },
+  { k:'thu', l:'Thursday' }, { k:'fri', l:'Friday' }, { k:'sat', l:'Saturday' }, { k:'sun', l:'Sunday' },
+];
+
+function fmtYMD(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function AdminAvailability() {
+  const [avail, setAvail] = useState(null);
+  const [hoursForm, setHoursForm] = useState(null);
+  const [savingHours, setSavingHours] = useState(false);
+  const [monthCursor, setMonthCursor] = useState(() => { const d = new Date(); d.setDate(1); return d; });
+  const [slotDay, setSlotDay] = useState(null);
+
+  const load = () => {
+    fetch('/api/admin/availability', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject()).then(d => { setAvail(d); setHoursForm(d.operatingHours); }).catch(() => {});
+  };
+  useEffect(load, []);
+
+  const saveHours = async () => {
+    setSavingHours(true);
+    const r = await fetch('/api/admin/availability/hours', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ operatingHours: hoursForm }) }).catch(()=>null);
+    setSavingHours(false);
+    if (r && r.ok) { adminToast('Operating hours saved.'); load(); }
+    else adminToast('Failed to save operating hours.');
+  };
+
+  const toggleBlockDate = async (date) => {
+    const r = await fetch('/api/admin/availability/block-date', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ date }) }).catch(()=>null);
+    if (r && r.ok) { const d = await r.json(); setAvail(a => ({ ...a, blockedDates: d.blockedDates })); }
+    else adminToast('Failed to update day.');
+  };
+
+  const toggleBlockSlot = async (date, time) => {
+    const r = await fetch('/api/admin/availability/block-slot', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ date, time }) }).catch(()=>null);
+    if (r && r.ok) { const d = await r.json(); setAvail(a => ({ ...a, blockedSlots: d.blockedSlots })); }
+    else adminToast('Failed to update slot.');
+  };
+
+  if (!avail || !hoursForm) return <div style={{padding:32, color:'var(--ink-2)'}}>Loading…</div>;
+
+  const year = monthCursor.getFullYear(), month = monthCursor.getMonth();
+  const firstOfMonth = new Date(year, month, 1);
+  const startOffset = firstOfMonth.getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < startOffset; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
+
+  const todayYMD = fmtYMD(new Date());
+
+  const slotsForSlotDay = slotDay ? (() => {
+    const WEEKDAY_KEYS = ['sun','mon','tue','wed','thu','fri','sat'];
+    const dayKey = WEEKDAY_KEYS[new Date(slotDay + 'T00:00:00').getDay()];
+    const hours = avail.operatingHours[dayKey];
+    if (!hours || hours.closed) return [];
+    const [openH, openM] = hours.open.split(':').map(Number);
+    const [closeH, closeM] = hours.close.split(':').map(Number);
+    const out = [];
+    for (let m = openH*60+openM; m < closeH*60+closeM; m += 30) {
+      out.push(`${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`);
+    }
+    return out;
+  })() : [];
+
+  return (
+    <div style={{padding:32, display:'grid', gap:24}}>
+      <div className="card-paper" style={{padding:24}}>
+        <span className="eyebrow">OPERATING HOURS</span>
+        <p style={{fontSize:13, color:'var(--ink-2)', marginTop:6, marginBottom:16}}>Customers can only book online within these hours. Outside them, the booking page tells them to call.</p>
+        <div style={{display:'grid', gap:10}}>
+          {WEEKDAY_DEFS.map(({k,l}) => (
+            <div key={k} className="row-flex" style={{gap:12, alignItems:'center'}}>
+              <span style={{width:100, fontSize:13}}>{l}</span>
+              <label style={{display:'flex', alignItems:'center', gap:6, fontSize:12, color:'var(--ink-2)'}}>
+                <input type="checkbox" checked={!hoursForm[k].closed} onChange={e => setHoursForm(f => ({ ...f, [k]: { ...f[k], closed: !e.target.checked } }))} />
+                Open
+              </label>
+              <input type="time" className="input" style={{width:120}} disabled={hoursForm[k].closed} value={hoursForm[k].open}
+                onChange={e => setHoursForm(f => ({ ...f, [k]: { ...f[k], open: e.target.value } }))} />
+              <span style={{color:'var(--ink-3)'}}>to</span>
+              <input type="time" className="input" style={{width:120}} disabled={hoursForm[k].closed} value={hoursForm[k].close}
+                onChange={e => setHoursForm(f => ({ ...f, [k]: { ...f[k], close: e.target.value } }))} />
+            </div>
+          ))}
+        </div>
+        <div style={{marginTop:16}}>
+          <button className="btn btn-sm" disabled={savingHours} onClick={saveHours}>{savingHours ? 'Saving…' : 'Save hours'}</button>
+        </div>
+      </div>
+
+      <div className="card-paper" style={{padding:24}}>
+        <div className="row-flex" style={{justifyContent:'space-between', marginBottom:12}}>
+          <span className="eyebrow">CALENDAR — CLICK A DAY TO BLOCK IT ENTIRELY</span>
+          <div className="row-flex" style={{gap:8}}>
+            <button className="btn btn-ghost btn-sm" onClick={() => setMonthCursor(c => new Date(c.getFullYear(), c.getMonth()-1, 1))}>←</button>
+            <span className="mono" style={{fontSize:12, minWidth:120, textAlign:'center'}}>{monthCursor.toLocaleString('en-AU',{month:'long', year:'numeric'})}</span>
+            <button className="btn btn-ghost btn-sm" onClick={() => setMonthCursor(c => new Date(c.getFullYear(), c.getMonth()+1, 1))}>→</button>
+          </div>
+        </div>
+        <div style={{display:'grid', gridTemplateColumns:'repeat(7, 1fr)', gap:6}}>
+          {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
+            <div key={d} className="mono" style={{fontSize:10, color:'var(--ink-3)', textAlign:'center'}}>{d}</div>
+          ))}
+          {cells.map((d, i) => {
+            if (!d) return <div key={i} />;
+            const ymd = fmtYMD(d);
+            const blocked = avail.blockedDates.includes(ymd);
+            const hasBlockedSlots = (avail.blockedSlots[ymd] || []).length > 0;
+            const isPast = ymd < todayYMD;
+            return (
+              <div key={i}
+                onClick={() => !isPast && toggleBlockDate(ymd)}
+                style={{
+                  padding:'10px 4px', textAlign:'center', cursor: isPast ? 'default' : 'pointer', borderRadius:4,
+                  border:'1px solid var(--line)', fontSize:13, position:'relative',
+                  background: blocked ? 'var(--rust)' : 'var(--paper)',
+                  color: blocked ? '#fff' : isPast ? 'var(--ink-3)' : 'var(--ink)',
+                  opacity: isPast ? 0.5 : 1,
+                }}
+              >
+                {d.getDate()}
+                {hasBlockedSlots && !blocked && <span style={{position:'absolute', bottom:3, right:3, width:5, height:5, borderRadius:'50%', background:'var(--ochre)'}} />}
+                {!isPast && !blocked && (
+                  <div style={{marginTop:4}}>
+                    <button type="button" className="btn btn-ghost" style={{fontSize:9, padding:'1px 4px'}} onClick={e => { e.stopPropagation(); setSlotDay(ymd); }}>hours</button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div className="row-flex" style={{gap:16, marginTop:14, fontSize:11, color:'var(--ink-2)'}}>
+          <span className="row-flex" style={{gap:6}}><span style={{width:10,height:10,borderRadius:'50%',background:'var(--rust)',display:'inline-block'}} /> Blocked day</span>
+          <span className="row-flex" style={{gap:6}}><span style={{width:10,height:10,borderRadius:'50%',background:'var(--ochre)',display:'inline-block'}} /> Has blocked hours</span>
+        </div>
+      </div>
+
+      {slotDay && (
+        <Drawer open={true} onClose={() => setSlotDay(null)} title={`Block hours — ${slotDay}`}>
+          {slotsForSlotDay.length === 0 ? (
+            <div style={{fontSize:13, color:'var(--ink-2)'}}>No operating hours configured for this day of the week.</div>
+          ) : (
+            <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:8}}>
+              {slotsForSlotDay.map(t => {
+                const blocked = (avail.blockedSlots[slotDay] || []).includes(t);
+                return (
+                  <button key={t} type="button" className={`btn btn-sm ${blocked ? 'btn-rust' : 'btn-ghost'}`}
+                    onClick={() => toggleBlockSlot(slotDay, t)}>{t}</button>
+                );
+              })}
+            </div>
+          )}
         </Drawer>
       )}
     </div>
@@ -6434,6 +6601,7 @@ const ADMIN_VIEWS = {
   quotes:     { c: AdminQuotes,     t:'Quotes Inbox' },
   ewaste:     { c: AdminEwaste,     t:'eWaste Intake' },
   bookings:   { c: AdminBookings,   t:'Bookings' },
+  availability: { c: AdminAvailability, t:'Availability', staticSubtitle:'operating hours · blocked days & slots' },
   products:   { c: AdminProducts,   t:'Products' },
   services:   { c: AdminServices,   t:'Services' },
   software:   { c: AdminSoftware,   t:'Software' },
@@ -6454,7 +6622,7 @@ const ADMIN_VIEWS = {
 };
 
 const ADMIN_ALL_IDS = new Set([
-  'overview','orders','repairs','quotes','ewaste','bookings',
+  'overview','orders','repairs','quotes','ewaste','bookings','availability',
   'products','services','software','tutorials','ai',
   'groups','customers','sellers',
   'memberships','gift-cards','rewards','expenses','policies','seller-billing','settings','audit-log',

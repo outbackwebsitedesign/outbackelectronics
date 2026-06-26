@@ -249,6 +249,11 @@ function BookingPage({ go, pageParams }) {
   const [submitError, setSubmitError] = useState(null);
   const [bookingId, setBookingId] = useState(null);
 
+  const [slotInfo, setSlotInfo] = useState(null);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [calloutInfo, setCalloutInfo] = useState(null);
+  const [addrGeocoding, setAddrGeocoding] = useState(false);
+
   const [form, setForm] = useState({
     type: pageParams?.type || 'dropoff',
     name: '',
@@ -266,6 +271,42 @@ function BookingPage({ go, pageParams }) {
   useEffect(() => {
     if (pageParams?.type) update('type', pageParams.type);
   }, [pageParams?.type]);
+
+  useEffect(() => {
+    if (!form.preferredDate) { setSlotInfo(null); return; }
+    setSlotsLoading(true);
+    fetch(`/api/availability/slots?date=${encodeURIComponent(form.preferredDate)}`)
+      .then(r => r.json())
+      .then(d => {
+        setSlotInfo(d);
+        if (d.closed || !d.slots.includes(form.preferredTime)) update('preferredTime', '');
+      })
+      .catch(() => setSlotInfo({ closed: true, slots: [] }))
+      .finally(() => setSlotsLoading(false));
+  }, [form.preferredDate]);
+
+  useEffect(() => {
+    if (form.type !== 'callout' || !form.address || form.address.trim().length < 3) { setCalloutInfo(null); return; }
+    const t = setTimeout(async () => {
+      setAddrGeocoding(true);
+      try {
+        const geoRes = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(form.address + ', Australia')}&limit=1`,
+          { headers: { 'Accept-Language': 'en' } }
+        );
+        const geoData = await geoRes.json();
+        if (geoData[0]) {
+          const feeRes = await fetch(`/api/callout-fee?lat=${encodeURIComponent(geoData[0].lat)}&lng=${encodeURIComponent(geoData[0].lon)}`);
+          const info = await feeRes.json();
+          setCalloutInfo(info);
+        } else {
+          setCalloutInfo(null);
+        }
+      } catch { setCalloutInfo(null); }
+      finally { setAddrGeocoding(false); }
+    }, 700);
+    return () => clearTimeout(t);
+  }, [form.address, form.type]);
 
   const pageCopy = {
     dropoff:     { title: 'Book a Repair Drop-off',  lead: "Bring your device to the bench. Pick a date and we'll have a slot ready." },
@@ -342,12 +383,43 @@ function BookingPage({ go, pageParams }) {
             <hr className="thin" />
             <span className="eyebrow">03 · WHEN</span>
             <div className="grid-2" style={{gap:16, marginTop: 12}}>
-              <label className="field"><span className="label">Preferred date</span><input required type="date" className="input" value={form.preferredDate} onChange={e => update('preferredDate', e.target.value)} /></label>
-              <label className="field"><span className="label">Preferred time (optional)</span><input type="time" className="input" value={form.preferredTime} onChange={e => update('preferredTime', e.target.value)} /></label>
+              <label className="field"><span className="label">Preferred date</span><input required type="date" min={new Date().toISOString().slice(0,10)} className="input" value={form.preferredDate} onChange={e => update('preferredDate', e.target.value)} /></label>
+              <label className="field">
+                <span className="label">Preferred time</span>
+                <select required className="select" value={form.preferredTime} disabled={!form.preferredDate || slotsLoading || (slotInfo && slotInfo.closed)}
+                  onChange={e => update('preferredTime', e.target.value)}>
+                  <option value="">{slotsLoading ? 'Loading…' : 'Select a time'}</option>
+                  {slotInfo && !slotInfo.closed && slotInfo.slots.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </label>
             </div>
+            {form.preferredDate && !slotsLoading && slotInfo && slotInfo.closed && (
+              <div style={{marginTop:4, marginBottom:4, padding:'8px 12px', fontSize:13, border:'1px solid var(--rust)', background:'var(--bg-elev)', color:'var(--rust)'}}>
+                We're not taking online bookings on that date. Please call us to arrange a time.
+              </div>
+            )}
 
             {form.type === 'callout' && (
-              <label className="field"><span className="label">Address</span><input required className="input" value={form.address} onChange={e => update('address', e.target.value)} placeholder="Street, town" /></label>
+              <>
+                <label className="field"><span className="label">Address</span><input required className="input" value={form.address} onChange={e => update('address', e.target.value)} placeholder="Street, town" /></label>
+                {addrGeocoding && <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:4, marginBottom:4}}>Checking distance…</div>}
+                {!addrGeocoding && calloutInfo !== null && (() => {
+                  const { distKm, fee, days, localCapKm, dailyRate } = calloutInfo;
+                  const capExceeded = distKm > localCapKm;
+                  return (
+                    <div style={{marginTop:4, marginBottom:4, padding:'8px 12px', fontSize:13, border:'1px solid var(--line)', background:'var(--bg-elev)', borderColor: capExceeded ? 'var(--rust)' : 'var(--line)'}}>
+                      {capExceeded
+                        ? <span style={{color:'var(--rust)'}}>That's {distKm}km — on-site callouts are capped at {localCapKm}km. Please call us to discuss options.</span>
+                        : fee === 0
+                          ? <span><span style={{color:'var(--rust)', fontWeight:600}}>Free callout</span> — you're {distKm}km away.</span>
+                          : days > 0
+                            ? <span><span style={{fontWeight:600}}>~${fee} travel fee</span> — {distKm}km: fuel + {days * 2} travel days @ ${dailyRate}/day. We'll confirm when we book you in.</span>
+                            : <span><span style={{fontWeight:600}}>~${fee} travel fee</span> — {distKm}km at $0.55/km (round trip fuel). We'll confirm when we book you in.</span>
+                      }
+                    </div>
+                  );
+                })()}
+              </>
             )}
 
             <hr className="thin" />

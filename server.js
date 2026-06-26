@@ -150,6 +150,7 @@ const REWARDS_DB_PATH = path.join(__dirname, 'rewards.db');
 const ANALYTICS_DB_PATH = path.join(__dirname, 'analytics.db');
 const STORE_CREDIT_DB_PATH = path.join(__dirname, 'store-credits.db');
 const BOOKINGS_DB_PATH = path.join(__dirname, 'bookings.db');
+const AVAILABILITY_DB_PATH = path.join(__dirname, 'availability.db');
 const TUTORIALS_DB_PATH = path.join(__dirname, 'tutorials.db');
 const AI_DB_PATH        = path.join(__dirname, 'ai.db');
 const POLICIES_DB_PATH  = path.join(__dirname, 'policies.db');
@@ -643,6 +644,56 @@ function readBookings() {
   try { const d = JSON.parse(cachedReadFile(BOOKINGS_DB_PATH)); return { bookings: Array.isArray(d.bookings) ? d.bookings : [] }; } catch { return { bookings: [] }; }
 }
 function writeBookings(data) { atomicWriteFile(BOOKINGS_DB_PATH, JSON.stringify(data, null, 2)); }
+
+const DEFAULT_OPERATING_HOURS = {
+  mon: { closed: false, open: '09:00', close: '17:00' },
+  tue: { closed: false, open: '09:00', close: '17:00' },
+  wed: { closed: false, open: '09:00', close: '17:00' },
+  thu: { closed: false, open: '09:00', close: '17:00' },
+  fri: { closed: false, open: '09:00', close: '17:00' },
+  sat: { closed: true,  open: '09:00', close: '17:00' },
+  sun: { closed: true,  open: '09:00', close: '17:00' },
+};
+const SLOT_MINUTES = 30;
+const WEEKDAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+
+function readAvailability() {
+  try {
+    const d = JSON.parse(cachedReadFile(AVAILABILITY_DB_PATH));
+    return {
+      operatingHours: { ...DEFAULT_OPERATING_HOURS, ...(d.operatingHours || {}) },
+      blockedDates: Array.isArray(d.blockedDates) ? d.blockedDates : [],
+      blockedSlots: (d.blockedSlots && typeof d.blockedSlots === 'object') ? d.blockedSlots : {},
+    };
+  } catch {
+    return { operatingHours: { ...DEFAULT_OPERATING_HOURS }, blockedDates: [], blockedSlots: {} };
+  }
+}
+function writeAvailability(data) { atomicWriteFile(AVAILABILITY_DB_PATH, JSON.stringify(data, null, 2)); }
+
+// Returns { closed, reason, slots: ['09:00', ...] } for a given YYYY-MM-DD date.
+function computeSlotsForDate(dateStr) {
+  const avail = readAvailability();
+  const d = new Date(dateStr + 'T00:00:00');
+  if (isNaN(d.getTime())) return { closed: true, reason: 'invalid_date', slots: [] };
+  if (avail.blockedDates.includes(dateStr)) return { closed: true, reason: 'blocked', slots: [] };
+  const dayKey = WEEKDAY_KEYS[d.getDay()];
+  const hours = avail.operatingHours[dayKey];
+  if (!hours || hours.closed) return { closed: true, reason: 'outside_hours', slots: [] };
+  const blocked = new Set(avail.blockedSlots[dateStr] || []);
+  const [openH, openM] = hours.open.split(':').map(Number);
+  const [closeH, closeM] = hours.close.split(':').map(Number);
+  const startMin = openH * 60 + openM;
+  const endMin = closeH * 60 + closeM;
+  const slots = [];
+  for (let m = startMin; m < endMin; m += SLOT_MINUTES) {
+    const hh = String(Math.floor(m / 60)).padStart(2, '0');
+    const mm = String(m % 60).padStart(2, '0');
+    const t = `${hh}:${mm}`;
+    if (!blocked.has(t)) slots.push(t);
+  }
+  return { closed: slots.length === 0, reason: slots.length === 0 ? 'fully_blocked' : null, slots };
+}
 
 function generateGiftCardCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -3637,6 +3688,13 @@ const mainServer = http.createServer(async (req, res) => {
     return json(res, 201, { ok: true, id: quote.id });
   }
 
+  if (req.method === 'GET' && url.pathname === '/api/availability/slots') {
+    const dateParam = (url.searchParams.get('date') || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateParam)) return json(res, 422, { error: 'invalid_date' });
+    const result = computeSlotsForDate(dateParam);
+    return json(res, 200, result);
+  }
+
   if (req.method === 'POST' && url.pathname === '/api/bookings/request') {
     if (publicRateLimited(getIp(req), 'bookings/request')) return json(res, 429, { error: 'too_many_requests' });
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
@@ -3647,6 +3705,12 @@ const mainServer = http.createServer(async (req, res) => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())) return json(res, 422, { error: 'invalid_email', message: 'Email address is invalid.' });
     if (type === 'callout' && !String(address || '').trim()) return json(res, 422, { error: 'missing_address', message: 'Address is required for an on-site callout.' });
     if (String(notes || '').trim().length > 2000) return json(res, 422, { error: 'notes_too_long', message: 'Notes must be 2000 characters or fewer.' });
+    const slotInfo = computeSlotsForDate(String(preferredDate).trim());
+    if (slotInfo.closed) return json(res, 422, { error: 'date_unavailable', message: 'We are not available on that date — please call us to arrange a booking.' });
+    const preferredTimeTrimmed = String(preferredTime || '').trim();
+    if (preferredTimeTrimmed && !slotInfo.slots.includes(preferredTimeTrimmed)) {
+      return json(res, 422, { error: 'time_unavailable', message: 'That time is no longer available — please pick another slot.' });
+    }
     const db = readBookings();
     const booking = {
       id: 'bkg-' + Date.now(),
@@ -5380,6 +5444,65 @@ const adminServer = http.createServer(async (req, res) => {
     db.bookings[idx] = { ...db.bookings[idx], status };
     writeBookings(db);
     return json(res, 200, { ok: true, booking: db.bookings[idx] });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/admin/availability') {
+    const session = requireAdmin(req, res); if (!session) return;
+    return json(res, 200, readAvailability());
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/availability/hours') {
+    const session = requireAdmin(req, res); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const { operatingHours } = body || {};
+    if (!operatingHours || typeof operatingHours !== 'object') return json(res, 422, { error: 'missing_operating_hours' });
+    const avail = readAvailability();
+    for (const day of WEEKDAY_KEYS) {
+      if (operatingHours[day]) {
+        const { closed, open, close } = operatingHours[day];
+        avail.operatingHours[day] = {
+          closed: !!closed,
+          open: /^\d{2}:\d{2}$/.test(open) ? open : avail.operatingHours[day].open,
+          close: /^\d{2}:\d{2}$/.test(close) ? close : avail.operatingHours[day].close,
+        };
+      }
+    }
+    writeAvailability(avail);
+    auditAdminAction({ req, session, action: 'availability.hours.update', result: { status: 'ok' } });
+    return json(res, 200, { ok: true, operatingHours: avail.operatingHours });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/availability/block-date') {
+    const session = requireAdmin(req, res); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const date = String(body?.date || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return json(res, 422, { error: 'invalid_date' });
+    const avail = readAvailability();
+    const idx = avail.blockedDates.indexOf(date);
+    if (idx >= 0) avail.blockedDates.splice(idx, 1);
+    else avail.blockedDates.push(date);
+    writeAvailability(avail);
+    auditAdminAction({ req, session, action: 'availability.blockDate.toggle', result: { status: 'ok', changed: { date, blocked: idx < 0 } } });
+    return json(res, 200, { ok: true, blockedDates: avail.blockedDates });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/availability/block-slot') {
+    const session = requireAdmin(req, res); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const date = String(body?.date || '').trim();
+    const time = String(body?.time || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return json(res, 422, { error: 'invalid_date' });
+    if (!/^\d{2}:\d{2}$/.test(time)) return json(res, 422, { error: 'invalid_time' });
+    const avail = readAvailability();
+    const list = avail.blockedSlots[date] || [];
+    const idx = list.indexOf(time);
+    if (idx >= 0) list.splice(idx, 1);
+    else list.push(time);
+    if (list.length) avail.blockedSlots[date] = list;
+    else delete avail.blockedSlots[date];
+    writeAvailability(avail);
+    auditAdminAction({ req, session, action: 'availability.blockSlot.toggle', result: { status: 'ok', changed: { date, time, blocked: idx < 0 } } });
+    return json(res, 200, { ok: true, blockedSlots: avail.blockedSlots });
   }
 
   if (url.pathname === '/admin-login.html' || url.pathname === '/') {
