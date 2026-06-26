@@ -2419,6 +2419,8 @@ function fmtYMD(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
+const WEEKDAY_KEYS_AVAIL = ['sun','mon','tue','wed','thu','fri','sat'];
+
 function AdminAvailability() {
   const [avail, setAvail] = useState(null);
   const [hoursForm, setHoursForm] = useState(null);
@@ -2521,16 +2523,19 @@ function AdminAvailability() {
             if (!d) return <div key={i} />;
             const ymd = fmtYMD(d);
             const blocked = avail.blockedDates.includes(ymd);
+            const dayKey = WEEKDAY_KEYS_AVAIL[d.getDay()];
+            const closedByHours = !blocked && !!avail.operatingHours[dayKey]?.closed;
             const hasBlockedSlots = (avail.blockedSlots[ymd] || []).length > 0;
             const isPast = ymd < todayYMD;
             return (
               <div key={i}
                 onClick={() => !isPast && toggleBlockDate(ymd)}
+                title={closedByHours ? 'Closed every week on this day (set in operating hours)' : undefined}
                 style={{
                   padding:'10px 4px', textAlign:'center', cursor: isPast ? 'default' : 'pointer', borderRadius:4,
                   border:'1px solid var(--line)', fontSize:13, position:'relative',
-                  background: blocked ? 'var(--rust)' : 'var(--paper)',
-                  color: blocked ? '#fff' : isPast ? 'var(--ink-3)' : 'var(--ink)',
+                  background: blocked ? 'var(--rust)' : closedByHours ? 'var(--bg-deep)' : 'var(--paper)',
+                  color: blocked ? '#fff' : isPast ? 'var(--ink-3)' : closedByHours ? 'var(--ink-2)' : 'var(--ink)',
                   opacity: isPast ? 0.5 : 1,
                 }}
               >
@@ -2547,6 +2552,7 @@ function AdminAvailability() {
         </div>
         <div className="row-flex" style={{gap:16, marginTop:14, fontSize:11, color:'var(--ink-2)'}}>
           <span className="row-flex" style={{gap:6}}><span style={{width:10,height:10,borderRadius:'50%',background:'var(--rust)',display:'inline-block'}} /> Blocked day</span>
+          <span className="row-flex" style={{gap:6}}><span style={{width:10,height:10,borderRadius:'50%',background:'var(--bg-deep)',border:'1px solid var(--line)',display:'inline-block'}} /> Closed weekly (operating hours)</span>
           <span className="row-flex" style={{gap:6}}><span style={{width:10,height:10,borderRadius:'50%',background:'var(--ochre)',display:'inline-block'}} /> Has blocked hours</span>
         </div>
       </div>
