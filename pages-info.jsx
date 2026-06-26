@@ -185,7 +185,7 @@ function QuotePage({ go, pageParams }) {
                       ? <span><span style={{color:'var(--rust)', fontWeight:600}}>Free callout</span> — you're {distKm}km away.</span>
                       : days > 0
                         ? <span><span style={{fontWeight:600}}>~${fee} travel fee</span> — {distKm}km: fuel + {days * 2} travel days @ ${dailyRate}/day. We'll confirm in the quote.</span>
-                        : <span><span style={{fontWeight:600}}>~${fee} travel fee</span> — {distKm}km at $0.55/km (round trip fuel). We'll confirm in the quote.</span>
+                        : <span><span style={{fontWeight:600}}>~${fee} travel fee</span> — {distKm}km at $0.60/km (round trip fuel). We'll confirm in the quote.</span>
                   }
                 </div>
               );
@@ -414,7 +414,7 @@ function BookingPage({ go, pageParams }) {
                           ? <span><span style={{color:'var(--rust)', fontWeight:600}}>Free callout</span> — you're {distKm}km away.</span>
                           : days > 0
                             ? <span><span style={{fontWeight:600}}>~${fee} travel fee</span> — {distKm}km: fuel + {days * 2} travel days @ ${dailyRate}/day. We'll confirm when we book you in.</span>
-                            : <span><span style={{fontWeight:600}}>~${fee} travel fee</span> — {distKm}km at $0.55/km (round trip fuel). We'll confirm when we book you in.</span>
+                            : <span><span style={{fontWeight:600}}>~${fee} travel fee</span> — {distKm}km at $0.60/km (round trip fuel). We'll confirm when we book you in.</span>
                       }
                     </div>
                   );

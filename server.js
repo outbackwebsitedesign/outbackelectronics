@@ -2963,10 +2963,10 @@ const mainServer = http.createServer(async (req, res) => {
     if (rawShipping < 0 || rawShipping > 200) return json(res, 422, { error: 'invalid_shipping', message: 'Shipping amount is outside the accepted range.' });
     const validatedShipping = rawShipping > 0 ? rawShipping : 0;
     // Travel/callout fee — calculated server-side from reported one-way distance.
-    // Fuel: $0.55/km round trip ($110/tank ÷ 400km × 2). Free within 10km.
+    // Fuel: $0.60/km round trip ($120/tank ÷ 400km × 2). Free within 10km.
     // Daily allowance (D > 400km): $150/day, 6h driving/day at ~80km/h = 480km/day; ×2 for return.
     const CALLOUT_FREE_KM = 10;
-    const CALLOUT_FUEL_RATE = 220 / 400;  // $0.55/km round trip
+    const CALLOUT_FUEL_RATE = 240 / 400;  // $0.60/km round trip
     const CALLOUT_KM_PER_DAY = 480;        // 6h × 80km/h
     const CALLOUT_DAILY_RATE = 150;
     const CALLOUT_DAILY_THRESHOLD_KM = 400;
@@ -3643,7 +3643,7 @@ const mainServer = http.createServer(async (req, res) => {
   if (req.method === 'GET' && url.pathname === '/api/callout-fee') {
     const SHOP_LAT = -24.4235, SHOP_LNG = 145.4693;
     const FREE_KM = 10, LOCAL_CAP_KM = 200, HIVAL_THRESHOLD = 10000;
-    const FUEL_RATE = 220 / 400, KM_PER_DAY = 480, DAILY_RATE = 150, DAILY_THRESHOLD_KM = 400;
+    const FUEL_RATE = 240 / 400, KM_PER_DAY = 480, DAILY_RATE = 150, DAILY_THRESHOLD_KM = 400;
     const lat = parseFloat(url.searchParams.get('lat'));
     const lng = parseFloat(url.searchParams.get('lng'));
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return json(res, 422, { error: 'invalid_coords' });
