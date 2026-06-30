@@ -2495,9 +2495,22 @@ function estimateSoleTradeTax(netProfit) {
 }
 
 // ── Tax / P&L report helpers ─────────────────────────────────────────────────
+function parseAuDateStr(s) {
+  if (!s) return null;
+  // ISO or RFC2822 — let V8 handle it
+  let d = new Date(s);
+  if (!isNaN(d)) return d;
+  // "DD Mon YYYY" (en-AU locale with month:'short') → "Mon DD YYYY"
+  const mShort = String(s).match(/^(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})$/);
+  if (mShort) { d = new Date(`${mShort[2]} ${mShort[1].padStart(2,'0')} ${mShort[3]}`); if (!isNaN(d)) return d; }
+  // "DD/MM/YYYY" (en-AU locale with month:'2-digit')
+  const mSlash = String(s).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (mSlash) { d = new Date(Number(mSlash[3]), Number(mSlash[2])-1, Number(mSlash[1])); if (!isNaN(d)) return d; }
+  return null;
+}
 function parseOrderDateForReport(o) {
   if (o.createdAt) { const d = new Date(o.createdAt); if (!isNaN(d)) return d; }
-  if (o.date) { const d = new Date(o.date); if (!isNaN(d)) return d; }
+  if (o.date) { const d = parseAuDateStr(o.date); if (d) return d; }
   return null;
 }
 function parseExpDateForReport(s) {
@@ -2526,6 +2539,7 @@ function buildTaxReportData(fromStr, toStr) {
   const monthMap = {};
   const ensureMonth = k => { if (!monthMap[k]) monthMap[k] = { revenue: 0, expenses: 0 }; };
   for (const o of readOrders()) {
+    if (o.gratis) continue; // complimentary — no income to recognise
     const d = parseOrderDateForReport(o);
     if (!inRange(d)) continue;
     const total = Number(o.total) || 0;
@@ -2603,6 +2617,7 @@ function buildBASData(fromStr, toStr) {
   let refunds = 0;
   let orderCount = 0, repairCount = 0;
   for (const o of readOrders()) {
+    if (o.gratis) continue;
     const d = parseOrderDateForReport(o);
     if (!inRange(d)) continue;
     G1 += Number(o.total) || 0;
@@ -3005,6 +3020,7 @@ function buildReceivablesData() {
 
   // Orders not yet paid
   for (const o of readOrders()) {
+    if (o.gratis) continue; // complimentary — not a receivable
     const paid = (o.paymentStatus === 'paid') || (o.status === 'completed') || (o.status === 'shipped') || (o.status === 'delivered');
     if (paid) continue;
     const total = Number(o.total) || 0;
@@ -3048,11 +3064,12 @@ function buildReceivablesData() {
   });
 
   const total    = items.reduce((s,i) => s + i.amount, 0);
+  const current  = items.filter(i => i.ageDays == null || i.ageDays <= 30).reduce((s,i) => s+i.amount, 0);
   const over30   = items.filter(i => i.ageDays != null && i.ageDays > 30).reduce((s,i) => s+i.amount, 0);
   const over60   = items.filter(i => i.ageDays != null && i.ageDays > 60).reduce((s,i) => s+i.amount, 0);
   const over90   = items.filter(i => i.ageDays != null && i.ageDays > 90).reduce((s,i) => s+i.amount, 0);
 
-  return { asAt: now.toISOString().slice(0,10), items, total, over30, over60, over90 };
+  return { asAt: now.toISOString().slice(0,10), items, total, current, over30, over60, over90 };
 }
 
 function buildReceivablesPdf(data, shop) {
@@ -3314,6 +3331,7 @@ function buildGSTThresholdData() {
   const now = new Date();
   const revMap = {};
   for (const o of readOrders()) {
+    if (o.gratis) continue;
     const d = parseOrderDateForReport(o);
     if (!d) continue;
     const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;

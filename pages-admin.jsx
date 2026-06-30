@@ -885,6 +885,7 @@ const ORDER_PAYMENT_MAP = {
   paid:       { bg:'#d8e7d0', fg:'#345526' },
   'part-paid':{ bg:'#fff4d6', fg:'#7a5d10' },
   unpaid:     { bg:'#f3d5c5', fg:'#7a3a18' },
+  gratis:     { bg:'#ede7f6', fg:'#4527a0', label:'Gratis' },
 };
 const ORDER_FULFILMENT_MAP = {
   pending:   { bg:'var(--bg-deep)', fg:'var(--ink-2)' },
@@ -906,8 +907,12 @@ function orderEffectiveTotal(f) {
   const lastMethod = payments.length ? (payments[payments.length - 1].method || 'Card') : 'Card';
   return lastMethod === 'Cash' ? cashRound(Number(f.total) || 0) : Math.round((Number(f.total) || 0) * 100) / 100;
 }
-function orderBalance(f) { return Math.round((orderEffectiveTotal(f) - orderAmountPaid(f)) * 100) / 100; }
+function orderBalance(f) {
+  if (f.gratis) return 0;
+  return Math.round((orderEffectiveTotal(f) - orderAmountPaid(f)) * 100) / 100;
+}
 function orderPaymentStatus(f) {
+  if (f.gratis) return 'gratis';
   if ((f.payments || []).length > 0) {
     if (orderAmountPaid(f) >= orderEffectiveTotal(f)) return 'paid';
     return 'part-paid';
@@ -1465,17 +1470,31 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
       </div>
 
       <div style={{borderTop:'1px solid var(--line)', margin:'12px 0 16px'}}/>
-      <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:10}}>
+      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10}}>
         <div className="mono" style={{fontSize:10, letterSpacing:'.1em', color:'var(--ink-2)'}}>PAYMENT LOG</div>
         <div style={{display:'flex', gap:8, alignItems:'center'}}>
           <StatusPill value={orderPaymentStatus(form)} map={ORDER_PAYMENT_MAP} />
-          <span className="mono" style={{fontSize:11}}>
+          {!form.gratis && <span className="mono" style={{fontSize:11}}>
             <span style={{color:'var(--eucalyptus)'}}>paid ${orderAmountPaid(form).toLocaleString()}</span>
             {orderBalance(form) > 0 && <span style={{color:'var(--rust)'}}> · owing ${orderBalance(form).toLocaleString()}</span>}
-          </span>
+          </span>}
+          <button
+            className="btn btn-sm"
+            style={form.gratis
+              ? {background:'#ede7f6', color:'#4527a0', border:'1px solid #b39ddb', fontSize:11}
+              : {background:'transparent', color:'var(--ink-3)', border:'1px solid var(--border)', fontSize:11}}
+            onClick={() => saveNow({ gratis: !form.gratis })}
+            title={form.gratis ? 'Remove gratis flag — order will appear in reports again' : 'Mark as complimentary — hides from receivables and revenue reports'}>
+            {form.gratis ? '✓ Gratis — click to unmark' : 'Mark as Gratis'}
+          </button>
         </div>
       </div>
-      {(form.payments || []).length === 0 && <div className="mono" style={{fontSize:11, color:'var(--ink-3)', marginBottom:12}}>No payments recorded.</div>}
+      {form.gratis && (
+        <div style={{background:'#ede7f6', border:'1px solid #b39ddb', borderRadius:5, padding:'8px 12px', marginBottom:12, fontSize:12, color:'#4527a0'}}>
+          This order is marked <strong>gratis</strong> — it is excluded from revenue, receivables, and GST reports. The price on record is kept for reference only.
+        </div>
+      )}
+      {!form.gratis && (form.payments || []).length === 0 && <div className="mono" style={{fontSize:11, color:'var(--ink-3)', marginBottom:12}}>No payments recorded.</div>}
       {(form.payments || []).map((p, i) => (
         <div key={i} style={{display:'flex', alignItems:'center', gap:10, padding:'8px 12px', background:'var(--bg-elev)', border:'1px solid var(--line)', marginBottom:6}}>
           <div style={{flex:1}}>
@@ -1583,6 +1602,7 @@ function AdminOrders({ search, sessionInfo }) {
     if (statusTab !== 'all') {
       out = out.filter(r => ['shipped','refunded'].includes(statusTab)
         ? (r.fulfilment || 'pending') === statusTab
+        : statusTab === 'gratis' ? !!r.gratis
         : orderPaymentStatus(r) === statusTab);
     }
     if (dateRange.from || dateRange.to) {
@@ -1602,6 +1622,7 @@ function AdminOrders({ search, sessionInfo }) {
     unpaid: rows.filter(r => orderPaymentStatus(r) === 'unpaid').length,
     'part-paid': rows.filter(r => orderPaymentStatus(r) === 'part-paid').length,
     paid: rows.filter(r => orderPaymentStatus(r) === 'paid').length,
+    gratis: rows.filter(r => r.gratis).length,
     shipped: rows.filter(r => (r.fulfilment||'pending') === 'shipped').length,
     refunded: rows.filter(r => (r.fulfilment||'pending') === 'refunded').length,
   }), [rows]);
@@ -1619,7 +1640,7 @@ function AdminOrders({ search, sessionInfo }) {
     <div style={{padding:32}}>
       <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14, flexWrap:'wrap', gap:10}}>
         <div className="tabs tabs-row" style={{margin:0}}>
-          {[['all','All'],['unpaid','Unpaid'],['part-paid','Part paid'],['paid','Paid'],['shipped','Shipped'],['refunded','Refunded']].map(([k,l]) => (
+          {[['all','All'],['unpaid','Unpaid'],['part-paid','Part paid'],['paid','Paid'],['gratis','Gratis'],['shipped','Shipped'],['refunded','Refunded']].map(([k,l]) => (
             <div key={k} role="button" tabIndex={0} className={`tab ${statusTab===k?'active':''}`} style={{cursor:'pointer'}}
               onClick={() => setStatusTab(k)}
               onKeyDown={e => { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); setStatusTab(k); } }}>{l} ({tabCounts[k]})</div>
@@ -1644,6 +1665,7 @@ function AdminOrders({ search, sessionInfo }) {
           { key:'items', label:'Items', w:'2fr', render:r => <span style={{fontSize:13}}>{r.items}</span> },
           { key:'total', label:'Total', w:'90px', sort:r => Number(r.total) || 0, render:r => <span className="mono" style={{fontWeight:600}}>${(Number(r.total)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}</span> },
           { key:'balance', label:'Balance', w:'90px', sort:r => orderBalance(r), render:r => {
+            if (r.gratis) return <span className="mono" style={{fontSize:11, color:'#4527a0', fontWeight:700}}>GRATIS</span>;
             const b = orderBalance(r);
             return b <= 0.005
               ? <span className="mono" style={{fontSize:11, color:'var(--eucalyptus)'}}>CLEAR</span>
@@ -6533,10 +6555,11 @@ function ReceivablesView() {
       {data && <>
         <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px,1fr))', gap:14, marginBottom:20}}>
           {[
-            {label:'TOTAL OUTSTANDING', value:fmtAUD(data.total),   color:'var(--rust)'},
-            {label:'> 30 DAYS',         value:fmtAUD(data.over30),  color: data.over30>0?'#c67c00':'var(--ink-3)'},
-            {label:'> 60 DAYS',         value:fmtAUD(data.over60),  color: data.over60>0?'var(--rust)':'var(--ink-3)'},
-            {label:'> 90 DAYS',         value:fmtAUD(data.over90),  color: data.over90>0?'var(--rust)':'var(--ink-3)'},
+            {label:'TOTAL OUTSTANDING', value:fmtAUD(data.total),      color:'var(--rust)'},
+            {label:'CURRENT (≤ 30d)',   value:fmtAUD(data.current),    color: data.current>0?'var(--ink-1)':'var(--ink-3)'},
+            {label:'> 30 DAYS',         value:fmtAUD(data.over30),     color: data.over30>0?'#c67c00':'var(--ink-3)'},
+            {label:'> 60 DAYS',         value:fmtAUD(data.over60),     color: data.over60>0?'var(--rust)':'var(--ink-3)'},
+            {label:'> 90 DAYS',         value:fmtAUD(data.over90),     color: data.over90>0?'var(--rust)':'var(--ink-3)'},
           ].map(t => (
             <div key={t.label} className="card" style={{padding:'14px 16px'}}>
               <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:4}}>{t.label}</div>
