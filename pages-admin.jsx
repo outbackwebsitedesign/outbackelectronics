@@ -3012,7 +3012,22 @@ function AdminEwaste() {
               return (
                 <div style={{display:'grid', gap:6}}>
                   <input className="input" placeholder="Search by order # or customer…" value={orderSearch} onChange={e=>setOrderSearch(e.target.value)}/>
-                  <select className="input" value={form.orderId||''} onChange={e=>setForm({...form,orderId:e.target.value})} style={{fontFamily:'var(--font-mono)', fontSize:12}}>
+                  <select className="input" value={form.orderId||''} onChange={e=>{
+                    const oid = e.target.value;
+                    const o = orders.find(o => o.id === oid);
+                    const updates = { orderId: oid };
+                    if (o) {
+                      if (o.cust && !form.from) updates.from = o.cust;
+                      if (!form.date) {
+                        const raw = o.createdAt || o.date || '';
+                        if (raw) {
+                          const d = new Date(raw);
+                          updates.date = isNaN(d) ? raw : d.toISOString().slice(0,10);
+                        }
+                      }
+                    }
+                    setForm(f => ({...f, ...updates}));
+                  }} style={{fontFamily:'var(--font-mono)', fontSize:12}}>
                     <option value="">— none —</option>
                     {filtered.map(o => (
                       <option key={o.id} value={o.id}>{o.id}{o.cust ? ` · ${o.cust}` : ''}</option>
