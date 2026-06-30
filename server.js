@@ -385,6 +385,11 @@ function nextOrderId(orders) {
   const maxN = orders.reduce((max, o) => { const m = String(o.id || '').match(/^OE-(\d+)$/); return m ? Math.max(max, parseInt(m[1])) : max; }, 0);
   return `OE-${String(maxN + 1).padStart(4, '0')}`;
 }
+function nextRepairId(board) {
+  const allCards = (board.columns || []).flatMap(c => c.cards || []);
+  const maxN = allCards.reduce((max, c) => { const m = String(c.id || '').match(/^REP-(\d+)$/); return m ? Math.max(max, parseInt(m[1])) : max; }, 0);
+  return `REP-${String(maxN + 1).padStart(4, '0')}`;
+}
 
 function readCustomers() {
   try {
@@ -5455,6 +5460,10 @@ const adminServer = http.createServer(async (req, res) => {
   if (req.method === 'GET' && url.pathname === '/api/admin/repairs') {
     const session = requireRole(req, res, 'staff'); if (!session) return;
     return json(res, 200, readRepairs());
+  }
+  if (req.method === 'GET' && url.pathname === '/api/admin/repairs/next-id') {
+    const session = requireRole(req, res, 'staff'); if (!session) return;
+    return json(res, 200, { id: nextRepairId(readRepairs()) });
   }
   if (req.method === 'GET' && url.pathname === '/api/admin/quotes') {
     const session = requireRole(req, res, 'staff'); if (!session) return;

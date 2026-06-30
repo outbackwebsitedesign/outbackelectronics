@@ -1711,68 +1711,166 @@ const DEFAULT_REPAIR_COLS = [
   { id:'done',       label:'Done',       cards:[] },
 ];
 
-function RepairJobDrawer({ card, onSave, onDelete, onClose }) {
+function RepairJobDrawer({ card, expenses, customers, onSave, onDelete, onExpensesChange, onCustomerCreated, onClose }) {
+  const PARTS_MARGIN = 0.20;
   const [form, setForm] = useState(() => ({
-    t:             card.t || '',
-    who:           card.who || '',
-    tag:           card.tag || '',
-    customer:      card.customer || card.name || '',
-    email:         card.email || '',
-    phone:         card.phone || '',
-    dateIn:        card.dateIn || new Date().toISOString().slice(0, 10),
-    dateEst:       card.dateEst || '',
-    device:        card.device || '',
-    condition:     card.condition || '',
-    findings:      card.findings || '',
-    diagnostics:   card.diagnostics || '',
-    techNotes:     card.techNotes || '',
-    parts:         card.parts || [],
-    laborHours:    card.laborHours ?? '',
-    laborRate:     card.laborRate ?? '',
-    otherCharges:  card.otherCharges ?? '',
-    paid:          card.paid || false,
-    paymentMethod: card.paymentMethod || '',
-    notes:         card.notes || '',
+    t:           card.t || '',
+    who:         card.who || '',
+    tag:         card.tag || '',
+    customer:    card.customer || card.name || '',
+    email:       card.email || '',
+    phone:       card.phone || '',
+    dateIn:      card.dateIn || new Date().toISOString().slice(0, 10),
+    dateEst:     card.dateEst || '',
+    device:      card.device || '',
+    condition:   card.condition || '',
+    findings:    card.findings || '',
+    diagnostics: card.diagnostics || '',
+    techNotes:   card.techNotes || '',
+    lineItems:   card.lineItems || [],
+    payments:    card.payments || [],
+    notes:       card.notes || '',
   }));
-  const dirty = useDirtyTracker(form, card.id);
+  const [selectedCustomerId, setSelectedCustomerId] = useState(() => {
+    const email = (card.email || '').toLowerCase().trim();
+    const name  = (card.customer || card.name || '').toLowerCase().trim();
+    const match = (customers || []).find(x =>
+      (email && (x.email||'').toLowerCase().trim() === email) ||
+      (name  && (x.name ||'').toLowerCase().trim() === name)
+    );
+    return match ? match.id : '';
+  });
+  const [expenseEdit, setExpenseEdit] = useState(null);
+  const [expenseForm, setExpenseForm] = useState({});
+  const [payEntry, setPayEntry] = useState({ amount:'', method:'Cash', note:'' });
+  const savedSnapRef = React.useRef(JSON.stringify(card));
+  const dirty = JSON.stringify({ ...card, ...form }) !== savedSnapRef.current;
+
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const addPart = () => set('parts', [...form.parts, { name: '', qty: 1, cost: '' }]);
-  const updatePart = (i, k, v) => set('parts', form.parts.map((p, idx) => idx === i ? { ...p, [k]: v } : p));
-  const removePart = (i) => set('parts', form.parts.filter((_, idx) => idx !== i));
-  const partsTotal = form.parts.reduce((s, p) => s + (parseFloat(p.qty) || 0) * (parseFloat(p.cost) || 0), 0);
-  const laborTotal = (parseFloat(form.laborHours) || 0) * (parseFloat(form.laborRate) || 0);
-  const otherTotal = parseFloat(form.otherCharges) || 0;
-  const grandTotal = partsTotal + laborTotal + otherTotal;
-  const handleSave = () => onSave({ ...card, ...form, name: form.customer, total: grandTotal || undefined });
-  const S = { mb12: {marginBottom:12}, mt20: {marginTop:20, marginBottom:12} };
+  const linkedExpenses = (expenses || []).filter(e => e.jobId && e.jobId === card.id);
+  const partsCost = linkedExpenses.reduce((s, e) => s + (e.partStatus === 'returned' ? 0 : expTotal(e)), 0);
+
+  const recalcTotal = (expList) => {
+    const cost = (expList || []).filter(e => e.jobId && e.jobId === card.id)
+      .reduce((s, e) => s + (e.partStatus === 'returned' ? 0 : expTotal(e)), 0);
+    const partsCharge = Math.round(cost * (1 + PARTS_MARGIN) * 100) / 100;
+    setForm(f => {
+      const others = (f.lineItems || []).filter(li => li.id !== 'parts-auto');
+      const lineItems = partsCharge > 0
+        ? [...others, { id: 'parts-auto', description: 'Parts & materials', amount: partsCharge }]
+        : others;
+      return { ...f, lineItems };
+    });
+  };
+
+  React.useEffect(() => {
+    const expectedCharge = Math.round(partsCost * (1 + PARTS_MARGIN) * 100) / 100;
+    const existingCharge = Number((form.lineItems || []).find(li => li.id === 'parts-auto')?.amount) || 0;
+    if (expectedCharge !== existingCharge) recalcTotal(expenses);
+  }, [card.id]);
+
+  const lineTotal = Math.round((form.lineItems || []).reduce((s, li) => s + liTotal(li), 0) * 100) / 100;
+  const amountPaid = orderAmountPaid(form);
+  const balance = Math.round((lineTotal - amountPaid) * 100) / 100;
+
+  const blankExpense = () => ({
+    description: '', category: 'parts', amount: '', quantity: 1,
+    date: new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'2-digit', year:'numeric' }),
+    notes: '', isSecondHand: false, partStatus: '', jobId: card.id,
+  });
+
+  const saveExpense = async (exp) => {
+    const payload = { ...exp, amount: Number(exp.amount) || 0 };
+    if (!payload.id) payload.id = 'exp-' + Date.now();
+    const r = await fetch('/api/admin/expenses/save', { method:'POST', headers:postHeaders(), credentials:'include', body:JSON.stringify(payload) }).catch(()=>null);
+    if (r && r.ok) {
+      const d = await r.json();
+      const newExpenses = (expenses||[]).find(e => e.id === payload.id)
+        ? (expenses||[]).map(e => e.id === payload.id ? d.item : e)
+        : [...(expenses||[]), d.item];
+      onExpensesChange(newExpenses);
+      recalcTotal(newExpenses);
+    }
+    setExpenseEdit(null); setExpenseForm({});
+  };
+
+  const deleteExpense = async (id) => {
+    if (!(await adminConfirm('Delete this expense? This cannot be undone.', { title:'Delete expense', confirmLabel:'Delete', danger:true }))) return;
+    const r = await fetch('/api/admin/expenses/delete', { method:'POST', headers:postHeaders(), credentials:'include', body:JSON.stringify({ id }) }).catch(()=>null);
+    if (!r || !r.ok) { adminToast('Failed to delete expense.'); return; }
+    const newExpenses = (expenses||[]).filter(e => e.id !== id);
+    onExpensesChange(newExpenses);
+    recalcTotal(newExpenses);
+    setExpenseEdit(null); setExpenseForm({});
+  };
+
+  const addPayment = () => {
+    const amt = Number(payEntry.amount);
+    if (!amt || amt <= 0) return;
+    const isCash = payEntry.method === 'Cash';
+    const finalAmt = isCash ? cashRound(amt) : Math.round(amt * 100) / 100;
+    const payment = { amount: finalAmt, method: payEntry.method, note: payEntry.note, date: todayOrderDate() };
+    setForm(f => ({ ...f, payments: [...(f.payments||[]), payment] }));
+    setPayEntry({ amount:'', method:'Cash', note:'' });
+  };
+
+  const handleSave = async () => {
+    const updated = { ...card, ...form, name: form.customer, total: lineTotal || undefined };
+    savedSnapRef.current = JSON.stringify(updated);
+    if (!selectedCustomerId && form.customer.trim()) {
+      const emailL = form.email.toLowerCase();
+      const nameL  = form.customer.toLowerCase();
+      const exists = (customers||[]).find(x => (x.email||'').toLowerCase()===emailL || (x.name||'').toLowerCase()===nameL);
+      if (!exists) {
+        const cr = await fetch('/api/admin/customers/save', { method:'POST', headers:postHeaders(), credentials:'include',
+          body: JSON.stringify({ name:form.customer.trim(), email:form.email||'', phone:form.phone||'' }) }).catch(()=>null);
+        if (cr && cr.ok) { const cd = await cr.json(); if (cd.item) onCustomerCreated?.(cd.item); }
+      }
+    }
+    onSave(updated);
+  };
+
+  const S = { mb12:{ marginBottom:12 }, mt20:{ marginTop:20, marginBottom:12 } };
   return (
     <Drawer open={true} onClose={onClose} dirty={dirty}
       title={<span><span className="mono" style={{fontSize:11,color:'var(--rust)',marginRight:8}}>{card.id}</span>{form.t||'Repair Job'}</span>}
       footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
-        <div className="row-flex" style={{gap:8}}>
-          <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)',borderColor:'var(--rust)'}}
-            onClick={async () => {
-              const ok = await adminConfirm(`Delete job ${card.id}? This cannot be undone.`, { title:'Delete repair job', confirmLabel:'Delete', danger:true });
-              if (ok) onDelete(card.id);
-            }}>Delete job</button>
-          <div className="mono" style={{fontSize:11,color:'var(--ink-2)',alignSelf:'center'}}>{grandTotal>0?`TOTAL $${grandTotal.toFixed(2)}`:''}</div>
-        </div>
+        <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)',borderColor:'var(--rust)'}}
+          onClick={async () => {
+            const ok = await adminConfirm(`Delete job ${card.id}? This cannot be undone.`, { title:'Delete repair job', confirmLabel:'Delete', danger:true });
+            if (ok) onDelete(card.id);
+          }}>Delete job</button>
         <div className="row-flex" style={{gap:8}}>
           <button className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
           <button className="btn btn-rust btn-sm" onClick={handleSave}>Save changes</button>
         </div>
       </div>}>
 
+      {/* ── Customer ── */}
       <div className="eyebrow" style={S.mb12}>Customer</div>
+      <label className="field" style={S.mb12}><span className="label">Select existing or add new</span>
+        <select className="select" value={selectedCustomerId} onChange={e => {
+          const id = e.target.value;
+          setSelectedCustomerId(id);
+          if (!id) return;
+          const c = (customers||[]).find(x => x.id === id);
+          if (!c) return;
+          setForm(f => ({ ...f, customer: c.name||f.customer, email: c.email||f.email, phone: c.phone||f.phone }));
+        }}>
+          <option value="">+ New customer</option>
+          {(customers||[]).map(c => <option key={c.id} value={c.id}>{c.name}{c.email?` (${c.email})`:''}</option>)}
+        </select>
+      </label>
       <div className="grid-2" style={S.mb12}>
-        <label className="field"><span className="label">Name</span>
-          <input className="input" value={form.customer} onChange={e=>set('customer',e.target.value)} placeholder="Full name" /></label>
+        <label className="field"><span className="label">{selectedCustomerId ? 'Customer name' : 'New customer name'}<ReqMark/></span>
+          <input className="input" value={form.customer} onChange={e=>set('customer',e.target.value)} /></label>
         <label className="field"><span className="label">Phone</span>
           <input className="input" value={form.phone} onChange={e=>set('phone',e.target.value)} placeholder="0400 000 000" /></label>
       </div>
-      <label className="field" style={S.mb12}><span className="label">Email — used for status notifications &amp; portal access</span>
+      <label className="field" style={S.mb12}><span className="label">Email — status notifications &amp; portal access</span>
         <input className="input" type="email" value={form.email} onChange={e=>set('email',e.target.value)} placeholder="customer@example.com" /></label>
 
+      {/* ── Job ── */}
       <div className="eyebrow" style={S.mt20}>Job</div>
       <label className="field" style={S.mb12}><span className="label">Description / fault reported<ReqMark/></span>
         <input className="input" value={form.t} onChange={e=>set('t',e.target.value)} placeholder="e.g. Toughbook 55 — keyboard ribbon fault" /></label>
@@ -1795,6 +1893,7 @@ function RepairJobDrawer({ card, onSave, onDelete, onClose }) {
           <input className="input" value={form.condition} onChange={e=>set('condition',e.target.value)} placeholder="e.g. Fair — cracked screen" /></label>
       </div>
 
+      {/* ── Diagnostics ── */}
       <div className="eyebrow" style={S.mt20}>Diagnostics</div>
       <label className="field" style={S.mb12}><span className="label">Findings</span>
         <textarea className="textarea" rows={3} value={form.findings} onChange={e=>set('findings',e.target.value)} placeholder="What was found — e.g. Keyboard ribbon disconnected at left connector" /></label>
@@ -1803,62 +1902,88 @@ function RepairJobDrawer({ card, onSave, onDelete, onClose }) {
       <label className="field" style={S.mb12}><span className="label">Technician notes</span>
         <textarea className="textarea" rows={3} value={form.techNotes} onChange={e=>set('techNotes',e.target.value)} placeholder="Work performed, observations, follow-up actions..." /></label>
 
-      <div className="eyebrow" style={S.mt20}>Parts &amp; Materials</div>
-      {form.parts.length > 0 && (
-        <div style={{display:'grid', gridTemplateColumns:'1fr 56px 76px 32px', gap:4, marginBottom:4}}>
-          <span className="label">Part / material</span><span className="label">Qty</span><span className="label">$/unit</span><span/>
+      {/* ── Parts / Expenses ── */}
+      <div className="eyebrow" style={S.mt20}>Parts &amp; Expenses</div>
+      <div style={{fontSize:12,color:'var(--ink-3)',marginBottom:10}}>Parts cost + 20% margin is auto-added as a line item below.</div>
+      {linkedExpenses.map(e => (
+        <ExpenseRow key={e.id} e={e} isEditing={expenseEdit===e.id} expenseForm={expenseForm} setExpenseForm={setExpenseForm}
+          setExpenseEdit={setExpenseEdit} saveExpense={saveExpense} deleteExpense={deleteExpense} />
+      ))}
+      {expenseEdit === 'new'
+        ? <ExpenseRow e={expenseForm} isEditing={true} expenseForm={expenseForm} setExpenseForm={setExpenseForm}
+            setExpenseEdit={setExpenseEdit} saveExpense={saveExpense} deleteExpense={() => { setExpenseEdit(null); setExpenseForm({}); }} />
+        : <button className="btn btn-ghost btn-sm" style={{marginBottom:8}} onClick={() => { setExpenseEdit('new'); setExpenseForm(blankExpense()); }}>+ Add expense / part</button>
+      }
+      {partsCost > 0 && (
+        <div style={{fontSize:12,color:'var(--ink-2)',marginBottom:8}}>
+          Cost: <strong>${partsCost.toFixed(2)}</strong> → charged at cost+20%: <strong>${(Math.round(partsCost*1.2*100)/100).toFixed(2)}</strong>
         </div>
       )}
-      {form.parts.map((p, i) => (
-        <div key={i} style={{display:'grid', gridTemplateColumns:'1fr 56px 76px 32px', gap:4, marginBottom:4, alignItems:'center'}}>
-          <input className="input" value={p.name} onChange={e=>updatePart(i,'name',e.target.value)} placeholder="Part / material" style={{fontSize:12}} />
-          <input className="input" type="number" min="1" value={p.qty} onChange={e=>updatePart(i,'qty',e.target.value)} style={{fontSize:12}} />
-          <input className="input" type="number" min="0" step="0.01" value={p.cost} onChange={e=>updatePart(i,'cost',e.target.value)} placeholder="0.00" style={{fontSize:12}} />
-          <button className="icon-btn" onClick={()=>removePart(i)} title="Remove part" style={{width:32,height:32}}>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
+
+      {/* ── Line items ── */}
+      <div className="eyebrow" style={S.mt20}>Line Items (Labour &amp; Services)</div>
+      {(form.lineItems||[]).map(li => (
+        <div key={li.id} style={{display:'grid',gridTemplateColumns:'1fr 56px 90px 28px',gap:8,marginBottom:8,alignItems:'center'}}>
+          <input className="input" placeholder="e.g. Labour — 2hr diagnostic" value={li.description}
+            onChange={e=>setForm(f=>({...f,lineItems:f.lineItems.map(x=>x.id===li.id?{...x,description:e.target.value}:x)}))}
+            style={{fontSize:12}} disabled={li.id==='parts-auto'} />
+          <input className="input" type="number" min="1" step="1" placeholder="Qty" value={li.qty||1}
+            onChange={e=>setForm(f=>({...f,lineItems:f.lineItems.map(x=>x.id===li.id?{...x,qty:Math.max(1,parseInt(e.target.value)||1)}:x)}))}
+            style={{fontSize:12}} disabled={li.id==='parts-auto'} />
+          <input className="input" type="number" min="0" step="0.01" placeholder="Price" value={li.amount}
+            onChange={e=>setForm(f=>({...f,lineItems:f.lineItems.map(x=>x.id===li.id?{...x,amount:nonNegInput(e.target.value)}:x)}))}
+            style={{fontSize:12}} disabled={li.id==='parts-auto'} />
+          {li.id==='parts-auto'
+            ? <span style={{fontSize:10,color:'var(--ink-3)',textAlign:'center'}}>auto</span>
+            : <button className="btn btn-ghost btn-sm" style={{padding:0,color:'var(--rust)'}}
+                onClick={()=>setForm(f=>({...f,lineItems:f.lineItems.filter(x=>x.id!==li.id)}))}>✕</button>}
         </div>
       ))}
-      <div className="row-flex" style={{marginBottom:4}}>
-        <button className="btn btn-ghost btn-sm" onClick={addPart}>+ Add part</button>
-        {partsTotal>0 && <span className="mono" style={{fontSize:11,color:'var(--ink-2)'}}>PARTS: ${partsTotal.toFixed(2)}</span>}
+      <div className="row-flex" style={{marginBottom:8}}>
+        <button className="btn btn-ghost btn-sm"
+          onClick={()=>setForm(f=>({...f,lineItems:[...(f.lineItems||[]),{id:'li-'+Date.now(),description:'',amount:'',qty:1}]}))}>+ Add line item</button>
+        {lineTotal > 0 && <span className="mono" style={{fontSize:12,fontWeight:600}}>TOTAL: ${lineTotal.toLocaleString('en-AU',{minimumFractionDigits:2})}</span>}
       </div>
 
-      <div className="eyebrow" style={S.mt20}>Labour</div>
-      <div className="grid-2" style={{marginBottom:6}}>
-        <label className="field"><span className="label">Hours</span>
-          <input className="input" type="number" min="0" step="0.25" value={form.laborHours} onChange={e=>set('laborHours',e.target.value)} placeholder="0.0" /></label>
-        <label className="field"><span className="label">Hourly rate ($)</span>
-          <input className="input" type="number" min="0" step="1" value={form.laborRate} onChange={e=>set('laborRate',e.target.value)} placeholder="0" /></label>
+      {/* ── Payments ── */}
+      <div className="eyebrow" style={S.mt20}>Payments</div>
+      {(form.payments||[]).map((p,i) => (
+        <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'7px 10px',background:'var(--bg-elev)',border:'1px solid var(--line)',marginBottom:6}}>
+          <div>
+            <span className="mono" style={{fontSize:12,fontWeight:600,color:'var(--eucalyptus)'}}>+${Number(p.amount).toFixed(2)}</span>
+            <span style={{fontSize:12,color:'var(--ink-2)',marginLeft:10}}>{p.method}</span>
+            {p.note && <span style={{fontSize:12,color:'var(--ink-3)',marginLeft:8}}>{p.note}</span>}
+          </div>
+          <div style={{display:'flex',alignItems:'center',gap:8}}>
+            <span className="mono" style={{fontSize:10,color:'var(--ink-3)'}}>{p.date}</span>
+            <button className="btn btn-ghost btn-sm" style={{padding:'2px 6px',fontSize:11,color:'var(--rust)'}}
+              onClick={()=>setForm(f=>({...f,payments:f.payments.filter((_,idx)=>idx!==i)}))}>✕</button>
+          </div>
+        </div>
+      ))}
+      <div style={{display:'grid',gridTemplateColumns:'90px 110px 1fr auto',gap:8,marginBottom:8,alignItems:'center'}}>
+        <input className="input" type="number" min="0" step="0.01" placeholder="Amount" value={payEntry.amount}
+          onChange={e=>setPayEntry(p=>({...p,amount:e.target.value}))} style={{fontSize:12}} />
+        <select className="select" value={payEntry.method} onChange={e=>setPayEntry(p=>({...p,method:e.target.value}))} style={{fontSize:12}}>
+          {['Cash','Card','Bank transfer','Invoice'].map(m=><option key={m}>{m}</option>)}
+        </select>
+        <input className="input" placeholder="Note (optional)" value={payEntry.note}
+          onChange={e=>setPayEntry(p=>({...p,note:e.target.value}))} style={{fontSize:12}} />
+        <button className="btn btn-sm" onClick={addPayment}>Add</button>
       </div>
-      {laborTotal>0 && <div className="mono" style={{fontSize:11,color:'var(--ink-2)',marginBottom:8}}>LABOUR: ${laborTotal.toFixed(2)}</div>}
-      <label className="field" style={{marginTop:8,marginBottom:8}}><span className="label">Other charges ($)</span>
-        <input className="input" type="number" min="0" step="0.01" value={form.otherCharges} onChange={e=>set('otherCharges',e.target.value)} placeholder="0.00" /></label>
-      {grandTotal>0 && (
-        <div style={{padding:'10px 14px',background:'var(--bg-deep)',marginTop:4,marginBottom:4}}>
-          <span className="mono" style={{fontSize:13,fontWeight:600}}>TOTAL: ${grandTotal.toFixed(2)}</span>
+      {lineTotal > 0 && (
+        <div style={{padding:'10px 14px',background:balance<=0.005?'#d8e7d0':'var(--bg-deep)',marginBottom:4}}>
+          <span className="mono" style={{fontSize:13,fontWeight:600,color:balance<=0.005?'#345526':'var(--ink)'}}>
+            {balance<=0.005
+              ? `PAID IN FULL — $${lineTotal.toLocaleString('en-AU',{minimumFractionDigits:2})}`
+              : `BALANCE: $${balance.toLocaleString('en-AU',{minimumFractionDigits:2})} of $${lineTotal.toLocaleString('en-AU',{minimumFractionDigits:2})}`}
+          </span>
         </div>
       )}
 
-      <div className="eyebrow" style={S.mt20}>Payment</div>
-      <div className="grid-2" style={S.mb12}>
-        <label className="field"><span className="label">Status</span>
-          <select className="select" value={form.paid?'paid':'unpaid'} onChange={e=>set('paid',e.target.value==='paid')}>
-            <option value="unpaid">Unpaid</option>
-            <option value="paid">Paid</option>
-          </select></label>
-        <label className="field"><span className="label">Payment method</span>
-          <select className="select" value={form.paymentMethod} onChange={e=>set('paymentMethod',e.target.value)}>
-            <option value="">— Select —</option>
-            <option value="Cash">Cash</option>
-            <option value="Card">Card</option>
-            <option value="Bank transfer">Bank transfer</option>
-            <option value="Invoice">Invoice</option>
-          </select></label>
-      </div>
-
+      {/* ── Notes ── */}
       <div className="eyebrow" style={S.mt20}>Internal Notes</div>
-      <label className="field"><span className="label">Notes — not visible to customer</span>
+      <label className="field"><span className="label">Not visible to customer</span>
         <textarea className="textarea" rows={3} value={form.notes} onChange={e=>set('notes',e.target.value)} placeholder="Staff-only notes..." /></label>
     </Drawer>
   );
@@ -1866,157 +1991,132 @@ function RepairJobDrawer({ card, onSave, onDelete, onClose }) {
 
 function AdminRepairs() {
   const [cols, setCols] = useState(DEFAULT_REPAIR_COLS);
-  const [newJob, setNewJob] = useState(null);
-  const [newJobForm, setNewJobForm] = useState({ t:'', who:'', customer:'', email:'', tag:'' });
+  const [expenses, setExpenses] = useState([]);
+  const [customers, setCustomers] = useState([]);
   const [editCard, setEditCard] = useState(null);
   const [dragOverCol, setDragOverCol] = useState(null);
-  const newJobDirty = useDirtyTracker(newJobForm, newJob);
+
   useEffect(() => {
     fetch('/api/admin/repairs', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject())
-      .then(d => {
-        const fetched = d.columns || [];
-        if (fetched.length > 0) setCols(fetched);
-        else setCols(DEFAULT_REPAIR_COLS);
-      })
+      .then(d => { if ((d.columns||[]).length) setCols(d.columns); else setCols(DEFAULT_REPAIR_COLS); })
       .catch(() => setCols(DEFAULT_REPAIR_COLS));
+    fetch('/api/admin/expenses', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject()).then(d => setExpenses(d.items||[])).catch(()=>{});
+    fetch('/api/admin/customers', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject()).then(d => setCustomers(d.items||[])).catch(()=>{});
   }, []);
-  const openCount = cols.filter(c => c.id !== 'done').reduce((s, c) => s + (c.cards ? c.cards.length : 0), 0);
+
+  const openCount = cols.filter(c => c.id !== 'done').reduce((s, c) => s + (c.cards||[]).length, 0);
+
+  const nextId = async () => {
+    const r = await fetch('/api/admin/repairs/next-id', { credentials:'include' }).catch(()=>null);
+    if (r && r.ok) { const d = await r.json(); return d.id; }
+    const allCards = cols.flatMap(c => c.cards||[]);
+    const maxN = allCards.reduce((mx, c) => { const m = String(c.id||'').match(/^REP-(\d+)$/); return m?Math.max(mx,parseInt(m[1])):mx; }, 0);
+    return `REP-${String(maxN+1).padStart(4,'0')}`;
+  };
+
   const persist = async (updated) => {
-    const r = await fetch('/api/admin/repairs/save', {
-      method:'POST', headers:postHeaders(), credentials:'include', body:JSON.stringify({ columns: updated }),
-    }).catch(() => null);
+    const r = await fetch('/api/admin/repairs/save', { method:'POST', headers:postHeaders(), credentials:'include', body:JSON.stringify({ columns:updated }) }).catch(()=>null);
     return r && r.ok;
   };
-  const addCard = async (colId) => {
-    const newCard = { id: 'J-' + Date.now(), t: 'New job', who: '', age: '0h', dateIn: new Date().toISOString().slice(0,10) };
-    const updated = cols.map(c => c.id === colId ? { ...c, cards: [...(c.cards || []), newCard] } : c);
+
+  const newCard = async (colId) => {
+    const id = await nextId();
+    const card = { id, t:'New job', who:'', age:'0h', dateIn:new Date().toISOString().slice(0,10) };
+    const updated = cols.map(c => c.id===colId ? { ...c, cards:[...(c.cards||[]),card] } : c);
     setCols(updated);
-    setEditCard({ card: newCard, colId });
+    setEditCard({ card, colId });
     await persist(updated);
   };
-  const createJob = async () => {
-    if (!newJobForm.t.trim()) return;
-    const firstCol = cols[0];
-    if (!firstCol) return;
-    const newCard = { id: 'J-' + Date.now(), t: newJobForm.t, who: newJobForm.who, customer: newJobForm.customer, name: newJobForm.customer, email: newJobForm.email, tag: newJobForm.tag || undefined, age: '0h', dateIn: new Date().toISOString().slice(0,10) };
-    const updated = cols.map(c => c.id === firstCol.id ? { ...c, cards: [...(c.cards || []), newCard] } : c);
-    setCols(updated);
-    setNewJob(null);
-    setNewJobForm({ t:'', who:'', customer:'', email:'', tag:'' });
-    setEditCard({ card: newCard, colId: firstCol.id });
-    await persist(updated);
-  };
+
   const saveCard = async (updatedCard) => {
-    const updated = cols.map(c => ({ ...c, cards: (c.cards||[]).map(cd => cd.id===updatedCard.id ? updatedCard : cd) }));
+    const updated = cols.map(c => ({ ...c, cards:(c.cards||[]).map(cd => cd.id===updatedCard.id ? updatedCard : cd) }));
     setCols(updated);
     setEditCard(null);
     const ok = await persist(updated);
-    if (!ok) adminToast('Failed to save — changes may not have persisted.');
-    else adminToast('Job saved.', 'success');
+    if (!ok) adminToast('Save failed — check your connection.'); else adminToast('Job saved.','success');
   };
+
   const deleteCard = async (cardId) => {
-    const updated = cols.map(c => ({ ...c, cards: (c.cards||[]).filter(cd => cd.id !== cardId) }));
+    const updated = cols.map(c => ({ ...c, cards:(c.cards||[]).filter(cd => cd.id!==cardId) }));
     setCols(updated);
     setEditCard(null);
     const ok = await persist(updated);
-    if (!ok) adminToast('Delete may not have saved — check your connection.');
-    else adminToast('Job deleted.', 'success');
+    if (!ok) adminToast('Delete may not have saved.'); else adminToast('Job deleted.','success');
   };
+
   const moveCard = async (cardId, fromId, toId) => {
-    if (!cardId || fromId === toId) return;
+    if (!cardId || fromId===toId) return;
     let moved = null;
-    const without = cols.map(c => c.id === fromId
-      ? { ...c, cards: (c.cards || []).filter(cd => { if (cd.id === cardId) { moved = cd; return false; } return true; }) }
+    const without = cols.map(c => c.id===fromId
+      ? { ...c, cards:(c.cards||[]).filter(cd => { if(cd.id===cardId){moved=cd;return false;}return true; }) }
       : c);
     if (!moved) return;
-    const updated = without.map(c => c.id === toId ? { ...c, cards: [...(c.cards || []), moved] } : c);
+    const updated = without.map(c => c.id===toId ? { ...c, cards:[...(c.cards||[]),moved] } : c);
     const prev = cols;
     setCols(updated);
     const ok = await persist(updated);
-    if (!ok) { setCols(prev); adminToast('Failed to move job — change not saved.'); }
-    else adminToast(`Moved to ${updated.find(c => c.id === toId)?.label || toId}.`, 'success');
+    if (!ok) { setCols(prev); adminToast('Failed to move job.'); }
+    else adminToast(`Moved to ${updated.find(c=>c.id===toId)?.label||toId}.`,'success');
   };
+
   return (
     <div style={{padding:32}}>
       <div className="row-flex" style={{justifyContent:'space-between', marginBottom:18}}>
-        <div className="mono" style={{fontSize:12, color:'var(--ink-2)'}}>{openCount} OPEN</div>
-        <button className="btn btn-rust btn-sm" onClick={() => { setNewJobForm({ t:'', who:'', customer:'', email:'', tag:'' }); setNewJob(true); }}>+ New job</button>
+        <div className="mono" style={{fontSize:12,color:'var(--ink-2)'}}>{openCount} OPEN</div>
+        <button className="btn btn-rust btn-sm" onClick={() => newCard((cols[0]||{}).id)}>+ New job</button>
       </div>
-      {newJob && (
-        <Drawer open={true} onClose={() => setNewJob(null)} dirty={newJobDirty} title="New repair job"
-          footer={<div className="row-flex" style={{gap:8, justifyContent:'flex-end'}}>
-            <button className="btn btn-ghost btn-sm" onClick={() => setNewJob(null)}>Cancel</button>
-            <button className="btn btn-rust btn-sm" onClick={createJob}>Create &amp; open</button>
-          </div>}>
-          <label className="field"><span className="label">Description / fault reported<ReqMark/></span>
-            <input className="input" aria-required="true" placeholder="e.g. Toughbook 55 — keyboard ribbon fault" value={newJobForm.t} onChange={e => setNewJobForm(f => ({...f, t:e.target.value}))} /></label>
-          <div className="grid-2">
-            <label className="field"><span className="label">Customer name</span>
-              <input className="input" placeholder="Full name" value={newJobForm.customer} onChange={e => setNewJobForm(f => ({...f, customer:e.target.value}))} /></label>
-            <label className="field"><span className="label">Customer email</span>
-              <input className="input" type="email" placeholder="customer@example.com" value={newJobForm.email} onChange={e => setNewJobForm(f => ({...f, email:e.target.value}))} /></label>
-          </div>
-          <div className="grid-2">
-            <label className="field"><span className="label">Assigned technician</span>
-              <input className="input" placeholder="Technician name" value={newJobForm.who} onChange={e => setNewJobForm(f => ({...f, who:e.target.value}))} /></label>
-            <label className="field"><span className="label">Tag (optional)</span>
-              <input className="input" placeholder="e.g. URGENT" value={newJobForm.tag} onChange={e => setNewJobForm(f => ({...f, tag:e.target.value}))} /></label>
-          </div>
-        </Drawer>
-      )}
       {editCard && (
         <RepairJobDrawer
           card={editCard.card}
+          expenses={expenses}
+          customers={customers}
           onSave={saveCard}
           onDelete={deleteCard}
+          onExpensesChange={setExpenses}
+          onCustomerCreated={c => setCustomers(cs => [...cs, c])}
           onClose={() => setEditCard(null)}
         />
       )}
-      <div className="admin-kanban-grid" style={{display:'grid', gridTemplateColumns:'repeat(5, minmax(240px, 1fr))', gap:16, minWidth:1200}}>
+      <div className="admin-kanban-grid" style={{display:'grid',gridTemplateColumns:'repeat(5,minmax(240px,1fr))',gap:16,minWidth:1200}}>
         {cols.map(c => (
           <div key={c.id}
-            onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverCol(c.id); }}
-            onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverCol(cur => cur === c.id ? null : cur); }}
-            onDrop={e => {
-              e.preventDefault();
-              setDragOverCol(null);
-              try {
-                const { cardId, from } = JSON.parse(e.dataTransfer.getData('text/plain') || '{}');
-                moveCard(cardId, from, c.id);
-              } catch {}
-            }}
-            style={{outline: dragOverCol === c.id ? '2px dashed var(--ochre)' : 'none', outlineOffset: 4}}>
-            <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:10}}>
+            onDragOver={e=>{e.preventDefault();e.dataTransfer.dropEffect='move';setDragOverCol(c.id);}}
+            onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setDragOverCol(cur=>cur===c.id?null:cur);}}
+            onDrop={e=>{e.preventDefault();setDragOverCol(null);try{const{cardId,from}=JSON.parse(e.dataTransfer.getData('text/plain')||'{}');moveCard(cardId,from,c.id);}catch{}}}
+            style={{outline:dragOverCol===c.id?'2px dashed var(--ochre)':'none',outlineOffset:4}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:10}}>
               <span className="eyebrow">{c.label}</span>
-              <span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>{(c.cards||[]).length}</span>
+              <span className="mono" style={{fontSize:11,color:'var(--ink-3)'}}>{(c.cards||[]).length}</span>
             </div>
-            <div style={{display:'grid', gap:10, minHeight:40}}>
-              {(c.cards||[]).map(card => (
-                <div key={card.id} draggable
-                  onDragStart={e => {
-                    e.dataTransfer.setData('text/plain', JSON.stringify({ cardId: card.id, from: c.id }));
-                    e.dataTransfer.effectAllowed = 'move';
-                  }}
-                  onClick={() => setEditCard({ card, colId: c.id })}
-                  title="Click to view / edit job details"
-                  style={{padding:14, background:'var(--paper)', border:'1px solid var(--line)', cursor:'pointer'}}>
-                  <div className="row-flex" style={{justifyContent:'space-between'}}>
-                    <span className="mono" style={{fontSize:10, color:'var(--rust)'}}>{card.id}</span>
-                    <div className="row-flex" style={{gap:4}}>
-                      {card.paid && <span className="tag" style={{fontSize:9, color:'var(--eucalyptus)', borderColor:'var(--eucalyptus)'}}>PAID</span>}
-                      {card.tag && <span className="tag" style={{fontSize:9}}>{card.tag}</span>}
+            <div style={{display:'grid',gap:10,minHeight:40}}>
+              {(c.cards||[]).map(card => {
+                const paid = orderAmountPaid(card) >= (Number(card.total)||0) && (Number(card.total)||0) > 0;
+                return (
+                  <div key={card.id} draggable
+                    onDragStart={e=>{e.dataTransfer.setData('text/plain',JSON.stringify({cardId:card.id,from:c.id}));e.dataTransfer.effectAllowed='move';}}
+                    onClick={()=>setEditCard({card,colId:c.id})}
+                    title="Click to view / edit"
+                    style={{padding:14,background:'var(--paper)',border:'1px solid var(--line)',cursor:'pointer'}}>
+                    <div className="row-flex" style={{justifyContent:'space-between'}}>
+                      <span className="mono" style={{fontSize:10,color:'var(--rust)'}}>{card.id}</span>
+                      <div className="row-flex" style={{gap:4}}>
+                        {paid && <span className="tag" style={{fontSize:9,color:'var(--eucalyptus)',borderColor:'var(--eucalyptus)'}}>PAID</span>}
+                        {card.tag && <span className="tag" style={{fontSize:9}}>{card.tag}</span>}
+                      </div>
+                    </div>
+                    <div style={{fontSize:13,marginTop:6,fontWeight:500,lineHeight:1.3}}>{card.t}</div>
+                    {(card.customer||card.name) && <div style={{fontSize:11,color:'var(--ink-2)',marginTop:3}}>{card.customer||card.name}</div>}
+                    <div className="mono" style={{fontSize:10,color:'var(--ink-2)',marginTop:8,display:'flex',justifyContent:'space-between'}}>
+                      <span>{(card.who||'').toUpperCase()}</span>
+                      <span>{card.total?`$${Number(card.total).toFixed(2)}`:(card.age||'').toUpperCase()}</span>
                     </div>
                   </div>
-                  <div style={{fontSize:13, marginTop:6, fontWeight:500, lineHeight:1.3}}>{card.t}</div>
-                  {(card.customer||card.name) && <div style={{fontSize:11, color:'var(--ink-2)', marginTop:3}}>{card.customer||card.name}</div>}
-                  <div className="mono" style={{fontSize:10, color:'var(--ink-2)', marginTop:8, display:'flex', justifyContent:'space-between'}}>
-                    <span>{(card.who||'').toUpperCase()}</span>
-                    <span>{card.total ? `$${Number(card.total).toFixed(2)}` : (card.age||'').toUpperCase()}</span>
-                  </div>
-                </div>
-              ))}
-              <button className="btn btn-ghost btn-sm" style={{justifyContent:'center', borderStyle:'dashed', color:'var(--ink-3)'}} onClick={() => addCard(c.id)}>+ Card</button>
+                );
+              })}
+              <button className="btn btn-ghost btn-sm" style={{justifyContent:'center',borderStyle:'dashed',color:'var(--ink-3)'}} onClick={()=>newCard(c.id)}>+ Card</button>
             </div>
           </div>
         ))}
@@ -2024,6 +2124,7 @@ function AdminRepairs() {
     </div>
   );
 }
+
 
 // ============================================================
 // QUOTE CREATOR
