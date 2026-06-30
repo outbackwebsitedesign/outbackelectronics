@@ -2428,6 +2428,258 @@ function buildInvoicePdf(order, shop) {
   });
 }
 
+// ── Tax / P&L report helpers ─────────────────────────────────────────────────
+function parseOrderDateForReport(o) {
+  if (o.createdAt) { const d = new Date(o.createdAt); if (!isNaN(d)) return d; }
+  if (o.date) { const d = new Date(o.date); if (!isNaN(d)) return d; }
+  return null;
+}
+function parseExpDateForReport(s) {
+  if (!s) return null;
+  const parts = s.split('/');
+  if (parts.length === 3) {
+    const [dd, mm, yyyy] = parts.map(Number);
+    if (yyyy && mm && dd) return new Date(yyyy, mm - 1, dd);
+  }
+  const d = new Date(s); return isNaN(d) ? null : d;
+}
+function parseRepairDateForReport(r) {
+  if (r.createdAt) { const d = new Date(r.createdAt); if (!isNaN(d)) return d; }
+  const m = (r.id || '').match(/^J-(\d{10,})$/);
+  if (m) { const d = new Date(parseInt(m[1])); if (!isNaN(d)) return d; }
+  return null;
+}
+
+function buildTaxReportData(fromStr, toStr) {
+  const from = new Date(fromStr + 'T00:00:00');
+  const to   = new Date(toStr   + 'T23:59:59');
+  const inRange = d => d && d >= from && d <= to;
+
+  // Orders
+  let orderRevenue = 0, refundTotal = 0, orderCount = 0;
+  const monthMap = {};
+  const ensureMonth = k => { if (!monthMap[k]) monthMap[k] = { revenue: 0, expenses: 0 }; };
+  for (const o of readOrders()) {
+    const d = parseOrderDateForReport(o);
+    if (!inRange(d)) continue;
+    const total = Number(o.total) || 0;
+    const refAmt = o.refund ? (Number(o.refund.amount) || 0) : 0;
+    orderRevenue += total;
+    refundTotal  += refAmt;
+    orderCount++;
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    ensureMonth(key);
+    monthMap[key].revenue += total - refAmt;
+  }
+  const netOrderRevenue = orderRevenue - refundTotal;
+
+  // Repairs (done column only)
+  let repairRevenue = 0, repairCount = 0;
+  for (const r of flatRepairs()) {
+    if (r._colId !== 'done') continue;
+    const d = parseRepairDateForReport(r);
+    if (!inRange(d)) continue;
+    const total = Number(r.total || r.cost) || 0;
+    repairRevenue += total;
+    repairCount++;
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    ensureMonth(key);
+    monthMap[key].revenue += total;
+  }
+
+  const totalRevenue = netOrderRevenue + repairRevenue;
+
+  // Expenses
+  const expByCat = {};
+  let totalExpenses = 0, expenseCount = 0;
+  for (const e of readExpenses()) {
+    const d = parseExpDateForReport(e.date);
+    if (!inRange(d)) continue;
+    const amt = (Number(e.amount) || 0) * (Number(e.quantity) || 1);
+    const cat = e.category || 'other';
+    expByCat[cat] = (expByCat[cat] || 0) + amt;
+    totalExpenses += amt;
+    expenseCount++;
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    ensureMonth(key);
+    monthMap[key].expenses += amt;
+  }
+
+  const grossProfit   = totalRevenue - totalExpenses;
+  const gstCollected  = totalRevenue / 11;
+  const gstCredits    = totalExpenses / 11;
+  const netGst        = gstCollected - gstCredits;
+
+  const monthly = Object.entries(monthMap)
+    .sort(([a],[b]) => a < b ? -1 : 1)
+    .map(([month, v]) => ({ month, revenue: v.revenue, expenses: v.expenses, profit: v.revenue - v.expenses }));
+
+  return {
+    from: fromStr, to: toStr,
+    orderRevenue, refundTotal, netOrderRevenue, repairRevenue,
+    totalRevenue, totalExpenses, grossProfit,
+    expByCat,
+    gstCollected, gstCredits, netGst,
+    monthly,
+    orderCount, repairCount, expenseCount,
+  };
+}
+
+function buildTaxReportPdf(data, shop) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: 'A4', margin: 50 });
+    const chunks = [];
+    doc.on('data', c => chunks.push(c));
+    doc.on('end',  () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const RUST  = '#b5451b';
+    const OCHRE = '#d39a37';
+    const fmtMoney = n => `$${(Number(n)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+    const shopName    = shop.tradingName || shop.name || 'Outback Electronics';
+    const shopAddress = shop.address || [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ');
+    const logoPath    = path.join(__dirname, 'assets', 'logo.png');
+    const hasLogo     = fs.existsSync(logoPath);
+
+    const fmtDateStr = s => {
+      const d = new Date(s + 'T00:00:00');
+      return d.toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
+    };
+    const periodLabel = `${fmtDateStr(data.from)} – ${fmtDateStr(data.to)}`;
+    const fyLabel = (() => {
+      const [fY,fM,fD] = data.from.split('-').map(Number);
+      const [tY,tM,tD] = data.to.split('-').map(Number);
+      if (fM===7&&fD===1&&tM===6&&tD===30) return `Financial Year ${fY}–${String(tY).slice(2)}`;
+      return null;
+    })();
+
+    // Header band
+    doc.rect(0, 0, doc.page.width, 110).fill(RUST);
+    if (hasLogo) { try { doc.image(logoPath, 50, 22, { width: 66 }); } catch {} }
+    doc.fillColor('#fff').font('Helvetica-Bold').fontSize(20)
+      .text(shopName, hasLogo ? 130 : 50, 30, { width: 280 });
+    doc.font('Helvetica').fontSize(9).fillColor('#fde6d6')
+      .text(shopAddress || '', hasLogo ? 130 : 50, 56, { width: 280 })
+      .text([shop.phone, shop.email].filter(Boolean).join('  ·  '), hasLogo ? 130 : 50, 70, { width: 280 });
+
+    doc.font('Helvetica-Bold').fontSize(18).fillColor('#fff').text('PROFIT & LOSS', 0, 26, { width: 545, align: 'right' });
+    doc.font('Helvetica-Bold').fontSize(10).fillColor('#fde6d6').text('STATEMENT', 0, 50, { width: 545, align: 'right' });
+    doc.font('Helvetica').fontSize(9).fillColor('#fde6d6')
+      .text(fyLabel || '', 0, 66, { width: 545, align: 'right' })
+      .text(periodLabel, 0, 78, { width: 545, align: 'right' });
+
+    doc.fillColor('#000');
+    let y = 130;
+    if (shop.abn) {
+      doc.font('Helvetica').fontSize(9).fillColor('#888').text(`ABN: ${shop.abn}`, 50, y, { width: 495, align: 'right' });
+    }
+    y = 150;
+
+    const sectionHeader = label => {
+      doc.rect(50, y, 495, 20).fill(OCHRE);
+      doc.font('Helvetica-Bold').fontSize(10).fillColor('#fff').text(label, 56, y + 5);
+      y += 20;
+    };
+    const dataRow = (label, value, bold = false) => {
+      doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(10).fillColor(bold ? '#111' : '#333');
+      doc.text(label, 56, y, { width: 360 });
+      doc.text(value, 0, y, { width: 540, align: 'right' });
+      y += 18;
+    };
+    const divider = () => { doc.moveTo(50, y+2).lineTo(545, y+2).strokeColor('#ccc').stroke(); y += 10; };
+    const highlight = (label, value, bg, fg) => {
+      doc.rect(50, y-4, 495, 26).fill(bg);
+      doc.font('Helvetica-Bold').fontSize(11).fillColor(fg).text(label, 56, y);
+      doc.text(value, 0, y, { width: 540, align: 'right' });
+      y += 30;
+    };
+
+    // Income
+    sectionHeader('INCOME');
+    y += 4;
+    dataRow(`Shop Orders (${data.orderCount})`, fmtMoney(data.orderRevenue));
+    if (data.refundTotal > 0) dataRow('Less: Refunds', `(${fmtMoney(data.refundTotal)})`);
+    if (data.repairRevenue > 0) dataRow(`Repair Jobs (${data.repairCount} completed)`, fmtMoney(data.repairRevenue));
+    divider();
+    highlight('TOTAL INCOME', fmtMoney(data.totalRevenue), '#eaf3ea', '#2e7d32');
+    y += 8;
+
+    // Expenses
+    sectionHeader('EXPENSES');
+    y += 4;
+    const catLabels = { tools:'Tools', equipment:'Equipment', parts:'Parts & Components', software:'Software', other:'Other' };
+    const sortedExp = Object.entries(data.expByCat).sort(([,a],[,b]) => b - a);
+    if (sortedExp.length === 0) {
+      dataRow('No expenses recorded in this period', '');
+    } else {
+      for (const [cat, amt] of sortedExp) {
+        dataRow(catLabels[cat] || (cat.charAt(0).toUpperCase()+cat.slice(1)), `(${fmtMoney(amt)})`);
+      }
+    }
+    divider();
+    highlight('TOTAL EXPENSES', `(${fmtMoney(data.totalExpenses)})`, '#fbe9e4', RUST);
+    y += 8;
+
+    // Net profit
+    const profitBg  = data.grossProfit >= 0 ? '#d8e7d0' : '#f3d5c5';
+    const profitFg  = data.grossProfit >= 0 ? '#2e7d32' : RUST;
+    const profitLbl = data.grossProfit >= 0 ? 'NET PROFIT' : 'NET LOSS';
+    doc.rect(50, y-4, 495, 32).fill(profitBg);
+    doc.font('Helvetica-Bold').fontSize(13).fillColor(profitFg).text(profitLbl, 56, y+2);
+    doc.text(fmtMoney(Math.abs(data.grossProfit)), 0, y+2, { width: 540, align: 'right' });
+    y += 42;
+
+    // GST Summary
+    y += 6;
+    sectionHeader('GST SUMMARY (ESTIMATED — see note below)');
+    y += 4;
+    dataRow('GST Collected (1/11 of total income)', fmtMoney(data.gstCollected));
+    dataRow('Input Tax Credits (1/11 of expenses)', `(${fmtMoney(data.gstCredits)})`);
+    divider();
+    highlight('NET GST PAYABLE (estimated)', fmtMoney(Math.max(0, data.netGst)), '#fffbf0', '#7a5d10');
+    doc.font('Helvetica-Oblique').fontSize(8).fillColor('#888')
+      .text('* GST figures assume all amounts are GST-inclusive at 10%. Second-hand goods and certain services may be GST-free. Consult your registered tax agent or BAS agent for actual BAS obligations.', 50, y, { width: 495 });
+    y += 30;
+
+    // Monthly breakdown
+    if (data.monthly.length > 0) {
+      y += 4;
+      if (y > 660) { doc.addPage(); y = 50; }
+      sectionHeader('MONTHLY BREAKDOWN');
+      y += 4;
+      const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      doc.rect(50, y, 495, 18).fill('#f5ede3');
+      doc.font('Helvetica-Bold').fontSize(9).fillColor('#555')
+        .text('Month',         56,  y+4, { width:100 })
+        .text('Revenue',      230,  y+4, { width:100, align:'right' })
+        .text('Expenses',     340,  y+4, { width:100, align:'right' })
+        .text('Profit/(Loss)',450,  y+4, { width:90,  align:'right' });
+      y += 18;
+      for (let i=0; i<data.monthly.length; i++) {
+        const m = data.monthly[i];
+        const [yr,mo] = m.month.split('-');
+        const lbl = `${monthNames[parseInt(mo)-1]} ${yr}`;
+        if (i%2===1) doc.rect(50, y-2, 495, 16).fill('#fdf9f5');
+        doc.font('Helvetica').fontSize(9).fillColor('#222')
+          .text(lbl,                  56,  y, { width:100 })
+          .text(fmtMoney(m.revenue), 230,  y, { width:100, align:'right' })
+          .text(`(${fmtMoney(m.expenses)})`, 340, y, { width:100, align:'right' });
+        const pFg = m.profit>=0 ? '#2e7d32' : RUST;
+        doc.fillColor(pFg).text(fmtMoney(m.profit), 450, y, { width:90, align:'right' });
+        y += 16;
+      }
+    }
+
+    // Footer
+    if (y > 720) { doc.addPage(); y = 50; }
+    const genDate = new Date().toLocaleDateString('en-AU',{day:'2-digit',month:'long',year:'numeric'});
+    doc.font('Helvetica').fontSize(8).fillColor('#aaa')
+      .text(`Generated ${genDate} · ${shopName} · For internal reference only`, 50, y+16, { width:495, align:'center' });
+
+    doc.end();
+  });
+}
+
 function getPortalUrl() {
   const base = getSiteUrl();
   if (process.env.PORTAL_URL) return process.env.PORTAL_URL;
@@ -5307,6 +5559,38 @@ const adminServer = http.createServer(async (req, res) => {
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     writeExpenses(readExpenses().filter(e => e.id !== body.id));
     return json(res, 200, { ok: true });
+  }
+
+  // ── Admin: Tax / P&L Report ─────────────────────────────────
+  if (req.method === 'GET' && url.pathname === '/api/admin/tax-report') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    const from = url.searchParams.get('from') || '';
+    const to   = url.searchParams.get('to')   || '';
+    if (!from || !to || !/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
+      return json(res, 422, { error: 'from and to (YYYY-MM-DD) are required' });
+    }
+    return json(res, 200, buildTaxReportData(from, to));
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/admin/tax-report/pdf') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    const from = url.searchParams.get('from') || '';
+    const to   = url.searchParams.get('to')   || '';
+    if (!from || !to || !/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
+      return json(res, 422, { error: 'from and to (YYYY-MM-DD) are required' });
+    }
+    const data = buildTaxReportData(from, to);
+    const { shop } = readSettings();
+    const buffer = await buildTaxReportPdf(data, shop);
+    const filename = `profit-loss-${from}-to-${to}.pdf`;
+    res.writeHead(200, {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length,
+      'X-Content-Type-Options': 'nosniff',
+    });
+    res.end(buffer);
+    return;
   }
 
   // ── Admin: Memberships ──────────────────────────────────────

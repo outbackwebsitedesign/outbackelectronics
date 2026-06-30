@@ -280,6 +280,7 @@ const NAV_ICONS = {
   settings:     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M16.24 16.24l1.41 1.41M4.93 4.93l1.41 1.41M7.76 16.24l-1.41 1.41M22 12h-2M4 12H2M12 22v-2M12 4V2"/></svg>,
   'seller-billing': <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>,
   'audit-log': <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="12" y2="17"/></svg>,
+  'tax-reports': <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><line x1="6" y1="8" x2="6" y2="13"/><line x1="10" y1="11" x2="10" y2="13"/><line x1="14" y1="9" x2="14" y2="13"/><line x1="18" y1="7" x2="18" y2="13"/></svg>,
 };
 
 const ADMIN_SECTIONS = [
@@ -310,7 +311,8 @@ const ADMIN_SECTIONS = [
     { id:'rewards',   label:'Rewards',       minRole:'manager' },
     { id:'store-credit', label:'Store Credit', minRole:'manager' },
     { id:'analytics', label:'Analytics',      minRole:'manager' },
-    { id:'expenses',  label:'Expenses',      minRole:'manager' },
+    { id:'expenses',    label:'Expenses',      minRole:'manager' },
+    { id:'tax-reports', label:'Tax Reports',   minRole:'manager' },
     { id:'seller-billing', label:'Seller Billing', minRole:'manager' },
     { id:'settings',  label:'Settings',      minRole:'seller' },
     { id:'audit-log', label:'Audit Log',     minRole:'manager' },
@@ -5330,6 +5332,226 @@ function AdminExpenses() {
 }
 
 // ============================================================
+// TAX REPORTS / P&L STATEMENT
+// ============================================================
+function AdminTaxReports() {
+  const now = new Date();
+  const currentFyYear = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+
+  const FY_PRESETS = [
+    { label: `FY ${currentFyYear}–${String(currentFyYear+1).slice(2)} (Current)`, from: `${currentFyYear}-07-01`, to: `${currentFyYear+1}-06-30` },
+    { label: `FY ${currentFyYear-1}–${String(currentFyYear).slice(2)} (Previous)`, from: `${currentFyYear-1}-07-01`, to: `${currentFyYear}-06-30` },
+    { label: `FY ${currentFyYear-2}–${String(currentFyYear-1).slice(2)}`, from: `${currentFyYear-2}-07-01`, to: `${currentFyYear-1}-06-30` },
+    { label: 'Custom range', from: '', to: '' },
+  ];
+
+  const [preset, setPreset] = useState(0);
+  const [from, setFrom] = useState(FY_PRESETS[0].from);
+  const [to, setTo]     = useState(FY_PRESETS[0].to);
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState(null);
+
+  const applyPreset = idx => {
+    setPreset(idx);
+    if (idx < FY_PRESETS.length - 1) { setFrom(FY_PRESETS[idx].from); setTo(FY_PRESETS[idx].to); }
+  };
+
+  const loadReport = async (f = from, t = to) => {
+    if (!f || !t) { setError('Please select a date range.'); return; }
+    setLoading(true); setError(null); setData(null);
+    const r = await fetch(`/api/admin/tax-report?from=${f}&to=${t}`, { credentials:'include' }).catch(()=>null);
+    setLoading(false);
+    if (!r || !r.ok) { setError('Failed to load report.'); return; }
+    setData(await r.json());
+  };
+
+  useEffect(() => { loadReport(FY_PRESETS[0].from, FY_PRESETS[0].to); }, []);
+
+  const exportPdf = () => window.open(`/api/admin/tax-report/pdf?from=${from}&to=${to}`, '_blank');
+
+  const fmtAUD = n => `$${(Number(n)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+  const fmtDateLabel = s => s ? new Date(s+'T00:00:00').toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'}) : '';
+  const catLabels = { tools:'Tools', equipment:'Equipment', parts:'Parts & Components', software:'Software', other:'Other' };
+  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  return (
+    <div style={{padding:32, maxWidth:900}}>
+      {/* Period selector */}
+      <div className="card" style={{padding:'18px 22px', marginBottom:24}}>
+        <div style={{display:'flex', gap:12, flexWrap:'wrap', alignItems:'flex-end'}}>
+          <div>
+            <div className="label" style={{marginBottom:6}}>Period</div>
+            <div className="tabs">
+              {FY_PRESETS.map((p, i) => (
+                <div key={i} role="button" tabIndex={0} className={`tab${preset===i?' active':''}`}
+                  onClick={() => applyPreset(i)}
+                  onKeyDown={e => { if (e.key==='Enter'||e.key===' ') applyPreset(i); }}
+                  style={{cursor:'pointer'}}>
+                  {p.label}
+                </div>
+              ))}
+            </div>
+          </div>
+          {preset === FY_PRESETS.length - 1 && (<>
+            <label className="field" style={{margin:0}}>
+              <span className="label">From</span>
+              <input className="input" type="date" value={from} onChange={e => setFrom(e.target.value)} />
+            </label>
+            <label className="field" style={{margin:0}}>
+              <span className="label">To</span>
+              <input className="input" type="date" value={to} onChange={e => setTo(e.target.value)} />
+            </label>
+          </>)}
+          <button className="btn btn-rust" onClick={() => loadReport()} disabled={loading}>
+            {loading ? 'Loading…' : 'Generate'}
+          </button>
+          {data && (
+            <button className="btn" style={{background:'#345526', color:'#fff'}} onClick={exportPdf}>
+              ↓ Export PDF
+            </button>
+          )}
+        </div>
+        {error && <div className="mono" style={{color:'var(--rust)', fontSize:12, marginTop:8}}>{error}</div>}
+        {data && <div className="mono" style={{fontSize:11, color:'var(--ink-3)', marginTop:8}}>
+          Period: {fmtDateLabel(data.from)} – {fmtDateLabel(data.to)}
+        </div>}
+      </div>
+
+      {loading && <div className="mono" style={{color:'var(--ink-3)', textAlign:'center', padding:40}}>Loading report…</div>}
+
+      {data && <>
+        {/* Summary tiles */}
+        <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))', gap:14, marginBottom:24}}>
+          {[
+            { label:'TOTAL REVENUE',   value: fmtAUD(data.totalRevenue),               color:'#345526' },
+            { label:'TOTAL EXPENSES',  value: `(${fmtAUD(data.totalExpenses)})`,        color:'var(--rust)' },
+            { label: data.grossProfit>=0 ? 'NET PROFIT' : 'NET LOSS',
+              value: fmtAUD(Math.abs(data.grossProfit)),
+              color: data.grossProfit>=0 ? '#345526' : 'var(--rust)' },
+            { label:'EST. GST PAYABLE', value: fmtAUD(Math.max(0,data.netGst)),        color:'#7a5d10' },
+          ].map(t => (
+            <div key={t.label} className="card" style={{padding:'16px 18px'}}>
+              <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:4}}>{t.label}</div>
+              <div className="mono" style={{fontSize:20, fontWeight:700, color:t.color}}>{t.value}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Income */}
+        <div className="card" style={{padding:'18px 22px', marginBottom:16}}>
+          <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--rust)', marginBottom:12, letterSpacing:1}}>INCOME</div>
+          <table style={{width:'100%', borderCollapse:'collapse', fontSize:13}}>
+            <tbody>
+              <tr>
+                <td style={{padding:'5px 0', color:'var(--ink-2)'}}>Shop Orders ({data.orderCount})</td>
+                <td style={{textAlign:'right', fontFamily:'monospace'}}>{fmtAUD(data.orderRevenue)}</td>
+              </tr>
+              {data.refundTotal > 0 && (
+                <tr>
+                  <td style={{padding:'5px 0', color:'var(--ink-2)'}}>Less: Refunds</td>
+                  <td style={{textAlign:'right', fontFamily:'monospace', color:'var(--rust)'}}>({fmtAUD(data.refundTotal)})</td>
+                </tr>
+              )}
+              {data.repairRevenue > 0 && (
+                <tr>
+                  <td style={{padding:'5px 0', color:'var(--ink-2)'}}>Repair Jobs — completed ({data.repairCount})</td>
+                  <td style={{textAlign:'right', fontFamily:'monospace'}}>{fmtAUD(data.repairRevenue)}</td>
+                </tr>
+              )}
+              <tr style={{borderTop:'1px solid var(--border)'}}>
+                <td style={{padding:'8px 0', fontWeight:700}}>Total Income</td>
+                <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:700, color:'#345526'}}>{fmtAUD(data.totalRevenue)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* Expenses */}
+        <div className="card" style={{padding:'18px 22px', marginBottom:16}}>
+          <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--rust)', marginBottom:12, letterSpacing:1}}>EXPENSES</div>
+          <table style={{width:'100%', borderCollapse:'collapse', fontSize:13}}>
+            <tbody>
+              {Object.entries(data.expByCat).sort(([,a],[,b])=>b-a).map(([cat, amt]) => (
+                <tr key={cat}>
+                  <td style={{padding:'5px 0', color:'var(--ink-2)'}}>{catLabels[cat]||cat.charAt(0).toUpperCase()+cat.slice(1)}</td>
+                  <td style={{textAlign:'right', fontFamily:'monospace'}}>({fmtAUD(amt)})</td>
+                </tr>
+              ))}
+              {Object.keys(data.expByCat).length === 0 && (
+                <tr><td colSpan={2} style={{color:'var(--ink-3)', padding:'5px 0'}}>No expenses recorded in this period.</td></tr>
+              )}
+              <tr style={{borderTop:'1px solid var(--border)'}}>
+                <td style={{padding:'8px 0', fontWeight:700}}>Total Expenses</td>
+                <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:700, color:'var(--rust)'}}>({fmtAUD(data.totalExpenses)})</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* GST */}
+        <div className="card" style={{padding:'18px 22px', marginBottom:16, background:'#fffbf0', border:'1px solid #f0d97c'}}>
+          <div className="mono" style={{fontSize:11, fontWeight:700, color:'#7a5d10', marginBottom:12, letterSpacing:1}}>GST SUMMARY (ESTIMATED)</div>
+          <table style={{width:'100%', borderCollapse:'collapse', fontSize:13}}>
+            <tbody>
+              <tr>
+                <td style={{padding:'5px 0', color:'var(--ink-2)'}}>GST Collected (1/11 of total income)</td>
+                <td style={{textAlign:'right', fontFamily:'monospace'}}>{fmtAUD(data.gstCollected)}</td>
+              </tr>
+              <tr>
+                <td style={{padding:'5px 0', color:'var(--ink-2)'}}>Input Tax Credits (1/11 of expenses)</td>
+                <td style={{textAlign:'right', fontFamily:'monospace', color:'#345526'}}>({fmtAUD(data.gstCredits)})</td>
+              </tr>
+              <tr style={{borderTop:'1px solid #f0d97c'}}>
+                <td style={{padding:'8px 0', fontWeight:700}}>Net GST Payable (estimated)</td>
+                <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:700, color:'#7a5d10'}}>{fmtAUD(Math.max(0,data.netGst))}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div style={{fontSize:11, color:'#9a7a30', marginTop:10}}>
+            Assumes all amounts are GST-inclusive at 10%. Second-hand goods and certain services may be GST-free.
+            Consult your registered tax agent or BAS agent for actual BAS obligations.
+          </div>
+        </div>
+
+        {/* Monthly breakdown */}
+        {data.monthly.length > 0 && (
+          <div className="card" style={{padding:'18px 22px', marginBottom:16}}>
+            <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--rust)', marginBottom:12, letterSpacing:1}}>MONTHLY BREAKDOWN</div>
+            <table style={{width:'100%', borderCollapse:'collapse', fontSize:13}}>
+              <thead>
+                <tr style={{borderBottom:'2px solid var(--border)'}}>
+                  <th style={{textAlign:'left',  padding:'4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11}}>MONTH</th>
+                  <th style={{textAlign:'right', padding:'4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11}}>REVENUE</th>
+                  <th style={{textAlign:'right', padding:'4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11}}>EXPENSES</th>
+                  <th style={{textAlign:'right', padding:'4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11}}>PROFIT / (LOSS)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.monthly.map((m, i) => {
+                  const [yr, mo] = m.month.split('-');
+                  const lbl = `${monthNames[parseInt(mo)-1]} ${yr}`;
+                  return (
+                    <tr key={m.month} style={{background: i%2===1 ? 'var(--bg-deep)' : 'transparent'}}>
+                      <td style={{padding:'6px 0', color:'var(--ink-1)'}}>{lbl}</td>
+                      <td style={{textAlign:'right', fontFamily:'monospace'}}>{fmtAUD(m.revenue)}</td>
+                      <td style={{textAlign:'right', fontFamily:'monospace', color:'var(--ink-2)'}}>({fmtAUD(m.expenses)})</td>
+                      <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:600, color: m.profit>=0 ? '#345526' : 'var(--rust)'}}>
+                        {fmtAUD(m.profit)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </>}
+    </div>
+  );
+}
+
+// ============================================================
 // POLICIES — edit
 // ============================================================
 // ============================================================
@@ -6621,7 +6843,8 @@ const ADMIN_VIEWS = {
   'rewards':    { c: AdminRewards,   t:'Rewards',           staticSubtitle:'points balances · history · manual adjustments' },
   'store-credit': { c: AdminStoreCredit, t:'Store Credit',  staticSubtitle:'credit balances · history · manual adjustments' },
   analytics:  { c: AdminAnalytics,  t:'Analytics',        staticSubtitle:'page views · top pages · referrers · devices' },
-  expenses:   { c: AdminExpenses,   t:'Expenses',         staticSubtitle:'track costs · receipt uploads' },
+  expenses:     { c: AdminExpenses,     t:'Expenses',          staticSubtitle:'track costs · receipt uploads' },
+  'tax-reports': { c: AdminTaxReports, t:'Tax Reports',       staticSubtitle:'P&L · GST summary · monthly breakdown · PDF export' },
   settings:   { c: AdminSettings,   t:'Settings',         staticSubtitle:'shop · staff · integrations' },
   'seller-billing': { c: AdminSellerBilling, t:'Seller Billing', staticSubtitle:'listing fees · balances · card management' },
   'audit-log': { c: AdminAuditLog, t:'Audit Log', staticSubtitle:'admin actions · actor · timestamp · detail' },
@@ -6631,7 +6854,7 @@ const ADMIN_ALL_IDS = new Set([
   'overview','orders','repairs','quotes','ewaste','bookings','availability',
   'products','services','software','tutorials','ai',
   'groups','customers','sellers',
-  'memberships','gift-cards','rewards','expenses','policies','seller-billing','settings','audit-log',
+  'memberships','gift-cards','rewards','expenses','tax-reports','policies','seller-billing','settings','audit-log',
 ]);
 
 function adminSectionFromPath() {
