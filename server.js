@@ -360,6 +360,11 @@ function isOrderPaid(o) {
   if (o.gratis) return false;
   return (o.payments || []).some(p => (Number(p.amount) || 0) > 0);
 }
+// Returns cash actually received for an order (sum of payments, capped at order total).
+function orderCashReceived(o) {
+  const paid = Math.round((o.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0) * 100) / 100;
+  return Math.min(paid, Number(o.total) || 0);
+}
 
 function readOrders() {
   try { const p = JSON.parse(cachedReadFile(ORDERS_DB_PATH)); return Array.isArray(p.orders) ? p.orders : []; } catch { return []; }
@@ -2581,14 +2586,14 @@ function buildTaxReportData(fromStr, toStr) {
     if (!isOrderPaid(o)) continue; // cash-basis: only count money actually received
     const d = parseOrderDateForReport(o);
     if (!inRange(d)) continue;
-    const total = Number(o.total) || 0;
+    const received = orderCashReceived(o);
     const refAmt = o.refund ? (Number(o.refund.amount) || 0) : 0;
-    orderRevenue += total;
+    orderRevenue += received;
     refundTotal  += refAmt;
     orderCount++;
     const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
     ensureMonth(key);
-    monthMap[key].revenue += total - refAmt;
+    monthMap[key].revenue += received - refAmt;
   }
   const netOrderRevenue = orderRevenue - refundTotal;
 
@@ -2659,7 +2664,7 @@ function buildBASData(fromStr, toStr) {
     if (!isOrderPaid(o)) continue; // cash-basis: only count money actually received
     const d = parseOrderDateForReport(o);
     if (!inRange(d)) continue;
-    G1 += Number(o.total) || 0;
+    G1 += orderCashReceived(o);
     if (o.refund) refunds += Number(o.refund.amount) || 0;
     orderCount++;
   }
@@ -3374,7 +3379,7 @@ function buildGSTThresholdData() {
     const d = parseOrderDateForReport(o);
     if (!d) continue;
     const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-    const net = Math.max(0, (Number(o.total)||0) - (o.refund ? Number(o.refund.amount)||0 : 0));
+    const net = Math.max(0, orderCashReceived(o) - (o.refund ? Number(o.refund.amount)||0 : 0));
     revMap[key] = (revMap[key]||0) + net;
   }
   for (const r of flatRepairs()) {
