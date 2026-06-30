@@ -1711,7 +1711,7 @@ const DEFAULT_REPAIR_COLS = [
   { id:'done',       label:'Done',       cards:[] },
 ];
 
-function RepairJobDrawer({ card, onSave, onClose }) {
+function RepairJobDrawer({ card, onSave, onDelete, onClose }) {
   const [form, setForm] = useState(() => ({
     t:             card.t || '',
     who:           card.who || '',
@@ -1749,7 +1749,14 @@ function RepairJobDrawer({ card, onSave, onClose }) {
     <Drawer open={true} onClose={onClose} dirty={dirty}
       title={<span><span className="mono" style={{fontSize:11,color:'var(--rust)',marginRight:8}}>{card.id}</span>{form.t||'Repair Job'}</span>}
       footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
-        <div className="mono" style={{fontSize:11,color:'var(--ink-2)'}}>{grandTotal>0?`TOTAL $${grandTotal.toFixed(2)}`:''}</div>
+        <div className="row-flex" style={{gap:8}}>
+          <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)',borderColor:'var(--rust)'}}
+            onClick={async () => {
+              const ok = await adminConfirm(`Delete job ${card.id}? This cannot be undone.`, { title:'Delete repair job', confirmLabel:'Delete', danger:true });
+              if (ok) onDelete(card.id);
+            }}>Delete job</button>
+          <div className="mono" style={{fontSize:11,color:'var(--ink-2)',alignSelf:'center'}}>{grandTotal>0?`TOTAL $${grandTotal.toFixed(2)}`:''}</div>
+        </div>
         <div className="row-flex" style={{gap:8}}>
           <button className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
           <button className="btn btn-rust btn-sm" onClick={handleSave}>Save changes</button>
@@ -1908,6 +1915,14 @@ function AdminRepairs() {
     if (!ok) adminToast('Failed to save — changes may not have persisted.');
     else adminToast('Job saved.', 'success');
   };
+  const deleteCard = async (cardId) => {
+    const updated = cols.map(c => ({ ...c, cards: (c.cards||[]).filter(cd => cd.id !== cardId) }));
+    setCols(updated);
+    setEditCard(null);
+    const ok = await persist(updated);
+    if (!ok) adminToast('Delete may not have saved — check your connection.');
+    else adminToast('Job deleted.', 'success');
+  };
   const moveCard = async (cardId, fromId, toId) => {
     if (!cardId || fromId === toId) return;
     let moved = null;
@@ -1954,6 +1969,7 @@ function AdminRepairs() {
         <RepairJobDrawer
           card={editCard.card}
           onSave={saveCard}
+          onDelete={deleteCard}
           onClose={() => setEditCard(null)}
         />
       )}
