@@ -1711,10 +1711,157 @@ const DEFAULT_REPAIR_COLS = [
   { id:'done',       label:'Done',       cards:[] },
 ];
 
+function RepairJobDrawer({ card, onSave, onClose }) {
+  const [form, setForm] = useState(() => ({
+    t:             card.t || '',
+    who:           card.who || '',
+    tag:           card.tag || '',
+    customer:      card.customer || card.name || '',
+    email:         card.email || '',
+    phone:         card.phone || '',
+    dateIn:        card.dateIn || new Date().toISOString().slice(0, 10),
+    dateEst:       card.dateEst || '',
+    device:        card.device || '',
+    condition:     card.condition || '',
+    findings:      card.findings || '',
+    diagnostics:   card.diagnostics || '',
+    techNotes:     card.techNotes || '',
+    parts:         card.parts || [],
+    laborHours:    card.laborHours ?? '',
+    laborRate:     card.laborRate ?? '',
+    otherCharges:  card.otherCharges ?? '',
+    paid:          card.paid || false,
+    paymentMethod: card.paymentMethod || '',
+    notes:         card.notes || '',
+  }));
+  const dirty = useDirtyTracker(form, card.id);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const addPart = () => set('parts', [...form.parts, { name: '', qty: 1, cost: '' }]);
+  const updatePart = (i, k, v) => set('parts', form.parts.map((p, idx) => idx === i ? { ...p, [k]: v } : p));
+  const removePart = (i) => set('parts', form.parts.filter((_, idx) => idx !== i));
+  const partsTotal = form.parts.reduce((s, p) => s + (parseFloat(p.qty) || 0) * (parseFloat(p.cost) || 0), 0);
+  const laborTotal = (parseFloat(form.laborHours) || 0) * (parseFloat(form.laborRate) || 0);
+  const otherTotal = parseFloat(form.otherCharges) || 0;
+  const grandTotal = partsTotal + laborTotal + otherTotal;
+  const handleSave = () => onSave({ ...card, ...form, name: form.customer, total: grandTotal || undefined });
+  const S = { mb12: {marginBottom:12}, mt20: {marginTop:20, marginBottom:12} };
+  return (
+    <Drawer open={true} onClose={onClose} dirty={dirty}
+      title={<span><span className="mono" style={{fontSize:11,color:'var(--rust)',marginRight:8}}>{card.id}</span>{form.t||'Repair Job'}</span>}
+      footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
+        <div className="mono" style={{fontSize:11,color:'var(--ink-2)'}}>{grandTotal>0?`TOTAL $${grandTotal.toFixed(2)}`:''}</div>
+        <div className="row-flex" style={{gap:8}}>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
+          <button className="btn btn-rust btn-sm" onClick={handleSave}>Save changes</button>
+        </div>
+      </div>}>
+
+      <div className="eyebrow" style={S.mb12}>Customer</div>
+      <div className="grid-2" style={S.mb12}>
+        <label className="field"><span className="label">Name</span>
+          <input className="input" value={form.customer} onChange={e=>set('customer',e.target.value)} placeholder="Full name" /></label>
+        <label className="field"><span className="label">Phone</span>
+          <input className="input" value={form.phone} onChange={e=>set('phone',e.target.value)} placeholder="0400 000 000" /></label>
+      </div>
+      <label className="field" style={S.mb12}><span className="label">Email — used for status notifications &amp; portal access</span>
+        <input className="input" type="email" value={form.email} onChange={e=>set('email',e.target.value)} placeholder="customer@example.com" /></label>
+
+      <div className="eyebrow" style={S.mt20}>Job</div>
+      <label className="field" style={S.mb12}><span className="label">Description / fault reported<ReqMark/></span>
+        <input className="input" value={form.t} onChange={e=>set('t',e.target.value)} placeholder="e.g. Toughbook 55 — keyboard ribbon fault" /></label>
+      <div className="grid-2" style={S.mb12}>
+        <label className="field"><span className="label">Device / model</span>
+          <input className="input" value={form.device} onChange={e=>set('device',e.target.value)} placeholder="e.g. Panasonic Toughbook 55" /></label>
+        <label className="field"><span className="label">Assigned technician</span>
+          <input className="input" value={form.who} onChange={e=>set('who',e.target.value)} placeholder="Technician name" /></label>
+      </div>
+      <div className="grid-2" style={S.mb12}>
+        <label className="field"><span className="label">Date received</span>
+          <input className="input" type="date" value={form.dateIn} onChange={e=>set('dateIn',e.target.value)} /></label>
+        <label className="field"><span className="label">Est. completion</span>
+          <input className="input" type="date" value={form.dateEst} onChange={e=>set('dateEst',e.target.value)} /></label>
+      </div>
+      <div className="grid-2" style={S.mb12}>
+        <label className="field"><span className="label">Tag</span>
+          <input className="input" value={form.tag} onChange={e=>set('tag',e.target.value)} placeholder="e.g. URGENT, WARRANTY" /></label>
+        <label className="field"><span className="label">Condition on receipt</span>
+          <input className="input" value={form.condition} onChange={e=>set('condition',e.target.value)} placeholder="e.g. Fair — cracked screen" /></label>
+      </div>
+
+      <div className="eyebrow" style={S.mt20}>Diagnostics</div>
+      <label className="field" style={S.mb12}><span className="label">Findings</span>
+        <textarea className="textarea" rows={3} value={form.findings} onChange={e=>set('findings',e.target.value)} placeholder="What was found — e.g. Keyboard ribbon disconnected at left connector" /></label>
+      <label className="field" style={S.mb12}><span className="label">Diagnostic notes — tests run &amp; results</span>
+        <textarea className="textarea" rows={3} value={form.diagnostics} onChange={e=>set('diagnostics',e.target.value)} placeholder="e.g. POST passes, keyboard not detected in BIOS, HDD SMART OK" /></label>
+      <label className="field" style={S.mb12}><span className="label">Technician notes</span>
+        <textarea className="textarea" rows={3} value={form.techNotes} onChange={e=>set('techNotes',e.target.value)} placeholder="Work performed, observations, follow-up actions..." /></label>
+
+      <div className="eyebrow" style={S.mt20}>Parts &amp; Materials</div>
+      {form.parts.length > 0 && (
+        <div style={{display:'grid', gridTemplateColumns:'1fr 56px 76px 32px', gap:4, marginBottom:4}}>
+          <span className="label">Part / material</span><span className="label">Qty</span><span className="label">$/unit</span><span/>
+        </div>
+      )}
+      {form.parts.map((p, i) => (
+        <div key={i} style={{display:'grid', gridTemplateColumns:'1fr 56px 76px 32px', gap:4, marginBottom:4, alignItems:'center'}}>
+          <input className="input" value={p.name} onChange={e=>updatePart(i,'name',e.target.value)} placeholder="Part / material" style={{fontSize:12}} />
+          <input className="input" type="number" min="1" value={p.qty} onChange={e=>updatePart(i,'qty',e.target.value)} style={{fontSize:12}} />
+          <input className="input" type="number" min="0" step="0.01" value={p.cost} onChange={e=>updatePart(i,'cost',e.target.value)} placeholder="0.00" style={{fontSize:12}} />
+          <button className="icon-btn" onClick={()=>removePart(i)} title="Remove part" style={{width:32,height:32}}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+      ))}
+      <div className="row-flex" style={{marginBottom:4}}>
+        <button className="btn btn-ghost btn-sm" onClick={addPart}>+ Add part</button>
+        {partsTotal>0 && <span className="mono" style={{fontSize:11,color:'var(--ink-2)'}}>PARTS: ${partsTotal.toFixed(2)}</span>}
+      </div>
+
+      <div className="eyebrow" style={S.mt20}>Labour</div>
+      <div className="grid-2" style={{marginBottom:6}}>
+        <label className="field"><span className="label">Hours</span>
+          <input className="input" type="number" min="0" step="0.25" value={form.laborHours} onChange={e=>set('laborHours',e.target.value)} placeholder="0.0" /></label>
+        <label className="field"><span className="label">Hourly rate ($)</span>
+          <input className="input" type="number" min="0" step="1" value={form.laborRate} onChange={e=>set('laborRate',e.target.value)} placeholder="0" /></label>
+      </div>
+      {laborTotal>0 && <div className="mono" style={{fontSize:11,color:'var(--ink-2)',marginBottom:8}}>LABOUR: ${laborTotal.toFixed(2)}</div>}
+      <label className="field" style={{marginTop:8,marginBottom:8}}><span className="label">Other charges ($)</span>
+        <input className="input" type="number" min="0" step="0.01" value={form.otherCharges} onChange={e=>set('otherCharges',e.target.value)} placeholder="0.00" /></label>
+      {grandTotal>0 && (
+        <div style={{padding:'10px 14px',background:'var(--bg-deep)',marginTop:4,marginBottom:4}}>
+          <span className="mono" style={{fontSize:13,fontWeight:600}}>TOTAL: ${grandTotal.toFixed(2)}</span>
+        </div>
+      )}
+
+      <div className="eyebrow" style={S.mt20}>Payment</div>
+      <div className="grid-2" style={S.mb12}>
+        <label className="field"><span className="label">Status</span>
+          <select className="select" value={form.paid?'paid':'unpaid'} onChange={e=>set('paid',e.target.value==='paid')}>
+            <option value="unpaid">Unpaid</option>
+            <option value="paid">Paid</option>
+          </select></label>
+        <label className="field"><span className="label">Payment method</span>
+          <select className="select" value={form.paymentMethod} onChange={e=>set('paymentMethod',e.target.value)}>
+            <option value="">— Select —</option>
+            <option value="Cash">Cash</option>
+            <option value="Card">Card</option>
+            <option value="Bank transfer">Bank transfer</option>
+            <option value="Invoice">Invoice</option>
+          </select></label>
+      </div>
+
+      <div className="eyebrow" style={S.mt20}>Internal Notes</div>
+      <label className="field"><span className="label">Notes — not visible to customer</span>
+        <textarea className="textarea" rows={3} value={form.notes} onChange={e=>set('notes',e.target.value)} placeholder="Staff-only notes..." /></label>
+    </Drawer>
+  );
+}
+
 function AdminRepairs() {
   const [cols, setCols] = useState(DEFAULT_REPAIR_COLS);
   const [newJob, setNewJob] = useState(null);
-  const [newJobForm, setNewJobForm] = useState({ t:'', who:'', tag:'' });
+  const [newJobForm, setNewJobForm] = useState({ t:'', who:'', customer:'', email:'', tag:'' });
+  const [editCard, setEditCard] = useState(null);
   const [dragOverCol, setDragOverCol] = useState(null);
   const newJobDirty = useDirtyTracker(newJobForm, newJob);
   useEffect(() => {
@@ -1728,30 +1875,39 @@ function AdminRepairs() {
       .catch(() => setCols(DEFAULT_REPAIR_COLS));
   }, []);
   const openCount = cols.filter(c => c.id !== 'done').reduce((s, c) => s + (c.cards ? c.cards.length : 0), 0);
+  const persist = async (updated) => {
+    const r = await fetch('/api/admin/repairs/save', {
+      method:'POST', headers:postHeaders(), credentials:'include', body:JSON.stringify({ columns: updated }),
+    }).catch(() => null);
+    return r && r.ok;
+  };
   const addCard = async (colId) => {
-    const newCard = { id: 'J-' + Date.now(), t: 'New job', who: '', age: '0h' };
+    const newCard = { id: 'J-' + Date.now(), t: 'New job', who: '', age: '0h', dateIn: new Date().toISOString().slice(0,10) };
     const updated = cols.map(c => c.id === colId ? { ...c, cards: [...(c.cards || []), newCard] } : c);
     setCols(updated);
-    await fetch('/api/admin/repairs/save', {
-      method: 'POST', headers: postHeaders(),
-      credentials: 'include', body: JSON.stringify({ columns: updated }),
-    }).catch(() => null);
+    setEditCard({ card: newCard, colId });
+    await persist(updated);
   };
   const createJob = async () => {
     if (!newJobForm.t.trim()) return;
     const firstCol = cols[0];
     if (!firstCol) return;
-    const newCard = { id: 'J-' + Date.now(), t: newJobForm.t, who: newJobForm.who, age: '0h', tag: newJobForm.tag || undefined };
+    const newCard = { id: 'J-' + Date.now(), t: newJobForm.t, who: newJobForm.who, customer: newJobForm.customer, name: newJobForm.customer, email: newJobForm.email, tag: newJobForm.tag || undefined, age: '0h', dateIn: new Date().toISOString().slice(0,10) };
     const updated = cols.map(c => c.id === firstCol.id ? { ...c, cards: [...(c.cards || []), newCard] } : c);
     setCols(updated);
     setNewJob(null);
-    setNewJobForm({ t:'', who:'', tag:'' });
-    await fetch('/api/admin/repairs/save', {
-      method: 'POST', headers: postHeaders(),
-      credentials: 'include', body: JSON.stringify({ columns: updated }),
-    }).catch(() => null);
+    setNewJobForm({ t:'', who:'', customer:'', email:'', tag:'' });
+    setEditCard({ card: newCard, colId: firstCol.id });
+    await persist(updated);
   };
-  // Drag-and-drop: move a card between stages and persist via the existing save API.
+  const saveCard = async (updatedCard) => {
+    const updated = cols.map(c => ({ ...c, cards: (c.cards||[]).map(cd => cd.id===updatedCard.id ? updatedCard : cd) }));
+    setCols(updated);
+    setEditCard(null);
+    const ok = await persist(updated);
+    if (!ok) adminToast('Failed to save — changes may not have persisted.');
+    else adminToast('Job saved.', 'success');
+  };
   const moveCard = async (cardId, fromId, toId) => {
     if (!cardId || fromId === toId) return;
     let moved = null;
@@ -1762,29 +1918,44 @@ function AdminRepairs() {
     const updated = without.map(c => c.id === toId ? { ...c, cards: [...(c.cards || []), moved] } : c);
     const prev = cols;
     setCols(updated);
-    const r = await fetch('/api/admin/repairs/save', {
-      method: 'POST', headers: postHeaders(),
-      credentials: 'include', body: JSON.stringify({ columns: updated }),
-    }).catch(() => null);
-    if (!r || !r.ok) { setCols(prev); adminToast('Failed to move job — change not saved.'); }
+    const ok = await persist(updated);
+    if (!ok) { setCols(prev); adminToast('Failed to move job — change not saved.'); }
     else adminToast(`Moved to ${updated.find(c => c.id === toId)?.label || toId}.`, 'success');
   };
   return (
-    <div style={{padding:32, overflowX:'auto'}}>
-      <div className="row-flex" style={{justifyContent:'space-between', marginBottom: 18}}>
+    <div style={{padding:32}}>
+      <div className="row-flex" style={{justifyContent:'space-between', marginBottom:18}}>
         <div className="mono" style={{fontSize:12, color:'var(--ink-2)'}}>{openCount} OPEN</div>
-        <button className="btn btn-rust btn-sm" onClick={() => { setNewJobForm({ t:'', who:'', tag:'' }); setNewJob(true); }}>+ New job</button>
+        <button className="btn btn-rust btn-sm" onClick={() => { setNewJobForm({ t:'', who:'', customer:'', email:'', tag:'' }); setNewJob(true); }}>+ New job</button>
       </div>
       {newJob && (
         <Drawer open={true} onClose={() => setNewJob(null)} dirty={newJobDirty} title="New repair job"
           footer={<div className="row-flex" style={{gap:8, justifyContent:'flex-end'}}>
             <button className="btn btn-ghost btn-sm" onClick={() => setNewJob(null)}>Cancel</button>
-            <button className="btn btn-rust btn-sm" onClick={createJob}>Create job</button>
+            <button className="btn btn-rust btn-sm" onClick={createJob}>Create &amp; open</button>
           </div>}>
-          <label className="field"><span className="label">Job description<ReqMark/></span><input className="input" aria-required="true" placeholder="e.g. Toughbook 55 — keyboard ribbon fault" value={newJobForm.t} onChange={e => setNewJobForm(f => ({...f, t:e.target.value}))} /></label>
-          <label className="field"><span className="label">Assigned to</span><input className="input" placeholder="Technician name" value={newJobForm.who} onChange={e => setNewJobForm(f => ({...f, who:e.target.value}))} /></label>
-          <label className="field"><span className="label">Tag (optional)</span><input className="input" placeholder="e.g. URGENT" value={newJobForm.tag} onChange={e => setNewJobForm(f => ({...f, tag:e.target.value}))} /></label>
+          <label className="field"><span className="label">Description / fault reported<ReqMark/></span>
+            <input className="input" aria-required="true" placeholder="e.g. Toughbook 55 — keyboard ribbon fault" value={newJobForm.t} onChange={e => setNewJobForm(f => ({...f, t:e.target.value}))} /></label>
+          <div className="grid-2">
+            <label className="field"><span className="label">Customer name</span>
+              <input className="input" placeholder="Full name" value={newJobForm.customer} onChange={e => setNewJobForm(f => ({...f, customer:e.target.value}))} /></label>
+            <label className="field"><span className="label">Customer email</span>
+              <input className="input" type="email" placeholder="customer@example.com" value={newJobForm.email} onChange={e => setNewJobForm(f => ({...f, email:e.target.value}))} /></label>
+          </div>
+          <div className="grid-2">
+            <label className="field"><span className="label">Assigned technician</span>
+              <input className="input" placeholder="Technician name" value={newJobForm.who} onChange={e => setNewJobForm(f => ({...f, who:e.target.value}))} /></label>
+            <label className="field"><span className="label">Tag (optional)</span>
+              <input className="input" placeholder="e.g. URGENT" value={newJobForm.tag} onChange={e => setNewJobForm(f => ({...f, tag:e.target.value}))} /></label>
+          </div>
         </Drawer>
+      )}
+      {editCard && (
+        <RepairJobDrawer
+          card={editCard.card}
+          onSave={saveCard}
+          onClose={() => setEditCard(null)}
+        />
       )}
       <div className="admin-kanban-grid" style={{display:'grid', gridTemplateColumns:'repeat(5, minmax(240px, 1fr))', gap:16, minWidth:1200}}>
         {cols.map(c => (
@@ -1802,24 +1973,30 @@ function AdminRepairs() {
             style={{outline: dragOverCol === c.id ? '2px dashed var(--ochre)' : 'none', outlineOffset: 4}}>
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:10}}>
               <span className="eyebrow">{c.label}</span>
-              <span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>{c.cards.length}</span>
+              <span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>{(c.cards||[]).length}</span>
             </div>
             <div style={{display:'grid', gap:10, minHeight:40}}>
-              {c.cards.map(card => (
+              {(c.cards||[]).map(card => (
                 <div key={card.id} draggable
                   onDragStart={e => {
                     e.dataTransfer.setData('text/plain', JSON.stringify({ cardId: card.id, from: c.id }));
                     e.dataTransfer.effectAllowed = 'move';
                   }}
-                  title="Drag to another column to change stage"
-                  style={{padding:14, background:'var(--paper)', border:'1px solid var(--line)', cursor:'grab'}}>
+                  onClick={() => setEditCard({ card, colId: c.id })}
+                  title="Click to view / edit job details"
+                  style={{padding:14, background:'var(--paper)', border:'1px solid var(--line)', cursor:'pointer'}}>
                   <div className="row-flex" style={{justifyContent:'space-between'}}>
                     <span className="mono" style={{fontSize:10, color:'var(--rust)'}}>{card.id}</span>
-                    {card.tag && <span className="tag" style={{fontSize:9}}>{card.tag}</span>}
+                    <div className="row-flex" style={{gap:4}}>
+                      {card.paid && <span className="tag" style={{fontSize:9, color:'var(--eucalyptus)', borderColor:'var(--eucalyptus)'}}>PAID</span>}
+                      {card.tag && <span className="tag" style={{fontSize:9}}>{card.tag}</span>}
+                    </div>
                   </div>
                   <div style={{fontSize:13, marginTop:6, fontWeight:500, lineHeight:1.3}}>{card.t}</div>
+                  {(card.customer||card.name) && <div style={{fontSize:11, color:'var(--ink-2)', marginTop:3}}>{card.customer||card.name}</div>}
                   <div className="mono" style={{fontSize:10, color:'var(--ink-2)', marginTop:8, display:'flex', justifyContent:'space-between'}}>
-                    <span>{(card.who || '').toUpperCase()}</span><span>{(card.age || '').toUpperCase()}</span>
+                    <span>{(card.who||'').toUpperCase()}</span>
+                    <span>{card.total ? `$${Number(card.total).toFixed(2)}` : (card.age||'').toUpperCase()}</span>
                   </div>
                 </div>
               ))}
