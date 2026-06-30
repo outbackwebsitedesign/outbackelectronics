@@ -161,6 +161,7 @@ const MEMBERSHIPS_DB_PATH = path.join(__dirname, 'memberships.db');
 const STAFF_DB_PATH       = path.join(__dirname, 'staff.db');
 const SELLER_LEDGER_DB_PATH = path.join(__dirname, 'seller-ledger.db');
 const EXPENSES_DB_PATH    = path.join(__dirname, 'expenses.db');
+const VEHICLE_LOG_DB_PATH = path.join(__dirname, 'vehicle-log.db');
 const ADMIN_AUDIT_LOG_PATH   = path.join(__dirname, 'admin-audit.log');
 const SESSIONS_DB_PATH        = path.join(__dirname, 'sessions.db');
 const PORTAL_SESSIONS_DB_PATH = path.join(__dirname, 'portal-sessions.db');
@@ -536,6 +537,10 @@ function maskIntegrationConfig(name, config) {
 
 function readExpenses() { try { return JSON.parse(cachedReadFile(EXPENSES_DB_PATH)).expenses || []; } catch { return []; } }
 function writeExpenses(e) { atomicWriteFile(EXPENSES_DB_PATH, JSON.stringify({ expenses: e }, null, 2)); }
+function readVehicleLog() {
+  try { const p = JSON.parse(cachedReadFile(VEHICLE_LOG_DB_PATH)); return Array.isArray(p.entries) ? p.entries : []; } catch { return []; }
+}
+function writeVehicleLog(entries) { atomicWriteFile(VEHICLE_LOG_DB_PATH, JSON.stringify({ entries }, null, 2)); }
 
 // Analytics — append-only event log. Kept in memory for fast aggregation;
 // flushed to disk on a 30-second timer and on each new event batch.
@@ -2552,6 +2557,7 @@ function buildTaxReportData(fromStr, toStr) {
 
   // Expenses
   const expByCat = {};
+  const expLines = {};
   let totalExpenses = 0, expenseCount = 0;
   for (const e of readExpenses()) {
     const d = parseExpDateForReport(e.date);
@@ -2559,6 +2565,8 @@ function buildTaxReportData(fromStr, toStr) {
     const amt = (Number(e.amount) || 0) * (Number(e.quantity) || 1);
     const cat = e.category || 'other';
     expByCat[cat] = (expByCat[cat] || 0) + amt;
+    if (!expLines[cat]) expLines[cat] = [];
+    expLines[cat].push({ date: e.date || '', description: e.description || '', notes: e.notes || '', amount: amt });
     totalExpenses += amt;
     expenseCount++;
     const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
@@ -2577,7 +2585,7 @@ function buildTaxReportData(fromStr, toStr) {
     from: fromStr, to: toStr,
     orderRevenue, refundTotal, netOrderRevenue, repairRevenue,
     totalRevenue, totalExpenses, grossProfit,
-    expByCat,
+    expByCat, expLines,
     taxEstimate,
     monthly,
     orderCount, repairCount, expenseCount,
@@ -3297,6 +3305,157 @@ function buildTradingStockPdf(data, shop) {
     doc.font('Helvetica').fontSize(8).fillColor('#aaa')
       .text(`Generated ${genDate} · ${shopName} · Internal reference only`, 50, y+10, { width:495, align:'center' });
 
+    doc.end();
+  });
+}
+
+// ── GST threshold tracker ─────────────────────────────────────────────────────
+function buildGSTThresholdData() {
+  const now = new Date();
+  const revMap = {};
+  for (const o of readOrders()) {
+    const d = parseOrderDateForReport(o);
+    if (!d) continue;
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    const net = Math.max(0, (Number(o.total)||0) - (o.refund ? Number(o.refund.amount)||0 : 0));
+    revMap[key] = (revMap[key]||0) + net;
+  }
+  for (const r of flatRepairs()) {
+    if (r._colId !== 'done') continue;
+    const d = parseRepairDateForReport(r);
+    if (!d) continue;
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    revMap[key] = (revMap[key]||0) + (Number(r.total||r.cost)||0);
+  }
+  // Build last 13 months
+  const months = [];
+  for (let i = 12; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    months.push({ month: key, revenue: revMap[key]||0 });
+  }
+  const rolling12 = months.slice(1).reduce((s,m) => s + m.revenue, 0);
+  const threshold = 75000;
+  return {
+    asAt: now.toISOString().slice(0,10),
+    months: months.slice(1),
+    rolling12,
+    threshold,
+    pct: Math.round((rolling12 / threshold) * 100),
+  };
+}
+
+// ── Year-over-year comparison ────────────────────────────────────────────────
+function buildYoYData(fyYear) {
+  const curr = buildTaxReportData(`${fyYear}-07-01`,   `${fyYear+1}-06-30`);
+  const prev = buildTaxReportData(`${fyYear-1}-07-01`, `${fyYear}-06-30`);
+  return { fyYear, curr, prev };
+}
+
+// ── Vehicle log PDF ──────────────────────────────────────────────────────────
+const ATO_KM_RATES = { 2021: 0.72, 2022: 0.78, 2023: 0.85, 2024: 0.88, 2025: 0.88 };
+
+function buildVehicleLogPdf(entries, fyYear, shop) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: 'A4', margin: 50 });
+    const chunks = [];
+    doc.on('data', c => chunks.push(c));
+    doc.on('end',  () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const RUST = '#b5451b', OCHRE = '#d39a37';
+    const rate = ATO_KM_RATES[fyYear] || 0.88;
+    const fmtMoney = n => `$${(Number(n)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+    const shopName    = shop.tradingName || shop.name || 'Outback Electronics';
+    const shopAddress = shop.address || [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ');
+    const logoPath = path.join(__dirname, 'assets', 'logo.png');
+    const hasLogo  = fs.existsSync(logoPath);
+
+    const fyFrom = new Date(`${fyYear}-07-01`);
+    const fyTo   = new Date(`${fyYear+1}-06-30T23:59:59`);
+    const fyEntries = entries
+      .filter(e => { const d = e.date ? new Date(e.date) : null; return d && d >= fyFrom && d <= fyTo; })
+      .sort((a,b) => a.date < b.date ? -1 : 1);
+    const totalKm  = fyEntries.reduce((s,e) => s + (Number(e.km)||0), 0);
+    const cappedKm = Math.min(5000, totalKm);
+    const deduction = cappedKm * rate;
+
+    // Header
+    doc.rect(0, 0, doc.page.width, 110).fill(RUST);
+    if (hasLogo) { try { doc.image(logoPath, 50, 22, { width: 66 }); } catch {} }
+    doc.fillColor('#fff').font('Helvetica-Bold').fontSize(20)
+      .text(shopName, hasLogo ? 130 : 50, 30, { width: 280 });
+    doc.font('Helvetica').fontSize(9).fillColor('#fde6d6')
+      .text(shopAddress || '', hasLogo ? 130 : 50, 56, { width: 280 })
+      .text([shop.phone, shop.email].filter(Boolean).join('  ·  '), hasLogo ? 130 : 50, 70, { width: 280 });
+    doc.font('Helvetica-Bold').fontSize(18).fillColor('#fff').text('VEHICLE LOG', 0, 26, { width: 545, align: 'right' });
+    doc.font('Helvetica-Bold').fontSize(10).fillColor('#fde6d6')
+      .text(`FY ${fyYear}–${String(fyYear+1).slice(2)}  ·  CENTS-PER-KM METHOD`, 0, 50, { width: 545, align: 'right' });
+    doc.font('Helvetica').fontSize(9).fillColor('#fde6d6')
+      .text(`ATO rate: ${(rate*100).toFixed(0)}c/km  ·  Maximum: 5,000 km`, 0, 66, { width: 545, align: 'right' });
+    if (shop.abn) doc.font('Helvetica-Bold').fontSize(10).fillColor('#fde6d6').text(`ABN  ${shop.abn}`, 0, 82, { width: 545, align: 'right' });
+
+    let y = 148;
+
+    // Summary band
+    doc.rect(50, y, 495, 20).fill(OCHRE);
+    doc.font('Helvetica-Bold').fontSize(10).fillColor('#fff').text('SUMMARY', 56, y+5);
+    y += 24;
+    const sumRow = (label, value, highlight) => {
+      if (highlight) doc.rect(50, y-2, 495, 22).fill('#fbe9e4');
+      doc.font(highlight ? 'Helvetica-Bold' : 'Helvetica').fontSize(highlight ? 11 : 10)
+        .fillColor(highlight ? RUST : '#333')
+        .text(label, 56, y, { width: 360 }).text(value, 0, y, { width: 540, align: 'right' });
+      y += highlight ? 26 : 18;
+    };
+    sumRow('Total trips recorded', String(fyEntries.length));
+    sumRow('Total kilometres driven', `${totalKm.toFixed(1)} km`);
+    if (totalKm > 5000) {
+      doc.rect(50, y-2, 495, 18).fill('#fff8e1');
+      doc.font('Helvetica').fontSize(9).fillColor('#7a5d10')
+        .text('⚠  Exceeds 5,000 km — capped for cents-per-km method. Consider using the full logbook method for a higher deduction.', 56, y+1, { width: 483 });
+      y += 22;
+    }
+    sumRow(`Deductible amount  (${cappedKm.toFixed(1)} km × ${(rate*100).toFixed(0)}c)`, fmtMoney(deduction), true);
+
+    if (fyEntries.length === 0) {
+      doc.font('Helvetica').fontSize(11).fillColor('#555').text('No trips recorded for this financial year.', 56, y);
+      y += 20;
+    } else {
+      y += 8;
+      // Table header
+      doc.rect(50, y, 495, 18).fill('#f5ede3');
+      doc.font('Helvetica-Bold').fontSize(8).fillColor('#555')
+        .text('Date',    56,  y+4, { width: 65 })
+        .text('From',   121,  y+4, { width: 100 })
+        .text('To',     221,  y+4, { width: 100 })
+        .text('km',     321,  y+4, { width: 44, align: 'right' })
+        .text('Purpose',370,  y+4, { width: 175 });
+      y += 18;
+
+      for (let i = 0; i < fyEntries.length; i++) {
+        const e = fyEntries[i];
+        if (y > 750) { doc.addPage(); y = 50; }
+        if (i % 2 === 1) doc.rect(50, y-1, 495, 16).fill('#fdf9f5');
+        const dateStr = e.date ? new Date(e.date+'T00:00:00').toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+        doc.font('Helvetica').fontSize(8).fillColor('#222')
+          .text(dateStr,                 56,  y, { width: 65 })
+          .text(e.from    || '—',       121,  y, { width: 100 })
+          .text(e.to      || '—',       221,  y, { width: 100 })
+          .text((Number(e.km)||0).toFixed(1), 321, y, { width: 44, align: 'right' })
+          .text(e.purpose || '—',       370,  y, { width: 175 });
+        y += 16;
+      }
+      doc.moveTo(50, y+2).lineTo(545, y+2).strokeColor('#ccc').stroke(); y += 8;
+      doc.font('Helvetica-Bold').fontSize(9).fillColor('#111')
+        .text('Total', 56, y, { width: 300 })
+        .text(`${totalKm.toFixed(1)} km`, 321, y, { width: 44, align: 'right' });
+      y += 20;
+    }
+
+    const genDate = new Date().toLocaleDateString('en-AU',{day:'2-digit',month:'long',year:'numeric'});
+    doc.font('Helvetica').fontSize(8).fillColor('#aaa')
+      .text(`Generated ${genDate} · ${shopName} · Keep with your tax records for 5 years`, 50, y+10, { width: 495, align: 'center' });
     doc.end();
   });
 }
@@ -6236,6 +6395,69 @@ const adminServer = http.createServer(async (req, res) => {
     const { shop } = readSettings();
     const buffer = await buildBASPdf(data, shop);
     const filename = `bas-worksheet-${from}-to-${to}.pdf`;
+    res.writeHead(200, {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length,
+      'X-Content-Type-Options': 'nosniff',
+    });
+    res.end(buffer);
+    return;
+  }
+
+  // ── Admin: GST threshold tracker ────────────────────────────
+  if (req.method === 'GET' && url.pathname === '/api/admin/gst-threshold') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    return json(res, 200, buildGSTThresholdData());
+  }
+
+  // ── Admin: Year-over-year comparison ────────────────────────
+  if (req.method === 'GET' && url.pathname === '/api/admin/yoy-report') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    const fyYear = parseInt(url.searchParams.get('fy') || '') || (new Date().getMonth() >= 6 ? new Date().getFullYear() : new Date().getFullYear() - 1);
+    return json(res, 200, buildYoYData(fyYear));
+  }
+
+  // ── Admin: Vehicle log ──────────────────────────────────────
+  if (req.method === 'GET' && url.pathname === '/api/admin/vehicle-log') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    return json(res, 200, { entries: readVehicleLog() });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/vehicle-log/add') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    if (!body || !body.date || !body.km) return json(res, 422, { error: 'date and km required' });
+    const entries = readVehicleLog();
+    const entry = {
+      id: 'vl-' + Date.now(),
+      date: String(body.date).slice(0,10),
+      from: String(body.from || '').trim(),
+      to:   String(body.to   || '').trim(),
+      km:   Math.round(Number(body.km) * 10) / 10,
+      purpose: String(body.purpose || '').trim(),
+    };
+    entries.push(entry);
+    writeVehicleLog(entries);
+    return json(res, 200, { ok: true, entry });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/vehicle-log/delete') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    if (!body || !body.id) return json(res, 422, { error: 'id required' });
+    const entries = readVehicleLog().filter(e => e.id !== body.id);
+    writeVehicleLog(entries);
+    return json(res, 200, { ok: true });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/admin/vehicle-log/pdf') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    const fyYear = parseInt(url.searchParams.get('fy') || '') || (new Date().getMonth() >= 6 ? new Date().getFullYear() : new Date().getFullYear() - 1);
+    const entries = readVehicleLog();
+    const { shop } = readSettings();
+    const buffer = await buildVehicleLogPdf(entries, fyYear, shop);
+    const filename = `vehicle-log-fy${fyYear}-${fyYear+1}.pdf`;
     res.writeHead(200, {
       'Content-Type': 'application/pdf',
       'Content-Disposition': `attachment; filename="${filename}"`,

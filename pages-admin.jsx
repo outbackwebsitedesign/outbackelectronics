@@ -5345,14 +5345,20 @@ function AdminTaxReports() {
   const [view, setView] = useState('pl');
   const TABS = [
     {id:'pl',          label:'P&L Statement'},
+    {id:'yoy',         label:'Year-on-Year'},
+    {id:'cashflow',    label:'Cash Flow'},
+    {id:'gst',         label:'GST Tracker'},
     {id:'bas',         label:'BAS Worksheet'},
     {id:'receivables', label:'Receivables'},
     {id:'stock',       label:'Trading Stock'},
+    {id:'vehicle',     label:'Vehicle Log'},
+    {id:'homeoffice',  label:'Home Office'},
+    {id:'atodates',    label:'ATO Dates'},
     {id:'yearend',     label:'Year-End Checklist'},
   ];
   return (
-    <div style={{padding:32, maxWidth:960}}>
-      <div className="tabs" style={{marginBottom:24, flexWrap:'wrap'}}>
+    <div style={{padding:32, maxWidth:980}}>
+      <div className="tabs" style={{marginBottom:24, flexWrap:'wrap', gap:4}}>
         {TABS.map(v => (
           <div key={v.id} role="button" tabIndex={0} className={`tab${view===v.id?' active':''}`}
             onClick={() => setView(v.id)}
@@ -5363,9 +5369,15 @@ function AdminTaxReports() {
         ))}
       </div>
       {view === 'pl'          && <PLView />}
+      {view === 'yoy'         && <YoYView />}
+      {view === 'cashflow'    && <CashFlowView />}
+      {view === 'gst'         && <GSTTrackerView />}
       {view === 'bas'         && <BASView />}
       {view === 'receivables' && <ReceivablesView />}
       {view === 'stock'       && <StockView />}
+      {view === 'vehicle'     && <VehicleLogView />}
+      {view === 'homeoffice'  && <HomeOfficeView />}
+      {view === 'atodates'    && <ATODatesView />}
       {view === 'yearend'     && <YearEndView />}
     </div>
   );
@@ -5388,6 +5400,7 @@ function PLView() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState(null);
+  const [expandedCat, setExpandedCat] = useState(null);
 
   const applyPreset = idx => {
     setPreset(idx);
@@ -5507,15 +5520,32 @@ function PLView() {
 
         {/* Expenses */}
         <div className="card" style={{padding:'18px 22px', marginBottom:16}}>
-          <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--rust)', marginBottom:12, letterSpacing:1}}>EXPENSES</div>
+          <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:12}}>
+            <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--rust)', letterSpacing:1}}>EXPENSES</div>
+            <div style={{fontSize:11, color:'var(--ink-3)'}}>Click a category to expand</div>
+          </div>
           <table style={{width:'100%', borderCollapse:'collapse', fontSize:13}}>
             <tbody>
-              {Object.entries(data.expByCat).sort(([,a],[,b])=>b-a).map(([cat, amt]) => (
-                <tr key={cat}>
-                  <td style={{padding:'5px 0', color:'var(--ink-2)'}}>{catLabels[cat]||cat.charAt(0).toUpperCase()+cat.slice(1)}</td>
-                  <td style={{textAlign:'right', fontFamily:'monospace'}}>({fmtAUD(amt)})</td>
+              {Object.entries(data.expByCat).sort(([,a],[,b])=>b-a).map(([cat, amt]) => (<>
+                <tr key={cat} onClick={() => setExpandedCat(expandedCat===cat ? null : cat)}
+                  style={{cursor:'pointer', background: expandedCat===cat ? 'var(--bg-deep)' : 'transparent'}}>
+                  <td style={{padding:'6px 0', color:'var(--ink-2)'}}>
+                    <span style={{marginRight:6, fontSize:11, color:'var(--ink-3)'}}>{expandedCat===cat?'▾':'▸'}</span>
+                    {catLabels[cat]||cat.charAt(0).toUpperCase()+cat.slice(1)}
+                  </td>
+                  <td style={{textAlign:'right', fontFamily:'monospace', color:'var(--rust)'}}>({fmtAUD(amt)})</td>
                 </tr>
-              ))}
+                {expandedCat === cat && (data.expLines||{})[cat] && (data.expLines[cat]).map((ln,i) => (
+                  <tr key={i} style={{background:'#fdf9f5'}}>
+                    <td style={{padding:'3px 0 3px 22px', color:'var(--ink-3)', fontSize:12}}>
+                      <span className="mono" style={{fontSize:10, marginRight:8}}>{ln.date}</span>
+                      {ln.description || '(no description)'}
+                      {ln.notes && <span style={{marginLeft:8, fontSize:11, color:'var(--ink-3)'}}>— {ln.notes}</span>}
+                    </td>
+                    <td style={{textAlign:'right', fontFamily:'monospace', fontSize:12, color:'var(--ink-2)'}}>({fmtAUD(ln.amount)})</td>
+                  </tr>
+                ))}
+              </>))}
               {Object.keys(data.expByCat).length === 0 && (
                 <tr><td colSpan={2} style={{color:'var(--ink-3)', padding:'5px 0'}}>No expenses recorded in this period.</td></tr>
               )}
@@ -5848,6 +5878,624 @@ function BASView() {
           All purchases assumed GST-inclusive — exclude purchases from unregistered sellers.
         </div>
       </>}
+    </>
+  );
+}
+
+function GSTTrackerView() {
+  const [data, setData]       = useState(null);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    setLoading(true);
+    fetch('/api/admin/gst-threshold', { credentials:'include' })
+      .then(r => r.ok ? r.json() : null).then(d => { setData(d); setLoading(false); }).catch(()=>setLoading(false));
+  }, []);
+
+  const fmtAUD = n => `$${(Number(n)||0).toLocaleString('en-AU',{minimumFractionDigits:0,maximumFractionDigits:0})}`;
+  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const fmtMonthLabel = s => { const [yr,mo] = s.split('-'); return `${monthNames[parseInt(mo)-1]} ${yr.slice(2)}`; };
+
+  if (loading) return <div className="mono" style={{textAlign:'center', padding:40, color:'var(--ink-3)'}}>Loading…</div>;
+  if (!data) return null;
+
+  const pct    = Math.min(200, data.pct);
+  const barW   = Math.min(100, pct);
+  const status = data.rolling12 >= data.threshold ? 'THRESHOLD EXCEEDED' : data.rolling12 >= data.threshold * 0.9 ? 'APPROACHING LIMIT' : data.rolling12 >= data.threshold * 0.75 ? 'GETTING CLOSE' : 'UNDER THRESHOLD';
+  const statusColor = data.rolling12 >= data.threshold ? '#c62828' : data.rolling12 >= data.threshold * 0.9 ? '#e65100' : data.rolling12 >= data.threshold * 0.75 ? '#c67c00' : '#2e7d32';
+  const maxMonthRev = Math.max(...data.months.map(m => m.revenue), 1);
+
+  return (
+    <>
+      {/* Status card */}
+      <div className="card" style={{padding:'22px 28px', marginBottom:20, borderLeft:`4px solid ${statusColor}`}}>
+        <div style={{display:'flex', alignItems:'flex-start', justifyContent:'space-between', flexWrap:'wrap', gap:16}}>
+          <div>
+            <div className="mono" style={{fontSize:11, color:statusColor, fontWeight:700, letterSpacing:1, marginBottom:6}}>{status}</div>
+            <div className="mono" style={{fontSize:28, fontWeight:700, color:statusColor}}>{fmtAUD(data.rolling12)}</div>
+            <div style={{fontSize:12, color:'var(--ink-3)', marginTop:4}}>rolling 12-month GST turnover · threshold {fmtAUD(data.threshold)}</div>
+          </div>
+          <div style={{textAlign:'right'}}>
+            <div className="mono" style={{fontSize:13, color:'var(--ink-2)'}}>{data.pct}% of threshold</div>
+            <div style={{fontSize:11, color:'var(--ink-3)', marginTop:4}}>{fmtAUD(data.threshold - data.rolling12 > 0 ? data.threshold - data.rolling12 : 0)} remaining</div>
+          </div>
+        </div>
+        <div style={{marginTop:16}}>
+          <div style={{position:'relative', height:12, background:'var(--border)', borderRadius:6, overflow:'hidden'}}>
+            <div style={{position:'absolute', left:0, top:0, height:'100%', width:`${barW}%`, background:statusColor, borderRadius:6, transition:'width 0.4s'}} />
+            <div style={{position:'absolute', left:'calc(100% * 0.75)', top:'-2px', height:16, width:2, background:'#c67c00', opacity:0.7}} />
+            <div style={{position:'absolute', left:'calc(100% * 0.9)', top:'-2px', height:16, width:2, background:'#e65100', opacity:0.7}} />
+          </div>
+          <div style={{display:'flex', justifyContent:'space-between', fontSize:10, color:'var(--ink-3)', marginTop:4}}>
+            <span>$0</span><span style={{color:'#c67c00'}}>$56k</span><span style={{color:'#e65100'}}>$67.5k</span><span style={{color:'#c62828'}}>$75k</span>
+          </div>
+        </div>
+      </div>
+
+      {data.rolling12 >= data.threshold && (
+        <div style={{background:'#ffebee', border:'1px solid #ef9a9a', borderRadius:6, padding:'12px 18px', marginBottom:20, fontSize:13, color:'#c62828'}}>
+          <strong>Action required:</strong> Your rolling 12-month turnover has met or exceeded $75,000. You must register for GST within 21 days.
+          Register at <strong>business.gov.au</strong> or through your registered tax agent.
+        </div>
+      )}
+
+      {/* Bar chart */}
+      <div className="card" style={{padding:'18px 22px', marginBottom:16}}>
+        <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--rust)', marginBottom:16, letterSpacing:1}}>MONTHLY REVENUE — LAST 12 MONTHS</div>
+        <div style={{display:'flex', alignItems:'flex-end', gap:6, height:120, padding:'0 4px'}}>
+          {data.months.map(m => {
+            const h = Math.round((m.revenue / maxMonthRev) * 100);
+            return (
+              <div key={m.month} style={{flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:4}}>
+                <div className="mono" style={{fontSize:9, color:'var(--ink-3)'}}>{m.revenue > 0 ? fmtAUD(m.revenue) : ''}</div>
+                <div style={{width:'100%', height:`${Math.max(2, h)}%`, background:'var(--rust)', borderRadius:'3px 3px 0 0', minHeight:2, opacity:0.8}} />
+                <div className="mono" style={{fontSize:9, color:'var(--ink-3)', whiteSpace:'nowrap'}}>{fmtMonthLabel(m.month)}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div style={{fontSize:11, color:'var(--ink-3)'}}>
+        GST turnover = gross business income, excluding GST (which doesn't apply while unregistered).
+        The ATO checks any consecutive 12-month period — past or projected. Voluntarily register earlier if clients need tax invoices.
+      </div>
+    </>
+  );
+}
+
+function YoYView() {
+  const now = new Date();
+  const defaultFy = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+  const [fy, setFy]       = useState(defaultFy);
+  const [data, setData]   = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const load = (fyYear) => {
+    setLoading(true); setData(null);
+    fetch(`/api/admin/yoy-report?fy=${fyYear}`, { credentials:'include' })
+      .then(r => r.ok ? r.json() : null).then(d => { setData(d); setLoading(false); }).catch(()=>setLoading(false));
+  };
+  useEffect(() => { load(defaultFy); }, []);
+
+  const fmtAUD = n => `$${(Number(n)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+  const pct = (a, b) => { if (!b) return null; const p = ((a-b)/b)*100; return { val: p, label: `${p>=0?'+':''}${p.toFixed(1)}%`, color: p>=0?'#2e7d32':'var(--rust)' }; };
+
+  const FY_OPTIONS = [defaultFy, defaultFy-1, defaultFy-2];
+
+  return (
+    <>
+      <div className="card" style={{padding:'14px 22px', marginBottom:20, display:'flex', alignItems:'center', gap:16}}>
+        <div className="label" style={{marginBottom:0}}>Compare</div>
+        <div className="tabs">
+          {FY_OPTIONS.map(y => (
+            <div key={y} role="button" tabIndex={0} className={`tab${fy===y?' active':''}`} style={{cursor:'pointer'}}
+              onClick={() => { setFy(y); load(y); }}
+              onKeyDown={e => { if (e.key==='Enter'||e.key===' ') { setFy(y); load(y); } }}>
+              FY {y}–{String(y+1).slice(2)} vs {y-1}–{String(y).slice(2)}
+            </div>
+          ))}
+        </div>
+        {loading && <span className="mono" style={{fontSize:12, color:'var(--ink-3)'}}>Loading…</span>}
+      </div>
+
+      {data && (() => {
+        const c = data.curr, p = data.prev;
+        const rows = [
+          { label:'Total Revenue',   curr:c.totalRevenue,   prev:p.totalRevenue,   pos:true },
+          { label:'Order Revenue',   curr:c.netOrderRevenue,prev:p.netOrderRevenue, pos:true },
+          { label:'Repair Revenue',  curr:c.repairRevenue,  prev:p.repairRevenue,   pos:true },
+          { label:'Total Expenses',  curr:c.totalExpenses,  prev:p.totalExpenses,   pos:false },
+          { label:'Net Profit',      curr:c.grossProfit,    prev:p.grossProfit,     pos:true, bold:true },
+          { label:'Estimated Tax',   curr:(c.taxEstimate||{}).totalTax, prev:(p.taxEstimate||{}).totalTax, pos:false },
+          { label:'Orders',          curr:c.orderCount,     prev:p.orderCount,      pos:true,  money:false },
+          { label:'Repair Jobs',     curr:c.repairCount,    prev:p.repairCount,     pos:true,  money:false },
+        ];
+        return (
+          <div className="card" style={{padding:'18px 22px'}}>
+            <table style={{width:'100%', borderCollapse:'collapse', fontSize:13}}>
+              <thead>
+                <tr style={{borderBottom:'2px solid var(--border)'}}>
+                  <th style={{textAlign:'left',  padding:'4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11, width:'40%'}}>&nbsp;</th>
+                  <th style={{textAlign:'right', padding:'4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11}}>FY {data.fyYear}–{String(data.fyYear+1).slice(2)}</th>
+                  <th style={{textAlign:'right', padding:'4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11}}>FY {data.fyYear-1}–{String(data.fyYear).slice(2)}</th>
+                  <th style={{textAlign:'right', padding:'4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11}}>Change</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r,i) => {
+                  const ch = pct(r.curr, r.prev);
+                  const money = r.money !== false;
+                  const chColor = ch ? (((r.pos && ch.val>=0)||(!r.pos&&ch.val<=0)) ? '#2e7d32' : 'var(--rust)') : 'var(--ink-3)';
+                  return (
+                    <tr key={r.label} style={{background: i%2===1?'var(--bg-deep)':'transparent', fontWeight:r.bold?700:400}}>
+                      <td style={{padding:'7px 0', color: r.bold?'var(--ink-1)':'var(--ink-2)'}}>{r.label}</td>
+                      <td style={{textAlign:'right', fontFamily:'monospace', color: r.bold?(r.curr>=0?'#345526':'var(--rust)'):'var(--ink-1)'}}>{money ? fmtAUD(r.curr) : (r.curr||0)}</td>
+                      <td style={{textAlign:'right', fontFamily:'monospace', color:'var(--ink-3)'}}>{money ? fmtAUD(r.prev) : (r.prev||0)}</td>
+                      <td style={{textAlign:'right', fontFamily:'monospace', fontSize:12, color:chColor}}>{ch ? ch.label : '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        );
+      })()}
+    </>
+  );
+}
+
+function CashFlowView() {
+  const now = new Date();
+  const currentFyYear = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+  const FY_PRESETS = [
+    { label:`FY ${currentFyYear}–${String(currentFyYear+1).slice(2)}`, from:`${currentFyYear}-07-01`, to:`${currentFyYear+1}-06-30` },
+    { label:`FY ${currentFyYear-1}–${String(currentFyYear).slice(2)}`, from:`${currentFyYear-1}-07-01`, to:`${currentFyYear}-06-30` },
+    { label:'Custom', from:'', to:'' },
+  ];
+  const [preset, setPreset] = useState(0);
+  const [from, setFrom]     = useState(FY_PRESETS[0].from);
+  const [to, setTo]         = useState(FY_PRESETS[0].to);
+  const [data, setData]     = useState(null);
+  const [opening, setOpening] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const load = (f=from, t=to) => {
+    if (!f||!t) return;
+    setLoading(true); setData(null);
+    fetch(`/api/admin/tax-report?from=${f}&to=${t}`, { credentials:'include' })
+      .then(r => r.ok ? r.json() : null).then(d => { setData(d); setLoading(false); }).catch(()=>setLoading(false));
+  };
+  useEffect(() => { load(FY_PRESETS[0].from, FY_PRESETS[0].to); }, []);
+
+  const fmtAUD = n => `$${(Number(n)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const applyPreset = i => { setPreset(i); if (i < FY_PRESETS.length-1) { setFrom(FY_PRESETS[i].from); setTo(FY_PRESETS[i].to); } };
+  const openingBal = Number(opening) || 0;
+
+  return (
+    <>
+      <div className="card" style={{padding:'18px 22px', marginBottom:20}}>
+        <div style={{display:'flex', gap:12, flexWrap:'wrap', alignItems:'flex-end'}}>
+          <div>
+            <div className="label" style={{marginBottom:6}}>Period</div>
+            <div className="tabs">
+              {FY_PRESETS.map((p,i) => (
+                <div key={i} role="button" tabIndex={0} className={`tab${preset===i?' active':''}`} style={{cursor:'pointer'}}
+                  onClick={() => applyPreset(i)} onKeyDown={e => { if(e.key==='Enter'||e.key===' ') applyPreset(i); }}>{p.label}</div>
+              ))}
+            </div>
+          </div>
+          {preset===2 && (<>
+            <label className="field" style={{margin:0}}><span className="label">From</span><input className="input" type="date" value={from} onChange={e=>setFrom(e.target.value)}/></label>
+            <label className="field" style={{margin:0}}><span className="label">To</span><input className="input" type="date" value={to} onChange={e=>setTo(e.target.value)}/></label>
+          </>)}
+          <label className="field" style={{margin:0}}>
+            <span className="label">Opening balance ($)</span>
+            <input className="input" type="number" step="0.01" placeholder="0.00" value={opening} onChange={e=>setOpening(e.target.value)} style={{width:110}} />
+          </label>
+          <button className="btn btn-rust" onClick={() => load()} disabled={loading}>{loading?'Loading…':'Generate'}</button>
+        </div>
+      </div>
+
+      {loading && <div className="mono" style={{textAlign:'center', padding:40, color:'var(--ink-3)'}}>Loading…</div>}
+
+      {data && (() => {
+        let running = openingBal;
+        const rows = data.monthly.map(m => {
+          const net = m.revenue - m.expenses;
+          running += net;
+          return { ...m, net, balance: running };
+        });
+        const maxAbs = Math.max(...rows.map(r => Math.max(r.revenue, r.expenses)), 1);
+
+        return (<>
+          {/* Bar chart */}
+          <div className="card" style={{padding:'18px 22px', marginBottom:16}}>
+            <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--rust)', marginBottom:16, letterSpacing:1}}>MONTHLY CASH FLOW</div>
+            <div style={{display:'flex', gap:4, alignItems:'flex-end', height:130}}>
+              {rows.map(r => {
+                const [yr,mo] = r.month.split('-');
+                const inH  = Math.round((r.revenue  / maxAbs) * 100);
+                const outH = Math.round((r.expenses / maxAbs) * 100);
+                return (
+                  <div key={r.month} style={{flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:2}}>
+                    <div style={{width:'100%', display:'flex', gap:1, alignItems:'flex-end', height:110}}>
+                      <div style={{flex:1, height:`${Math.max(1,inH)}%`, background:'#345526', borderRadius:'2px 2px 0 0', opacity:0.85}} title={`Revenue: ${fmtAUD(r.revenue)}`} />
+                      <div style={{flex:1, height:`${Math.max(1,outH)}%`, background:'var(--rust)', borderRadius:'2px 2px 0 0', opacity:0.75}} title={`Expenses: ${fmtAUD(r.expenses)}`} />
+                    </div>
+                    <div className="mono" style={{fontSize:9, color:'var(--ink-3)'}}>{monthNames[parseInt(mo)-1]}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{display:'flex', gap:16, marginTop:8, fontSize:11}}>
+              <span><span style={{display:'inline-block',width:10,height:10,background:'#345526',borderRadius:2,marginRight:4}} />Cash in</span>
+              <span><span style={{display:'inline-block',width:10,height:10,background:'var(--rust)',borderRadius:2,marginRight:4}} />Cash out</span>
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="card" style={{padding:'18px 22px'}}>
+            <table style={{width:'100%', borderCollapse:'collapse', fontSize:13}}>
+              <thead>
+                <tr style={{borderBottom:'2px solid var(--border)'}}>
+                  {['Month','Cash In','Cash Out','Net','Running Balance'].map(h => (
+                    <th key={h} style={{textAlign:h==='Month'?'left':'right', padding:'4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r,i) => {
+                  const [yr,mo] = r.month.split('-');
+                  return (
+                    <tr key={r.month} style={{background:i%2===1?'var(--bg-deep)':'transparent'}}>
+                      <td style={{padding:'6px 0'}}>{monthNames[parseInt(mo)-1]} {yr}</td>
+                      <td style={{textAlign:'right', fontFamily:'monospace', color:'#345526'}}>{fmtAUD(r.revenue)}</td>
+                      <td style={{textAlign:'right', fontFamily:'monospace', color:'var(--rust)'}}>({fmtAUD(r.expenses)})</td>
+                      <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:600, color:r.net>=0?'#345526':'var(--rust)'}}>{fmtAUD(r.net)}</td>
+                      <td style={{textAlign:'right', fontFamily:'monospace', color:r.balance>=0?'var(--ink-1)':'var(--rust)'}}>{fmtAUD(r.balance)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr style={{borderTop:'2px solid var(--border)'}}>
+                  <td style={{padding:'8px 0', fontWeight:700}}>Total</td>
+                  <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:700, color:'#345526'}}>{fmtAUD(data.totalRevenue)}</td>
+                  <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:700, color:'var(--rust)'}}>({fmtAUD(data.totalExpenses)})</td>
+                  <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:700, color:data.grossProfit>=0?'#345526':'var(--rust)'}}>{fmtAUD(data.grossProfit)}</td>
+                  <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:700}}>{fmtAUD(openingBal + data.grossProfit)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </>);
+      })()}
+    </>
+  );
+}
+
+function VehicleLogView() {
+  const now = new Date();
+  const defaultFy = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+  const [fy, setFy]           = useState(defaultFy);
+  const [entries, setEntries] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [form, setForm]       = useState({ date:'', from:'', to:'', km:'', purpose:'' });
+  const [saving, setSaving]   = useState(false);
+  const [error, setError]     = useState(null);
+
+  const KM_RATES = { 2021:0.72, 2022:0.78, 2023:0.85, 2024:0.88, 2025:0.88 };
+  const rate = KM_RATES[fy] || 0.88;
+  const fmtAUD = n => `$${(Number(n)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+
+  const load = () => {
+    setLoading(true);
+    fetch('/api/admin/vehicle-log', { credentials:'include' })
+      .then(r => r.ok ? r.json() : {entries:[]})
+      .then(d => { setEntries(d.entries||[]); setLoading(false); })
+      .catch(()=>setLoading(false));
+  };
+  useEffect(load, []);
+
+  const fyEntries = entries.filter(e => {
+    const d = e.date ? new Date(e.date) : null;
+    return d && d >= new Date(`${fy}-07-01`) && d <= new Date(`${fy+1}-06-30T23:59:59`);
+  }).sort((a,b) => a.date < b.date ? -1 : 1);
+
+  const totalKm = fyEntries.reduce((s,e) => s + (Number(e.km)||0), 0);
+  const cappedKm = Math.min(5000, totalKm);
+  const deduction = cappedKm * rate;
+
+  const addEntry = async () => {
+    if (!form.date || !form.km) { setError('Date and km are required.'); return; }
+    setSaving(true); setError(null);
+    const csrf = await getCsrf().catch(()=>null);
+    const r = await fetch('/api/admin/vehicle-log/add', {
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json','X-CSRF-Token':csrf||''},
+      body: JSON.stringify({ ...form, km: Number(form.km) }),
+    }).catch(()=>null);
+    setSaving(false);
+    if (!r||!r.ok) { setError('Failed to save.'); return; }
+    setForm({ date:'', from:'', to:'', km:'', purpose:'' });
+    load();
+  };
+
+  const deleteEntry = async (id) => {
+    if (!confirm('Delete this trip?')) return;
+    const csrf = await getCsrf().catch(()=>null);
+    await fetch('/api/admin/vehicle-log/delete', {
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json','X-CSRF-Token':csrf||''},
+      body: JSON.stringify({ id }),
+    });
+    load();
+  };
+
+  const exportPdf = () => window.open(`/api/admin/vehicle-log/pdf?fy=${fy}`, '_blank');
+
+  const FY_OPTIONS = [defaultFy, defaultFy-1, defaultFy-2];
+  const fmtDate = s => s ? new Date(s+'T00:00:00').toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'}) : '—';
+
+  return (
+    <>
+      {/* FY selector + summary */}
+      <div className="card" style={{padding:'18px 22px', marginBottom:20}}>
+        <div style={{display:'flex', alignItems:'center', gap:16, flexWrap:'wrap', marginBottom:16}}>
+          <div>
+            <div className="label" style={{marginBottom:6}}>Financial Year</div>
+            <div className="tabs">
+              {FY_OPTIONS.map(y => (
+                <div key={y} role="button" tabIndex={0} className={`tab${fy===y?' active':''}`} style={{cursor:'pointer'}}
+                  onClick={()=>setFy(y)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' ')setFy(y);}}>{y}–{String(y+1).slice(2)}</div>
+              ))}
+            </div>
+          </div>
+          <button className="btn" style={{background:'#345526',color:'#fff'}} onClick={exportPdf}>↓ Export PDF</button>
+        </div>
+        <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))', gap:12}}>
+          {[
+            {label:'TRIPS THIS FY', val:fyEntries.length, money:false},
+            {label:'TOTAL KM', val:`${totalKm.toFixed(1)} km`, money:false},
+            {label:`ATO RATE (${fy}–${String(fy+1).slice(2)})`, val:`${(rate*100).toFixed(0)}c/km`, money:false},
+            {label:'ESTIMATED DEDUCTION', val:fmtAUD(deduction), color:'#345526'},
+          ].map(t => (
+            <div key={t.label} style={{padding:'12px 14px', background:'var(--bg-deep)', borderRadius:6}}>
+              <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:4}}>{t.label}</div>
+              <div className="mono" style={{fontSize:16, fontWeight:700, color:t.color||'var(--ink-1)'}}>{t.val}</div>
+            </div>
+          ))}
+        </div>
+        {totalKm > 5000 && (
+          <div style={{background:'#fff8e1', border:'1px solid #f0d97c', borderRadius:5, padding:'8px 12px', marginTop:12, fontSize:12, color:'#7a5d10'}}>
+            <strong>Over 5,000 km:</strong> The cents-per-km method is capped at 5,000 km. A logbook kept for 12 continuous weeks may allow you to claim more — talk to your tax agent.
+          </div>
+        )}
+      </div>
+
+      {/* Add trip form */}
+      <div className="card" style={{padding:'18px 22px', marginBottom:20}}>
+        <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--rust)', marginBottom:14, letterSpacing:1}}>LOG A TRIP</div>
+        <div style={{display:'grid', gridTemplateColumns:'140px 1fr 1fr 80px 1fr auto', gap:10, alignItems:'flex-end', flexWrap:'wrap'}}>
+          <label className="field" style={{margin:0}}><span className="label">Date</span>
+            <input className="input" type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))} /></label>
+          <label className="field" style={{margin:0}}><span className="label">From</span>
+            <input className="input" placeholder="Workshop" value={form.from} onChange={e=>setForm(f=>({...f,from:e.target.value}))} /></label>
+          <label className="field" style={{margin:0}}><span className="label">To</span>
+            <input className="input" placeholder="Parts supplier" value={form.to} onChange={e=>setForm(f=>({...f,to:e.target.value}))} /></label>
+          <label className="field" style={{margin:0}}><span className="label">km</span>
+            <input className="input" type="number" step="0.1" min="0" placeholder="12.5" value={form.km} onChange={e=>setForm(f=>({...f,km:e.target.value}))} /></label>
+          <label className="field" style={{margin:0}}><span className="label">Purpose</span>
+            <input className="input" placeholder="Pick up capacitors for J-123" value={form.purpose} onChange={e=>setForm(f=>({...f,purpose:e.target.value}))} /></label>
+          <button className="btn btn-rust" onClick={addEntry} disabled={saving} style={{whiteSpace:'nowrap'}}>{saving?'Saving…':'Add Trip'}</button>
+        </div>
+        {error && <div className="mono" style={{color:'var(--rust)', fontSize:12, marginTop:8}}>{error}</div>}
+      </div>
+
+      {/* Trip table */}
+      {loading ? <div className="mono" style={{textAlign:'center', padding:40, color:'var(--ink-3)'}}>Loading…</div> : fyEntries.length === 0 ? (
+        <div className="card" style={{padding:'32px 22px', textAlign:'center', color:'var(--ink-3)'}}>No trips logged for FY {fy}–{String(fy+1).slice(2)}.</div>
+      ) : (
+        <div className="card" style={{padding:'18px 22px'}}>
+          <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--rust)', marginBottom:12, letterSpacing:1}}>TRIPS — FY {fy}–{String(fy+1).slice(2)}</div>
+          <table style={{width:'100%', borderCollapse:'collapse', fontSize:13}}>
+            <thead>
+              <tr style={{borderBottom:'2px solid var(--border)'}}>
+                {['Date','From','To','km','Purpose',''].map(h => (
+                  <th key={h} style={{textAlign:h==='km'?'right':'left', padding:'4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {fyEntries.map((e,i) => (
+                <tr key={e.id} style={{background:i%2===1?'var(--bg-deep)':'transparent'}}>
+                  <td style={{padding:'6px 0', fontFamily:'monospace', fontSize:11}}>{fmtDate(e.date)}</td>
+                  <td style={{padding:'6px 0'}}>{e.from||'—'}</td>
+                  <td style={{padding:'6px 0'}}>{e.to||'—'}</td>
+                  <td style={{textAlign:'right', fontFamily:'monospace'}}>{(Number(e.km)||0).toFixed(1)}</td>
+                  <td style={{padding:'6px 0', color:'var(--ink-2)'}}>{e.purpose||'—'}</td>
+                  <td style={{textAlign:'right'}}>
+                    <button className="btn" style={{padding:'2px 8px', fontSize:11, color:'var(--rust)', background:'transparent', border:'none', cursor:'pointer'}} onClick={() => deleteEntry(e.id)}>✕</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr style={{borderTop:'2px solid var(--border)'}}>
+                <td colSpan={3} style={{padding:'8px 0', fontWeight:700}}>Total</td>
+                <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:700}}>{totalKm.toFixed(1)}</td>
+                <td colSpan={2} style={{textAlign:'right', fontFamily:'monospace', color:'#345526', fontWeight:700}}>≈ {fmtAUD(deduction)} deduction</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}
+
+function HomeOfficeView() {
+  const [method, setMethod] = useState('fixed');
+  // Fixed rate method (67c/hour from 1 July 2022)
+  const [hoursPerWeek, setHoursPerWeek] = useState('');
+  const [weeksPerYear, setWeeksPerYear] = useState('48');
+  // Floor area method
+  const [homeArea, setHomeArea]       = useState('');
+  const [officeArea, setOfficeArea]   = useState('');
+  const [annualCosts, setAnnualCosts] = useState('');
+
+  const fmtAUD = n => `$${(Number(n)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+
+  const fixedResult   = Number(hoursPerWeek) * Number(weeksPerYear) * 0.67;
+  const floorAreaPct  = homeArea && officeArea ? (Number(officeArea) / Number(homeArea)) * 100 : 0;
+  const floorResult   = (Number(annualCosts) * (floorAreaPct / 100));
+  const betterMethod  = fixedResult >= floorResult ? 'fixed' : 'floor';
+
+  return (
+    <>
+      <div style={{background:'#fff8e1', border:'1px solid #f0d97c', borderRadius:6, padding:'10px 16px', marginBottom:20, fontSize:12, color:'#7a5d10'}}>
+        <strong>Estimate only.</strong> Record your actual hours with a diary for 4 representative weeks under the fixed rate method.
+        Consult a registered tax agent to confirm the best method for your situation.
+      </div>
+
+      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:20, marginBottom:20}}>
+        {/* Fixed Rate Method */}
+        <div className="card" style={{padding:'22px', outline: method==='fixed'?'2px solid var(--rust)':undefined}}>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16}}>
+            <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--rust)', letterSpacing:1}}>FIXED RATE METHOD</div>
+            <span style={{fontSize:10, background:'#345526', color:'#fff', borderRadius:10, padding:'2px 8px'}}>67c/hour</span>
+          </div>
+          <div style={{fontSize:12, color:'var(--ink-3)', marginBottom:14}}>
+            Covers electricity, internet, stationery, and minor equipment. Does not include occupancy costs (rent/mortgage interest).
+          </div>
+          <label className="field"><span className="label">Hours/week worked from home</span>
+            <input className="input" type="number" min="0" max="168" step="0.5" placeholder="25"
+              value={hoursPerWeek} onChange={e=>setHoursPerWeek(e.target.value)} /></label>
+          <label className="field"><span className="label">Weeks worked (default 48)</span>
+            <input className="input" type="number" min="0" max="52" step="1" placeholder="48"
+              value={weeksPerYear} onChange={e=>setWeeksPerYear(e.target.value)} /></label>
+          {fixedResult > 0 && (
+            <div style={{background: betterMethod==='fixed'?'#eaf3ea':'var(--bg-deep)', borderRadius:6, padding:'14px', marginTop:8, textAlign:'center'}}>
+              <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:4}}>ESTIMATED DEDUCTION</div>
+              <div className="mono" style={{fontSize:24, fontWeight:700, color:'#345526'}}>{fmtAUD(fixedResult)}</div>
+              <div style={{fontSize:11, color:'var(--ink-3)', marginTop:4}}>{hoursPerWeek} hrs × {weeksPerYear} wks × 67c</div>
+              {betterMethod==='fixed' && <div style={{fontSize:11, fontWeight:700, color:'#345526', marginTop:4}}>HIGHER DEDUCTION</div>}
+            </div>
+          )}
+        </div>
+
+        {/* Floor Area Method */}
+        <div className="card" style={{padding:'22px', outline: method==='floor'?'2px solid var(--rust)':undefined}}>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16}}>
+            <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--rust)', letterSpacing:1}}>FLOOR AREA METHOD</div>
+            <span style={{fontSize:10, background:'#555', color:'#fff', borderRadius:10, padding:'2px 8px'}}>% of costs</span>
+          </div>
+          <div style={{fontSize:12, color:'var(--ink-3)', marginBottom:14}}>
+            Claim the business-use percentage of all running costs. Requires receipts for all expenses claimed.
+          </div>
+          <label className="field"><span className="label">Home total floor area (m²)</span>
+            <input className="input" type="number" min="0" step="1" placeholder="120"
+              value={homeArea} onChange={e=>setHomeArea(e.target.value)} /></label>
+          <label className="field"><span className="label">Dedicated office area (m²)</span>
+            <input className="input" type="number" min="0" step="0.5" placeholder="12"
+              value={officeArea} onChange={e=>setOfficeArea(e.target.value)} /></label>
+          <label className="field"><span className="label">Annual running costs ($) — electricity, internet, etc.</span>
+            <input className="input" type="number" min="0" step="1" placeholder="4000"
+              value={annualCosts} onChange={e=>setAnnualCosts(e.target.value)} /></label>
+          {floorAreaPct > 0 && annualCosts && (
+            <div style={{background: betterMethod==='floor'?'#eaf3ea':'var(--bg-deep)', borderRadius:6, padding:'14px', marginTop:8, textAlign:'center'}}>
+              <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:4}}>ESTIMATED DEDUCTION</div>
+              <div className="mono" style={{fontSize:24, fontWeight:700, color:'#345526'}}>{fmtAUD(floorResult)}</div>
+              <div style={{fontSize:11, color:'var(--ink-3)', marginTop:4}}>{floorAreaPct.toFixed(1)}% of ${Number(annualCosts).toLocaleString()}</div>
+              {betterMethod==='floor' && <div style={{fontSize:11, fontWeight:700, color:'#345526', marginTop:4}}>HIGHER DEDUCTION</div>}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {(fixedResult > 0 || floorResult > 0) && (
+        <div className="card" style={{padding:'16px 22px', background: betterMethod==='fixed'?'#eaf3ea':'#eaf3ea'}}>
+          <div style={{fontSize:13}}>
+            <strong>Recommended: {betterMethod==='fixed' ? 'Fixed Rate Method' : 'Floor Area Method'}</strong>
+            {' '}gives you an estimated <strong style={{color:'#345526'}}>{fmtAUD(Math.max(fixedResult, floorResult))}</strong> deduction.
+            {betterMethod==='fixed' && ' Remember to keep a 4-week representative diary to substantiate your hours.'}
+            {betterMethod==='floor' && ' Keep all receipts for utilities and running costs.'}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function ATODatesView() {
+  const now = new Date();
+  const todayStr = now.toISOString().slice(0,10);
+  const fy = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+
+  const dates = [
+    // Q1 BAS + PAYG
+    { due:`${fy}-10-28`, label:'Q1 BAS Lodge & Pay (Jul–Sep)',     cat:'GST',  gst:true },
+    { due:`${fy}-10-28`, label:'Q1 PAYG Instalment (Jul–Sep)',      cat:'PAYG', payg:true },
+    // Q2 BAS + PAYG
+    { due:`${fy+1}-02-28`, label:'Q2 BAS Lodge & Pay (Oct–Dec)',    cat:'GST',  gst:true },
+    { due:`${fy+1}-02-28`, label:'Q2 PAYG Instalment (Oct–Dec)',    cat:'PAYG', payg:true },
+    // Q3 BAS + PAYG
+    { due:`${fy+1}-04-28`, label:'Q3 BAS Lodge & Pay (Jan–Mar)',    cat:'GST',  gst:true },
+    { due:`${fy+1}-04-28`, label:'Q3 PAYG Instalment (Jan–Mar)',    cat:'PAYG', payg:true },
+    // Super personal contribution deadline
+    { due:`${fy+1}-06-30`, label:'Personal super contributions — last day to contribute for FY deduction', cat:'Super' },
+    // Tax return
+    { due:`${fy+1}-10-31`, label:`Lodge income tax return FY${fy}–${String(fy+1).slice(2)} (self-lodging)`, cat:'Income Tax' },
+    { due:`${fy+1}-05-15`, label:`Lodge via registered tax agent — extended deadline`, cat:'Income Tax' },
+    // Q4 BAS + PAYG (next FY)
+    { due:`${fy+1}-07-28`, label:'Q4 BAS Lodge & Pay (Apr–Jun)',    cat:'GST',  gst:true },
+    { due:`${fy+1}-07-28`, label:'Q4 PAYG Instalment (Apr–Jun)',    cat:'PAYG', payg:true },
+  ].sort((a,b) => a.due < b.due ? -1 : 1);
+
+  const catColors = { 'GST':'#003087', 'PAYG':'#5e35b1', 'Income Tax':'var(--rust)', 'Super':'#345526' };
+  const fmtDue = s => new Date(s+'T00:00:00').toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'long',year:'numeric'});
+  const daysUntil = s => Math.ceil((new Date(s+'T00:00:00') - now) / 86400000);
+  const pastCount = dates.filter(d => d.due < todayStr).length;
+
+  return (
+    <>
+      <div style={{background:'#fff8e1', border:'1px solid #f0d97c', borderRadius:6, padding:'10px 16px', marginBottom:20, fontSize:12, color:'#7a5d10'}}>
+        <strong>FY {fy}–{String(fy+1).slice(2)} key dates.</strong> BAS and PAYG dates apply only if you are registered. GST/PAYG dates are shown for planning — they are greyed when not yet applicable.
+        Always confirm exact due dates at <strong>ato.gov.au</strong> as dates may vary for weekends and public holidays.
+      </div>
+
+      <div style={{display:'flex', flexDirection:'column', gap:10}}>
+        {dates.map((d,i) => {
+          const days = daysUntil(d.due);
+          const isPast = d.due < todayStr;
+          const isSoon = !isPast && days <= 30;
+          const isGstOrPayg = d.gst || d.payg;
+          const bg    = isPast ? 'var(--bg-deep)' : isSoon ? '#fff8e1' : 'var(--bg-elev)';
+          const border= isPast ? 'var(--border)' : isSoon ? '#f0d97c' : 'var(--border)';
+          const opacity = isGstOrPayg ? 0.65 : 1;
+          return (
+            <div key={i} style={{display:'flex', alignItems:'center', gap:14, padding:'12px 16px',
+              background:bg, border:`1px solid ${border}`, borderRadius:6, opacity}}>
+              <div style={{width:6, height:36, background:catColors[d.cat]||'var(--rust)', borderRadius:3, flexShrink:0}} />
+              <div style={{flex:1}}>
+                <div style={{fontWeight:600, fontSize:13, color: isPast?'var(--ink-3)':'var(--ink-1)',
+                  textDecoration: isPast?'line-through':'none'}}>{d.label}</div>
+                <div style={{fontSize:11, color:'var(--ink-3)', marginTop:2}}>
+                  <span className="mono" style={{marginRight:8}}>{fmtDue(d.due)}</span>
+                  <span style={{background:catColors[d.cat]||'var(--rust)', color:'#fff', fontSize:9,
+                    padding:'1px 6px', borderRadius:8, fontWeight:700}}>{d.cat}</span>
+                  {isGstOrPayg && <span style={{marginLeft:6, fontSize:10, color:'var(--ink-3)'}}>when GST registered</span>}
+                </div>
+              </div>
+              <div className="mono" style={{fontSize:12, fontWeight:700, textAlign:'right', flexShrink:0,
+                color: isPast?'var(--ink-3)':isSoon?'#c67c00':'var(--ink-2)'}}>
+                {isPast ? 'Passed' : days===0 ? 'TODAY' : `${days}d`}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </>
   );
 }
