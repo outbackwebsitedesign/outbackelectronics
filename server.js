@@ -870,7 +870,7 @@ function buildAdminMetrics() {
   const orders7d   = recentPaidOrders.length;
 
   return {
-    overview: { revenue7d, orders7d, openRepairs, quotesAwaiting },
+    overview: { revenue7d, orders7d, openRepairs, quotesAwaiting: awaitingQuotes },
     subtitles: {
       orders: `${orders.length} total orders`,
       repairs: `kanban · ${openRepairs} open jobs`,
