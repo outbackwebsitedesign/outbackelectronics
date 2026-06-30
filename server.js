@@ -3830,7 +3830,7 @@ const mainServer = http.createServer(async (req, res) => {
     const ewaste = readEwaste();
     const repairCount = (repairs.columns || []).reduce((sum, col) => sum + ((col.cards || []).length), 0);
     const ewasteTonnes = ewaste.reduce((sum, item) => sum + (Number(item.weightKg) || Number(item.kg) || 0), 0) / 1000;
-    const resaleable = ewaste.filter(item => item.tier && item.tier !== 'D').length;
+    const resaleable = ewaste.filter(item => item.tier && item.tier !== 'D' && item.tier !== 'recycle').length;
     const resalePercent = ewaste.length > 0 ? Math.round((resaleable / ewaste.length) * 100) : null;
     return json(res, 200, { repairCount, ewasteTonnes, resalePercent });
   }

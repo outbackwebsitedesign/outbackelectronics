@@ -2932,7 +2932,7 @@ function AdminEwaste() {
         <div>
           <div className="row-flex" style={{justifyContent:'space-between', marginBottom:12}}>
             <h3 className="serif" style={{fontSize:22}}>Recent intakes</h3>
-            <button className="btn btn-rust btn-sm" onClick={() => { setEdit({}); setForm({ id:'', from:'', kg:0, items:'', tier:'A', payout:'', date:'', orderId:'' }); setOrderSearch(''); }}>+ Log intake</button>
+            <button className="btn btn-rust btn-sm" onClick={() => { setEdit({}); setForm({ id:'', from:'', kg:0, items:'', tier:'', payout:'', date:'', orderId:'' }); setOrderSearch(''); }}>+ Log intake</button>
           </div>
           <Table
             columns={[
@@ -2940,7 +2940,7 @@ function AdminEwaste() {
               { key:'from', label:'From', w:'1.5fr' },
               { key:'items', label:'Items', w:'2fr', render:r => <span style={{fontSize:13, color:'var(--ink-2)'}}>{r.items}</span> },
               { key:'kg', label:'Weight', w:'80px', render:r => <span className="mono">{r.kg}kg</span> },
-              { key:'tier', label:'Tier', w:'80px', render:r => <span className="tag tag-outline">{r.tier}</span> },
+              { key:'tier', label:'Condition', w:'110px', render:r => <span className="tag tag-outline" style={{textTransform:'capitalize'}}>{r.tier||'—'}</span> },
               { key:'payout', label:'Payout', w:'140px', render:r => <span style={{fontWeight:600}}>{r.payout}</span> },
               { key:'date', label:'When', w:'90px', render:r => <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{r.date.toUpperCase()}</span>},
               { key:'orderId', label:'Order', w:'120px', render:r => r.orderId ? <span className="mono" style={{fontSize:11, color:'var(--rust)', cursor:'pointer'}} onClick={e=>{e.stopPropagation(); window.location.hash='orders';}}>{r.orderId}</span> : <span style={{color:'var(--ink-3)'}}>—</span> },
@@ -2991,7 +2991,15 @@ function AdminEwaste() {
           <label className="field"><span className="label">From</span><input className="input" value={form.from||''} onChange={e=>setForm({...form,from:e.target.value})}/></label>
           <label className="field"><span className="label">Weight (kg)</span><input className="input" type="number" value={form.kg||0} onChange={e=>setForm({...form,kg:Number(e.target.value)})}/></label>
           <label className="field"><span className="label">Items</span><input className="input" value={form.items||''} onChange={e=>setForm({...form,items:e.target.value})}/></label>
-          <label className="field"><span className="label">Tier</span><input className="input" value={form.tier||''} onChange={e=>setForm({...form,tier:e.target.value})}/></label>
+          <label className="field"><span className="label">Condition</span>
+            <select className="input" value={form.tier||''} onChange={e=>setForm({...form,tier:e.target.value})}>
+              <option value="">— select —</option>
+              <option value="working">Working</option>
+              <option value="repairable">Repairable</option>
+              <option value="parts">Parts only</option>
+              <option value="recycle">Recycle</option>
+            </select>
+          </label>
           <label className="field"><span className="label">Payout</span><input className="input" value={form.payout||''} onChange={e=>setForm({...form,payout:e.target.value})}/></label>
           <label className="field"><span className="label">Date</span><input className="input" value={form.date||''} onChange={e=>setForm({...form,date:e.target.value})}/></label>
           <div className="field">
