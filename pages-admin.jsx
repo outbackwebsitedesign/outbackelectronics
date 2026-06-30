@@ -4439,13 +4439,25 @@ function AdminCustomers() {
       .then(r => r.ok ? r.json() : Promise.reject()).then(d => setRows(d.items || [])).catch(() => setRows([]));
   }, []);
   const openCustomer = (r) => { setEdit(r); setForm({...r, tagsStr: (r.tags||[]).join(', ')}); };
+
+  const now = new Date();
+  const msPerDay = 86400000;
+  const parseIso = s => { if (!s) return null; const d = new Date(s + 'T00:00:00'); return isNaN(d) ? null : d; };
+  const active90     = rows.filter(r => { const d = parseIso(r.last); return d && (now - d) < 90 * msPerDay; }).length;
+  const newThisMonth = rows.filter(r => { const d = parseIso(r.last); return d && d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth(); }).length;
+  const repeatRate   = rows.length ? Math.round(rows.filter(r => (r.orders||0) > 1).length / rows.length * 100) : 0;
+  const totalOrders  = rows.reduce((s, r) => s + (r.orders||0), 0);
+  const totalSpent   = rows.reduce((s, r) => s + (r.spent||0), 0);
+  const avgOrder     = totalOrders ? (totalSpent / totalOrders) : 0;
+  const fmtAUD = n => `$${n.toLocaleString('en-AU', {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+
   return (
     <div style={{padding:32, display:'grid', gap:24}}>
       <div className="grid-4">
-        <StatTile label="ACTIVE CUSTOMERS · 90D" value="—" />
-        <StatTile label="NEW THIS MONTH" value="—" />
-        <StatTile label="REPEAT RATE" value="—" />
-        <StatTile label="AVG ORDER VALUE" value="—" />
+        <StatTile label="ACTIVE CUSTOMERS · 90D" value={rows.length ? active90 : '—'} />
+        <StatTile label="NEW THIS MONTH" value={rows.length ? newThisMonth : '—'} />
+        <StatTile label="REPEAT RATE" value={rows.length ? `${repeatRate}%` : '—'} />
+        <StatTile label="AVG ORDER VALUE" value={rows.length ? fmtAUD(avgOrder) : '—'} />
       </div>
       <div className="row-flex" style={{justifyContent:'flex-end', gap:8, marginBottom:-8}}>
         <button className="btn btn-ghost btn-sm" onClick={async () => {

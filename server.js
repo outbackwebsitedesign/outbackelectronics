@@ -830,7 +830,15 @@ function buildAdminMetrics() {
   const ewasteTonnes = ewaste.reduce((sum, item) => sum + (Number(item.weightKg) || 0), 0) / 1000;
   const liveProducts = countBy(products, p => p.status === 'published');
   const draftTutorials = countBy(tutorials, t => t.status !== 'published');
-  const repeatCustomers = countBy(customers, c => !!c.repeat);
+  const orderEmailCounts = {};
+  for (const o of orders) {
+    const e = (o.email||'').toLowerCase().trim();
+    if (e) orderEmailCounts[e] = (orderEmailCounts[e]||0) + 1;
+  }
+  const repeatCustomers = countBy(customers, c => {
+    const e = (c.email||'').toLowerCase().trim();
+    return e ? (orderEmailCounts[e]||0) > 1 : false;
+  });
   const repeatRate = customers.length ? Math.round((repeatCustomers / customers.length) * 100) : 0;
   const outstandingSellerValue = sellers.reduce((sum, s) => sum + (Number(s.payoutDue) || 0), 0);
   return {
@@ -5397,11 +5405,11 @@ const adminServer = http.createServer(async (req, res) => {
       const repairs = allRepairs.filter(r => custMatches(c, r));
       const spent   = orders.reduce((s, o) => s + (parseFloat(o.total)||0), 0)
                     + repairs.reduce((s, r) => s + (parseFloat(r.total||r.cost||0)||0), 0);
-      const lastDates = [
-        ...orders.map(o => o.createdAt||o.date||''),
-        ...repairs.map(r => r.createdAt||r.date||''),
-      ].filter(Boolean).sort();
-      const last = lastDates.length ? lastDates[lastDates.length - 1].slice(0, 10) : (c.last||'');
+      const lastDate = [
+        ...orders.map(o => parseAuDateStr(o.createdAt||o.date||'')),
+        ...repairs.map(r => parseAuDateStr(r.createdAt||r.date||'')),
+      ].filter(Boolean).reduce((best, d) => (!best || d > best) ? d : best, null);
+      const last = lastDate ? lastDate.toISOString().slice(0,10) : (c.last||'');
       return { ...c, orders: orders.length + repairs.length, spent: Math.round(spent * 100) / 100, last };
     });
     return json(res, 200, { items });
