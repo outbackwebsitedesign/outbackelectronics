@@ -8190,7 +8190,9 @@ function AdminPage({ go }) {
             </div>
           }
         />
-        <Body sessionInfo={sessionInfo} search={search} />
+        <div className="admin-section-root">
+          <Body sessionInfo={sessionInfo} search={search} />
+        </div>
       </div>
     </div>
   );
