@@ -2910,11 +2910,15 @@ function AdminEwaste() {
   const [intakes, setIntakes] = useState([]);
   const [edit, setEdit] = useState(null);
   const [form, setForm] = useState({});
+  const [orders, setOrders] = useState([]);
+  const [orderSearch, setOrderSearch] = useState('');
   useEffect(() => {
     fetch('/api/admin/ewaste', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject()).then(d => setIntakes(d.items || [])).catch(() => setIntakes([]));
+    fetch('/api/admin/orders', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject()).then(d => setOrders(d.items || [])).catch(() => setOrders([]));
   }, []);
-  const openIntake = (r) => { setEdit(r); setForm({...r}); };
+  const openIntake = (r) => { setEdit(r); setForm({...r}); setOrderSearch(''); };
   return (
     <div style={{padding:32, display:'grid', gap:24}}>
       <div className="grid-4">
@@ -2928,7 +2932,7 @@ function AdminEwaste() {
         <div>
           <div className="row-flex" style={{justifyContent:'space-between', marginBottom:12}}>
             <h3 className="serif" style={{fontSize:22}}>Recent intakes</h3>
-            <button className="btn btn-rust btn-sm" onClick={() => { setEdit({}); setForm({ id:'', from:'', kg:0, items:'', tier:'A', payout:'', date:'', orderId:'' }); }}>+ Log intake</button>
+            <button className="btn btn-rust btn-sm" onClick={() => { setEdit({}); setForm({ id:'', from:'', kg:0, items:'', tier:'A', payout:'', date:'', orderId:'' }); setOrderSearch(''); }}>+ Log intake</button>
           </div>
           <Table
             columns={[
@@ -2990,7 +2994,29 @@ function AdminEwaste() {
           <label className="field"><span className="label">Tier</span><input className="input" value={form.tier||''} onChange={e=>setForm({...form,tier:e.target.value})}/></label>
           <label className="field"><span className="label">Payout</span><input className="input" value={form.payout||''} onChange={e=>setForm({...form,payout:e.target.value})}/></label>
           <label className="field"><span className="label">Date</span><input className="input" value={form.date||''} onChange={e=>setForm({...form,date:e.target.value})}/></label>
-          <label className="field"><span className="label">Linked order # <span style={{fontWeight:400,color:'var(--ink-2)'}}>(optional — e.g. replaced component)</span></span><input className="input" placeholder="ord-…" value={form.orderId||''} onChange={e=>setForm({...form,orderId:e.target.value.trim()})}/></label>
+          <div className="field">
+            <span className="label">Linked order <span style={{fontWeight:400,color:'var(--ink-2)'}}>(optional — e.g. replaced component)</span></span>
+            {(() => {
+              const q = orderSearch.toLowerCase();
+              const filtered = orders.filter(o =>
+                !q || o.id?.toLowerCase().includes(q) || (o.cust||'').toLowerCase().includes(q)
+              ).slice(0, 60);
+              return (
+                <div style={{display:'grid', gap:6}}>
+                  <input className="input" placeholder="Search by order # or customer…" value={orderSearch} onChange={e=>setOrderSearch(e.target.value)}/>
+                  <select className="input" value={form.orderId||''} onChange={e=>setForm({...form,orderId:e.target.value})} style={{fontFamily:'var(--font-mono)', fontSize:12}}>
+                    <option value="">— none —</option>
+                    {filtered.map(o => (
+                      <option key={o.id} value={o.id}>{o.id}{o.cust ? ` · ${o.cust}` : ''}</option>
+                    ))}
+                  </select>
+                  {form.orderId && !filtered.find(o=>o.id===form.orderId) && (
+                    <div style={{fontSize:12,color:'var(--ink-2)'}}>Linked: <span className="mono">{form.orderId}</span></div>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
         </Drawer>
       )}
     </div>
