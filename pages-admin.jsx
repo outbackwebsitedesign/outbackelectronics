@@ -765,7 +765,7 @@ function AdminOverview({ go }) {
     return d && d.getTime() >= sevenDayCutoff;
   });
   const orderCount = recentOrders === null ? '—' : recentOrders.length;
-  const revenue = recentOrders === null ? '—' : '$' + recentOrders.reduce((s, o) => s + (Number(o.total) || 0), 0).toLocaleString();
+  const revenue = recentOrders === null ? '—' : '$' + recentOrders.reduce((s, o) => s + (Number(o.total) || 0), 0).toLocaleString('en-AU', {minimumFractionDigits:2, maximumFractionDigits:2});
   const openRepairs = repairs === null ? '—' : repairs.filter(c => c.id !== 'done').reduce((s, c) => s + (c.cards ? c.cards.length : 0), 0);
   const ACTIVE_QUOTE_STATUSES = new Set(['new', 'in-review', 'quoted']);
   const quotesAwaiting = quotes === null ? '—' : quotes.filter(q => ACTIVE_QUOTE_STATUSES.has(q.status || 'new')).length;

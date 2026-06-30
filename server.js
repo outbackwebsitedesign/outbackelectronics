@@ -830,14 +830,18 @@ function buildAdminMetrics() {
   const ewasteTonnes = ewaste.reduce((sum, item) => sum + (Number(item.weightKg) || 0), 0) / 1000;
   const liveProducts = countBy(products, p => p.status === 'published');
   const draftTutorials = countBy(tutorials, t => t.status !== 'published');
-  const orderEmailCounts = {};
-  for (const o of orders) {
-    const e = (o.email||'').toLowerCase().trim();
-    if (e) orderEmailCounts[e] = (orderEmailCounts[e]||0) + 1;
-  }
   const repeatCustomers = countBy(customers, c => {
-    const e = (c.email||'').toLowerCase().trim();
-    return e ? (orderEmailCounts[e]||0) > 1 : false;
+    const ce = (c.email||'').toLowerCase().trim();
+    const cn = (c.name||'').toLowerCase().trim();
+    const cp = normalisePhone(c.phone||'');
+    let count = 0;
+    for (const o of orders) {
+      const oe = (o.email||'').toLowerCase().trim();
+      const on = (o.cust||'').toLowerCase().trim();
+      const op = normalisePhone(o.phone||'');
+      if ((ce && ce === oe) || (cn && cn === on) || (cp && cp === op)) count++;
+    }
+    return count > 1;
   });
   const repeatRate = customers.length ? Math.round((repeatCustomers / customers.length) * 100) : 0;
   const outstandingSellerValue = sellers.reduce((sum, s) => sum + (Number(s.payoutDue) || 0), 0);
