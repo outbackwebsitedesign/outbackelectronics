@@ -604,7 +604,7 @@ function Table({ columns, rows, onRowClick, emptyMessage, loading }) {
               style={{display:'grid', gridTemplateColumns:tpl, padding:'14px 18px', borderTop:'1px solid var(--line)', fontSize:13, alignItems:'center', cursor: onRowClick?'pointer':'default'}}
               onMouseEnter={e => { if (onRowClick) e.currentTarget.style.background='var(--bg-elev)'; }}
               onMouseLeave={e => { e.currentTarget.style.background='transparent'; }}>
-              {columns.map((c,j) => <div key={j} style={{minWidth:0, overflow:'hidden', textOverflow:'ellipsis'}}>{c.render ? c.render(r) : r[c.key]}</div>)}
+              {columns.map((c,j) => <div key={j} style={{minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{c.render ? c.render(r) : r[c.key]}</div>)}
             </div>
           ))}
         </div>
