@@ -845,7 +845,26 @@ function buildAdminMetrics() {
   });
   const repeatRate = customers.length ? Math.round((repeatCustomers / customers.length) * 100) : 0;
   const outstandingSellerValue = sellers.reduce((sum, s) => sum + (Number(s.payoutDue) || 0), 0);
+
+  // 7-day overview stats — parsed server-side so date formats are handled reliably
+  const sevenDayCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const isPaid = o => {
+    if (o.gratis) return false;
+    const ps = (o.paymentStatus || '').toLowerCase();
+    if (ps === 'paid') return true;
+    const paid = (o.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
+    return paid >= (Number(o.total) || 0) * 0.99;
+  };
+  const recentPaidOrders = orders.filter(o => {
+    if (!isPaid(o)) return false;
+    const d = parseAuDateStr(o.createdAt || o.date || '');
+    return d && d >= sevenDayCutoff;
+  });
+  const revenue7d  = recentPaidOrders.reduce((s, o) => s + (Number(o.total) || 0), 0);
+  const orders7d   = recentPaidOrders.length;
+
   return {
+    overview: { revenue7d, orders7d, openRepairs, quotesAwaiting },
     subtitles: {
       orders: `${orders.length} total orders`,
       repairs: `kanban · ${openRepairs} open jobs`,

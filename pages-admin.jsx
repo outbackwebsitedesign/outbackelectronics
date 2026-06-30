@@ -744,11 +744,14 @@ function parseOrderDate(dateStr) {
 }
 
 function AdminOverview({ go }) {
+  const [overview, setOverview] = useState(null);
   const [orders, setOrders] = useState(null);
   const [repairs, setRepairs] = useState(null);
   const [quotes, setQuotes] = useState(null);
   const [catalog, setCatalog] = useState(null);
   useEffect(() => {
+    fetch('/api/admin/metrics', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject()).then(d => setOverview(d.overview || null)).catch(() => setOverview(null));
     fetch('/api/admin/orders', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject()).then(d => setOrders(d.items || [])).catch(() => setOrders([]));
     fetch('/api/admin/repairs', { credentials:'include' })
@@ -759,13 +762,9 @@ function AdminOverview({ go }) {
       .then(r => r.ok ? r.json() : Promise.reject()).then(d => setCatalog(d.products || [])).catch(() => setCatalog([]));
   }, []);
 
-  const sevenDayCutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
-  const recentOrders = orders === null ? null : orders.filter(o => {
-    const d = parseOrderDate(o.createdAt || o.date);
-    return d && d.getTime() >= sevenDayCutoff;
-  });
-  const orderCount = recentOrders === null ? '—' : recentOrders.length;
-  const revenue = recentOrders === null ? '—' : '$' + recentOrders.reduce((s, o) => s + (Number(o.total) || 0), 0).toLocaleString('en-AU', {minimumFractionDigits:2, maximumFractionDigits:2});
+  const fmtAUD = n => '$' + Number(n).toLocaleString('en-AU', {minimumFractionDigits:2, maximumFractionDigits:2});
+  const orderCount = overview ? overview.orders7d : '—';
+  const revenue    = overview ? fmtAUD(overview.revenue7d) : '—';
   const openRepairs = repairs === null ? '—' : repairs.filter(c => c.id !== 'done').reduce((s, c) => s + (c.cards ? c.cards.length : 0), 0);
   const ACTIVE_QUOTE_STATUSES = new Set(['new', 'in-review', 'quoted']);
   const quotesAwaiting = quotes === null ? '—' : quotes.filter(q => ACTIVE_QUOTE_STATUSES.has(q.status || 'new')).length;
