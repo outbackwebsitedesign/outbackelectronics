@@ -520,9 +520,9 @@ function StatTile({ label, value, delta, tone }) {
 
 const TABLE_PAGE_SIZE = 50;
 
-function Table({ columns, rows, onRowClick, emptyMessage, loading }) {
+function Table({ columns, rows, onRowClick, emptyMessage, loading, defaultSort }) {
   const tpl = columns.map(c => c.w || '1fr').join(' ');
-  const [sort, setSort] = useState(null); // { key, dir: 'asc' | 'desc' }
+  const [sort, setSort] = useState(defaultSort || null); // { key, dir: 'asc' | 'desc' }
   const [page, setPage] = useState(0);
   const safeRows = rows || [];
 
@@ -1676,6 +1676,7 @@ function AdminOrders({ search, sessionInfo }) {
         ]}
         rows={visibleRows}
         onRowClick={openRow}
+        defaultSort={{ key: 'id', dir: 'desc' }}
       />
       {edit !== null && (
         <OrderDrawer
