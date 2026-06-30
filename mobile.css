@@ -261,6 +261,13 @@
     grid-template-columns: 1fr !important;
     gap: 16px !important;
   }
+
+  /* Repairs kanban: stack columns vertically instead of horizontal scroll */
+  .admin-kanban-grid {
+    grid-template-columns: 1fr !important;
+    min-width: unset !important;
+    gap: 24px !important;
+  }
 }
 
 @media (max-width: 480px) {

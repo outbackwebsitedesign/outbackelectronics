@@ -1786,7 +1786,7 @@ function AdminRepairs() {
           <label className="field"><span className="label">Tag (optional)</span><input className="input" placeholder="e.g. URGENT" value={newJobForm.tag} onChange={e => setNewJobForm(f => ({...f, tag:e.target.value}))} /></label>
         </Drawer>
       )}
-      <div style={{display:'grid', gridTemplateColumns:'repeat(5, minmax(240px, 1fr))', gap:16, minWidth:1200}}>
+      <div className="admin-kanban-grid" style={{display:'grid', gridTemplateColumns:'repeat(5, minmax(240px, 1fr))', gap:16, minWidth:1200}}>
         {cols.map(c => (
           <div key={c.id}
             onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverCol(c.id); }}
