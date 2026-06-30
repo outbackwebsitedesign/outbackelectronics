@@ -848,12 +848,18 @@ function buildAdminMetrics() {
 
   // 7-day overview stats — parsed server-side so date formats are handled reliably
   const sevenDayCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  // Mirror the frontend "CLEAR" logic exactly: payments must exist and cover the total
+  const cashRoundSrv = n => Math.round(n * 20) / 20;
   const isPaid = o => {
     if (o.gratis) return false;
-    const ps = (o.paymentStatus || '').toLowerCase();
-    if (ps === 'paid') return true;
-    const paid = (o.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
-    return paid >= (Number(o.total) || 0) * 0.99;
+    const payments = o.payments || [];
+    if (payments.length === 0) return false;
+    const amountPaid = Math.round(payments.reduce((s, p) => s + (Number(p.amount) || 0), 0) * 100) / 100;
+    const lastMethod = (payments[payments.length - 1].method || '').toLowerCase();
+    const effectiveTotal = lastMethod === 'cash'
+      ? cashRoundSrv(Number(o.total) || 0)
+      : Math.round((Number(o.total) || 0) * 100) / 100;
+    return amountPaid >= effectiveTotal;
   };
   const recentPaidOrders = orders.filter(o => {
     if (!isPaid(o)) return false;
