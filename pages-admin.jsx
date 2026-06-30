@@ -6545,7 +6545,7 @@ function VehicleLogView() {
   const addEntry = async () => {
     if (!form.date || !form.km) { setError('Date and km are required.'); return; }
     setSaving(true); setError(null);
-    const csrf = await getCsrf().catch(()=>null);
+    const csrf = getCsrf();
     const r = await fetch('/api/admin/vehicle-log/add', {
       method:'POST', credentials:'include',
       headers:{'Content-Type':'application/json','X-CSRF-Token':csrf||''},
@@ -6559,7 +6559,7 @@ function VehicleLogView() {
 
   const deleteEntry = async (id) => {
     if (!confirm('Delete this trip?')) return;
-    const csrf = await getCsrf().catch(()=>null);
+    const csrf = getCsrf();
     await fetch('/api/admin/vehicle-log/delete', {
       method:'POST', credentials:'include',
       headers:{'Content-Type':'application/json','X-CSRF-Token':csrf||''},
