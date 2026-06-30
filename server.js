@@ -355,17 +355,10 @@ function readCatalog() { return { products: readProducts(), services: readServic
 
 function normalisePhone(p) { return (p||'').replace(/[\s\-().+]/g, '').toLowerCase(); }
 
-// Cash-basis: an order is "received" only when payments sum to the full (cash-rounded) total.
+// Cash-basis: an order counts as income once any payment has been received.
 function isOrderPaid(o) {
   if (o.gratis) return false;
-  const payments = o.payments || [];
-  if (payments.length === 0) return false;
-  const amountPaid = Math.round(payments.reduce((s, p) => s + (Number(p.amount) || 0), 0) * 100) / 100;
-  const lastMethod = (payments[payments.length - 1].method || '').toLowerCase();
-  const effectiveTotal = lastMethod === 'cash'
-    ? Math.round((Number(o.total) || 0) * 20) / 20
-    : Math.round((Number(o.total) || 0) * 100) / 100;
-  return amountPaid >= effectiveTotal;
+  return (o.payments || []).some(p => (Number(p.amount) || 0) > 0);
 }
 
 function readOrders() {
@@ -859,10 +852,19 @@ function buildAdminMetrics() {
   const repeatRate = customers.length ? Math.round((repeatCustomers / customers.length) * 100) : 0;
   const outstandingSellerValue = sellers.reduce((sum, s) => sum + (Number(s.payoutDue) || 0), 0);
 
-  // 7-day overview stats — parsed server-side so date formats are handled reliably
+  // 7-day overview stats — CLEAR only (fully settled), parsed server-side
   const sevenDayCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const isCleared = o => {
+    if (o.gratis) return false;
+    const pmts = o.payments || [];
+    if (pmts.length === 0) return false;
+    const paid = Math.round(pmts.reduce((s, p) => s + (Number(p.amount) || 0), 0) * 100) / 100;
+    const last = (pmts[pmts.length - 1].method || '').toLowerCase();
+    const eff  = last === 'cash' ? Math.round((Number(o.total)||0) * 20) / 20 : Math.round((Number(o.total)||0) * 100) / 100;
+    return paid >= eff;
+  };
   const recentPaidOrders = orders.filter(o => {
-    if (!isOrderPaid(o)) return false;
+    if (!isCleared(o)) return false;
     const d = parseAuDateStr(o.createdAt || o.date || '');
     return d && d >= sevenDayCutoff;
   });
