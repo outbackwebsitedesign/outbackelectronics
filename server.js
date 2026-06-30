@@ -3239,6 +3239,7 @@ function buildTradingStockData() {
   let totalSellValue = 0, totalCostValue = 0;
 
   for (const p of products) {
+    if (p.createdBy) continue; // belongs to an external seller — not your stock
     if (p.variants && p.variants.length > 0) {
       for (const v of p.variants) {
         const qty = Number(v.stock) || 0;
