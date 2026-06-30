@@ -365,6 +365,17 @@ function orderCashReceived(o) {
   const paid = Math.round((o.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0) * 100) / 100;
   return Math.min(paid, Number(o.total) || 0);
 }
+// Returns the outstanding balance, mirroring the frontend CLEAR logic (cash rounding applied).
+function orderRemainingBalance(o) {
+  if (o.gratis) return 0;
+  const pmts = o.payments || [];
+  const received = Math.round(pmts.reduce((s, p) => s + (Number(p.amount) || 0), 0) * 100) / 100;
+  const lastMethod = pmts.length ? (pmts[pmts.length - 1].method || '').toLowerCase() : '';
+  const effectiveTotal = lastMethod === 'cash'
+    ? Math.round((Number(o.total) || 0) * 20) / 20
+    : Math.round((Number(o.total) || 0) * 100) / 100;
+  return Math.max(0, Math.round((effectiveTotal - received) * 100) / 100);
+}
 
 function readOrders() {
   try { const p = JSON.parse(cachedReadFile(ORDERS_DB_PATH)); return Array.isArray(p.orders) ? p.orders : []; } catch { return []; }
@@ -859,17 +870,9 @@ function buildAdminMetrics() {
 
   // 7-day overview stats — CLEAR only (fully settled), parsed server-side
   const sevenDayCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  const isCleared = o => {
-    if (o.gratis) return false;
-    const pmts = o.payments || [];
-    if (pmts.length === 0) return false;
-    const paid = Math.round(pmts.reduce((s, p) => s + (Number(p.amount) || 0), 0) * 100) / 100;
-    const last = (pmts[pmts.length - 1].method || '').toLowerCase();
-    const eff  = last === 'cash' ? Math.round((Number(o.total)||0) * 20) / 20 : Math.round((Number(o.total)||0) * 100) / 100;
-    return paid >= eff;
-  };
   const recentPaidOrders = orders.filter(o => {
-    if (!isCleared(o)) return false;
+    if (orderRemainingBalance(o) > 0) return false;
+    if (!(o.payments || []).length) return false; // exclude unpaid $0 orders
     const d = parseAuDateStr(o.createdAt || o.date || '');
     return d && d >= sevenDayCutoff;
   });
@@ -3062,22 +3065,21 @@ function buildReceivablesData() {
   const now = new Date();
   const items = [];
 
-  // Orders not yet paid
+  // Orders with an outstanding balance
   for (const o of readOrders()) {
     if (o.gratis) continue; // complimentary — not a receivable
-    const paid = (o.paymentStatus === 'paid') || (o.status === 'completed') || (o.status === 'shipped') || (o.status === 'delivered');
-    if (paid) continue;
-    const total = Number(o.total) || 0;
-    if (total <= 0) continue;
+    const balance = orderRemainingBalance(o);
+    if (balance <= 0) continue; // fully cleared
+    const received = orderCashReceived(o);
     const d = parseOrderDateForReport(o);
     items.push({
       type: 'order',
       ref: o.id || '—',
       customer: (o.customer && o.customer.name) || o.customerName || o.email || '—',
       description: `Shop order ${o.id || ''}`.trim(),
-      amount: total,
+      amount: balance,
       date: d ? d.toISOString().slice(0,10) : null,
-      status: o.status || 'pending',
+      status: received > 0 ? 'part-paid' : (o.status || 'pending'),
       ageDays: d ? Math.floor((now - d) / 86400000) : null,
     });
   }
