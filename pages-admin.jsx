@@ -2928,7 +2928,7 @@ function AdminEwaste() {
         <div>
           <div className="row-flex" style={{justifyContent:'space-between', marginBottom:12}}>
             <h3 className="serif" style={{fontSize:22}}>Recent intakes</h3>
-            <button className="btn btn-rust btn-sm" onClick={() => { setEdit({}); setForm({ id:'', from:'', kg:0, items:'', tier:'A', payout:'', date:'' }); }}>+ Log intake</button>
+            <button className="btn btn-rust btn-sm" onClick={() => { setEdit({}); setForm({ id:'', from:'', kg:0, items:'', tier:'A', payout:'', date:'', orderId:'' }); }}>+ Log intake</button>
           </div>
           <Table
             columns={[
@@ -2939,6 +2939,7 @@ function AdminEwaste() {
               { key:'tier', label:'Tier', w:'80px', render:r => <span className="tag tag-outline">{r.tier}</span> },
               { key:'payout', label:'Payout', w:'140px', render:r => <span style={{fontWeight:600}}>{r.payout}</span> },
               { key:'date', label:'When', w:'90px', render:r => <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{r.date.toUpperCase()}</span>},
+              { key:'orderId', label:'Order', w:'120px', render:r => r.orderId ? <span className="mono" style={{fontSize:11, color:'var(--rust)', cursor:'pointer'}} onClick={e=>{e.stopPropagation(); window.location.hash='orders';}}>{r.orderId}</span> : <span style={{color:'var(--ink-3)'}}>—</span> },
             ]}
             rows={intakes}
             onRowClick={(r) => openIntake(r)}
@@ -2989,6 +2990,7 @@ function AdminEwaste() {
           <label className="field"><span className="label">Tier</span><input className="input" value={form.tier||''} onChange={e=>setForm({...form,tier:e.target.value})}/></label>
           <label className="field"><span className="label">Payout</span><input className="input" value={form.payout||''} onChange={e=>setForm({...form,payout:e.target.value})}/></label>
           <label className="field"><span className="label">Date</span><input className="input" value={form.date||''} onChange={e=>setForm({...form,date:e.target.value})}/></label>
+          <label className="field"><span className="label">Linked order # <span style={{fontWeight:400,color:'var(--ink-2)'}}>(optional — e.g. replaced component)</span></span><input className="input" placeholder="ord-…" value={form.orderId||''} onChange={e=>setForm({...form,orderId:e.target.value.trim()})}/></label>
         </Drawer>
       )}
     </div>
