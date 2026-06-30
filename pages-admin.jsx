@@ -222,7 +222,7 @@ function AdminLogin({ onAuth, siteUrl }) {
         <form onSubmit={submit} style={{background:'#181410', border:'1px solid #2a241c', padding: 28}}>
           <div className="mono" style={{fontSize:10, color:'rgba(244,237,225,0.5)', marginBottom: 14}}>// AUTH REQUIRED</div>
           <label className="field"><span className="label" style={{color:'var(--paper)'}}>Name</span>
-            <input className="input" style={{background:'#0f0d0a', borderColor:'#2a241c', color:'var(--paper)'}} value={u} onChange={e => setU(e.target.value)} autoComplete="name" />
+            <input className="input" style={{background:'#0f0d0a', borderColor:'#2a241c', color:'var(--paper)'}} value={u} onChange={e => setU(e.target.value)} autoComplete="username" />
           </label>
           <label className="field"><span className="label" style={{color:'var(--paper)'}}>Password / PIN</span>
             <input className="input" type="password" style={{background:'#0f0d0a', borderColor:'#2a241c', color:'var(--paper)'}} value={p} onChange={e => setP(e.target.value)} autoComplete="current-password" />
