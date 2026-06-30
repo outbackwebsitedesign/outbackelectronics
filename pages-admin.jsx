@@ -5424,16 +5424,17 @@ function AdminTaxReports() {
         {/* Summary tiles */}
         <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))', gap:14, marginBottom:24}}>
           {[
-            { label:'TOTAL REVENUE',   value: fmtAUD(data.totalRevenue),               color:'#345526' },
-            { label:'TOTAL EXPENSES',  value: `(${fmtAUD(data.totalExpenses)})`,        color:'var(--rust)' },
+            { label:'TOTAL REVENUE',     value: fmtAUD(data.totalRevenue),                                    color:'#345526' },
+            { label:'TOTAL EXPENSES',    value: `(${fmtAUD(data.totalExpenses)})`,                            color:'var(--rust)' },
             { label: data.grossProfit>=0 ? 'NET PROFIT' : 'NET LOSS',
               value: fmtAUD(Math.abs(data.grossProfit)),
               color: data.grossProfit>=0 ? '#345526' : 'var(--rust)' },
-            { label:'EST. GST PAYABLE', value: fmtAUD(Math.max(0,data.netGst)),        color:'#7a5d10' },
+            { label:'SET ASIDE FOR TAX', value: fmtAUD((data.taxEstimate||{}).quarterlySetAside||0), sub:'per quarter', color:'var(--rust)' },
           ].map(t => (
             <div key={t.label} className="card" style={{padding:'16px 18px'}}>
               <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:4}}>{t.label}</div>
               <div className="mono" style={{fontSize:20, fontWeight:700, color:t.color}}>{t.value}</div>
+              {t.sub && <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginTop:2}}>{t.sub}</div>}
             </div>
           ))}
         </div>
@@ -5489,28 +5490,62 @@ function AdminTaxReports() {
           </table>
         </div>
 
-        {/* GST */}
-        <div className="card" style={{padding:'18px 22px', marginBottom:16, background:'#fffbf0', border:'1px solid #f0d97c'}}>
-          <div className="mono" style={{fontSize:11, fontWeight:700, color:'#7a5d10', marginBottom:12, letterSpacing:1}}>GST SUMMARY (ESTIMATED)</div>
-          <table style={{width:'100%', borderCollapse:'collapse', fontSize:13}}>
-            <tbody>
-              <tr>
-                <td style={{padding:'5px 0', color:'var(--ink-2)'}}>GST Collected (1/11 of total income)</td>
-                <td style={{textAlign:'right', fontFamily:'monospace'}}>{fmtAUD(data.gstCollected)}</td>
-              </tr>
-              <tr>
-                <td style={{padding:'5px 0', color:'var(--ink-2)'}}>Input Tax Credits (1/11 of expenses)</td>
-                <td style={{textAlign:'right', fontFamily:'monospace', color:'#345526'}}>({fmtAUD(data.gstCredits)})</td>
-              </tr>
-              <tr style={{borderTop:'1px solid #f0d97c'}}>
-                <td style={{padding:'8px 0', fontWeight:700}}>Net GST Payable (estimated)</td>
-                <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:700, color:'#7a5d10'}}>{fmtAUD(Math.max(0,data.netGst))}</td>
-              </tr>
-            </tbody>
-          </table>
-          <div style={{fontSize:11, color:'#9a7a30', marginTop:10}}>
-            Assumes all amounts are GST-inclusive at 10%. Second-hand goods and certain services may be GST-free.
-            Consult your registered tax agent or BAS agent for actual BAS obligations.
+        {/* Income tax estimate */}
+        {(() => {
+          const tx = data.taxEstimate || {};
+          return (
+            <div className="card" style={{padding:'18px 22px', marginBottom:16}}>
+              <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--rust)', marginBottom:12, letterSpacing:1}}>INCOME TAX ESTIMATE — SOLE TRADER (2025-26 RATES)</div>
+              <table style={{width:'100%', borderCollapse:'collapse', fontSize:13}}>
+                <tbody>
+                  <tr>
+                    <td style={{padding:'5px 0', color:'var(--ink-2)'}}>Taxable income (net profit)</td>
+                    <td style={{textAlign:'right', fontFamily:'monospace'}}>{fmtAUD(data.grossProfit)}</td>
+                  </tr>
+                  <tr>
+                    <td style={{padding:'5px 0', color:'var(--ink-2)'}}>Base income tax</td>
+                    <td style={{textAlign:'right', fontFamily:'monospace', color:'var(--rust)'}}>({fmtAUD(tx.baseTax||0)})</td>
+                  </tr>
+                  {(tx.lito||0) > 0 && (
+                    <tr>
+                      <td style={{padding:'5px 0', color:'var(--ink-2)'}}>Low Income Tax Offset (LITO)</td>
+                      <td style={{textAlign:'right', fontFamily:'monospace', color:'#345526'}}>{fmtAUD(tx.lito)}</td>
+                    </tr>
+                  )}
+                  <tr>
+                    <td style={{padding:'5px 0', color:'var(--ink-2)'}}>Medicare levy (2%)</td>
+                    <td style={{textAlign:'right', fontFamily:'monospace', color:'var(--rust)'}}>({fmtAUD(tx.medicareLevy||0)})</td>
+                  </tr>
+                  <tr style={{borderTop:'1px solid var(--border)'}}>
+                    <td style={{padding:'8px 0', fontWeight:700}}>
+                      Estimated tax payable
+                      <span className="mono" style={{fontWeight:400, fontSize:11, color:'var(--ink-3)', marginLeft:10}}>
+                        effective rate {(tx.effectiveRate||0).toFixed(1)}%
+                      </span>
+                    </td>
+                    <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:700, color:'var(--rust)'}}>{fmtAUD(tx.totalTax||0)}</td>
+                  </tr>
+                  <tr style={{background:'#fbe9e4'}}>
+                    <td style={{padding:'8px 0 8px 8px', fontWeight:700, color:'var(--rust)', borderRadius:4}}>Set aside per quarter</td>
+                    <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:700, fontSize:16, color:'var(--rust)', paddingRight:4}}>{fmtAUD(tx.quarterlySetAside||0)}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div style={{fontSize:11, color:'var(--ink-3)', marginTop:10}}>
+                Estimated using 2025-26 Australian individual tax rates and LITO, assuming this profit is your only income.
+                Does not account for small business offsets, private health rebate, or other adjustments.
+                Consult a registered tax agent for your actual liability.
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* GST — not registered */}
+        <div className="card" style={{padding:'14px 22px', marginBottom:16, background:'var(--bg-deep)', border:'1px solid var(--border)', opacity:0.6}}>
+          <div style={{display:'flex', alignItems:'center', gap:12}}>
+            <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--ink-3)', letterSpacing:1}}>GST</div>
+            <div style={{fontSize:13, color:'var(--ink-3)'}}>Not registered — N/A</div>
+            <div style={{fontSize:11, color:'var(--ink-3)', marginLeft:'auto'}}>Register at the ATO once turnover exceeds $75,000/yr</div>
           </div>
         </div>
 

@@ -2428,6 +2428,35 @@ function buildInvoicePdf(order, shop) {
   });
 }
 
+// ── Australian sole trader income tax estimate (2025-26 rates) ──────────────
+function estimateSoleTradeTax(netProfit) {
+  if (netProfit <= 0) return { baseTax: 0, lito: 0, medicareLevy: 0, totalTax: 0, effectiveRate: 0, quarterlySetAside: 0 };
+
+  // Marginal rates
+  let baseTax = 0;
+  if (netProfit <= 18200)        baseTax = 0;
+  else if (netProfit <= 45000)   baseTax = (netProfit - 18200) * 0.19;
+  else if (netProfit <= 120000)  baseTax = 5092  + (netProfit - 45000)  * 0.325;
+  else if (netProfit <= 180000)  baseTax = 29467 + (netProfit - 120000) * 0.37;
+  else                           baseTax = 51667 + (netProfit - 180000) * 0.45;
+
+  // Low Income Tax Offset (LITO)
+  let lito = 0;
+  if (netProfit <= 37500)       lito = 700;
+  else if (netProfit <= 45000)  lito = 700 - (netProfit - 37500) * 0.05;
+  else if (netProfit <= 66667)  lito = 325 - (netProfit - 45000) * 0.015;
+
+  // Medicare levy (~2%; low-income phase-in ≈$26k–$32.5k)
+  let medicareLevy = 0;
+  if (netProfit > 32500)       medicareLevy = netProfit * 0.02;
+  else if (netProfit > 26000)  medicareLevy = (netProfit - 26000) * 0.10;
+
+  const totalTax = Math.max(0, baseTax - lito + medicareLevy);
+  const effectiveRate = (totalTax / netProfit) * 100;
+  const quarterlySetAside = totalTax / 4;
+  return { baseTax, lito, medicareLevy, totalTax, effectiveRate, quarterlySetAside };
+}
+
 // ── Tax / P&L report helpers ─────────────────────────────────────────────────
 function parseOrderDateForReport(o) {
   if (o.createdAt) { const d = new Date(o.createdAt); if (!isNaN(d)) return d; }
@@ -2506,9 +2535,7 @@ function buildTaxReportData(fromStr, toStr) {
   }
 
   const grossProfit   = totalRevenue - totalExpenses;
-  const gstCollected  = totalRevenue / 11;
-  const gstCredits    = totalExpenses / 11;
-  const netGst        = gstCollected - gstCredits;
+  const taxEstimate   = estimateSoleTradeTax(grossProfit);
 
   const monthly = Object.entries(monthMap)
     .sort(([a],[b]) => a < b ? -1 : 1)
@@ -2519,7 +2546,7 @@ function buildTaxReportData(fromStr, toStr) {
     orderRevenue, refundTotal, netOrderRevenue, repairRevenue,
     totalRevenue, totalExpenses, grossProfit,
     expByCat,
-    gstCollected, gstCredits, netGst,
+    taxEstimate,
     monthly,
     orderCount, repairCount, expenseCount,
   };
@@ -2629,17 +2656,29 @@ function buildTaxReportPdf(data, shop) {
     doc.text(fmtMoney(Math.abs(data.grossProfit)), 0, y+2, { width: 540, align: 'right' });
     y += 42;
 
-    // GST Summary
+    // Income Tax Estimate (sole trader, 2025-26 rates)
+    const tx = data.taxEstimate || {};
     y += 6;
-    sectionHeader('GST SUMMARY (ESTIMATED — see note below)');
+    if (y > 620) { doc.addPage(); y = 50; }
+    sectionHeader('INCOME TAX ESTIMATE (SOLE TRADER — 2025-26 RATES)');
     y += 4;
-    dataRow('GST Collected (1/11 of total income)', fmtMoney(data.gstCollected));
-    dataRow('Input Tax Credits (1/11 of expenses)', `(${fmtMoney(data.gstCredits)})`);
+    dataRow('Taxable income (net profit)', fmtMoney(data.grossProfit));
+    dataRow('Base income tax', `(${fmtMoney(tx.baseTax || 0)})`);
+    if ((tx.lito || 0) > 0) dataRow('Low Income Tax Offset (LITO)', fmtMoney(tx.lito));
+    dataRow('Medicare levy (2%)', `(${fmtMoney(tx.medicareLevy || 0)})`);
     divider();
-    highlight('NET GST PAYABLE (estimated)', fmtMoney(Math.max(0, data.netGst)), '#fffbf0', '#7a5d10');
+    highlight('ESTIMATED TAX PAYABLE', fmtMoney(tx.totalTax || 0), '#fbe9e4', RUST);
+    dataRow(`Effective rate: ${(tx.effectiveRate || 0).toFixed(1)}%  ·  Quarterly set-aside`, fmtMoney(tx.quarterlySetAside || 0));
     doc.font('Helvetica-Oblique').fontSize(8).fillColor('#888')
-      .text('* GST figures assume all amounts are GST-inclusive at 10%. Second-hand goods and certain services may be GST-free. Consult your registered tax agent or BAS agent for actual BAS obligations.', 50, y, { width: 495 });
-    y += 30;
+      .text('* Based on 2025-26 Australian individual tax rates assuming this profit is your only income. Does not include small business offsets, private health rebate, or other adjustments. Consult a registered tax agent.', 50, y, { width: 495 });
+    y += 28;
+
+    // GST — not registered
+    y += 4;
+    doc.rect(50, y, 495, 20).fill('#e0e0e0');
+    doc.font('Helvetica-Bold').fontSize(10).fillColor('#888').text('GST', 56, y + 5);
+    doc.text('Not registered — N/A', 0, y + 5, { width: 540, align: 'right' });
+    y += 26;
 
     // Monthly breakdown
     if (data.monthly.length > 0) {
