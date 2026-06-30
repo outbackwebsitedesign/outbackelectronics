@@ -5332,9 +5332,29 @@ function AdminExpenses() {
 }
 
 // ============================================================
-// TAX REPORTS / P&L STATEMENT
+// TAX REPORTS — P&L + BAS WORKSHEET
 // ============================================================
 function AdminTaxReports() {
+  const [view, setView] = useState('pl'); // 'pl' | 'bas'
+  return (
+    <div style={{padding:32, maxWidth:900}}>
+      <div className="tabs" style={{marginBottom:24}}>
+        {[{id:'pl', label:'P&L Statement'},{id:'bas', label:'BAS Worksheet'}].map(v => (
+          <div key={v.id} role="button" tabIndex={0} className={`tab${view===v.id?' active':''}`}
+            onClick={() => setView(v.id)}
+            onKeyDown={e => { if (e.key==='Enter'||e.key===' ') setView(v.id); }}
+            style={{cursor:'pointer'}}>
+            {v.label}
+          </div>
+        ))}
+      </div>
+      {view === 'pl'  && <PLView />}
+      {view === 'bas' && <BASView />}
+    </div>
+  );
+}
+
+function PLView() {
   const now = new Date();
   const currentFyYear = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
 
@@ -5376,7 +5396,7 @@ function AdminTaxReports() {
   const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
   return (
-    <div style={{padding:32, maxWidth:900}}>
+    <>
       {/* Period selector */}
       <div className="card" style={{padding:'18px 22px', marginBottom:24}}>
         <div style={{display:'flex', gap:12, flexWrap:'wrap', alignItems:'flex-end'}}>
@@ -5582,7 +5602,197 @@ function AdminTaxReports() {
           </div>
         )}
       </>}
-    </div>
+    </>
+  );
+}
+
+function BASView() {
+  const now = new Date();
+  const fyYear = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+
+  const BAS_PRESETS = [
+    { label: `Q1 – Jul–Sep ${fyYear}`,   from: `${fyYear}-07-01`,   to: `${fyYear}-09-30` },
+    { label: `Q2 – Oct–Dec ${fyYear}`,   from: `${fyYear}-10-01`,   to: `${fyYear}-12-31` },
+    { label: `Q3 – Jan–Mar ${fyYear+1}`, from: `${fyYear+1}-01-01`, to: `${fyYear+1}-03-31` },
+    { label: `Q4 – Apr–Jun ${fyYear+1}`, from: `${fyYear+1}-04-01`, to: `${fyYear+1}-06-30` },
+    { label: 'Custom', from: '', to: '' },
+  ];
+
+  // Default to the most recently completed quarter
+  const defaultPreset = (() => {
+    const m = now.getMonth() + 1; // 1-12
+    if (m >= 10) return 0; // Oct+ → Q1 just finished
+    if (m >= 7)  return 3; // Jul-Sep → Q4 of previous FY (just finished)
+    if (m >= 4)  return 2; // Apr-Jun → Q3 just finished
+    return 1;              // Jan-Mar → Q2 just finished
+  })();
+
+  const [preset, setPreset]  = useState(defaultPreset);
+  const [from, setFrom]      = useState(BAS_PRESETS[defaultPreset].from);
+  const [to, setTo]          = useState(BAS_PRESETS[defaultPreset].to);
+  const [data, setData]      = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]    = useState(null);
+
+  const applyPreset = idx => {
+    setPreset(idx);
+    if (idx < BAS_PRESETS.length - 1) { setFrom(BAS_PRESETS[idx].from); setTo(BAS_PRESETS[idx].to); }
+  };
+
+  const loadBAS = async (f = from, t = to) => {
+    if (!f || !t) { setError('Please select a period.'); return; }
+    setLoading(true); setError(null); setData(null);
+    const r = await fetch(`/api/admin/bas-report?from=${f}&to=${t}`, { credentials:'include' }).catch(()=>null);
+    setLoading(false);
+    if (!r || !r.ok) { setError('Failed to load BAS data.'); return; }
+    setData(await r.json());
+  };
+
+  useEffect(() => { loadBAS(BAS_PRESETS[defaultPreset].from, BAS_PRESETS[defaultPreset].to); }, []);
+
+  const exportPdf = () => window.open(`/api/admin/bas-report/pdf?from=${from}&to=${to}`, '_blank');
+  const fmtAUD = n => `$${(Number(n)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+  const fmtDateLabel = s => s ? new Date(s+'T00:00:00').toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'}) : '';
+
+  const GRow = ({ code, label, value, bold, shade, dim, highlight }) => (
+    <tr style={{background: highlight ? '#003087' : shade ? 'var(--bg-deep)' : 'transparent', color: highlight ? '#fff' : 'inherit'}}>
+      <td style={{padding:'5px 8px', fontWeight:700, fontSize:12, color: highlight ? '#fff' : '#777', width:36, fontFamily:'monospace'}}>{code}</td>
+      <td style={{padding:'5px 0', fontWeight: bold||highlight ? 600 : 400, color: highlight ? '#fff' : dim ? 'var(--ink-3)' : 'var(--ink-1)', fontSize:13}}>{label}</td>
+      <td style={{textAlign:'right', fontFamily:'monospace', fontWeight: bold||highlight ? 700 : 400, fontSize: highlight ? 14 : 13, padding:'5px 4px',
+        color: highlight ? '#fff' : dim ? 'var(--ink-3)' : 'var(--ink-1)'}}>
+        {value != null ? fmtAUD(value) : '—'}
+      </td>
+    </tr>
+  );
+
+  return (
+    <>
+      {/* Notice */}
+      <div style={{background:'#fff8e1', border:'1px solid #f0d97c', borderRadius:6, padding:'10px 16px', marginBottom:20, fontSize:12, color:'#7a5d10'}}>
+        <strong>Worksheet only — not an official ATO form.</strong> Use these figures as a reference when lodging your BAS via myGov Business Portal or with your registered BAS agent.
+        Once you register for GST, you'll be assigned a BAS lodgement schedule (usually quarterly for small businesses).
+      </div>
+
+      {/* Period selector */}
+      <div className="card" style={{padding:'18px 22px', marginBottom:20}}>
+        <div style={{display:'flex', gap:12, flexWrap:'wrap', alignItems:'flex-end'}}>
+          <div>
+            <div className="label" style={{marginBottom:6}}>BAS Period</div>
+            <div className="tabs">
+              {BAS_PRESETS.map((p, i) => (
+                <div key={i} role="button" tabIndex={0} className={`tab${preset===i?' active':''}`}
+                  onClick={() => applyPreset(i)}
+                  onKeyDown={e => { if (e.key==='Enter'||e.key===' ') applyPreset(i); }}
+                  style={{cursor:'pointer'}}>
+                  {p.label}
+                </div>
+              ))}
+            </div>
+          </div>
+          {preset === BAS_PRESETS.length - 1 && (<>
+            <label className="field" style={{margin:0}}>
+              <span className="label">From</span>
+              <input className="input" type="date" value={from} onChange={e => setFrom(e.target.value)} />
+            </label>
+            <label className="field" style={{margin:0}}>
+              <span className="label">To</span>
+              <input className="input" type="date" value={to} onChange={e => setTo(e.target.value)} />
+            </label>
+          </>)}
+          <button className="btn btn-rust" onClick={() => loadBAS()} disabled={loading}>
+            {loading ? 'Loading…' : 'Calculate'}
+          </button>
+          {data && (
+            <button className="btn" style={{background:'#003087', color:'#fff'}} onClick={exportPdf}>
+              ↓ Export BAS PDF
+            </button>
+          )}
+        </div>
+        {error && <div className="mono" style={{color:'var(--rust)', fontSize:12, marginTop:8}}>{error}</div>}
+        {data && <div className="mono" style={{fontSize:11, color:'var(--ink-3)', marginTop:8}}>Period: {fmtDateLabel(data.from)} – {fmtDateLabel(data.to)}</div>}
+      </div>
+
+      {loading && <div className="mono" style={{color:'var(--ink-3)', textAlign:'center', padding:40}}>Calculating…</div>}
+
+      {data && <>
+        {/* Summary tiles */}
+        <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))', gap:14, marginBottom:20}}>
+          {[
+            { label:'TOTAL SALES (G1)',   value: fmtAUD(data.G1),    color:'#345526' },
+            { label:'TAXABLE SALES (G5)', value: fmtAUD(data.G5),    color:'#345526' },
+            { label:'GST ON SALES (1A)',  value: fmtAUD(data.box1A), color:'#003087' },
+            { label:'GST CREDITS (1B)',   value: fmtAUD(data.box1B), color:'#345526' },
+            { label: data.netGST >= 0 ? 'NET GST PAYABLE' : 'NET GST REFUND',
+              value: fmtAUD(Math.abs(data.netGST)),
+              color: data.netGST >= 0 ? 'var(--rust)' : '#345526' },
+          ].map(t => (
+            <div key={t.label} className="card" style={{padding:'14px 16px'}}>
+              <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:4}}>{t.label}</div>
+              <div className="mono" style={{fontSize:17, fontWeight:700, color:t.color}}>{t.value}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* G-label table */}
+        <div className="card" style={{padding:'18px 22px', marginBottom:16}}>
+          <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--rust)', marginBottom:12, letterSpacing:1}}>GST ON SALES</div>
+          <table style={{width:'100%', borderCollapse:'collapse'}}>
+            <tbody>
+              <GRow code="G1" label="Total sales (all revenue, including GST where applicable)" value={data.G1} />
+              <GRow code="G2" label="Export sales (GST-free)" value={data.G2} dim={data.G2===0} />
+              <GRow code="G3" label="Other GST-free sales" value={data.G3} dim={data.G3===0} />
+              <GRow code="G4" label="Input-taxed sales" value={data.G4} dim={data.G4===0} />
+              <GRow code="G5" label="G1 minus (G2 + G3 + G4)  —  Taxable sales" value={data.G5} bold shade />
+              <tr><td colSpan={3} style={{padding:4}}></td></tr>
+              <GRow code="1A" label="GST on sales  =  G5 ÷ 11" value={data.box1A} highlight bold />
+            </tbody>
+          </table>
+
+          <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--rust)', margin:'20px 0 12px', letterSpacing:1}}>GST CREDITS ON PURCHASES</div>
+          <table style={{width:'100%', borderCollapse:'collapse'}}>
+            <tbody>
+              <GRow code="G10" label="Capital purchases (tools & equipment)" value={data.G10} dim={data.G10===0} />
+              <GRow code="G11" label="Non-capital purchases (parts, software, other)" value={data.G11} dim={data.G11===0} />
+              <GRow code="G6"  label="Total purchases  (G10 + G11)" value={data.G6} bold shade />
+              <tr><td colSpan={3} style={{padding:4}}></td></tr>
+              <GRow code="1B" label="GST credits  =  G6 ÷ 11" value={data.box1B} highlight bold />
+            </tbody>
+          </table>
+
+          <div style={{margin:'16px 0 8px', borderTop:'2px solid var(--border)', paddingTop:12}}>
+            <table style={{width:'100%', borderCollapse:'collapse'}}>
+              <tbody>
+                <tr style={{background: data.netGST >= 0 ? '#fbe9e4' : '#eaf3ea', borderRadius:4}}>
+                  <td style={{padding:'8px 8px', fontWeight:700, fontSize:12, color:'#777', width:36, fontFamily:'monospace'}}>9</td>
+                  <td style={{padding:'8px 0', fontWeight:700, fontSize:14, color: data.netGST>=0 ? 'var(--rust)' : '#2e7d32'}}>
+                    {data.netGST >= 0 ? 'Net GST payable  (1A minus 1B)' : 'Net GST refundable  (1B minus 1A)'}
+                  </td>
+                  <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:700, fontSize:16,
+                    color: data.netGST>=0 ? 'var(--rust)' : '#2e7d32', paddingRight:4}}>
+                    {fmtAUD(Math.abs(data.netGST))}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* PAYG */}
+        <div className="card" style={{padding:'14px 22px', marginBottom:16, background:'var(--bg-deep)'}}>
+          <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--ink-3)', marginBottom:6, letterSpacing:1}}>PAYG WITHHOLDING</div>
+          <div style={{fontSize:13, color:'var(--ink-3)'}}>W1 / W2 — No employees · not applicable</div>
+        </div>
+
+        {/* Assumptions */}
+        <div style={{fontSize:11, color:'var(--ink-3)', lineHeight:1.6, padding:'4px 2px'}}>
+          <strong style={{color:'var(--ink-2)'}}>Assumptions: </strong>
+          G1 includes all shop orders and completed repair jobs, net of refunds.
+          All sales treated as fully taxable (G5 = G1) — adjust G2/G3/G4 if you have export or GST-free sales.
+          Tools & equipment expenses mapped to G10 (capital); all other categories to G11 (non-capital).
+          All purchases assumed GST-inclusive — exclude purchases from unregistered sellers.
+        </div>
+      </>}
+    </>
   );
 }
 

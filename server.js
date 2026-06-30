@@ -2552,6 +2552,229 @@ function buildTaxReportData(fromStr, toStr) {
   };
 }
 
+// ── BAS Worksheet builder ────────────────────────────────────────────────────
+function buildBASData(fromStr, toStr) {
+  const from = new Date(fromStr + 'T00:00:00');
+  const to   = new Date(toStr   + 'T23:59:59');
+  const inRange = d => d && d >= from && d <= to;
+
+  // G1 – Total sales (all revenue, GST-inclusive)
+  let G1 = 0;
+  let refunds = 0;
+  let orderCount = 0, repairCount = 0;
+  for (const o of readOrders()) {
+    const d = parseOrderDateForReport(o);
+    if (!inRange(d)) continue;
+    G1 += Number(o.total) || 0;
+    if (o.refund) refunds += Number(o.refund.amount) || 0;
+    orderCount++;
+  }
+  for (const r of flatRepairs()) {
+    if (r._colId !== 'done') continue;
+    const d = parseRepairDateForReport(r);
+    if (!inRange(d)) continue;
+    G1 += Number(r.total || r.cost) || 0;
+    repairCount++;
+  }
+  G1 -= refunds; // net of credit notes / refunds
+
+  // G2 – Export sales (assumed nil for domestic-only business)
+  const G2 = 0;
+  // G3 – Other GST-free sales (user may adjust; defaulting to 0)
+  const G3 = 0;
+  // G4 – Input-taxed sales (financial supply etc; assumed nil)
+  const G4 = 0;
+  // G5 – Taxable sales = G1 - G2 - G3 - G4
+  const G5 = Math.max(0, G1 - G2 - G3 - G4);
+  // 1A – GST on sales = G5 / 11
+  const box1A = G5 / 11;
+
+  // G10 – Capital purchases (tools, equipment — typically assets ≥ $1k in value)
+  // G11 – Non-capital purchases (parts, software, other running costs)
+  let G10 = 0, G11 = 0;
+  let expenseCount = 0;
+  for (const e of readExpenses()) {
+    const d = parseExpDateForReport(e.date);
+    if (!inRange(d)) continue;
+    const amt = (Number(e.amount) || 0) * (Number(e.quantity) || 1);
+    const cat = e.category || 'other';
+    if (cat === 'tools' || cat === 'equipment') G10 += amt;
+    else G11 += amt;
+    expenseCount++;
+  }
+  const G6 = G10 + G11; // total purchases (GST-inclusive)
+  // 1B – GST credits = G6 / 11
+  const box1B = G6 / 11;
+  // Net GST payable (positive = you owe ATO; negative = ATO owes you)
+  const netGST = box1A - box1B;
+
+  return {
+    from: fromStr, to: toStr,
+    G1, G2, G3, G4, G5, G6, G10, G11,
+    box1A, box1B, netGST,
+    refunds, orderCount, repairCount, expenseCount,
+  };
+}
+
+function buildBASPdf(data, shop) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: 'A4', margin: 50 });
+    const chunks = [];
+    doc.on('data', c => chunks.push(c));
+    doc.on('end',  () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const RUST  = '#b5451b';
+    const OCHRE = '#d39a37';
+    const ATO_BLUE = '#003087';
+    const fmtMoney = n => `$${(Number(n)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+    const shopName    = shop.tradingName || shop.name || 'Outback Electronics';
+    const shopAddress = shop.address || [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ');
+    const logoPath    = path.join(__dirname, 'assets', 'logo.png');
+    const hasLogo     = fs.existsSync(logoPath);
+
+    const fmtDateStr = s => new Date(s+'T00:00:00').toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'});
+    const periodLabel = `${fmtDateStr(data.from)} – ${fmtDateStr(data.to)}`;
+
+    // Detect quarter label
+    const [fY,fM,fD] = data.from.split('-').map(Number);
+    const [tY,tM,tD] = data.to.split('-').map(Number);
+    const fyStart = fM >= 7 ? fY : fY - 1;
+    const quarterLabel = (() => {
+      if (fM===7&&fD===1&&tM===9&&tD===30)  return `Q1 ${fyStart}–${String(fyStart+1).slice(2)} (Jul–Sep)`;
+      if (fM===10&&fD===1&&tM===12&&tD===31) return `Q2 ${fyStart}–${String(fyStart+1).slice(2)} (Oct–Dec)`;
+      if (fM===1&&fD===1&&tM===3&&tD===31)   return `Q3 ${fyStart}–${String(fyStart+1).slice(2)} (Jan–Mar)`;
+      if (fM===4&&fD===1&&tM===6&&tD===30)   return `Q4 ${fyStart}–${String(fyStart+1).slice(2)} (Apr–Jun)`;
+      return null;
+    })();
+
+    // ── Header ──
+    doc.rect(0, 0, doc.page.width, 110).fill(RUST);
+    if (hasLogo) { try { doc.image(logoPath, 50, 22, { width: 66 }); } catch {} }
+    doc.fillColor('#fff').font('Helvetica-Bold').fontSize(20)
+      .text(shopName, hasLogo ? 130 : 50, 30, { width: 280 });
+    doc.font('Helvetica').fontSize(9).fillColor('#fde6d6')
+      .text(shopAddress || '', hasLogo ? 130 : 50, 56, { width: 280 })
+      .text([shop.phone, shop.email].filter(Boolean).join('  ·  '), hasLogo ? 130 : 50, 70, { width: 280 });
+    doc.font('Helvetica-Bold').fontSize(18).fillColor('#fff').text('BAS WORKSHEET', 0, 26, { width: 545, align: 'right' });
+    doc.font('Helvetica').fontSize(9).fillColor('#fde6d6')
+      .text(quarterLabel || '', 0, 52, { width: 545, align: 'right' })
+      .text(periodLabel, 0, 66, { width: 545, align: 'right' });
+    if (shop.abn) {
+      doc.font('Helvetica-Bold').fontSize(10).fillColor('#fde6d6').text(`ABN  ${shop.abn}`, 0, 82, { width: 545, align: 'right' });
+    }
+
+    let y = 128;
+
+    // ── Notice banner ──
+    doc.rect(50, y, 495, 28).fill('#fff8e1');
+    doc.font('Helvetica-Bold').fontSize(9).fillColor('#7a5d10')
+      .text('WORKSHEET ONLY — NOT AN OFFICIAL ATO FORM', 56, y+5);
+    doc.font('Helvetica').fontSize(8).fillColor('#9a7a30')
+      .text('Use these figures to complete your BAS via myGov Business Portal or your registered BAS/tax agent.', 56, y+16);
+    y += 38;
+
+    const W = 495;
+    const labelX = 50, codeW = 30, labelW = 330, amtX = 430, amtW = 115;
+
+    // Row helper
+    const row = (code, label, value, opts = {}) => {
+      const rowH = 20;
+      if (opts.shade) doc.rect(labelX, y, W, rowH).fill(opts.shade);
+      if (opts.topLine) { doc.moveTo(labelX, y).lineTo(labelX+W, y).strokeColor('#bbb').lineWidth(0.5).stroke(); }
+      const codeColor = opts.highlight ? '#fff' : '#555';
+      const labelColor = opts.highlight ? '#fff' : (opts.dim ? '#999' : '#222');
+      const valColor   = opts.highlight ? '#fff' : (opts.dim ? '#999' : '#111');
+      doc.font('Helvetica-Bold').fontSize(9).fillColor(codeColor).text(code, labelX+4, y+5, { width: codeW });
+      doc.font(opts.bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(9).fillColor(labelColor).text(label, labelX+codeW+4, y+5, { width: labelW });
+      if (value !== null) {
+        doc.font(opts.bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(9).fillColor(valColor)
+          .text(fmtMoney(value), amtX, y+5, { width: amtW, align: 'right' });
+      }
+      y += rowH;
+    };
+    const sectionBand = label => {
+      doc.rect(labelX, y, W, 18).fill(OCHRE);
+      doc.font('Helvetica-Bold').fontSize(9).fillColor('#fff').text(label, labelX+6, y+4);
+      y += 18;
+    };
+
+    // ── Section 1: GST on Sales ──
+    sectionBand('SECTION 1  —  GST ON SALES');
+    row('G1',  'Total sales (all revenue, including GST where applicable)', data.G1);
+    row('G2',  'Export sales (GST-free)',                                   data.G2, { dim: data.G2===0 });
+    row('G3',  'Other GST-free sales',                                      data.G3, { dim: data.G3===0 });
+    row('G4',  'Input-taxed sales',                                         data.G4, { dim: data.G4===0 });
+    row('G5',  'G1 minus (G2 + G3 + G4)  —  Taxable sales',               data.G5, { shade:'#f5f5f5', bold:true });
+    y += 4;
+    doc.rect(labelX, y, W, 22).fill(ATO_BLUE);
+    doc.font('Helvetica-Bold').fontSize(10).fillColor('#fff')
+      .text('1A', labelX+4, y+5, { width: codeW })
+      .text('GST on sales  =  G5 ÷ 11', labelX+codeW+4, y+5, { width: labelW })
+      .text(fmtMoney(data.box1A), amtX, y+5, { width: amtW, align: 'right' });
+    y += 22;
+
+    y += 10;
+
+    // ── Section 2: GST on Purchases ──
+    sectionBand('SECTION 2  —  GST CREDITS ON PURCHASES');
+    row('G10', 'Capital purchases (tools & equipment)', data.G10, { dim: data.G10===0 });
+    row('G11', 'Non-capital purchases (parts, software, other)', data.G11, { dim: data.G11===0 });
+    row('G6',  'Total purchases  (G10 + G11)',           data.G6,  { shade:'#f5f5f5', bold:true });
+    y += 4;
+    doc.rect(labelX, y, W, 22).fill(ATO_BLUE);
+    doc.font('Helvetica-Bold').fontSize(10).fillColor('#fff')
+      .text('1B', labelX+4, y+5, { width: codeW })
+      .text('GST credits  =  G6 ÷ 11', labelX+codeW+4, y+5, { width: labelW })
+      .text(fmtMoney(data.box1B), amtX, y+5, { width: amtW, align: 'right' });
+    y += 22;
+
+    y += 10;
+
+    // ── Net GST ──
+    const netBg  = data.netGST >= 0 ? '#c62828' : '#2e7d32';
+    doc.rect(labelX, y, W, 28).fill(netBg);
+    doc.font('Helvetica-Bold').fontSize(12).fillColor('#fff')
+      .text('9', labelX+4, y+7, { width: codeW })
+      .text(data.netGST >= 0 ? 'Net GST payable  (1A minus 1B)' : 'Net GST refundable  (1B minus 1A)', labelX+codeW+4, y+7, { width: labelW })
+      .text(fmtMoney(Math.abs(data.netGST)), amtX, y+7, { width: amtW, align: 'right' });
+    y += 36;
+
+    // ── PAYG Withholding ──
+    y += 4;
+    sectionBand('SECTION 3  —  PAYG WITHHOLDING  (employees)');
+    doc.font('Helvetica').fontSize(9).fillColor('#888')
+      .text('W1  Total salary, wages and other payments               N/A — no employees', labelX+6, y+4);
+    doc.text('W2  Amount withheld from payments                         N/A — no employees', labelX+6, y+16);
+    y += 30;
+
+    // ── Assumptions ──
+    y += 6;
+    doc.rect(labelX, y, W, 1).fill('#ddd'); y += 6;
+    doc.font('Helvetica-Bold').fontSize(8).fillColor('#555').text('ASSUMPTIONS & NOTES', labelX, y);
+    y += 12;
+    const notes = [
+      '• G1 includes all shop orders and completed repair jobs for the period, net of any refunds.',
+      '• All sales assumed to be fully taxable at 10% GST (G5 = G1). Adjust G2/G3/G4 if you have GST-free or export sales.',
+      '• G10 (capital) = tools & equipment expenses; G11 (non-capital) = parts, software, and other categories.',
+      '• All purchases assumed to be GST-inclusive. Exclude second-hand goods purchased from unregistered sellers from G10/G11.',
+      '• PAYG instalments: if the ATO has issued a T7 instalment amount, enter it in the T7 box on your actual BAS.',
+      '• Lodge your BAS via myGov (business.gov.au) or through a registered BAS/tax agent by the due date.',
+    ];
+    for (const n of notes) {
+      doc.font('Helvetica').fontSize(8).fillColor('#666').text(n, labelX, y, { width: W });
+      y += 12;
+    }
+
+    // ── Footer ──
+    const genDate = new Date().toLocaleDateString('en-AU',{day:'2-digit',month:'long',year:'numeric'});
+    doc.font('Helvetica').fontSize(8).fillColor('#aaa')
+      .text(`Generated ${genDate} · ${shopName} · BAS Worksheet — internal reference only`, 50, y+8, { width: 495, align: 'center' });
+
+    doc.end();
+  });
+}
+
 function buildTaxReportPdf(data, shop) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 50 });
@@ -5622,6 +5845,38 @@ const adminServer = http.createServer(async (req, res) => {
     const { shop } = readSettings();
     const buffer = await buildTaxReportPdf(data, shop);
     const filename = `profit-loss-${from}-to-${to}.pdf`;
+    res.writeHead(200, {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length,
+      'X-Content-Type-Options': 'nosniff',
+    });
+    res.end(buffer);
+    return;
+  }
+
+  // ── Admin: BAS Worksheet ────────────────────────────────────
+  if (req.method === 'GET' && url.pathname === '/api/admin/bas-report') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    const from = url.searchParams.get('from') || '';
+    const to   = url.searchParams.get('to')   || '';
+    if (!from || !to || !/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
+      return json(res, 422, { error: 'from and to (YYYY-MM-DD) are required' });
+    }
+    return json(res, 200, buildBASData(from, to));
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/admin/bas-report/pdf') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    const from = url.searchParams.get('from') || '';
+    const to   = url.searchParams.get('to')   || '';
+    if (!from || !to || !/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
+      return json(res, 422, { error: 'from and to (YYYY-MM-DD) are required' });
+    }
+    const data = buildBASData(from, to);
+    const { shop } = readSettings();
+    const buffer = await buildBASPdf(data, shop);
+    const filename = `bas-worksheet-${from}-to-${to}.pdf`;
     res.writeHead(200, {
       'Content-Type': 'application/pdf',
       'Content-Disposition': `attachment; filename="${filename}"`,
