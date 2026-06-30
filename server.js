@@ -2429,8 +2429,21 @@ function buildInvoicePdf(order, shop) {
 }
 
 // ── Australian sole trader income tax estimate (2025-26 rates) ──────────────
+function soleTradeMarginalRate(income) {
+  if (income <= 18200)  return 0;
+  if (income <= 45000)  return 0.19;
+  if (income <= 120000) return 0.325;
+  if (income <= 180000) return 0.37;
+  return 0.45;
+}
+
 function estimateSoleTradeTax(netProfit) {
-  if (netProfit <= 0) return { baseTax: 0, lito: 0, medicareLevy: 0, totalTax: 0, effectiveRate: 0, quarterlySetAside: 0 };
+  if (netProfit <= 0) return {
+    baseTax:0, lito:0, sbito:0, incomeTax:0, medicareLevy:0,
+    totalTax:0, effectiveRate:0, quarterlySetAside:0,
+    paygRequired:false, marginalRate:0,
+    recommendedSuper:0, superTaxSaving:0, concessionalCap:30000,
+  };
 
   // Marginal rates
   let baseTax = 0;
@@ -2440,21 +2453,40 @@ function estimateSoleTradeTax(netProfit) {
   else if (netProfit <= 180000)  baseTax = 29467 + (netProfit - 120000) * 0.37;
   else                           baseTax = 51667 + (netProfit - 180000) * 0.45;
 
-  // Low Income Tax Offset (LITO)
+  // LITO
   let lito = 0;
   if (netProfit <= 37500)       lito = 700;
   else if (netProfit <= 45000)  lito = 700 - (netProfit - 37500) * 0.05;
   else if (netProfit <= 66667)  lito = 325 - (netProfit - 45000) * 0.015;
 
-  // Medicare levy (~2%; low-income phase-in ≈$26k–$32.5k)
+  // Small Business Income Tax Offset (SBITO): 16% of business tax, capped $1,000
+  const taxBeforeOffset = Math.max(0, baseTax - lito);
+  const sbito = Math.min(1000, taxBeforeOffset * 0.16);
+  const incomeTax = Math.max(0, taxBeforeOffset - sbito);
+
+  // Medicare levy (~2%; phase-in $26k–$32.5k for singles)
   let medicareLevy = 0;
   if (netProfit > 32500)       medicareLevy = netProfit * 0.02;
   else if (netProfit > 26000)  medicareLevy = (netProfit - 26000) * 0.10;
 
-  const totalTax = Math.max(0, baseTax - lito + medicareLevy);
+  const totalTax = incomeTax + medicareLevy;
   const effectiveRate = (totalTax / netProfit) * 100;
   const quarterlySetAside = totalTax / 4;
-  return { baseTax, lito, medicareLevy, totalTax, effectiveRate, quarterlySetAside };
+  const paygRequired = totalTax > 4000;
+  const marginalRate = soleTradeMarginalRate(netProfit);
+
+  // Superannuation (personal deductible contribution)
+  const concessionalCap = 30000; // 2025-26 cap
+  const recommendedSuper = Math.min(concessionalCap, Math.round(netProfit * 0.12 * 100) / 100);
+  // Tax saving = (marginal rate - 15% super tax) on the contribution
+  const superTaxSaving = Math.round(recommendedSuper * Math.max(0, marginalRate - 0.15) * 100) / 100;
+
+  return {
+    baseTax, lito, sbito, incomeTax, medicareLevy,
+    totalTax, effectiveRate, quarterlySetAside,
+    paygRequired, marginalRate,
+    recommendedSuper, superTaxSaving, concessionalCap,
+  };
 }
 
 // ── Tax / P&L report helpers ─────────────────────────────────────────────────
@@ -2882,19 +2914,35 @@ function buildTaxReportPdf(data, shop) {
     // Income Tax Estimate (sole trader, 2025-26 rates)
     const tx = data.taxEstimate || {};
     y += 6;
-    if (y > 620) { doc.addPage(); y = 50; }
+    if (y > 580) { doc.addPage(); y = 50; }
     sectionHeader('INCOME TAX ESTIMATE (SOLE TRADER — 2025-26 RATES)');
     y += 4;
     dataRow('Taxable income (net profit)', fmtMoney(data.grossProfit));
-    dataRow('Base income tax', `(${fmtMoney(tx.baseTax || 0)})`);
+    dataRow('Base income tax (brackets)', `(${fmtMoney(tx.baseTax || 0)})`);
     if ((tx.lito || 0) > 0) dataRow('Low Income Tax Offset (LITO)', fmtMoney(tx.lito));
+    if ((tx.sbito || 0) > 0) dataRow('Small Business Income Tax Offset (SBITO)', fmtMoney(tx.sbito));
     dataRow('Medicare levy (2%)', `(${fmtMoney(tx.medicareLevy || 0)})`);
     divider();
     highlight('ESTIMATED TAX PAYABLE', fmtMoney(tx.totalTax || 0), '#fbe9e4', RUST);
-    dataRow(`Effective rate: ${(tx.effectiveRate || 0).toFixed(1)}%  ·  Quarterly set-aside`, fmtMoney(tx.quarterlySetAside || 0));
+    dataRow(`Effective rate: ${(tx.effectiveRate || 0).toFixed(1)}%  ·  Marginal rate: ${((tx.marginalRate||0)*100).toFixed(0)}%`, '');
+    dataRow('Recommended quarterly set-aside', fmtMoney(tx.quarterlySetAside || 0));
+    if (tx.paygRequired) {
+      doc.rect(50, y-2, 495, 18).fill('#fff8e1');
+      doc.font('Helvetica').fontSize(9).fillColor('#7a5d10')
+        .text('PAYG Instalments: Your estimated tax exceeds $4,000. The ATO will likely issue a PAYG instalment schedule. Lodge via myGov Business Portal.', 56, y+1, { width: 483 });
+      y += 22;
+    }
+    y += 6;
+    sectionHeader('SUPERANNUATION ESTIMATE');
+    y += 4;
+    dataRow(`Recommended contribution (12% of profit, capped $${(tx.concessionalCap||30000).toLocaleString()})`, fmtMoney(tx.recommendedSuper || 0));
+    dataRow(`Estimated tax saving (marginal rate ${((tx.marginalRate||0)*100).toFixed(0)}% less 15% super tax)`, fmtMoney(tx.superTaxSaving || 0));
     doc.font('Helvetica-Oblique').fontSize(8).fillColor('#888')
-      .text('* Based on 2025-26 Australian individual tax rates assuming this profit is your only income. Does not include small business offsets, private health rebate, or other adjustments. Consult a registered tax agent.', 50, y, { width: 495 });
-    y += 28;
+      .text('Personal super contributions are tax-deductible up to the concessional cap if a "Notice of intent to claim a deduction" is lodged with your fund. Consult a financial adviser.', 56, y, { width: 483 });
+    y += 20;
+    doc.font('Helvetica-Oblique').fontSize(8).fillColor('#888')
+      .text('Tax estimate based on 2025-26 Australian individual rates. Assumes this profit is your only income. Consult a registered tax agent for your actual liability.', 50, y, { width: 495 });
+    y += 20;
 
     // GST — not registered
     y += 4;
@@ -2937,6 +2985,317 @@ function buildTaxReportPdf(data, shop) {
     const genDate = new Date().toLocaleDateString('en-AU',{day:'2-digit',month:'long',year:'numeric'});
     doc.font('Helvetica').fontSize(8).fillColor('#aaa')
       .text(`Generated ${genDate} · ${shopName} · For internal reference only`, 50, y+16, { width:495, align:'center' });
+
+    doc.end();
+  });
+}
+
+// ── Receivables report ────────────────────────────────────────────────────────
+function buildReceivablesData() {
+  const now = new Date();
+  const items = [];
+
+  // Orders not yet paid
+  for (const o of readOrders()) {
+    const paid = (o.paymentStatus === 'paid') || (o.status === 'completed') || (o.status === 'shipped') || (o.status === 'delivered');
+    if (paid) continue;
+    const total = Number(o.total) || 0;
+    if (total <= 0) continue;
+    const d = parseOrderDateForReport(o);
+    items.push({
+      type: 'order',
+      ref: o.id || '—',
+      customer: (o.customer && o.customer.name) || o.customerName || o.email || '—',
+      description: `Shop order ${o.id || ''}`.trim(),
+      amount: total,
+      date: d ? d.toISOString().slice(0,10) : null,
+      status: o.status || 'pending',
+      ageDays: d ? Math.floor((now - d) / 86400000) : null,
+    });
+  }
+
+  // Repair jobs in progress (not done, not cancelled) with an estimated amount
+  for (const r of flatRepairs()) {
+    if (r._colId === 'done') continue;
+    const amt = Number(r.total || r.cost || r.estimatedCost || r.quote) || 0;
+    if (amt <= 0) continue;
+    const d = parseRepairDateForReport(r);
+    items.push({
+      type: 'repair',
+      ref: r.id || '—',
+      customer: r.customer || r.customerName || '—',
+      description: r.title || r.device || `Repair job ${r.id || ''}`.trim(),
+      amount: amt,
+      date: d ? d.toISOString().slice(0,10) : null,
+      status: r._colLabel || r._colId,
+      ageDays: d ? Math.floor((now - d) / 86400000) : null,
+    });
+  }
+
+  items.sort((a,b) => {
+    if (!a.date && !b.date) return 0;
+    if (!a.date) return 1;
+    if (!b.date) return -1;
+    return a.date < b.date ? -1 : 1;
+  });
+
+  const total    = items.reduce((s,i) => s + i.amount, 0);
+  const over30   = items.filter(i => i.ageDays != null && i.ageDays > 30).reduce((s,i) => s+i.amount, 0);
+  const over60   = items.filter(i => i.ageDays != null && i.ageDays > 60).reduce((s,i) => s+i.amount, 0);
+  const over90   = items.filter(i => i.ageDays != null && i.ageDays > 90).reduce((s,i) => s+i.amount, 0);
+
+  return { asAt: now.toISOString().slice(0,10), items, total, over30, over60, over90 };
+}
+
+function buildReceivablesPdf(data, shop) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: 'A4', margin: 50 });
+    const chunks = [];
+    doc.on('data', c => chunks.push(c));
+    doc.on('end',  () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const RUST  = '#b5451b';
+    const OCHRE = '#d39a37';
+    const fmtMoney = n => `$${(Number(n)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+    const shopName    = shop.tradingName || shop.name || 'Outback Electronics';
+    const shopAddress = shop.address || [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ');
+    const logoPath    = path.join(__dirname, 'assets', 'logo.png');
+    const hasLogo     = fs.existsSync(logoPath);
+
+    // Header
+    doc.rect(0, 0, doc.page.width, 110).fill(RUST);
+    if (hasLogo) { try { doc.image(logoPath, 50, 22, { width: 66 }); } catch {} }
+    doc.fillColor('#fff').font('Helvetica-Bold').fontSize(20)
+      .text(shopName, hasLogo ? 130 : 50, 30, { width: 280 });
+    doc.font('Helvetica').fontSize(9).fillColor('#fde6d6')
+      .text(shopAddress || '', hasLogo ? 130 : 50, 56, { width: 280 })
+      .text([shop.phone, shop.email].filter(Boolean).join('  ·  '), hasLogo ? 130 : 50, 70, { width: 280 });
+    doc.font('Helvetica-Bold').fontSize(18).fillColor('#fff').text('RECEIVABLES', 0, 26, { width: 545, align: 'right' });
+    doc.font('Helvetica-Bold').fontSize(10).fillColor('#fde6d6').text('OUTSTANDING REPORT', 0, 50, { width: 545, align: 'right' });
+    doc.font('Helvetica').fontSize(9).fillColor('#fde6d6').text(`As at ${new Date(data.asAt+'T00:00:00').toLocaleDateString('en-AU',{day:'2-digit',month:'long',year:'numeric'})}`, 0, 66, { width: 545, align: 'right' });
+    if (shop.abn) {
+      doc.font('Helvetica-Bold').fontSize(10).fillColor('#fde6d6').text(`ABN  ${shop.abn}`, 0, 82, { width: 545, align: 'right' });
+    }
+
+    let y = 130;
+    if (shop.abn) {
+      doc.font('Helvetica').fontSize(9).fillColor('#888').text(`ABN: ${shop.abn}`, 50, y, { width: 495, align: 'right' });
+    }
+    y = 148;
+
+    const fmtDateStr = s => s ? new Date(s+'T00:00:00').toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+
+    // Ageing summary
+    doc.rect(50, y, 495, 20).fill(OCHRE);
+    doc.font('Helvetica-Bold').fontSize(10).fillColor('#fff').text('AGEING SUMMARY', 56, y+5);
+    y += 24;
+    const ageItems = [
+      ['Total outstanding', data.total],
+      ['> 30 days',         data.over30],
+      ['> 60 days',         data.over60],
+      ['> 90 days',         data.over90],
+    ];
+    for (const [lbl, amt] of ageItems) {
+      const isTotal = lbl === 'Total outstanding';
+      if (isTotal) doc.rect(50, y-2, 495, 20).fill('#fbe9e4');
+      doc.font(isTotal ? 'Helvetica-Bold' : 'Helvetica').fontSize(10).fillColor(isTotal ? RUST : '#333')
+        .text(lbl, 56, y, { width: 360 })
+        .text(fmtMoney(amt), 0, y, { width: 540, align: 'right' });
+      y += 18;
+    }
+    y += 10;
+
+    if (data.items.length === 0) {
+      doc.font('Helvetica').fontSize(11).fillColor('#555').text('No outstanding receivables.', 56, y);
+      y += 20;
+    } else {
+      // Table header
+      doc.rect(50, y, 495, 18).fill('#f5ede3');
+      doc.font('Helvetica-Bold').fontSize(8).fillColor('#555')
+        .text('Ref',        56, y+4, { width:60 })
+        .text('Customer',   116, y+4, { width:130 })
+        .text('Description',246, y+4, { width:130 })
+        .text('Date',       376, y+4, { width:60 })
+        .text('Status',     436, y+4, { width:60 })
+        .text('Amount',     0,   y+4, { width:540, align:'right' });
+      y += 18;
+
+      for (let i=0; i<data.items.length; i++) {
+        const it = data.items[i];
+        if (y > 750) { doc.addPage(); y = 50; }
+        if (i%2===1) doc.rect(50, y-1, 495, 16).fill('#fdf9f5');
+        const ageLbl = it.ageDays != null ? `${it.ageDays}d` : '';
+        const ageColor = it.ageDays > 90 ? RUST : it.ageDays > 60 ? '#c67c00' : '#333';
+        doc.font('Helvetica').fontSize(8).fillColor('#222')
+          .text(it.ref,           56,  y, { width:60 })
+          .text(it.customer,      116, y, { width:130 })
+          .text(it.description,   246, y, { width:130 })
+          .text(fmtDateStr(it.date), 376, y, { width:60 });
+        doc.fillColor('#555').text(it.status || '—', 436, y, { width:50 });
+        doc.fillColor('#111').font('Helvetica-Bold').text(fmtMoney(it.amount), 0, y, { width:540, align:'right' });
+        if (ageLbl) doc.fillColor(ageColor).font('Helvetica').text(ageLbl, 486, y, { width:54, align:'right' });
+        y += 16;
+      }
+
+      // Total row
+      doc.moveTo(50, y+2).lineTo(545, y+2).strokeColor('#ccc').stroke(); y += 8;
+      doc.rect(50, y-2, 495, 22).fill('#fbe9e4');
+      doc.font('Helvetica-Bold').fontSize(11).fillColor(RUST)
+        .text('TOTAL OUTSTANDING', 56, y+2)
+        .text(fmtMoney(data.total), 0, y+2, { width:540, align:'right' });
+      y += 28;
+    }
+
+    // Footer
+    const genDate = new Date().toLocaleDateString('en-AU',{day:'2-digit',month:'long',year:'numeric'});
+    doc.font('Helvetica').fontSize(8).fillColor('#aaa')
+      .text(`Generated ${genDate} · ${shopName} · Internal reference only`, 50, y+10, { width:495, align:'center' });
+
+    doc.end();
+  });
+}
+
+// ── Trading stock report ──────────────────────────────────────────────────────
+function buildTradingStockData() {
+  const products = readProducts();
+  const lines = [];
+  let totalSellValue = 0, totalCostValue = 0;
+
+  for (const p of products) {
+    if (p.variants && p.variants.length > 0) {
+      for (const v of p.variants) {
+        const qty = Number(v.stock) || 0;
+        if (qty <= 0) continue;
+        const sellPrice = Number(v.price || p.price) || 0;
+        const costPrice = Number(v.costPrice || p.costPrice) || 0;
+        const sellValue = sellPrice * qty;
+        const costValue = costPrice ? costPrice * qty : sellValue;
+        lines.push({ sku: v.sku || p.sku || '—', name: `${p.name || p.title || '—'} — ${v.name || ''}`, qty, sellPrice, costPrice: costPrice || null, sellValue, costValue, hasCost: !!costPrice });
+        totalSellValue += sellValue;
+        totalCostValue += costValue;
+      }
+    } else {
+      if (p.digital || p.infiniteStock) continue;
+      const qty = Number(p.stock) || 0;
+      if (qty <= 0) continue;
+      const sellPrice = Number(p.price) || 0;
+      const costPrice = Number(p.costPrice) || 0;
+      const sellValue = sellPrice * qty;
+      const costValue = costPrice ? costPrice * qty : sellValue;
+      lines.push({ sku: p.sku || '—', name: p.name || p.title || '—', qty, sellPrice, costPrice: costPrice || null, sellValue, costValue, hasCost: !!costPrice });
+      totalSellValue += sellValue;
+      totalCostValue += costValue;
+    }
+  }
+
+  lines.sort((a,b) => a.name.localeCompare(b.name));
+  const hasCostPrices = lines.some(l => l.hasCost);
+  const asAt = new Date().toISOString().slice(0,10);
+  return { asAt, lines, totalSellValue, totalCostValue, hasCostPrices, itemCount: lines.length };
+}
+
+function buildTradingStockPdf(data, shop) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: 'A4', margin: 50 });
+    const chunks = [];
+    doc.on('data', c => chunks.push(c));
+    doc.on('end',  () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const RUST  = '#b5451b';
+    const OCHRE = '#d39a37';
+    const fmtMoney = n => `$${(Number(n)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+    const shopName    = shop.tradingName || shop.name || 'Outback Electronics';
+    const shopAddress = shop.address || [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ');
+    const logoPath    = path.join(__dirname, 'assets', 'logo.png');
+    const hasLogo     = fs.existsSync(logoPath);
+    const asAtLabel   = new Date(data.asAt+'T00:00:00').toLocaleDateString('en-AU',{day:'2-digit',month:'long',year:'numeric'});
+
+    // Header
+    doc.rect(0, 0, doc.page.width, 110).fill(RUST);
+    if (hasLogo) { try { doc.image(logoPath, 50, 22, { width: 66 }); } catch {} }
+    doc.fillColor('#fff').font('Helvetica-Bold').fontSize(20)
+      .text(shopName, hasLogo ? 130 : 50, 30, { width: 280 });
+    doc.font('Helvetica').fontSize(9).fillColor('#fde6d6')
+      .text(shopAddress || '', hasLogo ? 130 : 50, 56, { width: 280 })
+      .text([shop.phone, shop.email].filter(Boolean).join('  ·  '), hasLogo ? 130 : 50, 70, { width: 280 });
+    doc.font('Helvetica-Bold').fontSize(18).fillColor('#fff').text('TRADING STOCK', 0, 26, { width: 545, align: 'right' });
+    doc.font('Helvetica-Bold').fontSize(10).fillColor('#fde6d6').text('YEAR-END STOCKTAKE', 0, 50, { width: 545, align: 'right' });
+    doc.font('Helvetica').fontSize(9).fillColor('#fde6d6').text(`As at ${asAtLabel}`, 0, 66, { width: 545, align: 'right' });
+    if (shop.abn) {
+      doc.font('Helvetica-Bold').fontSize(10).fillColor('#fde6d6').text(`ABN  ${shop.abn}`, 0, 82, { width: 545, align: 'right' });
+    }
+
+    let y = 148;
+
+    // Value summary
+    doc.rect(50, y, 495, 20).fill(OCHRE);
+    doc.font('Helvetica-Bold').fontSize(10).fillColor('#fff').text('STOCK VALUATION SUMMARY', 56, y+5);
+    y += 24;
+    doc.font('Helvetica').fontSize(10).fillColor('#333').text('Total items in stock', 56, y, { width: 360 });
+    doc.text(String(data.lines.length), 0, y, { width: 540, align: 'right' });
+    y += 18;
+    if (data.hasCostPrices) {
+      doc.text('Total value at cost price', 56, y, { width: 360 }).text(fmtMoney(data.totalCostValue), 0, y, { width: 540, align: 'right' });
+      y += 18;
+    }
+    doc.rect(50, y-2, 495, 20).fill('#fbe9e4');
+    doc.font('Helvetica-Bold').fontSize(10).fillColor(RUST)
+      .text('Total value at selling price', 56, y, { width: 360 })
+      .text(fmtMoney(data.totalSellValue), 0, y, { width: 540, align: 'right' });
+    y += 28;
+
+    if (data.lines.length === 0) {
+      doc.font('Helvetica').fontSize(11).fillColor('#555').text('No stock on hand.', 56, y);
+      y += 20;
+    } else {
+      // Column widths
+      const skuX = 50, nameX = 100, qtyX = 340, sellX = 390, costX = 450, valX = 0;
+      doc.rect(50, y, 495, 18).fill('#f5ede3');
+      doc.font('Helvetica-Bold').fontSize(8).fillColor('#555')
+        .text('SKU',        skuX, y+4, { width:50 })
+        .text('Product',    nameX, y+4, { width:230 })
+        .text('Qty',        qtyX, y+4, { width:45, align:'right' })
+        .text('Sell $',     sellX, y+4, { width:55, align:'right' })
+        .text('Cost $',     costX, y+4, { width:55, align:'right' })
+        .text('Value',      valX, y+4, { width:540, align:'right' });
+      y += 18;
+
+      for (let i=0; i<data.lines.length; i++) {
+        const ln = data.lines[i];
+        if (y > 750) { doc.addPage(); y = 50; }
+        if (i%2===1) doc.rect(50, y-1, 495, 16).fill('#fdf9f5');
+        doc.font('Helvetica').fontSize(8).fillColor('#222')
+          .text(ln.sku,                      skuX, y, { width:50 })
+          .text(ln.name,                     nameX, y, { width:230 })
+          .text(String(ln.qty),              qtyX, y, { width:45, align:'right' })
+          .text(fmtMoney(ln.sellPrice),      sellX, y, { width:55, align:'right' })
+          .text(ln.costPrice ? fmtMoney(ln.costPrice) : '—', costX, y, { width:55, align:'right' })
+          .text(fmtMoney(ln.hasCost ? ln.costValue : ln.sellValue), valX, y, { width:540, align:'right' });
+        y += 16;
+      }
+
+      doc.moveTo(50, y+2).lineTo(545, y+2).strokeColor('#ccc').stroke(); y += 8;
+      doc.rect(50, y-2, 495, 22).fill('#fbe9e4');
+      doc.font('Helvetica-Bold').fontSize(11).fillColor(RUST)
+        .text(data.hasCostPrices ? 'TOTAL AT COST' : 'TOTAL AT SELLING PRICE', 56, y+2)
+        .text(fmtMoney(data.hasCostPrices ? data.totalCostValue : data.totalSellValue), 0, y+2, { width:540, align:'right' });
+      y += 30;
+    }
+
+    // Note
+    doc.font('Helvetica-Oblique').fontSize(8).fillColor('#888')
+      .text(data.hasCostPrices
+        ? 'Stock valued at cost price. ATO accepts cost, market value, or replacement value — use the same method consistently year to year.'
+        : 'No cost prices set — stock valued at selling price (market value method, acceptable to ATO). Add cost prices in Admin → Products for more accurate COGS reporting.',
+        50, y, { width: 495 });
+    y += 20;
+
+    // Footer
+    const genDate = new Date().toLocaleDateString('en-AU',{day:'2-digit',month:'long',year:'numeric'});
+    doc.font('Helvetica').fontSize(8).fillColor('#aaa')
+      .text(`Generated ${genDate} · ${shopName} · Internal reference only`, 50, y+10, { width:495, align:'center' });
 
     doc.end();
   });
@@ -5877,6 +6236,50 @@ const adminServer = http.createServer(async (req, res) => {
     const { shop } = readSettings();
     const buffer = await buildBASPdf(data, shop);
     const filename = `bas-worksheet-${from}-to-${to}.pdf`;
+    res.writeHead(200, {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length,
+      'X-Content-Type-Options': 'nosniff',
+    });
+    res.end(buffer);
+    return;
+  }
+
+  // ── Admin: Receivables report ───────────────────────────────
+  if (req.method === 'GET' && url.pathname === '/api/admin/receivables-report') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    return json(res, 200, buildReceivablesData());
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/admin/receivables-report/pdf') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    const data = buildReceivablesData();
+    const { shop } = readSettings();
+    const buffer = await buildReceivablesPdf(data, shop);
+    const filename = `receivables-${data.asAt}.pdf`;
+    res.writeHead(200, {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length,
+      'X-Content-Type-Options': 'nosniff',
+    });
+    res.end(buffer);
+    return;
+  }
+
+  // ── Admin: Trading stock report ─────────────────────────────
+  if (req.method === 'GET' && url.pathname === '/api/admin/trading-stock-report') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    return json(res, 200, buildTradingStockData());
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/admin/trading-stock-report/pdf') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    const data = buildTradingStockData();
+    const { shop } = readSettings();
+    const buffer = await buildTradingStockPdf(data, shop);
+    const filename = `trading-stock-${data.asAt}.pdf`;
     res.writeHead(200, {
       'Content-Type': 'application/pdf',
       'Content-Disposition': `attachment; filename="${filename}"`,

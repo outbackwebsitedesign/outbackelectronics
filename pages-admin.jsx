@@ -2916,6 +2916,13 @@ function AdminProducts({ sessionInfo = {} }) {
           </label>
           <div className="grid-2" style={{gap:14}}>
             <label className="field"><span className="label">Price (AUD)</span><input className="input" type="number" value={form.price||0} onChange={e=>setForm({...form, price:Number(e.target.value)})}/></label>
+            <label className="field">
+              <span className="label">Cost Price (AUD) <span style={{fontWeight:400, color:'var(--ink-3)', fontSize:11}}>internal — for stock reports</span></span>
+              <input className="input" type="number" step="0.01" min="0" placeholder="0.00" value={form.costPrice||''} onChange={e=>setForm({...form, costPrice:e.target.value ? Number(e.target.value) : ''})} />
+            </label>
+          </div>
+          <div className="grid-2" style={{gap:14}}>
+            <div></div>
             <div className="field">
               <span className="label">Stock on hand</span>
               {form.digital ? (
@@ -5335,11 +5342,18 @@ function AdminExpenses() {
 // TAX REPORTS — P&L + BAS WORKSHEET
 // ============================================================
 function AdminTaxReports() {
-  const [view, setView] = useState('pl'); // 'pl' | 'bas'
+  const [view, setView] = useState('pl');
+  const TABS = [
+    {id:'pl',          label:'P&L Statement'},
+    {id:'bas',         label:'BAS Worksheet'},
+    {id:'receivables', label:'Receivables'},
+    {id:'stock',       label:'Trading Stock'},
+    {id:'yearend',     label:'Year-End Checklist'},
+  ];
   return (
-    <div style={{padding:32, maxWidth:900}}>
-      <div className="tabs" style={{marginBottom:24}}>
-        {[{id:'pl', label:'P&L Statement'},{id:'bas', label:'BAS Worksheet'}].map(v => (
+    <div style={{padding:32, maxWidth:960}}>
+      <div className="tabs" style={{marginBottom:24, flexWrap:'wrap'}}>
+        {TABS.map(v => (
           <div key={v.id} role="button" tabIndex={0} className={`tab${view===v.id?' active':''}`}
             onClick={() => setView(v.id)}
             onKeyDown={e => { if (e.key==='Enter'||e.key===' ') setView(v.id); }}
@@ -5348,8 +5362,11 @@ function AdminTaxReports() {
           </div>
         ))}
       </div>
-      {view === 'pl'  && <PLView />}
-      {view === 'bas' && <BASView />}
+      {view === 'pl'          && <PLView />}
+      {view === 'bas'         && <BASView />}
+      {view === 'receivables' && <ReceivablesView />}
+      {view === 'stock'       && <StockView />}
+      {view === 'yearend'     && <YearEndView />}
     </div>
   );
 }
@@ -5513,7 +5530,7 @@ function PLView() {
         {/* Income tax estimate */}
         {(() => {
           const tx = data.taxEstimate || {};
-          return (
+          return (<>
             <div className="card" style={{padding:'18px 22px', marginBottom:16}}>
               <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--rust)', marginBottom:12, letterSpacing:1}}>INCOME TAX ESTIMATE — SOLE TRADER (2025-26 RATES)</div>
               <table style={{width:'100%', borderCollapse:'collapse', fontSize:13}}>
@@ -5523,13 +5540,19 @@ function PLView() {
                     <td style={{textAlign:'right', fontFamily:'monospace'}}>{fmtAUD(data.grossProfit)}</td>
                   </tr>
                   <tr>
-                    <td style={{padding:'5px 0', color:'var(--ink-2)'}}>Base income tax</td>
+                    <td style={{padding:'5px 0', color:'var(--ink-2)'}}>Base income tax (brackets)</td>
                     <td style={{textAlign:'right', fontFamily:'monospace', color:'var(--rust)'}}>({fmtAUD(tx.baseTax||0)})</td>
                   </tr>
                   {(tx.lito||0) > 0 && (
                     <tr>
                       <td style={{padding:'5px 0', color:'var(--ink-2)'}}>Low Income Tax Offset (LITO)</td>
                       <td style={{textAlign:'right', fontFamily:'monospace', color:'#345526'}}>{fmtAUD(tx.lito)}</td>
+                    </tr>
+                  )}
+                  {(tx.sbito||0) > 0 && (
+                    <tr>
+                      <td style={{padding:'5px 0', color:'var(--ink-2)'}}>Small Business Income Tax Offset (SBITO)</td>
+                      <td style={{textAlign:'right', fontFamily:'monospace', color:'#345526'}}>{fmtAUD(tx.sbito)}</td>
                     </tr>
                   )}
                   <tr>
@@ -5540,24 +5563,57 @@ function PLView() {
                     <td style={{padding:'8px 0', fontWeight:700}}>
                       Estimated tax payable
                       <span className="mono" style={{fontWeight:400, fontSize:11, color:'var(--ink-3)', marginLeft:10}}>
-                        effective rate {(tx.effectiveRate||0).toFixed(1)}%
+                        effective {(tx.effectiveRate||0).toFixed(1)}% · marginal {((tx.marginalRate||0)*100).toFixed(0)}%
                       </span>
                     </td>
                     <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:700, color:'var(--rust)'}}>{fmtAUD(tx.totalTax||0)}</td>
                   </tr>
                   <tr style={{background:'#fbe9e4'}}>
-                    <td style={{padding:'8px 0 8px 8px', fontWeight:700, color:'var(--rust)', borderRadius:4}}>Set aside per quarter</td>
+                    <td style={{padding:'8px 0 8px 8px', fontWeight:700, color:'var(--rust)'}}>Set aside per quarter</td>
                     <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:700, fontSize:16, color:'var(--rust)', paddingRight:4}}>{fmtAUD(tx.quarterlySetAside||0)}</td>
                   </tr>
                 </tbody>
               </table>
+              {tx.paygRequired && (
+                <div style={{background:'#fff8e1', border:'1px solid #f0d97c', borderRadius:5, padding:'8px 12px', marginTop:10, fontSize:12, color:'#7a5d10'}}>
+                  <strong>PAYG Instalments likely required.</strong> Your estimated tax exceeds $4,000. The ATO will issue a PAYG instalment notice — lodge quarterly via myGov Business Portal.
+                </div>
+              )}
               <div style={{fontSize:11, color:'var(--ink-3)', marginTop:10}}>
-                Estimated using 2025-26 Australian individual tax rates and LITO, assuming this profit is your only income.
-                Does not account for small business offsets, private health rebate, or other adjustments.
+                Estimated using 2025-26 Australian individual tax rates, LITO, and SBITO. Assumes this profit is your only income.
                 Consult a registered tax agent for your actual liability.
               </div>
             </div>
-          );
+
+            {/* Superannuation estimate */}
+            <div className="card" style={{padding:'18px 22px', marginBottom:16}}>
+              <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--rust)', marginBottom:12, letterSpacing:1}}>SUPERANNUATION ESTIMATE</div>
+              <table style={{width:'100%', borderCollapse:'collapse', fontSize:13}}>
+                <tbody>
+                  <tr>
+                    <td style={{padding:'5px 0', color:'var(--ink-2)'}}>
+                      Recommended contribution
+                      <span style={{fontSize:11, color:'var(--ink-3)', marginLeft:8}}>12% of profit, capped ${(tx.concessionalCap||30000).toLocaleString()}</span>
+                    </td>
+                    <td style={{textAlign:'right', fontFamily:'monospace'}}>{fmtAUD(tx.recommendedSuper||0)}</td>
+                  </tr>
+                  <tr style={{borderTop:'1px solid var(--border)'}}>
+                    <td style={{padding:'8px 0', fontWeight:700}}>
+                      Estimated tax saving
+                      <span className="mono" style={{fontWeight:400, fontSize:11, color:'var(--ink-3)', marginLeft:8}}>
+                        marginal {((tx.marginalRate||0)*100).toFixed(0)}% − 15% super tax
+                      </span>
+                    </td>
+                    <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:700, color:'#345526'}}>{fmtAUD(tx.superTaxSaving||0)}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div style={{fontSize:11, color:'var(--ink-3)', marginTop:10}}>
+                Personal contributions are deductible up to the concessional cap if you lodge a "Notice of intent to claim a deduction" with your fund before lodging your tax return.
+                Contributions must be made by 30 June. Consult a licensed financial adviser.
+              </div>
+            </div>
+          </>);
         })()}
 
         {/* GST — not registered */}
@@ -5792,6 +5848,273 @@ function BASView() {
           All purchases assumed GST-inclusive — exclude purchases from unregistered sellers.
         </div>
       </>}
+    </>
+  );
+}
+
+function ReceivablesView() {
+  const [data, setData]       = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState(null);
+
+  const load = async () => {
+    setLoading(true); setError(null); setData(null);
+    const r = await fetch('/api/admin/receivables-report', { credentials:'include' }).catch(()=>null);
+    setLoading(false);
+    if (!r || !r.ok) { setError('Failed to load receivables.'); return; }
+    setData(await r.json());
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const fmtAUD = n => `$${(Number(n)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+  const fmtDate = s => s ? new Date(s+'T00:00:00').toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'}) : '—';
+  const exportPdf = () => window.open('/api/admin/receivables-report/pdf', '_blank');
+
+  return (
+    <>
+      <div className="card" style={{padding:'14px 22px', marginBottom:20, display:'flex', alignItems:'center', gap:16}}>
+        <button className="btn btn-rust" onClick={load} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</button>
+        {data && <button className="btn" style={{background:'#345526',color:'#fff'}} onClick={exportPdf}>↓ Export PDF</button>}
+        {data && <span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>As at {fmtDate(data.asAt)}</span>}
+        {error && <span className="mono" style={{fontSize:12, color:'var(--rust)'}}>{error}</span>}
+      </div>
+
+      {loading && <div className="mono" style={{color:'var(--ink-3)', textAlign:'center', padding:40}}>Loading…</div>}
+
+      {data && <>
+        <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px,1fr))', gap:14, marginBottom:20}}>
+          {[
+            {label:'TOTAL OUTSTANDING', value:fmtAUD(data.total),   color:'var(--rust)'},
+            {label:'> 30 DAYS',         value:fmtAUD(data.over30),  color: data.over30>0?'#c67c00':'var(--ink-3)'},
+            {label:'> 60 DAYS',         value:fmtAUD(data.over60),  color: data.over60>0?'var(--rust)':'var(--ink-3)'},
+            {label:'> 90 DAYS',         value:fmtAUD(data.over90),  color: data.over90>0?'var(--rust)':'var(--ink-3)'},
+          ].map(t => (
+            <div key={t.label} className="card" style={{padding:'14px 16px'}}>
+              <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:4}}>{t.label}</div>
+              <div className="mono" style={{fontSize:17, fontWeight:700, color:t.color}}>{t.value}</div>
+            </div>
+          ))}
+        </div>
+
+        {data.items.length === 0 ? (
+          <div className="card" style={{padding:'32px 22px', textAlign:'center', color:'var(--ink-3)'}}>No outstanding receivables — great!</div>
+        ) : (
+          <div className="card" style={{padding:'18px 22px'}}>
+            <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--rust)', marginBottom:12, letterSpacing:1}}>OUTSTANDING ITEMS</div>
+            <table style={{width:'100%', borderCollapse:'collapse', fontSize:13}}>
+              <thead>
+                <tr style={{borderBottom:'2px solid var(--border)'}}>
+                  {['Ref','Customer','Description','Date','Age','Status','Amount'].map(h => (
+                    <th key={h} style={{textAlign: h==='Amount'?'right':'left', padding:'4px 6px 4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {data.items.map((it,i) => {
+                  const ageColor = it.ageDays > 90 ? 'var(--rust)' : it.ageDays > 60 ? '#c67c00' : 'var(--ink-2)';
+                  return (
+                    <tr key={i} style={{background: i%2===1?'var(--bg-deep)':'transparent'}}>
+                      <td style={{padding:'6px 6px 6px 0', fontFamily:'monospace', fontSize:11}}>{it.ref}</td>
+                      <td style={{padding:'6px 6px 6px 0', color:'var(--ink-1)'}}>{it.customer}</td>
+                      <td style={{padding:'6px 6px 6px 0', color:'var(--ink-2)'}}>{it.description}</td>
+                      <td style={{padding:'6px 6px 6px 0', fontFamily:'monospace', fontSize:11}}>{fmtDate(it.date)}</td>
+                      <td style={{padding:'6px 6px 6px 0', fontFamily:'monospace', fontSize:11, color:ageColor}}>{it.ageDays != null ? `${it.ageDays}d` : '—'}</td>
+                      <td style={{padding:'6px 6px 6px 0', color:'var(--ink-3)', fontSize:11}}>{it.status}</td>
+                      <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:600, color:'var(--rust)'}}>{fmtAUD(it.amount)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr style={{borderTop:'2px solid var(--border)'}}>
+                  <td colSpan={6} style={{padding:'8px 0', fontWeight:700}}>Total Outstanding</td>
+                  <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:700, fontSize:15, color:'var(--rust)'}}>{fmtAUD(data.total)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </>}
+    </>
+  );
+}
+
+function StockView() {
+  const [data, setData]       = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState(null);
+
+  const load = async () => {
+    setLoading(true); setError(null); setData(null);
+    const r = await fetch('/api/admin/trading-stock-report', { credentials:'include' }).catch(()=>null);
+    setLoading(false);
+    if (!r || !r.ok) { setError('Failed to load stock data.'); return; }
+    setData(await r.json());
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const fmtAUD = n => `$${(Number(n)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+  const fmtDate = s => s ? new Date(s+'T00:00:00').toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'}) : '—';
+  const exportPdf = () => window.open('/api/admin/trading-stock-report/pdf', '_blank');
+
+  return (
+    <>
+      <div className="card" style={{padding:'14px 22px', marginBottom:20, display:'flex', alignItems:'center', gap:16, flexWrap:'wrap'}}>
+        <button className="btn btn-rust" onClick={load} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</button>
+        {data && <button className="btn" style={{background:'#345526',color:'#fff'}} onClick={exportPdf}>↓ Export PDF</button>}
+        {data && <span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>As at {fmtDate(data.asAt)}</span>}
+        {error && <span className="mono" style={{fontSize:12, color:'var(--rust)'}}>{error}</span>}
+      </div>
+
+      {loading && <div className="mono" style={{color:'var(--ink-3)', textAlign:'center', padding:40}}>Loading…</div>}
+
+      {data && <>
+        <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px,1fr))', gap:14, marginBottom:20}}>
+          <div className="card" style={{padding:'14px 16px'}}>
+            <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:4}}>ITEMS IN STOCK</div>
+            <div className="mono" style={{fontSize:20, fontWeight:700, color:'var(--ink-1)'}}>{data.itemCount}</div>
+          </div>
+          {data.hasCostPrices && (
+            <div className="card" style={{padding:'14px 16px'}}>
+              <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:4}}>VALUE AT COST</div>
+              <div className="mono" style={{fontSize:20, fontWeight:700, color:'var(--ink-1)'}}>{fmtAUD(data.totalCostValue)}</div>
+            </div>
+          )}
+          <div className="card" style={{padding:'14px 16px'}}>
+            <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:4}}>VALUE AT SELLING PRICE</div>
+            <div className="mono" style={{fontSize:20, fontWeight:700, color:'#345526'}}>{fmtAUD(data.totalSellValue)}</div>
+          </div>
+        </div>
+
+        {!data.hasCostPrices && (
+          <div style={{background:'#fff8e1', border:'1px solid #f0d97c', borderRadius:6, padding:'10px 16px', marginBottom:16, fontSize:12, color:'#7a5d10'}}>
+            No cost prices set — stock valued at selling price (market value method, acceptable to ATO).
+            Add a <strong>Cost Price (AUD)</strong> field to each product for more accurate COGS reporting.
+          </div>
+        )}
+
+        {data.lines.length === 0 ? (
+          <div className="card" style={{padding:'32px 22px', textAlign:'center', color:'var(--ink-3)'}}>No stock on hand.</div>
+        ) : (
+          <div className="card" style={{padding:'18px 22px'}}>
+            <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--rust)', marginBottom:12, letterSpacing:1}}>STOCK ON HAND</div>
+            <table style={{width:'100%', borderCollapse:'collapse', fontSize:13}}>
+              <thead>
+                <tr style={{borderBottom:'2px solid var(--border)'}}>
+                  <th style={{textAlign:'left',  padding:'4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11, width:70}}>SKU</th>
+                  <th style={{textAlign:'left',  padding:'4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11}}>Product</th>
+                  <th style={{textAlign:'right', padding:'4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11, width:50}}>Qty</th>
+                  <th style={{textAlign:'right', padding:'4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11, width:80}}>Sell $</th>
+                  {data.hasCostPrices && <th style={{textAlign:'right', padding:'4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11, width:80}}>Cost $</th>}
+                  <th style={{textAlign:'right', padding:'4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11, width:90}}>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.lines.map((ln,i) => (
+                  <tr key={i} style={{background: i%2===1?'var(--bg-deep)':'transparent'}}>
+                    <td style={{padding:'5px 0', fontFamily:'monospace', fontSize:11, color:'var(--ink-3)'}}>{ln.sku}</td>
+                    <td style={{padding:'5px 0'}}>{ln.name}</td>
+                    <td style={{textAlign:'right', fontFamily:'monospace'}}>{ln.qty}</td>
+                    <td style={{textAlign:'right', fontFamily:'monospace'}}>{fmtAUD(ln.sellPrice)}</td>
+                    {data.hasCostPrices && <td style={{textAlign:'right', fontFamily:'monospace'}}>{ln.costPrice ? fmtAUD(ln.costPrice) : <span style={{color:'var(--ink-3)'}}>—</span>}</td>}
+                    <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:600}}>{fmtAUD(ln.hasCost ? ln.costValue : ln.sellValue)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr style={{borderTop:'2px solid var(--border)'}}>
+                  <td colSpan={data.hasCostPrices ? 5 : 4} style={{padding:'8px 0', fontWeight:700}}>
+                    Total {data.hasCostPrices ? 'at cost' : 'at selling price'}
+                  </td>
+                  <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:700, fontSize:15, color:'#345526'}}>
+                    {fmtAUD(data.hasCostPrices ? data.totalCostValue : data.totalSellValue)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </>}
+    </>
+  );
+}
+
+function YearEndView() {
+  const now = new Date();
+  const fyYear = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+  const fyLabel = `FY ${fyYear}–${String(fyYear+1).slice(2)}`;
+  const storageKey = `yearend-checklist-${fyYear}`;
+
+  const CHECKLIST = [
+    { id:'bank',    section:'Records', label:'Reconcile all business bank accounts and credit cards for the financial year' },
+    { id:'invoices',section:'Records', label:'Ensure all invoices issued are recorded (check repairs + shop orders)' },
+    { id:'receipts',section:'Records', label:'Gather receipts for all business expenses — store for 5 years' },
+    { id:'stock',   section:'Records', label:'Complete a physical stocktake and reconcile with system stock levels' },
+    { id:'assets',  section:'Tax deductions', label:'List all tools and equipment purchased — claim instant asset write-off if under the threshold' },
+    { id:'super',   section:'Tax deductions', label:'Make personal super contributions before 30 June and lodge a "Notice of intent to claim a deduction" with your fund' },
+    { id:'prepay',  section:'Tax deductions', label:'Prepay deductible expenses for next year (e.g. insurance, subscriptions) if cash allows' },
+    { id:'baddebt', section:'Tax deductions', label:'Write off any genuinely unrecoverable debts before 30 June' },
+    { id:'travel',  section:'Tax deductions', label:'Log all business travel / vehicle kilometres used for the year' },
+    { id:'wfh',     section:'Tax deductions', label:'Calculate work-from-home expenses (fixed rate or actual cost method)' },
+    { id:'bas',     section:'Lodgements', label:'Lodge Q4 BAS (if registered for GST) — due 28 July' },
+    { id:'payg',    section:'Lodgements', label:'Check for any PAYG instalment notices from the ATO and pay by the due date' },
+    { id:'agent',   section:'Lodgements', label:'Engage a registered tax agent or lodge your own tax return by 31 October' },
+    { id:'abn',     section:'Lodgements', label:'Confirm your ABN and business details are up to date with the ATO' },
+  ];
+
+  const [checked, setChecked] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(storageKey) || '{}'); } catch { return {}; }
+  });
+
+  const toggle = id => {
+    const next = { ...checked, [id]: !checked[id] };
+    setChecked(next);
+    try { localStorage.setItem(storageKey, JSON.stringify(next)); } catch {}
+  };
+
+  const sections = [...new Set(CHECKLIST.map(c => c.section))];
+  const done = CHECKLIST.filter(c => checked[c.id]).length;
+  const pct  = Math.round(done / CHECKLIST.length * 100);
+
+  return (
+    <>
+      <div className="card" style={{padding:'18px 22px', marginBottom:20}}>
+        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:12}}>
+          <div>
+            <div style={{fontSize:16, fontWeight:700}}>{fyLabel} Year-End Checklist</div>
+            <div style={{fontSize:12, color:'var(--ink-3)', marginTop:4}}>{done} of {CHECKLIST.length} complete</div>
+          </div>
+          <div style={{display:'flex', alignItems:'center', gap:10}}>
+            <div style={{width:120, height:8, background:'var(--border)', borderRadius:4, overflow:'hidden'}}>
+              <div style={{width:`${pct}%`, height:'100%', background: pct===100?'#2e7d32':'var(--rust)', borderRadius:4, transition:'width 0.3s'}} />
+            </div>
+            <span className="mono" style={{fontSize:13, fontWeight:700, color: pct===100?'#2e7d32':'var(--rust)'}}>{pct}%</span>
+          </div>
+        </div>
+      </div>
+
+      {sections.map(section => (
+        <div key={section} className="card" style={{padding:'18px 22px', marginBottom:16}}>
+          <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--rust)', marginBottom:14, letterSpacing:1}}>{section.toUpperCase()}</div>
+          {CHECKLIST.filter(c => c.section===section).map(c => (
+            <label key={c.id} style={{display:'flex', alignItems:'flex-start', gap:12, marginBottom:12, cursor:'pointer'}}>
+              <input type="checkbox" checked={!!checked[c.id]} onChange={() => toggle(c.id)}
+                style={{marginTop:2, accentColor:'var(--rust)', width:16, height:16, flexShrink:0}} />
+              <span style={{fontSize:13, color: checked[c.id] ? 'var(--ink-3)' : 'var(--ink-1)',
+                textDecoration: checked[c.id] ? 'line-through' : 'none', lineHeight:1.5}}>
+                {c.label}
+              </span>
+            </label>
+          ))}
+        </div>
+      ))}
+
+      <div style={{fontSize:11, color:'var(--ink-3)', marginTop:8}}>
+        Checklist progress is saved in your browser for {fyLabel}. Reset by clearing browser data.
+        Consult a registered tax agent for advice specific to your situation.
+      </div>
     </>
   );
 }
