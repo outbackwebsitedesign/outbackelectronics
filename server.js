@@ -355,6 +355,19 @@ function readCatalog() { return { products: readProducts(), services: readServic
 
 function normalisePhone(p) { return (p||'').replace(/[\s\-().+]/g, '').toLowerCase(); }
 
+// Cash-basis: an order is "received" only when payments sum to the full (cash-rounded) total.
+function isOrderPaid(o) {
+  if (o.gratis) return false;
+  const payments = o.payments || [];
+  if (payments.length === 0) return false;
+  const amountPaid = Math.round(payments.reduce((s, p) => s + (Number(p.amount) || 0), 0) * 100) / 100;
+  const lastMethod = (payments[payments.length - 1].method || '').toLowerCase();
+  const effectiveTotal = lastMethod === 'cash'
+    ? Math.round((Number(o.total) || 0) * 20) / 20
+    : Math.round((Number(o.total) || 0) * 100) / 100;
+  return amountPaid >= effectiveTotal;
+}
+
 function readOrders() {
   try { const p = JSON.parse(cachedReadFile(ORDERS_DB_PATH)); return Array.isArray(p.orders) ? p.orders : []; } catch { return []; }
 }
@@ -848,21 +861,8 @@ function buildAdminMetrics() {
 
   // 7-day overview stats — parsed server-side so date formats are handled reliably
   const sevenDayCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  // Mirror the frontend "CLEAR" logic exactly: payments must exist and cover the total
-  const cashRoundSrv = n => Math.round(n * 20) / 20;
-  const isPaid = o => {
-    if (o.gratis) return false;
-    const payments = o.payments || [];
-    if (payments.length === 0) return false;
-    const amountPaid = Math.round(payments.reduce((s, p) => s + (Number(p.amount) || 0), 0) * 100) / 100;
-    const lastMethod = (payments[payments.length - 1].method || '').toLowerCase();
-    const effectiveTotal = lastMethod === 'cash'
-      ? cashRoundSrv(Number(o.total) || 0)
-      : Math.round((Number(o.total) || 0) * 100) / 100;
-    return amountPaid >= effectiveTotal;
-  };
   const recentPaidOrders = orders.filter(o => {
-    if (!isPaid(o)) return false;
+    if (!isOrderPaid(o)) return false;
     const d = parseAuDateStr(o.createdAt || o.date || '');
     return d && d >= sevenDayCutoff;
   });
@@ -2576,7 +2576,7 @@ function buildTaxReportData(fromStr, toStr) {
   const monthMap = {};
   const ensureMonth = k => { if (!monthMap[k]) monthMap[k] = { revenue: 0, expenses: 0 }; };
   for (const o of readOrders()) {
-    if (o.gratis) continue; // complimentary — no income to recognise
+    if (!isOrderPaid(o)) continue; // cash-basis: only count money actually received
     const d = parseOrderDateForReport(o);
     if (!inRange(d)) continue;
     const total = Number(o.total) || 0;
@@ -2654,7 +2654,7 @@ function buildBASData(fromStr, toStr) {
   let refunds = 0;
   let orderCount = 0, repairCount = 0;
   for (const o of readOrders()) {
-    if (o.gratis) continue;
+    if (!isOrderPaid(o)) continue; // cash-basis: only count money actually received
     const d = parseOrderDateForReport(o);
     if (!inRange(d)) continue;
     G1 += Number(o.total) || 0;
@@ -3368,7 +3368,7 @@ function buildGSTThresholdData() {
   const now = new Date();
   const revMap = {};
   for (const o of readOrders()) {
-    if (o.gratis) continue;
+    if (!isOrderPaid(o)) continue; // cash-basis: only count money actually received
     const d = parseOrderDateForReport(o);
     if (!d) continue;
     const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
