@@ -1711,7 +1711,7 @@ const DEFAULT_REPAIR_COLS = [
   { id:'done',       label:'Done',       cards:[] },
 ];
 
-function RepairJobDrawer({ card, expenses, customers, onSave, onDelete, onExpensesChange, onCustomerCreated, onClose }) {
+function RepairJobDrawer({ card, expenses, customers, staff, onSave, onDelete, onExpensesChange, onCustomerCreated, onClose }) {
   const PARTS_MARGIN = 0.20;
   const [form, setForm] = useState(() => ({
     t:           card.t || '',
@@ -1878,7 +1878,10 @@ function RepairJobDrawer({ card, expenses, customers, onSave, onDelete, onExpens
         <label className="field"><span className="label">Device / model</span>
           <input className="input" value={form.device} onChange={e=>set('device',e.target.value)} placeholder="e.g. Panasonic Toughbook 55" /></label>
         <label className="field"><span className="label">Assigned technician</span>
-          <input className="input" value={form.who} onChange={e=>set('who',e.target.value)} placeholder="Technician name" /></label>
+          <select className="select" value={form.who} onChange={e=>set('who',e.target.value)}>
+            <option value="">— Unassigned —</option>
+            {(staff||[]).map(m => <option key={m.id||m.name} value={m.name}>{m.name}</option>)}
+          </select></label>
       </div>
       <div className="grid-2" style={S.mb12}>
         <label className="field"><span className="label">Date received</span>
@@ -1993,6 +1996,7 @@ function AdminRepairs() {
   const [cols, setCols] = useState(DEFAULT_REPAIR_COLS);
   const [expenses, setExpenses] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [staff, setStaff] = useState([]);
   const [editCard, setEditCard] = useState(null);
   const [dragOverCol, setDragOverCol] = useState(null);
 
@@ -2005,6 +2009,8 @@ function AdminRepairs() {
       .then(r => r.ok ? r.json() : Promise.reject()).then(d => setExpenses(d.items||[])).catch(()=>{});
     fetch('/api/admin/customers', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject()).then(d => setCustomers(d.items||[])).catch(()=>{});
+    fetch('/api/admin/staff', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject()).then(d => setStaff(d.members||[])).catch(()=>{});
   }, []);
 
   const openCount = cols.filter(c => c.id !== 'done').reduce((s, c) => s + (c.cards||[]).length, 0);
@@ -2073,6 +2079,7 @@ function AdminRepairs() {
           card={editCard.card}
           expenses={expenses}
           customers={customers}
+          staff={staff}
           onSave={saveCard}
           onDelete={deleteCard}
           onExpensesChange={setExpenses}
