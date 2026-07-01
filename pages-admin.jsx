@@ -1128,7 +1128,7 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
         : others;
       const newTotal = Math.round(lineItems.reduce((s, i) => s + liTotal(i), 0) * 100) / 100;
       const updated = { ...f, lineItems, total: newTotal, items: lineItems.map(i => i.description).filter(Boolean).join(', ') || f.items };
-      saveNow(updated);
+      if (edit.id) saveNow(updated);
       return updated;
     });
   };
@@ -1183,6 +1183,7 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
   // linked expenses imply a different parts charge than what's on the order,
   // bring it into sync once on open rather than leaving it stale forever.
   React.useEffect(() => {
+    if (!edit.id) return;
     const expectedCharge = Math.round(partsCost * (1 + PARTS_MARGIN) * 100) / 100;
     const existingCharge = Number((form.lineItems || []).find(li => li.id === 'parts-auto')?.amount) || 0;
     if (expectedCharge !== existingCharge) recalcTotal(expenses);
