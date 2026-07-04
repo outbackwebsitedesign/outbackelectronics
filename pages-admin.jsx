@@ -3007,8 +3007,11 @@ function AdminEwaste() {
             <select className="input" value={form.disposition||''} onChange={e=>setForm({...form,disposition:e.target.value})}>
               <option value="">— select —</option>
               <option value="resale">For resale</option>
+              <option value="parts-donor">Parts donor / teardown</option>
+              <option value="learning">Learning device (training)</option>
               <option value="home">For home use</option>
               <option value="business">For business use</option>
+              <option value="recycling">Recycling / audited processor</option>
             </select>
           </label>
           <label className="field"><span className="label">Date</span><input className="input" value={form.date||''} onChange={e=>setForm({...form,date:e.target.value})}/></label>
