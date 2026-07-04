@@ -2940,6 +2940,7 @@ function AdminEwaste() {
               { key:'id', label:'#', w:'120px', render:r => <span className="mono" style={{fontSize:11, color:'var(--rust)'}}>{r.id}</span>},
               { key:'from', label:'From', w:'1.5fr' },
               { key:'items', label:'Items', w:'2fr', render:r => <span style={{fontSize:13, color:'var(--ink-2)'}}>{r.items}</span> },
+              { key:'serialNumber', label:'Serial', w:'140px', render:r => <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{r.serialNumber||'—'}</span> },
               { key:'kg', label:'Weight', w:'80px', render:r => <span className="mono">{r.kg}kg</span> },
               { key:'tier', label:'Condition', w:'110px', render:r => <span className="tag tag-outline" style={{textTransform:'capitalize'}}>{r.tier||'—'}</span> },
               { key:'disposition', label:'Disposition', w:'130px', render:r => <span className="tag tag-outline" style={{textTransform:'capitalize'}}>{r.disposition||'—'}</span> },
@@ -2991,8 +2992,9 @@ function AdminEwaste() {
           </div>}
         >
           <label className="field"><span className="label">From</span><input className="input" value={form.from||''} onChange={e=>setForm({...form,from:e.target.value})}/></label>
-          <label className="field"><span className="label">Weight (kg)</span><input className="input" type="number" value={form.kg||0} onChange={e=>setForm({...form,kg:Number(e.target.value)})}/></label>
           <label className="field"><span className="label">Items</span><input className="input" value={form.items||''} onChange={e=>setForm({...form,items:e.target.value})}/></label>
+          <label className="field"><span className="label">Serial Number</span><input className="input" value={form.serialNumber||''} onChange={e=>setForm({...form,serialNumber:e.target.value})}/></label>
+          <label className="field"><span className="label">Weight (kg)</span><input className="input" type="number" value={form.kg||0} onChange={e=>setForm({...form,kg:Number(e.target.value)})}/></label>
           <label className="field"><span className="label">Condition</span>
             <select className="input" value={form.tier||''} onChange={e=>setForm({...form,tier:e.target.value})}>
               <option value="">— select —</option>
