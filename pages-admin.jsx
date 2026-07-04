@@ -2942,6 +2942,7 @@ function AdminEwaste() {
               { key:'items', label:'Items', w:'2fr', render:r => <span style={{fontSize:13, color:'var(--ink-2)'}}>{r.items}</span> },
               { key:'kg', label:'Weight', w:'80px', render:r => <span className="mono">{r.kg}kg</span> },
               { key:'tier', label:'Condition', w:'110px', render:r => <span className="tag tag-outline" style={{textTransform:'capitalize'}}>{r.tier||'—'}</span> },
+              { key:'disposition', label:'Disposition', w:'130px', render:r => <span className="tag tag-outline" style={{textTransform:'capitalize'}}>{r.disposition||'—'}</span> },
               { key:'payout', label:'Payout', w:'140px', render:r => <span style={{fontWeight:600}}>{r.payout}</span> },
               { key:'date', label:'When', w:'90px', render:r => <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{r.date.toUpperCase()}</span>},
               { key:'orderId', label:'Order', w:'120px', render:r => r.orderId ? <span className="mono" style={{fontSize:11, color:'var(--rust)', cursor:'pointer'}} onClick={e=>{e.stopPropagation(); window.location.hash='orders';}}>{r.orderId}</span> : <span style={{color:'var(--ink-3)'}}>—</span> },
@@ -3002,6 +3003,14 @@ function AdminEwaste() {
             </select>
           </label>
           <label className="field"><span className="label">Payout</span><input className="input" value={form.payout||''} onChange={e=>setForm({...form,payout:e.target.value})}/></label>
+          <label className="field"><span className="label">Disposition</span>
+            <select className="input" value={form.disposition||''} onChange={e=>setForm({...form,disposition:e.target.value})}>
+              <option value="">— select —</option>
+              <option value="resale">For resale</option>
+              <option value="home">For home use</option>
+              <option value="business">For business use</option>
+            </select>
+          </label>
           <label className="field"><span className="label">Date</span><input className="input" value={form.date||''} onChange={e=>setForm({...form,date:e.target.value})}/></label>
           <div className="field">
             <span className="label">Linked order <span style={{fontWeight:400,color:'var(--ink-2)'}}>(optional — e.g. replaced component)</span></span>
