@@ -65,15 +65,26 @@ export function renderMarkdown(md) {
   return nodes;
 }
 
-// Plain-text excerpt of markdown, for card blurbs / meta descriptions.
-export function excerptMarkdown(md, maxLen = 160) {
-  if (!md) return '';
-  const text = md
+function stripMarkdown(md) {
+  return (md || '')
     .replace(/```[\s\S]*?```/g, ' ')
     .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
     .replace(/[#*_`>-]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+// Plain-text excerpt of markdown, for card blurbs / meta descriptions.
+export function excerptMarkdown(md, maxLen = 160) {
+  if (!md) return '';
+  const text = stripMarkdown(md);
   return text.length > maxLen ? text.slice(0, maxLen).replace(/\s+\S*$/, '') + '…' : text;
+}
+
+// Reading-time estimate at 200 words/minute, rounded up, minimum 1 minute.
+export function estimateReadTime(...markdownParts) {
+  const words = stripMarkdown(markdownParts.filter(Boolean).join(' ')).split(/\s+/).filter(Boolean).length;
+  const mins = Math.max(1, Math.round(words / 200));
+  return `${mins} min read`;
 }

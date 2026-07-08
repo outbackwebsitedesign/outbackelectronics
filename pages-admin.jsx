@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { getCsrf, ensureCsrf } from './src/lib/api.js';
-import { renderMarkdown } from './markdown.jsx';
+import { renderMarkdown, estimateReadTime } from './markdown.jsx';
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 // Canonical date format for all order dates: "27 May 2026"
@@ -4276,6 +4276,7 @@ function AdminTutorials() {
     payload.views = Number.isFinite(Number(payload.views)) ? Number(payload.views) : 0;
     payload.body = payload.body || '';
     payload.steps = (payload.steps || []).map(s => ({ ...s, title: (s.title || '').trim(), body: s.body || '' }));
+    // duration (estimated read time) is computed authoritatively by the server from content.
     if (!payload.title) { setNotice({ type:'error', msg:'Title is required.' }); return; }
     if (payload.format === 'steps' && payload.steps.length === 0) { setNotice({ type:'error', msg:"Add at least one step, or switch to Article/Info." }); return; }
     setSaving(true);
@@ -4323,6 +4324,9 @@ function AdminTutorials() {
   if (editId !== null) {
     const format = form.format || 'article';
     const existingCategories = Array.from(new Set(rows.map(r => r.cat).filter(Boolean))).sort((a,b) => a.localeCompare(b));
+    const liveDuration = format === 'steps'
+      ? estimateReadTime(form.intro, (form.tools||[]).join(' '), ...(form.steps||[]).map(s => `${s.title||''} ${s.body||''}`))
+      : estimateReadTime(form.body);
     return (
       <div style={{padding:32}}>
         <div className="row-flex" style={{justifyContent:'space-between', marginBottom:18, flexWrap:'wrap', gap:12}}>
@@ -4421,9 +4425,11 @@ function AdminTutorials() {
                 </select>
               </label>
               {format !== 'info' && (
-                <label className="field"><span className="label">Estimated read</span>
-                  <input className="input" placeholder="22 min" value={form.duration||''} onChange={e=>setForm({...form, duration:e.target.value})}/>
-                </label>
+                <div className="field"><span className="label">Estimated read</span>
+                  <div className="input" style={{background:'var(--bg-elev)', color:'var(--ink-2)', cursor:'default'}} title="Calculated automatically from the word count.">
+                    {liveDuration}
+                  </div>
+                </div>
               )}
               <label className="field"><span className="label">Author</span>
                 <input className="input" value={form.author||''} onChange={e=>setForm({...form, author:e.target.value})}/>
@@ -4464,7 +4470,7 @@ function AdminTutorials() {
                   (form.author||'STAFF').toUpperCase(),
                   form.cat && form.cat.toUpperCase(),
                   format !== 'info' && form.difficulty,
-                  format !== 'info' && form.duration,
+                  format !== 'info' && liveDuration,
                 ].filter(Boolean).join(' · ')}
               </div>
               {form.coverImage && <img src={form.coverImage} alt="" style={{width:'100%', maxHeight:320, objectFit:'cover', marginBottom:24}} />}

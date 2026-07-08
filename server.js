@@ -282,6 +282,19 @@ function validateVideoUrl(url) {
   return '';
 }
 
+// Reading-time estimate at 200 words/minute, rounded up, minimum 1 minute.
+// Mirrors estimateReadTime() in markdown.jsx — kept separate since this file
+// is plain CommonJS and that one is a JSX/ESM module.
+function estimateReadTime(...markdownParts) {
+  const stripped = markdownParts.filter(Boolean).join(' ')
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/[#*_`>-]/g, ' ');
+  const words = stripped.split(/\s+/).filter(Boolean).length;
+  return `${Math.max(1, Math.round(words / 200))} min read`;
+}
+
 // ── DB helpers ────────────────────────────────────────────────────────────────
 
 // In-memory read cache: filePath → raw JSON string.
@@ -6312,6 +6325,10 @@ const adminServer = http.createServer(async (req, res) => {
     }
     if (body.content) body.content = sanitizeTutorialHTML(body.content);
     if (body.videoUrl) body.videoUrl = validateVideoUrl(body.videoUrl);
+    // Estimated read time is always derived from the content, never client-supplied.
+    body.duration = body.format === 'info' ? '' : (body.format === 'steps'
+      ? estimateReadTime(body.intro, (Array.isArray(body.tools) ? body.tools.join(' ') : ''), ...(Array.isArray(body.steps) ? body.steps.map(s => `${s.title || ''} ${s.body || ''}`) : []))
+      : estimateReadTime(body.body));
     const items = readTutorials(); const idx = items.findIndex(x => x.id && x.id === body.id);
     if (idx >= 0) items[idx] = body; else { body.id = 'tut-' + Date.now(); items.push(body); }
     writeTutorials(items); return json(res, 200, { ok: true, item: body });
