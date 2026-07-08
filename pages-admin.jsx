@@ -1233,11 +1233,11 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
       footer={<div className="row-flex" style={{gap:8, justifyContent:'space-between'}}>
         {edit.id
           ? <div className="row-flex" style={{gap:8}}>
-              <button className="btn btn-ghost btn-sm" style={{fontSize:12}}
+              <button className="btn btn-ghost btn-sm"
                 onClick={() => window.open(`/api/admin/orders/invoice?id=${encodeURIComponent(form.id)}`, '_blank')}>
                 🖨 Print invoice
               </button>
-              <button className="btn btn-ghost btn-sm" style={{fontSize:12}}
+              <button className="btn btn-ghost btn-sm"
                 disabled={trackingEmailStatus === 'sending' || !form.email}
                 title={!form.email ? 'Order has no customer email' : 'Send order tracking email to customer'}
                 onClick={async () => {
@@ -1251,7 +1251,7 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
                 {trackingEmailStatus === 'sending' ? '⏳ Sending…' : trackingEmailStatus === 'sent' ? '✓ Email sent' : trackingEmailStatus === 'error' ? '✗ Failed' : '✉ Send tracking email'}
               </button>
               {canDeleteOrder && (
-                <button className="btn btn-ghost btn-sm" style={{fontSize:12, color:'var(--rust)'}} disabled={deleteBusy} onClick={deleteOrderNow}>
+                <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} disabled={deleteBusy} onClick={deleteOrderNow}>
                   {deleteBusy ? '⏳ Deleting…' : '🗑 Delete order'}
                 </button>
               )}
@@ -2002,17 +2002,16 @@ function RepairJobDrawer({ card, expenses, customers, staff, onSave, onDelete, o
           </div>
         </div>
       ))}
-      <div style={{display:'grid',gridTemplateColumns:'90px 110px 130px 1fr auto',gap:8,marginBottom:8,alignItems:'center'}}>
-        <input className="input" type="number" min="0" step="0.01" placeholder="Amount" value={payEntry.amount}
-          onChange={e=>setPayEntry(p=>({...p,amount:e.target.value}))} style={{fontSize:12}} />
-        <select className="select" value={payEntry.method} onChange={e=>setPayEntry(p=>({...p,method:e.target.value}))} style={{fontSize:12}}>
-          {['Cash','Card','Bank transfer','Invoice'].map(m=><option key={m}>{m}</option>)}
-        </select>
-        <input className="input" type="date" max={todayISODate()} value={payEntry.date}
-          onChange={e=>setPayEntry(p=>({...p,date:e.target.value}))} style={{fontSize:12}} />
-        <input className="input" placeholder="Note (optional)" value={payEntry.note}
-          onChange={e=>setPayEntry(p=>({...p,note:e.target.value}))} style={{fontSize:12}} />
-        <button className="btn btn-sm" onClick={addPayment}>Add</button>
+      <div style={{display:'grid', gridTemplateColumns:'100px 100px 130px 1fr auto', gap:8, alignItems:'end', marginBottom:8}}>
+        <label className="field" style={{margin:0}}><span className="label">Amount</span><input className="input" type="number" min="0" step="0.01" placeholder="0.00" value={payEntry.amount} onChange={e=>setPayEntry(p=>({...p,amount:nonNegInput(e.target.value)}))}/></label>
+        <label className="field" style={{margin:0}}><span className="label">Method</span>
+          <select className="select" value={payEntry.method} onChange={e=>setPayEntry(p=>({...p,method:e.target.value}))}>
+            {['Cash','Card','Bank transfer','Invoice'].map(m=><option key={m}>{m}</option>)}
+          </select>
+        </label>
+        <label className="field" style={{margin:0}}><span className="label">Date received</span><input className="input" type="date" max={todayISODate()} value={payEntry.date} onChange={e=>setPayEntry(p=>({...p,date:e.target.value}))}/></label>
+        <label className="field" style={{margin:0}}><span className="label">Note (optional)</span><input className="input" placeholder="e.g. deposit, part payment" value={payEntry.note} onChange={e=>setPayEntry(p=>({...p,note:e.target.value}))}/></label>
+        <button className="btn btn-sm" style={{marginBottom:1}} onClick={addPayment}>Log</button>
       </div>
       {lineTotal > 0 && (
         <div style={{padding:'10px 14px',background:balance<=0.005?'#d8e7d0':'var(--bg-deep)',marginBottom:4}}>
@@ -6986,7 +6985,7 @@ function VehicleLogView() {
             <input className="input" type="number" step="0.1" min="0" placeholder="12.5" value={form.km} onChange={e=>setForm(f=>({...f,km:e.target.value}))} /></label>
           <label className="field" style={{margin:0}}><span className="label">Purpose</span>
             <input className="input" placeholder="Pick up capacitors for J-123" value={form.purpose} onChange={e=>setForm(f=>({...f,purpose:e.target.value}))} /></label>
-          <button className="btn btn-rust" onClick={addEntry} disabled={saving} style={{whiteSpace:'nowrap'}}>{saving?'Saving…':'Add Trip'}</button>
+          <button className="btn btn-rust btn-sm" onClick={addEntry} disabled={saving} style={{whiteSpace:'nowrap', marginBottom:1}}>{saving?'Saving…':'Add Trip'}</button>
         </div>
         {error && <div className="mono" style={{color:'var(--rust)', fontSize:12, marginTop:8}}>{error}</div>}
       </div>
