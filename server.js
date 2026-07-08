@@ -295,6 +295,10 @@ function estimateReadTime(...markdownParts) {
   return `${Math.max(1, Math.round(words / 200))} min read`;
 }
 
+function slugify(s) {
+  return String(s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
 // ── DB helpers ────────────────────────────────────────────────────────────────
 
 // In-memory read cache: filePath → raw JSON string.
@@ -6352,6 +6356,10 @@ const adminServer = http.createServer(async (req, res) => {
     }
     if (body.content) body.content = sanitizeTutorialHTML(body.content);
     if (body.videoUrl) body.videoUrl = validateVideoUrl(body.videoUrl);
+    // Slug always ends up clean (lowercase, punctuation/whitespace stripped to
+    // hyphens) regardless of what the client sent — it flows straight into
+    // the public /tutorial/:slug URL.
+    body.slug = slugify(body.slug) || slugify(body.title);
     // Estimated read time is always derived from the content, never client-supplied.
     body.duration = body.format === 'info' ? '' : (body.format === 'steps'
       ? estimateReadTime(body.intro, (Array.isArray(body.tools) ? body.tools.join(' ') : ''), ...(Array.isArray(body.steps) ? body.steps.map(s => `${s.title || ''} ${s.body || ''}`) : []))

@@ -4006,6 +4006,7 @@ function newTutorial() {
   return { status:'Draft', cat:'', format:'article', difficulty:'Intermediate', body:'', intro:'', steps:[], tools:[], tags:[], views:0 };
 }
 function emptyStep() { return { id:'step-'+Date.now()+'-'+Math.random().toString(36).slice(2,7), title:'', body:'', image:'' }; }
+function slugify(s) { return (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); }
 
 // Pure textarea-selection transform shared by every markdown field in the editor.
 function applyMarkdownFormat(ta, val, fmt) {
@@ -4268,6 +4269,7 @@ function AdminTutorials() {
     setNotice({ type:'', msg:'' });
     const payload = { ...form, ...overrides };
     payload.title = (payload.title || '').trim();
+    payload.slug = slugify(payload.slug) || slugify(payload.title);
     payload.cat = (payload.cat || '').trim() || 'General';
     payload.format = payload.format || 'article';
     payload.author = (payload.author || '').trim() || 'Staff';
@@ -4345,7 +4347,10 @@ function AdminTutorials() {
 
         <div className="admin-split" style={{display:'grid', gridTemplateColumns:'1fr 300px', gap:24}}>
           <div style={{background:'var(--paper)', border:'1px solid var(--line)', padding:32}}>
-            <input className="input" placeholder="Tutorial title" value={form.title||''} onChange={e=>setForm({...form, title:e.target.value})}
+            <input className="input" placeholder="Tutorial title" value={form.title||''} onChange={e=>{
+                const title = e.target.value;
+                setForm(f => ({ ...f, title, ...(f._slugTouched ? {} : { slug: slugify(title) }) }));
+              }}
               style={{fontFamily:'Instrument Serif, serif', fontSize:32, padding:'8px 0', border:'none', borderBottom:'1px solid var(--line)', background:'transparent'}} />
             <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:8, letterSpacing:'.08em'}}>BY {(form.author||'YOU').toUpperCase()} · {form.cat?.toUpperCase()} · {form.date||'TODAY'}</div>
 
@@ -4453,7 +4458,7 @@ function AdminTutorials() {
             </div>
             <div style={{padding:18, background:'var(--paper)', border:'1px solid var(--line)'}}>
               <span className="eyebrow">SEO</span>
-              <label className="field" style={{marginTop:10}}><span className="label">Slug</span><input className="input" placeholder="building-a-12v-solar-shed" value={form.slug||''} onChange={e=>setForm({...form, slug:e.target.value})}/></label>
+              <label className="field" style={{marginTop:10}}><span className="label">Slug</span><input className="input" placeholder="building-a-12v-solar-shed" value={form.slug||''} onChange={e=>setForm({...form, slug:e.target.value, _slugTouched:true})}/></label>
               <label className="field"><span className="label">Meta description</span><textarea className="textarea" style={{minHeight:80}} value={form.metaDesc||''} onChange={e=>setForm({...form, metaDesc:e.target.value})}/></label>
             </div>
           </aside>
