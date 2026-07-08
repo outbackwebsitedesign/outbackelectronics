@@ -3927,7 +3927,6 @@ function AdminSoftware() {
 // ============================================================
 // TUTORIALS — list + editor
 // ============================================================
-const TUTORIAL_CATEGORIES = ['Repair','Off-grid','Software','AI','Comms'];
 const TUTORIAL_FORMATS = [
   { id:'article', label:'Article', hint:'Long-form write-up, like a blog post.' },
   { id:'steps', label:'Step-by-step', hint:'Numbered steps, each with its own text and photo.' },
@@ -3935,7 +3934,7 @@ const TUTORIAL_FORMATS = [
 ];
 
 function newTutorial() {
-  return { status:'Draft', cat:'Repair', format:'article', difficulty:'Intermediate', body:'', intro:'', steps:[], tools:[], tags:[], views:0 };
+  return { status:'Draft', cat:'', format:'article', difficulty:'Intermediate', body:'', intro:'', steps:[], tools:[], tags:[], views:0 };
 }
 function emptyStep() { return { id:'step-'+Date.now()+'-'+Math.random().toString(36).slice(2,7), title:'', body:'', image:'' }; }
 
@@ -4135,7 +4134,7 @@ function AdminTutorials() {
     setNotice({ type:'', msg:'' });
     const payload = { ...form, ...overrides };
     payload.title = (payload.title || '').trim();
-    payload.cat = payload.cat || 'Repair';
+    payload.cat = (payload.cat || '').trim() || 'General';
     payload.format = payload.format || 'article';
     payload.author = (payload.author || '').trim() || 'Staff';
     payload.status = payload.status || 'Draft';
@@ -4189,6 +4188,7 @@ function AdminTutorials() {
 
   if (editId !== null) {
     const format = form.format || 'article';
+    const existingCategories = Array.from(new Set(rows.map(r => r.cat).filter(Boolean))).sort((a,b) => a.localeCompare(b));
     return (
       <div style={{padding:32}}>
         <div className="row-flex" style={{justifyContent:'space-between', marginBottom:18, flexWrap:'wrap', gap:12}}>
@@ -4268,9 +4268,11 @@ function AdminTutorials() {
                 </select>
               </label>
               <label className="field"><span className="label">Category</span>
-                <select className="select" value={form.cat||'Repair'} onChange={e=>setForm({...form, cat:e.target.value})}>
-                  {TUTORIAL_CATEGORIES.map(c => <option key={c}>{c}</option>)}
-                </select>
+                <input className="input" list="tutorial-category-options" placeholder="e.g. Repair, Off-grid, Comms…"
+                  value={form.cat||''} onChange={e=>setForm({...form, cat:e.target.value})} />
+                <datalist id="tutorial-category-options">
+                  {existingCategories.map(c => <option key={c} value={c} />)}
+                </datalist>
               </label>
               {format !== 'info' && (
                 <label className="field"><span className="label">Difficulty</span>
