@@ -4095,6 +4095,71 @@ function ChipInput({ value, onChange, placeholder }) {
   );
 }
 
+// Styled like the other <select> fields (same chevron, same box), but opens a
+// searchable list of existing values with a "+ Create" option for new ones.
+function ComboSelect({ value, options, onChange, placeholder }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const rootRef = React.useRef(null);
+  const inputRef = React.useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setQuery('');
+    const t = setTimeout(() => inputRef.current && inputRef.current.focus(), 0);
+    const onDocClick = (e) => { if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
+    return () => { clearTimeout(t); document.removeEventListener('mousedown', onDocClick); document.removeEventListener('keydown', onKey); };
+  }, [open]);
+
+  const q = query.trim();
+  const ql = q.toLowerCase();
+  const filtered = ql ? options.filter(o => o.toLowerCase().includes(ql)) : options;
+  const canCreate = q && !options.some(o => o.toLowerCase() === ql);
+  const choose = (v) => { onChange(v); setOpen(false); };
+
+  return (
+    <div ref={rootRef} style={{position:'relative'}}>
+      <button type="button" className="select" style={{textAlign:'left', cursor:'pointer', color: value ? 'var(--ink)' : 'var(--ink-3)'}}
+        onClick={() => setOpen(o => !o)} aria-haspopup="listbox" aria-expanded={open}>
+        {value || placeholder || 'Select or create…'}
+      </button>
+      {open && (
+        <div role="listbox" style={{position:'absolute', top:'calc(100% + 6px)', left:0, right:0, background:'var(--bg-elev)', border:'1px solid var(--line-strong)', boxShadow:'var(--shadow)', zIndex:80, maxHeight:280, display:'flex', flexDirection:'column'}}>
+          <input ref={inputRef} className="input" style={{border:'none', borderBottom:'1px solid var(--line)'}}
+            placeholder="Search or type to create…" value={query} onChange={e => setQuery(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && canCreate) { e.preventDefault(); choose(q); } }} />
+          <div style={{overflowY:'auto'}}>
+            {filtered.length === 0 && !canCreate && (
+              <div style={{padding:'10px 12px', fontSize:13, color:'var(--ink-3)'}}>No options yet — type to create one.</div>
+            )}
+            {filtered.map(o => (
+              <div key={o} role="option" aria-selected={o===value} tabIndex={0} onClick={() => choose(o)}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(o); } }}
+                style={{padding:'9px 12px', fontSize:14, cursor:'pointer', background: o===value ? 'var(--bg-deep)' : 'transparent'}}
+                onMouseEnter={e => e.currentTarget.style.background='var(--bg-deep)'}
+                onMouseLeave={e => e.currentTarget.style.background = o===value ? 'var(--bg-deep)' : 'transparent'}>
+                {o}
+              </div>
+            ))}
+            {canCreate && (
+              <div role="option" tabIndex={0} onClick={() => choose(q)}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(q); } }}
+                style={{padding:'9px 12px', fontSize:14, cursor:'pointer', color:'var(--rust)', borderTop: filtered.length ? '1px solid var(--line)' : 'none'}}
+                onMouseEnter={e => e.currentTarget.style.background='var(--bg-deep)'}
+                onMouseLeave={e => e.currentTarget.style.background='transparent'}>
+                + Create "{q}"
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // One card in the step-by-step builder: title, markdown body, photo, reorder/remove.
 function StepRow({ step, index, total, onChange, onRemove, onMove }) {
   return (
@@ -4290,13 +4355,10 @@ function AdminTutorials() {
                   <option>Draft</option><option>Review</option><option>Published</option><option>Archived</option>
                 </select>
               </label>
-              <label className="field"><span className="label">Category</span>
-                <input className="input" list="tutorial-category-options" placeholder="e.g. Repair, Off-grid, Comms…"
-                  value={form.cat||''} onChange={e=>setForm({...form, cat:e.target.value})} />
-                <datalist id="tutorial-category-options">
-                  {existingCategories.map(c => <option key={c} value={c} />)}
-                </datalist>
-              </label>
+              <div className="field"><span className="label">Category</span>
+                <ComboSelect value={form.cat} options={existingCategories} placeholder="Select or create…"
+                  onChange={v=>setForm({...form, cat:v})} />
+              </div>
               {format !== 'info' && (
                 <label className="field"><span className="label">Difficulty</span>
                   <select className="select" value={form.difficulty||'Intermediate'} onChange={e=>setForm({...form, difficulty:e.target.value})}>
