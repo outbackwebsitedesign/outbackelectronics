@@ -52,8 +52,13 @@ export function renderMarkdown(md) {
       continue;
     } else if (/^\d+\. /.test(line)) {
       const items = [];
+      // A numbered line that's isolated from its siblings by prose (common in
+      // numbered section headers like "1. Intro" ... prose ... "2. Details")
+      // becomes its own single-item <ol> — respect the author's own number
+      // instead of letting a fresh list default back to 1 every time.
+      const startNum = parseInt(line.match(/^(\d+)\./)[1], 10) || 1;
       while (i < lines.length && /^\d+\. /.test(lines[i])) { items.push(<li key={i}>{inlineRender(lines[i].replace(/^\d+\. /, ''))}</li>); i++; }
-      nodes.push(<ol key={`ol-${i}`} style={{paddingLeft:22, margin:'8px 0 14px'}}>{items}</ol>);
+      nodes.push(<ol key={`ol-${i}`} start={startNum} style={{paddingLeft:22, margin:'8px 0 14px'}}>{items}</ol>);
       continue;
     } else if (line.trim() === '') {
       nodes.push(<div key={i} style={{height:10}} />);
