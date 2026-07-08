@@ -3748,10 +3748,23 @@ const mainServer = http.createServer(async (req, res) => {
   if (checkMaintenance(req, res, url)) return;
 
   if (req.method === 'GET' && url.pathname === '/robots.txt') {
+    const aiCrawlers = [
+      'GPTBot', 'ChatGPT-User', 'OAI-SearchBot',
+      'CCBot',
+      'Google-Extended',
+      'ClaudeBot', 'Claude-Web', 'anthropic-ai',
+      'Bytespider',
+      'PerplexityBot',
+      'Amazonbot',
+      'Applebot-Extended',
+      'Meta-ExternalAgent', 'Meta-ExternalFetcher',
+    ];
     const txt = [
       'User-agent: *',
       'Disallow: /api/',
       'Disallow: /assets/uploads/',
+      '',
+      ...aiCrawlers.flatMap(ua => [`User-agent: ${ua}`, 'Disallow: /']),
       `Sitemap: ${OG_BASE_URL}/sitemap.xml`,
     ].join('\n') + '\n';
     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600', 'Expires': new Date(Date.now() + 3600 * 1000).toUTCString() });
