@@ -22,6 +22,16 @@ function fmtOrderDate(raw) {
 function todayOrderDate() {
   return new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
 }
+function todayISODate() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+// Converts a yyyy-mm-dd (from an <input type="date">) to the "DD Mon YYYY" format used for logged payments.
+function orderDateFromISO(iso) {
+  if (!iso) return todayOrderDate();
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
+}
 // Australian cash rounding: round to nearest 5 cents
 function cashRound(amount) {
   return Math.round(amount * 20) / 20;
@@ -67,7 +77,7 @@ const isValidPhone = (v) => /^[\d\s()+\-.]{6,20}$/.test(String(v || '').trim());
 const nonNegInput = (v) => (typeof v === 'string' ? v.replace(/-/g, '') : v);
 
 // Marks a required field label; pair with aria-required on the input.
-const ReqMark = () => <span className="admin-req" aria-hidden="true"> *</span>;
+const ReqMark = () => <span className="admin-req" aria-hidden="true"></span>;
 
 // ── Overlay / dirty-drawer registries (module-level singletons) ──────────────
 // Overlays (confirm dialogs, shortcut help) stack above drawers; while one is
@@ -1017,7 +1027,7 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
     const match = findCustomerMatch(edit);
     return match ? match.id : '';
   });
-  const [payEntry, setPayEntry] = useState({ amount:'', method:'Cash', note:'' });
+  const [payEntry, setPayEntry] = useState({ amount:'', method:'Cash', note:'', date: todayISODate() });
   const [deleteBusy, setDeleteBusy] = useState(false);
   const canDeleteOrder = (ROLE_LEVELS[sessionInfo.role] ?? 0) >= ROLE_LEVELS.manager;
   const deleteOrderNow = async () => {
@@ -1163,9 +1173,9 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
     if (!rawAmt || rawAmt <= 0) return;
     const isCash = payEntry.method === 'Cash';
     const amt = isCash ? cashRound(rawAmt) : Math.round(rawAmt * 100) / 100;
-    const payment = { amount: amt, method: payEntry.method, note: payEntry.note, date: todayOrderDate() };
+    const payment = { amount: amt, method: payEntry.method, note: payEntry.note, date: orderDateFromISO(payEntry.date) };
     setForm(f => ({ ...f, payments: [...(f.payments || []), payment] }));
-    setPayEntry({ amount:'', method:'Cash', note:'' });
+    setPayEntry({ amount:'', method:'Cash', note:'', date: todayISODate() });
   };
   const removePayment = (i) => setForm(f => ({ ...f, payments: (f.payments || []).filter((_,idx) => idx !== i) }));
   const addUpdate = () => {
@@ -1506,13 +1516,14 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
           <button className="icon-btn" style={{width:22, height:22, fontSize:14, color:'var(--ink-3)'}} onClick={() => removePayment(i)}>×</button>
         </div>
       ))}
-      <div style={{display:'grid', gridTemplateColumns:'100px 100px 1fr auto', gap:8, alignItems:'end', marginTop:8}}>
+      <div style={{display:'grid', gridTemplateColumns:'100px 100px 130px 1fr auto', gap:8, alignItems:'end', marginTop:8}}>
         <label className="field" style={{margin:0}}><span className="label">Amount</span><input className="input" type="number" min="0" step="0.01" placeholder="0.00" value={payEntry.amount} onChange={e=>setPayEntry(v=>({...v,amount:nonNegInput(e.target.value)}))}/></label>
         <label className="field" style={{margin:0}}><span className="label">Method</span>
           <select className="select" value={payEntry.method} onChange={e=>setPayEntry(v=>({...v,method:e.target.value}))}>
             {['Cash','Card','Bank Transfer','Crypto','Other'].map(m => <option key={m}>{m}</option>)}
           </select>
         </label>
+        <label className="field" style={{margin:0}}><span className="label">Date received</span><input className="input" type="date" max={todayISODate()} value={payEntry.date} onChange={e=>setPayEntry(v=>({...v,date:e.target.value}))}/></label>
         <label className="field" style={{margin:0}}><span className="label">Note (optional)</span><input className="input" placeholder="e.g. deposit, part payment" value={payEntry.note} onChange={e=>setPayEntry(v=>({...v,note:e.target.value}))}/></label>
         <button className="btn btn-sm" style={{marginBottom:1}} onClick={addPayment}>Log</button>
       </div>
@@ -1744,7 +1755,7 @@ function RepairJobDrawer({ card, expenses, customers, staff, onSave, onDelete, o
   });
   const [expenseEdit, setExpenseEdit] = useState(null);
   const [expenseForm, setExpenseForm] = useState({});
-  const [payEntry, setPayEntry] = useState({ amount:'', method:'Cash', note:'' });
+  const [payEntry, setPayEntry] = useState({ amount:'', method:'Cash', note:'', date: todayISODate() });
   const savedSnapRef = React.useRef(JSON.stringify(card));
   const dirty = JSON.stringify({ ...card, ...form }) !== savedSnapRef.current;
 
@@ -1811,9 +1822,9 @@ function RepairJobDrawer({ card, expenses, customers, staff, onSave, onDelete, o
     if (!amt || amt <= 0) return;
     const isCash = payEntry.method === 'Cash';
     const finalAmt = isCash ? cashRound(amt) : Math.round(amt * 100) / 100;
-    const payment = { amount: finalAmt, method: payEntry.method, note: payEntry.note, date: todayOrderDate() };
+    const payment = { amount: finalAmt, method: payEntry.method, note: payEntry.note, date: orderDateFromISO(payEntry.date) };
     setForm(f => ({ ...f, payments: [...(f.payments||[]), payment] }));
-    setPayEntry({ amount:'', method:'Cash', note:'' });
+    setPayEntry({ amount:'', method:'Cash', note:'', date: todayISODate() });
   };
 
   const handleSave = async () => {
@@ -1966,12 +1977,14 @@ function RepairJobDrawer({ card, expenses, customers, staff, onSave, onDelete, o
           </div>
         </div>
       ))}
-      <div style={{display:'grid',gridTemplateColumns:'90px 110px 1fr auto',gap:8,marginBottom:8,alignItems:'center'}}>
+      <div style={{display:'grid',gridTemplateColumns:'90px 110px 130px 1fr auto',gap:8,marginBottom:8,alignItems:'center'}}>
         <input className="input" type="number" min="0" step="0.01" placeholder="Amount" value={payEntry.amount}
           onChange={e=>setPayEntry(p=>({...p,amount:e.target.value}))} style={{fontSize:12}} />
         <select className="select" value={payEntry.method} onChange={e=>setPayEntry(p=>({...p,method:e.target.value}))} style={{fontSize:12}}>
           {['Cash','Card','Bank transfer','Invoice'].map(m=><option key={m}>{m}</option>)}
         </select>
+        <input className="input" type="date" max={todayISODate()} value={payEntry.date}
+          onChange={e=>setPayEntry(p=>({...p,date:e.target.value}))} style={{fontSize:12}} />
         <input className="input" placeholder="Note (optional)" value={payEntry.note}
           onChange={e=>setPayEntry(p=>({...p,note:e.target.value}))} style={{fontSize:12}} />
         <button className="btn btn-sm" onClick={addPayment}>Add</button>
