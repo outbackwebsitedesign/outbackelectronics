@@ -1235,7 +1235,8 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
           ? <div className="row-flex" style={{gap:8}}>
               <button className="btn btn-ghost btn-sm"
                 onClick={() => window.open(`/api/admin/orders/invoice?id=${encodeURIComponent(form.id)}`, '_blank')}>
-                🖨 Print invoice
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                Print invoice
               </button>
               <button className="btn btn-ghost btn-sm"
                 disabled={trackingEmailStatus === 'sending' || !form.email}
@@ -1248,11 +1249,13 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
                   } catch { setTrackingEmailStatus('error'); }
                   setTimeout(() => setTrackingEmailStatus(null), 4000);
                 }}>
-                {trackingEmailStatus === 'sending' ? '⏳ Sending…' : trackingEmailStatus === 'sent' ? '✓ Email sent' : trackingEmailStatus === 'error' ? '✗ Failed' : '✉ Send tracking email'}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg>
+                {trackingEmailStatus === 'sending' ? 'Sending…' : trackingEmailStatus === 'sent' ? 'Email sent' : trackingEmailStatus === 'error' ? 'Failed' : 'Send tracking email'}
               </button>
               {canDeleteOrder && (
                 <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} disabled={deleteBusy} onClick={deleteOrderNow}>
-                  {deleteBusy ? '⏳ Deleting…' : '🗑 Delete order'}
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+                  {deleteBusy ? 'Deleting…' : 'Delete order'}
                 </button>
               )}
             </div>

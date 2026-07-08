@@ -42,14 +42,14 @@ button { font-family: inherit; }
 .container { width: 100%; max-width: 1320px; margin: 0 auto; padding: 0 32px; }
 
 /* Buttons */
-.btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 0; border: 1px solid var(--ink); background: var(--ink); color: var(--bg); font-weight: 600; font-size: 13px; line-height: 1; letter-spacing: 0.02em; cursor: pointer; transition: transform 80ms ease, background 120ms ease; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 35px; padding: 0 16px; border-radius: 0; border: 1px solid var(--ink); background: var(--ink); color: var(--bg); font-weight: 600; font-size: 13px; line-height: 1; letter-spacing: 0.02em; cursor: pointer; transition: transform 80ms ease, background 120ms ease; }
 .btn:hover { background: var(--rust); border-color: var(--rust); }
 .btn:active { transform: translateY(1px); }
 .btn-ghost { background: transparent; color: var(--ink); }
 .btn-ghost:hover { background: var(--ink); color: var(--bg); }
 .btn-rust { background: var(--rust); border-color: var(--rust); color: var(--paper); }
 .btn-rust:hover { background: var(--rust-deep); border-color: var(--rust-deep); }
-.btn-sm { padding: 6px 10px; font-size: 11px; }
+.btn-sm { height: 25px; padding: 0 10px; font-size: 11px; }
 button:focus-visible, a:focus-visible { outline: 2px solid var(--rust); outline-offset: 2px; }
 
 /* Cards */
