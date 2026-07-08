@@ -33,6 +33,30 @@ function orderDateFromISO(iso) {
   const [y, m, d] = iso.split('-').map(Number);
   return new Date(y, m - 1, d).toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
 }
+// Converts an order date (any of the formats fmtOrderDate accepts) to yyyy-mm-dd for an <input type="date">.
+function isoFromOrderDate(raw) {
+  if (!raw) return '';
+  let d = new Date(raw);
+  if (isNaN(d)) {
+    const parts = String(raw).split('/');
+    if (parts.length === 3) d = new Date(`${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`);
+  }
+  if (isNaN(d)) return '';
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+// Converts "DD/MM/YYYY" (the expense date storage format) to yyyy-mm-dd for an <input type="date">.
+function auDateToISO(au) {
+  if (!au) return '';
+  const [d, m, y] = au.split('/');
+  if (!d || !m || !y) return '';
+  return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+}
+// Converts yyyy-mm-dd (from an <input type="date">) back to "DD/MM/YYYY" for storing an expense date.
+function isoToAuDate(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
 // Australian cash rounding: round to nearest 5 cents
 function cashRound(amount) {
   return Math.round(amount * 20) / 20;
@@ -971,7 +995,7 @@ function ExpenseRow({ e, isEditing, expenseForm, setExpenseForm, setExpenseEdit,
         </label>
       </div>
       <div className="grid-2" style={{gap:10, marginBottom:10}}>
-        <label className="field" style={{margin:0}}><span className="label">Date</span><input className="input" value={ef.date||''} onChange={ev=>setExpenseForm(f=>({...f,date:ev.target.value}))}/></label>
+        <label className="field" style={{margin:0}}><span className="label">Date</span><input className="input" type="date" value={auDateToISO(ef.date)} onChange={ev=>setExpenseForm(f=>({...f,date:isoToAuDate(ev.target.value)}))}/></label>
         <label className="field" style={{margin:0}}><span className="label">Notes</span><input className="input" value={ef.notes||''} onChange={ev=>setExpenseForm(f=>({...f,notes:ev.target.value}))}/></label>
       </div>
       <label style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',marginBottom:12,fontSize:13}}>
@@ -1288,7 +1312,7 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
       <label className="field"><span className="label">Phone</span><input className="input" type="tel" value={form.phone||''} onChange={e=>setForm({...form,phone:e.target.value})}/></label>
       <label className="field"><span className="label">Shipping Address</span><input className="input" value={form.shippingAddress||''} onChange={e=>setForm({...form,shippingAddress:e.target.value})} placeholder="Street, City, State, Postcode"/></label>
       <label className="field"><span className="label">Location</span><input className="input" value={form.loc||''} onChange={e=>setForm({...form,loc:e.target.value})}/></label>
-      <label className="field"><span className="label">Date</span><input className="input" value={form.date||''} onChange={e=>setForm({...form,date:e.target.value})}/></label>
+      <label className="field"><span className="label">Date</span><input className="input" type="date" value={isoFromOrderDate(form.date)} onChange={e=>setForm({...form,date:orderDateFromISO(e.target.value)})}/></label>
 
       <div className="field">
         <span className="label">Line items</span>
@@ -1455,7 +1479,7 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
               </label>
             </div>
             <div className="grid-2" style={{gap:10, marginBottom:10}}>
-              <label className="field" style={{margin:0}}><span className="label">Date</span><input className="input" value={expenseForm.date||''} onChange={e=>setExpenseForm(f=>({...f,date:e.target.value}))}/></label>
+              <label className="field" style={{margin:0}}><span className="label">Date</span><input className="input" type="date" value={auDateToISO(expenseForm.date)} onChange={e=>setExpenseForm(f=>({...f,date:isoToAuDate(e.target.value)}))}/></label>
               <label className="field" style={{margin:0}}><span className="label">Notes</span><input className="input" value={expenseForm.notes||''} onChange={e=>setExpenseForm(f=>({...f,notes:e.target.value}))}/></label>
             </div>
             <label style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',marginBottom:12,fontSize:13}}>
@@ -3030,7 +3054,7 @@ function AdminEwaste() {
               <option value="recycling">Recycling / audited processor</option>
             </select>
           </label>
-          <label className="field"><span className="label">Date</span><input className="input" value={form.date||''} onChange={e=>setForm({...form,date:e.target.value})}/></label>
+          <label className="field"><span className="label">Date</span><input className="input" type="date" value={form.date||''} onChange={e=>setForm({...form,date:e.target.value})}/></label>
           <div className="field">
             <span className="label">Linked order <span style={{fontWeight:400,color:'var(--ink-2)'}}>(optional — e.g. replaced component)</span></span>
             {(() => {
@@ -5972,7 +5996,7 @@ function AdminExpenses() {
             <label className="field"><span className="label">Amount (AUD, per item)</span><input className="input" type="number" step="0.01" value={form.amount||0} onChange={e=>setForm({...form,amount:Number(e.target.value)})}/></label>
             <label className="field"><span className="label">Total</span><input className="input" disabled value={`$${expTotal(form).toLocaleString('en-AU',{minimumFractionDigits:2})}`}/></label>
           </div>
-          <label className="field"><span className="label">Date</span><input className="input" value={form.date||''} onChange={e=>setForm({...form,date:e.target.value})}/></label>
+          <label className="field"><span className="label">Date</span><input className="input" type="date" value={auDateToISO(form.date)} onChange={e=>setForm({...form,date:isoToAuDate(e.target.value)})}/></label>
           <label className="field"><span className="label">Link to job</span>
             <select className="select" value={form.jobId||''} onChange={e=>setForm({...form,jobId:e.target.value})}>
               <option value="">— No job link —</option>
