@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { getCsrf, ensureCsrf } from './src/lib/api.js';
+import { renderMarkdown } from './markdown.jsx';
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 // Canonical date format for all order dates: "27 May 2026"
@@ -3926,80 +3927,191 @@ function AdminSoftware() {
 // ============================================================
 // TUTORIALS — list + editor
 // ============================================================
+const TUTORIAL_CATEGORIES = ['Repair','Off-grid','Software','AI','Comms'];
+const TUTORIAL_FORMATS = [
+  { id:'article', label:'Article', hint:'Long-form write-up, like a blog post.' },
+  { id:'steps', label:'Step-by-step', hint:'Numbered steps, each with its own text and photo.' },
+  { id:'info', label:'Info page', hint:'Short reference page — no difficulty or read-time shown.' },
+];
+
+function newTutorial() {
+  return { status:'Draft', cat:'Repair', format:'article', difficulty:'Intermediate', body:'', intro:'', steps:[], tools:[], tags:[], views:0 };
+}
+function emptyStep() { return { id:'step-'+Date.now()+'-'+Math.random().toString(36).slice(2,7), title:'', body:'', image:'' }; }
+
+// Pure textarea-selection transform shared by every markdown field in the editor.
+function applyMarkdownFormat(ta, val, fmt) {
+  const ss = ta.selectionStart, se = ta.selectionEnd;
+  const sel = val.slice(ss, se);
+  const lineStart = val.lastIndexOf('\n', ss - 1) + 1;
+  let newVal, cur;
+  if (fmt === 'H2') { newVal = val.slice(0, lineStart) + '## ' + val.slice(lineStart); cur = [ss + 3, se + 3]; }
+  else if (fmt === 'H3') { newVal = val.slice(0, lineStart) + '### ' + val.slice(lineStart); cur = [ss + 4, se + 4]; }
+  else if (fmt === 'B') { const w = sel || 'bold text'; newVal = val.slice(0, ss) + `**${w}**` + val.slice(se); cur = sel ? [ss + 2, ss + 2 + sel.length] : [ss + 2, ss + 2 + w.length]; }
+  else if (fmt === 'I') { const w = sel || 'italic text'; newVal = val.slice(0, ss) + `_${w}_` + val.slice(se); cur = sel ? [ss + 1, ss + 1 + sel.length] : [ss + 1, ss + 1 + w.length]; }
+  else if (fmt === '</>') {
+    if (sel.includes('\n')) { newVal = val.slice(0, ss) + '```\n' + sel + '\n```' + val.slice(se); cur = [ss + 4, ss + 4 + sel.length]; }
+    else { const w = sel || 'code'; newVal = val.slice(0, ss) + '`' + w + '`' + val.slice(se); cur = sel ? [ss + 1, ss + 1 + sel.length] : [ss + 1, ss + 1 + w.length]; }
+  }
+  else if (fmt === '—') { newVal = val.slice(0, ss) + '—' + val.slice(se); cur = [ss + 1, ss + 1]; }
+  else if (fmt === '· list') { newVal = val.slice(0, lineStart) + '- ' + val.slice(lineStart); cur = [ss + 2, se + 2]; }
+  else if (fmt === '1. list') { newVal = val.slice(0, lineStart) + '1. ' + val.slice(lineStart); cur = [ss + 3, se + 3]; }
+  else if (fmt === 'Link') { const snippet = sel ? `[${sel}](url)` : '[link text](url)'; newVal = val.slice(0, ss) + snippet + val.slice(se); cur = sel ? [ss + sel.length + 3, ss + sel.length + 6] : [ss + 1, ss + 10]; }
+  else return null;
+  return { newVal, cur };
+}
+
+// Markdown textarea with a formatting toolbar and a real "insert image" button
+// that uploads the file and drops a ![alt](url) snippet at the cursor.
+function MarkdownField({ value, onChange, placeholder, minHeight = 260 }) {
+  const taRef = React.useRef(null);
+  const fileRef = React.useRef(null);
+  const [uploading, setUploading] = useState(false);
+
+  const apply = (fmt) => {
+    const ta = taRef.current; if (!ta) return;
+    const result = applyMarkdownFormat(ta, value || '', fmt);
+    if (!result) return;
+    onChange(result.newVal);
+    setTimeout(() => { ta.focus(); ta.setSelectionRange(result.cur[0], result.cur[1]); }, 0);
+  };
+  const insertImage = async (file) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const url = await uploadImage(file);
+      const ta = taRef.current;
+      const ss = ta ? ta.selectionStart : (value || '').length;
+      const se = ta ? ta.selectionEnd : ss;
+      const snippet = `![${file.name.replace(/\.[a-z0-9]+$/i, '')}](${url})`;
+      onChange((value || '').slice(0, ss) + snippet + (value || '').slice(se));
+    } catch { adminToast('Image upload failed.'); }
+    setUploading(false);
+  };
+
+  return (
+    <div>
+      <div className="row-flex" style={{gap:4, paddingBottom:10, borderBottom:'1px solid var(--line)', flexWrap:'wrap'}}>
+        {['H2','H3','B','I','</>','—','· list','1. list','Link'].map((b,i) => (
+          <button key={i} type="button" className="btn btn-ghost btn-sm" style={{minWidth:32, justifyContent:'center', padding:'4px 8px'}}
+            onMouseDown={e => { e.preventDefault(); apply(b); }}>{b}</button>
+        ))}
+        <button type="button" className="btn btn-ghost btn-sm" disabled={uploading}
+          onMouseDown={e => e.preventDefault()} onClick={() => fileRef.current && fileRef.current.click()}>
+          {uploading ? 'Uploading…' : '📷 Image'}
+        </button>
+        <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" style={{display:'none'}}
+          onChange={e => { const f = e.target.files[0]; e.target.value = ''; insertImage(f); }} />
+      </div>
+      <textarea ref={taRef} className="textarea" style={{minHeight, marginTop:12, border:'none', fontSize:15, lineHeight:1.6, fontFamily:'Archivo, sans-serif'}}
+        placeholder={placeholder} value={value || ''} onChange={e => onChange(e.target.value)} />
+    </div>
+  );
+}
+
+// Cover/step image slot — click or drag-drop to upload, with replace/remove.
+function ImageUploadSlot({ value, onChange, aspect = '16/10', label }) {
+  const fileRef = React.useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const pick = async (file) => {
+    if (!file) return;
+    setUploading(true);
+    try { onChange(await uploadImage(file)); }
+    catch { adminToast('Image upload failed.'); }
+    setUploading(false);
+  };
+  return (
+    <div>
+      <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" style={{display:'none'}}
+        onChange={e => { const f = e.target.files[0]; e.target.value = ''; pick(f); }} />
+      {value ? (
+        <div style={{marginTop:10}}>
+          <img src={value} alt="" style={{width:'100%', aspectRatio:aspect, objectFit:'cover', display:'block'}} />
+          <div className="row-flex" style={{gap:6, marginTop:8}}>
+            <button type="button" className="btn btn-ghost btn-sm" disabled={uploading} onClick={() => fileRef.current.click()}>{uploading ? 'Uploading…' : 'Replace'}</button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => onChange('')}>Remove</button>
+          </div>
+        </div>
+      ) : (
+        <div className="slot" style={{aspectRatio:aspect, marginTop:10, cursor:'pointer'}}
+          onClick={() => fileRef.current.click()}
+          onDragOver={e => e.preventDefault()}
+          onDrop={e => { e.preventDefault(); pick(e.dataTransfer.files[0]); }}>
+          {uploading ? 'Uploading…' : (label || 'DROP IMAGE, OR CLICK')}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Chip/tag list input — Enter or comma to add, × to remove.
+function ChipInput({ value, onChange, placeholder }) {
+  const [draft, setDraft] = useState('');
+  const items = value || [];
+  const add = () => {
+    const v = draft.trim();
+    if (v && !items.includes(v)) onChange([...items, v]);
+    setDraft('');
+  };
+  return (
+    <div>
+      {items.length > 0 && (
+        <div className="row-flex" style={{gap:6, flexWrap:'wrap', marginBottom:8}}>
+          {items.map((t,i) => (
+            <span key={i} className="tag tag-outline" style={{display:'inline-flex', alignItems:'center', gap:6}}>
+              {t}
+              <button type="button" aria-label={`Remove ${t}`} onClick={() => onChange(items.filter((_,j) => j !== i))}
+                style={{background:'none', border:'none', cursor:'pointer', color:'inherit', fontSize:12, lineHeight:1, padding:0}}>×</button>
+            </span>
+          ))}
+        </div>
+      )}
+      <input className="input" placeholder={placeholder} value={draft} onChange={e => setDraft(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add(); } }}
+        onBlur={add} />
+    </div>
+  );
+}
+
+// One card in the step-by-step builder: title, markdown body, photo, reorder/remove.
+function StepRow({ step, index, total, onChange, onRemove, onMove }) {
+  return (
+    <div style={{padding:20, background:'var(--paper)', border:'1px solid var(--line)', marginBottom:14}}>
+      <div className="row-flex" style={{justifyContent:'space-between', marginBottom:12}}>
+        <span className="mono" style={{fontSize:11, color:'var(--ink-2)', letterSpacing:'.08em'}}>STEP {index + 1}</span>
+        <div className="row-flex" style={{gap:4}}>
+          <button type="button" className="btn btn-ghost btn-sm" disabled={index === 0} style={{opacity:index === 0 ? 0.4 : 1}} onClick={() => onMove(-1)} title="Move up">↑</button>
+          <button type="button" className="btn btn-ghost btn-sm" disabled={index === total - 1} style={{opacity:index === total - 1 ? 0.4 : 1}} onClick={() => onMove(1)} title="Move down">↓</button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onRemove}>Remove</button>
+        </div>
+      </div>
+      <input className="input" placeholder="Step title" value={step.title || ''} onChange={e => onChange({ ...step, title:e.target.value })} style={{marginBottom:10}} />
+      <div className="row-flex" style={{gap:16, alignItems:'flex-start', flexWrap:'wrap'}}>
+        <div style={{flex:1, minWidth:240}}>
+          <MarkdownField value={step.body} onChange={v => onChange({ ...step, body:v })} placeholder="Describe this step…" minHeight={140} />
+        </div>
+        <div style={{width:160, flexShrink:0}}>
+          <ImageUploadSlot value={step.image} onChange={v => onChange({ ...step, image:v })} aspect="4/3" label="STEP PHOTO" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AdminTutorials() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [edit, setEdit] = useState(null);
+  const [editId, setEditId] = useState(null); // null | 'new' | tutorial id
   const [form, setForm] = useState({});
   const [notice, setNotice] = useState({ type:'', msg:'' });
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [membershipTiers, setMembershipTiers] = useState([]);
-  const bodyRef = React.useRef(null);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('All');
 
-  const applyFormat = (fmt) => {
-    const ta = bodyRef.current;
-    if (!ta) return;
-    const val = form.body || '';
-    const ss = ta.selectionStart;
-    const se = ta.selectionEnd;
-    const sel = val.slice(ss, se);
-    const lineStart = val.lastIndexOf('\n', ss - 1) + 1;
-    let newVal, cur;
-
-    if (fmt === 'H2') {
-      newVal = val.slice(0, lineStart) + '## ' + val.slice(lineStart);
-      cur = [ss + 3, se + 3];
-    } else if (fmt === 'H3') {
-      newVal = val.slice(0, lineStart) + '### ' + val.slice(lineStart);
-      cur = [ss + 4, se + 4];
-    } else if (fmt === 'B') {
-      const word = sel || 'bold text';
-      newVal = val.slice(0, ss) + `**${word}**` + val.slice(se);
-      cur = sel ? [ss + 2, ss + 2 + sel.length] : [ss + 2, ss + 2 + word.length];
-    } else if (fmt === 'I') {
-      const word = sel || 'italic text';
-      newVal = val.slice(0, ss) + `_${word}_` + val.slice(se);
-      cur = sel ? [ss + 1, ss + 1 + sel.length] : [ss + 1, ss + 1 + word.length];
-    } else if (fmt === '</>') {
-      if (sel.includes('\n')) {
-        newVal = val.slice(0, ss) + '```\n' + sel + '\n```' + val.slice(se);
-        cur = [ss + 4, ss + 4 + sel.length];
-      } else {
-        const word = sel || 'code';
-        newVal = val.slice(0, ss) + '`' + word + '`' + val.slice(se);
-        cur = sel ? [ss + 1, ss + 1 + sel.length] : [ss + 1, ss + 1 + word.length];
-      }
-    } else if (fmt === '—') {
-      newVal = val.slice(0, ss) + '—' + val.slice(se);
-      cur = [ss + 1, ss + 1];
-    } else if (fmt === '· list') {
-      newVal = val.slice(0, lineStart) + '- ' + val.slice(lineStart);
-      cur = [ss + 2, se + 2];
-    } else if (fmt === '1. list') {
-      newVal = val.slice(0, lineStart) + '1. ' + val.slice(lineStart);
-      cur = [ss + 3, se + 3];
-    } else if (fmt === '📷') {
-      const snippet = '![description](image-url)';
-      newVal = val.slice(0, ss) + snippet + val.slice(se);
-      cur = [ss + 2, ss + 13];
-    } else if (fmt === '🎥') {
-      const snippet = '[video](youtube-url)';
-      newVal = val.slice(0, ss) + snippet + val.slice(se);
-      cur = [ss + 8, ss + 19];
-    } else if (fmt === 'Link') {
-      const snippet = sel ? `[${sel}](url)` : '[link text](url)';
-      newVal = val.slice(0, ss) + snippet + val.slice(se);
-      cur = sel ? [ss + sel.length + 3, ss + sel.length + 6] : [ss + 1, ss + 10];
-    } else {
-      return;
-    }
-
-    setForm(f => ({...f, body: newVal}));
-    setTimeout(() => { ta.focus(); ta.setSelectionRange(cur[0], cur[1]); }, 0);
-  };
-  const open = (i) => { setEdit(i); setForm(i==='new'?{ status:'Draft', cat:'Repair' }:rows[i]); };
   useEffect(() => {
     fetch('/api/admin/tutorials', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject())
@@ -4011,39 +4123,81 @@ function AdminTutorials() {
       .then(d => setMembershipTiers((d.tiers || []).filter(t => t.status === 'published')))
       .catch(() => {});
   }, []);
+
+  const open = (rowOrNew) => {
+    if (rowOrNew === 'new') { setEditId('new'); setForm(newTutorial()); }
+    else { setEditId(rowOrNew.id); setForm({ ...newTutorial(), ...rowOrNew }); }
+    setNotice({ type:'', msg:'' });
+    setPreviewing(false);
+  };
+
   const save = async (overrides = {}) => {
     setNotice({ type:'', msg:'' });
-    const payload = edit === 'new' ? { ...form, ...overrides } : { ...rows[edit], ...form, ...overrides };
+    const payload = { ...form, ...overrides };
     payload.title = (payload.title || '').trim();
     payload.cat = payload.cat || 'Repair';
+    payload.format = payload.format || 'article';
     payload.author = (payload.author || '').trim() || 'Staff';
     payload.status = payload.status || 'Draft';
     payload.date = payload.date || new Date().toISOString().slice(0, 10);
     payload.views = Number.isFinite(Number(payload.views)) ? Number(payload.views) : 0;
     payload.body = payload.body || '';
+    payload.steps = (payload.steps || []).map(s => ({ ...s, title: (s.title || '').trim(), body: s.body || '' }));
     if (!payload.title) { setNotice({ type:'error', msg:'Title is required.' }); return; }
+    if (payload.format === 'steps' && payload.steps.length === 0) { setNotice({ type:'error', msg:"Add at least one step, or switch to Article/Info." }); return; }
     setSaving(true);
-    const r = await fetch('/api/admin/tutorials/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(payload) }).catch(()=>null);
+    const r = await fetch('/api/admin/tutorials/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(payload) }).catch(() => null);
     setSaving(false);
     if (r && r.ok) {
       const d = await r.json();
-      setRows(rs => edit==='new' ? [...rs, d.item] : rs.map((row,i)=>i===edit?d.item:row));
+      setRows(rs => editId === 'new' ? [...rs, d.item] : rs.map(row => row.id === d.item.id ? d.item : row));
       setNotice({ type:'success', msg: payload.status === 'Published' ? 'Tutorial published.' : 'Tutorial saved.' });
-      setEdit(null);
+      setEditId(null);
       return;
     }
     setNotice({ type:'error', msg:'Failed to save tutorial.' });
   };
 
-  if (edit !== null) {
+  const removeTutorial = async (row) => {
+    if (!(await adminConfirm(`Delete "${row.title || 'this tutorial'}"? This can't be undone.`, { danger:true, confirmLabel:'Delete' }))) return;
+    setDeleting(true);
+    const r = await fetch('/api/admin/tutorials/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: row.id }) }).catch(() => null);
+    setDeleting(false);
+    if (r && r.ok) {
+      setRows(rs => rs.filter(x => x.id !== row.id));
+      if (editId !== null && editId !== 'new') setEditId(null);
+    } else adminToast('Failed to delete tutorial.');
+  };
+
+  const duplicate = (row) => {
+    setEditId('new');
+    setForm({ ...newTutorial(), ...row, id: undefined, title: row.title + ' (copy)', status:'Draft', views:0, date: new Date().toISOString().slice(0,10) });
+    setNotice({ type:'', msg:'' });
+    setPreviewing(false);
+  };
+
+  const setStep = (idx, next) => setForm(f => ({ ...f, steps: f.steps.map((s,i) => i === idx ? next : s) }));
+  const addStep = () => setForm(f => ({ ...f, steps: [...(f.steps || []), emptyStep()] }));
+  const removeStep = (idx) => setForm(f => ({ ...f, steps: f.steps.filter((_,i) => i !== idx) }));
+  const moveStep = (idx, dir) => setForm(f => {
+    const steps = [...f.steps];
+    const to = idx + dir;
+    if (to < 0 || to >= steps.length) return f;
+    [steps[idx], steps[to]] = [steps[to], steps[idx]];
+    return { ...f, steps };
+  });
+
+  if (editId !== null) {
+    const format = form.format || 'article';
     return (
       <div style={{padding:32}}>
-        <div className="row-flex" style={{justifyContent:'space-between', marginBottom:18}}>
+        <div className="row-flex" style={{justifyContent:'space-between', marginBottom:18, flexWrap:'wrap', gap:12}}>
           <div>
-            <a className="mono" style={{fontSize:11, color:'var(--rust)', cursor:'pointer'}} onClick={()=>setEdit(null)}>← Back to list</a>
-            <h2 className="serif" style={{fontSize:32, marginTop:6}}>{edit==='new'?'New tutorial':form.title}</h2>
+            <a className="mono" style={{fontSize:11, color:'var(--rust)', cursor:'pointer'}} onClick={() => setEditId(null)}>← Back to list</a>
+            <h2 className="serif" style={{fontSize:32, marginTop:6}}>{editId === 'new' ? 'New tutorial' : form.title}</h2>
           </div>
           <div className="row-flex" style={{gap:8}}>
+            {editId !== 'new' && <button className="btn btn-ghost btn-sm" disabled={deleting} onClick={() => removeTutorial(form)}>{deleting ? 'Deleting…' : 'Delete'}</button>}
             <button className="btn btn-ghost btn-sm" onClick={() => setPreviewing(true)}>Preview</button>
             <button className="btn btn-ghost btn-sm" disabled={saving} onClick={() => save({ status:'Draft' })}>{saving ? 'Saving…' : 'Save draft'}</button>
             <button className="btn btn-rust btn-sm" disabled={saving} onClick={() => save({ status:'Published' })}>{saving ? 'Publishing…' : 'Publish →'}</button>
@@ -4051,28 +4205,58 @@ function AdminTutorials() {
         </div>
         {notice.msg && <div style={{marginBottom:12, fontSize:13, color:notice.type==='error'?'var(--rust)':'var(--eucalyptus)'}}>{notice.msg}</div>}
 
-        <div className="admin-split" style={{display:'grid', gridTemplateColumns:'1fr 280px', gap:24}}>
+        <div className="admin-split" style={{display:'grid', gridTemplateColumns:'1fr 300px', gap:24}}>
           <div style={{background:'var(--paper)', border:'1px solid var(--line)', padding:32}}>
             <input className="input" placeholder="Tutorial title" value={form.title||''} onChange={e=>setForm({...form, title:e.target.value})}
               style={{fontFamily:'Instrument Serif, serif', fontSize:32, padding:'8px 0', border:'none', borderBottom:'1px solid var(--line)', background:'transparent'}} />
             <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:8, letterSpacing:'.08em'}}>BY {(form.author||'YOU').toUpperCase()} · {form.cat?.toUpperCase()} · {form.date||'TODAY'}</div>
 
-            <div className="row-flex" style={{marginTop:18, gap:4, paddingBottom:10, borderBottom:'1px solid var(--line)'}}>
-              {['H2','H3','B','I','</>','—','· list','1. list','📷','🎥','Link'].map((b,i) => (
-                <button key={i} className="btn btn-ghost btn-sm" style={{minWidth:32, justifyContent:'center', padding:'4px 8px'}}
-                  onMouseDown={e => { e.preventDefault(); applyFormat(b); }}>{b}</button>
+            <div className="row-flex" style={{gap:6, marginTop:20}} role="group" aria-label="Tutorial format">
+              {TUTORIAL_FORMATS.map(f => (
+                <button key={f.id} type="button" className={`tab ${format===f.id?'active':''}`} style={{cursor:'pointer'}}
+                  title={f.hint} onClick={() => setForm({...form, format:f.id})}>{f.label}</button>
               ))}
             </div>
 
-            <textarea ref={bodyRef} className="textarea" style={{minHeight:380, marginTop:12, border:'none', fontSize:15, lineHeight:1.6, fontFamily:'Archivo, sans-serif'}}
-              placeholder="Start writing… Markdown supported. Drop in photos by dragging onto this area."
-              value={form.body ?? `## The problem\n\nA Toughbook 55's keyboard cuts out after a hot day in the ute. Here's what's actually failing and how to swap it on the bench in under an hour…\n\n## Tools you'll need\n\n- T6 Torx driver\n- Plastic spudger\n- Replacement ribbon (Pana p/n: FZ-VKB55U)\n- ESD strap (you do have one, right?)\n\n## Step 1 — Cool it down\n\nPull the battery, leave it 20 minutes. Most "intermittent" failures resolve themselves once the silicone substrate stops flexing…`}
-              onChange={e => setForm(f => ({...f, body: e.target.value}))}
-            />
+            <label className="field" style={{marginTop:18}}><span className="label">Short description</span>
+              <textarea className="textarea" style={{minHeight:60}} placeholder="One or two sentences — shown on the tutorial card and used as the meta description fallback."
+                value={form.description||''} onChange={e=>setForm({...form, description:e.target.value})} />
+            </label>
 
-            <div style={{marginTop:18, padding:16, background:'var(--bg-elev)', border:'1px dashed var(--line-strong)', textAlign:'center', color:'var(--ink-2)', fontSize:13}}>
-              📎 Drop images or video here, or paste a YouTube URL
-            </div>
+            {format === 'steps' ? (
+              <>
+                <div style={{marginTop:22}}>
+                  <span className="eyebrow">INTRO (OPTIONAL)</span>
+                  <div style={{marginTop:8}}>
+                    <MarkdownField value={form.intro} onChange={v=>setForm({...form, intro:v})} placeholder="Set the scene before step 1…" minHeight={100} />
+                  </div>
+                </div>
+                <div style={{marginTop:22}}>
+                  <span className="eyebrow">TOOLS &amp; PARTS NEEDED</span>
+                  <div style={{marginTop:8}}>
+                    <ChipInput value={form.tools} onChange={v=>setForm({...form, tools:v})} placeholder="Type a tool or part, press Enter" />
+                  </div>
+                </div>
+                <div style={{marginTop:26}}>
+                  <div className="row-flex" style={{justifyContent:'space-between', marginBottom:12}}>
+                    <span className="eyebrow">STEPS</span>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={addStep}>+ Add step</button>
+                  </div>
+                  {(form.steps||[]).length === 0 && (
+                    <div style={{fontSize:12, color:'var(--ink-2)', padding:'16px 0', textAlign:'center', border:'1px dashed var(--line-strong)'}}>No steps yet — add the first one.</div>
+                  )}
+                  {(form.steps||[]).map((s,i) => (
+                    <StepRow key={s.id||i} step={s} index={i} total={form.steps.length}
+                      onChange={next=>setStep(i,next)} onRemove={()=>removeStep(i)} onMove={dir=>moveStep(i,dir)} />
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div style={{marginTop:18}}>
+                <MarkdownField value={form.body} onChange={v=>setForm({...form, body:v})}
+                  placeholder="Start writing… Markdown supported." minHeight={380} />
+              </div>
+            )}
           </div>
 
           <aside style={{display:'grid', gap:14, alignContent:'start'}}>
@@ -4085,14 +4269,16 @@ function AdminTutorials() {
               </label>
               <label className="field"><span className="label">Category</span>
                 <select className="select" value={form.cat||'Repair'} onChange={e=>setForm({...form, cat:e.target.value})}>
-                  {['Repair','Off-grid','Software','AI','Comms'].map(c => <option key={c}>{c}</option>)}
+                  {TUTORIAL_CATEGORIES.map(c => <option key={c}>{c}</option>)}
                 </select>
               </label>
-              <label className="field"><span className="label">Difficulty</span>
-                <select className="select" value={form.difficulty||'Intermediate'} onChange={e=>setForm({...form, difficulty:e.target.value})}>
-                  <option>Beginner</option><option>Intermediate</option><option>Advanced</option><option>Expert</option>
-                </select>
-              </label>
+              {format !== 'info' && (
+                <label className="field"><span className="label">Difficulty</span>
+                  <select className="select" value={form.difficulty||'Intermediate'} onChange={e=>setForm({...form, difficulty:e.target.value})}>
+                    <option>Beginner</option><option>Intermediate</option><option>Advanced</option><option>Expert</option>
+                  </select>
+                </label>
+              )}
               <label className="field"><span className="label">Access</span>
                 <select className="select" value={form.requiredTierId || ''} onChange={e=>setForm({...form, requiredTierId: e.target.value})}>
                   <option value="">Public</option>
@@ -4101,16 +4287,30 @@ function AdminTutorials() {
                   ))}
                 </select>
               </label>
-              <label className="field"><span className="label">Estimated read</span>
-                <input className="input" placeholder="22 min" value={form.duration||''} onChange={e=>setForm({...form, duration:e.target.value})}/>
-              </label>
+              {format !== 'info' && (
+                <label className="field"><span className="label">Estimated read</span>
+                  <input className="input" placeholder="22 min" value={form.duration||''} onChange={e=>setForm({...form, duration:e.target.value})}/>
+                </label>
+              )}
               <label className="field"><span className="label">Author</span>
                 <input className="input" value={form.author||''} onChange={e=>setForm({...form, author:e.target.value})}/>
               </label>
             </div>
             <div style={{padding:18, background:'var(--paper)', border:'1px solid var(--line)'}}>
               <span className="eyebrow">COVER IMAGE</span>
-              <div className="slot" style={{aspectRatio:'16/10', marginTop:10}}>16:10 · DRAG TO REPLACE</div>
+              <ImageUploadSlot value={form.coverImage} onChange={v=>setForm({...form, coverImage:v})} aspect="16/10" label="16:10 · DROP IMAGE, OR CLICK" />
+            </div>
+            <div style={{padding:18, background:'var(--paper)', border:'1px solid var(--line)'}}>
+              <span className="eyebrow">VIDEO</span>
+              <label className="field" style={{marginTop:10}}><span className="label">YouTube or Vimeo URL</span>
+                <input className="input" placeholder="https://youtube.com/watch?v=…" value={form.videoUrl||''} onChange={e=>setForm({...form, videoUrl:e.target.value})}/>
+              </label>
+            </div>
+            <div style={{padding:18, background:'var(--paper)', border:'1px solid var(--line)'}}>
+              <span className="eyebrow">TAGS</span>
+              <div style={{marginTop:10}}>
+                <ChipInput value={form.tags} onChange={v=>setForm({...form, tags:v})} placeholder="Add a tag, press Enter" />
+              </div>
             </div>
             <div style={{padding:18, background:'var(--paper)', border:'1px solid var(--line)'}}>
               <span className="eyebrow">SEO</span>
@@ -4126,8 +4326,42 @@ function AdminTutorials() {
               onClick={e => e.stopPropagation()}>
               <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:18, letterSpacing:'.1em'}}>PREVIEW · NOT PUBLISHED</div>
               <h1 style={{fontFamily:'Instrument Serif, serif', fontSize:48, lineHeight:1.05, marginBottom:10}}>{form.title || 'Untitled'}</h1>
-              <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginBottom:28}}>BY {(form.author||'STAFF').toUpperCase()} · {(form.cat||'REPAIR').toUpperCase()} · {form.date||'TODAY'}</div>
-              <div style={{fontSize:15, lineHeight:1.75, whiteSpace:'pre-wrap', color:'var(--ink)'}}>{form.body || '(no body yet)'}</div>
+              <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginBottom:20}}>
+                {[
+                  (form.author||'STAFF').toUpperCase(),
+                  form.cat && form.cat.toUpperCase(),
+                  format !== 'info' && form.difficulty,
+                  format !== 'info' && form.duration,
+                ].filter(Boolean).join(' · ')}
+              </div>
+              {form.coverImage && <img src={form.coverImage} alt="" style={{width:'100%', maxHeight:320, objectFit:'cover', marginBottom:24}} />}
+              {form.videoUrl && (
+                <div style={{position:'relative', paddingTop:'56.25%', marginBottom:24, background:'#000'}}>
+                  <iframe src={form.videoUrl} style={{position:'absolute', inset:0, width:'100%', height:'100%', border:0}} allowFullScreen title="Video preview" />
+                </div>
+              )}
+              {format === 'steps' ? (
+                <>
+                  {form.intro && <div style={{fontSize:15, lineHeight:1.75, color:'var(--ink)'}}>{renderMarkdown(form.intro)}</div>}
+                  {(form.tools||[]).length > 0 && (
+                    <div style={{background:'var(--bg-elev)', padding:'14px 18px', margin:'12px 0'}}>
+                      <div className="eyebrow" style={{marginBottom:6}}>WHAT YOU'LL NEED</div>
+                      <ul style={{margin:0, paddingLeft:18, fontSize:13}}>{form.tools.map((t,i)=><li key={i}>{t}</li>)}</ul>
+                    </div>
+                  )}
+                  {(form.steps||[]).length === 0 ? (
+                    <p style={{color:'var(--ink-2)', fontSize:14}}>(no steps yet)</p>
+                  ) : form.steps.map((s,i) => (
+                    <div key={s.id||i} style={{marginBottom:20}}>
+                      <h3 style={{fontFamily:'Instrument Serif, serif', fontSize:20, marginBottom:6}}>{i+1}. {s.title || 'Untitled step'}</h3>
+                      {s.image && <img src={s.image} alt="" style={{width:'100%', maxHeight:240, objectFit:'cover', marginBottom:8}} />}
+                      <div style={{fontSize:15, lineHeight:1.75, color:'var(--ink)'}}>{renderMarkdown(s.body)}</div>
+                    </div>
+                  ))}
+                </>
+              ) : (
+                <div style={{fontSize:15, lineHeight:1.75, color:'var(--ink)'}}>{form.body ? renderMarkdown(form.body) : '(no body yet)'}</div>
+              )}
               <button className="btn btn-ghost btn-sm" style={{marginTop:32}} onClick={() => setPreviewing(false)}>Close preview</button>
             </div>
           </div>
@@ -4136,28 +4370,52 @@ function AdminTutorials() {
     );
   }
 
+  const counts = {
+    All: rows.length,
+    Published: rows.filter(r=>r.status==='Published').length,
+    Draft: rows.filter(r=>r.status==='Draft').length,
+    Review: rows.filter(r=>r.status==='Review').length,
+    Archived: rows.filter(r=>r.status==='Archived').length,
+  };
+  const q = search.trim().toLowerCase();
+  const filtered = rows
+    .filter(r => statusFilter === 'All' || r.status === statusFilter)
+    .filter(r => !q || (r.title||'').toLowerCase().includes(q) || (r.author||'').toLowerCase().includes(q));
+
   return (
     <div style={{padding:32}}>
       {loading && <div className="mono" style={{fontSize:12, color:'var(--ink-2)', marginBottom:10}}>Loading…</div>}
       {error && <div style={{fontSize:12, color:'var(--rust)', marginBottom:10}}>{error}</div>}
-      <div className="tabs" style={{marginBottom:18}}>
-        {['All (7)','Published (5)','Draft (2)','Review','Archived'].map((t,i) => (
-          <div key={i} className={`tab ${i===0?'active':''}`}>{t}</div>
-        ))}
-        <div style={{flex:1}}></div>
-        <button className="btn btn-rust btn-sm" onClick={() => open('new')}>+ New tutorial</button>
+      <div className="row-flex" style={{justifyContent:'space-between', flexWrap:'wrap', gap:12, marginBottom:18}}>
+        <div className="tabs">
+          {['All','Published','Draft','Review','Archived'].map(t => (
+            <div key={t} className={`tab ${statusFilter===t?'active':''}`} style={{cursor:'pointer'}} onClick={()=>setStatusFilter(t)}>{t} ({counts[t]})</div>
+          ))}
+        </div>
+        <div className="row-flex" style={{gap:8}}>
+          <input className="input" style={{width:220}} placeholder="Search title or author…" value={search} onChange={e=>setSearch(e.target.value)} />
+          <button className="btn btn-rust btn-sm" onClick={() => open('new')}>+ New tutorial</button>
+        </div>
       </div>
       <Table
         columns={[
-          { key:'title', label:'Title', w:'2.5fr', render:r => <span style={{fontWeight:600}}>{r.title}</span> },
-          { key:'cat', label:'Category', w:'1fr', render:r => <span className="tag tag-outline">{r.cat.toUpperCase()}</span> },
-          { key:'author', label:'Author', w:'1fr' },
-          { key:'date', label:'Date', w:'90px', render:r => <span className="mono" style={{fontSize:12, color:'var(--ink-2)'}}>{r.date}</span> },
-          { key:'views', label:'Views', w:'80px', render:r => <span className="mono">{r.views.toLocaleString()}</span> },
-          { key:'status', label:'Status', w:'110px', render:r => <span className={`tag ${r.status==='Published'?'tag-euc':r.status==='Draft'?'tag-ochre':'tag-outline'}`}>{r.status.toUpperCase()}</span> },
+          { key:'title', label:'Title', w:'2.2fr', render:r => <span style={{fontWeight:600}}>{r.title}</span>, sort:true },
+          { key:'format', label:'Format', w:'110px', render:r => <span className="tag tag-outline">{(TUTORIAL_FORMATS.find(f=>f.id===(r.format||'article'))||TUTORIAL_FORMATS[0]).label.toUpperCase()}</span> },
+          { key:'cat', label:'Category', w:'1fr', render:r => <span className="tag tag-outline">{(r.cat||'').toUpperCase()}</span>, sort:true },
+          { key:'author', label:'Author', w:'1fr', sort:true },
+          { key:'date', label:'Date', w:'90px', render:r => <span className="mono" style={{fontSize:12, color:'var(--ink-2)'}}>{r.date}</span>, sort:true },
+          { key:'views', label:'Views', w:'80px', render:r => <span className="mono">{(r.views||0).toLocaleString()}</span>, sort:true },
+          { key:'status', label:'Status', w:'110px', render:r => <span className={`tag ${r.status==='Published'?'tag-euc':r.status==='Draft'?'tag-ochre':'tag-outline'}`}>{(r.status||'').toUpperCase()}</span>, sort:true },
+          { key:'actions', label:'', w:'90px', render:r => (
+            <div className="row-flex" style={{gap:4}} onClick={e=>e.stopPropagation()}>
+              <button type="button" className="btn btn-ghost btn-sm" title="Duplicate" onClick={()=>duplicate(r)}>⎘</button>
+              <button type="button" className="btn btn-ghost btn-sm" title="Delete" onClick={()=>removeTutorial(r)}>🗑</button>
+            </div>
+          ) },
         ]}
-        rows={rows}
-        onRowClick={(_,i)=>open(i)}
+        rows={filtered}
+        onRowClick={(r)=>open(r)}
+        emptyMessage="No tutorials match."
       />
     </div>
   );

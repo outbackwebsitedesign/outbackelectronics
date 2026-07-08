@@ -856,7 +856,7 @@ function buildAdminMetrics() {
   const awaitingQuotes = countBy(quotes, q => String(q.status || '').toLowerCase() === 'new');
   const ewasteTonnes = ewaste.reduce((sum, item) => sum + (Number(item.weightKg) || 0), 0) / 1000;
   const liveProducts = countBy(products, p => p.status === 'published');
-  const draftTutorials = countBy(tutorials, t => t.status !== 'published');
+  const draftTutorials = countBy(tutorials, t => t.status !== 'Published');
   const repeatCustomers = countBy(customers, c => {
     const ce = (c.email||'').toLowerCase().trim();
     const cn = (c.name||'').toLowerCase().trim();
@@ -6293,15 +6293,35 @@ const adminServer = http.createServer(async (req, res) => {
     writeSoftware(items); return json(res, 200, { ok: true, item: body });
   }
 
+  // GET /api/admin/tutorials — list all tutorials (admin)
+  // GET /api/admin/tutorials/list — same, used by the Groups access picker
+  if (req.method === 'GET' && (url.pathname === '/api/admin/tutorials' || url.pathname === '/api/admin/tutorials/list')) {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    return json(res, 200, { items: readTutorials() });
+  }
+
   if (req.method === 'POST' && url.pathname === '/api/admin/tutorials/save') {
     const session = requireRole(req, res, 'manager'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
-    // Sanitize HTML content and validate video URL
+    // Sanitize prose fields and validate the video URL
+    if (body.body) body.body = sanitizeTutorialHTML(body.body);
+    if (body.intro) body.intro = sanitizeTutorialHTML(body.intro);
+    if (body.description) body.description = sanitizeTutorialHTML(body.description);
+    if (Array.isArray(body.steps)) {
+      body.steps = body.steps.map(s => ({ ...s, title: sanitizeTutorialHTML(s.title || ''), body: sanitizeTutorialHTML(s.body || '') }));
+    }
     if (body.content) body.content = sanitizeTutorialHTML(body.content);
     if (body.videoUrl) body.videoUrl = validateVideoUrl(body.videoUrl);
     const items = readTutorials(); const idx = items.findIndex(x => x.id && x.id === body.id);
     if (idx >= 0) items[idx] = body; else { body.id = 'tut-' + Date.now(); items.push(body); }
     writeTutorials(items); return json(res, 200, { ok: true, item: body });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/tutorials/delete') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    writeTutorials(readTutorials().filter(t => t.id !== body.id));
+    return json(res, 200, { ok: true });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/admin/ai/save') {
@@ -8513,7 +8533,8 @@ async function buildRagIndex() {
 
   const tutorials = readTutorials().filter(t => t.status === 'Published');
   for (const t of tutorials) {
-    const body = (t.body || t.content || '').replace(/<[^>]+>/g, '').slice(0, 600);
+    const stepsText = Array.isArray(t.steps) ? t.steps.map(s => `${s.title || ''}. ${s.body || ''}`).join(' ') : '';
+    const body = (t.body || t.content || t.intro || stepsText || '').replace(/<[^>]+>/g, '').slice(0, 600);
     const text = `Tutorial: ${t.title}. Category: ${t.cat || ''}. Difficulty: ${t.difficulty || ''}. ${body}`.slice(0, 1500);
     const key = `tut-${t.id}`;
     let emb = cache[key];
