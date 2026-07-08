@@ -104,6 +104,47 @@ const nonNegInput = (v) => (typeof v === 'string' ? v.replace(/-/g, '') : v);
 // Marks a required field label; pair with aria-required on the input.
 const ReqMark = () => <span className="admin-req" aria-hidden="true"></span>;
 
+// ── Icon system ────────────────────────────────────────────────────────────
+// Every small in-UI icon renders through this one component so its size never
+// depends on emoji/glyph metrics, which vary unpredictably by OS and browser.
+const ICON_PATHS = {
+  chevronLeft: <polyline points="15 18 9 12 15 6"/>,
+  chevronRight: <polyline points="9 18 15 12 9 6"/>,
+  chevronUp: <polyline points="18 15 12 9 6 15"/>,
+  chevronDown: <polyline points="6 9 12 15 18 9"/>,
+  chevronsUpDown: <><polyline points="7 14.5 12 19.5 17 14.5"/><polyline points="7 9.5 12 4.5 17 9.5"/></>,
+  externalLink: <><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></>,
+  download: <><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></>,
+  camera: <><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></>,
+  copy: <><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></>,
+  trash: <><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></>,
+  pencil: <path d="M17 3a2.85 2.85 0 114 4L7.5 20.5 2 22l1.5-5.5z"/>,
+  alertTriangle: <><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></>,
+  dot: <circle cx="12" cy="12" r="7" fill="currentColor" stroke="none"/>,
+  x: <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>,
+  check: <polyline points="20 6 9 17 4 12"/>,
+  circleEmpty: <circle cx="12" cy="12" r="9"/>,
+  halfCircle: <><path d="M12 3a9 9 0 000 18z" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="9"/></>,
+  quarterCircle: <><path d="M12 3a9 9 0 019 9h-9z" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="9"/></>,
+  hammer: <><path d="M14.5 3.5l6 6-2.5 2.5-6-6z"/><path d="M2 22l7-7"/><path d="M12 12L7 7l-3 3 5 5z"/></>,
+  diamond: <polygon points="12 2 22 12 12 22 2 12"/>,
+  square: <rect x="4" y="4" width="16" height="16" rx="1"/>,
+  undo: <><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 00-4-4H4"/></>,
+  star: <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>,
+  mail: <><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></>,
+  refresh: <><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.36-3.36L23 10M1 14l5.14 4.36A9 9 0 0020.49 15"/></>,
+  printer: <><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></>,
+  minus: <line x1="5" y1="12" x2="19" y2="12"/>,
+};
+function Icon({ name, size = 12, strokeWidth = 2, style, className }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth}
+      strokeLinecap="round" strokeLinejoin="round" style={style} className={className} aria-hidden="true">
+      {ICON_PATHS[name]}
+    </svg>
+  );
+}
+
 // ── Overlay / dirty-drawer registries (module-level singletons) ──────────────
 // Overlays (confirm dialogs, shortcut help) stack above drawers; while one is
 // open the Drawer must not react to Escape/Tab.
@@ -271,11 +312,11 @@ function AdminLogin({ onAuth, siteUrl }) {
           <button disabled={busy} className="btn btn-rust" style={{width:'100%', justifyContent:'center', marginTop:6, opacity:busy?0.7:1}}>
             {busy ? (
               <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{animation:'spin 1s linear infinite'}}><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> Signing in…</>
-            ) : 'Enter terminal →'}
+            ) : <>Enter terminal <Icon name="chevronRight" size={13}/></>}
           </button>
         </form>
         <div style={{marginTop:18, textAlign:'center'}}>
-          <a className="mono" style={{fontSize:11, color:'#c4a75d', textDecoration:'underline', textUnderlineOffset:3, cursor:'pointer'}} onClick={() => { if (siteUrl) window.location.href = siteUrl + '/home'; }}>← Back to public site</a>
+          <a className="mono" style={{display:'inline-flex', alignItems:'center', gap:4, fontSize:11, color:'#c4a75d', textDecoration:'underline', textUnderlineOffset:3, cursor:'pointer'}} onClick={() => { if (siteUrl) window.location.href = siteUrl + '/home'; }}><Icon name="chevronLeft" size={10}/> Back to public site</a>
         </div>
       </div>
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
@@ -396,7 +437,7 @@ function AdminSidebar({ section, setSection, onSignOut, role, username }) {
             <button type="button" className="mono" onClick={() => toggleGroup(g.group)} aria-expanded={!isCollapsed}
               style={{display:'flex', alignItems:'center', justifyContent:'space-between', width:'100%', background:'none', border:'none', cursor:'pointer', fontSize:10, letterSpacing:'.12em', color:'rgba(244,237,225,0.4)', padding:'4px 10px 8px', fontFamily:'JetBrains Mono, monospace'}}>
               <span>{g.group}</span>
-              <span aria-hidden="true" style={{fontSize:8, transition:'transform 150ms ease', transform: isCollapsed ? 'rotate(-90deg)' : 'none'}}>▼</span>
+              <Icon name="chevronDown" size={8} strokeWidth={3} style={{transition:'transform 150ms ease', transform: isCollapsed ? 'rotate(-90deg)' : 'none'}}/>
             </button>
             {!isCollapsed && <div style={{display:'grid', gap: 2}}>
               {g.items.map(it => {
@@ -612,7 +653,9 @@ function Table({ columns, rows, onRowClick, emptyMessage, loading, defaultSort }
                     title={`Sort by ${c.label}`}
                     style={{font:'inherit', letterSpacing:'inherit', color: active ? 'var(--rust)' : 'inherit', background:'none', border:'none', padding:0, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:4}}>
                     {c.label.toUpperCase()}
-                    <span aria-hidden="true" style={{fontSize:8, opacity: active ? 1 : 0.4}}>{active ? (sort.dir === 'asc' ? '▲' : '▼') : '▲▼'}</span>
+                    <span aria-hidden="true" style={{display:'inline-flex', opacity: active ? 1 : 0.4}}>
+                      {active ? <Icon name={sort.dir === 'asc' ? 'chevronUp' : 'chevronDown'} size={8} strokeWidth={3}/> : <Icon name="chevronsUpDown" size={8} strokeWidth={3}/>}
+                    </span>
                   </button>
                 </div>
               );
@@ -648,8 +691,8 @@ function Table({ columns, rows, onRowClick, emptyMessage, loading, defaultSort }
         <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, padding:'10px 18px', borderTop:'1px solid var(--line)', background:'var(--bg-elev)', flexWrap:'wrap'}}>
           <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{sorted.length.toLocaleString()} RECORDS · PAGE {curPage + 1} / {pageCount}</span>
           <div style={{display:'flex', gap:6}}>
-            <button className="btn btn-ghost btn-sm" disabled={curPage === 0} style={{opacity: curPage === 0 ? 0.45 : 1}} onClick={() => setPage(p => Math.max(0, p - 1))}>← Prev</button>
-            <button className="btn btn-ghost btn-sm" disabled={curPage >= pageCount - 1} style={{opacity: curPage >= pageCount - 1 ? 0.45 : 1}} onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}>Next →</button>
+            <button className="btn btn-ghost btn-sm" disabled={curPage === 0} style={{opacity: curPage === 0 ? 0.45 : 1}} onClick={() => setPage(p => Math.max(0, p - 1))}><Icon name="chevronLeft" size={12}/> Prev</button>
+            <button className="btn btn-ghost btn-sm" disabled={curPage >= pageCount - 1} style={{opacity: curPage >= pageCount - 1 ? 0.45 : 1}} onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}>Next <Icon name="chevronRight" size={12}/></button>
           </div>
         </div>
       )}
@@ -657,22 +700,22 @@ function Table({ columns, rows, onRowClick, emptyMessage, loading, defaultSort }
   );
 }
 
-// Glyphs paired with status colors so state is never conveyed by colour alone (WCAG 1.4.1).
+// Icons paired with status colors so state is never conveyed by colour alone (WCAG 1.4.1).
 const STATUS_GLYPHS = {
-  paid:'✓', 'part-paid':'◐', unpaid:'✕',
-  pending:'○', ordering:'◔', building:'⚒', testing:'◈', packed:'▣', shipped:'➤', fulfilled:'✓', refunded:'↩',
-  new:'★', 'in-review':'◐', quoted:'✉', won:'✓', closed:'—',
-  live:'✓', sold:'✓', bench:'⚒', recycle:'↻',
-  ok:'✓', 'low batt':'◐', offline:'✕', maintenance:'⚒',
-  active:'✓', cancelled:'✕', expired:'—',
+  paid:'check', 'part-paid':'halfCircle', unpaid:'x',
+  pending:'circleEmpty', ordering:'quarterCircle', building:'hammer', testing:'diamond', packed:'square', shipped:'chevronRight', fulfilled:'check', refunded:'undo',
+  new:'star', 'in-review':'halfCircle', quoted:'mail', won:'check', closed:'minus',
+  live:'check', sold:'check', bench:'hammer', recycle:'refresh',
+  ok:'check', 'low batt':'halfCircle', offline:'x', maintenance:'hammer',
+  active:'check', cancelled:'x', expired:'minus',
 };
 
 function StatusPill({ value, map }) {
   const cfg = map[value] || { bg:'var(--bg-deep)', fg:'var(--ink)' };
-  const glyph = STATUS_GLYPHS[String(value || '').toLowerCase()];
+  const iconName = STATUS_GLYPHS[String(value || '').toLowerCase()];
   return (
     <span className="tag" style={{background: cfg.bg, color: cfg.fg, borderColor: cfg.bg, gap:4}}>
-      {glyph && <span aria-hidden="true" style={{fontFamily:'inherit'}}>{glyph}</span>}
+      {iconName && <Icon name={iconName} size={10} strokeWidth={2.5}/>}
       {String(value).toUpperCase()}
     </span>
   );
@@ -749,7 +792,7 @@ function Drawer({ open, onClose, title, children, footer, dirty = false }) {
         <div style={{padding:'16px 24px', borderBottom:'1px solid var(--line)', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12}}>
           <h3 style={{fontSize:16, fontWeight:600, margin:0, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{title}</h3>
           <div style={{display:'flex', alignItems:'center', gap:10, flexShrink:0}}>
-            {dirty && <span className="mono" title="This drawer has unsaved changes" style={{fontSize:9, letterSpacing:'.08em', color:'var(--ochre)'}}>● UNSAVED</span>}
+            {dirty && <span className="mono" title="This drawer has unsaved changes" style={{display:'inline-flex', alignItems:'center', gap:4, fontSize:9, letterSpacing:'.08em', color:'var(--ochre)'}}><Icon name="dot" size={8}/> UNSAVED</span>}
             <button className="icon-btn" onClick={requestClose} aria-label="Close" style={{flexShrink:0}}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
@@ -903,7 +946,7 @@ function AdminOverview({ go }) {
                 a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
                 a.download = 'purchase-order.csv';
                 a.click();
-              }}>Generate PO →</button>
+              }}>Generate PO <Icon name="chevronRight" size={11}/></button>
             )}
           </div>
         </div>
@@ -1029,7 +1072,7 @@ function ExpenseRow({ e, isEditing, expenseForm, setExpenseForm, setExpenseEdit,
             </span>
           : <span className="mono" style={{fontWeight:600, color:'var(--rust)'}}>-${expTotal(e).toLocaleString('en-AU',{minimumFractionDigits:2})}</span>
         }
-        <span style={{fontSize:12, color:'var(--ink-3)'}}>✎</span>
+        <span style={{color:'var(--ink-3)', display:'inline-flex'}}><Icon name="pencil" size={12}/></span>
       </div>
     </div>
   );
@@ -1235,7 +1278,7 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
           ? <div className="row-flex" style={{gap:8}}>
               <button className="btn btn-ghost btn-sm"
                 onClick={() => window.open(`/api/admin/orders/invoice?id=${encodeURIComponent(form.id)}`, '_blank')}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                <Icon name="printer" size={14}/>
                 Print invoice
               </button>
               <button className="btn btn-ghost btn-sm"
@@ -1249,12 +1292,12 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
                   } catch { setTrackingEmailStatus('error'); }
                   setTimeout(() => setTrackingEmailStatus(null), 4000);
                 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg>
+                <Icon name="mail" size={14}/>
                 {trackingEmailStatus === 'sending' ? 'Sending…' : trackingEmailStatus === 'sent' ? 'Email sent' : trackingEmailStatus === 'error' ? 'Failed' : 'Send tracking email'}
               </button>
               {canDeleteOrder && (
                 <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} disabled={deleteBusy} onClick={deleteOrderNow}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+                  <Icon name="trash" size={14}/>
                   {deleteBusy ? 'Deleting…' : 'Delete order'}
                 </button>
               )}
@@ -1328,7 +1371,7 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
             <input className="input" type="number" min="0" step="0.01" placeholder="Price ea." value={li.amount}
               onChange={e => setForm(f => ({...f, lineItems: f.lineItems.map(x => x.id === li.id ? {...x, amount: nonNegInput(e.target.value)} : x)}))}/>
             <button className="btn btn-ghost btn-sm" style={{padding:0, color:'var(--rust)'}}
-              onClick={() => setForm(f => ({...f, lineItems: f.lineItems.filter(x => x.id !== li.id)}))}>✕</button>
+              onClick={() => setForm(f => ({...f, lineItems: f.lineItems.filter(x => x.id !== li.id)}))}><Icon name="x" size={12}/></button>
           </div>
         ))}
         <button className="btn btn-ghost btn-sm" onClick={() => setForm(f => ({...f, lineItems: [...(f.lineItems||[]), { id: 'li-' + Date.now(), description:'', amount:'', qty:1 }]}))}>+ Add line item</button>
@@ -1350,7 +1393,7 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
       </label>
       {form.trackingNumber && (
         <div style={{marginBottom:14}}>
-          <a href={`https://auspost.com.au/mypost/track/#/details/${form.trackingNumber}`} target="_blank" rel="noreferrer" style={{fontSize:13, color:'var(--rust)'}}>Preview tracking link ↗</a>
+          <a href={`https://auspost.com.au/mypost/track/#/details/${form.trackingNumber}`} target="_blank" rel="noreferrer" style={{display:'inline-flex', alignItems:'center', gap:4, fontSize:13, color:'var(--rust)'}}>Preview tracking link <Icon name="externalLink" size={11}/></a>
         </div>
       )}
 
@@ -1359,14 +1402,14 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
         if (f === 'testing') return (
           <div style={{padding:'14px', background:'#fff4d6', border:'1px solid #e6cc88', marginBottom:14}}>
             <div className="mono" style={{fontSize:10, color:'#7a5d10', marginBottom:8}}>TESTING COMPLETE?</div>
-            <button className="btn btn-sm" style={{background:'#0e4a8c', color:'#fff', border:'none'}} onClick={() => saveNow({ fulfilment:'packed' })}>Mark as Packed →</button>
+            <button className="btn btn-sm" style={{background:'#0e4a8c', color:'#fff', border:'none'}} onClick={() => saveNow({ fulfilment:'packed' })}>Mark as Packed <Icon name="chevronRight" size={11}/></button>
           </div>
         );
         if (f === 'packed') return (
           <div style={{padding:'14px', background:'#dceaf5', border:'1px solid #9ec4e8', marginBottom:14}}>
             <div className="mono" style={{fontSize:10, color:'#1668c8', marginBottom:8}}>READY TO SHIP?</div>
-            {!form.trackingNumber && <div style={{fontSize:12, color:'var(--rust)', marginBottom:8}}>⚠ Add a tracking number above before marking as shipped.</div>}
-            <button className="btn btn-sm" style={{background:'var(--ink)', color:'var(--paper)', border:'none', opacity: form.trackingNumber ? 1 : 0.5}} disabled={!form.trackingNumber} onClick={() => saveNow({ fulfilment:'shipped' })}>Mark as Shipped →</button>
+            {!form.trackingNumber && <div style={{display:'flex', alignItems:'center', gap:6, fontSize:12, color:'var(--rust)', marginBottom:8}}><Icon name="alertTriangle" size={13}/> Add a tracking number above before marking as shipped.</div>}
+            <button className="btn btn-sm" style={{background:'var(--ink)', color:'var(--paper)', border:'none', opacity: form.trackingNumber ? 1 : 0.5}} disabled={!form.trackingNumber} onClick={() => saveNow({ fulfilment:'shipped' })}>Mark as Shipped <Icon name="chevronRight" size={11}/></button>
           </div>
         );
         if (f === 'shipped') return (
@@ -1388,7 +1431,7 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
             )}
             {trackingResult?.error && <div style={{fontSize:12, color:'var(--rust)', marginBottom:8}}>{trackingResult.error}</div>}
             {form.lastTrackingStatus && !trackingResult && <div style={{fontSize:12, color:'var(--ink-2)', marginBottom:8}}>Last known: <strong>{form.lastTrackingStatus}</strong></div>}
-            <button className="btn btn-sm" style={{background:'#345526', color:'#fff', border:'none'}} onClick={() => saveNow({ fulfilment:'fulfilled' })}>Mark as Delivered manually →</button>
+            <button className="btn btn-sm" style={{background:'#345526', color:'#fff', border:'none'}} onClick={() => saveNow({ fulfilment:'fulfilled' })}>Mark as Delivered manually <Icon name="chevronRight" size={11}/></button>
           </div>
         );
         return null;
@@ -1523,7 +1566,7 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
               : {background:'transparent', color:'var(--ink-3)', border:'1px solid var(--border)', fontSize:11}}
             onClick={() => saveNow({ gratis: !form.gratis })}
             title={form.gratis ? 'Remove gratis flag — order will appear in reports again' : 'Mark as complimentary — hides from receivables and revenue reports'}>
-            {form.gratis ? '✓ Gratis — click to unmark' : 'Mark as Gratis'}
+            {form.gratis ? <><Icon name="check" size={11}/> Gratis — click to unmark</> : 'Mark as Gratis'}
           </button>
         </div>
       </div>
@@ -1690,7 +1733,7 @@ function AdminOrders({ search, sessionInfo }) {
       <div className="row-flex" style={{gap:8, marginBottom:14, alignItems:'center'}}>
         <span className="mono" style={{fontSize:10, letterSpacing:'.08em', color:'var(--ink-2)'}}>DATE RANGE</span>
         <input className="input" type="date" aria-label="Orders from date" style={{width:150, padding:'5px 8px', fontSize:12}} value={dateRange.from} onChange={e => setDateRange(r => ({ ...r, from: e.target.value }))} />
-        <span style={{color:'var(--ink-3)', fontSize:12}}>→</span>
+        <span style={{color:'var(--ink-3)', display:'inline-flex'}}><Icon name="chevronRight" size={12}/></span>
         <input className="input" type="date" aria-label="Orders to date" style={{width:150, padding:'5px 8px', fontSize:12}} value={dateRange.to} onChange={e => setDateRange(r => ({ ...r, to: e.target.value }))} />
         {(dateRange.from || dateRange.to) && (
           <button className="btn btn-ghost btn-sm" onClick={() => setDateRange({ from:'', to:'' })}>Clear</button>
@@ -1980,7 +2023,7 @@ function RepairJobDrawer({ card, expenses, customers, staff, onSave, onDelete, o
           {li.id==='parts-auto'
             ? <span style={{fontSize:10,color:'var(--ink-3)',textAlign:'center'}}>auto</span>
             : <button className="btn btn-ghost btn-sm" style={{padding:0,color:'var(--rust)'}}
-                onClick={()=>setForm(f=>({...f,lineItems:f.lineItems.filter(x=>x.id!==li.id)}))}>✕</button>}
+                onClick={()=>setForm(f=>({...f,lineItems:f.lineItems.filter(x=>x.id!==li.id)}))}><Icon name="x" size={12}/></button>}
         </div>
       ))}
       <div className="row-flex" style={{marginBottom:8}}>
@@ -2001,7 +2044,7 @@ function RepairJobDrawer({ card, expenses, customers, staff, onSave, onDelete, o
           <div style={{display:'flex',alignItems:'center',gap:8}}>
             <span className="mono" style={{fontSize:10,color:'var(--ink-3)'}}>{p.date}</span>
             <button className="btn btn-ghost btn-sm" style={{padding:'2px 6px',fontSize:11,color:'var(--rust)'}}
-              onClick={()=>setForm(f=>({...f,payments:f.payments.filter((_,idx)=>idx!==i)}))}>✕</button>
+              onClick={()=>setForm(f=>({...f,payments:f.payments.filter((_,idx)=>idx!==i)}))}><Icon name="x" size={12}/></button>
           </div>
         </div>
       ))}
@@ -2266,13 +2309,13 @@ function QuoteCreator({ context, onBack, onQuoteSent }) {
       {/* Page header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 28 }}>
         <div>
-          <a style={{ cursor: 'pointer', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--rust)', letterSpacing: '.08em' }} onClick={onBack}>← BACK TO INBOX</a>
+          <a style={{ display:'inline-flex', alignItems:'center', gap:4, cursor: 'pointer', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--rust)', letterSpacing: '.08em' }} onClick={onBack}><Icon name="chevronLeft" size={10}/> BACK TO INBOX</a>
           <h2 className="serif" style={{ fontSize: 30, marginTop: 6, fontWeight: 400 }}>{context?.draftQuote ? 'Edit Quote' : 'Quote Builder'}</h2>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {msg.text && <span style={{ fontSize: 13, color: msg.ok ? 'var(--eucalyptus)' : 'var(--rust)' }}>{msg.text}</span>}
           <button className="btn btn-ghost btn-sm" disabled={sending} onClick={doSaveDraft}>Save draft</button>
-          <button className="btn btn-rust btn-sm" disabled={sending} onClick={doSend} style={{ minWidth: 130 }}>{sending ? 'Sending…' : 'Send quote →'}</button>
+          <button className="btn btn-rust btn-sm" disabled={sending} onClick={doSend} style={{ minWidth: 130 }}>{sending ? 'Sending…' : <>Send quote <Icon name="chevronRight" size={11}/></>}</button>
         </div>
       </div>
 
@@ -2599,7 +2642,7 @@ function AdminQuotes() {
               </div>
               <div className="row-flex" style={{marginTop:14, gap:8, justifyContent:'flex-end'}}>
                 <button className="btn btn-ghost btn-sm" onClick={() => { setAssignee(''); setAssignTarget(q); }}>Assign</button>
-                <button className="btn btn-rust btn-sm" onClick={() => openQuoteCreator(q)}>{q.status === 'quoted' ? 'Edit & Resend →' : 'Build quote →'}</button>
+                <button className="btn btn-rust btn-sm" onClick={() => openQuoteCreator(q)}>{q.status === 'quoted' ? <>Edit &amp; Resend <Icon name="chevronRight" size={11}/></> : <>Build quote <Icon name="chevronRight" size={11}/></>}</button>
               </div>
             </div>
           ))}
@@ -2619,7 +2662,7 @@ function AdminQuotes() {
               : quotes.filter(q => q.status === 'new').map((q,i) => (
                 <li key={i} style={{display:'flex', justifyContent:'space-between'}}>
                   <span className="mono" style={{fontSize:12}}>{q.id}</span>
-                  <a className="mono" style={{fontSize:11, color:'var(--rust)', cursor:'pointer'}} onClick={() => openQuoteCreator(q)}>BUILD →</a>
+                  <a className="mono" style={{display:'inline-flex', alignItems:'center', gap:4, fontSize:11, color:'var(--rust)', cursor:'pointer'}} onClick={() => openQuoteCreator(q)}>BUILD <Icon name="chevronRight" size={10}/></a>
                 </li>
               ))
             }
@@ -2876,9 +2919,9 @@ function AdminAvailability() {
         <div className="row-flex" style={{justifyContent:'space-between', marginBottom:12}}>
           <span className="eyebrow">CALENDAR — CLICK A DAY TO BLOCK IT ENTIRELY</span>
           <div className="row-flex" style={{gap:8}}>
-            <button className="btn btn-ghost btn-sm" onClick={() => setMonthCursor(c => new Date(c.getFullYear(), c.getMonth()-1, 1))}>←</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setMonthCursor(c => new Date(c.getFullYear(), c.getMonth()-1, 1))}><Icon name="chevronLeft" size={12}/></button>
             <span className="mono" style={{fontSize:12, minWidth:120, textAlign:'center'}}>{monthCursor.toLocaleString('en-AU',{month:'long', year:'numeric'})}</span>
-            <button className="btn btn-ghost btn-sm" onClick={() => setMonthCursor(c => new Date(c.getFullYear(), c.getMonth()+1, 1))}>→</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setMonthCursor(c => new Date(c.getFullYear(), c.getMonth()+1, 1))}><Icon name="chevronRight" size={12}/></button>
           </div>
         </div>
         <div style={{display:'grid', gridTemplateColumns:'repeat(7, 1fr)', gap:6}}>
@@ -4023,7 +4066,7 @@ function MarkdownField({ value, onChange, placeholder, minHeight = 260 }) {
         ))}
         <button type="button" className="btn btn-ghost btn-sm" disabled={uploading}
           onMouseDown={e => e.preventDefault()} onClick={() => fileRef.current && fileRef.current.click()}>
-          {uploading ? 'Uploading…' : '📷 Image'}
+          {uploading ? 'Uploading…' : <><Icon name="camera" size={12}/> Image</>}
         </button>
         <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" style={{display:'none'}}
           onChange={e => { const f = e.target.files[0]; e.target.value = ''; insertImage(f); }} />
@@ -4170,8 +4213,8 @@ function StepRow({ step, index, total, onChange, onRemove, onMove }) {
       <div className="row-flex" style={{justifyContent:'space-between', marginBottom:12}}>
         <span className="mono" style={{fontSize:11, color:'var(--ink-2)', letterSpacing:'.08em'}}>STEP {index + 1}</span>
         <div className="row-flex" style={{gap:4}}>
-          <button type="button" className="btn btn-ghost btn-sm" disabled={index === 0} style={{opacity:index === 0 ? 0.4 : 1}} onClick={() => onMove(-1)} title="Move up">↑</button>
-          <button type="button" className="btn btn-ghost btn-sm" disabled={index === total - 1} style={{opacity:index === total - 1 ? 0.4 : 1}} onClick={() => onMove(1)} title="Move down">↓</button>
+          <button type="button" className="btn btn-ghost btn-sm" disabled={index === 0} style={{opacity:index === 0 ? 0.4 : 1}} onClick={() => onMove(-1)} title="Move up"><Icon name="chevronUp" size={12}/></button>
+          <button type="button" className="btn btn-ghost btn-sm" disabled={index === total - 1} style={{opacity:index === total - 1 ? 0.4 : 1}} onClick={() => onMove(1)} title="Move down"><Icon name="chevronDown" size={12}/></button>
           <button type="button" className="btn btn-ghost btn-sm" onClick={onRemove}>Remove</button>
         </div>
       </div>
@@ -4284,14 +4327,14 @@ function AdminTutorials() {
       <div style={{padding:32}}>
         <div className="row-flex" style={{justifyContent:'space-between', marginBottom:18, flexWrap:'wrap', gap:12}}>
           <div>
-            <a className="mono" style={{fontSize:11, color:'var(--rust)', cursor:'pointer'}} onClick={() => setEditId(null)}>← Back to list</a>
+            <a className="mono" style={{display:'inline-flex', alignItems:'center', gap:4, fontSize:11, color:'var(--rust)', cursor:'pointer'}} onClick={() => setEditId(null)}><Icon name="chevronLeft" size={10}/> Back to list</a>
             <h2 className="serif" style={{fontSize:32, marginTop:6}}>{editId === 'new' ? 'New tutorial' : form.title}</h2>
           </div>
           <div className="row-flex" style={{gap:8}}>
             {editId !== 'new' && <button className="btn btn-ghost btn-sm" disabled={deleting} onClick={() => removeTutorial(form)}>{deleting ? 'Deleting…' : 'Delete'}</button>}
             <button className="btn btn-ghost btn-sm" onClick={() => setPreviewing(true)}>Preview</button>
             <button className="btn btn-ghost btn-sm" disabled={saving} onClick={() => save({ status:'Draft' })}>{saving ? 'Saving…' : 'Save draft'}</button>
-            <button className="btn btn-rust btn-sm" disabled={saving} onClick={() => save({ status:'Published' })}>{saving ? 'Publishing…' : 'Publish →'}</button>
+            <button className="btn btn-rust btn-sm" disabled={saving} onClick={() => save({ status:'Published' })}>{saving ? 'Publishing…' : <>Publish <Icon name="chevronRight" size={11}/></>}</button>
           </div>
         </div>
         {notice.msg && <div style={{marginBottom:12, fontSize:13, color:notice.type==='error'?'var(--rust)':'var(--eucalyptus)'}}>{notice.msg}</div>}
@@ -4498,8 +4541,8 @@ function AdminTutorials() {
           { key:'status', label:'Status', w:'110px', render:r => <span className={`tag ${r.status==='Published'?'tag-euc':r.status==='Draft'?'tag-ochre':'tag-outline'}`}>{(r.status||'').toUpperCase()}</span>, sort:true },
           { key:'actions', label:'', w:'90px', render:r => (
             <div className="row-flex" style={{gap:4}} onClick={e=>e.stopPropagation()}>
-              <button type="button" className="btn btn-ghost btn-sm" title="Duplicate" onClick={()=>duplicate(r)}>⎘</button>
-              <button type="button" className="btn btn-ghost btn-sm" title="Delete" onClick={()=>removeTutorial(r)}>🗑</button>
+              <button type="button" className="btn btn-ghost btn-sm" title="Duplicate" onClick={()=>duplicate(r)}><Icon name="copy" size={12}/></button>
+              <button type="button" className="btn btn-ghost btn-sm" title="Delete" onClick={()=>removeTutorial(r)}><Icon name="trash" size={12}/></button>
             </div>
           ) },
         ]}
@@ -5000,11 +5043,11 @@ function MergeCustomerModal({ customers, onClose, onMerged }) {
                     <td style={{padding:'8px',fontWeight:600,fontSize:12,color:'var(--ink-2)'}}>{f.label}</td>
                     <td style={{padding:'8px',cursor:'pointer',background:chosen==='a'?'var(--bg-deep)':'transparent',borderRadius:4}} onClick={()=>pick(f.key,'a')}>
                       <span style={{fontSize:12}}>{av || <em style={{color:'var(--ink-3)'}}>empty</em>}</span>
-                      {chosen==='a' && <span style={{marginLeft:6,fontSize:10,color:'var(--rust)',fontWeight:700}}>✓ KEEP</span>}
+                      {chosen==='a' && <span style={{marginLeft:6,display:'inline-flex',alignItems:'center',gap:3,fontSize:10,color:'var(--rust)',fontWeight:700}}><Icon name="check" size={9} strokeWidth={3}/> KEEP</span>}
                     </td>
                     <td style={{padding:'8px',cursor:'pointer',background:chosen==='b'?'var(--bg-deep)':'transparent',borderRadius:4}} onClick={()=>pick(f.key,'b')}>
                       <span style={{fontSize:12}}>{bv || <em style={{color:'var(--ink-3)'}}>empty</em>}</span>
-                      {chosen==='b' && <span style={{marginLeft:6,fontSize:10,color:'var(--rust)',fontWeight:700}}>✓ KEEP</span>}
+                      {chosen==='b' && <span style={{marginLeft:6,display:'inline-flex',alignItems:'center',gap:3,fontSize:10,color:'var(--rust)',fontWeight:700}}><Icon name="check" size={9} strokeWidth={3}/> KEEP</span>}
                     </td>
                   </tr>
                 );
@@ -5015,7 +5058,7 @@ function MergeCustomerModal({ customers, onClose, onMerged }) {
         <div className="row-flex" style={{justifyContent:'flex-end',gap:8,marginTop:4}}>
           <button className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
           <button className="btn btn-sm" style={{background:'var(--rust)',color:'#fff'}} disabled={!a||!b||busy} onClick={doMerge}>
-            {busy ? 'Merging…' : 'Merge →'}
+            {busy ? 'Merging…' : <>Merge <Icon name="chevronRight" size={11}/></>}
           </button>
         </div>
       </div>
@@ -5309,7 +5352,7 @@ function AdminSellers() {
           </div>}>
           {payoutsDone ? (
             <div>
-              <div className="mono" style={{fontSize:12, color:'var(--eucalyptus)', marginBottom:8}}>✓ PAYOUTS QUEUED</div>
+              <div className="mono" style={{display:'flex', alignItems:'center', gap:5, fontSize:12, color:'var(--eucalyptus)', marginBottom:8}}><Icon name="check" size={11} strokeWidth={3}/> PAYOUTS QUEUED</div>
               <p style={{fontSize:13, color:'var(--ink-2)'}}>EFTs for {soldRows.length} seller{soldRows.length !== 1 ? 's' : ''} have been queued. They will appear in bank statements within 1–2 business days.</p>
             </div>
           ) : soldRows.length === 0 ? (
@@ -6028,7 +6071,7 @@ function AdminExpenses() {
           { key:'amount', label:'Amount', w:'110px', render:r => <span className="mono" style={{fontWeight:600,color:'var(--rust)'}}>-${expTotal(r).toLocaleString('en-AU',{minimumFractionDigits:2})}</span> },
           { key:'date', label:'Date', w:'120px', render:r => <span className="mono" style={{fontSize:11,color:'var(--ink-2)'}}>{r.date||'—'}</span> },
           { key:'jobId', label:'Linked job', w:'140px', render:r => r.jobId ? <span className="mono" style={{fontSize:11,color:'var(--rust)'}}>{r.jobId}</span> : <span style={{color:'var(--ink-3)'}}>—</span> },
-          { key:'receipt', label:'Receipt', w:'90px', render:r => r.receipt ? <a href={r.receipt} target="_blank" rel="noopener noreferrer" style={{color:'var(--rust)',fontSize:12}}>View ↗</a> : <span style={{color:'var(--ink-3)'}}>—</span> },
+          { key:'receipt', label:'Receipt', w:'90px', render:r => r.receipt ? <a href={r.receipt} target="_blank" rel="noopener noreferrer" style={{display:'inline-flex', alignItems:'center', gap:4, color:'var(--rust)',fontSize:12}}>View <Icon name="externalLink" size={10}/></a> : <span style={{color:'var(--ink-3)'}}>—</span> },
           { key:'notes', label:'Notes', w:'1fr', render:r => <span style={{fontSize:12,color:'var(--ink-2)'}}>{r.notes||''}</span> },
         ]}
         rows={visible}
@@ -6085,7 +6128,7 @@ function AdminExpenses() {
             <span className="label">Receipt</span>
             {form.receipt && (
               <div style={{marginBottom:8,display:'flex',gap:8,alignItems:'center'}}>
-                <a href={form.receipt} target="_blank" rel="noopener noreferrer" style={{color:'var(--rust)',fontSize:13}}>View current receipt ↗</a>
+                <a href={form.receipt} target="_blank" rel="noopener noreferrer" style={{display:'inline-flex', alignItems:'center', gap:4, color:'var(--rust)',fontSize:13}}>View current receipt <Icon name="externalLink" size={11}/></a>
                 <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={() => setForm(f=>({...f,receipt:null}))}>Remove</button>
               </div>
             )}
@@ -6220,7 +6263,7 @@ function PLView() {
           </button>
           {data && (
             <button className="btn" style={{background:'#345526', color:'#fff'}} onClick={exportPdf}>
-              ↓ Export PDF
+              <Icon name="download" size={13}/> Export PDF
             </button>
           )}
         </div>
@@ -6292,7 +6335,7 @@ function PLView() {
                 <tr key={cat} onClick={() => setExpandedCat(expandedCat===cat ? null : cat)}
                   style={{cursor:'pointer', background: expandedCat===cat ? 'var(--bg-deep)' : 'transparent'}}>
                   <td style={{padding:'6px 0', color:'var(--ink-2)'}}>
-                    <span style={{marginRight:6, fontSize:11, color:'var(--ink-3)'}}>{expandedCat===cat?'▾':'▸'}</span>
+                    <span style={{marginRight:6, display:'inline-flex', color:'var(--ink-3)'}}><Icon name={expandedCat===cat?'chevronDown':'chevronRight'} size={11}/></span>
                     {catLabels[cat]||cat.charAt(0).toUpperCase()+cat.slice(1)}
                   </td>
                   <td style={{textAlign:'right', fontFamily:'monospace', color:'var(--rust)'}}>({fmtAUD(amt)})</td>
@@ -6552,7 +6595,7 @@ function BASView() {
           </button>
           {data && (
             <button className="btn" style={{background:'#003087', color:'#fff'}} onClick={exportPdf}>
-              ↓ Export BAS PDF
+              <Icon name="download" size={13}/> Export BAS PDF
             </button>
           )}
         </div>
@@ -7014,7 +7057,7 @@ function VehicleLogView() {
               ))}
             </div>
           </div>
-          <button className="btn" style={{background:'#345526',color:'#fff'}} onClick={exportPdf}>↓ Export PDF</button>
+          <button className="btn" style={{background:'#345526',color:'#fff'}} onClick={exportPdf}><Icon name="download" size={13}/> Export PDF</button>
         </div>
         <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))', gap:12}}>
           {[
@@ -7078,7 +7121,7 @@ function VehicleLogView() {
                   <td style={{textAlign:'right', fontFamily:'monospace'}}>{(Number(e.km)||0).toFixed(1)}</td>
                   <td style={{padding:'6px 0', color:'var(--ink-2)'}}>{e.purpose||'—'}</td>
                   <td style={{textAlign:'right'}}>
-                    <button className="btn" style={{padding:'2px 8px', fontSize:11, color:'var(--rust)', background:'transparent', border:'none', cursor:'pointer'}} onClick={() => deleteEntry(e.id)}>✕</button>
+                    <button className="btn" style={{padding:'2px 8px', fontSize:11, color:'var(--rust)', background:'transparent', border:'none', cursor:'pointer'}} onClick={() => deleteEntry(e.id)}><Icon name="x" size={12}/></button>
                   </td>
                 </tr>
               ))}
@@ -7285,7 +7328,7 @@ function ReceivablesView() {
     <>
       <div className="card" style={{padding:'14px 22px', marginBottom:20, display:'flex', alignItems:'center', gap:16}}>
         <button className="btn btn-rust" onClick={load} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</button>
-        {data && <button className="btn" style={{background:'#345526',color:'#fff'}} onClick={exportPdf}>↓ Export PDF</button>}
+        {data && <button className="btn" style={{background:'#345526',color:'#fff'}} onClick={exportPdf}><Icon name="download" size={13}/> Export PDF</button>}
         {data && <span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>As at {fmtDate(data.asAt)}</span>}
         {error && <span className="mono" style={{fontSize:12, color:'var(--rust)'}}>{error}</span>}
       </div>
@@ -7374,7 +7417,7 @@ function StockView() {
     <>
       <div className="card" style={{padding:'14px 22px', marginBottom:20, display:'flex', alignItems:'center', gap:16, flexWrap:'wrap'}}>
         <button className="btn btn-rust" onClick={load} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</button>
-        {data && <button className="btn" style={{background:'#345526',color:'#fff'}} onClick={exportPdf}>↓ Export PDF</button>}
+        {data && <button className="btn" style={{background:'#345526',color:'#fff'}} onClick={exportPdf}><Icon name="download" size={13}/> Export PDF</button>}
         {data && <span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>As at {fmtDate(data.asAt)}</span>}
         {error && <span className="mono" style={{fontSize:12, color:'var(--rust)'}}>{error}</span>}
       </div>
@@ -8118,6 +8161,19 @@ function SettingsSecurityTab({ security, setSecurity, savedSecurity, securityDir
 }
 SettingsSecurityTab = React.memo(SettingsSecurityTab);
 
+// Messages are prefixed '✓ ' at the source to mark success; this strips that
+// sentinel and renders a proper icon instead of leaving the raw glyph on screen.
+function DangerMsgLine({ msg, okColor = 'var(--eucalyptus)', errColor = 'var(--rust)' }) {
+  if (!msg) return null;
+  const ok = msg.startsWith('✓ ');
+  return (
+    <div style={{display:'flex', alignItems:'center', gap:5, fontSize:12, marginBottom:6, color: ok ? okColor : errColor}}>
+      {ok && <Icon name="check" size={11} strokeWidth={3}/>}
+      {ok ? msg.slice(2) : msg}
+    </div>
+  );
+}
+
 function SettingsAdvancedTab({ maintenanceEnabled, setMaintenanceEnabled, maintConfirm, setMaintConfirm, dangerMsg, setDangerMsg, sectionBusy, setSectionBusy }) {
   return (
     <div style={{display:'grid', gap:24}}>
@@ -8127,7 +8183,7 @@ function SettingsAdvancedTab({ maintenanceEnabled, setMaintenanceEnabled, maintC
           <div style={{padding:'14px', background:'var(--bg-elev)', border:'1px solid var(--line)'}}>
             <div style={{fontWeight:600}}>Rebuild search index</div>
             <p style={{fontSize:13, color:'var(--ink-2)', margin:'4px 0 8px'}}>Re-indexes products and tutorials.</p>
-            {dangerMsg.rebuild && <div style={{fontSize:12, marginBottom:6, color:dangerMsg.rebuild.includes('✓')?'var(--eucalyptus)':'var(--rust)'}}>{dangerMsg.rebuild}</div>}
+            <DangerMsgLine msg={dangerMsg.rebuild}/>
             <button className="btn btn-ghost btn-sm" disabled={sectionBusy==='rebuild'} onClick={async () => {
               setSectionBusy('rebuild');
               setDangerMsg(m => ({...m, rebuild:'Rebuilding…'}));
@@ -8140,7 +8196,7 @@ function SettingsAdvancedTab({ maintenanceEnabled, setMaintenanceEnabled, maintC
           <div style={{padding:'14px', background:'var(--bg-elev)', border:'1px solid var(--line)'}}>
             <div style={{fontWeight:600}}>Export all data</div>
             <p style={{fontSize:13, color:'var(--ink-2)', margin:'4px 0 8px'}}>JSON dump of everything — products, orders, customers, content.</p>
-            {dangerMsg.export && <div style={{fontSize:12, marginBottom:6, color:dangerMsg.export.includes('✓')?'var(--eucalyptus)':'var(--rust)'}}>{dangerMsg.export}</div>}
+            <DangerMsgLine msg={dangerMsg.export}/>
             <button className="btn btn-ghost btn-sm" disabled={sectionBusy==='export'} onClick={async () => {
               setSectionBusy('export');
               setDangerMsg(m => ({...m, export:'Generating…'}));
@@ -8162,8 +8218,8 @@ function SettingsAdvancedTab({ maintenanceEnabled, setMaintenanceEnabled, maintC
           <div style={{padding:'14px', background:'#3a1a14', color:'var(--paper)', border:'1px solid #7a3a18'}}>
             <div style={{fontWeight:600, color:'#ffb59c'}}>Maintenance mode</div>
             <p style={{fontSize:13, margin:'4px 0 8px', color:'var(--bg-deep)'}}>Shows a holding page to non-staff visitors.</p>
-            {maintenanceEnabled && <div style={{fontSize:12, marginBottom:6, color:'#ffb59c', fontWeight:600}}>⚠ Maintenance mode is currently ON</div>}
-            {dangerMsg.maint && <div style={{fontSize:12, marginBottom:6, color:'#ffb59c'}}>{dangerMsg.maint}</div>}
+            {maintenanceEnabled && <div style={{display:'flex', alignItems:'center', gap:6, fontSize:12, marginBottom:6, color:'#ffb59c', fontWeight:600}}><Icon name="alertTriangle" size={13}/> Maintenance mode is currently ON</div>}
+            <DangerMsgLine msg={dangerMsg.maint} okColor="#ffb59c" errColor="#ffb59c"/>
             {maintenanceEnabled ? (
               <button className="btn btn-ghost btn-sm" disabled={sectionBusy==='maint'} onClick={async () => {
                 setSectionBusy('maint');
@@ -8660,7 +8716,7 @@ function AdminMemberships() {
                   </div>
                 </div>
                 <button className="btn btn-rust btn-sm" disabled={activating === o.id} onClick={() => activatePending(o)}>
-                  {activating === o.id ? 'Activating…' : 'Activate →'}
+                  {activating === o.id ? 'Activating…' : <>Activate <Icon name="chevronRight" size={11}/></>}
                 </button>
               </div>
             ))
@@ -8681,7 +8737,7 @@ function AdminMemberships() {
               <div className="row-flex" style={{ gap: 8 }}>
                 <button className="btn btn-ghost btn-sm" onClick={() => { setEdit(null); setNotice(''); }}>Cancel</button>
                 <button className="btn btn-ghost btn-sm" disabled={saving} onClick={() => saveTier('draft')}>Save draft</button>
-                <button className="btn btn-rust btn-sm" disabled={saving} onClick={() => saveTier('published')}>Publish →</button>
+                <button className="btn btn-rust btn-sm" disabled={saving} onClick={() => saveTier('published')}>Publish <Icon name="chevronRight" size={11}/></button>
               </div>
             </div>
           }
@@ -8764,8 +8820,8 @@ function AdminAuditLog() {
       <div className="row-flex" style={{justifyContent:'space-between', marginBottom:18}}>
         <span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>// {total} ENTRIES · PAGE {page + 1} OF {pageCount}</span>
         <div className="row-flex" style={{gap:8}}>
-          <button className="btn btn-ghost btn-sm" disabled={page === 0} onClick={() => setPage(p => p - 1)}>← Prev</button>
-          <button className="btn btn-ghost btn-sm" disabled={page >= pageCount - 1} onClick={() => setPage(p => p + 1)}>Next →</button>
+          <button className="btn btn-ghost btn-sm" disabled={page === 0} onClick={() => setPage(p => p - 1)}><Icon name="chevronLeft" size={12}/> Prev</button>
+          <button className="btn btn-ghost btn-sm" disabled={page >= pageCount - 1} onClick={() => setPage(p => p + 1)}>Next <Icon name="chevronRight" size={12}/></button>
         </div>
       </div>
       {loading ? <div style={{color:'var(--ink-2)', fontSize:13}}>Loading…</div> : entries.length === 0 ? (
@@ -8915,7 +8971,7 @@ function AdminPage({ go }) {
         <AdminTopbar title={view.t} subtitle={subtitle} search={search} onSearch={setSearch}
           actions={
             <div className="row-flex" style={{gap:8}}>
-              <a className="btn btn-ghost btn-sm" href={siteUrl ? siteUrl + '/home' : '/'} target="_blank" rel="noreferrer" style={{textDecoration:'none'}} title="Open public site in a new tab">View public site ↗</a>
+              <a className="btn btn-ghost btn-sm" href={siteUrl ? siteUrl + '/home' : '/'} target="_blank" rel="noreferrer" style={{textDecoration:'none'}} title="Open public site in a new tab">View public site <Icon name="externalLink" size={11}/></a>
             </div>
           }
         />
