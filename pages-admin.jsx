@@ -990,7 +990,7 @@ function ExpenseRow({ e, isEditing, expenseForm, setExpenseForm, setExpenseEdit,
         <label className="field" style={{margin:0}}><span className="label">Part status</span>
           <select className="select" value={ef.partStatus||''} onChange={ev=>setExpenseForm(f=>({...f,partStatus:ev.target.value}))}>
             <option value="">— N/A —</option>
-            {['ordered','arrived','installed','returned'].map(s=><option key={s}>{s}</option>)}
+            {['ordered','arrived','installed','returned'].map(s=><option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
           </select>
         </label>
       </div>
@@ -1474,7 +1474,7 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
               <label className="field" style={{margin:0}}><span className="label">Part status</span>
                 <select className="select" value={expenseForm.partStatus||''} onChange={e=>setExpenseForm(f=>({...f,partStatus:e.target.value}))}>
                   <option value="">— N/A —</option>
-                  {['ordered','arrived','installed','returned'].map(s=><option key={s}>{s}</option>)}
+                  {['ordered','arrived','installed','returned'].map(s=><option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
                 </select>
               </label>
             </div>
@@ -1903,7 +1903,7 @@ function RepairJobDrawer({ card, expenses, customers, staff, onSave, onDelete, o
         <label className="field"><span className="label">{selectedCustomerId ? 'Customer name' : 'New customer name'}<ReqMark/></span>
           <input className="input" value={form.customer} onChange={e=>set('customer',e.target.value)} /></label>
         <label className="field"><span className="label">Phone</span>
-          <input className="input" value={form.phone} onChange={e=>set('phone',e.target.value)} placeholder="0400 000 000" /></label>
+          <input className="input" type="tel" value={form.phone} onChange={e=>set('phone',e.target.value)} placeholder="0400 000 000" /></label>
       </div>
       <label className="field" style={S.mb12}><span className="label">Email — status notifications &amp; portal access</span>
         <input className="input" type="email" value={form.email} onChange={e=>set('email',e.target.value)} placeholder="customer@example.com" /></label>
@@ -5187,7 +5187,7 @@ function AdminCustomers() {
           <label className="field"><span className="label">Name</span><input className="input" value={form.name||''} onChange={e=>setForm({...form,name:e.target.value})}/></label>
           <label className="field"><span className="label">Location</span><input className="input" value={form.loc||''} onChange={e=>setForm({...form,loc:e.target.value})}/></label>
           <label className="field"><span className="label">Email</span><input className="input" type="email" value={form.email||''} onChange={e=>setForm({...form,email:e.target.value})}/></label>
-          <label className="field"><span className="label">Phone</span><input className="input" value={form.phone||''} onChange={e=>setForm({...form,phone:e.target.value})}/></label>
+          <label className="field"><span className="label">Phone</span><input className="input" type="tel" value={form.phone||''} onChange={e=>setForm({...form,phone:e.target.value})}/></label>
           <label className="field"><span className="label">Tags (comma-separated)</span><input className="input" value={form.tagsStr||''} onChange={e=>setForm({...form,tagsStr:e.target.value})}/></label>
 
           <label className="field"><span className="label">Testimonial quote</span><textarea className="input" rows={3} style={{resize:'vertical'}} value={form.testimonial||''} onChange={e=>setForm({...form,testimonial:e.target.value})} placeholder="In their own words…"/></label>
@@ -5993,7 +5993,7 @@ function AdminExpenses() {
             </label>
           </div>
           <div className="grid-2" style={{gap:14}}>
-            <label className="field"><span className="label">Amount (AUD, per item)</span><input className="input" type="number" step="0.01" value={form.amount||0} onChange={e=>setForm({...form,amount:Number(e.target.value)})}/></label>
+            <label className="field"><span className="label">Amount (AUD, per item)</span><input className="input" type="number" min="0" step="0.01" value={form.amount||0} onChange={e=>setForm({...form,amount:Number(nonNegInput(e.target.value))||0})}/></label>
             <label className="field"><span className="label">Total</span><input className="input" disabled value={`$${expTotal(form).toLocaleString('en-AU',{minimumFractionDigits:2})}`}/></label>
           </div>
           <label className="field"><span className="label">Date</span><input className="input" type="date" value={auDateToISO(form.date)} onChange={e=>setForm({...form,date:isoToAuDate(e.target.value)})}/></label>
@@ -7602,7 +7602,7 @@ function SellerSettings({ sessionInfo = {} }) {
         <span className="eyebrow">MY DETAILS</span>
         <label className="field" style={{marginTop:8}}><span className="label">Name</span><input className="input" value={form.name||''} onChange={e=>setForm({...form,name:e.target.value})}/></label>
         <label className="field"><span className="label">Email</span><input className="input" type="email" value={form.email||''} onChange={e=>setForm({...form,email:e.target.value})}/></label>
-        <label className="field"><span className="label">Phone</span><input className="input" value={form.phone||''} onChange={e=>setForm({...form,phone:e.target.value})}/></label>
+        <label className="field"><span className="label">Phone</span><input className="input" type="tel" value={form.phone||''} onChange={e=>setForm({...form,phone:e.target.value})}/></label>
         <label className="field"><span className="label">Avatar colour</span><input type="color" value={form.color||'#d7c7a6'} onChange={e=>setForm({...form,color:e.target.value})} style={{width:48,height:32,padding:2,border:'1px solid var(--line)',borderRadius:4,cursor:'pointer'}}/></label>
         <label className="field"><span className="label">New PIN (leave blank to keep current)</span><input className="input" type="password" inputMode="numeric" maxLength={6} value={form.newPin||''} onChange={e=>setForm({...form,newPin:e.target.value.replace(/\D/g,'').slice(0,6)})} placeholder="4–6 digits"/></label>
         <button className="btn btn-rust btn-sm" style={{marginTop:4,alignSelf:'flex-start'}} disabled={busy} onClick={save}>{busy?'Saving…':'Save'}</button>
@@ -7824,7 +7824,7 @@ function SettingsGeneralTab({ shop, setShop, savedShop, announcement, setAnnounc
           <label className="field"><span className="label">Map latitude</span><input className="input" value={shop.mapLat||''} onChange={(e) => setShop({ ...shop, mapLat: e.target.value })} placeholder="-35.9833"/></label>
           <label className="field"><span className="label">Map longitude</span><input className="input" value={shop.mapLng||''} onChange={(e) => setShop({ ...shop, mapLng: e.target.value })} placeholder="144.7500"/></label>
         </div>
-        <label className="field"><span className="label">Phone</span><input className="input" value={shop.phone} onChange={(e) => setShop({ ...shop, phone: e.target.value })}/></label>
+        <label className="field"><span className="label">Phone</span><input className="input" type="tel" value={shop.phone} onChange={(e) => setShop({ ...shop, phone: e.target.value })}/></label>
         <label className="field"><span className="label">Contact email</span><input className="input" type="email" value={shop.email||''} onChange={(e) => setShop({ ...shop, email: e.target.value })}/></label>
         <label className="field"><span className="label">Tagline</span><input className="input" value={shop.tagline} onChange={(e) => setShop({ ...shop, tagline: e.target.value })}/></label>
         <label className="field"><span className="label">Description (footer)</span><textarea className="textarea" value={shop.description||''} onChange={(e) => setShop({ ...shop, description: e.target.value })} style={{minHeight:80}} placeholder="e.g. An independent electronics outpost..."/></label>
@@ -7917,7 +7917,7 @@ function SettingsStaffTab({ staffMembers, staffForm, setStaffForm, staffBusy, on
               </select>
             </label>
             <label className="field"><span className="label">Email</span><input className="input" type="email" value={staffForm.email||''} onChange={e=>setStaffForm({...staffForm,email:e.target.value})}/></label>
-            <label className="field"><span className="label">Phone</span><input className="input" value={staffForm.phone||''} onChange={e=>setStaffForm({...staffForm,phone:e.target.value})}/></label>
+            <label className="field"><span className="label">Phone</span><input className="input" type="tel" value={staffForm.phone||''} onChange={e=>setStaffForm({...staffForm,phone:e.target.value})}/></label>
             <label className="field"><span className="label">Status</span>
               <select className="select" value={staffForm.status||'active'} onChange={e=>setStaffForm({...staffForm,status:e.target.value})}>
                 {['active','inactive'].map(s=><option key={s}>{s}</option>)}
