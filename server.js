@@ -1459,6 +1459,24 @@ function resolveOgTags(pathname) {
     }
     return { title: 'Services — Outback Electronics', description: 'Expert repairs and field service for rugged electronics.', image: '/assets/og-image.webp', url: OG_BASE_URL + pathname };
   }
+  // Tutorial deep link: /tutorial/<slug-or-id>
+  if (pathname.startsWith('/tutorial/')) {
+    const id = decodeURIComponent(pathname.slice('/tutorial/'.length));
+    if (id) {
+      const t = readTutorials().find(x => x.status === 'Published' && (x.slug === id || String(x.id) === id));
+      if (t) {
+        const desc = t.description ? stripHtml(t.description).slice(0, 160) : `${t.title} — a tutorial from Outback Electronics.`;
+        return {
+          title: `${t.title} — Outback Electronics`,
+          description: desc,
+          image: t.coverImage || '/assets/og-image.webp',
+          url: `${OG_BASE_URL}/tutorial/${encodeURIComponent(id)}`,
+          type: 'article',
+        };
+      }
+    }
+    return { title: 'Tutorials — Outback Electronics', description: 'Field guides, how-to videos and repair tutorials for off-grid gear and rugged electronics.', image: '/assets/og-image.webp', url: OG_BASE_URL + pathname };
+  }
   return null;
 }
 
@@ -1540,7 +1558,7 @@ function serveIndexWithOg(req, res, og, pathname) {
   const distPath = path.join(__dirname, 'dist', 'index.html');
   readIndexTemplate(distPath, (err, template) => {
     if (err) return sendErrorPage(req, res, 404, 'Not found', ERROR_404_HTML);
-    const ogType = og.type === 'product' ? 'product' : 'website';
+    const ogType = og.type === 'product' ? 'product' : (og.type === 'article' ? 'article' : 'website');
     const isHome = pathname === '/' || pathname === '/home';
     const heroPreload = isHome ? getHeroImagePreload() : '';
     const absoluteImage = og.image && og.image.startsWith('/') ? OG_BASE_URL + og.image : og.image;
@@ -1678,7 +1696,7 @@ function checkMaintenance(req, res, url) {
 }
 
 const MAIN_SPA_ROUTES = new Set([
-  'home', 'shop', 'services', 'software', 'ewaste', 'ai', 'tutorials', 'groups',
+  'home', 'shop', 'services', 'software', 'ewaste', 'ai', 'tutorials', 'tutorial', 'groups',
   'quote', 'book', 'sellers', 'sell-gear', 'contact', 'policies', 'admin',
   'account', 'profile', 'subscriptions', 'rewards', 'wallet', 'my-groups',
   'orders', 'addresses', 'bookings', 'logout',
@@ -3923,9 +3941,18 @@ const mainServer = http.createServer(async (req, res) => {
     const tutorialUsername = tutorialPortalSession ? tutorialPortalSession.username : null;
     const allTutorials = readTutorials().filter(i => i.status === 'Published');
     const tutorialItems = allTutorials.map(t => {
+      // Tutorials saved before read-time was auto-calculated may still have
+      // no duration on disk — backfill it on read rather than requiring staff
+      // to re-open and re-save every old tutorial.
+      if (!t.duration && t.format !== 'info') {
+        t = { ...t, duration: t.format === 'steps'
+          ? estimateReadTime(t.intro, (Array.isArray(t.tools) ? t.tools.join(' ') : ''), ...(Array.isArray(t.steps) ? t.steps.map(s => `${s.title || ''} ${s.body || ''}`) : []))
+          : estimateReadTime(t.body) };
+      }
       if (memberCanAccess(tutorialUsername, t.requiredTierId)) return t;
-      // User lacks access — return locked tutorial without body
-      const { body: _body, content: _content, ...rest } = t;
+      // User lacks access — strip every prose/content field, not just body,
+      // so gated step-by-step guides don't leak their steps over the wire.
+      const { body: _body, content: _content, intro: _intro, steps: _steps, tools: _tools, ...rest } = t;
       return { ...rest, locked: true };
     });
     return json(res, 200, { items: tutorialItems });

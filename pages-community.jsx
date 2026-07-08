@@ -12,17 +12,16 @@ function tutorialExcerpt(t) {
 // ============================================================
 // TUTORIALS
 // ============================================================
+const tutorialHref = (t) => `/tutorial/${encodeURIComponent(t.slug || t.id)}`;
+const tutorialLinkProps = (t, go) => ({
+  href: tutorialHref(t),
+  onClick: (e) => { e.preventDefault(); go('tutorial', t); },
+});
+
 function TutorialsPage({ go }) {
   const [filter, setFilter] = useState('All');
-  const [activeTutorial, setActiveTutorial] = useState(null);
   const [tutorials, setTutorials] = useState([]);
   const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    if (!activeTutorial) return;
-    const h = e => { if (e.key === 'Escape') setActiveTutorial(null); };
-    document.addEventListener('keydown', h);
-    return () => document.removeEventListener('keydown', h);
-  }, [activeTutorial]);
   useEffect(() => {
     // The server already returns only Published tutorials (and strips the
     // body of locked ones) — no client-side status filtering needed here.
@@ -86,7 +85,9 @@ function TutorialsPage({ go }) {
                     {!t.locked && t.cat && <span className="tag tag-outline" style={{marginBottom:10, display:'inline-block'}}>{t.cat.toUpperCase()}</span>}
                     {t.format === 'steps' && <span className="tag tag-outline" style={{marginBottom:10, display:'inline-block'}}>{(t.steps||[]).length} STEPS</span>}
                   </div>
-                  <h3 className="serif" style={{fontSize:22, lineHeight:1.15, marginTop:6}}>{t.title}</h3>
+                  <a {...tutorialLinkProps(t, go)} style={{textDecoration:'none', color:'inherit'}}>
+                    <h3 className="serif" style={{fontSize:22, lineHeight:1.15, marginTop:6}}>{t.title}</h3>
+                  </a>
                   <p style={{marginTop:8, fontSize:13, color:'var(--ink-2)', lineHeight:1.6,
                     overflow:'hidden', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical'}}>
                     {tutorialExcerpt(t)}
@@ -97,8 +98,8 @@ function TutorialsPage({ go }) {
                     {[t.difficulty, t.duration].filter(Boolean).join(' · ')}
                   </div>
                   {t.locked
-                    ? <a href="/memberships" className="btn btn-ghost btn-sm" style={{textDecoration:'none'}}>Join to unlock →</a>
-                    : <button className="btn btn-ghost btn-sm" onClick={() => setActiveTutorial(t)}>Read More →</button>
+                    ? <a href="/memberships" className="btn btn-ghost btn-sm" style={{textDecoration:'none'}} onClick={e=>{e.preventDefault(); go('memberships');}}>Join to unlock →</a>
+                    : <a {...tutorialLinkProps(t, go)} className="btn btn-ghost btn-sm" style={{textDecoration:'none'}}>Read More →</a>
                   }
                 </div>
               </div>
@@ -106,91 +107,145 @@ function TutorialsPage({ go }) {
           </div>
         )}
       </section>
+    </>
+  );
+}
 
-      {/* Expanded tutorial modal */}
-      {activeTutorial && (
-        <div role="dialog" aria-modal="true" aria-label={activeTutorial.title} style={{position:'fixed', inset:0, zIndex:500, background:'rgba(15,13,10,0.75)', display:'flex', flexDirection:'column', alignItems:'center', padding:'48px 16px', overflowY:'auto'}}
-          onClick={() => setActiveTutorial(null)}>
-          <div style={{width:'100%', maxWidth:760, background:'var(--paper)', padding:'40px 48px', boxShadow:'0 16px 48px rgba(0,0,0,.3)'}}
-            onClick={e => e.stopPropagation()}>
-            <div className="row-flex" style={{justifyContent:'space-between', marginBottom:8}}>
-              {activeTutorial.cat && <span className="tag tag-outline">{activeTutorial.cat.toUpperCase()}</span>}
-              <button aria-label="Close tutorial" style={{background:'none', border:'none', cursor:'pointer', fontSize:22, color:'var(--ink-2)', lineHeight:1, marginLeft:'auto'}} onClick={() => setActiveTutorial(null)}>×</button>
-            </div>
-            <h1 style={{fontFamily:'Instrument Serif, serif', fontSize:36, lineHeight:1.05, marginTop:10}}>{activeTutorial.title}</h1>
-            <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:10, marginBottom:24}}>
-              {[
-                activeTutorial.author && activeTutorial.author.toUpperCase(),
-                activeTutorial.difficulty,
-                activeTutorial.duration,
-              ].filter(Boolean).join(' · ')}
-            </div>
-            {activeTutorial.coverImage && (
-              <img src={activeTutorial.coverImage} alt="" style={{width:'100%', maxHeight:360, objectFit:'cover', marginBottom:28}} />
-            )}
-            {activeTutorial.videoUrl && (
-              <div style={{position:'relative', paddingTop:'56.25%', marginBottom:28, background:'#000'}}>
-                <iframe
-                  src={activeTutorial.videoUrl}
-                  style={{position:'absolute', inset:0, width:'100%', height:'100%', border:0}}
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                  title={activeTutorial.title}
-                />
-              </div>
-            )}
-
-            {activeTutorial.format === 'steps' ? (
-              <>
-                {activeTutorial.intro && (
-                  <div style={{fontSize:15, color:'var(--ink)', lineHeight:1.75, marginBottom:8}}>{renderMarkdown(activeTutorial.intro)}</div>
-                )}
-                {(activeTutorial.tools||[]).length > 0 && (
-                  <div style={{background:'var(--bg-elev)', padding:'16px 20px', margin:'8px 0 24px'}}>
-                    <div className="eyebrow" style={{marginBottom:8}}>WHAT YOU'LL NEED</div>
-                    <ul style={{paddingLeft:20, margin:0, fontSize:14, lineHeight:1.8}}>
-                      {activeTutorial.tools.map((tool,ti) => <li key={ti}>{tool}</li>)}
-                    </ul>
-                  </div>
-                )}
-                {(activeTutorial.steps||[]).length > 0 ? (
-                  <ol style={{listStyle:'none', margin:0, padding:0}}>
-                    {activeTutorial.steps.map((s,si) => (
-                      <li key={s.id||si} style={{marginBottom:32, paddingBottom:32, borderBottom: si < activeTutorial.steps.length-1 ? '1px solid var(--line)' : 'none'}}>
-                        <div className="row-flex" style={{alignItems:'flex-start', gap:14}}>
-                          <span className="mono" style={{fontSize:13, color:'var(--paper)', background:'var(--rust)', width:28, height:28, borderRadius:'50%', display:'grid', placeItems:'center', flexShrink:0}}>{si+1}</span>
-                          <div style={{flex:1, minWidth:0}}>
-                            <h3 style={{fontFamily:'Instrument Serif, serif', fontSize:22, lineHeight:1.2, margin:'2px 0 8px'}}>{s.title}</h3>
-                            {s.image && <img src={s.image} alt="" style={{width:'100%', maxHeight:320, objectFit:'cover', margin:'8px 0'}} />}
-                            <div style={{fontSize:15, color:'var(--ink)', lineHeight:1.75}}>{renderMarkdown(s.body)}</div>
-                          </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ol>
-                ) : (
-                  <p style={{color:'var(--ink-2)', fontSize:14}}>No steps added yet.</p>
-                )}
-              </>
-            ) : activeTutorial.body ? (
-              <div style={{fontSize:15, color:'var(--ink)', lineHeight:1.75}}>
-                {renderMarkdown(activeTutorial.body)}
-              </div>
-            ) : (
-              <p style={{color:'var(--ink-2)', fontSize:14}}>No content available for this tutorial yet.</p>
-            )}
-
-            {(activeTutorial.tags||[]).length > 0 && (
-              <div className="row-flex" style={{gap:6, flexWrap:'wrap', marginTop:28}}>
-                {activeTutorial.tags.map((tag,ti) => <span key={ti} className="tag tag-outline">{tag}</span>)}
-              </div>
-            )}
-            <div style={{marginTop:28}}>
-              <button className="btn btn-rust" onClick={() => setActiveTutorial(null)}>Close</button>
-            </div>
-          </div>
+// Format-aware body: video embed, then either numbered steps (with tools list
+// and intro) or a single markdown article. Shared by the tutorial detail page.
+function TutorialContent({ tutorial }) {
+  return (
+    <>
+      {tutorial.videoUrl && (
+        <div style={{position:'relative', paddingTop:'56.25%', marginBottom:28, background:'#000'}}>
+          <iframe
+            src={tutorial.videoUrl}
+            style={{position:'absolute', inset:0, width:'100%', height:'100%', border:0}}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            title={tutorial.title}
+          />
         </div>
       )}
+
+      {tutorial.format === 'steps' ? (
+        <>
+          {tutorial.intro && (
+            <div style={{fontSize:15, color:'var(--ink)', lineHeight:1.75, marginBottom:8}}>{renderMarkdown(tutorial.intro)}</div>
+          )}
+          {(tutorial.tools||[]).length > 0 && (
+            <div style={{background:'var(--bg-elev)', padding:'16px 20px', margin:'8px 0 24px'}}>
+              <div className="eyebrow" style={{marginBottom:8}}>WHAT YOU'LL NEED</div>
+              <ul style={{paddingLeft:20, margin:0, fontSize:14, lineHeight:1.8}}>
+                {tutorial.tools.map((tool,ti) => <li key={ti}>{tool}</li>)}
+              </ul>
+            </div>
+          )}
+          {(tutorial.steps||[]).length > 0 ? (
+            <ol style={{listStyle:'none', margin:0, padding:0}}>
+              {tutorial.steps.map((s,si) => (
+                <li key={s.id||si} style={{marginBottom:32, paddingBottom:32, borderBottom: si < tutorial.steps.length-1 ? '1px solid var(--line)' : 'none'}}>
+                  <div className="row-flex" style={{alignItems:'flex-start', gap:14}}>
+                    <span className="mono" style={{fontSize:13, color:'var(--paper)', background:'var(--rust)', width:28, height:28, borderRadius:'50%', display:'grid', placeItems:'center', flexShrink:0}}>{si+1}</span>
+                    <div style={{flex:1, minWidth:0}}>
+                      <h2 style={{fontFamily:'Instrument Serif, serif', fontSize:22, lineHeight:1.2, margin:'2px 0 8px'}}>{s.title}</h2>
+                      {s.image && <img src={s.image} alt="" style={{width:'100%', maxHeight:320, objectFit:'cover', margin:'8px 0'}} />}
+                      <div style={{fontSize:15, color:'var(--ink)', lineHeight:1.75}}>{renderMarkdown(s.body)}</div>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p style={{color:'var(--ink-2)', fontSize:14}}>No steps added yet.</p>
+          )}
+        </>
+      ) : tutorial.body ? (
+        <div style={{fontSize:15, color:'var(--ink)', lineHeight:1.75}}>
+          {renderMarkdown(tutorial.body)}
+        </div>
+      ) : (
+        <p style={{color:'var(--ink-2)', fontSize:14}}>No content available for this tutorial yet.</p>
+      )}
+
+      {(tutorial.tags||[]).length > 0 && (
+        <div className="row-flex" style={{gap:6, flexWrap:'wrap', marginTop:28}}>
+          {tutorial.tags.map((tag,ti) => <span key={ti} className="tag tag-outline">{tag}</span>)}
+        </div>
+      )}
+    </>
+  );
+}
+
+// Single tutorial at its own URL (/tutorial/:slug), resolved via pageParams
+// by app.jsx's deep-link handling — see resolveDeepLink().
+function TutorialPage({ go, pageParams }) {
+  const tutorial = pageParams;
+
+  if (!tutorial) {
+    return (
+      <>
+        <PageHead crumbs={['Outback','Tutorials','Loading…']} title="Loading…" />
+        <section className="container" style={{paddingTop:32, paddingBottom:48}}>
+          <div style={{maxWidth:760, margin:'0 auto', display:'grid', gap:14}}>
+            <div className="skeleton" style={{height:36, width:'70%'}} />
+            <div className="skeleton" style={{height:18, width:'40%'}} />
+            <div className="skeleton" style={{height:320}} />
+          </div>
+        </section>
+      </>
+    );
+  }
+
+  if (tutorial._notFound) {
+    return (
+      <>
+        <PageHead crumbs={['Outback','Tutorials','Not Found']} title="Tutorial not found"
+          lead="Sorry — we couldn't find that tutorial. It may have been removed or the link may be incorrect." />
+        <section className="container" style={{paddingTop:32, paddingBottom:48}}>
+          <div style={{display:'flex', gap:12, flexWrap:'wrap'}}>
+            <button className="btn btn-rust" onClick={() => go('tutorials')}>Browse all Tutorials →</button>
+            <button className="btn btn-ghost" onClick={() => go('contact')}>Contact us</button>
+          </div>
+        </section>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <PageHead crumbs={['Outback','Tutorials', tutorial.title]} title={tutorial.title} lead={tutorialExcerpt(tutorial)} />
+      <section className="container" style={{paddingTop:32, paddingBottom:64}}>
+        <div style={{maxWidth:760, margin:'0 auto'}}>
+          <div className="row-flex" style={{gap:6, flexWrap:'wrap', marginBottom:12}}>
+            {tutorial.locked && <span className="tag tag-rust">MEMBERS ONLY</span>}
+            {!tutorial.locked && tutorial.cat && <span className="tag tag-outline">{tutorial.cat.toUpperCase()}</span>}
+          </div>
+          <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginBottom:24}}>
+            {[
+              tutorial.author && tutorial.author.toUpperCase(),
+              tutorial.difficulty,
+              tutorial.duration,
+            ].filter(Boolean).join(' · ')}
+          </div>
+          {tutorial.coverImage && (
+            <img src={tutorial.coverImage} alt="" style={{width:'100%', maxHeight:400, objectFit:'cover', marginBottom:28}} />
+          )}
+
+          {tutorial.locked ? (
+            <div style={{padding:32, background:'var(--bg-elev)', textAlign:'center'}}>
+              <p style={{fontSize:15, color:'var(--ink-2)', marginBottom:16}}>This tutorial is available to members.</p>
+              <a href="/memberships" className="btn btn-rust" style={{textDecoration:'none'}} onClick={e=>{e.preventDefault(); go('memberships');}}>Join to unlock →</a>
+            </div>
+          ) : (
+            <TutorialContent tutorial={tutorial} />
+          )}
+
+          <div style={{marginTop:40, paddingTop:24, borderTop:'1px solid var(--line)'}}>
+            <a href="/tutorials" className="btn btn-ghost" style={{textDecoration:'none'}} onClick={e=>{e.preventDefault(); go('tutorials');}}>← All tutorials</a>
+          </div>
+        </div>
+      </section>
     </>
   );
 }
@@ -260,6 +315,7 @@ function GroupsPage({ go }) {
 
 window.OE_PAGES = Object.assign(window.OE_PAGES || {}, {
   tutorials: TutorialsPage,
+  tutorial: TutorialPage,
   groups: GroupsPage,
 });
 window.dispatchEvent(new Event('oe:pages-updated'));
