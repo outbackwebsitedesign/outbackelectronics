@@ -181,6 +181,20 @@ function TutorialContent({ tutorial }) {
 // by app.jsx's deep-link handling — see resolveDeepLink().
 function TutorialPage({ go, pageParams }) {
   const tutorial = pageParams;
+  const countedRef = React.useRef(null);
+
+  // Count one view per tutorial visit — fire-and-forget, and guarded so it
+  // doesn't double-count on re-renders once the deep link has resolved.
+  useEffect(() => {
+    if (!tutorial || tutorial._notFound || countedRef.current === tutorial.id) return;
+    countedRef.current = tutorial.id;
+    fetch('/api/tutorials/view', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: tutorial.id }),
+      keepalive: true,
+    }).catch(() => {});
+  }, [tutorial]);
 
   if (!tutorial) {
     return (

@@ -90,7 +90,7 @@ const PUBLIC_CSP = "default-src 'self'; " +
 const HSTS_VALUE = 'max-age=31536000; includeSubDomains';
 const PERMISSIONS_POLICY = 'camera=(), microphone=(), geolocation=(), payment=(), usb=()';
 const PUBLIC_RATE_WINDOW_MS = 1000 * 60 * 10;
-const PUBLIC_RATE_LIMITS = { analytics: 120, checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10, 'forgot-password': 5, 'reset-password': 10, 'gift-card/apply': 10, 'gift-card/balance': 5, 'warranty/order-lookup': 10, 'cart/get': 20, 'weather_register': 3, 'stock-notify': 5, 'membership': 10, 'order-token': 30, 'bookings/request': 10 };
+const PUBLIC_RATE_LIMITS = { analytics: 120, checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10, 'forgot-password': 5, 'reset-password': 10, 'gift-card/apply': 10, 'gift-card/balance': 5, 'warranty/order-lookup': 10, 'cart/get': 20, 'weather_register': 3, 'stock-notify': 5, 'membership': 10, 'order-token': 30, 'bookings/request': 10, 'tutorials/view': 60 };
 
 fs.mkdirSync(path.join(__dirname, 'assets/uploads'), { recursive: true });
 fs.mkdirSync(path.join(__dirname, 'assets/uploads/software'), { recursive: true });
@@ -3845,7 +3845,7 @@ const mainServer = http.createServer(async (req, res) => {
     return json(res, 200, { token });
   }
 
-  if (['POST', 'PATCH', 'DELETE'].includes(req.method) && url.pathname !== '/api/stripe/webhook' && url.pathname !== '/api/analytics/event' && url.pathname !== '/api/ai-chat') {
+  if (['POST', 'PATCH', 'DELETE'].includes(req.method) && url.pathname !== '/api/stripe/webhook' && url.pathname !== '/api/analytics/event' && url.pathname !== '/api/ai-chat' && url.pathname !== '/api/tutorials/view') {
     if (!verifyCsrf(req, res)) return;
   }
 
@@ -3960,6 +3960,18 @@ const mainServer = http.createServer(async (req, res) => {
       return { ...rest, locked: true };
     });
     return json(res, 200, { items: tutorialItems });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/tutorials/view') {
+    if (publicRateLimited(getIp(req), 'tutorials/view')) return json(res, 429, { error: 'rate_limited' });
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const id = typeof body.id === 'string' ? body.id : '';
+    if (!id) return json(res, 400, { error: 'missing_id' });
+    const items = readTutorials();
+    const idx = items.findIndex(t => t.id === id && t.status === 'Published');
+    if (idx < 0) return json(res, 404, { error: 'not_found' });
+    items[idx].views = (Number(items[idx].views) || 0) + 1;
+    writeTutorials(items);
+    return json(res, 200, { ok: true });
   }
   if (req.method === 'GET' && url.pathname === '/api/ai') {
     return json(res, 200, readAI());
