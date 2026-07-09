@@ -4332,8 +4332,15 @@ function AdminTutorials({ sessionInfo }) {
   };
 
   const duplicate = (row) => {
+    // A duplicate must never keep the original's slug (they'd collide — the
+    // public /tutorial/:slug lookup would resolve to whichever comes first).
+    // If it's part of a series, bump to the next free part number too,
+    // rather than creating a second "Part N" collision in the series box.
+    const seriesPeers = row.series ? rows.filter(r => r.series === row.series) : [];
+    const seriesOrder = seriesPeers.length ? Math.max(...seriesPeers.map(r => Number(r.seriesOrder) || 0)) + 1 : row.seriesOrder;
     setEditId('new');
-    setForm({ ...newTutorial(), ...row, id: undefined, title: row.title + ' (copy)', status:'Draft', views:0, date: new Date().toISOString().slice(0,10) });
+    setForm({ ...newTutorial(), ...row, id: undefined, title: row.title + ' (copy)', status:'Draft', views:0,
+      date: new Date().toISOString().slice(0,10), slug:'', _slugTouched:false, seriesOrder });
     setNotice({ type:'', msg:'' });
     setPreviewing(false);
   };

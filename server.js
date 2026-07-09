@@ -6385,17 +6385,26 @@ const adminServer = http.createServer(async (req, res) => {
     }
     if (body.content) body.content = sanitizeTutorialHTML(body.content);
     if (body.videoUrl) body.videoUrl = validateVideoUrl(body.videoUrl);
+    const items = readTutorials(); const idx = items.findIndex(x => x.id && x.id === body.id);
     // Slug always ends up clean (lowercase, punctuation/whitespace stripped to
     // hyphens) regardless of what the client sent — it flows straight into
-    // the public /tutorial/:slug URL.
-    body.slug = slugify(body.slug) || slugify(body.title);
+    // the public /tutorial/:slug URL. Also guaranteed unique here: two
+    // tutorials sharing a slug would make the public lookup resolve to
+    // whichever comes first, silently showing the wrong content for the other.
+    let slug = slugify(body.slug) || slugify(body.title);
+    const takenSlugs = new Set(items.filter((x,i) => i !== idx).map(x => x.slug).filter(Boolean));
+    if (takenSlugs.has(slug)) {
+      let n = 2;
+      while (takenSlugs.has(`${slug}-${n}`)) n++;
+      slug = `${slug}-${n}`;
+    }
+    body.slug = slug;
     body.series = sanitizeTutorialHTML((body.series || '').trim());
     body.seriesOrder = body.series ? (Number(body.seriesOrder) || 1) : '';
     // Estimated read time is always derived from the content, never client-supplied.
     body.duration = body.format === 'info' ? '' : (body.format === 'steps'
       ? estimateReadTime(body.intro, (Array.isArray(body.tools) ? body.tools.join(' ') : ''), ...(Array.isArray(body.steps) ? body.steps.map(s => `${s.title || ''} ${s.body || ''}`) : []))
       : estimateReadTime(body.body));
-    const items = readTutorials(); const idx = items.findIndex(x => x.id && x.id === body.id);
     if (idx >= 0) items[idx] = body; else { body.id = 'tut-' + Date.now(); items.push(body); }
     writeTutorials(items); return json(res, 200, { ok: true, item: body });
   }
