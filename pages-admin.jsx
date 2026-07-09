@@ -4005,7 +4005,19 @@ const TUTORIAL_FORMATS = [
 function newTutorial() {
   return { status:'Draft', cat:'', format:'article', difficulty:'Intermediate', body:'', intro:'', steps:[], tools:[], tags:[], views:0, series:'', seriesOrder:'' };
 }
-function emptyStep() { return { id:'step-'+Date.now()+'-'+Math.random().toString(36).slice(2,7), title:'', body:'', image:'' }; }
+function emptyStep() { return { id:'step-'+Date.now()+'-'+Math.random().toString(36).slice(2,7), title:'', body:'', image:'', imageAlt:'' }; }
+
+// Mirrors TRUSTED_VIDEO_DOMAINS in server.js — the server silently blanks
+// anything that doesn't match, so warn before that happens rather than
+// after a save quietly drops the URL with no explanation.
+const TRUSTED_VIDEO_DOMAINS = ['youtube.com', 'www.youtube.com', 'youtu.be', 'www.youtu.be', 'youtube-nocookie.com', 'www.youtube-nocookie.com', 'vimeo.com', 'www.vimeo.com'];
+function isTrustedVideoUrl(url) {
+  if (!url) return true;
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    return TRUSTED_VIDEO_DOMAINS.some(d => hostname === d || hostname.endsWith('.' + d));
+  } catch { return false; }
+}
 
 // Pure textarea-selection transform shared by every markdown field in the editor.
 function applyMarkdownFormat(ta, val, fmt) {
@@ -4083,7 +4095,7 @@ function MarkdownField({ value, onChange, placeholder, minHeight = 260 }) {
 }
 
 // Cover/step image slot — click or drag-drop to upload, with replace/remove.
-function ImageUploadSlot({ value, onChange, aspect = '16/10', label }) {
+function ImageUploadSlot({ value, onChange, aspect = '16/10', label, alt, onAltChange }) {
   const fileRef = React.useRef(null);
   const [uploading, setUploading] = useState(false);
   const pick = async (file) => {
@@ -4104,6 +4116,10 @@ function ImageUploadSlot({ value, onChange, aspect = '16/10', label }) {
             <button type="button" className="btn btn-ghost btn-sm" disabled={uploading} onClick={() => fileRef.current.click()}>{uploading ? 'Uploading…' : 'Replace'}</button>
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => onChange('')}>Remove</button>
           </div>
+          {onAltChange && (
+            <input className="input" style={{marginTop:8, fontSize:13}} placeholder="Describe this image (alt text, for accessibility)"
+              value={alt||''} onChange={e=>onAltChange(e.target.value)} />
+          )}
         </div>
       ) : (
         <div className="slot" style={{aspectRatio:aspect, marginTop:10, cursor:'pointer'}}
@@ -4238,14 +4254,15 @@ function StepRow({ step, index, total, onChange, onRemove, onMove }) {
           <MarkdownField value={step.body} onChange={v => onChange({ ...step, body:v })} placeholder="Describe this step…" minHeight={140} />
         </div>
         <div style={{width:160, flexShrink:0}}>
-          <ImageUploadSlot value={step.image} onChange={v => onChange({ ...step, image:v })} aspect="4/3" label="STEP PHOTO" />
+          <ImageUploadSlot value={step.image} onChange={v => onChange({ ...step, image:v })} aspect="4/3" label="STEP PHOTO"
+            alt={step.imageAlt} onAltChange={v => onChange({ ...step, imageAlt:v })} />
         </div>
       </div>
     </div>
   );
 }
 
-function AdminTutorials({ sessionInfo }) {
+function AdminTutorials({ sessionInfo, siteUrl }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -4380,6 +4397,11 @@ function AdminTutorials({ sessionInfo }) {
           </div>
           <div className="row-flex" style={{gap:8}}>
             {editId !== 'new' && <button className="btn btn-ghost btn-sm" disabled={deleting} onClick={() => removeTutorial(form)}>{deleting ? 'Deleting…' : 'Delete'}</button>}
+            {editId !== 'new' && form.status === 'Published' && form.slug && (
+              <a className="btn btn-ghost btn-sm" href={(siteUrl||'') + '/tutorial/' + encodeURIComponent(form.slug)} target="_blank" rel="noreferrer" style={{textDecoration:'none'}}>
+                View live <Icon name="externalLink" size={11}/>
+              </a>
+            )}
             <button className="btn btn-ghost btn-sm" onClick={() => setPreviewing(true)}>Preview</button>
             <button className="btn btn-ghost btn-sm" disabled={saving} onClick={() => save({ status:'Draft' })}>{saving ? 'Saving…' : 'Save draft'}</button>
             <button className="btn btn-rust btn-sm" disabled={saving} onClick={() => save({ status:'Published' })}>{saving ? 'Publishing…' : <>Publish <Icon name="chevronRight" size={11}/></>}</button>
@@ -4501,13 +4523,19 @@ function AdminTutorials({ sessionInfo }) {
             </div>
             <div style={{padding:18, background:'var(--paper)', border:'1px solid var(--line)'}}>
               <span className="eyebrow">COVER IMAGE</span>
-              <ImageUploadSlot value={form.coverImage} onChange={v=>setForm({...form, coverImage:v})} aspect="16/10" label="16:10 · DROP IMAGE, OR CLICK" />
+              <ImageUploadSlot value={form.coverImage} onChange={v=>setForm({...form, coverImage:v})} aspect="16/10" label="16:10 · DROP IMAGE, OR CLICK"
+                alt={form.coverImageAlt} onAltChange={v=>setForm({...form, coverImageAlt:v})} />
             </div>
             <div style={{padding:18, background:'var(--paper)', border:'1px solid var(--line)'}}>
               <span className="eyebrow">VIDEO</span>
               <label className="field" style={{marginTop:10}}><span className="label">YouTube or Vimeo URL</span>
                 <input className="input" placeholder="https://youtube.com/watch?v=…" value={form.videoUrl||''} onChange={e=>setForm({...form, videoUrl:e.target.value})}/>
               </label>
+              {form.videoUrl && !isTrustedVideoUrl(form.videoUrl) && (
+                <div style={{fontSize:12, color:'var(--rust)', marginTop:6}}>
+                  Only YouTube and Vimeo links are supported — this URL will be removed when you save.
+                </div>
+              )}
             </div>
             <div style={{padding:18, background:'var(--paper)', border:'1px solid var(--line)'}}>
               <span className="eyebrow">TAGS</span>
@@ -4537,7 +4565,12 @@ function AdminTutorials({ sessionInfo }) {
                   format !== 'info' && liveDuration,
                 ].filter(Boolean).join(' · ')}
               </div>
-              {form.coverImage && <img src={form.coverImage} alt="" style={{width:'100%', maxHeight:320, objectFit:'cover', marginBottom:24}} />}
+              {form.series && (
+                <div className="mono" style={{fontSize:11, color:'var(--rust)', marginBottom:16}}>
+                  {form.series.toUpperCase()} · PART {form.seriesOrder||1}
+                </div>
+              )}
+              {form.coverImage && <img src={form.coverImage} alt={form.coverImageAlt || form.title} style={{width:'100%', maxHeight:320, objectFit:'cover', marginBottom:24}} />}
               {form.videoUrl && (
                 <div style={{position:'relative', paddingTop:'56.25%', marginBottom:24, background:'#000'}}>
                   <iframe src={form.videoUrl} style={{position:'absolute', inset:0, width:'100%', height:'100%', border:0}} allowFullScreen title="Video preview" />
@@ -4557,7 +4590,7 @@ function AdminTutorials({ sessionInfo }) {
                   ) : form.steps.map((s,i) => (
                     <div key={s.id||i} style={{marginBottom:20}}>
                       <h3 style={{fontFamily:'Instrument Serif, serif', fontSize:20, marginBottom:6}}>{i+1}. {s.title || 'Untitled step'}</h3>
-                      {s.image && <img src={s.image} alt="" style={{width:'100%', maxHeight:240, objectFit:'cover', marginBottom:8}} />}
+                      {s.image && <img src={s.image} alt={s.imageAlt || s.title} style={{width:'100%', maxHeight:240, objectFit:'cover', marginBottom:8}} />}
                       <div style={{fontSize:15, lineHeight:1.75, color:'var(--ink)'}}>{renderMarkdown(s.body)}</div>
                     </div>
                   ))}
@@ -4565,6 +4598,25 @@ function AdminTutorials({ sessionInfo }) {
               ) : (
                 <div style={{fontSize:15, lineHeight:1.75, color:'var(--ink)'}}>{form.body ? renderMarkdown(form.body) : '(no body yet)'}</div>
               )}
+              {form.series && (() => {
+                const peers = rows.filter(r => r.series === form.series && r.id !== form.id);
+                const previewId = form.id || '__preview__';
+                const allParts = [...peers, { ...form, id: previewId }].sort((a,b) => (Number(a.seriesOrder)||0) - (Number(b.seriesOrder)||0));
+                return (
+                  <div style={{marginTop:24, padding:20, background:'var(--bg-elev)', border:'1px solid var(--line)'}}>
+                    <div className="eyebrow" style={{marginBottom:10}}>{form.series} — {allParts.length} PART{allParts.length===1?'':'S'}</div>
+                    <ol style={{listStyle:'none', margin:0, padding:0, display:'grid', gap:4, fontSize:13}}>
+                      {allParts.map(p => (
+                        <li key={p.id}>
+                          {p.id === previewId
+                            ? <strong>#{p.seriesOrder||1} · {p.title || 'Untitled'} (this part)</strong>
+                            : <span style={{color:'var(--ink-2)'}}>#{p.seriesOrder||1} · {p.title}</span>}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                );
+              })()}
               <button className="btn btn-ghost btn-sm" style={{marginTop:32}} onClick={() => setPreviewing(false)}>Close preview</button>
             </div>
           </div>
@@ -4583,7 +4635,12 @@ function AdminTutorials({ sessionInfo }) {
   const q = search.trim().toLowerCase();
   const filtered = rows
     .filter(r => statusFilter === 'All' || r.status === statusFilter)
-    .filter(r => !q || (r.title||'').toLowerCase().includes(q) || (r.author||'').toLowerCase().includes(q));
+    .filter(r => !q
+      || (r.title||'').toLowerCase().includes(q)
+      || (r.author||'').toLowerCase().includes(q)
+      || (r.cat||'').toLowerCase().includes(q)
+      || (r.series||'').toLowerCase().includes(q)
+      || (r.tags||[]).some(t => t.toLowerCase().includes(q)));
 
   return (
     <div style={{padding:32}}>
@@ -9047,7 +9104,7 @@ function AdminPage({ go }) {
           }
         />
         <div className="admin-section-root">
-          <Body sessionInfo={sessionInfo} search={search} />
+          <Body sessionInfo={sessionInfo} search={search} siteUrl={siteUrl} />
         </div>
       </div>
     </div>

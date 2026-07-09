@@ -104,7 +104,7 @@ function TutorialsPage({ go }) {
               <div key={t.id||i} className="card-paper" style={{display:'flex', flexDirection:'column', overflow:'hidden', opacity: t.locked ? 0.8 : 1}}>
                 {t.coverImage && (
                   <div style={{aspectRatio:'16/9', overflow:'hidden', background:'var(--bg-elev)'}}>
-                    <img src={t.coverImage} alt="" style={{width:'100%', height:'100%', objectFit:'cover'}} />
+                    <img src={t.coverImage} alt={t.coverImageAlt || t.title} style={{width:'100%', height:'100%', objectFit:'cover'}} />
                   </div>
                 )}
                 <div style={{padding:'20px 24px 0'}}>
@@ -182,7 +182,7 @@ function TutorialContent({ tutorial }) {
                     <span className="mono" style={{fontSize:13, color:'var(--paper)', background:'var(--rust)', width:28, height:28, borderRadius:'50%', display:'grid', placeItems:'center', flexShrink:0}}>{si+1}</span>
                     <div style={{flex:1, minWidth:0}}>
                       <h2 style={{fontFamily:'Instrument Serif, serif', fontSize:22, lineHeight:1.2, margin:'2px 0 8px'}}>{s.title}</h2>
-                      {s.image && <img src={s.image} alt="" style={{width:'100%', maxHeight:320, objectFit:'cover', margin:'8px 0'}} />}
+                      {s.image && <img src={s.image} alt={s.imageAlt || s.title} style={{width:'100%', maxHeight:320, objectFit:'cover', margin:'8px 0'}} />}
                       <div style={{fontSize:15, color:'var(--ink)', lineHeight:1.75}}>{renderMarkdown(s.body)}</div>
                     </div>
                   </div>
@@ -291,7 +291,7 @@ function TutorialPage({ go, pageParams }) {
             </div>
           )}
           {tutorial.coverImage && (
-            <img src={tutorial.coverImage} alt="" style={{width:'100%', maxHeight:400, objectFit:'cover', marginBottom:28}} />
+            <img src={tutorial.coverImage} alt={tutorial.coverImageAlt || tutorial.title} style={{width:'100%', maxHeight:400, objectFit:'cover', marginBottom:28}} />
           )}
 
           {tutorial.locked ? (

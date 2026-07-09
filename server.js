@@ -6380,8 +6380,9 @@ const adminServer = http.createServer(async (req, res) => {
     if (body.body) body.body = sanitizeTutorialHTML(body.body);
     if (body.intro) body.intro = sanitizeTutorialHTML(body.intro);
     if (body.description) body.description = sanitizeTutorialHTML(body.description);
+    if (body.coverImageAlt) body.coverImageAlt = sanitizeTutorialHTML(body.coverImageAlt);
     if (Array.isArray(body.steps)) {
-      body.steps = body.steps.map(s => ({ ...s, title: sanitizeTutorialHTML(s.title || ''), body: sanitizeTutorialHTML(s.body || '') }));
+      body.steps = body.steps.map(s => ({ ...s, title: sanitizeTutorialHTML(s.title || ''), body: sanitizeTutorialHTML(s.body || ''), imageAlt: sanitizeTutorialHTML(s.imageAlt || '') }));
     }
     if (body.content) body.content = sanitizeTutorialHTML(body.content);
     if (body.videoUrl) body.videoUrl = validateVideoUrl(body.videoUrl);
