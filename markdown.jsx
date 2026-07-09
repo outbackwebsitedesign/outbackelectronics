@@ -60,6 +60,37 @@ export function renderMarkdown(md) {
       while (i < lines.length && /^\d+\. /.test(lines[i])) { items.push(<li key={i}>{inlineRender(lines[i].replace(/^\d+\. /, ''))}</li>); i++; }
       nodes.push(<ol key={`ol-${i}`} start={startNum} style={{paddingLeft:22, margin:'8px 0 14px'}}>{items}</ol>);
       continue;
+    } else if (/^\|.*\|\s*$/.test(line) && i + 1 < lines.length && /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/.test(lines[i+1])) {
+      const splitRow = (row) => row.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+      const headerCells = splitRow(line);
+      const align = splitRow(lines[i+1]).map(c => {
+        const left = c.startsWith(':'), right = c.endsWith(':');
+        return left && right ? 'center' : right ? 'right' : left ? 'left' : null;
+      });
+      i += 2;
+      const bodyRows = [];
+      while (i < lines.length && /^\|.*\|\s*$/.test(lines[i])) { bodyRows.push(splitRow(lines[i])); i++; }
+      nodes.push(
+        <div key={`table-${i}`} style={{overflowX:'auto', margin:'16px 0'}}>
+          <table style={{width:'100%', borderCollapse:'collapse', fontSize:14}}>
+            <thead>
+              <tr>
+                {headerCells.map((c,ci) => (
+                  <th key={ci} style={{textAlign:align[ci]||'left', padding:'8px 12px', borderBottom:'2px solid var(--ink)', fontFamily:'JetBrains Mono, monospace', fontSize:11, letterSpacing:'.06em', textTransform:'uppercase', color:'var(--ink-2)', whiteSpace:'nowrap'}}>{inlineRender(c)}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {bodyRows.map((row,ri) => (
+                <tr key={ri} style={{borderBottom:'1px solid var(--line)'}}>
+                  {row.map((c,ci) => <td key={ci} style={{textAlign:align[ci]||'left', padding:'8px 12px', verticalAlign:'top'}}>{inlineRender(c)}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+      continue;
     } else if (line.trim() === '') {
       nodes.push(<div key={i} style={{height:10}} />);
     } else {
@@ -75,7 +106,7 @@ function stripMarkdown(md) {
     .replace(/```[\s\S]*?```/g, ' ')
     .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    .replace(/[#*_`>-]/g, ' ')
+    .replace(/[#*_`>|-]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }

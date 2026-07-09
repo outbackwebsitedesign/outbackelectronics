@@ -4026,6 +4026,11 @@ function applyMarkdownFormat(ta, val, fmt) {
   else if (fmt === '· list') { newVal = val.slice(0, lineStart) + '- ' + val.slice(lineStart); cur = [ss + 2, se + 2]; }
   else if (fmt === '1. list') { newVal = val.slice(0, lineStart) + '1. ' + val.slice(lineStart); cur = [ss + 3, se + 3]; }
   else if (fmt === 'Link') { const snippet = sel ? `[${sel}](url)` : '[link text](url)'; newVal = val.slice(0, ss) + snippet + val.slice(se); cur = sel ? [ss + sel.length + 3, ss + sel.length + 6] : [ss + 1, ss + 10]; }
+  else if (fmt === 'Table') {
+    const snippet = '| Column 1 | Column 2 |\n|---|---|\n| Cell | Cell |\n';
+    newVal = val.slice(0, lineStart) + snippet + val.slice(lineStart);
+    cur = [lineStart + 2, lineStart + 2 + 'Column 1'.length];
+  }
   else return null;
   return { newVal, cur };
 }
@@ -4061,7 +4066,7 @@ function MarkdownField({ value, onChange, placeholder, minHeight = 260 }) {
   return (
     <div>
       <div className="row-flex" style={{gap:4, paddingBottom:10, borderBottom:'1px solid var(--line)', flexWrap:'wrap'}}>
-        {['H2','H3','B','I','</>','—','· list','1. list','Link'].map((b,i) => (
+        {['H2','H3','B','I','</>','—','· list','1. list','Link','Table'].map((b,i) => (
           <button key={i} type="button" className="btn btn-ghost btn-sm" style={{minWidth:32, justifyContent:'center', padding:'4px 8px'}}
             onMouseDown={e => { e.preventDefault(); apply(b); }}>{b}</button>
         ))}
