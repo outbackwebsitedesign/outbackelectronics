@@ -4118,14 +4118,15 @@ function ImageUploadSlot({ value, onChange, aspect = '16/10', label }) {
 }
 
 // Chip/tag list input — Enter or comma to add, × to remove.
-function ChipInput({ value, onChange, placeholder }) {
+function ChipInput({ value, onChange, placeholder, suggestions }) {
   const [draft, setDraft] = useState('');
   const items = value || [];
-  const add = () => {
-    const v = draft.trim();
+  const add = (v) => {
+    v = (v ?? draft).trim();
     if (v && !items.includes(v)) onChange([...items, v]);
     setDraft('');
   };
+  const unused = (suggestions || []).filter(s => !items.includes(s));
   return (
     <div>
       {items.length > 0 && (
@@ -4141,7 +4142,15 @@ function ChipInput({ value, onChange, placeholder }) {
       )}
       <input className="input" placeholder={placeholder} value={draft} onChange={e => setDraft(e.target.value)}
         onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add(); } }}
-        onBlur={add} />
+        onBlur={() => add()} />
+      {unused.length > 0 && (
+        <div className="row-flex" style={{gap:6, flexWrap:'wrap', marginTop:8}}>
+          {unused.map(s => (
+            <button key={s} type="button" className="tag tag-outline" style={{cursor:'pointer', background:'none'}}
+              onClick={() => add(s)}>+ {s}</button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -4236,7 +4245,7 @@ function StepRow({ step, index, total, onChange, onRemove, onMove }) {
   );
 }
 
-function AdminTutorials() {
+function AdminTutorials({ sessionInfo }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -4247,8 +4256,10 @@ function AdminTutorials() {
   const [deleting, setDeleting] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [membershipTiers, setMembershipTiers] = useState([]);
+  const [staffNames, setStaffNames] = useState([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
+  const dirty = useDirtyTracker(form, editId);
 
   useEffect(() => {
     fetch('/api/admin/tutorials', { credentials:'include' })
@@ -4260,13 +4271,22 @@ function AdminTutorials() {
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(d => setMembershipTiers((d.tiers || []).filter(t => t.status === 'published')))
       .catch(() => {});
+    fetch('/api/admin/staff', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setStaffNames((d.members || []).filter(m => m.status === 'active').map(m => m.name).filter(Boolean)))
+      .catch(() => {});
   }, []);
 
   const open = (rowOrNew) => {
-    if (rowOrNew === 'new') { setEditId('new'); setForm(newTutorial()); }
+    if (rowOrNew === 'new') { setEditId('new'); setForm({ ...newTutorial(), author: sessionInfo?.username || '' }); }
     else { setEditId(rowOrNew.id); setForm({ ...newTutorial(), ...rowOrNew }); }
     setNotice({ type:'', msg:'' });
     setPreviewing(false);
+  };
+
+  const closeEditor = async () => {
+    if (dirty && !(await adminConfirm('Discard unsaved changes to this tutorial?', { danger:true, confirmLabel:'Discard' }))) return;
+    setEditId(null);
   };
 
   const save = async (overrides = {}) => {
@@ -4333,6 +4353,9 @@ function AdminTutorials() {
     const format = form.format || 'article';
     const existingCategories = Array.from(new Set(rows.map(r => r.cat).filter(Boolean))).sort((a,b) => a.localeCompare(b));
     const existingSeries = Array.from(new Set(rows.map(r => r.series).filter(Boolean))).sort((a,b) => a.localeCompare(b));
+    const existingAuthors = Array.from(new Set([...staffNames, ...rows.map(r => r.author)])).filter(Boolean).sort((a,b) => a.localeCompare(b));
+    const existingTags = Array.from(new Set(rows.flatMap(r => r.tags || []))).filter(Boolean).sort((a,b) => a.localeCompare(b));
+    const existingTools = Array.from(new Set(rows.flatMap(r => r.tools || []))).filter(Boolean).sort((a,b) => a.localeCompare(b));
     const liveDuration = format === 'steps'
       ? estimateReadTime(form.intro, (form.tools||[]).join(' '), ...(form.steps||[]).map(s => `${s.title||''} ${s.body||''}`))
       : estimateReadTime(form.body);
@@ -4345,7 +4368,7 @@ function AdminTutorials() {
       <div style={{padding:32}}>
         <div className="row-flex" style={{justifyContent:'space-between', marginBottom:18, flexWrap:'wrap', gap:12}}>
           <div>
-            <a className="mono" style={{display:'inline-flex', alignItems:'center', gap:4, fontSize:11, color:'var(--rust)', cursor:'pointer'}} onClick={() => setEditId(null)}><Icon name="chevronLeft" size={10}/> Back to list</a>
+            <a className="mono" style={{display:'inline-flex', alignItems:'center', gap:4, fontSize:11, color:'var(--rust)', cursor:'pointer'}} onClick={closeEditor}><Icon name="chevronLeft" size={10}/> Back to list</a>
             <h2 className="serif" style={{fontSize:32, marginTop:6}}>{editId === 'new' ? 'New tutorial' : form.title}</h2>
           </div>
           <div className="row-flex" style={{gap:8}}>
@@ -4389,7 +4412,7 @@ function AdminTutorials() {
                 <div style={{marginTop:22}}>
                   <span className="eyebrow">TOOLS &amp; PARTS NEEDED</span>
                   <div style={{marginTop:8}}>
-                    <ChipInput value={form.tools} onChange={v=>setForm({...form, tools:v})} placeholder="Type a tool or part, press Enter" />
+                    <ChipInput value={form.tools} onChange={v=>setForm({...form, tools:v})} placeholder="Type a tool or part, press Enter" suggestions={existingTools} />
                   </div>
                 </div>
                 <div style={{marginTop:26}}>
@@ -4449,7 +4472,8 @@ function AdminTutorials() {
                 </div>
               )}
               <label className="field"><span className="label">Author</span>
-                <input className="input" value={form.author||''} onChange={e=>setForm({...form, author:e.target.value})}/>
+                <ComboSelect value={form.author} options={existingAuthors} placeholder="Select or type a name…"
+                  onChange={v=>setForm({...form, author:v})} />
               </label>
             </div>
             <div style={{padding:18, background:'var(--paper)', border:'1px solid var(--line)'}}>
@@ -4481,7 +4505,7 @@ function AdminTutorials() {
             <div style={{padding:18, background:'var(--paper)', border:'1px solid var(--line)'}}>
               <span className="eyebrow">TAGS</span>
               <div style={{marginTop:10}}>
-                <ChipInput value={form.tags} onChange={v=>setForm({...form, tags:v})} placeholder="Add a tag, press Enter" />
+                <ChipInput value={form.tags} onChange={v=>setForm({...form, tags:v})} placeholder="Add a tag, press Enter" suggestions={existingTags} />
               </div>
             </div>
             <div style={{padding:18, background:'var(--paper)', border:'1px solid var(--line)'}}>
