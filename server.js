@@ -1463,6 +1463,23 @@ function resolveOgTags(pathname) {
     }
     return { title: 'Services — Outback Electronics', description: 'Expert repairs and field service for rugged electronics.', image: '/assets/og-image.webp', url: OG_BASE_URL + pathname };
   }
+  // Tutorial series landing page: /tutorials/series/<slug>
+  if (pathname.startsWith('/tutorials/series/')) {
+    const slug = decodeURIComponent(pathname.slice('/tutorials/series/'.length));
+    if (slug) {
+      const parts = readTutorials().filter(t => t.status === 'Published' && t.series && slugify(t.series) === slug);
+      if (parts.length) {
+        const first = parts.slice().sort((a,b) => (Number(a.seriesOrder)||0) - (Number(b.seriesOrder)||0))[0];
+        return {
+          title: `${first.series} — Outback Electronics`,
+          description: `A ${parts.length}-part tutorial series from Outback Electronics.`,
+          image: first.coverImage || '/assets/og-image.webp',
+          url: `${OG_BASE_URL}${pathname}`,
+        };
+      }
+    }
+    return { title: 'Tutorials — Outback Electronics', description: 'Field guides, how-to videos and repair tutorials for off-grid gear and rugged electronics.', image: '/assets/og-image.webp', url: OG_BASE_URL + pathname };
+  }
   // Tutorial deep link: /tutorial/<slug-or-id>
   if (pathname.startsWith('/tutorial/')) {
     const id = decodeURIComponent(pathname.slice('/tutorial/'.length));
@@ -6372,6 +6389,8 @@ const adminServer = http.createServer(async (req, res) => {
     // hyphens) regardless of what the client sent — it flows straight into
     // the public /tutorial/:slug URL.
     body.slug = slugify(body.slug) || slugify(body.title);
+    body.series = sanitizeTutorialHTML((body.series || '').trim());
+    body.seriesOrder = body.series ? (Number(body.seriesOrder) || 1) : '';
     // Estimated read time is always derived from the content, never client-supplied.
     body.duration = body.format === 'info' ? '' : (body.format === 'steps'
       ? estimateReadTime(body.intro, (Array.isArray(body.tools) ? body.tools.join(' ') : ''), ...(Array.isArray(body.steps) ? body.steps.map(s => `${s.title || ''} ${s.body || ''}`) : []))

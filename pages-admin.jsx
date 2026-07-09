@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { getCsrf, ensureCsrf } from './src/lib/api.js';
-import { renderMarkdown, estimateReadTime } from './markdown.jsx';
+import { renderMarkdown, estimateReadTime, slugify } from './markdown.jsx';
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 // Canonical date format for all order dates: "27 May 2026"
@@ -4003,10 +4003,9 @@ const TUTORIAL_FORMATS = [
 ];
 
 function newTutorial() {
-  return { status:'Draft', cat:'', format:'article', difficulty:'Intermediate', body:'', intro:'', steps:[], tools:[], tags:[], views:0 };
+  return { status:'Draft', cat:'', format:'article', difficulty:'Intermediate', body:'', intro:'', steps:[], tools:[], tags:[], views:0, series:'', seriesOrder:'' };
 }
 function emptyStep() { return { id:'step-'+Date.now()+'-'+Math.random().toString(36).slice(2,7), title:'', body:'', image:'' }; }
-function slugify(s) { return (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); }
 
 // Pure textarea-selection transform shared by every markdown field in the editor.
 function applyMarkdownFormat(ta, val, fmt) {
@@ -4283,6 +4282,8 @@ function AdminTutorials() {
     payload.views = Number.isFinite(Number(payload.views)) ? Number(payload.views) : 0;
     payload.body = payload.body || '';
     payload.steps = (payload.steps || []).map(s => ({ ...s, title: (s.title || '').trim(), body: s.body || '' }));
+    payload.series = (payload.series || '').trim();
+    payload.seriesOrder = payload.series ? (Number(payload.seriesOrder) || 1) : '';
     // duration (estimated read time) is computed authoritatively by the server from content.
     if (!payload.title) { setNotice({ type:'error', msg:'Title is required.' }); return; }
     if (payload.format === 'steps' && payload.steps.length === 0) { setNotice({ type:'error', msg:"Add at least one step, or switch to Article/Info." }); return; }
@@ -4331,9 +4332,15 @@ function AdminTutorials() {
   if (editId !== null) {
     const format = form.format || 'article';
     const existingCategories = Array.from(new Set(rows.map(r => r.cat).filter(Boolean))).sort((a,b) => a.localeCompare(b));
+    const existingSeries = Array.from(new Set(rows.map(r => r.series).filter(Boolean))).sort((a,b) => a.localeCompare(b));
     const liveDuration = format === 'steps'
       ? estimateReadTime(form.intro, (form.tools||[]).join(' '), ...(form.steps||[]).map(s => `${s.title||''} ${s.body||''}`))
       : estimateReadTime(form.body);
+    const chooseSeries = (name) => {
+      const partsInSeries = rows.filter(r => r.series === name && r.id !== form.id);
+      const nextOrder = partsInSeries.length ? Math.max(...partsInSeries.map(r => Number(r.seriesOrder) || 0)) + 1 : 1;
+      setForm(f => ({ ...f, series:name, seriesOrder: f.seriesOrder || nextOrder }));
+    };
     return (
       <div style={{padding:32}}>
         <div className="row-flex" style={{justifyContent:'space-between', marginBottom:18, flexWrap:'wrap', gap:12}}>
@@ -4446,6 +4453,22 @@ function AdminTutorials() {
               </label>
             </div>
             <div style={{padding:18, background:'var(--paper)', border:'1px solid var(--line)'}}>
+              <span className="eyebrow">SERIES</span>
+              <label className="field" style={{marginTop:10}}><span className="label">Series name</span>
+                <ComboSelect value={form.series} options={existingSeries} placeholder="None — standalone tutorial"
+                  onChange={chooseSeries} />
+              </label>
+              {form.series && (
+                <>
+                  <label className="field"><span className="label">Part number</span>
+                    <input className="input" type="number" min="1" placeholder="1" value={form.seriesOrder||''}
+                      onChange={e=>setForm({...form, seriesOrder:e.target.value})}/>
+                  </label>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={()=>setForm({...form, series:'', seriesOrder:''})}>Remove from series</button>
+                </>
+              )}
+            </div>
+            <div style={{padding:18, background:'var(--paper)', border:'1px solid var(--line)'}}>
               <span className="eyebrow">COVER IMAGE</span>
               <ImageUploadSlot value={form.coverImage} onChange={v=>setForm({...form, coverImage:v})} aspect="16/10" label="16:10 · DROP IMAGE, OR CLICK" />
             </div>
@@ -4551,6 +4574,7 @@ function AdminTutorials() {
           { key:'title', label:'Title', w:'2.2fr', render:r => <span style={{fontWeight:600}}>{r.title}</span>, sort:true },
           { key:'format', label:'Format', w:'110px', render:r => <span className="tag tag-outline">{(TUTORIAL_FORMATS.find(f=>f.id===(r.format||'article'))||TUTORIAL_FORMATS[0]).label.toUpperCase()}</span> },
           { key:'cat', label:'Category', w:'1fr', render:r => <span className="tag tag-outline">{(r.cat||'').toUpperCase()}</span>, sort:true },
+          { key:'series', label:'Series', w:'1.2fr', render:r => r.series ? <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{r.series} · #{r.seriesOrder||1}</span> : <span style={{color:'var(--ink-3)'}}>—</span>, sort:true },
           { key:'author', label:'Author', w:'1fr', sort:true },
           { key:'date', label:'Date', w:'90px', render:r => <span className="mono" style={{fontSize:12, color:'var(--ink-2)'}}>{r.date}</span>, sort:true },
           { key:'views', label:'Views', w:'80px', render:r => <span className="mono">{(r.views||0).toLocaleString()}</span>, sort:true },

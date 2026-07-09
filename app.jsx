@@ -818,6 +818,7 @@ function App() {
     if (path.startsWith('policies/')) return 'policies';
     if (path.startsWith('software/')) return 'software';
     if (path.startsWith('book/')) return 'book';
+    if (path.startsWith('tutorials/series/')) return 'tutorial-series';
     if (path.startsWith('tutorial/')) return 'tutorial';
     const resolved = PAGE_ALIASES_INIT[path] || path;
     return KNOWN_PAGES.includes(resolved) ? resolved : 'home';
@@ -863,6 +864,14 @@ function App() {
         const t = (d.items || []).find(x => x.slug === id || String(x.id) === id);
         setPageParams(t || { _notFound: true });
       }).catch(() => setPageParams({ _notFound: true }));
+    } else if (path.startsWith('tutorials/series/')) {
+      const slug = decodeURIComponent(path.slice('tutorials/series/'.length));
+      const slugify = (s) => (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      fetch('/api/tutorials').then(r => r.json()).then(d => {
+        const parts = (d.items || []).filter(t => t.series && slugify(t.series) === slug)
+          .sort((a,b) => (Number(a.seriesOrder)||0) - (Number(b.seriesOrder)||0));
+        setPageParams(parts.length ? { seriesName: parts[0].series, slug, parts } : { _notFound: true });
+      }).catch(() => setPageParams({ _notFound: true }));
     }
   };
 
@@ -871,7 +880,7 @@ function App() {
     const path = location.pathname.replace(/^\/+/, '');
     if (path.startsWith('policies/') && !pageParams) {
       setPageParams(parsePoliciesPath(path.slice('policies/'.length)));
-    } else if ((path.startsWith('product/') || path.startsWith('service/') || path.startsWith('tutorial/')) && !pageParams) {
+    } else if ((path.startsWith('product/') || path.startsWith('service/') || path.startsWith('tutorial/') || path.startsWith('tutorials/series/')) && !pageParams) {
       resolveDeepLink(path);
     } else if (path.startsWith('software/') && !pageParams) {
       const rest = path.slice('software/'.length);
@@ -904,6 +913,7 @@ function App() {
     ai:           'Custom AI built to your problem — chatbots, integrations, fine-tuned models, and edge deployments for remote Australia.',
     tutorials:    'Tutorials from the Outback Electronics workshop — repairs, builds, and troubleshooting guides.',
     tutorial:     'A tutorial from the Outback Electronics workshop.',
+    'tutorial-series': 'A multi-part tutorial series from the Outback Electronics workshop.',
     groups:       'Community groups at Outback Electronics — meet other remote-area tinkerers.',
     quote:        'Request a quote from Outback Electronics — tell us the use case in plain English, our techs will spec it, price it, and ship it.',
     book:         'Book a repair drop-off, in-store appointment, or on-site callout with Outback Electronics.',
@@ -921,6 +931,7 @@ function App() {
     ai:           'Edge AI — Outback Electronics',
     tutorials:    'Tutorials — Outback Electronics',
     tutorial:     'Tutorial — Outback Electronics',
+    'tutorial-series': 'Tutorial Series — Outback Electronics',
     groups:       'Community Groups — Outback Electronics',
     quote:        'Request a Quote — Outback Electronics',
     'gift-cards': 'Gift Cards — Outback Electronics',
@@ -951,6 +962,8 @@ function App() {
     } else if (page === 'tutorial' && pageParams) {
       const id = pageParams.slug || pageParams.id;
       if (id) target = `/tutorial/${encodeURIComponent(id)}`;
+    } else if (page === 'tutorial-series' && pageParams?.slug) {
+      target = `/tutorials/series/${encodeURIComponent(pageParams.slug)}`;
     }
     if (location.pathname !== target) window.history.pushState({}, '', target);
     window.scrollTo({top:0, behavior:'smooth'});
@@ -960,6 +973,7 @@ function App() {
     else if (page === 'service' && pageParams?.name) title = `${pageParams.name} — Outback Electronics`;
     else if (page === 'software' && pageParams?.name) title = `${pageParams.name} — Outback Electronics`;
     else if (page === 'tutorial' && pageParams?.title) title = `${pageParams.title} — Outback Electronics`;
+    else if (page === 'tutorial-series' && pageParams?.seriesName) title = `${pageParams.seriesName} — Outback Electronics`;
     document.title = title;
     // Keep the meta description in sync so deep-linked shares don't all show the homepage blurb
     let description = PAGE_DESCRIPTIONS[page] || DEFAULT_META_DESCRIPTION;
@@ -971,6 +985,8 @@ function App() {
       description = pageParams.description
         ? String(pageParams.description).slice(0, 160)
         : `${pageParams.title} — a tutorial from Outback Electronics.`;
+    } else if (page === 'tutorial-series' && pageParams?.seriesName) {
+      description = `A ${(pageParams.parts||[]).length}-part tutorial series from Outback Electronics.`;
     }
     const metaDesc = document.querySelector('meta[name="description"]');
     if (metaDesc) metaDesc.setAttribute('content', description);
@@ -984,6 +1000,7 @@ function App() {
       const path = location.pathname.replace(/^\/+/, '');
       if (path.startsWith('product/')) { setPage('product'); setPageParams(null); resolveDeepLink(path); return; }
       if (path.startsWith('service/')) { setPage('service'); setPageParams(null); resolveDeepLink(path); return; }
+      if (path.startsWith('tutorials/series/')) { setPage('tutorial-series'); setPageParams(null); resolveDeepLink(path); return; }
       if (path.startsWith('tutorial/')) { setPage('tutorial'); setPageParams(null); resolveDeepLink(path); return; }
       if (path.startsWith('policies/')) { setPage('policies'); setPageParams(parsePoliciesPath(path.slice('policies/'.length))); return; }
       if (path.startsWith('software/')) {

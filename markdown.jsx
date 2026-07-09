@@ -124,6 +124,8 @@ export function renderMarkdown(md) {
   return nodes;
 }
 
+export function slugify(s) { return (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); }
+
 function stripMarkdown(md) {
   return (md || '')
     .replace(/```[\s\S]*?```/g, ' ')

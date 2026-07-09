@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { renderMarkdown, excerptMarkdown } from './markdown.jsx';
+import { renderMarkdown, excerptMarkdown, slugify } from './markdown.jsx';
 
 // A tutorial's first non-empty prose, used as a card blurb / meta fallback
 // when staff haven't written an explicit description.
@@ -18,8 +18,22 @@ const tutorialLinkProps = (t, go) => ({
   onClick: (e) => { e.preventDefault(); go('tutorial', t); },
 });
 
+// All published tutorials sharing a series name, in part order.
+const seriesPartsOf = (seriesName, allTutorials) =>
+  allTutorials.filter(t => t.series === seriesName).sort((a,b) => (Number(a.seriesOrder)||0) - (Number(b.seriesOrder)||0));
+
+const seriesHref = (seriesName) => `/tutorials/series/${encodeURIComponent(slugify(seriesName))}`;
+// Navigate to the series page with a fully-resolved parts list already in
+// hand (from a page that already fetched all tutorials), so there's no
+// loading flicker — matches how product/service cards pass go() full data.
+const seriesLinkProps = (seriesName, allTutorials, go) => ({
+  href: seriesHref(seriesName),
+  onClick: (e) => { e.preventDefault(); go('tutorial-series', { seriesName, slug: slugify(seriesName), parts: seriesPartsOf(seriesName, allTutorials) }); },
+});
+
 function TutorialsPage({ go }) {
   const [filter, setFilter] = useState('All');
+  const [seriesFilter, setSeriesFilter] = useState('All');
   const [tutorials, setTutorials] = useState([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
@@ -32,8 +46,11 @@ function TutorialsPage({ go }) {
 
   // Build category list from data, plus 'All'
   const cats = ['All', ...Array.from(new Set(tutorials.map(t => t.cat).filter(Boolean)))];
+  const seriesNames = Array.from(new Set(tutorials.map(t => t.series).filter(Boolean))).sort();
 
-  const list = filter === 'All' ? tutorials : tutorials.filter(t => t.cat === filter);
+  const list = tutorials
+    .filter(t => filter === 'All' || t.cat === filter)
+    .filter(t => seriesFilter === 'All' || t.series === seriesFilter);
 
   return (
     <>
@@ -42,13 +59,24 @@ function TutorialsPage({ go }) {
       <section className="container" style={{paddingTop: 32, paddingBottom: 48}}>
 
         {/* Category filters */}
-        <div className="tabs" style={{marginBottom: 24}} role="group" aria-label="Filter tutorials by category">
+        <div className="tabs" style={{marginBottom: seriesNames.length ? 10 : 24}} role="group" aria-label="Filter tutorials by category">
           {cats.map(c => (
             <div key={c} className={`tab ${filter===c?'active':''}`} role="button" tabIndex={0} aria-pressed={filter===c}
               onClick={() => setFilter(c)}
               onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setFilter(c); } }}>{c}</div>
           ))}
         </div>
+
+        {/* Series filters — only shown once at least one tutorial belongs to a series */}
+        {seriesNames.length > 0 && (
+          <div className="tabs" style={{marginBottom: 24}} role="group" aria-label="Filter tutorials by series">
+            {['All', ...seriesNames].map(s => (
+              <div key={s} className={`tab ${seriesFilter===s?'active':''}`} role="button" tabIndex={0} aria-pressed={seriesFilter===s}
+                onClick={() => setSeriesFilter(s)}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSeriesFilter(s); } }}>{s === 'All' ? 'All series' : s}</div>
+            ))}
+          </div>
+        )}
 
         {/* Loading skeleton */}
         {loading && (
@@ -84,6 +112,11 @@ function TutorialsPage({ go }) {
                     {t.locked && <span className="tag tag-rust" style={{marginBottom:8, display:'inline-block'}}>MEMBERS ONLY</span>}
                     {!t.locked && t.cat && <span className="tag tag-outline" style={{marginBottom:10, display:'inline-block'}}>{t.cat.toUpperCase()}</span>}
                     {t.format === 'steps' && <span className="tag tag-outline" style={{marginBottom:10, display:'inline-block'}}>{(t.steps||[]).length} STEPS</span>}
+                    {t.series && (
+                      <a {...seriesLinkProps(t.series, tutorials, go)} className="tag tag-rust" style={{marginBottom:10, display:'inline-block', textDecoration:'none'}}>
+                        {t.series.toUpperCase()} · PART {t.seriesOrder||1}
+                      </a>
+                    )}
                   </div>
                   <a {...tutorialLinkProps(t, go)} style={{textDecoration:'none', color:'inherit'}}>
                     <h3 className="serif" style={{fontSize:22, lineHeight:1.15, marginTop:6}}>{t.title}</h3>
@@ -182,6 +215,7 @@ function TutorialContent({ tutorial }) {
 function TutorialPage({ go, pageParams }) {
   const tutorial = pageParams;
   const countedRef = React.useRef(null);
+  const [seriesParts, setSeriesParts] = useState([]);
 
   // Count one view per tutorial visit — fire-and-forget, and guarded so it
   // doesn't double-count on re-renders once the deep link has resolved.
@@ -195,6 +229,14 @@ function TutorialPage({ go, pageParams }) {
       keepalive: true,
     }).catch(() => {});
   }, [tutorial]);
+
+  // Fetch sibling parts so the series box and prev/next links can render.
+  useEffect(() => {
+    if (!tutorial || tutorial._notFound || !tutorial.series) { setSeriesParts([]); return; }
+    fetch('/api/tutorials').then(r => r.ok ? r.json() : Promise.reject()).then(d => {
+      setSeriesParts(seriesPartsOf(tutorial.series, d.items || []));
+    }).catch(() => {});
+  }, [tutorial && tutorial.series]);
 
   if (!tutorial) {
     return (
@@ -235,13 +277,19 @@ function TutorialPage({ go, pageParams }) {
             {tutorial.locked && <span className="tag tag-rust">MEMBERS ONLY</span>}
             {!tutorial.locked && tutorial.cat && <span className="tag tag-outline">{tutorial.cat.toUpperCase()}</span>}
           </div>
-          <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginBottom:24}}>
+          <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginBottom:tutorial.series?4:24}}>
             {[
               tutorial.author && tutorial.author.toUpperCase(),
               tutorial.difficulty,
               tutorial.duration,
             ].filter(Boolean).join(' · ')}
           </div>
+          {tutorial.series && (
+            <div className="mono" style={{fontSize:11, color:'var(--rust)', marginBottom:24}}>
+              <a {...seriesLinkProps(tutorial.series, seriesParts.length ? seriesParts : [tutorial], go)} style={{color:'inherit', textDecoration:'underline'}}>{tutorial.series.toUpperCase()}</a>
+              {' '}· PART {tutorial.seriesOrder||1}{seriesParts.length ? ` OF ${seriesParts.length}` : ''}
+            </div>
+          )}
           {tutorial.coverImage && (
             <img src={tutorial.coverImage} alt="" style={{width:'100%', maxHeight:400, objectFit:'cover', marginBottom:28}} />
           )}
@@ -255,7 +303,107 @@ function TutorialPage({ go, pageParams }) {
             <TutorialContent tutorial={tutorial} />
           )}
 
+          {tutorial.series && seriesParts.length > 0 && (() => {
+            const idx = seriesParts.findIndex(p => p.id === tutorial.id);
+            const prevPart = idx > 0 ? seriesParts[idx-1] : null;
+            const nextPart = idx >= 0 && idx < seriesParts.length - 1 ? seriesParts[idx+1] : null;
+            return (
+              <div style={{marginTop:40, padding:24, background:'var(--bg-elev)', border:'1px solid var(--line)'}}>
+                <div className="eyebrow" style={{marginBottom:12}}>
+                  <a {...seriesLinkProps(tutorial.series, seriesParts, go)} style={{color:'inherit'}}>{tutorial.series}</a> — {seriesParts.length} PART{seriesParts.length===1?'':'S'}
+                </div>
+                <ol style={{listStyle:'none', margin:0, padding:0, display:'grid', gap:6}}>
+                  {seriesParts.map(p => (
+                    <li key={p.id} style={{fontSize:14}}>
+                      {p.id === tutorial.id ? (
+                        <span style={{fontWeight:600}}>#{p.seriesOrder||1} · {p.title}</span>
+                      ) : (
+                        <a {...tutorialLinkProps(p, go)} style={{textDecoration:'none', color:'var(--rust)'}}>#{p.seriesOrder||1} · {p.title}</a>
+                      )}
+                    </li>
+                  ))}
+                </ol>
+                {(prevPart || nextPart) && (
+                  <div className="row-flex" style={{gap:8, marginTop:18, flexWrap:'wrap'}}>
+                    {prevPart && <a {...tutorialLinkProps(prevPart, go)} className="btn btn-ghost btn-sm" style={{textDecoration:'none'}}>← {prevPart.title}</a>}
+                    {nextPart && <a {...tutorialLinkProps(nextPart, go)} className="btn btn-rust btn-sm" style={{textDecoration:'none', marginLeft:'auto'}}>{nextPart.title} →</a>}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
           <div style={{marginTop:40, paddingTop:24, borderTop:'1px solid var(--line)'}}>
+            <a href="/tutorials" className="btn btn-ghost" style={{textDecoration:'none'}} onClick={e=>{e.preventDefault(); go('tutorials');}}>← All tutorials</a>
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
+
+// Series landing page at /tutorials/series/:slug — pageParams is either
+// { seriesName, slug, parts } (resolved by app.jsx's deep-link handling, or
+// passed pre-resolved by a card/series-box link) or { _notFound: true }.
+function SeriesPage({ go, pageParams }) {
+  const series = pageParams;
+
+  if (!series) {
+    return (
+      <>
+        <PageHead crumbs={['Outback','Tutorials','Loading…']} title="Loading…" />
+        <section className="container" style={{paddingTop:32, paddingBottom:48}}>
+          <div style={{maxWidth:760, margin:'0 auto', display:'grid', gap:14}}>
+            <div className="skeleton" style={{height:36, width:'70%'}} />
+            <div className="skeleton" style={{height:220}} />
+          </div>
+        </section>
+      </>
+    );
+  }
+
+  if (series._notFound) {
+    return (
+      <>
+        <PageHead crumbs={['Outback','Tutorials','Not Found']} title="Series not found"
+          lead="Sorry — we couldn't find that series. It may have been renamed or removed." />
+        <section className="container" style={{paddingTop:32, paddingBottom:48}}>
+          <button className="btn btn-rust" onClick={() => go('tutorials')}>Browse all Tutorials →</button>
+        </section>
+      </>
+    );
+  }
+
+  const parts = series.parts || [];
+  return (
+    <>
+      <PageHead crumbs={['Outback','Tutorials', series.seriesName]} title={series.seriesName}
+        lead={`A ${parts.length}-part series from the Outback Electronics workshop.`} />
+      <section className="container" style={{paddingTop:32, paddingBottom:64}}>
+        <div style={{maxWidth:760, margin:'0 auto'}}>
+          <ol style={{listStyle:'none', margin:0, padding:0, display:'grid', gap:12}}>
+            {parts.map((p,i) => (
+              <li key={p.id||i} className="card-paper" style={{padding:'18px 22px', opacity: p.locked ? 0.8 : 1}}>
+                <div className="row-flex" style={{gap:12, alignItems:'flex-start'}}>
+                  <span className="mono" style={{fontSize:13, color:'var(--paper)', background:'var(--rust)', width:28, height:28, borderRadius:'50%', display:'grid', placeItems:'center', flexShrink:0}}>{p.seriesOrder||i+1}</span>
+                  <div style={{flex:1, minWidth:0}}>
+                    {p.locked ? (
+                      <h3 className="serif" style={{fontSize:19, lineHeight:1.2}}>{p.title}</h3>
+                    ) : (
+                      <a {...tutorialLinkProps(p, go)} style={{textDecoration:'none', color:'inherit'}}>
+                        <h3 className="serif" style={{fontSize:19, lineHeight:1.2}}>{p.title}</h3>
+                      </a>
+                    )}
+                    <p style={{marginTop:4, fontSize:13, color:'var(--ink-2)', lineHeight:1.5}}>{tutorialExcerpt(p)}</p>
+                    <div className="mono" style={{fontSize:11, color:'var(--ink-3)', marginTop:6}}>
+                      {p.locked ? 'MEMBERS ONLY' : [p.difficulty, p.duration].filter(Boolean).join(' · ')}
+                    </div>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ol>
+          <div style={{marginTop:32}}>
             <a href="/tutorials" className="btn btn-ghost" style={{textDecoration:'none'}} onClick={e=>{e.preventDefault(); go('tutorials');}}>← All tutorials</a>
           </div>
         </div>
@@ -330,6 +478,7 @@ function GroupsPage({ go }) {
 window.OE_PAGES = Object.assign(window.OE_PAGES || {}, {
   tutorials: TutorialsPage,
   tutorial: TutorialPage,
+  'tutorial-series': SeriesPage,
   groups: GroupsPage,
 });
 window.dispatchEvent(new Event('oe:pages-updated'));
