@@ -34,6 +34,19 @@ export function renderMarkdown(md) {
     return parts;
   };
 
+  // A line that starts a block type of its own — paragraph-joining stops here
+  // rather than folding the next line into the current paragraph.
+  const isBlockStart = (ln, nextLn) => {
+    if (ln === undefined) return true;
+    if (ln.startsWith('```')) return true;
+    if (ln.startsWith('## ') || ln.startsWith('### ')) return true;
+    if (/^(-{3,}|_{3,}|\*{3,})\s*$/.test(ln)) return true;
+    if (/^[-*] /.test(ln)) return true;
+    if (/^\d+\. /.test(ln)) return true;
+    if (/^\|.*\|\s*$/.test(ln) && nextLn !== undefined && /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/.test(nextLn)) return true;
+    return ln.trim() === '';
+  };
+
   while (i < lines.length) {
     const line = lines[i];
     if (line.startsWith('```')) {
@@ -41,6 +54,8 @@ export function renderMarkdown(md) {
       i++;
       while (i < lines.length && !lines[i].startsWith('```')) { codeLines.push(lines[i]); i++; }
       nodes.push(<pre key={i} style={{background:'var(--bg-elev)', padding:'14px 18px', overflowX:'auto', fontSize:13, lineHeight:1.55, margin:'16px 0'}}><code>{codeLines.join('\n')}</code></pre>);
+    } else if (/^(-{3,}|_{3,}|\*{3,})\s*$/.test(line)) {
+      nodes.push(<hr key={i} style={{border:'none', borderTop:'1px solid var(--line)', margin:'28px 0'}} />);
     } else if (line.startsWith('## ')) {
       nodes.push(<h2 key={i} style={{fontFamily:'Instrument Serif, serif', fontSize:26, marginTop:28, marginBottom:6, lineHeight:1.15}}>{line.slice(3)}</h2>);
     } else if (line.startsWith('### ')) {
@@ -94,7 +109,15 @@ export function renderMarkdown(md) {
     } else if (line.trim() === '') {
       nodes.push(<div key={i} style={{height:10}} />);
     } else {
-      nodes.push(<p key={i} style={{margin:'0 0 10px', lineHeight:1.75}}>{inlineRender(line)}</p>);
+      // A paragraph is every consecutive non-blank line up to the next blank
+      // line or block boundary — a single line break inside it is a soft wrap,
+      // not a new paragraph (this is how Markdown treats hard-wrapped prose
+      // pasted from Word/Docs/Notion, which puts a real newline every ~80 chars).
+      const paraLines = [line];
+      i++;
+      while (i < lines.length && !isBlockStart(lines[i], lines[i+1])) { paraLines.push(lines[i]); i++; }
+      nodes.push(<p key={i} style={{margin:'0 0 10px', lineHeight:1.75}}>{inlineRender(paraLines.join(' '))}</p>);
+      continue;
     }
     i++;
   }
