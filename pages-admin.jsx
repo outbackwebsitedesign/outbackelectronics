@@ -3638,7 +3638,7 @@ function AdminClients() {
   }, []);
   const [edit, setEdit] = useState(null);
   const [form, setForm] = useState({});
-  const open = (i) => { setEdit(i); setForm(i==='new' ? { name:'', subtitle:'', description:'', url:'', logoUrl:'', logoAlt:'', order: rows.length, active:true } : rows[i]); };
+  const open = (i) => { setEdit(i); setForm(i==='new' ? { name:'', subtitle:'', description:'', since:'', url:'', logoUrl:'', logoAlt:'', order: rows.length, active:true } : rows[i]); };
   const save = async () => {
     const r = await fetch('/api/admin/clients/save', {
       method: 'POST', headers: postHeaders(),
@@ -3704,7 +3704,10 @@ function AdminClients() {
           <label className="field"><span className="label">What we did for them (optional)</span>
             <input className="input" placeholder="e.g. Ongoing IT support & hardware servicing" value={form.description||''} onChange={e=>setForm({...form, description:e.target.value})}/>
           </label>
-          <label className="field"><span className="label">Their website (optional)</span><input className="input" placeholder="https://…" value={form.url||''} onChange={e=>setForm({...form, url:e.target.value})}/></label>
+          <div className="grid-2" style={{gap:14}}>
+            <label className="field"><span className="label">Their website (optional)</span><input className="input" placeholder="https://…" value={form.url||''} onChange={e=>setForm({...form, url:e.target.value})}/></label>
+            <label className="field"><span className="label">Client since (optional)</span><input className="input" placeholder="e.g. 2024" maxLength={4} inputMode="numeric" value={form.since||''} onChange={e=>setForm({...form, since:e.target.value.replace(/[^0-9]/g,'').slice(0,4)})}/></label>
+          </div>
           <div className="grid-2" style={{gap:14}}>
             <label className="field"><span className="label">Display order</span><input className="input" type="number" value={form.order ?? 0} onChange={e=>setForm({...form, order: parseInt(e.target.value,10) || 0})}/></label>
             <label className="field" style={{flexDirection:'row', alignItems:'center', gap:10, marginTop:22}}>
