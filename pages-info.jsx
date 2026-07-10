@@ -1294,17 +1294,10 @@ function ShippingContent({ email }) {
           <li>Express Shipping (Australia Post Express, typically 1–3 business days within Australia)</li>
         </ul>
         <p style={s.p}>All times and dates given for delivery are estimates only and are given in good faith. We are not liable for delays caused by Australia Post, customs, or circumstances beyond our control, though we will keep you informed of any significant delay.</p>
-        <p style={s.p}><em>For EU and UK consumers:</em> This does not affect your statutory rights. Unless specifically noted, estimated delivery times reflect the earliest available delivery, and deliveries will be made within 30 days after the day we accept your order. If we are unable to deliver within that period, you are entitled to cancel your order and receive a full refund.</p>
       </div>
 
       <div style={s.mt}><h3>Do You Deliver Internationally?</h3>
-        <p style={s.p}>We offer international shipping to the following countries:</p>
-        <ul style={{paddingLeft:20, lineHeight:2, marginTop:8}}>
-          <li>Australia</li>
-          <li>United Kingdom</li>
-          <li>United States</li>
-        </ul>
-        <p style={s.p}>We may be subject to various rules and restrictions in relation to some international deliveries and you may be subject to additional taxes and duties over which we have no control. You are responsible for complying with the laws applicable to the country where you live and for any such additional costs or taxes.</p>
+        <p style={s.p}>No. We currently ship only to addresses within Australia. We do not offer international shipping, and orders cannot be placed with a delivery address outside Australia.</p>
       </div>
 
       <div style={s.mt}><h3>Are There Other Shipping Restrictions?</h3>
@@ -1314,7 +1307,6 @@ function ShippingContent({ email }) {
 
       <div style={s.mt}><h3>What Happens If My Order Is Delayed?</h3>
         <p style={s.p}>If delivery is delayed for any reason we will let you know as soon as possible and will advise you of a revised estimated delivery date.</p>
-        <p style={s.p}><em>For EU and UK consumers:</em> This does not affect your statutory rights.</p>
       </div>
 
       <div style={s.mt}><h3>What If My Order Is Lost or Missing?</h3>
@@ -1322,7 +1314,6 @@ function ShippingContent({ email }) {
         <p style={s.p}>Where an order is confirmed as lost in transit, we will offer you a replacement or a full refund at your election, subject to stock availability for replacements. We will lodge any carrier claim on your behalf — you do not need to deal with the carrier directly.</p>
         <p style={s.p}><strong>Signature on Delivery.</strong> High-value orders may be dispatched with a signature-on-delivery requirement. If no one is available to sign at the time of delivery, a card will be left for redelivery or post office collection. We are not liable for packages left at an unattended delivery address where the carrier has confirmed delivery as per the applicable service terms and no signature was required.</p>
         <p style={s.p}><strong>Incorrect Delivery Address.</strong> You are responsible for providing a correct and complete delivery address at the time of order. We are not liable for delayed or failed delivery caused by an address error provided by you. If you notice an error immediately after placing your order, contact us at <a href={`mailto:${email}`}>{email}</a> as soon as possible; we will endeavour to correct it before dispatch but cannot guarantee we can do so.</p>
-        <p style={s.p}><em>For EU and UK consumers:</em> Risk of loss or damage to goods passes to you upon delivery. This does not affect your statutory rights.</p>
       </div>
 
       <div style={s.mt}><h3>Questions About Returns?</h3>
