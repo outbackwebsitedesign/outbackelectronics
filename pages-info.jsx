@@ -1304,7 +1304,6 @@ function ShippingContent({ email }) {
           <li>United Kingdom</li>
           <li>United States</li>
         </ul>
-        <p style={s.p}>Free shipping is not valid on international orders.</p>
         <p style={s.p}>We may be subject to various rules and restrictions in relation to some international deliveries and you may be subject to additional taxes and duties over which we have no control. You are responsible for complying with the laws applicable to the country where you live and for any such additional costs or taxes.</p>
       </div>
 

@@ -1790,9 +1790,7 @@ function UtilityBar() {
   return (
     <div className="utility-bar">
       <div className="container">
-        <div className="links">
-          <span>FREE FREIGHT OVER $200 · OUTBACK NT/SA/WA</span>
-        </div>
+        <div className="links"></div>
         <div className="links">
           {UTILITY_PAGES.map(p => (
             <a key={p.id} href={getSiteRoot() + p.id} onClick={(e) => { e.preventDefault(); go(p.id); }}>{p.label}</a>
