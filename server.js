@@ -2489,9 +2489,8 @@ function buildInvoicePdf(order, shop) {
       ? order.lineItems.map(li => { const qty = parseInt(li.qty) || 1; return { description: (li.description || '') + (qty > 1 ? ` × ${qty}` : ''), amount: (Number(li.amount) || 0) * qty }; })
       : [{ description: order.items || 'Goods / services', amount: Number(order.total) || 0 }];
     if (Number(order.discountAmount) > 0) {
-      const label = order.discountType === 'fixed'
-        ? 'Discount'
-        : `Discount (${Number(order.discountValue) || 0}%)`;
+      const base = order.discountLabel || 'Discount';
+      const label = order.discountType === 'fixed' ? base : `${base} (${Number(order.discountValue) || 0}%)`;
       lineItems.push({ description: label, amount: -Number(order.discountAmount) });
     }
 

@@ -1392,7 +1392,7 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
 
       <div className="field">
         <span className="label">Discount</span>
-        <div style={{display:'grid', gridTemplateColumns:'110px 1fr', gap:8}}>
+        <div style={{display:'grid', gridTemplateColumns:'110px 1fr', gap:8, marginBottom:8}}>
           <select className="select" value={form.discountType || 'percent'} onChange={e=>setForm({...form, discountType:e.target.value})}>
             <option value="percent">Percent (%)</option>
             <option value="fixed">Dollar ($)</option>
@@ -1400,8 +1400,10 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
           <input className="input" type="number" min="0" step="0.01" placeholder={form.discountType === 'fixed' ? 'e.g. 20.00' : 'e.g. 10'}
             value={form.discountValue || ''} onChange={e=>setForm({...form, discountValue:nonNegInput(e.target.value)})}/>
         </div>
+        <input className="input" value={form.discountLabel || ''} onChange={e=>setForm({...form, discountLabel:e.target.value})}
+          placeholder="Reason (optional) — e.g. Multi-service discount, Loyalty discount"/>
         {Number(form.discountAmount) > 0 && (
-          <div style={{marginTop:8, fontSize:12, color:'var(--rust)'}}>Discount applied: <strong>-${Number(form.discountAmount).toLocaleString('en-AU',{minimumFractionDigits:2})}</strong></div>
+          <div style={{marginTop:8, fontSize:12, color:'var(--rust)'}}>{form.discountLabel || 'Discount'} applied: <strong>-${Number(form.discountAmount).toLocaleString('en-AU',{minimumFractionDigits:2})}</strong></div>
         )}
       </div>
 
