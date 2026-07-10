@@ -1449,7 +1449,7 @@ function ReturnContent({ email, phone, address }) {
           <li>Photograph or video the outer packaging and the damaged item before unpacking further.</li>
           <li>Contact us within <strong>48 hours of delivery</strong> at <a href={`mailto:${email}`}>{email}</a> with your order number and photographic evidence.</li>
         </ul>
-        <p style={s.p}>We will arrange a replacement, repair, or refund as required. Where damage was caused by the carrier, we will lodge a claim with Australia Post or the relevant carrier on your behalf. You may be required to retain damaged packaging and the item for inspection. <em>For EU and UK consumers, this does not affect your statutory rights.</em></p>
+        <p style={s.p}>We will arrange a replacement, repair, or refund as required. Where damage was caused by the carrier, we will lodge a claim with Australia Post or the relevant carrier on your behalf. You may be required to retain damaged packaging and the item for inspection.</p>
       </div>
 
       <div style={s.mt}><h3>Products Posing a Safety Hazard</h3>
