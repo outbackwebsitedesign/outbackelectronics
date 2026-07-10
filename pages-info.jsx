@@ -1041,7 +1041,7 @@ function TermsContent({ email, phone, address, abn }) {
         <p style={s.p}><strong>Third-Party Products and Marketplace Sellers.</strong> Products listed and sold by third-party sellers on our marketplace are the sole responsibility of those sellers. Outback Electronics makes <strong>no representation, warranty, or guarantee of any kind</strong> regarding the quality, safety, fitness for purpose, compliance, accuracy of description, or any other characteristic of third-party products. We do not independently test, inspect, or certify third-party products before or after listing. Your purchase contract for a third-party product is with the seller, not with Outback Electronics. Your rights under the Australian Consumer Law in relation to third-party products run primarily against that seller as the vendor and supplier. If you have a complaint, warranty claim, or dispute regarding a third-party product, you must direct that claim to the seller. Outback Electronics will not be liable for any loss, damage, personal injury, property damage, or adverse outcome arising from a third-party product, to the fullest extent permitted by applicable law. Outback Electronics' role is limited to operating the marketplace platform.</p>
       </div>
       <div style={s.mt}><h3>6. Purchases and Payment</h3>
-        <p style={s.p}>We accept Visa, Mastercard, and Afterpay. All payments are in Australian Dollars. OE is not currently registered for GST, so no GST is currently added to prices; this will be updated if OE's GST registration status changes. Payment is processed securely via Stripe. By completing a purchase, you agree to Stripe's terms of service and privacy policy.</p>
+        <p style={s.p}>We accept payment by credit or debit card and any other payment method made available through our checkout at the time of your order. All payments are in Australian Dollars. OE is not currently registered for GST, so no GST is currently added to prices; this will be updated if OE's GST registration status changes. Payment is processed securely via Stripe. By completing a purchase, you agree to Stripe's terms of service and privacy policy.</p>
         <p style={s.p}>We reserve the right to refuse any order, correct pricing errors, or cancel orders placed by dealers or resellers. If we cancel an order for which payment has been received, we will issue a full refund via your original payment method.</p>
       </div>
       <div style={s.mt}><h3>7. Subscriptions</h3>
@@ -1122,7 +1122,7 @@ function TermsContent({ email, phone, address, abn }) {
       <div style={s.mt}><h3>23. Disclaimer and Assumption of Risk</h3>
         <p style={{...s.p, textTransform:'uppercase', fontSize:13}}>THE SERVICES ARE PROVIDED ON AN AS-IS AND AS-AVAILABLE BASIS WITHOUT ANY REPRESENTATION OR WARRANTY OF ANY KIND, WHETHER EXPRESS, IMPLIED, STATUTORY, OR OTHERWISE, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, NON-INFRINGEMENT, ACCURACY, RELIABILITY, OR COMPLETENESS. WE DO NOT WARRANT THAT THE SERVICES WILL BE UNINTERRUPTED, ERROR-FREE, SECURE, OR FREE OF VIRUSES OR OTHER HARMFUL COMPONENTS. YOUR USE OF THE SERVICES IS ENTIRELY AT YOUR OWN RISK.</p>
         <p style={s.p}><strong>Technical Information.</strong> Any technical information, advice, guides, tutorials, or recommendations made available through the Services (including the forum, repair guides, product descriptions, and our Repair Services) are provided for general informational purposes only and do not constitute professional engineering, electrical safety, or specialist advice. Our technical content relates exclusively to ELV (Extra Low Voltage, ≤50 V AC / ≤120 V DC) and LV equipment; nothing in the Services should be read as guidance for mains-voltage (240 V AC) work. You acknowledge that electronic repairs and modifications involve inherent and serious risks including, without limitation: <strong>electric shock capable of causing death or permanent serious injury; fire and explosion that may result in partial or complete property destruction (including damage to your home or premises); toxic gas release from damaged or mistreated battery cells; damage to connected equipment and infrastructure; personal injury; and voiding of manufacturer warranties</strong>. You should always consult a qualified professional before undertaking any electronic repair, modification, or installation, and must engage a licensed electrician for any mains-voltage work — which is outside our scope entirely. You assume all risk associated with acting on any technical information obtained through the Services and agree that we shall not be liable for any loss, damage, personal injury, serious bodily injury, death, fire, explosion, property damage (including total loss of property), or adverse outcome resulting from reliance on such information, to the fullest extent permitted by law.</p>
-        <p style={s.p}><strong>No Reliance.</strong> You acknowledge that in agreeing to these Legal Terms you have not relied upon any representation, statement, promise, assurance, warranty, understanding, undertaking, or other matter that is not expressly set out in these Legal Terms. You waive any right or remedy based on such representations or matters.</p>
+        <p style={s.p}><strong>No Reliance.</strong> Other than as expressly set out in these Legal Terms, you should not rely on any statement made outside these Legal Terms as varying them. This clause does not exclude, and nothing in it should be read as excluding, any liability we may have for misleading or deceptive conduct under section 18 of the Australian Consumer Law, for fraudulent or negligent misrepresentation, or for any other conduct that cannot lawfully be excluded, restricted, or waived.</p>
         <p style={s.p}><strong>Nothing in these Legal Terms excludes, restricts, or modifies any consumer guarantee, right, or remedy conferred by the Australian Consumer Law (Schedule 2 of the Competition and Consumer Act 2010 (Cth)) or any other applicable mandatory legislation that cannot lawfully be excluded.</strong></p>
       </div>
       <div style={s.mt}><h3>24. Limitations of Liability</h3>
@@ -1159,8 +1159,9 @@ function TermsContent({ email, phone, address, abn }) {
   );
 }
 
-function PrivacyContent({ email, phone, address }) {
+function PrivacyContent({ email, phone, address, portalUrl }) {
   const s = {mt: {marginTop:32}, p: {fontSize:15, lineHeight:1.75, marginTop:8}};
+  const accountUrl = `${portalUrl || 'https://portal.outbackelectronics.com.au'}/account`;
   return (
     <div>
       <span className="eyebrow">LEGAL · PRIVACY POLICY</span>
@@ -1234,7 +1235,7 @@ function PrivacyContent({ email, phone, address }) {
 
       <div style={s.mt}><h3>9. What Are Your Privacy Rights?</h3>
         <p style={s.p}>Depending on your location, you may have the right to: request access to and a copy of your personal information; request rectification or erasure; restrict processing; data portability; and object to processing. You can also opt out of marketing communications at any time via the unsubscribe link in our emails or by contacting us.</p>
-        <p style={s.p}>To review or change your account information, log in to your account settings at <a href="/account/my-account">outbackelectronics.com.au/account/my-account</a>. Questions? Email us at <a href={`mailto:${email}`}>{email}</a>.</p>
+        <p style={s.p}>To review or change your account information, log in to your customer portal account at <a href={accountUrl}>{accountUrl.replace(/^https?:\/\//, '')}</a>. Questions? Email us at <a href={`mailto:${email}`}>{email}</a>.</p>
       </div>
 
       <div style={s.mt}><h3>10. Controls for Do-Not-Track Features</h3>
@@ -1243,7 +1244,7 @@ function PrivacyContent({ email, phone, address }) {
 
       <div style={s.mt}><h3>11. Do United States Residents Have Specific Privacy Rights?</h3>
         <p style={s.p}>Residents of certain US states may have additional rights regarding personal information. We have not collected, sold, or shared any personal information to third parties for commercial purposes in the preceding twelve months, and we do not intend to do so. US residents may have rights including: right to know, access, correct, delete, and obtain a copy of their data; right to non-discrimination; and right to opt out of targeted advertising or profiling.</p>
-        <p style={s.p}>To exercise these rights, visit <a href="/account/my-account">outbackelectronics.com.au/account/my-account</a> or email <a href={`mailto:${email}`}>{email}</a>.</p>
+        <p style={s.p}>To exercise these rights, visit <a href={accountUrl}>{accountUrl.replace(/^https?:\/\//, '')}</a> or email <a href={`mailto:${email}`}>{email}</a>.</p>
       </div>
 
       <div style={s.mt}><h3>12. Do Other Regions Have Specific Privacy Rights?</h3>
@@ -1260,7 +1261,7 @@ function PrivacyContent({ email, phone, address }) {
       </div>
 
       <div style={s.mt}><h3>14. How Can You Review, Update, or Delete Your Data?</h3>
-        <p style={s.p}>To request to review, update, or delete your personal information, visit: <a href="/account/my-account">outbackelectronics.com.au/account/my-account</a></p>
+        <p style={s.p}>To request to review, update, or delete your personal information, visit: <a href={accountUrl}>{accountUrl.replace(/^https?:\/\//, '')}</a></p>
       </div>
 
       <div style={s.mt}><h3>15. How Can You Contact Us About This Notice?</h3>
@@ -2136,6 +2137,7 @@ function PoliciesPage({ go, pageParams }) {
   const phone = shop.phone;
   const address = fullAddress;
   const abn = shop.abn;
+  const portalUrl = shop._portalUrl || 'https://portal.outbackelectronics.com.au';
 
   // Resolve the incoming params: prefer an explicit two-segment {audience, slug},
   // fall back to legacy single-segment slugs (some of which moved audience+slug on rename).
@@ -2186,7 +2188,7 @@ function PoliciesPage({ go, pageParams }) {
             ))}
           </aside>
           <div className="policy-content">
-            <DocComponent email={email} phone={phone} address={address} abn={abn} />
+            <DocComponent email={email} phone={phone} address={address} abn={abn} portalUrl={portalUrl} />
           </div>
         </div>
       </section>

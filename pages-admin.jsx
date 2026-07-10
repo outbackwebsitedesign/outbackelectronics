@@ -3423,6 +3423,19 @@ function AdminProducts({ sessionInfo = {} }) {
             </label>
           </div>
           <div className="grid-2" style={{gap:14}}>
+            <label className="field">
+              <span className="label">Was price (AUD) <span style={{fontWeight:400, color:'var(--ink-3)', fontSize:11}}>optional — shown struck through next to the price</span></span>
+              <input className="input" type="number" step="0.01" min="0" placeholder="0.00" value={form.was||''} onChange={e=>setForm({...form, was:e.target.value ? Number(e.target.value) : ''})} />
+            </label>
+            <div />
+          </div>
+          {!!form.was && (
+            <label className="field" style={{flexDirection:'row', alignItems:'flex-start', gap:10}}>
+              <input type="checkbox" style={{marginTop:3}} checked={!!form.wasPriceConfirmed} onChange={e=>setForm({...form, wasPriceConfirmed:e.target.checked})} />
+              <span className="label" style={{marginBottom:0, fontWeight:400}}>I confirm this was a genuine price we actually charged for this product for a reasonable period, in line with Australian Consumer Law "was/now" pricing requirements.</span>
+            </label>
+          )}
+          <div className="grid-2" style={{gap:14}}>
             <div></div>
             <div className="field">
               <span className="label">Stock on hand</span>

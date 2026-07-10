@@ -5793,6 +5793,19 @@ const adminServer = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/admin/catalog/products/save') {
     const session = requireRole(req, res, 'seller'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    // "Was" price (struck-through former price) is a consumer-facing price representation —
+    // the Australian Consumer Law requires it to reflect a price genuinely charged for a
+    // reasonable period, so require the admin to confirm that before it can be saved.
+    if (body.was !== '' && body.was != null) {
+      const was = Number(body.was);
+      const current = Number(body.price) || 0;
+      if (!(was > current) || !body.wasPriceConfirmed) {
+        return json(res, 422, { error: 'invalid_was_price', message: 'The "was" price must be higher than the current price, and you must confirm it was a genuine price we actually charged.' });
+      }
+    } else {
+      body.was = '';
+      body.wasPriceConfirmed = false;
+    }
     const products = readProducts();
     const idx = products.findIndex(p => p.id && p.id === body.id);
     if (session.role === 'seller') {
