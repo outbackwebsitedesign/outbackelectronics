@@ -695,7 +695,7 @@ function SellerTermsContent({ email, phone, address, abn }) {
       </div>
 
       <div style={s.mt}><h3>8. GST</h3>
-        <p style={s.p}>Unless otherwise stated, all fees and Commission amounts are exclusive of GST. Where GST applies, it will be added and OE will provide a valid tax invoice.</p>
+        <p style={s.p}>Unless otherwise stated, all fees and Commission amounts are exclusive of GST. OE is not currently registered for GST, so no GST is added to fees or Commission and OE's invoices are not tax invoices. If OE becomes GST-registered, GST will be added to fees and Commission from that date and OE will issue valid tax invoices accordingly.</p>
         <p style={s.p}>The Seller warrants that it holds a valid ABN and complies with all GST obligations under the <em>A New Tax System (Goods and Services Tax) Act 1999</em> (Cth). The Seller must provide its ABN to OE before listing. OE may withhold tax from payments under the ATO's no-ABN withholding rules if the Seller fails to provide a valid ABN.</p>
         <p style={s.p}>Where OE collects payment from customers as a disclosed agent, the Seller is the entity making the taxable supply for GST purposes. The Seller is responsible for accounting for GST on its supplies.</p>
       </div>
@@ -863,7 +863,7 @@ function SellerFeesContent({ email }) {
       <span className="eyebrow">SELLER AGREEMENT · OHD003</span>
       <h2 style={{marginTop:8}}>Fees Schedule</h2>
       <div style={s.mt}>
-        <p style={s.p}>This document sets out the fees payable by Sellers for listing products on the Outback Electronics Platform. It forms part of the Seller Agreement (OHD001–OHD004). All amounts are in Australian Dollars (AUD). Unless otherwise stated, fees are <strong>exclusive of GST</strong>; GST will be added where applicable.</p>
+        <p style={s.p}>This document sets out the fees payable by Sellers for listing products on the Outback Electronics Platform. It forms part of the Seller Agreement (OHD001–OHD004). All amounts are in Australian Dollars (AUD). Unless otherwise stated, fees are <strong>exclusive of GST</strong> — see Section 5 for GST treatment.</p>
         <p style={s.p}>For questions about fees, contact us at {email ? <a href={`mailto:${email}`}>{email}</a> : 'our support team'}.</p>
       </div>
 
@@ -912,7 +912,7 @@ function SellerFeesContent({ email }) {
       </div>
 
       <div style={s.mt}><h3>5. GST Treatment</h3>
-        <p style={s.p}>All fees in this document are exclusive of GST. Where a fee is subject to GST, the GST-inclusive amount will be charged and OE will provide a valid tax invoice. Sellers are responsible for their own GST obligations on their product sales. Sellers must provide a valid ABN to OE; failure to do so may result in OE withholding tax from remittances under the ATO's no-ABN withholding rules.</p>
+        <p style={s.p}>All fees in this document are exclusive of GST. OE is not currently registered for GST, so no GST is added to Listing Fees or Commission and OE's invoices are not tax invoices while this remains the case. If OE becomes GST-registered, GST will be added to fees and Commission from that date and OE will issue valid tax invoices accordingly. Sellers are responsible for their own GST obligations on their product sales, regardless of OE's registration status. Sellers must provide a valid ABN to OE; failure to do so may result in OE withholding tax from remittances under the ATO's no-ABN withholding rules.</p>
       </div>
 
       <div style={s.mt}><h3>6. Refunds and Chargebacks</h3>
@@ -1041,7 +1041,7 @@ function TermsContent({ email, phone, address, abn }) {
         <p style={s.p}><strong>Third-Party Products and Marketplace Sellers.</strong> Products listed and sold by third-party sellers on our marketplace are the sole responsibility of those sellers. Outback Electronics makes <strong>no representation, warranty, or guarantee of any kind</strong> regarding the quality, safety, fitness for purpose, compliance, accuracy of description, or any other characteristic of third-party products. We do not independently test, inspect, or certify third-party products before or after listing. Your purchase contract for a third-party product is with the seller, not with Outback Electronics. Your rights under the Australian Consumer Law in relation to third-party products run primarily against that seller as the vendor and supplier. If you have a complaint, warranty claim, or dispute regarding a third-party product, you must direct that claim to the seller. Outback Electronics will not be liable for any loss, damage, personal injury, property damage, or adverse outcome arising from a third-party product, to the fullest extent permitted by applicable law. Outback Electronics' role is limited to operating the marketplace platform.</p>
       </div>
       <div style={s.mt}><h3>6. Purchases and Payment</h3>
-        <p style={s.p}>We accept Visa, Mastercard, and Afterpay. All payments are in Australian Dollars and include GST where applicable. Payment is processed securely via Stripe. By completing a purchase, you agree to Stripe's terms of service and privacy policy.</p>
+        <p style={s.p}>We accept Visa, Mastercard, and Afterpay. All payments are in Australian Dollars. OE is not currently registered for GST, so no GST is currently added to prices; this will be updated if OE's GST registration status changes. Payment is processed securely via Stripe. By completing a purchase, you agree to Stripe's terms of service and privacy policy.</p>
         <p style={s.p}>We reserve the right to refuse any order, correct pricing errors, or cancel orders placed by dealers or resellers. If we cancel an order for which payment has been received, we will issue a full refund via your original payment method.</p>
       </div>
       <div style={s.mt}><h3>7. Subscriptions</h3>
@@ -1541,7 +1541,7 @@ function CommercialTermsContent({ email, phone, address, abn }) {
       </div>
 
       <div style={s.mt}><h3>4. Pricing, Quotes, and Bulk Orders</h3>
-        <p style={s.p}>Trade and wholesale pricing is provided on request and may vary by volume, account history, or negotiated arrangement. Written quotes are valid for 14 days from issue unless otherwise stated and are subject to stock availability at the time of order confirmation. All prices are in Australian Dollars and exclude GST unless stated otherwise; GST will be added where applicable and shown on the tax invoice.</p>
+        <p style={s.p}>Trade and wholesale pricing is provided on request and may vary by volume, account history, or negotiated arrangement. Written quotes are valid for 14 days from issue unless otherwise stated and are subject to stock availability at the time of order confirmation. All prices are in Australian Dollars and exclude GST unless stated otherwise. OE is not currently registered for GST, so no GST is currently added to trade or wholesale prices; if OE becomes GST-registered, GST will be added and shown on the invoice from that date.</p>
       </div>
 
       <div style={s.mt}><h3>5. Delivery and Risk</h3>
