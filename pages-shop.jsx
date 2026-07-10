@@ -114,9 +114,9 @@ function HomePage({ go, addToCart, portalUser }) {
                 <div className="hero-actions" style={{marginTop:18, display:'flex', alignItems:'center', gap:10, padding:'12px 16px', border:'1px solid var(--line)', background:'var(--paper)', maxWidth:'fit-content', animationDelay:'380ms'}}>
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{color:'var(--ink-3)', flexShrink:0}}><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>
                   <span style={{fontSize:13, color:'var(--ink-2)'}}>New customer?</span>
-                  <a href="https://portal.outbackelectronics.com.au/?tab=register" style={{fontSize:13, color:'var(--rust)', fontWeight:600, textDecoration:'none'}}>Create a free account</a>
+                  <a href={`${shop._portalUrl || 'https://portal.outbackelectronics.com.au'}/?tab=register`} style={{fontSize:13, color:'var(--rust)', fontWeight:600, textDecoration:'none'}}>Create a free account</a>
                   <span style={{fontSize:13, color:'var(--ink-3)'}}>·</span>
-                  <a href="https://portal.outbackelectronics.com.au/?tab=login" style={{fontSize:13, color:'var(--ink-2)', textDecoration:'none'}}>Sign in</a>
+                  <a href={`${shop._portalUrl || 'https://portal.outbackelectronics.com.au'}/?tab=login`} style={{fontSize:13, color:'var(--ink-2)', textDecoration:'none'}}>Sign in</a>
                 </div>
               )}
               <div className="row-flex hero-stats" style={{marginTop: 36, gap: 32, borderTop:'1px solid var(--line)', paddingTop: 22}}>
@@ -314,7 +314,7 @@ function HomePage({ go, addToCart, portalUser }) {
               <ul style={{margin:'14px 0 0', padding:0, listStyle:'none', display:'flex', flexDirection:'column', gap:10}}>
                 {recentThreads.map(t => (
                   <li key={t.id} style={{borderBottom:'1px solid var(--line)', paddingBottom:10}}>
-                    <a href={`https://forum.outbackelectronics.com.au/t/${t.slug}/${t.id}`} target="_blank" rel="noopener noreferrer"
+                    <a href={`${shop._forumUrl || 'https://forum.outbackelectronics.com.au'}/t/${t.slug}/${t.id}`} target="_blank" rel="noopener noreferrer"
                        style={{color:'var(--ink)', fontSize:14, fontWeight:500, textDecoration:'none', display:'block', lineHeight:1.3}}>
                       {t.title}
                     </a>
@@ -325,7 +325,7 @@ function HomePage({ go, addToCart, portalUser }) {
             ) : (
               <p style={{marginTop: 14, color:'var(--ink-2)', fontSize:14}}>Join the discussion — repairs, builds, troubleshooting, and more.</p>
             )}
-            <a href="https://forum.outbackelectronics.com.au" target="_blank" rel="noopener noreferrer" className="btn btn-outline" style={{marginTop: 18, display:'inline-block'}}>Visit the Forum →</a>
+            <a href={shop._forumUrl || 'https://forum.outbackelectronics.com.au'} target="_blank" rel="noopener noreferrer" className="btn btn-outline" style={{marginTop: 18, display:'inline-block'}}>Visit the Forum →</a>
           </div>
         </div>
       </section>

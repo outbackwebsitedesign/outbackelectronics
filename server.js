@@ -3725,6 +3725,7 @@ function subUrl(override, port, sub) {
 function serviceUrls() {
   return {
     siteUrl:     getSiteUrl(),
+    forumUrl:    FORUM_PUBLIC_URL,
     portalUrl:   subUrl(process.env.PORTAL_URL,   PORTAL_PORT,     'portal'),
     gamesUrl:    subUrl(process.env.GAMES_URL,    GAMES_PORT,      'games'),
     toolsUrl:    subUrl(process.env.TOOLS_URL,    TOOLS_PORT,      'tools'),
@@ -4132,6 +4133,7 @@ const mainServer = http.createServer(async (req, res) => {
       portalUrl: getPortalUrl(),
       gamesUrl: getGamesUrl(),
       toolsUrl: getToolsUrl(),
+      forumUrl: FORUM_PUBLIC_URL,
     });
   }
 

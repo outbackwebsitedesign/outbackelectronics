@@ -14,9 +14,11 @@ const SITE_FLAGS = Object.assign(
 let _PORTAL_URL = 'https://portal.outbackelectronics.com.au';
 let _GAMES_URL  = 'https://games.outbackelectronics.com.au';
 let _TOOLS_URL  = 'https://tools.outbackelectronics.com.au';
+let _FORUM_URL  = 'https://forum.outbackelectronics.com.au';
 function getPortalUrl() { return _PORTAL_URL; }
 function getGamesUrl()  { return _GAMES_URL; }
 function getToolsUrl()  { return _TOOLS_URL; }
+function getForumUrl()  { return _FORUM_URL; }
 
 const { portalApi, usePortalUser } = makePortalHelpers(getPortalUrl);
 
@@ -332,9 +334,8 @@ const PRIMARY_PAGES = [
 ];
 // Pages served from their own subdomain (tools./forum./games.) — clicking these
 // navigates the browser to the external service rather than SPA-routing.
-const FORUM_URL = 'https://forum.outbackelectronics.com.au';
 const EXTERNAL_LINKS = {
-  'forum-link': () => FORUM_URL,
+  'forum-link': getForumUrl,
   'games-link': getGamesUrl,
   'tools-link': getToolsUrl,
 };
@@ -401,7 +402,7 @@ function UtilityBar({ go }) {
 }
 
 function useShopInfo() {
-  const [info, setInfo] = useState({ shop: {}, flags: {}, portalUrl: '', gamesUrl: '' });
+  const [info, setInfo] = useState({ shop: {}, flags: {}, portalUrl: '', gamesUrl: '', forumUrl: '' });
   useEffect(() => {
     fetch('/api/shop-info')
       .then(r => r.ok ? r.json() : null)
@@ -410,11 +411,13 @@ function useShopInfo() {
         if (d.portalUrl) _PORTAL_URL = d.portalUrl;
         if (d.gamesUrl)  _GAMES_URL  = d.gamesUrl;
         if (d.toolsUrl)  _TOOLS_URL  = d.toolsUrl;
+        if (d.forumUrl)  _FORUM_URL  = d.forumUrl;
         setInfo({
           shop: d.shop || {},
           flags: d.flags || {},
           portalUrl: d.portalUrl || _PORTAL_URL,
           gamesUrl: d.gamesUrl || _GAMES_URL,
+          forumUrl: d.forumUrl || _FORUM_URL,
         });
       })
       .catch(() => {});
@@ -659,7 +662,7 @@ function Footer({ go }) {
           </div>
         </div>
         <div className="baseline">
-          <span>© 2023–2026 {shop.tradingName}{shop.abn ? ` · ABN ${shop.abn}` : ''}</span>
+          <span>© 2023–{new Date().getFullYear()} {shop.tradingName}{shop.abn ? ` · ABN ${shop.abn}` : ''}</span>
           {(shop.acknowledgmentPeople || shop.acknowledgmentCountry) && <span>ACKNOWLEDGES THE {(shop.acknowledgmentPeople || '').toUpperCase()} AS TRADITIONAL CUSTODIANS OF {(shop.acknowledgmentCountry || '').toUpperCase()}</span>}
         </div>
       </div>
@@ -895,12 +898,13 @@ function App() {
   });
   const [searchOpen, setSearchOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
-  const { shop, flags, portalUrl } = useShopInfo();
+  const { shop, flags, portalUrl, forumUrl } = useShopInfo();
   const [portalUser] = usePortalUser();
   const resolvedFlags = useMemo(() => Object.assign({}, SITE_FLAGS, flags), [flags]);
   const siteUrls = useMemo(() => ({
-    portal: portalUrl || 'https://portal.outbackelectronics.com.au',
-  }), [portalUrl]);
+    portal: portalUrl || getPortalUrl(),
+    forum: forumUrl || getForumUrl(),
+  }), [portalUrl, forumUrl]);
 
   const DEFAULT_META_DESCRIPTION = 'Outback Electronics — Arduino & microcontroller builds, PC & phone repairs, software and AI solutions, and off-grid electronics. Serving remote Australia by appointment.';
   const PAGE_DESCRIPTIONS = {
@@ -1052,7 +1056,7 @@ function App() {
   }, [page]);
 
   const shopCtxValue = useMemo(
-    () => ({ ...shop, _flags: resolvedFlags, _portalUrl: siteUrls.portal }),
+    () => ({ ...shop, _flags: resolvedFlags, _portalUrl: siteUrls.portal, _forumUrl: siteUrls.forum }),
     [shop, resolvedFlags, siteUrls]
   );
 
