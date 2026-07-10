@@ -3038,7 +3038,7 @@ function AdminEwaste() {
         <StatTile label="INTAKE · THIS WEEK" value={intakes.filter(r => { const d = new Date(r.date); const now = new Date(); return !isNaN(d) && (now - d) < 7*24*3600*1000; }).length || 0} />
         <StatTile label="DIVERTED · YTD" value={intakes.reduce((s,r) => s + (Number(r.kg)||0), 0) + ' kg'} />
         <StatTile label="PAID OUT · MO" value={'$' + intakes.filter(r => { const d = new Date(r.date); const now = new Date(); return !isNaN(d) && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); }).reduce((s,r) => s + (parseFloat(r.payout?.replace(/[^0-9.]/g,''))||0), 0).toFixed(0)} />
-        <StatTile label="PALLETS AWAITING SORT" value={0} tone={0 > 0 ? 'rust' : undefined} />
+        <StatTile label="PALLETS AWAITING SORT" value={intakes.filter(r => !r.disposition).length} tone={intakes.filter(r => !r.disposition).length > 0 ? 'rust' : undefined} />
       </div>
 
       <div className="admin-split" style={{display:'grid', gridTemplateColumns:'2fr 1fr', gap:24}}>
