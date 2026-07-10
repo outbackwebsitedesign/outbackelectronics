@@ -975,6 +975,12 @@ const ORDER_FULFILMENT_MAP = {
   refunded:  { bg:'#f3d5c5', fg:'#7a3a18' },
 };
 function liTotal(i) { return (Number(i.amount) || 0) * (Number(i.qty) || 1); }
+function discountAmountFor(subtotal, type, value) {
+  const v = Number(value) || 0;
+  if (!v || subtotal <= 0) return 0;
+  const raw = type === 'percent' ? subtotal * (v / 100) : v;
+  return Math.round(Math.max(0, Math.min(subtotal, raw)) * 100) / 100;
+}
 function expTotal(e) { return (Number(e.amount) || 0) * (Number(e.quantity) || 1); }
 function orderAmountPaid(f) {
   return Math.round((f.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0) * 100) / 100;
@@ -1130,11 +1136,13 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
   React.useEffect(() => {
     if (!form.lineItems || form.lineItems.length === 0) return;
     const lineItemsTotal = Math.round(form.lineItems.reduce((s,i)=>s+liTotal(i),0) * 100) / 100;
+    const discountAmount = discountAmountFor(lineItemsTotal, form.discountType, form.discountValue);
+    const total = Math.round((lineItemsTotal - discountAmount) * 100) / 100;
     const summary = form.lineItems.map(i => i.description).filter(Boolean).join(', ');
-    if (lineItemsTotal !== Number(form.total) || (summary && summary !== form.items)) {
-      setForm(f => ({ ...f, total: lineItemsTotal, items: summary || f.items }));
+    if (total !== Number(form.total) || discountAmount !== Number(form.discountAmount || 0) || (summary && summary !== form.items)) {
+      setForm(f => ({ ...f, total, discountAmount, items: summary || f.items }));
     }
-  }, [form.lineItems]);
+  }, [form.lineItems, form.discountType, form.discountValue]);
 
   const saveNow = async (patch) => {
     const updated = { ...form, ...patch };
@@ -1204,8 +1212,10 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
       const lineItems = partsCharge > 0
         ? [...others, { id: 'parts-auto', description: 'Parts', amount: partsCharge }]
         : others;
-      const newTotal = Math.round(lineItems.reduce((s, i) => s + liTotal(i), 0) * 100) / 100;
-      const updated = { ...f, lineItems, total: newTotal, items: lineItems.map(i => i.description).filter(Boolean).join(', ') || f.items };
+      const subtotal = Math.round(lineItems.reduce((s, i) => s + liTotal(i), 0) * 100) / 100;
+      const discountAmount = discountAmountFor(subtotal, f.discountType, f.discountValue);
+      const newTotal = Math.round((subtotal - discountAmount) * 100) / 100;
+      const updated = { ...f, lineItems, total: newTotal, discountAmount, items: lineItems.map(i => i.description).filter(Boolean).join(', ') || f.items };
       if (edit.id) saveNow(updated);
       return updated;
     });
@@ -1380,6 +1390,21 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
         )}
       </div>
 
+      <div className="field">
+        <span className="label">Discount</span>
+        <div style={{display:'grid', gridTemplateColumns:'110px 1fr', gap:8}}>
+          <select className="select" value={form.discountType || 'percent'} onChange={e=>setForm({...form, discountType:e.target.value})}>
+            <option value="percent">Percent (%)</option>
+            <option value="fixed">Dollar ($)</option>
+          </select>
+          <input className="input" type="number" min="0" step="0.01" placeholder={form.discountType === 'fixed' ? 'e.g. 20.00' : 'e.g. 10'}
+            value={form.discountValue || ''} onChange={e=>setForm({...form, discountValue:nonNegInput(e.target.value)})}/>
+        </div>
+        {Number(form.discountAmount) > 0 && (
+          <div style={{marginTop:8, fontSize:12, color:'var(--rust)'}}>Discount applied: <strong>-${Number(form.discountAmount).toLocaleString('en-AU',{minimumFractionDigits:2})}</strong></div>
+        )}
+      </div>
+
       <label className="field"><span className="label">Items summary</span><input className="input" value={form.items||''} onChange={e=>setForm({...form,items:e.target.value})} placeholder="Shown in order lists"/></label>
 
       <label className="field"><span className="label">Fulfilment</span>
@@ -1488,7 +1513,7 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
       </>}
 
       <div style={{borderTop:'1px solid var(--line)', margin:'12px 0 16px'}}/>
-      <label className="field"><span className="label">Order Total (AUD){(form.lineItems||[]).length > 0 && <span style={{color:'var(--ink-3)', fontWeight:400}}> — set by line items</span>}</span>
+      <label className="field"><span className="label">Order Total (AUD){(form.lineItems||[]).length > 0 && <span style={{color:'var(--ink-3)', fontWeight:400}}> — set by line items{Number(form.discountAmount) > 0 ? ' less discount' : ''}</span>}</span>
         <input className="input" type="number" min="0" step="0.01" disabled={(form.lineItems||[]).length > 0} value={form.total||''} onChange={e=>setForm({...form,total:Number(e.target.value)})}/>
       </label>
 
@@ -1714,7 +1739,7 @@ function AdminOrders({ search, sessionInfo }) {
     return `OE-${String(maxN + 1).padStart(4, '0')}`;
   };
 
-  const blankOrder = () => ({ id:'', suggestedId: nextOrderId(), cust:'', email:'', phone:'', loc:'', items:'', lineItems:[], date: todayOrderDate(), total:0, fulfilment:'pending', payments:[], parts:[], updates:[] });
+  const blankOrder = () => ({ id:'', suggestedId: nextOrderId(), cust:'', email:'', phone:'', loc:'', items:'', lineItems:[], date: todayOrderDate(), total:0, discountType:'percent', discountValue:'', discountAmount:0, fulfilment:'pending', payments:[], parts:[], updates:[] });
 
   const openRow = (r) => { setEdit(r); };
 

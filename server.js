@@ -2449,7 +2449,7 @@ function buildInvoicePdf(order, shop) {
 
     const RUST = '#b5451b';
     const OCHRE = '#d39a37';
-    const fmtMoney = n => `$${(Number(n) || 0).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const fmtMoney = n => { const v = Number(n) || 0; return `${v < 0 ? '-' : ''}$${Math.abs(v).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; };
     const shopName = shop.tradingName || shop.name || 'Outback Electronics';
     const shopAddress = shop.address || [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ');
     const logoPath = path.join(__dirname, 'assets', 'logo.png');
@@ -2488,6 +2488,12 @@ function buildInvoicePdf(order, shop) {
     const lineItems = (order.lineItems && order.lineItems.length)
       ? order.lineItems.map(li => { const qty = parseInt(li.qty) || 1; return { description: (li.description || '') + (qty > 1 ? ` × ${qty}` : ''), amount: (Number(li.amount) || 0) * qty }; })
       : [{ description: order.items || 'Goods / services', amount: Number(order.total) || 0 }];
+    if (Number(order.discountAmount) > 0) {
+      const label = order.discountType === 'fixed'
+        ? 'Discount'
+        : `Discount (${Number(order.discountValue) || 0}%)`;
+      lineItems.push({ description: label, amount: -Number(order.discountAmount) });
+    }
 
     const tableTop = doc.y;
     const colDescX = 50, colAmountX = 460, colWidth = 500;
