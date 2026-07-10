@@ -1478,7 +1478,7 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
     ? true
     : hasVariants
       ? (selectedVariant ? (selectedVariant.stock || 0) > 0 : false)
-      : (product.stock == null || product.stock > 0);
+      : product.stock > 0;
 
   return (
     <>
