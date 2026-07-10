@@ -3964,7 +3964,7 @@ function AdminSoftware() {
   };
 
   const deleteFile = async (file) => {
-    if (!window.confirm(`Delete "${file.originalName || file.filename}"?`)) return;
+    if (!(await adminConfirm(`Delete "${file.originalName || file.filename}"?`, { title:'Delete file', confirmLabel:'Delete', danger:true }))) return;
     await fetch('/api/admin/software/upload/delete', {
       method:'POST', headers:postHeaders(), credentials:'include',
       body: JSON.stringify({ filename: file.filename }),
@@ -4923,7 +4923,7 @@ function AdminAI() {
     if (await saveAll(next, boxes)) { setModelDrawer(null); setFeedback('Model saved.'); }
   };
   const deleteModel = async () => {
-    if (!window.confirm('Delete this model?')) return;
+    if (!(await adminConfirm('Delete this model?', { title:'Delete model', confirmLabel:'Delete', danger:true }))) return;
     const next = models.filter((_,i)=>i!==modelDrawer);
     if (await saveAll(next, boxes)) { setModelDrawer(null); setFeedback('Model deleted.'); }
   };
@@ -4935,7 +4935,7 @@ function AdminAI() {
     if (await saveAll(models, next)) { setBoxDrawer(null); setFeedback('Box saved.'); }
   };
   const deleteBox = async () => {
-    if (!window.confirm('Delete this box?')) return;
+    if (!(await adminConfirm('Delete this box?', { title:'Delete box', confirmLabel:'Delete', danger:true }))) return;
     const next = boxes.filter((_,i)=>i!==boxDrawer);
     if (await saveAll(models, next)) { setBoxDrawer(null); setFeedback('Box deleted.'); }
   };
@@ -5531,7 +5531,7 @@ function AdminCustomers() {
         <Drawer open={true} onClose={() => setEdit(null)} title={edit.name || 'New customer'}
           footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
             {edit.id && <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={async () => {
-              if (!confirm('Delete this customer?')) return;
+              if (!(await adminConfirm('Delete this customer?', { title:'Delete customer', confirmLabel:'Delete', danger:true }))) return;
               const r = await fetch('/api/admin/customers/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: edit.id }) }).catch(()=>null);
               if (!r || !r.ok) { adminToast('Failed to delete customer.'); return; }
               setRows(rs => rs.filter(r => r.id !== edit.id));
@@ -5747,14 +5747,14 @@ function AdminGiftCards() {
   };
 
   const deleteDenom = async (id) => {
-    if (!confirm('Delete this denomination?')) return;
+    if (!(await adminConfirm('Delete this denomination?', { title:'Delete denomination', confirmLabel:'Delete', danger:true }))) return;
     await fetch('/api/admin/gift-cards/denominations/delete', { method: 'POST', headers: postHeaders(), credentials: 'include', body: JSON.stringify({ id }) }).catch(() => null);
     setDenoms(ds => ds.filter(d => d.id !== id));
     if (denomEdit && denomEdit.id === id) setDenomEdit(null);
   };
 
   const voidCard = async (code) => {
-    if (!confirm(`Void gift card ${code}? This cannot be undone.`)) return;
+    if (!(await adminConfirm(`Void gift card ${code}? This cannot be undone.`, { title:'Void gift card', confirmLabel:'Void', danger:true }))) return;
     await fetch('/api/admin/gift-cards/void', { method: 'POST', headers: postHeaders(), credentials: 'include', body: JSON.stringify({ code }) });
     load();
   };
@@ -6281,7 +6281,7 @@ function AdminExpenses() {
   };
 
   const del = async () => {
-    if (!form.id || !confirm('Delete this expense?')) return;
+    if (!form.id || !(await adminConfirm('Delete this expense?', { title:'Delete expense', confirmLabel:'Delete', danger:true }))) return;
     const r = await fetch('/api/admin/expenses/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: form.id }) }).catch(()=>null);
     if (!r || !r.ok) { adminToast('Failed to delete expense.'); return; }
     setRows(rs => rs.filter(x => x.id !== form.id));
@@ -7294,7 +7294,7 @@ function VehicleLogView() {
   };
 
   const deleteEntry = async (id) => {
-    if (!confirm('Delete this trip?')) return;
+    if (!(await adminConfirm('Delete this trip?', { title:'Delete trip', confirmLabel:'Delete', danger:true }))) return;
     const csrf = getCsrf();
     await fetch('/api/admin/vehicle-log/delete', {
       method:'POST', credentials:'include',
@@ -7953,7 +7953,7 @@ function SellerSettings({ sessionInfo = {} }) {
   };
 
   const removeCard = async () => {
-    if (!window.confirm('Remove saved card?')) return;
+    if (!(await adminConfirm('Remove saved card?', { title:'Remove saved card', confirmLabel:'Remove', danger:true }))) return;
     setCardBusy(true);
     const r = await fetch('/api/admin/seller/payment-method', { method:'DELETE', headers:postHeaders(), credentials:'include' }).catch(()=>null);
     setCardBusy(false);
@@ -8083,7 +8083,7 @@ function AdminSellerBilling({ sessionInfo = {} }) {
   };
 
   const chargeNow = async () => {
-    if (!window.confirm('Run listing fee billing now for all sellers?')) return;
+    if (!(await adminConfirm('Run listing fee billing now for all sellers?', { title:'Run billing', confirmLabel:'Run billing', danger:true }))) return;
     setChargeBusy(true); setChargeMsg('');
     const r = await fetch('/api/admin/seller-billing/charge-now', { method:'POST', headers:postHeaders(), credentials:'include' }).catch(()=>null);
     setChargeBusy(false);

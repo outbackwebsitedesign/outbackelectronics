@@ -511,8 +511,8 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
                 <div style={{marginBottom:14}}>
                   <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:6}}>HAVE AN ACCOUNT? REDEEM YOUR POINTS</div>
                   <div style={{display:'flex', gap:6, marginBottom:4}}>
-                    <input className="input" placeholder="Email" type="email" value={rewardsEmail} onChange={e => setRewardsEmail(e.target.value)} style={{flex:1, fontSize:12}} />
-                    <input className="input" placeholder="Password" type="password" value={rewardsPassword} onChange={e => setRewardsPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && lookupRewards()} style={{flex:1, fontSize:12}} />
+                    <input className="input" placeholder="Email" type="email" autoComplete="email" value={rewardsEmail} onChange={e => setRewardsEmail(e.target.value)} style={{flex:1, fontSize:12}} />
+                    <input className="input" placeholder="Password" type="password" autoComplete="current-password" value={rewardsPassword} onChange={e => setRewardsPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && lookupRewards()} style={{flex:1, fontSize:12}} />
                   </div>
                   <button className="btn btn-ghost btn-sm" onClick={lookupRewards} disabled={rewardsLoading || !rewardsEmail.trim() || !rewardsPassword} style={{width:'100%', justifyContent:'center'}}>
                     {rewardsLoading ? '…' : 'Check Points Balance'}
