@@ -143,6 +143,7 @@ const REPAIRS_DB_PATH   = path.join(__dirname, 'repairs.db');
 const QUOTES_DB_PATH    = path.join(__dirname, 'quotes.db');
 const EWASTE_DB_PATH    = path.join(__dirname, 'ewaste.db');
 const SELLERS_DB_PATH   = path.join(__dirname, 'sellers.db');
+const CLIENTS_DB_PATH   = path.join(__dirname, 'clients.db');
 const GROUPS_DB_PATH    = path.join(__dirname, 'groups.db');
 const USERS_DB_PATH     = path.join(__dirname, 'users.db');
 const SOFTWARE_DB_PATH  = path.join(__dirname, 'software.db');
@@ -454,6 +455,20 @@ function readSellers() {
   try { const p = JSON.parse(cachedReadFile(SELLERS_DB_PATH)); return Array.isArray(p.consignments) ? p.consignments : []; } catch { return []; }
 }
 function writeSellers(consignments) { atomicWriteFile(SELLERS_DB_PATH, JSON.stringify({ consignments }, null, 2)); }
+
+function readClients() {
+  try {
+    const p = JSON.parse(cachedReadFile(CLIENTS_DB_PATH));
+    if (!Array.isArray(p.clients)) return [];
+    let dirty = false;
+    for (const c of p.clients) {
+      if (!c.id) { c.id = 'client-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex'); dirty = true; }
+    }
+    if (dirty) writeClients(p.clients);
+    return p.clients;
+  } catch { return []; }
+}
+function writeClients(clients) { atomicWriteFile(CLIENTS_DB_PATH, JSON.stringify({ clients }, null, 2)); }
 
 function readSellerLedger() {
   try { const d = JSON.parse(cachedReadFile(SELLER_LEDGER_DB_PATH)); return d.transactions || []; } catch { return []; }
@@ -3878,6 +3893,14 @@ const mainServer = http.createServer(async (req, res) => {
     return json(res, 200, { testimonial: { quote: featured.testimonial, name: featured.name, loc: featured.loc } });
   }
 
+  if (req.method === 'GET' && url.pathname === '/api/clients') {
+    const items = readClients()
+      .filter(c => c.active !== false && c.name)
+      .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0))
+      .map(c => ({ id: c.id, name: c.name, subtitle: c.subtitle || '', url: c.url || '', logoUrl: c.logoUrl || '' }));
+    return json(res, 200, { items });
+  }
+
   // Public analytics event ingestion
   if (req.method === 'POST' && url.pathname === '/api/analytics/event') {
     if (publicRateLimited(getIp(req), 'analytics')) return json(res, 429, { error: 'rate_limited' });
@@ -5818,6 +5841,30 @@ const adminServer = http.createServer(async (req, res) => {
     const session = requireRole(req, res, 'manager'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     writeServices(readServices().filter(s => s.id !== body.id));
+    return json(res, 200, { ok: true });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/admin/clients') {
+    const session = requireRole(req, res, 'staff'); if (!session) return;
+    return json(res, 200, { items: readClients() });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/clients/save') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    if (!body.name) return json(res, 422, { error: 'name_required' });
+    const clients = readClients();
+    const idx = body.id ? clients.findIndex(c => c.id === body.id) : -1;
+    if (idx >= 0) { clients[idx] = body; } else { body.id = 'client-' + Date.now(); clients.push(body); }
+    try { writeClients(clients); } catch (err) {
+      console.error('[clients/save] write failed:', err);
+      return json(res, 500, { error: 'write_failed' });
+    }
+    return json(res, 200, { ok: true, item: body });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/clients/delete') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    writeClients(readClients().filter(c => c.id !== body.id));
     return json(res, 200, { ok: true });
   }
 

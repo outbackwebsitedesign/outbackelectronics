@@ -346,6 +346,7 @@ const NAV_ICONS = {
   groups:       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>,
   customers:    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
   sellers:      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
+  clients:      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="7" width="18" height="14" rx="1"/><path d="M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2"/><line x1="3" y1="12" x2="21" y2="12"/></svg>,
   memberships:  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
   'gift-cards': <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z"/></svg>,
   rewards:      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M6 9c0-1 .895-2 2-2h8c1.105 0 2 .895 2 2v8c0 1.105-.895 2-2 2H8c-1.105 0-2-.895-2-2V9z"/><polyline points="9 4 9 2 15 2 15 4"/><line x1="12" y1="9" x2="12" y2="15"/><line x1="9" y1="12" x2="15" y2="12"/></svg>,
@@ -380,6 +381,7 @@ const ADMIN_SECTIONS = [
     { id:'groups',    label:'Groups',    minRole:'manager' },
     { id:'customers', label:'Customers', minRole:'technician' },
     { id:'sellers',   label:'Sellers',   minRole:'manager' },
+    { id:'clients',   label:'Clients',   minRole:'manager' },
   ]},
   { group:'STORE', items: [
     { id:'memberships', label:'Memberships', minRole:'manager' },
@@ -3617,6 +3619,92 @@ function AdminServices() {
               <option value="published">Published</option>
             </select>
           </label>
+        </Drawer>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// CLIENTS
+// ============================================================
+function AdminClients() {
+  const [rows, setRows] = useState([]);
+  useEffect(() => {
+    fetch('/api/admin/clients', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(data => setRows(data.items || []))
+      .catch(() => {});
+  }, []);
+  const [edit, setEdit] = useState(null);
+  const [form, setForm] = useState({});
+  const open = (i) => { setEdit(i); setForm(i==='new' ? { name:'', subtitle:'', url:'', logoUrl:'', order: rows.length, active:true } : rows[i]); };
+  const save = async () => {
+    const r = await fetch('/api/admin/clients/save', {
+      method: 'POST', headers: postHeaders(),
+      credentials: 'include', body: JSON.stringify(form),
+    }).catch(() => null);
+    if (r && r.ok) {
+      const d = await r.json();
+      if (edit === 'new') setRows(rs => [...rs, d.item]);
+      else setRows(rs => rs.map((row, i) => i === edit ? d.item : row));
+      setEdit(null);
+    } else {
+      const err = r ? await r.json().catch(() => ({})) : {};
+      adminToast(err.error === 'name_required' ? 'Client name is required' : 'Failed to save client — check server logs', 'error');
+    }
+  };
+  const remove = async () => {
+    const item = rows[edit];
+    await fetch('/api/admin/clients/delete', {
+      method: 'POST', headers: postHeaders(),
+      credentials: 'include', body: JSON.stringify({ id: item.id }),
+    }).catch(() => null);
+    setRows(rs => rs.filter((_, i) => i !== edit));
+    setEdit(null);
+  };
+  return (
+    <div style={{padding:32}}>
+      <div className="row-flex" style={{justifyContent:'space-between', marginBottom:18}}>
+        <div className="mono" style={{fontSize:12, color:'var(--ink-2)'}}>{rows.length} CLIENTS · {rows.filter(r=>r.active !== false).length} SHOWN ON SITE</div>
+        <button className="btn btn-rust btn-sm" onClick={() => open('new')}>+ New client</button>
+      </div>
+      <p style={{fontSize:13, color:'var(--ink-2)', maxWidth:640, marginBottom:18}}>
+        Clients listed here appear on the public site as a "who we work with" trust strip. Only add a client after they've agreed you can name them — most engagements are confidential by default.
+      </p>
+      <Table
+        columns={[
+          { key:'name', label:'Client', w:'2fr', render:r => <span style={{fontWeight:600}}>{r.name}</span> },
+          { key:'subtitle', label:'Subtitle', w:'1.5fr' },
+          { key:'order', label:'Order', w:'80px' },
+          { key:'active', label:'Status', w:'120px', render:r => <span className={`tag ${r.active !== false ?'tag-euc':'tag-outline'}`}>{r.active !== false ? 'SHOWN' : 'HIDDEN'}</span> },
+        ]}
+        rows={rows}
+        onRowClick={(_,i) => open(i)}
+      />
+      {edit !== null && (
+        <Drawer open={true} onClose={() => setEdit(null)} title={edit==='new'?'New client':form.name}
+          footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
+            {edit!=='new' && <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={remove}>Delete</button>}
+            <div className="row-flex" style={{gap:8, marginLeft:'auto'}}>
+              <button className="btn btn-ghost btn-sm" onClick={()=>setEdit(null)}>Cancel</button>
+              <button className="btn btn-sm" onClick={save}>Save</button>
+            </div>
+          </div>}
+        >
+          <label className="field"><span className="label">Client name</span><input className="input" placeholder="e.g. Blackall-Tambo Regional Council" value={form.name||''} onChange={e=>setForm({...form, name:e.target.value})}/></label>
+          <label className="field"><span className="label">Subtitle (optional)</span><input className="input" placeholder="e.g. Blackall Library" value={form.subtitle||''} onChange={e=>setForm({...form, subtitle:e.target.value})}/></label>
+          <label className="field"><span className="label">Link (optional)</span><input className="input" placeholder="https://…" value={form.url||''} onChange={e=>setForm({...form, url:e.target.value})}/></label>
+          <label className="field"><span className="label">Logo (optional)</span>
+            <ImageUploadSlot value={form.logoUrl} onChange={v=>setForm({...form, logoUrl:v})} aspect="3/2" label="DROP LOGO, OR CLICK" />
+          </label>
+          <div className="grid-2" style={{gap:14}}>
+            <label className="field"><span className="label">Display order</span><input className="input" type="number" value={form.order ?? 0} onChange={e=>setForm({...form, order: parseInt(e.target.value,10) || 0})}/></label>
+            <label className="field" style={{flexDirection:'row', alignItems:'center', gap:10, marginTop:22}}>
+              <input type="checkbox" checked={form.active !== false} onChange={e=>setForm({...form, active:e.target.checked})}/>
+              <span className="label" style={{marginBottom:0}}>Shown on site</span>
+            </label>
+          </div>
         </Drawer>
       )}
     </div>
@@ -9028,6 +9116,7 @@ const ADMIN_VIEWS = {
   groups:     { c: AdminGroups,     t:'Groups' },
   customers:  { c: AdminCustomers,  t:'Customers' },
   sellers:    { c: AdminSellers,    t:'Sellers' },
+  clients:    { c: AdminClients,    t:'Clients',          staticSubtitle:'named on the public site with permission' },
   memberships: { c: AdminMemberships, t:'Memberships', staticSubtitle:'tiers · subscriptions · activation' },
   'gift-cards': { c: AdminGiftCards, t:'Gift Cards',        staticSubtitle:'issued codes · balances · manual issuance' },
   'rewards':    { c: AdminRewards,   t:'Rewards',           staticSubtitle:'points balances · history · manual adjustments' },
@@ -9043,7 +9132,7 @@ const ADMIN_VIEWS = {
 const ADMIN_ALL_IDS = new Set([
   'overview','orders','repairs','quotes','ewaste','bookings','availability',
   'products','services','software','tutorials','ai',
-  'groups','customers','sellers',
+  'groups','customers','sellers','clients',
   'memberships','gift-cards','rewards','expenses','tax-reports','policies','seller-billing','settings','audit-log',
 ]);
 

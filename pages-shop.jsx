@@ -26,6 +26,7 @@ function HomePage({ go, addToCart, portalUser }) {
   const [categories, setCategories] = useState([]);
   const [metrics, setMetrics] = useState({ repairCount: null, ewasteTonnes: null });
   const [testimonial, setTestimonial] = useState(null);
+  const [clients, setClients] = useState([]);
   const heroProduct = useMemo(() => featuredProducts.find(p => p.infiniteStock || p.stock > 0) || featuredProducts[0] || null, [featuredProducts]);
   const [aiData, setAiData] = useState(null);
   const [repairServices, setRepairServices] = useState([]);
@@ -53,6 +54,7 @@ function HomePage({ go, addToCart, portalUser }) {
       fetch('/api/catalog/filters').then(r => r.ok ? r.json() : Promise.reject()).then(d => setCategories(d.categories || [])).catch(() => {}),
       fetch('/api/metrics').then(r => r.json()).then(d => setMetrics(d)).catch(() => {}),
       fetch('/api/testimonial').then(r => r.ok ? r.json() : Promise.reject()).then(d => setTestimonial(d.testimonial)).catch(() => {}),
+      fetch('/api/clients').then(r => r.ok ? r.json() : Promise.reject()).then(d => setClients(d.items || [])).catch(() => {}),
       fetch('/api/ai').then(r => r.ok ? r.json() : Promise.reject()).then(d => setAiData(d)).catch(() => {}),
       fetch('/api/catalog/services').then(r => r.ok ? r.json() : Promise.reject()).then(d => setRepairServices(d.items || [])).catch(() => {}),
       fetch('/api/settings').then(r => r.ok ? r.json() : Promise.reject()).then(d => setSiteContent(d.siteContent || {})).catch(() => {}),
@@ -152,6 +154,33 @@ function HomePage({ go, addToCart, portalUser }) {
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
         </div>
       </section>
+
+      {/* Trusted by / clients strip */}
+      {clients.length > 0 && (
+        <section className="container reveal" style={{paddingTop: 40, paddingBottom: 8}}>
+          <div className="row-flex" style={{gap: 28, flexWrap:'wrap', alignItems:'center', borderTop:'1px solid var(--line)', borderBottom:'1px solid var(--line)', padding:'20px 0'}}>
+            <span className="eyebrow" style={{whiteSpace:'nowrap'}}>WHO WE WORK WITH</span>
+            <div className="row-flex" style={{gap: 28, flexWrap:'wrap', flex: 1}}>
+              {clients.map(c => {
+                const content = (
+                  <>
+                    {c.logoUrl && <img src={thumbUrl(c.logoUrl, 160)} alt={c.name} style={{height: 28, objectFit:'contain', display:'block'}} />}
+                    <span style={{display:'flex', flexDirection:'column', lineHeight:1.2}}>
+                      <span style={{fontSize:14, fontWeight:600}}>{c.name}</span>
+                      {c.subtitle && <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{c.subtitle}</span>}
+                    </span>
+                  </>
+                );
+                return c.url ? (
+                  <a key={c.id} href={c.url} target="_blank" rel="noopener noreferrer" style={{display:'flex', alignItems:'center', gap:10, color:'inherit', textDecoration:'none'}}>{content}</a>
+                ) : (
+                  <span key={c.id} style={{display:'flex', alignItems:'center', gap:10}}>{content}</span>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Category strip */}
       <section className="container reveal" style={{paddingTop: 64, paddingBottom: 24}}>
