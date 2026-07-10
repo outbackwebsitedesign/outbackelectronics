@@ -280,6 +280,8 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
       if (selectedShipping) {
         body.shippingAmount = selectedShipping.price;
         body.shippingService = selectedShipping.name;
+        body.shippingCode = selectedShipping.code;
+        body.toPostcode = shippingQuote?.toPostcode || '';
       }
       await ensureCsrf();
       const resp = await fetch('/api/checkout', {

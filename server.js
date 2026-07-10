@@ -2405,6 +2405,90 @@ function getShopPostcode() {
   } catch { return '2731'; }
 }
 
+// Computes a live AusPost parcel quote for a set of cart line items. Shared by
+// the public /api/shipping/quote endpoint and server-side checkout verification —
+// checkout must never trust a client-supplied shipping price.
+async function fetchAuspostServices(toPostcode, items, catalogProducts) {
+  let totalWeightKg = 0;
+  let maxLengthCm = 0;
+  let maxWidthCm = 0;
+  let totalHeightCm = 0;
+  let hasPhysical = false;
+
+  for (const li of (items || [])) {
+    const pid = String(li.productId || '');
+    const qty = Math.min(999, Math.max(1, Math.floor(Number(li.quantity) || 1)));
+    const prod = catalogProducts.find(p => p.id === pid);
+    if (!prod || prod.digital) continue;
+    hasPhysical = true;
+    const w = Number(prod.weightKg) || 0.5;
+    const l = Number(prod.lengthCm) || 20;
+    const ww = Number(prod.widthCm) || 15;
+    const h = Number(prod.heightCm) || 10;
+    totalWeightKg += w * qty;
+    maxLengthCm = Math.max(maxLengthCm, l);
+    maxWidthCm = Math.max(maxWidthCm, ww);
+    totalHeightCm += h * qty;
+  }
+
+  if (!hasPhysical) return { hasPhysical: false, services: [] };
+
+  totalWeightKg = Math.max(0.1, totalWeightKg);
+  maxLengthCm = Math.max(5, maxLengthCm);
+  maxWidthCm = Math.max(5, maxWidthCm);
+  totalHeightCm = Math.max(1, totalHeightCm);
+
+  const auspostKey = getAuspostKey();
+  if (!auspostKey) return { hasPhysical: true, error: 'auspost_not_configured' };
+
+  const fromPostcode = getShopPostcode();
+  const params = new URLSearchParams({
+    from_postcode: fromPostcode,
+    to_postcode: String(toPostcode).trim(),
+    length: String(Math.ceil(maxLengthCm)),
+    width: String(Math.ceil(maxWidthCm)),
+    height: String(Math.ceil(totalHeightCm)),
+    weight: String(Math.min(22, totalWeightKg).toFixed(3)),
+  });
+
+  const auspostResp = await new Promise((resolve) => {
+    const options = {
+      hostname: 'digitalapi.auspost.com.au',
+      path: `/postage/parcel/domestic/service.json?${params}`,
+      method: 'GET',
+      headers: { 'AUTH-KEY': auspostKey },
+    };
+    const req2 = https.request(options, (res2) => {
+      let data = '';
+      res2.on('data', d => { data += d; });
+      res2.on('end', () => {
+        try { resolve({ status: res2.statusCode, body: JSON.parse(data) }); }
+        catch { resolve({ status: res2.statusCode, body: null }); }
+      });
+    });
+    req2.on('error', () => resolve(null));
+    req2.setTimeout(8000, () => { req2.destroy(); resolve(null); });
+    req2.end();
+  });
+
+  if (!auspostResp || auspostResp.status !== 200 || !auspostResp.body) {
+    return { hasPhysical: true, error: 'auspost_error' };
+  }
+
+  const rawServices = auspostResp.body?.services?.service || [];
+  const services = (Array.isArray(rawServices) ? rawServices : [rawServices])
+    .filter(s => s && s.code && s.price)
+    .map(s => ({ code: s.code, name: s.name, price: parseFloat(s.price) }))
+    .sort((a, b) => a.price - b.price);
+
+  return {
+    hasPhysical: true,
+    services,
+    fromPostcode,
+    totalWeightKg: parseFloat(totalWeightKg.toFixed(3)),
+  };
+}
+
 function getSmtpConfig() {
   try {
     const s = readSettings();
@@ -4091,86 +4175,16 @@ const mainServer = http.createServer(async (req, res) => {
     if (!auspostKey) return json(res, 503, { error: 'auspost_not_configured', message: 'Shipping quotes are not available at this time.' });
 
     const catalog = readProducts();
-    let totalWeightKg = 0;
-    let maxLengthCm = 0;
-    let maxWidthCm = 0;
-    let totalHeightCm = 0;
-    let hasPhysical = false;
-
-    for (const li of items) {
-      const pid = String(li.productId || '');
-      const qty = Math.min(999, Math.max(1, Math.floor(Number(li.quantity) || 1)));
-      const prod = catalog.find(p => p.id === pid);
-      if (!prod || prod.digital) continue;
-      hasPhysical = true;
-      const w = Number(prod.weightKg) || 0.5;
-      const l = Number(prod.lengthCm) || 20;
-      const ww = Number(prod.widthCm) || 15;
-      const h = Number(prod.heightCm) || 10;
-      totalWeightKg += w * qty;
-      maxLengthCm = Math.max(maxLengthCm, l);
-      maxWidthCm = Math.max(maxWidthCm, ww);
-      totalHeightCm += h * qty;
-    }
-
-    if (!hasPhysical) return json(res, 200, { services: [], digital: true });
-
-    totalWeightKg = Math.max(0.1, totalWeightKg);
-    maxLengthCm = Math.max(5, maxLengthCm);
-    maxWidthCm = Math.max(5, maxWidthCm);
-    totalHeightCm = Math.max(1, totalHeightCm);
-
-    const fromPostcode = getShopPostcode();
-    const params = new URLSearchParams({
-      from_postcode: fromPostcode,
-      to_postcode: String(toPostcode).trim(),
-      length: String(Math.ceil(maxLengthCm)),
-      width: String(Math.ceil(maxWidthCm)),
-      height: String(Math.ceil(totalHeightCm)),
-      weight: String(Math.min(22, totalWeightKg).toFixed(3)),
-    });
-
-    const auspostResp = await new Promise((resolve) => {
-      const options = {
-        hostname: 'digitalapi.auspost.com.au',
-        path: `/postage/parcel/domestic/service.json?${params}`,
-        method: 'GET',
-        headers: { 'AUTH-KEY': auspostKey },
-      };
-      const req2 = https.request(options, (res2) => {
-        let data = '';
-        res2.on('data', d => { data += d; });
-        res2.on('end', () => {
-          try { resolve({ status: res2.statusCode, body: JSON.parse(data) }); }
-          catch { resolve({ status: res2.statusCode, body: null }); }
-        });
-      });
-      req2.on('error', () => resolve(null));
-      req2.setTimeout(8000, () => { req2.destroy(); resolve(null); });
-      req2.end();
-    });
-
-    if (!auspostResp || auspostResp.status !== 200 || !auspostResp.body) {
-      return json(res, 502, { error: 'auspost_error', message: 'Could not retrieve shipping quotes. Please try again.' });
-    }
-
-    const rawServices = auspostResp.body?.services?.service || [];
-    const services = (Array.isArray(rawServices) ? rawServices : [rawServices])
-      .filter(s => s && s.code && s.price)
-      .map(s => ({
-        code: s.code,
-        name: s.name,
-        price: parseFloat(s.price),
-        maxDays: s.max_extra_cover != null ? undefined : undefined,
-        options: undefined,
-      }))
-      .sort((a, b) => a.price - b.price);
+    const quote = await fetchAuspostServices(toPostcode, items, catalog);
+    if (!quote.hasPhysical) return json(res, 200, { services: [], digital: true });
+    if (quote.error === 'auspost_not_configured') return json(res, 503, { error: 'auspost_not_configured', message: 'Shipping quotes are not available at this time.' });
+    if (quote.error) return json(res, 502, { error: 'auspost_error', message: 'Could not retrieve shipping quotes. Please try again.' });
 
     return json(res, 200, {
-      services,
-      fromPostcode,
+      services: quote.services,
+      fromPostcode: quote.fromPostcode,
       toPostcode: String(toPostcode).trim(),
-      totalWeightKg: parseFloat(totalWeightKg.toFixed(3)),
+      totalWeightKg: quote.totalWeightKg,
     });
   }
 
@@ -4292,10 +4306,26 @@ const mainServer = http.createServer(async (req, res) => {
     }
 
     // Validate and apply gift card if provided
-    // Validate shipping amount (server-side cap to prevent manipulation: max $200)
-    const rawShipping = Number(shippingAmount) || 0;
-    if (rawShipping < 0 || rawShipping > 200) return json(res, 422, { error: 'invalid_shipping', message: 'Shipping amount is outside the accepted range.' });
-    const validatedShipping = rawShipping > 0 ? rawShipping : 0;
+    // Validate shipping amount — re-quoted live from AusPost server-side, never
+    // trusted from the client. A digital-only cart always ships free.
+    const cartHasPhysical = rawLineItems.some(li => {
+      const prod = catalogProducts.find(p => p.id === String(li.productId || ''));
+      return prod && !prod.digital;
+    });
+    let validatedShipping = 0;
+    if (cartHasPhysical && Number(shippingAmount) > 0) {
+      const toPostcode = String(body.toPostcode || '').trim();
+      const shippingCode = String(body.shippingCode || '').trim();
+      if (!/^\d{4}$/.test(toPostcode) || !shippingCode) {
+        return json(res, 422, { error: 'invalid_shipping', message: 'Shipping details are missing. Please re-select a shipping method.' });
+      }
+      const quote = await fetchAuspostServices(toPostcode, rawLineItems, catalogProducts);
+      if (quote.error) return json(res, 502, { error: 'auspost_error', message: 'Could not verify shipping cost. Please try again.' });
+      const matchedService = (quote.services || []).find(s => s.code === shippingCode);
+      if (!matchedService) return json(res, 422, { error: 'invalid_shipping', message: 'Selected shipping method is no longer available. Please get a new quote.' });
+      validatedShipping = matchedService.price;
+    }
+    if (validatedShipping < 0 || validatedShipping > 200) return json(res, 422, { error: 'invalid_shipping', message: 'Shipping amount is outside the accepted range.' });
     // Travel/callout fee — calculated server-side from reported one-way distance.
     // Fuel: $0.60/km round trip ($120/tank ÷ 400km × 2). Free within 10km.
     // Daily allowance (D > 400km): $150/day, 6h driving/day at ~80km/h = 480km/day; ×2 for return.
