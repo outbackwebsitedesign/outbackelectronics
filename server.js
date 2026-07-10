@@ -3897,7 +3897,7 @@ const mainServer = http.createServer(async (req, res) => {
     const items = readClients()
       .filter(c => c.active !== false && c.name)
       .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0))
-      .map(c => ({ id: c.id, name: c.name, subtitle: c.subtitle || '', url: c.url || '', logoUrl: c.logoUrl || '' }));
+      .map(c => ({ id: c.id, name: c.name, subtitle: c.subtitle || '', description: c.description || '', url: c.url || '', logoUrl: c.logoUrl || '', logoAlt: c.logoAlt || '' }));
     return json(res, 200, { items });
   }
 

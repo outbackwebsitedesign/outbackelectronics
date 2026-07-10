@@ -164,10 +164,11 @@ function HomePage({ go, addToCart, portalUser }) {
               {clients.map(c => {
                 const content = (
                   <>
-                    {c.logoUrl && <img src={thumbUrl(c.logoUrl, 160)} alt={c.name} style={{height: 28, objectFit:'contain', display:'block'}} />}
-                    <span style={{display:'flex', flexDirection:'column', lineHeight:1.2}}>
+                    {c.logoUrl && <img src={thumbUrl(c.logoUrl, 160)} alt={c.logoAlt || `${c.name} logo`} style={{height: 32, objectFit:'contain', display:'block'}} />}
+                    <span style={{display:'flex', flexDirection:'column', lineHeight:1.3}}>
                       <span style={{fontSize:14, fontWeight:600}}>{c.name}</span>
                       {c.subtitle && <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{c.subtitle}</span>}
+                      {c.description && <span style={{fontSize:12, color:'var(--ink-2)', marginTop:2}}>{c.description}</span>}
                     </span>
                   </>
                 );

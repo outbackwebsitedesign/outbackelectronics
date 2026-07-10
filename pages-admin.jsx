@@ -3638,7 +3638,7 @@ function AdminClients() {
   }, []);
   const [edit, setEdit] = useState(null);
   const [form, setForm] = useState({});
-  const open = (i) => { setEdit(i); setForm(i==='new' ? { name:'', subtitle:'', url:'', logoUrl:'', order: rows.length, active:true } : rows[i]); };
+  const open = (i) => { setEdit(i); setForm(i==='new' ? { name:'', subtitle:'', description:'', url:'', logoUrl:'', logoAlt:'', order: rows.length, active:true } : rows[i]); };
   const save = async () => {
     const r = await fetch('/api/admin/clients/save', {
       method: 'POST', headers: postHeaders(),
@@ -3674,6 +3674,9 @@ function AdminClients() {
       </p>
       <Table
         columns={[
+          { key:'logo', label:'', w:'52px', render:r => r.logoUrl
+            ? <img src={r.logoUrl} alt="" style={{width:36, height:36, objectFit:'contain', background:'var(--bg-deep)', border:'1px solid var(--line)', borderRadius:4, padding:3}} />
+            : <div style={{width:36, height:36, background:'var(--bg-deep)', border:'1px dashed var(--line)', borderRadius:4}} /> },
           { key:'name', label:'Client', w:'2fr', render:r => <span style={{fontWeight:600}}>{r.name}</span> },
           { key:'subtitle', label:'Subtitle', w:'1.5fr' },
           { key:'order', label:'Order', w:'80px' },
@@ -3693,11 +3696,15 @@ function AdminClients() {
           </div>}
         >
           <label className="field"><span className="label">Client name</span><input className="input" placeholder="e.g. Blackall-Tambo Regional Council" value={form.name||''} onChange={e=>setForm({...form, name:e.target.value})}/></label>
-          <label className="field"><span className="label">Subtitle (optional)</span><input className="input" placeholder="e.g. Blackall Library" value={form.subtitle||''} onChange={e=>setForm({...form, subtitle:e.target.value})}/></label>
-          <label className="field"><span className="label">Link (optional)</span><input className="input" placeholder="https://…" value={form.url||''} onChange={e=>setForm({...form, url:e.target.value})}/></label>
           <label className="field"><span className="label">Logo (optional)</span>
-            <ImageUploadSlot value={form.logoUrl} onChange={v=>setForm({...form, logoUrl:v})} aspect="3/2" label="DROP LOGO, OR CLICK" />
+            <ImageUploadSlot value={form.logoUrl} onChange={v=>setForm({...form, logoUrl:v})} aspect="3/2" label="DROP LOGO, OR CLICK"
+              alt={form.logoAlt} onAltChange={v=>setForm({...form, logoAlt:v})} />
           </label>
+          <label className="field"><span className="label">Subtitle (optional)</span><input className="input" placeholder="e.g. Blackall Library" value={form.subtitle||''} onChange={e=>setForm({...form, subtitle:e.target.value})}/></label>
+          <label className="field"><span className="label">What we did for them (optional)</span>
+            <input className="input" placeholder="e.g. Ongoing IT support & hardware servicing" value={form.description||''} onChange={e=>setForm({...form, description:e.target.value})}/>
+          </label>
+          <label className="field"><span className="label">Their website (optional)</span><input className="input" placeholder="https://…" value={form.url||''} onChange={e=>setForm({...form, url:e.target.value})}/></label>
           <div className="grid-2" style={{gap:14}}>
             <label className="field"><span className="label">Display order</span><input className="input" type="number" value={form.order ?? 0} onChange={e=>setForm({...form, order: parseInt(e.target.value,10) || 0})}/></label>
             <label className="field" style={{flexDirection:'row', alignItems:'center', gap:10, marginTop:22}}>
