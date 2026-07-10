@@ -2560,9 +2560,9 @@ function buildInvoicePdf(order, shop) {
 // ── Australian sole trader income tax estimate (2025-26 rates) ──────────────
 function soleTradeMarginalRate(income) {
   if (income <= 18200)  return 0;
-  if (income <= 45000)  return 0.19;
-  if (income <= 120000) return 0.325;
-  if (income <= 180000) return 0.37;
+  if (income <= 45000)  return 0.16;
+  if (income <= 135000) return 0.30;
+  if (income <= 190000) return 0.37;
   return 0.45;
 }
 
@@ -2577,10 +2577,10 @@ function estimateSoleTradeTax(netProfit) {
   // Marginal rates
   let baseTax = 0;
   if (netProfit <= 18200)        baseTax = 0;
-  else if (netProfit <= 45000)   baseTax = (netProfit - 18200) * 0.19;
-  else if (netProfit <= 120000)  baseTax = 5092  + (netProfit - 45000)  * 0.325;
-  else if (netProfit <= 180000)  baseTax = 29467 + (netProfit - 120000) * 0.37;
-  else                           baseTax = 51667 + (netProfit - 180000) * 0.45;
+  else if (netProfit <= 45000)   baseTax = (netProfit - 18200) * 0.16;
+  else if (netProfit <= 135000)  baseTax = 4288  + (netProfit - 45000)  * 0.30;
+  else if (netProfit <= 190000)  baseTax = 31288 + (netProfit - 135000) * 0.37;
+  else                           baseTax = 51638 + (netProfit - 190000) * 0.45;
 
   // LITO
   let lito = 0;
@@ -2593,10 +2593,10 @@ function estimateSoleTradeTax(netProfit) {
   const sbito = Math.min(1000, taxBeforeOffset * 0.16);
   const incomeTax = Math.max(0, taxBeforeOffset - sbito);
 
-  // Medicare levy (~2%; phase-in $26k–$32.5k for singles)
+  // Medicare levy (~2%; phase-in $28,011–$35,013 for singles, 2025-26)
   let medicareLevy = 0;
-  if (netProfit > 32500)       medicareLevy = netProfit * 0.02;
-  else if (netProfit > 26000)  medicareLevy = (netProfit - 26000) * 0.10;
+  if (netProfit > 35013)       medicareLevy = netProfit * 0.02;
+  else if (netProfit > 28011)  medicareLevy = (netProfit - 28011) * 0.10;
 
   const totalTax = incomeTax + medicareLevy;
   const effectiveRate = (totalTax / netProfit) * 100;
