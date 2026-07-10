@@ -6,9 +6,10 @@ const ErrorText = window.ErrorText;
 
 // ---------------- Order Success / Cancelled ----------------
 
-function OrderSuccessPage({ go }) {
+function OrderSuccessPage({ go, clearCart }) {
   const [session, setSession] = useState(null);
   useEffect(() => {
+    clearCart();
     const params = new URLSearchParams(location.search);
     const sid = params.get('session_id');
     const orderId = params.get('order_id');
@@ -291,7 +292,7 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
       });
       let data;
       try { data = await resp.json(); } catch { data = {}; }
-      if (data.url && data.url.startsWith('https://checkout.stripe.com/')) { clearCart(); window.location.href = data.url; }
+      if (data.url && data.url.startsWith('https://checkout.stripe.com/')) { window.location.href = data.url; }
       else if (data.url) { setError('Unexpected redirect URL from payment provider.'); }
       else setError(data.message || 'Checkout failed. Please try again.');
     } catch (err) {
