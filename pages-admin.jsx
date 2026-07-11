@@ -7765,7 +7765,6 @@ function YearEndView() {
   const now = new Date();
   const fyYear = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
   const fyLabel = `FY ${fyYear}–${String(fyYear+1).slice(2)}`;
-  const storageKey = `yearend-checklist-${fyYear}`;
 
   const CHECKLIST = [
     { id:'bank',    section:'Records', label:'Reconcile all business bank accounts and credit cards for the financial year' },
@@ -7784,19 +7783,30 @@ function YearEndView() {
     { id:'abn',     section:'Lodgements', label:'Confirm your ABN and business details are up to date with the ATO' },
   ];
 
-  const [checked, setChecked] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(storageKey) || '{}'); } catch { return {}; }
-  });
+  const [checked, setChecked] = useState({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`/api/admin/yearend-checklist?fy=${fyYear}`, { credentials:'include' })
+      .then(r => r.ok ? r.json() : { checked:{} })
+      .then(d => { setChecked(d.checked||{}); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [fyYear]);
 
   const toggle = id => {
     const next = { ...checked, [id]: !checked[id] };
     setChecked(next);
-    try { localStorage.setItem(storageKey, JSON.stringify(next)); } catch {}
+    fetch('/api/admin/yearend-checklist/save', {
+      method:'POST', credentials:'include', headers: postHeaders(),
+      body: JSON.stringify({ fy: fyYear, checked: next }),
+    }).catch(()=>{});
   };
 
   const sections = [...new Set(CHECKLIST.map(c => c.section))];
   const done = CHECKLIST.filter(c => checked[c.id]).length;
   const pct  = Math.round(done / CHECKLIST.length * 100);
+
+  if (loading) return <div className="mono" style={{textAlign:'center', padding:40, color:'var(--ink-3)'}}>Loading…</div>;
 
   return (
     <>
@@ -7832,7 +7842,7 @@ function YearEndView() {
       ))}
 
       <div style={{fontSize:11, color:'var(--ink-3)', marginTop:8}}>
-        Checklist progress is saved in your browser for {fyLabel}. Reset by clearing browser data.
+        Checklist progress for {fyLabel} is saved to the server and shared across staff.
         Consult a registered tax agent for advice specific to your situation.
       </div>
     </>

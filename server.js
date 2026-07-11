@@ -163,6 +163,7 @@ const STAFF_DB_PATH       = path.join(__dirname, 'staff.db');
 const SELLER_LEDGER_DB_PATH = path.join(__dirname, 'seller-ledger.db');
 const EXPENSES_DB_PATH    = path.join(__dirname, 'expenses.db');
 const VEHICLE_LOG_DB_PATH = path.join(__dirname, 'vehicle-log.db');
+const YEAREND_CHECKLIST_DB_PATH = path.join(__dirname, 'yearend-checklist.db');
 const ADMIN_AUDIT_LOG_PATH   = path.join(__dirname, 'admin-audit.log');
 const SESSIONS_DB_PATH        = path.join(__dirname, 'sessions.db');
 const PORTAL_SESSIONS_DB_PATH = path.join(__dirname, 'portal-sessions.db');
@@ -600,6 +601,10 @@ function readVehicleLog() {
   try { const p = JSON.parse(cachedReadFile(VEHICLE_LOG_DB_PATH)); return Array.isArray(p.entries) ? p.entries : []; } catch { return []; }
 }
 function writeVehicleLog(entries) { atomicWriteFile(VEHICLE_LOG_DB_PATH, JSON.stringify({ entries }, null, 2)); }
+function readYearEndChecklist() {
+  try { const p = JSON.parse(cachedReadFile(YEAREND_CHECKLIST_DB_PATH)); return (p && typeof p.years === 'object') ? p.years : {}; } catch { return {}; }
+}
+function writeYearEndChecklist(years) { atomicWriteFile(YEAREND_CHECKLIST_DB_PATH, JSON.stringify({ years }, null, 2)); }
 
 // Analytics — append-only event log. Kept in memory for fast aggregation;
 // flushed to disk on a 30-second timer and on each new event batch.
@@ -6745,6 +6750,25 @@ const adminServer = http.createServer(async (req, res) => {
     if (!body || !body.id) return json(res, 422, { error: 'id required' });
     const entries = readVehicleLog().filter(e => e.id !== body.id);
     writeVehicleLog(entries);
+    return json(res, 200, { ok: true });
+  }
+
+  // ── Admin: Year-end checklist ──────────────────────────────
+  if (req.method === 'GET' && url.pathname === '/api/admin/yearend-checklist') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    const fy = url.searchParams.get('fy') || '';
+    const years = readYearEndChecklist();
+    return json(res, 200, { checked: (fy && years[fy]) || {} });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/yearend-checklist/save') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const fy = String(body.fy || '');
+    if (!fy || !body.checked || typeof body.checked !== 'object') return json(res, 422, { error: 'fy and checked required' });
+    const years = readYearEndChecklist();
+    years[fy] = body.checked;
+    writeYearEndChecklist(years);
     return json(res, 200, { ok: true });
   }
 
