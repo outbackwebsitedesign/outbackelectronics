@@ -8,6 +8,7 @@ const zlib = require('zlib');
 const crypto = require('crypto');
 const sharp = require('sharp');
 const PDFDocument = require('pdfkit');
+const POLICY_DEFAULTS = require('./policy-defaults');
 
 const gzipCache = new Map();
 
@@ -943,15 +944,38 @@ function buildAdminMetrics() {
 function normalizePolicySlug(value) {
   return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
+// Must match the audience keys the public site's "viewing as" selector offers
+// (POLICY_AUDIENCES in pages-info.jsx) — these are the only groups a policy can belong to.
+const POLICY_AUDIENCES = ['all', 'private', 'commercial', 'seller'];
 function validatePolicyPayload(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return 'Policy payload must be a JSON object.';
   if (typeof value.title !== 'string' || !value.title.trim()) return 'Field "title" is required.';
+  if (!POLICY_AUDIENCES.includes(value.audience)) return 'Field "audience" must be one of: ' + POLICY_AUDIENCES.join(', ') + '.';
   if (typeof value.slug !== 'string' || !value.slug.trim()) return 'Field "slug" is required.';
   if (!normalizePolicySlug(value.slug)) return 'Field "slug" must include letters or numbers.';
   if (typeof value.body !== 'string' || !value.body.trim()) return 'Field "body" is required.';
   if (value.publishedAt != null && Number.isNaN(Date.parse(String(value.publishedAt)))) return 'Field "publishedAt" must be a valid date string.';
   if (value.publishedBy != null && (typeof value.publishedBy !== 'string' || !value.publishedBy.trim())) return 'Field "publishedBy" must be a non-empty string when provided.';
   return null;
+}
+function policyKey(audience, slug) { return `${audience}::${normalizePolicySlug(slug)}`; }
+// Merges the built-in defaults (shipped in code, since policies.db is gitignored
+// and starts empty on every fresh deploy) with any staff overrides saved to
+// policies.db, keyed by audience+slug — an override replaces its matching default.
+function getEffectivePolicies() {
+  const byKey = new Map();
+  for (const d of POLICY_DEFAULTS) {
+    byKey.set(policyKey(d.audience, d.slug), {
+      id: `default:${d.audience}:${d.slug}`,
+      audience: d.audience, slug: d.slug, title: d.title, body: d.body,
+      status: 'published', isDefault: true,
+      updatedAt: d.updatedAt, publishedAt: d.updatedAt,
+    });
+  }
+  for (const item of readPolicies()) {
+    byKey.set(policyKey(item.audience, item.slug), { ...item, isDefault: false });
+  }
+  return Array.from(byKey.values());
 }
 
 // ── Auth / session helpers ────────────────────────────────────────────────────
@@ -4121,11 +4145,13 @@ const mainServer = http.createServer(async (req, res) => {
     return json(res, 200, { items: groupItems });
   }
   if (req.method === 'GET' && url.pathname === '/api/policies') {
-    return json(res, 200, { items: readPolicies().filter(p => p.status === 'published') });
+    return json(res, 200, { items: getEffectivePolicies().filter(p => p.status === 'published') });
   }
-  if (req.method === 'GET' && url.pathname.startsWith('/api/policies/')) {
-    const key = decodeURIComponent(url.pathname.split('/').pop() || '').trim();
-    const policy = readPolicies().find(p => p.id === key || normalizePolicySlug(p.slug) === normalizePolicySlug(key));
+  if (req.method === 'GET' && /^\/api\/policies\/[^/]+\/[^/]+$/.test(url.pathname)) {
+    const [audience, slug] = url.pathname.split('/').slice(-2);
+    const decodedAudience = decodeURIComponent(audience || '').trim();
+    const decodedSlug = decodeURIComponent(slug || '').trim();
+    const policy = getEffectivePolicies().find(p => p.audience === decodedAudience && normalizePolicySlug(p.slug) === normalizePolicySlug(decodedSlug));
     if (!policy || policy.status !== 'published') return json(res, 404, { error: 'policy_not_found' });
     return json(res, 200, { item: policy });
   }
@@ -6534,14 +6560,18 @@ const adminServer = http.createServer(async (req, res) => {
     const items = readPolicies();
     const nowIso = new Date().toISOString();
     const normalizedSlug = normalizePolicySlug(body.slug);
-    const idx = items.findIndex(x => x.id && x.id === body.id);
-    const duplicateSlug = items.some((item, itemIndex) => itemIndex !== idx && normalizePolicySlug(item.slug) === normalizedSlug);
-    if (duplicateSlug) return json(res, 409, { error: 'slug_exists', message: 'A policy with this slug already exists.' });
+    // Identity is audience+slug, not id — a policy being edited for the first time
+    // (still showing its built-in default) arrives with a synthetic `default:...`
+    // id that has no row in policies.db yet, so matching on id would miss it.
+    const idx = items.findIndex(x => x.audience === body.audience && normalizePolicySlug(x.slug) === normalizedSlug);
+    const duplicateSlug = items.some((item, itemIndex) => itemIndex !== idx && item.audience === body.audience && normalizePolicySlug(item.slug) === normalizedSlug);
+    if (duplicateSlug) return json(res, 409, { error: 'slug_exists', message: 'A policy with this slug already exists for this audience.' });
     const existing = idx >= 0 ? items[idx] : null;
     const isPublished = body.status === 'published';
     const updated = {
       ...existing, ...body,
-      id: existing?.id || body.id || `policy-${Date.now()}`,
+      id: existing?.id || `policy-${Date.now()}`,
+      audience: body.audience,
       slug: normalizedSlug, title: body.title.trim(), body: body.body.trim(),
       status: isPublished ? 'published' : 'draft',
       updatedAt: nowIso, updatedBy: session.username,
@@ -6560,13 +6590,33 @@ const adminServer = http.createServer(async (req, res) => {
     if (!['published', 'draft'].includes(body.status)) return json(res, 400, { error: 'invalid_status', message: 'Field "status" must be "published" or "draft".' });
     const items = readPolicies();
     const idx = items.findIndex(x => x.id === body.id);
-    if (idx < 0) return json(res, 404, { error: 'policy_not_found' });
     const nowIso = new Date().toISOString();
+    if (idx < 0) {
+      // No DB row yet — this is a built-in default being toggled directly from
+      // the list view. Clone its content into a real row rather than 404ing.
+      const fallback = getEffectivePolicies().find(p => p.id === body.id && p.isDefault);
+      if (!fallback) return json(res, 404, { error: 'policy_not_found' });
+      const cloned = {
+        id: `policy-${Date.now()}`, audience: fallback.audience, slug: fallback.slug, title: fallback.title, body: fallback.body,
+        status: body.status, updatedAt: nowIso, updatedBy: session.username,
+        createdAt: nowIso, createdBy: session.username,
+        publishedAt: body.status === 'published' ? nowIso : null,
+        publishedBy: body.status === 'published' ? session.username : null,
+      };
+      items.push(cloned);
+      writePolicies(items);
+      return json(res, 200, { ok: true, item: cloned });
+    }
     const item = items[idx];
     const next = { ...item, status: body.status, updatedAt: nowIso, updatedBy: session.username, publishedAt: body.status === 'published' ? (item.publishedAt || nowIso) : null, publishedBy: body.status === 'published' ? (item.publishedBy || session.username) : null };
     items[idx] = next;
     writePolicies(items);
     return json(res, 200, { ok: true, item: next });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/admin/policies') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    return json(res, 200, { items: getEffectivePolicies() });
   }
 
   if (req.method === 'GET' && url.pathname === '/api/admin/settings') {

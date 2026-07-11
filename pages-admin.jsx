@@ -376,6 +376,7 @@ const ADMIN_SECTIONS = [
     { id:'software',  label:'Software',          minRole:'manager' },
     { id:'tutorials', label:'Tutorials',         minRole:'manager' },
     { id:'ai',        label:'AI Models & Boxes', minRole:'manager' },
+    { id:'policies',  label:'Policies',          minRole:'manager' },
   ]},
   { group:'COMMUNITY', items: [
     { id:'groups',    label:'Groups',    minRole:'manager' },
@@ -4884,6 +4885,185 @@ function BoxDrawer({ box, onChange, modelOptions }) {
   );
 }
 
+const POLICY_AUDIENCE_LABELS = { all: 'All Customers', private: 'Private Customer', commercial: 'Commercial Customer', seller: 'Seller' };
+const POLICY_AUDIENCE_ORDER = ['private', 'commercial', 'seller', 'all'];
+function newPolicy() { return { audience: 'private', slug: '', title: '', body: '', status: 'draft' }; }
+
+function AdminPolicies({ siteUrl }) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [editId, setEditId] = useState(null); // null | 'new' | policy id
+  const [form, setForm] = useState({});
+  const [notice, setNotice] = useState({ type:'', msg:'' });
+  const [saving, setSaving] = useState(false);
+  const dirty = useDirtyTracker(form, editId);
+
+  useEffect(() => {
+    fetch('/api/admin/policies', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setRows(d.items || []))
+      .catch(() => setError('Failed to load policies.'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const replaceRow = (item) => setRows(rs => {
+    const idx = rs.findIndex(x => x.audience === item.audience && x.slug === item.slug);
+    const next = { ...item, isDefault: false };
+    if (idx < 0) return [...rs, next];
+    const copy = [...rs]; copy[idx] = next; return copy;
+  });
+
+  const open = (rowOrNew) => {
+    if (rowOrNew === 'new') { setEditId('new'); setForm(newPolicy()); }
+    else { setEditId(rowOrNew.id); setForm({ ...rowOrNew }); }
+    setNotice({ type:'', msg:'' });
+  };
+
+  const closeEditor = async () => {
+    if (dirty && !(await adminConfirm('Discard unsaved changes to this policy?', { danger:true, confirmLabel:'Discard' }))) return;
+    setEditId(null);
+  };
+
+  const save = async (overrides = {}) => {
+    setNotice({ type:'', msg:'' });
+    const payload = { ...form, ...overrides };
+    payload.title = (payload.title || '').trim();
+    payload.slug = slugify(payload.slug) || slugify(payload.title);
+    payload.body = (payload.body || '').trim();
+    if (!payload.title) { setNotice({ type:'error', msg:'Title is required.' }); return; }
+    if (!payload.slug) { setNotice({ type:'error', msg:'Slug is required.' }); return; }
+    if (!payload.body) { setNotice({ type:'error', msg:'Body is required.' }); return; }
+    setSaving(true);
+    const r = await fetch('/api/admin/policies/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(payload) }).catch(() => null);
+    setSaving(false);
+    if (r && r.ok) {
+      const d = await r.json();
+      replaceRow(d.item);
+      setNotice({ type:'success', msg: payload.status === 'published' ? 'Policy published.' : 'Policy saved as draft.' });
+      setEditId(null);
+      return;
+    }
+    const d = r ? await r.json().catch(() => ({})) : {};
+    setNotice({ type:'error', msg: d.message || 'Failed to save policy.' });
+  };
+
+  const togglePublish = async (row) => {
+    const nextStatus = row.status === 'published' ? 'draft' : 'published';
+    const r = await fetch('/api/admin/policies/publish', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: row.id, status: nextStatus }) }).catch(() => null);
+    if (r && r.ok) { const d = await r.json(); replaceRow(d.item); }
+    else adminToast('Failed to update policy status.');
+  };
+
+  if (loading) return <div style={{padding:32}}>Loading…</div>;
+  if (error) return <div style={{padding:32, color:'var(--rust)'}}>{error}</div>;
+
+  if (editId !== null) {
+    const liveHref = form.status === 'published' && form.slug
+      ? (siteUrl||'') + '/policies/' + encodeURIComponent(form.audience) + '/' + encodeURIComponent(form.slug)
+      : null;
+    return (
+      <div style={{padding:32}}>
+        <div className="row-flex" style={{justifyContent:'space-between', marginBottom:18, flexWrap:'wrap', gap:12}}>
+          <div>
+            <a className="mono" style={{display:'inline-flex', alignItems:'center', gap:4, fontSize:11, color:'var(--rust)', cursor:'pointer'}} onClick={closeEditor}><Icon name="chevronLeft" size={10}/> Back to list</a>
+            <h2 className="serif" style={{fontSize:32, marginTop:6}}>{editId === 'new' ? 'New policy' : form.title}</h2>
+          </div>
+          <div className="row-flex" style={{gap:8}}>
+            {liveHref && <a className="btn btn-ghost btn-sm" href={liveHref} target="_blank" rel="noreferrer" style={{textDecoration:'none'}}>View live <Icon name="externalLink" size={11}/></a>}
+            <button className="btn btn-ghost btn-sm" disabled={saving} onClick={() => save({ status:'draft' })}>{saving ? 'Saving…' : 'Save draft'}</button>
+            <button className="btn btn-rust btn-sm" disabled={saving} onClick={() => save({ status:'published' })}>{saving ? 'Publishing…' : <>Publish <Icon name="chevronRight" size={11}/></>}</button>
+          </div>
+        </div>
+        {notice.msg && <div style={{marginBottom:12, fontSize:13, color:notice.type==='error'?'var(--rust)':'var(--eucalyptus)'}}>{notice.msg}</div>}
+        {editId === 'new' && (
+          <div className="notice" style={{marginBottom:18, fontSize:13}}>
+            New policies are created from a blank document — they won't inherit any built-in default text.
+          </div>
+        )}
+
+        <div className="admin-split" style={{display:'grid', gridTemplateColumns:'1fr 280px', gap:24}}>
+          <div style={{background:'var(--paper)', border:'1px solid var(--line)', padding:32}}>
+            <input className="input" placeholder="Policy title" value={form.title||''} onChange={e=>{
+                const title = e.target.value;
+                setForm(f => ({ ...f, title, ...(f._slugTouched ? {} : { slug: slugify(title) }) }));
+              }}
+              style={{fontFamily:'Instrument Serif, serif', fontSize:32, padding:'8px 0', border:'none', borderBottom:'1px solid var(--line)', background:'transparent'}} />
+            <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:8, letterSpacing:'.08em'}}>/POLICIES/{(form.audience||'private').toUpperCase()}/{(form.slug||'…').toUpperCase()}</div>
+
+            <div style={{marginTop:22}}>
+              <span className="eyebrow">BODY (MARKDOWN)</span>
+              <p style={{fontSize:12, color:'var(--ink-2)', marginTop:4, marginBottom:8}}>
+                Use <code>{'{{email}}'}</code>, <code>{'{{phone}}'}</code>, <code>{'{{phoneHref}}'}</code>, <code>{'{{address}}'}</code>, and <code>{'{{abn}}'}</code> as placeholders — they're filled in with live shop settings when the page renders.
+              </p>
+              <MarkdownField value={form.body} onChange={v=>setForm({...form, body:v})} placeholder="Start writing… Markdown supported." minHeight={420} />
+            </div>
+          </div>
+
+          <aside style={{display:'grid', gap:14, alignContent:'start'}}>
+            <div style={{padding:18, background:'var(--paper)', border:'1px solid var(--line)'}}>
+              <span className="eyebrow">DOCUMENT</span>
+              <label className="field" style={{marginTop:10}}><span className="label">Audience</span>
+                <select className="select" value={form.audience||'private'} onChange={e=>setForm({...form, audience:e.target.value})} disabled={editId !== 'new'}>
+                  {POLICY_AUDIENCE_ORDER.map(a => <option key={a} value={a}>{POLICY_AUDIENCE_LABELS[a]}</option>)}
+                </select>
+              </label>
+              <label className="field"><span className="label">Slug</span>
+                <input className="input" value={form.slug||''} onChange={e=>setForm({...form, slug:slugify(e.target.value), _slugTouched:true})} placeholder="e.g. return-policy" />
+              </label>
+              <label className="field"><span className="label">Status</span>
+                <select className="select" value={form.status||'draft'} onChange={e=>setForm({...form, status:e.target.value})}>
+                  <option value="draft">Draft</option>
+                  <option value="published">Published</option>
+                </select>
+              </label>
+              {form.updatedAt && <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:10}}>Last updated {new Date(form.updatedAt).toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' })}{form.updatedBy ? ` by ${form.updatedBy}` : ''}</div>}
+            </div>
+          </aside>
+        </div>
+      </div>
+    );
+  }
+
+  const groups = POLICY_AUDIENCE_ORDER.map(a => ({
+    audience: a,
+    label: POLICY_AUDIENCE_LABELS[a],
+    items: rows.filter(r => r.audience === a).sort((x,y) => x.title.localeCompare(y.title)),
+  }));
+
+  return (
+    <div style={{padding:32}}>
+      <div className="row-flex" style={{justifyContent:'space-between', marginBottom:18}}>
+        <p style={{fontSize:13, color:'var(--ink-2)', maxWidth:640}}>
+          Legal and policy documents shown on the public site. Documents marked <strong>Built-in</strong> are still using their shipped default text — edit and save one to take it over.
+        </p>
+        <button className="btn btn-rust btn-sm" onClick={() => open('new')} style={{whiteSpace:'nowrap'}}>+ New policy</button>
+      </div>
+      {groups.map(g => (
+        <div key={g.audience} style={{marginBottom:28}}>
+          <div className="eyebrow" style={{marginBottom:10}}>{g.label.toUpperCase()}</div>
+          <div style={{display:'grid', gap:1, background:'var(--line)', border:'1px solid var(--line)'}}>
+            {g.items.map(row => (
+              <div key={row.id} style={{display:'flex', alignItems:'center', gap:12, padding:'14px 18px', background:'var(--paper)', cursor:'pointer'}} onClick={() => open(row)}>
+                <div style={{flex:1, minWidth:0}}>
+                  <div style={{fontWeight:500, fontSize:14}}>{row.title}</div>
+                  <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:2}}>/{row.slug}</div>
+                </div>
+                {row.isDefault && <span className="tag tag-outline">BUILT-IN</span>}
+                <span className={`tag ${row.status === 'published' ? 'tag-euc' : 'tag-outline'}`}>{row.status === 'published' ? 'PUBLISHED' : 'DRAFT'}</span>
+                <button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); togglePublish(row); }}>
+                  {row.status === 'published' ? 'Unpublish' : 'Publish'}
+                </button>
+              </div>
+            ))}
+            {g.items.length === 0 && <div style={{padding:'14px 18px', background:'var(--paper)', fontSize:13, color:'var(--ink-2)'}}>No documents.</div>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function AdminAI() {
   const [models, setModels] = useState([]);
   const [boxes, setBoxes] = useState([]);
@@ -9146,6 +9326,7 @@ const ADMIN_VIEWS = {
   software:   { c: AdminSoftware,   t:'Software' },
   tutorials:  { c: AdminTutorials,  t:'Tutorials' },
   ai:         { c: AdminAI,         t:'AI Models & Boxes' },
+  policies:   { c: AdminPolicies,   t:'Policies',          staticSubtitle:'legal & policy documents · draft · publish' },
   groups:     { c: AdminGroups,     t:'Groups' },
   customers:  { c: AdminCustomers,  t:'Customers' },
   sellers:    { c: AdminSellers,    t:'Sellers' },
