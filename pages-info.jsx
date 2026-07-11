@@ -654,12 +654,15 @@ function findPolicyAudience(slug, items) {
 // setting change without a redeploy — fill them in with live values just before render.
 function interpolatePolicyBody(body, shop) {
   const phone = shop.phone || '';
+  const accountUrl = `${shop._portalUrl || 'https://portal.outbackelectronics.com.au'}/account`;
   const values = {
     email: shop.email || '',
     phone,
     phoneHref: phone.replace(/\s/g, ''),
     address: [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(', '),
     abn: shop.abn || '',
+    accountUrl,
+    accountUrlDisplay: accountUrl.replace(/^https?:\/\//, ''),
   };
   return String(body || '').replace(/\{\{(\w+)\}\}/g, (full, key) => (key in values ? values[key] : full));
 }

@@ -444,7 +444,7 @@ We endeavour to display products accurately but cannot guarantee colours, featur
 
 ### 6. Purchases and Payment
 
-We accept Visa, Mastercard, and Afterpay. All payments are in Australian Dollars. OE is not currently registered for GST, so no GST is currently added to prices; this will be updated if OE's GST registration status changes. Payment is processed securely via Stripe. By completing a purchase, you agree to Stripe's terms of service and privacy policy.
+We accept payment by credit or debit card and any other payment method made available through our checkout at the time of your order. All payments are in Australian Dollars. OE is not currently registered for GST, so no GST is currently added to prices; this will be updated if OE's GST registration status changes. Payment is processed securely via Stripe. By completing a purchase, you agree to Stripe's terms of service and privacy policy.
 
 We reserve the right to refuse any order, correct pricing errors, or cancel orders placed by dealers or resellers. If we cancel an order for which payment has been received, we will issue a full refund via your original payment method.
 
@@ -588,7 +588,7 @@ We may correct typographical errors, inaccuracies, or omissions in our content a
 
 **Technical Information.** Any technical information, advice, guides, tutorials, or recommendations made available through the Services (including the forum, repair guides, product descriptions, and our Repair Services) are provided for general informational purposes only and do not constitute professional engineering, electrical safety, or specialist advice. Our technical content relates exclusively to ELV (Extra Low Voltage, ≤50 V AC / ≤120 V DC) and LV equipment; nothing in the Services should be read as guidance for mains-voltage (240 V AC) work. You acknowledge that electronic repairs and modifications involve inherent and serious risks including, without limitation: **electric shock capable of causing death or permanent serious injury; fire and explosion that may result in partial or complete property destruction (including damage to your home or premises); toxic gas release from damaged or mistreated battery cells; damage to connected equipment and infrastructure; personal injury; and voiding of manufacturer warranties**. You should always consult a qualified professional before undertaking any electronic repair, modification, or installation, and must engage a licensed electrician for any mains-voltage work — which is outside our scope entirely. You assume all risk associated with acting on any technical information obtained through the Services and agree that we shall not be liable for any loss, damage, personal injury, serious bodily injury, death, fire, explosion, property damage (including total loss of property), or adverse outcome resulting from reliance on such information, to the fullest extent permitted by law.
 
-**No Reliance.** You acknowledge that in agreeing to these Legal Terms you have not relied upon any representation, statement, promise, assurance, warranty, understanding, undertaking, or other matter that is not expressly set out in these Legal Terms. You waive any right or remedy based on such representations or matters.
+**No Reliance.** Other than as expressly set out in these Legal Terms, you should not rely on any statement made outside these Legal Terms as varying them. This clause does not exclude, and nothing in it should be read as excluding, any liability we may have for misleading or deceptive conduct under section 18 of the Australian Consumer Law, for fraudulent or negligent misrepresentation, or for any other conduct that cannot lawfully be excluded, restricted, or waived.
 
 **Nothing in these Legal Terms excludes, restricts, or modifies any consumer guarantee, right, or remedy conferred by the Australian Consumer Law (Schedule 2 of the Competition and Consumer Act 2010 (Cth)) or any other applicable mandatory legislation that cannot lawfully be excluded.**
 
@@ -721,7 +721,7 @@ We do not knowingly collect data from or market to children under 18. If we lear
 
 Depending on your location, you may have the right to: request access to and a copy of your personal information; request rectification or erasure; restrict processing; data portability; and object to processing. You can also opt out of marketing communications at any time via the unsubscribe link in our emails or by contacting us.
 
-To review or change your account information, log in to your account settings at [outbackelectronics.com.au/account/my-account](/account/my-account). Questions? Email us at [{{email}}](mailto:{{email}}).
+To review or change your account information, log in to your customer portal account at [{{accountUrlDisplay}}]({{accountUrl}}). Questions? Email us at [{{email}}](mailto:{{email}}).
 
 ### 10. Controls for Do-Not-Track Features
 
@@ -731,7 +731,7 @@ We do not currently respond to DNT browser signals, as no uniform technology sta
 
 Residents of certain US states may have additional rights regarding personal information. We have not collected, sold, or shared any personal information to third parties for commercial purposes in the preceding twelve months, and we do not intend to do so. US residents may have rights including: right to know, access, correct, delete, and obtain a copy of their data; right to non-discrimination; and right to opt out of targeted advertising or profiling.
 
-To exercise these rights, visit [outbackelectronics.com.au/account/my-account](/account/my-account) or email [{{email}}](mailto:{{email}}).
+To exercise these rights, visit [{{accountUrlDisplay}}]({{accountUrl}}) or email [{{email}}](mailto:{{email}}).
 
 ### 12. Do Other Regions Have Specific Privacy Rights?
 
@@ -753,7 +753,7 @@ Yes. We may update this Privacy Notice from time to time to reflect changes in o
 
 ### 14. How Can You Review, Update, or Delete Your Data?
 
-To request to review, update, or delete your personal information, visit: [outbackelectronics.com.au/account/my-account](/account/my-account)
+To request to review, update, or delete your personal information, visit: [{{accountUrlDisplay}}]({{accountUrl}})
 
 ### 15. How Can You Contact Us About This Notice?
 
@@ -934,7 +934,7 @@ We take care in packaging all orders, but damage can occur during transit. If yo
 - Photograph or video the outer packaging and the damaged item before unpacking further.
 - Contact us within **48 hours of delivery** at [{{email}}](mailto:{{email}}) with your order number and photographic evidence.
 
-We will arrange a replacement, repair, or refund as required. Where damage was caused by the carrier, we will lodge a claim with Australia Post or the relevant carrier on your behalf. You may be required to retain damaged packaging and the item for inspection. _For EU and UK consumers, this does not affect your statutory rights._
+We will arrange a replacement, repair, or refund as required. Where damage was caused by the carrier, we will lodge a claim with Australia Post or the relevant carrier on your behalf. You may be required to retain damaged packaging and the item for inspection.
 
 ### Products Posing a Safety Hazard
 
