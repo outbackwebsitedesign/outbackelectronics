@@ -367,8 +367,8 @@ const ADMIN_SECTIONS = [
     { id:'repairs',   label:'Repair Jobs',   minRole:'staff', excludeRoles:['seller'] },
     { id:'quotes',    label:'Quotes Inbox',  minRole:'staff', excludeRoles:['seller'] },
     { id:'ewaste',    label:'eWaste Intake', minRole:'technician' },
-    { id:'bookings',  label:'Bookings',      minRole:'owner' },
-    { id:'availability', label:'Availability', minRole:'owner' },
+    { id:'bookings',  label:'Bookings',      minRole:'manager' },
+    { id:'availability', label:'Availability', minRole:'manager' },
   ]},
   { group:'CATALOG', items: [
     { id:'products',  label:'Products',         minRole:'seller' },

@@ -6221,7 +6221,7 @@ const adminServer = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/admin/bookings/delete') {
-    const session = requireAdmin(req, res); if (!session) return;
+    const session = requireRole(req, res, 'manager'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     const db = readBookings();
     const removed = db.bookings.find(b => b.id === body.id);
@@ -7100,13 +7100,13 @@ const adminServer = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'GET' && url.pathname === '/api/admin/bookings') {
-    const session = requireAdmin(req, res); if (!session) return;
+    const session = requireRole(req, res, 'manager'); if (!session) return;
     const db = readBookings();
     return json(res, 200, { items: db.bookings });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/admin/bookings/update') {
-    const session = requireAdmin(req, res); if (!session) return;
+    const session = requireRole(req, res, 'manager'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     const { id, status } = body || {};
     if (!id) return json(res, 422, { error: 'id_required' });
@@ -7120,12 +7120,12 @@ const adminServer = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'GET' && url.pathname === '/api/admin/availability') {
-    const session = requireAdmin(req, res); if (!session) return;
+    const session = requireRole(req, res, 'manager'); if (!session) return;
     return json(res, 200, readAvailability());
   }
 
   if (req.method === 'POST' && url.pathname === '/api/admin/availability/hours') {
-    const session = requireAdmin(req, res); if (!session) return;
+    const session = requireRole(req, res, 'manager'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     const { operatingHours } = body || {};
     if (!operatingHours || typeof operatingHours !== 'object') return json(res, 422, { error: 'missing_operating_hours' });
@@ -7146,7 +7146,7 @@ const adminServer = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/admin/availability/block-date') {
-    const session = requireAdmin(req, res); if (!session) return;
+    const session = requireRole(req, res, 'manager'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     const date = String(body?.date || '').trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return json(res, 422, { error: 'invalid_date' });
@@ -7160,7 +7160,7 @@ const adminServer = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/admin/availability/block-slot') {
-    const session = requireAdmin(req, res); if (!session) return;
+    const session = requireRole(req, res, 'manager'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     const date = String(body?.date || '').trim();
     const time = String(body?.time || '').trim();
