@@ -945,7 +945,8 @@ function normalizePolicySlug(value) {
   return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 // Must match the audience keys the public site's "viewing as" selector offers
-// (POLICY_AUDIENCES in pages-info.jsx) — these are the only groups a policy can belong to.
+// (POLICY_AUDIENCE_LABELS/POLICY_AUDIENCE_ORDER in pages-info.jsx and pages-admin.jsx)
+// — these are the only groups a policy can belong to.
 const POLICY_AUDIENCES = ['all', 'private', 'commercial', 'seller'];
 function validatePolicyPayload(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return 'Policy payload must be a JSON object.';
@@ -959,19 +960,19 @@ function validatePolicyPayload(value) {
   return null;
 }
 function policyKey(audience, slug) { return `${audience}::${normalizePolicySlug(slug)}`; }
+// The default-only half of the merge never changes at runtime, so build it once
+// at module load instead of re-allocating 31 objects on every request.
+const POLICY_DEFAULTS_MAP = new Map(POLICY_DEFAULTS.map(d => [policyKey(d.audience, d.slug), {
+  id: `default:${d.audience}:${d.slug}`,
+  audience: d.audience, slug: d.slug, title: d.title, body: d.body,
+  status: 'published', isDefault: true,
+  updatedAt: d.updatedAt, publishedAt: d.updatedAt,
+}]));
 // Merges the built-in defaults (shipped in code, since policies.db is gitignored
 // and starts empty on every fresh deploy) with any staff overrides saved to
 // policies.db, keyed by audience+slug — an override replaces its matching default.
 function getEffectivePolicies() {
-  const byKey = new Map();
-  for (const d of POLICY_DEFAULTS) {
-    byKey.set(policyKey(d.audience, d.slug), {
-      id: `default:${d.audience}:${d.slug}`,
-      audience: d.audience, slug: d.slug, title: d.title, body: d.body,
-      status: 'published', isDefault: true,
-      updatedAt: d.updatedAt, publishedAt: d.updatedAt,
-    });
-  }
+  const byKey = new Map(POLICY_DEFAULTS_MAP);
   for (const item of readPolicies()) {
     byKey.set(policyKey(item.audience, item.slug), { ...item, isDefault: false });
   }
@@ -4149,7 +4150,7 @@ const mainServer = http.createServer(async (req, res) => {
   }
   if (req.method === 'GET' && /^\/api\/policies\/[^/]+\/[^/]+$/.test(url.pathname)) {
     const [audience, slug] = url.pathname.split('/').slice(-2);
-    const decodedAudience = decodeURIComponent(audience || '').trim();
+    const decodedAudience = decodeURIComponent(audience || '').trim().toLowerCase();
     const decodedSlug = decodeURIComponent(slug || '').trim();
     const policy = getEffectivePolicies().find(p => p.audience === decodedAudience && normalizePolicySlug(p.slug) === normalizePolicySlug(decodedSlug));
     if (!policy || policy.status !== 'published') return json(res, 404, { error: 'policy_not_found' });
@@ -6560,10 +6561,15 @@ const adminServer = http.createServer(async (req, res) => {
     const items = readPolicies();
     const nowIso = new Date().toISOString();
     const normalizedSlug = normalizePolicySlug(body.slug);
-    // Identity is audience+slug, not id — a policy being edited for the first time
-    // (still showing its built-in default) arrives with a synthetic `default:...`
-    // id that has no row in policies.db yet, so matching on id would miss it.
-    const idx = items.findIndex(x => x.audience === body.audience && normalizePolicySlug(x.slug) === normalizedSlug);
+    // A real (non-synthetic) id unambiguously identifies an already-persisted row,
+    // even if its slug is being changed in this same save — match on it first so
+    // renaming a slug updates that row instead of leaving it behind and inserting
+    // a duplicate. Only fall back to audience+slug (e.g. first edit of a still-
+    // default document, arriving with a synthetic `default:...` id, or a brand
+    // new policy with no id at all) when there's no real id to anchor on.
+    const hasRealId = typeof body.id === 'string' && body.id.trim() && !body.id.startsWith('default:');
+    const idxById = hasRealId ? items.findIndex(x => x.id === body.id) : -1;
+    const idx = idxById >= 0 ? idxById : items.findIndex(x => x.audience === body.audience && normalizePolicySlug(x.slug) === normalizedSlug);
     const duplicateSlug = items.some((item, itemIndex) => itemIndex !== idx && item.audience === body.audience && normalizePolicySlug(item.slug) === normalizedSlug);
     if (duplicateSlug) return json(res, 409, { error: 'slug_exists', message: 'A policy with this slug already exists for this audience.' });
     const existing = idx >= 0 ? items[idx] : null;
@@ -6579,6 +6585,11 @@ const adminServer = http.createServer(async (req, res) => {
       publishedAt: isPublished ? (body.publishedAt || existing?.publishedAt || nowIso) : null,
       publishedBy: isPublished ? (body.publishedBy || existing?.publishedBy || session.username) : null,
     };
+    // Fields that only ever exist on the client's view of a row (computed by
+    // getEffectivePolicies, or scratch state on the admin form) must never be
+    // persisted, even though the spreads above copy the request body wholesale.
+    delete updated.isDefault;
+    delete updated._slugTouched;
     if (idx >= 0) items[idx] = updated; else items.push(updated);
     writePolicies(items); return json(res, 200, { ok: true, item: updated });
   }
@@ -6588,30 +6599,37 @@ const adminServer = http.createServer(async (req, res) => {
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     if (!body || typeof body.id !== 'string' || !body.id.trim()) return json(res, 400, { error: 'invalid_policy_id', message: 'Field "id" is required.' });
     if (!['published', 'draft'].includes(body.status)) return json(res, 400, { error: 'invalid_status', message: 'Field "status" must be "published" or "draft".' });
-    const items = readPolicies();
-    const idx = items.findIndex(x => x.id === body.id);
-    const nowIso = new Date().toISOString();
-    if (idx < 0) {
-      // No DB row yet — this is a built-in default being toggled directly from
-      // the list view. Clone its content into a real row rather than 404ing.
-      const fallback = getEffectivePolicies().find(p => p.id === body.id && p.isDefault);
-      if (!fallback) return json(res, 404, { error: 'policy_not_found' });
-      const cloned = {
-        id: `policy-${Date.now()}`, audience: fallback.audience, slug: fallback.slug, title: fallback.title, body: fallback.body,
-        status: body.status, updatedAt: nowIso, updatedBy: session.username,
-        createdAt: nowIso, createdBy: session.username,
-        publishedAt: body.status === 'published' ? nowIso : null,
-        publishedBy: body.status === 'published' ? session.username : null,
-      };
-      items.push(cloned);
-      writePolicies(items);
-      return json(res, 200, { ok: true, item: cloned });
+    // Resolve the true document (audience+slug) behind the id first, rather than
+    // trusting the id as the row to update — the client may hand back a synthetic
+    // `default:...` id, or a real id from before another session already
+    // materialized this same document, and matching on a stale id would clone a
+    // second row for the same audience+slug instead of updating the existing one.
+    let target = getEffectivePolicies().find(p => p.id === body.id);
+    if (!target) {
+      // The id may be a synthetic `default:<audience>:<slug>` id that's gone
+      // stale because another session already materialized this document since
+      // the client's list was fetched — the effective view no longer has an
+      // entry under that id (it's been replaced by the real override), but the
+      // audience+slug it encodes still resolves to the document.
+      const synthetic = /^default:([^:]+):(.+)$/.exec(body.id);
+      if (synthetic) target = getEffectivePolicies().find(p => p.audience === synthetic[1] && normalizePolicySlug(p.slug) === normalizePolicySlug(synthetic[2]));
     }
-    const item = items[idx];
-    const next = { ...item, status: body.status, updatedAt: nowIso, updatedBy: session.username, publishedAt: body.status === 'published' ? (item.publishedAt || nowIso) : null, publishedBy: body.status === 'published' ? (item.publishedBy || session.username) : null };
-    items[idx] = next;
+    if (!target) return json(res, 404, { error: 'policy_not_found' });
+    const items = readPolicies();
+    const nowIso = new Date().toISOString();
+    const idx = items.findIndex(x => x.audience === target.audience && normalizePolicySlug(x.slug) === normalizePolicySlug(target.slug));
+    const next = idx >= 0
+      ? { ...items[idx], status: body.status, updatedAt: nowIso, updatedBy: session.username,
+          publishedAt: body.status === 'published' ? (items[idx].publishedAt || nowIso) : null,
+          publishedBy: body.status === 'published' ? (items[idx].publishedBy || session.username) : null }
+      : { id: `policy-${Date.now()}`, audience: target.audience, slug: target.slug, title: target.title, body: target.body,
+          status: body.status, updatedAt: nowIso, updatedBy: session.username,
+          createdAt: nowIso, createdBy: session.username,
+          publishedAt: body.status === 'published' ? nowIso : null,
+          publishedBy: body.status === 'published' ? session.username : null };
+    if (idx >= 0) items[idx] = next; else items.push(next);
     writePolicies(items);
-    return json(res, 200, { ok: true, item: next });
+    return json(res, 200, { ok: true, item: { ...next, isDefault: false } });
   }
 
   if (req.method === 'GET' && url.pathname === '/api/admin/policies') {

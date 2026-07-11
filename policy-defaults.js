@@ -1553,7 +1553,8 @@ Items accepted for recycling or disposal with no resale value are accepted on th
 **Questions?** Email [{{email}}](mailto:{{email}}) — we'll get back to you as soon as we can.`;
 
 // Maps every audience+slug combination the public site's "viewing as" selector
-// offers (POLICY_AUDIENCES in pages-info.jsx) to its default body. Several slugs
+// offers (POLICY_AUDIENCE_LABELS/POLICY_AUDIENCE_ORDER in pages-info.jsx) to its
+// default body. Several slugs
 // (privacy-policy, cookie-policy, disclaimer, acceptable-use, custom-work,
 // gift-cards-store-credit-rewards, sale-of-goods-to-us) share identical text
 // across audiences and so share the same BODY_* constant.

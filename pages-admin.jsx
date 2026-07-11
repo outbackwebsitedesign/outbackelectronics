@@ -4931,9 +4931,20 @@ function AdminPolicies({ siteUrl }) {
     payload.title = (payload.title || '').trim();
     payload.slug = slugify(payload.slug) || slugify(payload.title);
     payload.body = (payload.body || '').trim();
+    // isDefault/_slugTouched are client-only scratch fields (isDefault is computed
+    // by the server on every read; _slugTouched just tracks whether the user
+    // hand-edited the slug field) — never part of the persisted document.
+    delete payload.isDefault;
+    delete payload._slugTouched;
     if (!payload.title) { setNotice({ type:'error', msg:'Title is required.' }); return; }
     if (!payload.slug) { setNotice({ type:'error', msg:'Slug is required.' }); return; }
     if (!payload.body) { setNotice({ type:'error', msg:'Body is required.' }); return; }
+    if (form.status === 'published' && payload.status !== 'published') {
+      const ok = await adminConfirm('This document is currently live on the public site. Saving it as a draft will take it down until you publish again.\nContinue?', {
+        title: 'Unpublish live document', confirmLabel: 'Save as draft', cancelLabel: 'Cancel', danger: true,
+      });
+      if (!ok) return;
+    }
     setSaving(true);
     const r = await fetch('/api/admin/policies/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(payload) }).catch(() => null);
     setSaving(false);

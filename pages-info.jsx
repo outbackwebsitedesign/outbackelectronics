@@ -655,16 +655,20 @@ function findPolicyAudience(slug, items) {
 function interpolatePolicyBody(body, shop) {
   const phone = shop.phone || '';
   const accountUrl = `${shop._portalUrl || 'https://portal.outbackelectronics.com.au'}/account`;
+  // Markdown link syntax like [{{email}}](mailto:{{email}}) requires non-empty
+  // link text to render at all — an empty substitution leaves the raw [](...)
+  // syntax visible to every visitor, so fall back to plain-English text (matching
+  // what the pre-CMS hardcoded pages showed) rather than an empty string.
   const values = {
-    email: shop.email || '',
-    phone,
+    email: shop.email || 'our support team',
+    phone: phone || 'our office',
     phoneHref: phone.replace(/\s/g, ''),
-    address: [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(', '),
-    abn: shop.abn || '',
+    address: [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(', ') || 'our business address',
+    abn: shop.abn || 'not yet provided',
     accountUrl,
     accountUrlDisplay: accountUrl.replace(/^https?:\/\//, ''),
   };
-  return String(body || '').replace(/\{\{(\w+)\}\}/g, (full, key) => (key in values ? values[key] : full));
+  return String(body || '').replace(/\{\{(\w+)\}\}/g, (full, key) => (Object.prototype.hasOwnProperty.call(values, key) ? values[key] : full));
 }
 
 function PoliciesPage({ go, pageParams }) {
