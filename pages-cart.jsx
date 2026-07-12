@@ -83,6 +83,7 @@ function OrderCancelledPage({ go }) {
 
 // ---------------- Cart Page ----------------
 function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart }) {
+  const { getPortalUrl } = window.__OE_HELPERS__ || {};
   const [checkingOut, setCheckingOut] = useState(false);
   const [error, setError] = useState(null);
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -509,15 +510,22 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
                 </div>
               ) : rewardsLoading ? null : (
                 <div style={{marginBottom:14}}>
-                  <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:6}}>HAVE AN ACCOUNT? REDEEM YOUR POINTS</div>
-                  <div style={{display:'flex', gap:6, marginBottom:4}}>
-                    <input className="input" placeholder="Email" type="email" autoComplete="email" value={rewardsEmail} onChange={e => setRewardsEmail(e.target.value)} style={{flex:1, fontSize:12}} />
-                    <input className="input" placeholder="Password" type="password" autoComplete="current-password" value={rewardsPassword} onChange={e => setRewardsPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && lookupRewards()} style={{flex:1, fontSize:12}} />
-                  </div>
-                  <button className="btn btn-ghost btn-sm" onClick={lookupRewards} disabled={rewardsLoading || !rewardsEmail.trim() || !rewardsPassword} style={{width:'100%', justifyContent:'center'}}>
-                    {rewardsLoading ? '…' : 'Check Points Balance'}
-                  </button>
+                  <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:6}}>LOG IN TO REDEEM POINTS</div>
+                  <form onSubmit={e => { e.preventDefault(); lookupRewards(); }}>
+                    <div style={{display:'flex', gap:6, marginBottom:4}}>
+                      <input className="input" name="email" aria-label="Account email" placeholder="Email" type="email" autoComplete="email" value={rewardsEmail} onChange={e => setRewardsEmail(e.target.value)} style={{flex:1, fontSize:12}} />
+                      <input className="input" name="password" aria-label="Account password" placeholder="Password" type="password" autoComplete="current-password" value={rewardsPassword} onChange={e => setRewardsPassword(e.target.value)} style={{flex:1, fontSize:12}} />
+                    </div>
+                    <button type="submit" className="btn btn-ghost btn-sm" disabled={rewardsLoading || !rewardsEmail.trim() || !rewardsPassword} style={{width:'100%', justifyContent:'center'}}>
+                      {rewardsLoading ? '…' : 'Log In'}
+                    </button>
+                  </form>
                   <ErrorText inline>{rewardsError}</ErrorText>
+                  {getPortalUrl && (
+                    <div style={{marginTop:6, fontSize:11, textAlign:'center'}}>
+                      <a href={getPortalUrl()} style={{color:'var(--ink-3)'}}>Forgot password or need an account?</a>
+                    </div>
+                  )}
                 </div>
               )}
 
