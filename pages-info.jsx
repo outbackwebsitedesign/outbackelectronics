@@ -656,7 +656,14 @@ function interpolatePolicyBody(body, shop) {
     accountUrl,
     accountUrlDisplay: accountUrl.replace(/^https?:\/\//, ''),
   };
-  return String(body || '').replace(/\{\{(\w+)\}\}/g, (full, key) => (Object.prototype.hasOwnProperty.call(values, key) ? values[key] : full));
+  let text = String(body || '');
+  // The email fallback text above is not a valid mailto address, so when
+  // shop.email is unset, drop the [{{email}}](mailto:{{email}}) link down to
+  // plain text rather than emitting mailto:our support team.
+  if (!shop.email) {
+    text = text.replace(/\[\{\{email\}\}\]\(mailto:\{\{email\}\}\)/g, values.email);
+  }
+  return text.replace(/\{\{(\w+)\}\}/g, (full, key) => (Object.prototype.hasOwnProperty.call(values, key) ? values[key] : full));
 }
 
 function PoliciesPage({ go, pageParams }) {
