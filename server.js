@@ -1681,6 +1681,9 @@ function sendErrorPage(req, res, status, fallback, html) {
     const { shop } = readSettings();
     const loc = [shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ') || 'Central Queensland, Australia';
     body = body.replace(/<!--SHOP_LOCATION-->[^<]*/g, `<!--SHOP_LOCATION-->${loc}`);
+    const name = shop.tradingName || shop.name || 'Outback Electronics Pty Ltd';
+    const copyright = `© 2023–${new Date().getFullYear()} ${name}${shop.abn ? ` · ABN ${shop.abn}` : ''}`;
+    body = body.replace(/<!--SHOP_COPYRIGHT-->[^<]*/g, `<!--SHOP_COPYRIGHT-->${copyright}`);
   } catch {}
   gzipSend(req, res, status, {
     'Content-Type': 'text/html; charset=utf-8',
