@@ -1396,6 +1396,9 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null, cspOverride 
 
     fs.readFile(filePath, (err, data) => {
       if (err) return tryRead(paths, idx + 1);
+      if (ext === '.html' && data.includes('<!--SHOP_COPYRIGHT-->')) {
+        data = Buffer.from(applyShopTemplate(data.toString('utf8')), 'utf8');
+      }
       const extraHeaders = {};
       const baseHeaders = {
         'Content-Type': (types[ext] || 'application/octet-stream'),
@@ -1674,8 +1677,12 @@ const ERROR_403_HTML = loadErrorPage('403.html');
 const ERROR_401_HTML = loadErrorPage('401.html');
 const OFFLINE_HTML   = loadErrorPage('offline.html');
 
-function sendErrorPage(req, res, status, fallback, html) {
-  if (!html) { res.writeHead(status); return res.end(fallback); }
+// Substitutes the shop location/copyright placeholders left as HTML comment
+// markers (<!--SHOP_LOCATION-->, <!--SHOP_COPYRIGHT-->) in static template
+// pages. Used both for pages sent through sendErrorPage() and for the same
+// templates when they're served directly as static files (e.g. /offline.html
+// via the service worker, or a direct request for /401.html).
+function applyShopTemplate(html) {
   let body = html;
   try {
     const { shop } = readSettings();
@@ -1685,6 +1692,12 @@ function sendErrorPage(req, res, status, fallback, html) {
     const copyright = `© 2023–${new Date().getFullYear()} ${name}${shop.abn ? ` · ABN ${shop.abn}` : ''}`;
     body = body.replace(/<!--SHOP_COPYRIGHT-->[^<]*/g, `<!--SHOP_COPYRIGHT-->${copyright}`);
   } catch {}
+  return body;
+}
+
+function sendErrorPage(req, res, status, fallback, html) {
+  if (!html) { res.writeHead(status); return res.end(fallback); }
+  const body = applyShopTemplate(html);
   gzipSend(req, res, status, {
     'Content-Type': 'text/html; charset=utf-8',
     'Cache-Control': 'no-cache, must-revalidate',
