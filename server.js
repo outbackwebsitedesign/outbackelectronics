@@ -2767,6 +2767,30 @@ function parseOrderDateForReport(o) {
   if (o.date) { const d = parseAuDateStr(o.date); if (d) return d; }
   return null;
 }
+function parsePaymentDateForReport(p) {
+  if (p && p.date) { const d = new Date(p.date); if (!isNaN(d)) return d; }
+  return null;
+}
+// Cash-basis: walks an order's payments (in the order they were recorded), running the
+// same cumulative cap against o.total that orderCashReceived applies to the lifetime sum,
+// but reports each payment's own incremental contribution against ITS OWN date — not the
+// order's creation date. This matters for orders paid off via instalments (e.g. a custom
+// build paid fortnightly): each instalment lands in the tax period it was actually paid in,
+// instead of every instalment being lumped into whichever period the order was first created.
+function forEachOrderPaymentDated(o, cb) {
+  const orderTotal = Number(o.total) || 0;
+  let cumPaid = 0;
+  for (const p of (o.payments || [])) {
+    const amt = Number(p.amount) || 0;
+    if (!amt) continue;
+    const before = cumPaid;
+    cumPaid = amt > 0 ? Math.min(cumPaid + amt, orderTotal) : cumPaid + amt;
+    const delta = cumPaid - before;
+    if (!delta) continue;
+    const d = parsePaymentDateForReport(p) || parseOrderDateForReport(o);
+    cb(delta, d);
+  }
+}
 function parseExpDateForReport(s) {
   if (!s) return null;
   const parts = s.split('/');
@@ -2794,16 +2818,25 @@ function buildTaxReportData(fromStr, toStr) {
   const ensureMonth = k => { if (!monthMap[k]) monthMap[k] = { revenue: 0, expenses: 0 }; };
   for (const o of readOrders()) {
     if (!isOrderPaid(o)) continue; // cash-basis: only count money actually received
-    const d = parseOrderDateForReport(o);
-    if (!inRange(d)) continue;
-    const received = orderCashReceived(o);
-    const refAmt = o.refund ? (Number(o.refund.amount) || 0) : 0;
-    orderRevenue += received;
-    refundTotal  += refAmt;
-    orderCount++;
-    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-    ensureMonth(key);
-    monthMap[key].revenue += received - refAmt;
+    let orderCounted = false;
+    forEachOrderPaymentDated(o, (delta, d) => {
+      if (!inRange(d)) return;
+      orderRevenue += delta;
+      if (!orderCounted) { orderCount++; orderCounted = true; }
+      const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      ensureMonth(key);
+      monthMap[key].revenue += delta;
+    });
+    if (o.refund) {
+      const refD = parsePaymentDateForReport(o.refund) || parseOrderDateForReport(o);
+      if (inRange(refD)) {
+        const refAmt = Number(o.refund.amount) || 0;
+        refundTotal += refAmt;
+        const key = `${refD.getFullYear()}-${String(refD.getMonth()+1).padStart(2,'0')}`;
+        ensureMonth(key);
+        monthMap[key].revenue -= refAmt;
+      }
+    }
   }
   const netOrderRevenue = orderRevenue - refundTotal;
 
@@ -2872,11 +2905,16 @@ function buildBASData(fromStr, toStr) {
   let orderCount = 0, repairCount = 0;
   for (const o of readOrders()) {
     if (!isOrderPaid(o)) continue; // cash-basis: only count money actually received
-    const d = parseOrderDateForReport(o);
-    if (!inRange(d)) continue;
-    G1 += orderCashReceived(o);
-    if (o.refund) refunds += Number(o.refund.amount) || 0;
-    orderCount++;
+    let orderCounted = false;
+    forEachOrderPaymentDated(o, (delta, d) => {
+      if (!inRange(d)) return;
+      G1 += delta;
+      if (!orderCounted) { orderCount++; orderCounted = true; }
+    });
+    if (o.refund) {
+      const refD = parsePaymentDateForReport(o.refund) || parseOrderDateForReport(o);
+      if (inRange(refD)) refunds += Number(o.refund.amount) || 0;
+    }
   }
   for (const r of flatRepairs()) {
     if (r._colId !== 'done') continue;
@@ -3586,11 +3624,18 @@ function buildGSTThresholdData() {
   const revMap = {};
   for (const o of readOrders()) {
     if (!isOrderPaid(o)) continue; // cash-basis: only count money actually received
-    const d = parseOrderDateForReport(o);
-    if (!d) continue;
-    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-    const net = Math.max(0, orderCashReceived(o) - (o.refund ? Number(o.refund.amount)||0 : 0));
-    revMap[key] = (revMap[key]||0) + net;
+    forEachOrderPaymentDated(o, (delta, d) => {
+      if (!d) return;
+      const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      revMap[key] = (revMap[key]||0) + delta;
+    });
+    if (o.refund) {
+      const refD = parsePaymentDateForReport(o.refund) || parseOrderDateForReport(o);
+      if (refD) {
+        const key = `${refD.getFullYear()}-${String(refD.getMonth()+1).padStart(2,'0')}`;
+        revMap[key] = (revMap[key]||0) - (Number(o.refund.amount) || 0);
+      }
+    }
   }
   for (const r of flatRepairs()) {
     if (r._colId !== 'done') continue;
