@@ -364,6 +364,7 @@ const ADMIN_SECTIONS = [
   { group:'OPERATIONS', items: [
     { id:'overview',  label:'Overview',      minRole:'staff', excludeRoles:['seller'] },
     { id:'orders',    label:'Orders',        minRole:'technician' },
+    { id:'payment-plans', label:'Payment Plans', minRole:'technician' },
     { id:'repairs',   label:'Repair Jobs',   minRole:'staff', excludeRoles:['seller'] },
     { id:'quotes',    label:'Quotes Inbox',  minRole:'staff', excludeRoles:['seller'] },
     { id:'ewaste',    label:'eWaste Intake', minRole:'technician' },
@@ -997,6 +998,31 @@ function orderBalance(f) {
   if (f.gratis) return 0;
   return Math.round((orderEffectiveTotal(f) - orderAmountPaid(f)) * 100) / 100;
 }
+// Mirrors server.js's paymentPlanProgress() — progress is always derived from
+// actual payments, never stored per-installment, so it reconciles correctly
+// regardless of how each instalment was actually collected.
+function paymentPlanProgress(order) {
+  const plan = order.paymentPlan;
+  if (!plan) return null;
+  const paidSoFar = orderAmountPaid(order);
+  const total = Number(order.total) || 0;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  let cumulative = 0;
+  let nextDue = null;
+  const entries = (plan.schedule || []).map(entry => {
+    const amt = Math.round((Number(entry.amount) || 0) * 100) / 100;
+    cumulative = Math.round((cumulative + amt) * 100) / 100;
+    const owed = Math.round(Math.max(0, Math.min(amt, cumulative - paidSoFar)) * 100) / 100;
+    let status;
+    if (owed <= 0.005) status = 'paid';
+    else status = new Date(entry.dueDate + 'T00:00:00') < today ? 'overdue' : 'upcoming';
+    if (status !== 'paid' && !nextDue) nextDue = { dueDate: entry.dueDate, amount: owed };
+    return { dueDate: entry.dueDate, amount: amt, owed, status };
+  });
+  const remaining = Math.max(0, Math.round((total - paidSoFar) * 100) / 100);
+  const completed = remaining <= 0.005;
+  return { paidSoFar, remaining, completed, nextDue: completed ? null : nextDue, entries };
+}
 function orderPaymentStatus(f) {
   if (f.gratis) return 'gratis';
   if ((f.payments || []).length > 0) {
@@ -1129,6 +1155,48 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
   const [refundEntry, setRefundEntry] = useState({ method:'stripe', amount:'' });
   const [refundBusy, setRefundBusy] = useState(false);
   const [refundError, setRefundError] = useState(null);
+  const canManagePlan = (ROLE_LEVELS[sessionInfo.role] ?? 0) >= ROLE_LEVELS.manager;
+  const [planForm, setPlanForm] = useState({ frequency:'fortnightly', installmentAmount:'', collectionMethod:'manual', startDate: todayISODate() });
+  const [planBusy, setPlanBusy] = useState(false);
+  const [planError, setPlanError] = useState(null);
+  const [cardLookup, setCardLookup] = useState(null); // {exists, hasCard, cardLast4, cardBrand} for form.email
+
+  useEffect(() => {
+    if (!form.email || form.paymentPlan) { setCardLookup(null); return; }
+    let cancelled = false;
+    fetch(`/api/admin/portal-users/lookup?email=${encodeURIComponent(form.email)}`, { credentials:'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (!cancelled && d) setCardLookup(d); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [form.email, form.paymentPlan]);
+
+  const savePlan = async () => {
+    setPlanError(null);
+    const amt = Number(planForm.installmentAmount);
+    if (!(amt > 0)) { setPlanError('Enter an instalment amount greater than zero.'); return; }
+    setPlanBusy(true);
+    const r = await fetch('/api/admin/orders/payment-plan/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({
+      orderId: form.id, frequency: planForm.frequency, installmentAmount: amt, collectionMethod: planForm.collectionMethod, startDate: planForm.startDate,
+    }) }).catch(()=>null);
+    setPlanBusy(false);
+    if (!r) { setPlanError('Network error. Please try again.'); return; }
+    const d = await r.json().catch(()=>({}));
+    if (!r.ok) { setPlanError(d.message || 'Could not set up payment plan.'); return; }
+    setForm(f => ({ ...f, paymentPlan: d.order.paymentPlan }));
+    onRowUpdate({ ...form, paymentPlan: d.order.paymentPlan });
+  };
+
+  const cancelPlan = async () => {
+    const ok = await adminConfirm('Cancel this payment plan? Remaining instalments will no longer be tracked or collected.', { title:'Cancel payment plan', confirmLabel:'Cancel plan', danger:true });
+    if (!ok) return;
+    setPlanBusy(true);
+    const r = await fetch('/api/admin/orders/payment-plan/cancel', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ orderId: form.id }) }).catch(()=>null);
+    setPlanBusy(false);
+    if (!r || !r.ok) { adminToast('Failed to cancel payment plan.'); return; }
+    setForm(f => ({ ...f, paymentPlan: { ...f.paymentPlan, status:'cancelled' } }));
+    onRowUpdate({ ...form, paymentPlan: { ...form.paymentPlan, status:'cancelled' } });
+  };
 
   // Dirty tracking against the last persisted snapshot — drives the
   // unsaved-changes warning in the Drawer (overlay click / Escape / nav).
@@ -1628,6 +1696,71 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
         <label className="field" style={{margin:0}}><span className="label">Note (optional)</span><input className="input" placeholder="e.g. deposit, part payment" value={payEntry.note} onChange={e=>setPayEntry(v=>({...v,note:e.target.value}))}/></label>
         <button className="btn btn-sm" style={{marginBottom:1}} onClick={addPayment}>Log</button>
       </div>
+
+      {form.id && !form.gratis && (
+        <div style={{marginTop:16, padding:'14px', background:'var(--bg-elev)', border:'1px solid var(--line)'}}>
+          <div className="mono" style={{fontSize:10, letterSpacing:'.1em', color:'var(--ink-2)', marginBottom:10}}>PAYMENT PLAN</div>
+          {form.paymentPlan && form.paymentPlan.status === 'active' ? (() => {
+            const progress = paymentPlanProgress(form);
+            return (
+              <>
+                <div style={{fontSize:12, color:'var(--ink-2)', marginBottom:10}}>
+                  {progress.completed
+                    ? 'Fully paid off.'
+                    : <>{progress.entries.filter(e=>e.status==='paid').length} of {progress.entries.length} instalments paid · next <strong>${progress.nextDue.amount.toLocaleString('en-AU',{minimumFractionDigits:2})}</strong> due {new Date(progress.nextDue.dueDate+'T00:00:00').toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'})}</>}
+                  {' · '}{form.paymentPlan.frequency} · {{manual:'staff-collected', customer:'customer pays in portal', auto:'auto-charged'}[form.paymentPlan.collectionMethod]}
+                </div>
+                <div style={{border:'1px solid var(--line)', marginBottom:10}}>
+                  {progress.entries.map((e, i) => (
+                    <div key={i} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'6px 10px', borderBottom: i < progress.entries.length-1 ? '1px solid var(--line)' : 'none', fontSize:12}}>
+                      <span className="mono" style={{color:'var(--ink-3)'}}>{new Date(e.dueDate+'T00:00:00').toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'})}</span>
+                      <span className="mono" style={{fontWeight:600}}>${e.amount.toLocaleString('en-AU',{minimumFractionDigits:2})}</span>
+                      <span className={`tag ${e.status==='paid'?'tag-green':e.status==='overdue'?'tag-red':'tag-outline'}`} style={{fontSize:10}}>{e.status.toUpperCase()}</span>
+                    </div>
+                  ))}
+                </div>
+                {canManagePlan && !progress.completed && (
+                  <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} disabled={planBusy} onClick={cancelPlan}>Cancel plan</button>
+                )}
+              </>
+            );
+          })() : form.paymentPlan && form.paymentPlan.status === 'cancelled' ? (
+            <div style={{fontSize:12, color:'var(--ink-3)'}}>Payment plan cancelled.</div>
+          ) : canManagePlan ? (
+            <>
+              <div style={{display:'grid', gridTemplateColumns:'110px 130px 170px 130px auto', gap:8, alignItems:'end', marginBottom:8}}>
+                <label className="field" style={{margin:0}}><span className="label">Instalment $</span>
+                  <input className="input" type="number" min="0" step="0.01" placeholder="0.00" value={planForm.installmentAmount} onChange={e=>setPlanForm(v=>({...v,installmentAmount:nonNegInput(e.target.value)}))}/></label>
+                <label className="field" style={{margin:0}}><span className="label">Frequency</span>
+                  <select className="select" value={planForm.frequency} onChange={e=>setPlanForm(v=>({...v,frequency:e.target.value}))}>
+                    <option value="weekly">Weekly</option>
+                    <option value="fortnightly">Fortnightly</option>
+                    <option value="monthly">Monthly</option>
+                  </select>
+                </label>
+                <label className="field" style={{margin:0}}><span className="label">Collection</span>
+                  <select className="select" value={planForm.collectionMethod} onChange={e=>setPlanForm(v=>({...v,collectionMethod:e.target.value}))}>
+                    <option value="manual">Staff collects</option>
+                    <option value="customer" disabled={!cardLookup?.hasCard}>Customer pays in portal{!cardLookup?.hasCard ? ' (needs saved card)' : ''}</option>
+                    <option value="auto" disabled={!cardLookup?.hasCard}>Auto-charge saved card{!cardLookup?.hasCard ? ' (needs saved card)' : ''}</option>
+                  </select>
+                </label>
+                <label className="field" style={{margin:0}}><span className="label">Start date</span>
+                  <input className="input" type="date" value={planForm.startDate} onChange={e=>setPlanForm(v=>({...v,startDate:e.target.value}))}/></label>
+                <button className="btn btn-sm" style={{marginBottom:1}} disabled={planBusy} onClick={savePlan}>{planBusy ? 'Saving…' : 'Create plan'}</button>
+              </div>
+              {!cardLookup?.hasCard && form.email && (
+                <div style={{fontSize:11, color:'var(--ink-3)', marginBottom:8}}>
+                  {cardLookup?.exists ? 'This customer has a portal account but no saved card — only staff-collected is available.' : 'No portal account found for this email yet — only staff-collected is available.'}
+                </div>
+              )}
+              {planError && <div style={{fontSize:12, color:'#b91c1c'}}>{planError}</div>}
+            </>
+          ) : (
+            <div style={{fontSize:12, color:'var(--ink-3)'}}>Only managers can set up a payment plan.</div>
+          )}
+        </div>
+      )}
 
       {form.id && (
         <div style={{marginTop:16, padding:'14px', background:'#fbeae1', border:'1px solid #e3b9a3'}}>
@@ -7762,6 +7895,98 @@ function ATODatesView() {
   );
 }
 
+// ============================================================
+// PAYMENT PLANS — cross-order dashboard
+// ============================================================
+function PaymentPlansView() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const load = async () => {
+    setLoading(true); setError(null);
+    const r = await fetch('/api/admin/payment-plans', { credentials:'include' }).catch(()=>null);
+    setLoading(false);
+    if (!r || !r.ok) { setError('Failed to load payment plans.'); return; }
+    setData(await r.json());
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const fmtAUD = n => `$${(Number(n)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+  const fmtDate = s => s ? new Date(s+'T00:00:00').toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'}) : '—';
+  const STATUS_MAP = {
+    'on-track': { label:'On track', cls:'tag-outline' },
+    'due-soon': { label:'Due soon', cls:'tag-ochre' },
+    overdue:    { label:'Overdue',  cls:'tag-red' },
+    failed:     { label:'Needs attention', cls:'tag-red' },
+  };
+  const goToOrder = (orderId) => {
+    navigator.clipboard?.writeText(orderId).catch(()=>{});
+    window.location.href = '/orders';
+  };
+
+  return (
+    <>
+      <div className="card" style={{padding:'14px 22px', marginBottom:20, display:'flex', alignItems:'center', gap:16}}>
+        <button className="btn btn-rust" onClick={load} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</button>
+        {error && <span className="mono" style={{fontSize:12, color:'var(--rust)'}}>{error}</span>}
+      </div>
+
+      {loading && !data && <div className="mono" style={{color:'var(--ink-3)', textAlign:'center', padding:40}}>Loading…</div>}
+
+      {data && <>
+        <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px,1fr))', gap:14, marginBottom:20}}>
+          {[
+            {label:'ACTIVE PLANS', value:data.activeCount, color:'var(--ink-1)'},
+            {label:'DUE SOON (7d)', value:data.dueSoonCount, color: data.dueSoonCount>0?'#c67c00':'var(--ink-3)'},
+            {label:'OVERDUE',       value:data.overdueCount, color: data.overdueCount>0?'var(--rust)':'var(--ink-3)'},
+            {label:'NEEDS ATTENTION', value:data.needsAttention, color: data.needsAttention>0?'var(--rust)':'var(--ink-3)'},
+          ].map(t => (
+            <div key={t.label} className="card" style={{padding:'14px 16px'}}>
+              <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:4}}>{t.label}</div>
+              <div className="mono" style={{fontSize:17, fontWeight:700, color:t.color}}>{t.value}</div>
+            </div>
+          ))}
+        </div>
+
+        {data.items.length === 0 ? (
+          <div className="card" style={{padding:'32px 22px', textAlign:'center', color:'var(--ink-3)'}}>No active payment plans.</div>
+        ) : (
+          <div className="card" style={{padding:'18px 22px'}}>
+            <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--rust)', marginBottom:12, letterSpacing:1}}>ACTIVE PLANS</div>
+            <div style={{overflowX:'auto'}}>
+              <table style={{width:'100%', borderCollapse:'collapse', fontSize:13}}>
+                <thead>
+                  <tr style={{borderBottom:'2px solid var(--border)'}}>
+                    {['Order #','Customer','Frequency','Method','Next Due','Amount','Remaining','Status'].map(h => (
+                      <th key={h} style={{textAlign: (h==='Amount'||h==='Remaining')?'right':'left', padding:'4px 6px 4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11, whiteSpace:'nowrap'}}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.items.map(item => (
+                    <tr key={item.orderId} style={{borderBottom:'1px solid var(--line)', cursor:'pointer'}} onClick={() => goToOrder(item.orderId)} title="Click to copy order # and open Orders">
+                      <td style={{padding:'7px 6px 7px 0', color:'var(--rust)', fontFamily:'monospace', whiteSpace:'nowrap'}}>{item.orderId}</td>
+                      <td style={{padding:'7px 6px'}}>{item.customer}</td>
+                      <td style={{padding:'7px 6px', textTransform:'capitalize'}}>{item.frequency}</td>
+                      <td style={{padding:'7px 6px', textTransform:'capitalize'}}>{item.collectionMethod === 'auto' ? 'Auto-charge' : item.collectionMethod === 'customer' ? 'Customer pays' : 'Staff collects'}</td>
+                      <td style={{padding:'7px 6px', whiteSpace:'nowrap'}}>{item.nextDue ? fmtDate(item.nextDue.dueDate) : '—'}</td>
+                      <td style={{padding:'7px 6px', textAlign:'right', fontFamily:'monospace'}}>{item.nextDue ? fmtAUD(item.nextDue.amount) : '—'}</td>
+                      <td style={{padding:'7px 6px', textAlign:'right', fontFamily:'monospace'}}>{fmtAUD(item.remaining)}</td>
+                      <td style={{padding:'7px 6px'}}><span className={`tag ${STATUS_MAP[item.status]?.cls || 'tag-outline'}`} style={{fontSize:10}}>{STATUS_MAP[item.status]?.label || item.status}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </>}
+    </>
+  );
+}
+
 function ReceivablesView() {
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(false);
@@ -8422,6 +8647,13 @@ function SettingsGeneralTab({ shop, setShop, savedShop, announcement, setAnnounc
           <label className="field"><span className="label">BSB</span><input className="input" value={shop.bankBsb||''} onChange={(e) => setShop({ ...shop, bankBsb: e.target.value })} placeholder="e.g. 123-456"/></label>
           <label className="field"><span className="label">Account number</span><input className="input" value={shop.bankAccountNumber||''} onChange={(e) => setShop({ ...shop, bankAccountNumber: e.target.value })} placeholder="e.g. 12345678"/></label>
         </div>
+        <span className="eyebrow" style={{marginTop:20, display:'block'}}>Payment Plans</span>
+        <label className="field" style={{marginTop:12, maxWidth:220}}>
+          <span className="label">Minimum order total ($)</span>
+          <input className="input" type="number" min="0" step="1" value={shop.paymentPlanMinTotal ?? 300}
+            onChange={(e) => setShop({ ...shop, paymentPlanMinTotal: e.target.value === '' ? '' : Math.max(0, Number(e.target.value) || 0) })} />
+          <span style={{fontSize:11, color:'var(--ink-3)', marginTop:3, display:'block'}}>Orders at or above this amount can be offered a payment plan at checkout.</span>
+        </label>
         <div className="row-flex" style={{gap:8, marginTop:12}}>
           <button className="btn btn-rust btn-sm" disabled={!shopDirty || sectionBusy==='shop'}>{sectionBusy==='shop'?'Saving…':'Save'}</button>
           <button type="button" className="btn btn-ghost btn-sm" disabled={!shopDirty || sectionBusy==='shop'} onClick={() => setShop(savedShop)}>Cancel</button>
@@ -9327,6 +9559,7 @@ function AdminAuditLog() {
 const ADMIN_VIEWS = {
   overview:   { c: AdminOverview,   t:'Overview',         staticSubtitle:'shop heartbeat · today' },
   orders:     { c: AdminOrders,     t:'Orders' },
+  'payment-plans': { c: PaymentPlansView, t:'Payment Plans', staticSubtitle:'active instalment plans · due dates · status' },
   repairs:    { c: AdminRepairs,    t:'Repair Jobs' },
   quotes:     { c: AdminQuotes,     t:'Quotes Inbox' },
   ewaste:     { c: AdminEwaste,     t:'eWaste Intake' },
@@ -9355,7 +9588,7 @@ const ADMIN_VIEWS = {
 };
 
 const ADMIN_ALL_IDS = new Set([
-  'overview','orders','repairs','quotes','ewaste','bookings','availability',
+  'overview','orders','payment-plans','repairs','quotes','ewaste','bookings','availability',
   'products','services','software','tutorials','ai',
   'groups','customers','sellers','clients',
   'memberships','gift-cards','rewards','expenses','tax-reports','policies','seller-billing','settings','audit-log',

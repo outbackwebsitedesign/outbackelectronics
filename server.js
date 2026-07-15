@@ -397,6 +397,62 @@ function orderRemainingBalance(o) {
   return Math.max(0, Math.round((effectiveTotal - received) * 100) / 100);
 }
 
+// ── Payment plans ─────────────────────────────────────────────────────────────
+function addPlanFrequency(date, frequency) {
+  const d = new Date(date);
+  if (frequency === 'weekly') d.setDate(d.getDate() + 7);
+  else if (frequency === 'monthly') d.setMonth(d.getMonth() + 1);
+  else d.setDate(d.getDate() + 14); // fortnightly (default)
+  return d;
+}
+function ymd(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+
+// Builds a schedule of {dueDate, amount} entries covering `total`, stepping by
+// `frequency` from `startDate`. The final entry is sized to the remainder so
+// the schedule always sums exactly to `total` regardless of rounding.
+function buildInstallmentSchedule({ total, installmentAmount, frequency, startDate }) {
+  const totalAmt = Math.round((Number(total) || 0) * 100) / 100;
+  const instAmt = Math.round((Number(installmentAmount) || 0) * 100) / 100;
+  const schedule = [];
+  if (totalAmt <= 0 || instAmt <= 0) return schedule;
+  let remaining = totalAmt;
+  let due = startDate ? new Date(startDate + 'T00:00:00') : new Date();
+  const MAX_INSTALLMENTS = 520; // ~10 years weekly — guards against pathological input
+  while (remaining > 0.005 && schedule.length < MAX_INSTALLMENTS) {
+    const amt = Math.min(instAmt, Math.round(remaining * 100) / 100);
+    schedule.push({ dueDate: ymd(due), amount: amt });
+    remaining = Math.round((remaining - amt) * 100) / 100;
+    due = addPlanFrequency(due, frequency);
+  }
+  return schedule;
+}
+
+// Progress is always derived from actual payments, never stored per-installment —
+// this reconciles correctly whether money arrived via auto-charge, a customer's
+// own portal payment, a manual counter payment, or paying off early in one go.
+function paymentPlanProgress(order) {
+  const plan = order.paymentPlan;
+  if (!plan) return null;
+  const paidSoFar = orderCashReceived(order);
+  const total = Number(order.total) || 0;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  let cumulative = 0;
+  let nextDue = null;
+  const entries = (plan.schedule || []).map(entry => {
+    const amt = Math.round((Number(entry.amount) || 0) * 100) / 100;
+    cumulative = Math.round((cumulative + amt) * 100) / 100;
+    const owed = Math.round(Math.max(0, Math.min(amt, cumulative - paidSoFar)) * 100) / 100;
+    let status;
+    if (owed <= 0.005) status = 'paid';
+    else status = new Date(entry.dueDate + 'T00:00:00') < today ? 'overdue' : 'upcoming';
+    if (status !== 'paid' && !nextDue) nextDue = { dueDate: entry.dueDate, amount: owed };
+    return { dueDate: entry.dueDate, amount: amt, owed, status };
+  });
+  const remaining = Math.max(0, Math.round((total - paidSoFar) * 100) / 100);
+  const completed = remaining <= 0.005;
+  return { paidSoFar, remaining, completed, nextDue: completed ? null : nextDue, entries };
+}
+
 function readOrders() {
   try { const p = JSON.parse(cachedReadFile(ORDERS_DB_PATH)); return Array.isArray(p.orders) ? p.orders : []; } catch { return []; }
 }
@@ -6130,6 +6186,120 @@ const adminServer = http.createServer(async (req, res) => {
     }
     return json(res, 200, { ok: true, order });
   }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/orders/payment-plan/save') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const { orderId, frequency, installmentAmount, collectionMethod, startDate } = body || {};
+    if (!orderId) return json(res, 400, { error: 'order_id_required' });
+    if (!['weekly', 'fortnightly', 'monthly'].includes(frequency)) return json(res, 422, { error: 'invalid_frequency' });
+    if (!['manual', 'customer', 'auto'].includes(collectionMethod)) return json(res, 422, { error: 'invalid_collection_method' });
+    const amt = Math.round((Number(installmentAmount) || 0) * 100) / 100;
+    if (!(amt > 0)) return json(res, 422, { error: 'invalid_amount', message: 'Instalment amount must be greater than zero.' });
+    const orders = readOrders();
+    const idx = orders.findIndex(o => o.id === orderId);
+    if (idx < 0) return json(res, 404, { error: 'not_found' });
+    const order = orders[idx];
+    const remaining = Math.max(0, Math.round(((Number(order.total) || 0) - orderCashReceived(order)) * 100) / 100);
+    if (remaining <= 0) return json(res, 422, { error: 'already_paid', message: 'This order is already fully paid — there is nothing left to schedule.' });
+    if (collectionMethod !== 'manual') {
+      const custUser = readUsers().find(u => (u.email || '').toLowerCase() === (order.email || '').toLowerCase());
+      if (!custUser || !custUser.stripePaymentMethodId) {
+        return json(res, 422, { error: 'no_saved_card', message: 'This customer has no saved card yet. Use manual collection, or ask them to add a card in the portal first.' });
+      }
+    }
+    const validStart = /^\d{4}-\d{2}-\d{2}$/.test(startDate || '') ? startDate : ymd(new Date());
+    const schedule = buildInstallmentSchedule({ total: remaining, installmentAmount: amt, frequency, startDate: validStart });
+    if (!schedule.length) return json(res, 422, { error: 'invalid_schedule', message: 'Could not build a schedule from the amounts given.' });
+    const plan = {
+      status: 'active',
+      frequency,
+      collectionMethod,
+      startDate: validStart,
+      schedule,
+      reminderDaysBefore: 3,
+      lastReminderSentFor: null,
+      lastAutoAttempt: null,
+      createdAt: new Date().toISOString(),
+      createdBy: session.username || session.role || 'admin',
+    };
+    orders[idx] = { ...order, paymentPlan: plan };
+    writeOrders(orders);
+    auditAdminAction({ req, session, action: 'order.payment-plan.save', result: { status: 'ok', changed: { orderId, frequency, collectionMethod, installments: schedule.length } } });
+    return json(res, 200, { ok: true, order: orders[idx], progress: paymentPlanProgress(orders[idx]) });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/orders/payment-plan/cancel') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    if (!body.orderId) return json(res, 400, { error: 'order_id_required' });
+    const orders = readOrders();
+    const idx = orders.findIndex(o => o.id === body.orderId);
+    if (idx < 0) return json(res, 404, { error: 'not_found' });
+    if (!orders[idx].paymentPlan) return json(res, 409, { error: 'no_plan', message: 'This order has no payment plan.' });
+    orders[idx] = { ...orders[idx], paymentPlan: { ...orders[idx].paymentPlan, status: 'cancelled' } };
+    writeOrders(orders);
+    auditAdminAction({ req, session, action: 'order.payment-plan.cancel', result: { status: 'ok', changed: { orderId: body.orderId } } });
+    return json(res, 200, { ok: true, order: orders[idx] });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/admin/portal-users/lookup') {
+    const session = requireRole(req, res, 'staff'); if (!session) return;
+    const email = String(url.searchParams.get('email') || '').toLowerCase().trim();
+    if (!email) return json(res, 400, { error: 'email_required' });
+    const user = readUsers().find(u => (u.email || '').toLowerCase() === email);
+    if (!user) return json(res, 200, { exists: false, hasCard: false, cardLast4: '', cardBrand: '' });
+    return json(res, 200, {
+      exists: true,
+      hasCard: !!user.stripePaymentMethodId,
+      cardLast4: user.stripeCardLast4 || '',
+      cardBrand: user.stripeCardBrand || '',
+    });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/admin/payment-plans') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    const orders = readOrders();
+    const now = new Date(); now.setHours(0, 0, 0, 0);
+    const in7d = new Date(now); in7d.setDate(in7d.getDate() + 7);
+    const items = [];
+    let overdueCount = 0, dueSoonCount = 0, needsAttention = 0;
+    for (const o of orders) {
+      const plan = o.paymentPlan;
+      if (!plan || plan.status !== 'active') continue;
+      const progress = paymentPlanProgress(o);
+      if (progress.completed) continue;
+      const failed = plan.lastAutoAttempt && plan.lastAutoAttempt.status === 'failed';
+      let status = 'on-track';
+      if (failed) status = 'failed';
+      else if (progress.nextDue) {
+        const due = new Date(progress.nextDue.dueDate + 'T00:00:00');
+        if (due < now) status = 'overdue';
+        else if (due <= in7d) status = 'due-soon';
+      }
+      if (status === 'overdue') overdueCount++;
+      if (status === 'due-soon') dueSoonCount++;
+      if (status === 'failed') needsAttention++;
+      items.push({
+        orderId: o.id,
+        customer: o.cust || o.email || '—',
+        email: o.email || '',
+        frequency: plan.frequency,
+        collectionMethod: plan.collectionMethod,
+        nextDue: progress.nextDue,
+        remaining: progress.remaining,
+        total: Number(o.total) || 0,
+        status,
+      });
+    }
+    items.sort((a, b) => {
+      const da = a.nextDue ? a.nextDue.dueDate : '9999-99-99';
+      const db = b.nextDue ? b.nextDue.dueDate : '9999-99-99';
+      return da < db ? -1 : da > db ? 1 : 0;
+    });
+    return json(res, 200, { items, activeCount: items.length, overdueCount, dueSoonCount, needsAttention });
+  }
+
   if (req.method === 'POST' && url.pathname === '/api/admin/orders/check-tracking') {
     const session = requireRole(req, res, 'staff'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
