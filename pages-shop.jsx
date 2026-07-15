@@ -1652,7 +1652,8 @@ function calloutFeeBreakdown(distKm) {
   return `${distKm}km · $${fuel} fuel + ${days * 2} travel days × $${CALLOUT_DAILY_RATE}`;
 }
 
-function ServiceDetailPage({ go, pageParams }) {
+function ServiceDetailPage({ go, pageParams, portalUser, onPortalUserChange }) {
+  const { InlineAuthGate } = window.__OE_HELPERS__ || {};
   const [service, setService] = useState(pageParams || null);
   const [bookForm, setBookForm] = useState({ name: '', email: '', loc: '', date: '', notes: '' });
   const [booking, setBooking] = useState(false);
@@ -1697,6 +1698,7 @@ function ServiceDetailPage({ go, pageParams }) {
   const handlePayAndBook = async (e) => {
     e.preventDefault();
     setBookError(null);
+    if (!portalUser) { setBookError('Please sign in or create an account before booking.'); return; }
     setBooking(true);
     try {
       await fetch('/api/csrf-token', { credentials: 'include' }).catch(() => {});
@@ -1815,9 +1817,12 @@ function ServiceDetailPage({ go, pageParams }) {
                 <span className="label">Notes (optional)</span>
                 <textarea className="textarea" rows={3} value={bookForm.notes} onChange={e => setBookForm(f => ({...f, notes: e.target.value}))} placeholder="Anything we should know before the appointment." />
               </label>
+              {portalUser === null && InlineAuthGate && (
+                <InlineAuthGate title="Sign in to book" onAuthenticated={user => { onPortalUserChange?.(user); setBookError(null); }} />
+              )}
               <ErrorText style={{marginBottom:12}}>{bookError}</ErrorText>
               <div style={{display:'flex', gap:12, alignItems:'center'}}>
-                <button type="submit" className="btn btn-rust" style={{flex:1, justifyContent:'center', gap:8}} disabled={booking || outOfRange} aria-busy={booking}>
+                <button type="submit" className="btn btn-rust" style={{flex:1, justifyContent:'center', gap:8}} disabled={booking || outOfRange || !portalUser} aria-busy={booking}>
                   {booking ? <><span className="spinner" aria-hidden="true" /> Redirecting…</> : travelFee > 0
                     ? `Pay now — $${(fixedPrice + travelFee).toLocaleString('en-AU', {minimumFractionDigits:2})} (incl. travel) →`
                     : `Pay now — $${fixedPrice.toLocaleString('en-AU', {minimumFractionDigits:2})} →`}

@@ -82,8 +82,8 @@ function OrderCancelledPage({ go }) {
 }
 
 // ---------------- Cart Page ----------------
-function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart }) {
-  const { getPortalUrl } = window.__OE_HELPERS__ || {};
+function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, portalUser, onPortalUserChange }) {
+  const { getPortalUrl, InlineAuthGate } = window.__OE_HELPERS__ || {};
   const [checkingOut, setCheckingOut] = useState(false);
   const [error, setError] = useState(null);
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -256,6 +256,10 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
 
   const checkout = async () => {
     if (cart.length === 0) return;
+    if (!portalUser) {
+      setError('Please sign in or create an account before checking out.');
+      return;
+    }
     if (!termsAccepted) {
       setError('Please accept the Terms & Conditions and Privacy Policy before proceeding to checkout.');
       return;
@@ -293,7 +297,8 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
       });
       let data;
       try { data = await resp.json(); } catch { data = {}; }
-      if (data.url && (data.fullyCoveredByGiftCard || data.url.startsWith('https://checkout.stripe.com/'))) { window.location.href = data.url; }
+      if (resp.status === 401 || data.error === 'login_required') { setError(data.message || 'Please sign in or create an account before checking out.'); }
+      else if (data.url && (data.fullyCoveredByGiftCard || data.url.startsWith('https://checkout.stripe.com/'))) { window.location.href = data.url; }
       else if (data.url) { setError('Unexpected redirect URL from payment provider.'); }
       else setError(data.message || 'Checkout failed. Please try again.');
     } catch (err) {
@@ -529,6 +534,10 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
                 </div>
               )}
 
+              {portalUser === null && InlineAuthGate && (
+                <InlineAuthGate title="Sign in to check out" onAuthenticated={user => { onPortalUserChange?.(user); setError(null); }} />
+              )}
+
               <label style={{display:'flex', alignItems:'flex-start', gap:10, marginBottom:12, cursor:'pointer'}}>
                 <input type="checkbox" checked={termsAccepted} onChange={e => { setTermsAccepted(e.target.checked); setError(null); }} style={{marginTop:2, flexShrink:0, accentColor:'var(--rust)', width:15, height:15, cursor:'pointer'}} />
                 <span style={{fontSize:12, color:'var(--ink-2)', lineHeight:1.5}}>
@@ -543,7 +552,7 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
                 </span>
               </label>
               <ErrorText style={{marginBottom:12}}>{error}</ErrorText>
-              <button className="btn btn-rust" style={{width:'100%', justifyContent:'center', gap:8}} onClick={checkout} disabled={checkingOut} aria-busy={checkingOut}>
+              <button className="btn btn-rust" style={{width:'100%', justifyContent:'center', gap:8}} onClick={checkout} disabled={checkingOut || !portalUser} aria-busy={checkingOut}>
                 {checkingOut ? <><span className="spinner" aria-hidden="true" /> Redirecting…</> : `Checkout — $${total.toLocaleString('en-AU', {minimumFractionDigits:2})}${selectedShipping ? '' : cart.some(i=>!i.digital) ? ' + shipping' : ''}`}
               </button>
               <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginTop:10, textAlign:'center'}}>SECURE CHECKOUT VIA STRIPE</div>
@@ -577,7 +586,7 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart })
           <div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>TOTAL{selectedShipping ? '' : cart.some(i => !i.digital) ? ' + SHIPPING' : ''}</div>
           <div className="serif" style={{fontSize:22, color:'var(--rust)', lineHeight:1.1}}>${total.toLocaleString('en-AU', {minimumFractionDigits:2})}</div>
         </div>
-        <button className="btn btn-rust" style={{justifyContent:'center', gap:8}} onClick={checkout} disabled={checkingOut} aria-busy={checkingOut}>
+        <button className="btn btn-rust" style={{justifyContent:'center', gap:8}} onClick={checkout} disabled={checkingOut || !portalUser} aria-busy={checkingOut}>
           {checkingOut ? <><span className="spinner" aria-hidden="true" /> Redirecting…</> : 'Checkout →'}
         </button>
       </div>

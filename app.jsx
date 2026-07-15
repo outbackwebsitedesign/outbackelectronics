@@ -681,6 +681,102 @@ function ErrorText({ children, inline, style }) {
   return <div role="alert" style={{ ...base, ...style }}>{children}</div>;
 }
 
+// ---------------- Inline sign-in / register gate ----------------
+// Every checkout now requires a portal account. This is the shared "sign in or
+// create an account to continue" widget embedded directly in the cart/buy-now
+// flow (not a redirect to the portal site) so the shopper's place in checkout
+// isn't lost. Exposed via window.__OE_HELPERS__ so pages-cart.jsx and
+// pages-shop.jsx (separate chunks) can both use it.
+function InlineAuthGate({ onAuthenticated, title = 'Sign in to continue' }) {
+  const { portalApi } = window.__OE_HELPERS__ || {};
+  const [mode, setMode] = useState('login'); // 'login' | 'register'
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [username, setUsername] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [termsAccepted, setTermsAccepted] = useState(false);
+
+  async function handleLogin(e) {
+    e.preventDefault();
+    setError(''); setBusy(true);
+    const r = await portalApi('/api/portal/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
+    setBusy(false);
+    if (r.ok) onAuthenticated(r.user);
+    else setError(r.message || 'Invalid email or password.');
+  }
+
+  async function handleRegister(e) {
+    e.preventDefault();
+    if (!termsAccepted) { setError('You must agree to the Terms & Conditions and Privacy Policy to create an account.'); return; }
+    setError(''); setBusy(true);
+    const r = await portalApi('/api/portal/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ firstName, lastName, email: regEmail, phone, username, password: regPassword }),
+    });
+    setBusy(false);
+    if (r.ok) onAuthenticated(r.user);
+    else setError(r.message || 'Registration failed. Please try again.');
+  }
+
+  const fieldStyle = { marginBottom: 10 };
+
+  return (
+    <div style={{ border: '1px solid var(--line)', background: 'var(--paper)', padding: 20, marginBottom: 16 }}>
+      <div className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 12, letterSpacing: '.06em' }}>{title.toUpperCase()}</div>
+      <div className="tabs" style={{ marginBottom: 14 }}>
+        <div role="button" tabIndex={0} className={`tab ${mode === 'login' ? 'active' : ''}`}
+          onClick={() => { setMode('login'); setError(''); }}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { setMode('login'); setError(''); } }}>Sign in</div>
+        <div role="button" tabIndex={0} className={`tab ${mode === 'register' ? 'active' : ''}`}
+          onClick={() => { setMode('register'); setError(''); }}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { setMode('register'); setError(''); } }}>Create account</div>
+      </div>
+      <ErrorText style={{ marginBottom: 12 }}>{error}</ErrorText>
+      {mode === 'login' ? (
+        <form onSubmit={handleLogin}>
+          <label className="field" style={fieldStyle}><span className="label">Email address</span>
+            <input className="input" type="email" value={email} autoComplete="email" onChange={e => setEmail(e.target.value)} required /></label>
+          <label className="field" style={fieldStyle}><span className="label">Password</span>
+            <input className="input" type="password" value={password} autoComplete="current-password" onChange={e => setPassword(e.target.value)} required /></label>
+          <button className="btn btn-rust" type="submit" disabled={busy} style={{ width: '100%', justifyContent: 'center' }}>{busy ? 'Signing in…' : 'Sign in →'}</button>
+        </form>
+      ) : (
+        <form onSubmit={handleRegister}>
+          <div className="grid-2" style={fieldStyle}>
+            <label className="field"><span className="label">First name</span>
+              <input className="input" value={firstName} autoComplete="given-name" onChange={e => setFirstName(e.target.value)} required /></label>
+            <label className="field"><span className="label">Last name</span>
+              <input className="input" value={lastName} autoComplete="family-name" onChange={e => setLastName(e.target.value)} required /></label>
+          </div>
+          <label className="field" style={fieldStyle}><span className="label">Email address</span>
+            <input className="input" type="email" value={regEmail} autoComplete="email" onChange={e => setRegEmail(e.target.value)} required /></label>
+          <label className="field" style={fieldStyle}><span className="label">Phone (optional)</span>
+            <input className="input" type="tel" value={phone} autoComplete="tel" onChange={e => setPhone(e.target.value)} /></label>
+          <label className="field" style={fieldStyle}><span className="label">Username</span>
+            <input className="input" value={username} autoComplete="username" onChange={e => setUsername(e.target.value)} required /></label>
+          <label className="field" style={fieldStyle}><span className="label">Password</span>
+            <input className="input" type="password" value={regPassword} autoComplete="new-password" onChange={e => setRegPassword(e.target.value)} required /></label>
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 12, cursor: 'pointer', fontSize: 12 }}>
+            <input type="checkbox" checked={termsAccepted} onChange={e => setTermsAccepted(e.target.checked)} style={{ marginTop: 2, flexShrink: 0 }} />
+            <span>I agree to the{' '}
+              <a href="/policies/terms-and-conditions" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--rust)', fontWeight: 600 }}>Terms &amp; Conditions</a>
+              {' and '}
+              <a href="/policies/privacy-policy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--rust)', fontWeight: 600 }}>Privacy Policy</a>.
+            </span>
+          </label>
+          <button className="btn btn-rust" type="submit" disabled={busy} style={{ width: '100%', justifyContent: 'center' }}>{busy ? 'Creating account…' : 'Create account →'}</button>
+        </form>
+      )}
+    </div>
+  );
+}
+
 // ---------------- Page Head helper ----------------
 // Map breadcrumb labels to SPA page ids so intermediate crumbs are real links.
 const CRUMB_PAGE_IDS = {
@@ -899,7 +995,7 @@ function App() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const { shop, flags, portalUrl, forumUrl } = useShopInfo();
-  const [portalUser] = usePortalUser();
+  const [portalUser, setPortalUser] = usePortalUser();
   const resolvedFlags = useMemo(() => Object.assign({}, SITE_FLAGS, flags), [flags]);
   const siteUrls = useMemo(() => ({
     portal: portalUrl || getPortalUrl(),
@@ -1082,7 +1178,7 @@ function App() {
       <TopNav page={page} go={go} cart={cartCount} onSearchOpen={() => setSearchOpen(true)} accountOpen={accountOpen} setAccountOpen={setAccountOpen} portalUser={portalUser} />
       <main id="main-content" tabIndex={-1}>
         <div key={page} className="page-in">
-          <PageComponent go={go} addToCart={addToCart} pageParams={pageParams} cart={cart} removeFromCart={removeFromCart} updateQty={updateQty} clearCart={clearCart} portalUser={portalUser} />
+          <PageComponent go={go} addToCart={addToCart} pageParams={pageParams} cart={cart} removeFromCart={removeFromCart} updateQty={updateQty} clearCart={clearCart} portalUser={portalUser} onPortalUserChange={setPortalUser} />
         </div>
       </main>
       <Footer go={go} />
@@ -1103,7 +1199,7 @@ function App() {
 
 // Expose helpers globally
 window.__ShopContext__ = ShopContext;
-window.__OE_HELPERS__ = { portalApi, getPortalUrl };
+window.__OE_HELPERS__ = { portalApi, getPortalUrl, InlineAuthGate };
 Object.assign(window, { PageHead, ErrorText, PRIMARY_PAGES, UTILITY_PAGES });
 window.OE_PAGES = Object.assign(window.OE_PAGES || {}, {
   account: () => <AccountPlaceholderPage title="Account Dashboard" portalPath="/account" />,

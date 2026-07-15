@@ -4306,9 +4306,16 @@ const mainServer = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/checkout') {
     if (publicRateLimited(getIp(req), 'checkout')) return json(res, 429, { error: 'too_many_requests', message: 'Too many requests. Please wait a moment and try again.' });
     if (!getStripeKey()) return json(res, 503, { error: 'stripe_not_configured', message: 'Payment is not configured. Please contact us.' });
+    // Guest checkout is no longer allowed — every order must be tied to a portal account.
+    const checkoutPortalSession = getPortalSession(req);
+    if (!checkoutPortalSession) return json(res, 401, { error: 'login_required', message: 'Please sign in or create an account to check out.' });
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
 
-    const { productId, name, priceAud, quantity = 1, customerEmail, items, giftCardCode, shippingAmount, shippingService, redeemPoints: redeemPointsBody, rewardsToken: rewardsTokenBody, redeemStoreCredit: redeemStoreCreditBody } = body;
+    const { productId, name, priceAud, quantity = 1, customerEmail: bodyCustomerEmail, items, giftCardCode, shippingAmount, shippingService, redeemPoints: redeemPointsBody, rewardsToken: rewardsTokenBody, redeemStoreCredit: redeemStoreCreditBody } = body;
+    // Every checkout is now tied to a real portal account — the account's own
+    // email is authoritative, never the client-supplied one.
+    const portalAccount = readUsers().find(u => u.id === checkoutPortalSession.id);
+    const customerEmail = (portalAccount && portalAccount.email) || bodyCustomerEmail || '';
 
     // Normalise to a line-items array (multi-item cart or legacy single-item)
     const rawLineItems = Array.isArray(items) && items.length > 0
@@ -4370,7 +4377,6 @@ const mainServer = http.createServer(async (req, res) => {
     }
 
     // Apply member discount if applicable
-    const checkoutPortalSession = getPortalSession(req);
     let memberDiscountPercent = 0;
     let memberDiscountTierName = '';
     if (checkoutPortalSession) {
