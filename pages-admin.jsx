@@ -2422,7 +2422,11 @@ function QuoteCreator({ context, onBack, onQuoteSent }) {
   const updOther = (id, patch) => setForm(f => ({ ...f, otherItems: f.otherItems.map(i => i.id === id ? { ...i, ...patch } : i) }));
   const remOther = (id) => setForm(f => ({ ...f, otherItems: f.otherItems.filter(i => i.id !== id) }));
 
-  const buildPayload = () => ({ ...form, hardwareTotal, pcBuildFee, otherTotal, grandTotal });
+  // Keep the customer's original request kind (e.g. "Repair") when building a
+  // quote from an inbox item — only fall back to a generic label for quotes
+  // started from scratch, and only call it "Custom Build" when that box is ticked.
+  const quoteKind = context?.kind || (form.pcBuild ? 'Custom Build' : 'Quote');
+  const buildPayload = () => ({ ...form, hardwareTotal, pcBuildFee, otherTotal, grandTotal, kind: quoteKind });
 
   const doSend = async () => {
     if (!form.customerEmail) { setMsg({ text: 'Customer email is required.', ok: false }); return; }
@@ -2450,7 +2454,7 @@ function QuoteCreator({ context, onBack, onQuoteSent }) {
         name: form.customerName,
         email: form.customerEmail,
         status: 'in-review',
-        kind: 'custom-pc-build',
+        kind: quoteKind,
         quoteRef: form.quoteRef,
         summary: `Draft quote — $${grandTotal.toLocaleString('en-AU', { minimumFractionDigits: 2 })} AUD`,
         age: '0m',
@@ -2542,7 +2546,7 @@ function QuoteCreator({ context, onBack, onQuoteSent }) {
               {hw.map(item => {
                 const base = parseFloat(item.basePrice) || 0;
                 const qty = parseInt(item.qty) || 1;
-                const customerPrice = base * qty * (1 + HARDWARE_MARGIN);
+                const customerPrice = base * qty * (1 + PARTS_MARGIN);
                 return (
                   <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '2fr 70px 130px 120px 28px', gap: 8, alignItems: 'center' }}>
                     <input className="input" placeholder="e.g. Ryzen 7 5800X CPU" value={item.name} onChange={e => updHw(item.id, { name: e.target.value })} />
@@ -2677,7 +2681,7 @@ function QuoteCreator({ context, onBack, onQuoteSent }) {
                 ...hw.filter(i => i.name || i.basePrice).map(i => {
                   const base = parseFloat(i.basePrice) || 0;
                   const qty = parseInt(i.qty) || 1;
-                  return { label: (i.name || '(item)') + (qty > 1 ? ` × ${qty}` : ''), amount: base * qty * (1 + HARDWARE_MARGIN) };
+                  return { label: (i.name || '(item)') + (qty > 1 ? ` × ${qty}` : ''), amount: base * qty * (1 + PARTS_MARGIN) };
                 }),
                 ...(form.pcBuild && pcBuildFee > 0 ? [{ label: 'Custom PC Build', amount: pcBuildFee }] : []),
                 ...form.otherItems.filter(i => i.description || i.amount).map(i => ({ label: (i.description || '(item)') + ((parseInt(i.qty) || 1) > 1 ? ` × ${parseInt(i.qty)}` : ''), amount: otherItemTotal(i) })),

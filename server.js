@@ -6727,7 +6727,7 @@ const adminServer = http.createServer(async (req, res) => {
       name: body.customerName || '',
       email: body.customerEmail,
       status: 'quoted',
-      kind: 'custom-pc-build',
+      kind: body.kind || (existingQuote?.kind) || (body.pcBuild ? 'Custom Build' : 'Quote'),
       quoteRef,
       quoteToken,
       draftQuote: body,
