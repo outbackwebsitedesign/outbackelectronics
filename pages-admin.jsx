@@ -1741,7 +1741,7 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
                 <label className="field" style={{margin:0}}><span className="label">Collection</span>
                   <select className="select" value={planForm.collectionMethod} onChange={e=>setPlanForm(v=>({...v,collectionMethod:e.target.value}))}>
                     <option value="manual">Staff collects</option>
-                    <option value="customer" disabled={!cardLookup?.hasCard}>Customer pays in portal{!cardLookup?.hasCard ? ' (needs saved card)' : ''}</option>
+                    <option value="customer" disabled={!cardLookup?.exists}>Customer pays in portal{!cardLookup?.exists ? ' (needs portal account)' : ''}</option>
                     <option value="auto" disabled={!cardLookup?.hasCard}>Auto-charge saved card{!cardLookup?.hasCard ? ' (needs saved card)' : ''}</option>
                   </select>
                 </label>
@@ -1749,10 +1749,11 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
                   <input className="input" type="date" value={planForm.startDate} onChange={e=>setPlanForm(v=>({...v,startDate:e.target.value}))}/></label>
                 <button className="btn btn-sm" style={{marginBottom:1}} disabled={planBusy} onClick={savePlan}>{planBusy ? 'Saving…' : 'Create plan'}</button>
               </div>
-              {!cardLookup?.hasCard && form.email && (
-                <div style={{fontSize:11, color:'var(--ink-3)', marginBottom:8}}>
-                  {cardLookup?.exists ? 'This customer has a portal account but no saved card — only staff-collected is available.' : 'No portal account found for this email yet — only staff-collected is available.'}
-                </div>
+              {!cardLookup?.exists && form.email && (
+                <div style={{fontSize:11, color:'var(--ink-3)', marginBottom:8}}>No portal account found for this email yet — only staff-collected is available.</div>
+              )}
+              {cardLookup?.exists && !cardLookup?.hasCard && (
+                <div style={{fontSize:11, color:'var(--ink-3)', marginBottom:8}}>This customer has no saved card yet — auto-charge isn't available until they add one in the portal.</div>
               )}
               {planError && <div style={{fontSize:12, color:'#b91c1c'}}>{planError}</div>}
             </>

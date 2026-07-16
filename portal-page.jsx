@@ -1024,6 +1024,15 @@ function QuotesTab({ user, onOrderCreated, highlightRef }) {
   const [acceptErr, setAcceptErr] = useState('');
   const [acceptedOrders, setAcceptedOrders] = useState({});
   const [search, setSearch] = useState('');
+  const [planMinTotal, setPlanMinTotal] = useState(300);
+  const [planChoice, setPlanChoice] = useState({}); // quoteId -> {mode, frequency, installmentAmount, collectionMethod}
+
+  useEffect(() => {
+    fetch('/api/shop-info').then(r => r.json()).then(d => {
+      const min = Number(d.shop?.paymentPlanMinTotal);
+      if (min > 0) setPlanMinTotal(min);
+    }).catch(() => {});
+  }, []);
 
   function load(force) {
     if (force) setItems(null);
@@ -1061,8 +1070,13 @@ function QuotesTab({ user, onOrderCreated, highlightRef }) {
   }
 
   async function acceptQuote(quoteId) {
+    const choice = planChoice[quoteId];
+    const paymentPlan = choice && choice.mode === 'plan'
+      ? { frequency: choice.frequency, installmentAmount: Number(choice.installmentAmount), collectionMethod: choice.collectionMethod }
+      : null;
+    if (paymentPlan && !(paymentPlan.installmentAmount > 0)) { setAcceptErr('Enter an instalment amount greater than zero.'); return; }
     setAccepting(quoteId); setAcceptErr('');
-    const r = await api('/api/portal/quotes/accept', { method: 'POST', body: JSON.stringify({ quoteId }) });
+    const r = await api('/api/portal/quotes/accept', { method: 'POST', body: JSON.stringify({ quoteId, ...(paymentPlan ? { paymentPlan } : {}) }) });
     setAccepting(null);
     if (r.ok) {
       setAcceptedOrders(prev => ({ ...prev, [quoteId]: r.orderId }));
@@ -1183,14 +1197,46 @@ function QuotesTab({ user, onOrderCreated, highlightRef }) {
 
               {accepted ? (
                 <div className="alert alert-success">Order created — <strong>{accepted}</strong>. Check your Orders tab and your email for confirmation.</div>
-              ) : (
-                <div style={{display:'flex', gap:12, alignItems:'center'}}>
-                  <button className="btn btn-rust" onClick={() => acceptQuote(q.id)} disabled={accepting === q.id}>
-                    {accepting === q.id ? 'Accepting…' : 'Accept Quote →'}
-                  </button>
-                  <span style={{fontSize:13, color:'var(--ink-3)'}}>Or reply to your quote email to ask questions first.</span>
-                </div>
-              )}
+              ) : (() => {
+                const choice = planChoice[q.id] || { mode: 'full', frequency: 'fortnightly', installmentAmount: '', collectionMethod: 'manual' };
+                const setChoice = patch => setPlanChoice(pc => ({ ...pc, [q.id]: { ...choice, ...patch } }));
+                const eligible = Number(dq.grandTotal || 0) >= planMinTotal;
+                return (
+                  <div>
+                    {eligible && (
+                      <div className="tabs" style={{marginBottom:14}}>
+                        <div role="button" tabIndex={0} className={`tab ${choice.mode === 'full' ? 'active' : ''}`} onClick={() => setChoice({ mode: 'full' })}>Pay in full</div>
+                        <div role="button" tabIndex={0} className={`tab ${choice.mode === 'plan' ? 'active' : ''}`} onClick={() => setChoice({ mode: 'plan' })}>Set up a payment plan</div>
+                      </div>
+                    )}
+                    {eligible && choice.mode === 'plan' && (
+                      <div className="grid-2" style={{gap:12, marginBottom:14}}>
+                        <label className="field"><span className="label">Instalment amount ($)</span>
+                          <input className="input" type="number" min="0" step="0.01" value={choice.installmentAmount} onChange={e => setChoice({ installmentAmount: e.target.value })} /></label>
+                        <label className="field"><span className="label">Frequency</span>
+                          <select className="select" value={choice.frequency} onChange={e => setChoice({ frequency: e.target.value })}>
+                            <option value="weekly">Weekly</option>
+                            <option value="fortnightly">Fortnightly</option>
+                            <option value="monthly">Monthly</option>
+                          </select>
+                        </label>
+                        <label className="field" style={{gridColumn:'1 / -1'}}><span className="label">How you'll pay each instalment</span>
+                          <select className="select" value={choice.collectionMethod} onChange={e => setChoice({ collectionMethod: e.target.value })}>
+                            <option value="customer">I'll pay each one myself in the portal</option>
+                            <option value="manual">Outback Electronics will contact me to collect it</option>
+                          </select>
+                        </label>
+                      </div>
+                    )}
+                    <div style={{display:'flex', gap:12, alignItems:'center'}}>
+                      <button className="btn btn-rust" onClick={() => acceptQuote(q.id)} disabled={accepting === q.id}>
+                        {accepting === q.id ? 'Accepting…' : choice.mode === 'plan' ? 'Accept Quote & Start Plan →' : 'Accept Quote →'}
+                      </button>
+                      <span style={{fontSize:13, color:'var(--ink-3)'}}>Or reply to your quote email to ask questions first.</span>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           );
         })}
@@ -2470,11 +2516,17 @@ function QuoteTokenView({ token, onAccepted }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [planMinTotal, setPlanMinTotal] = useState(300);
+  const [planChoice, setPlanChoice] = useState({ mode: 'full', frequency: 'fortnightly', installmentAmount: '', collectionMethod: 'manual' });
 
   useEffect(() => {
     api(`/api/quote/token?token=${encodeURIComponent(token)}`)
       .then(d => { if (d.ok) setQuote(d.quote); else setErr('This quote link is invalid or has expired.'); })
       .catch(() => setErr('Could not load quote. Please try again.'));
+    fetch('/api/shop-info').then(r => r.json()).then(d => {
+      const min = Number(d.shop?.paymentPlanMinTotal);
+      if (min > 0) setPlanMinTotal(min);
+    }).catch(() => {});
   }, [token]);
 
   const lineItems = quote ? [
@@ -2493,8 +2545,12 @@ function QuoteTokenView({ token, onAccepted }) {
   async function handleAccept(e) {
     e.preventDefault();
     if (!termsAccepted) { setMsg('You must accept the Terms & Conditions, Return Policy, and Privacy Policy to proceed.'); return; }
+    const paymentPlan = planChoice.mode === 'plan'
+      ? { frequency: planChoice.frequency, installmentAmount: Number(planChoice.installmentAmount), collectionMethod: planChoice.collectionMethod }
+      : null;
+    if (paymentPlan && !(paymentPlan.installmentAmount > 0)) { setMsg('Enter an instalment amount greater than zero.'); return; }
     setBusy(true); setMsg('');
-    const r = await api('/api/quote/accept-token', { method: 'POST', body: JSON.stringify({ token, ...form }) });
+    const r = await api('/api/quote/accept-token', { method: 'POST', body: JSON.stringify({ token, ...form, ...(paymentPlan ? { paymentPlan } : {}) }) });
     setBusy(false);
     if (r.ok) {
       setStep('done');
@@ -2599,6 +2655,35 @@ function QuoteTokenView({ token, onAccepted }) {
                 <span className="label">Password</span>
                 <input className="input" type="password" placeholder="At least 8 characters" value={form.password} onChange={e => setForm(f => ({...f, password: e.target.value}))} required minLength={8} />
               </label>
+
+              {Number(quote.grandTotal || 0) >= planMinTotal && (
+                <div style={{marginBottom:20}}>
+                  <div className="tabs" style={{marginBottom:14}}>
+                    <div role="button" tabIndex={0} className={`tab ${planChoice.mode === 'full' ? 'active' : ''}`} onClick={() => setPlanChoice(c => ({ ...c, mode: 'full' }))}>Pay in full</div>
+                    <div role="button" tabIndex={0} className={`tab ${planChoice.mode === 'plan' ? 'active' : ''}`} onClick={() => setPlanChoice(c => ({ ...c, mode: 'plan' }))}>Set up a payment plan</div>
+                  </div>
+                  {planChoice.mode === 'plan' && (
+                    <div className="grid-2" style={{gap:12}}>
+                      <label className="field"><span className="label">Instalment amount ($)</span>
+                        <input className="input" type="number" min="0" step="0.01" value={planChoice.installmentAmount} onChange={e => setPlanChoice(c => ({ ...c, installmentAmount: e.target.value }))} /></label>
+                      <label className="field"><span className="label">Frequency</span>
+                        <select className="select" value={planChoice.frequency} onChange={e => setPlanChoice(c => ({ ...c, frequency: e.target.value }))}>
+                          <option value="weekly">Weekly</option>
+                          <option value="fortnightly">Fortnightly</option>
+                          <option value="monthly">Monthly</option>
+                        </select>
+                      </label>
+                      <label className="field" style={{gridColumn:'1 / -1'}}><span className="label">How you'll pay each instalment</span>
+                        <select className="select" value={planChoice.collectionMethod} onChange={e => setPlanChoice(c => ({ ...c, collectionMethod: e.target.value }))}>
+                          <option value="customer">I'll pay each one myself in the portal</option>
+                          <option value="manual">Outback Electronics will contact me to collect it</option>
+                        </select>
+                      </label>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <label style={{display:'flex', alignItems:'flex-start', gap:10, marginBottom:16, cursor:'pointer'}}>
                 <input type="checkbox" checked={termsAccepted} onChange={e => { setTermsAccepted(e.target.checked); setMsg(''); }} style={{marginTop:2, flexShrink:0, accentColor:'var(--rust)', width:16, height:16, cursor:'pointer'}} />
                 <span style={{fontSize:13, color:'var(--ink-2)', lineHeight:1.5}}>

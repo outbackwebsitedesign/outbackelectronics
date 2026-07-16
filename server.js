@@ -6375,10 +6375,12 @@ const adminServer = http.createServer(async (req, res) => {
     const order = orders[idx];
     const remaining = Math.max(0, Math.round(((Number(order.total) || 0) - orderCashReceived(order)) * 100) / 100);
     if (remaining <= 0) return json(res, 422, { error: 'already_paid', message: 'This order is already fully paid — there is nothing left to schedule.' });
-    if (collectionMethod !== 'manual') {
+    if (collectionMethod === 'auto') {
+      // Only auto-charging needs a card on file — 'customer' collects via a fresh
+      // Stripe Checkout page each time, same as any other portal payment.
       const custUser = readUsers().find(u => (u.email || '').toLowerCase() === (order.email || '').toLowerCase());
       if (!custUser || !custUser.stripePaymentMethodId) {
-        return json(res, 422, { error: 'no_saved_card', message: 'This customer has no saved card yet. Use manual collection, or ask them to add a card in the portal first.' });
+        return json(res, 422, { error: 'no_saved_card', message: 'This customer has no saved card yet. Use manual or customer-pays collection, or ask them to add a card in the portal first.' });
       }
     }
     const validStart = /^\d{4}-\d{2}-\d{2}$/.test(startDate || '') ? startDate : ymd(new Date());
@@ -8151,7 +8153,7 @@ const portalServer = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/quote/accept-token') {
     if (publicRateLimited(getIp(req), 'register')) return json(res, 429, { error: 'too_many_requests' });
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
-    const { token, username, password, displayName } = body || {};
+    const { token, username, password, displayName, paymentPlan: planReq } = body || {};
     if (!token) return json(res, 400, { error: 'token_required' });
     const quotes = readQuotes();
     const qIdx = quotes.findIndex(q => q.quoteToken === token);
@@ -8169,12 +8171,19 @@ const portalServer = http.createServer(async (req, res) => {
     if (users.find(u => u.username && u.username.toLowerCase() === username.toLowerCase())) {
       return json(res, 409, { error: 'username_taken', message: 'That username is already taken.' });
     }
+    // A brand-new account can't possibly have a saved card yet, so auto-charge
+    // can't be offered here — only manual or customer-initiated collection.
+    if (planReq && !['weekly', 'fortnightly', 'monthly'].includes(planReq.frequency)) return json(res, 422, { error: 'invalid_frequency' });
+    if (planReq && !['manual', 'customer'].includes(planReq.collectionMethod)) return json(res, 422, { error: 'invalid_collection_method' });
+    if (planReq && !(Number(planReq.installmentAmount) > 0)) return json(res, 422, { error: 'invalid_amount', message: 'Instalment amount must be greater than zero.' });
     const resolvedDisplayName = (typeof displayName === 'string' ? displayName.trim() : '') || quote.name || username;
     const newUser = { id: 'U-' + Date.now(), username, displayName: resolvedDisplayName, email: quoteEmail, passwordHash: hashPassword(password), createdAt: new Date().toISOString() };
     users.push(newUser);
     writeUsers(users);
     const dq = quote.draftQuote || {};
     const nowStr = new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
+    const orderTotal = Math.round((dq.grandTotal || 0) * 100) / 100;
+    const paymentPlanMinTotal = Number((readSettings().shop || {}).paymentPlanMinTotal) || 300;
     const order = {
       id: nextOrderId(readOrders()),
       warrantyToken: crypto.randomBytes(16).toString('hex'),
@@ -8182,12 +8191,24 @@ const portalServer = http.createServer(async (req, res) => {
       email: quote.email,
       items: quote.summary || quote.quoteRef || quote.description || 'Custom build',
       date: nowStr,
-      total: Math.round((dq.grandTotal || 0) * 100) / 100,
+      total: orderTotal,
       fulfilment: 'pending',
       payments: [],
       sourceQuoteId: quote.id,
       quoteRef: quote.quoteRef || '',
       parts: buildPartsFromDraftQuote(dq),
+      ...(planReq && orderTotal >= paymentPlanMinTotal ? { paymentPlan: {
+        status: 'active',
+        frequency: planReq.frequency,
+        collectionMethod: planReq.collectionMethod,
+        startDate: ymd(new Date()),
+        schedule: buildInstallmentSchedule({ total: orderTotal, installmentAmount: Number(planReq.installmentAmount), frequency: planReq.frequency, startDate: ymd(new Date()) }),
+        reminderDaysBefore: 3,
+        lastReminderSentFor: null,
+        lastAutoAttempt: null,
+        createdAt: new Date().toISOString(),
+        createdBy: 'customer',
+      } } : {}),
     };
     const orders = readOrders();
     orders.push(order);
@@ -8250,8 +8271,17 @@ const portalServer = http.createServer(async (req, res) => {
     if (qIdx < 0) return json(res, 404, { error: 'quote_not_found' });
     const quote = quotes[qIdx];
     if (quote.status !== 'quoted') return json(res, 409, { error: 'quote_not_actionable', message: 'This quote has already been accepted or is not ready for acceptance.' });
+    const planReq = body.paymentPlan;
+    if (planReq && !['weekly', 'fortnightly', 'monthly'].includes(planReq.frequency)) return json(res, 422, { error: 'invalid_frequency' });
+    if (planReq && !['manual', 'customer', 'auto'].includes(planReq.collectionMethod)) return json(res, 422, { error: 'invalid_collection_method' });
+    if (planReq && !(Number(planReq.installmentAmount) > 0)) return json(res, 422, { error: 'invalid_amount', message: 'Instalment amount must be greater than zero.' });
+    if (planReq && planReq.collectionMethod === 'auto' && !(portalUser && portalUser.stripePaymentMethodId)) {
+      return json(res, 422, { error: 'no_saved_card', message: 'Add a saved card in your account before choosing auto-charge.' });
+    }
     const dq = quote.draftQuote || {};
     const now = new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
+    const orderTotal = Math.round((dq.grandTotal || 0) * 100) / 100;
+    const paymentPlanMinTotal = Number((readSettings().shop || {}).paymentPlanMinTotal) || 300;
     const order = {
       id: nextOrderId(readOrders()),
       warrantyToken: crypto.randomBytes(16).toString('hex'),
@@ -8259,12 +8289,24 @@ const portalServer = http.createServer(async (req, res) => {
       email: quote.email,
       items: quote.summary || quote.quoteRef || quote.description || 'Custom build',
       date: now,
-      total: Math.round((dq.grandTotal || 0) * 100) / 100,
+      total: orderTotal,
       fulfilment: 'pending',
       payments: [],
       sourceQuoteId: quote.id,
       quoteRef: quote.quoteRef || '',
       parts: buildPartsFromDraftQuote(dq),
+      ...(planReq && orderTotal >= paymentPlanMinTotal ? { paymentPlan: {
+        status: 'active',
+        frequency: planReq.frequency,
+        collectionMethod: planReq.collectionMethod,
+        startDate: ymd(new Date()),
+        schedule: buildInstallmentSchedule({ total: orderTotal, installmentAmount: Number(planReq.installmentAmount), frequency: planReq.frequency, startDate: ymd(new Date()) }),
+        reminderDaysBefore: 3,
+        lastReminderSentFor: null,
+        lastAutoAttempt: null,
+        createdAt: new Date().toISOString(),
+        createdBy: 'customer',
+      } } : {}),
     };
     const orders = readOrders();
     orders.push(order);
