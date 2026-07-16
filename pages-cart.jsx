@@ -108,6 +108,18 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, p
   const [shippingLoading, setShippingLoading] = useState(false);
   const [shippingError, setShippingError] = useState(null);
   const [selectedShipping, setSelectedShipping] = useState(null);
+  const [planMinTotal, setPlanMinTotal] = useState(300);
+  const [checkoutMode, setCheckoutMode] = useState('full'); // 'full' | 'plan'
+  const [planFrequency, setPlanFrequency] = useState('fortnightly');
+  const [planInstallmentAmount, setPlanInstallmentAmount] = useState('');
+  const [planCollectionMethod, setPlanCollectionMethod] = useState('manual');
+
+  useEffect(() => {
+    fetch('/api/shop-info').then(r => r.json()).then(d => {
+      const min = Number(d.shop?.paymentPlanMinTotal);
+      if (min > 0) setPlanMinTotal(min);
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     setShippingQuote(null);
@@ -170,6 +182,9 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, p
     ? Math.round(Math.min(storeCreditAvail, afterRewardsTotal) * 100) / 100
     : 0;
   const total = Math.max(0, Math.round((afterRewardsTotal - storeCreditToRedeem) * 100) / 100);
+  // Payment plans can't combine with gift cards / rewards / store credit — those
+  // redemptions are for paying in full only.
+  const planEligible = total >= planMinTotal && !gc && !(rewardsData && (rewardsApply || storeCreditApply));
 
   const getShippingQuote = async () => {
     const pc = postcodeInput.trim();
@@ -269,19 +284,27 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, p
       setError('Please get a shipping quote and select a shipping method before checkout.');
       return;
     }
+    if (checkoutMode === 'plan' && !(Number(planInstallmentAmount) > 0)) {
+      setError('Enter an instalment amount greater than zero.');
+      return;
+    }
     setCheckingOut(true);
     setError(null);
     try {
       const items = cart.map(i => ({ name: i.name, priceAud: i.price, quantity: i.qty, productId: i.id || i.sku || '', variantSku: i._variantSku || null }));
       const body = { items };
-      if (gc) body.giftCardCode = gc.code;
-      if (rewardsData && rewardsApply && rewardsPointsToRedeem > 0) {
-        body.redeemPoints = rewardsPointsToRedeem;
-        body.rewardsToken = rewardsData.token;
-      }
-      if (rewardsData && storeCreditApply && storeCreditToRedeem > 0) {
-        body.redeemStoreCredit = storeCreditToRedeem;
-        body.rewardsToken = rewardsData.token;
+      if (checkoutMode === 'full') {
+        if (gc) body.giftCardCode = gc.code;
+        if (rewardsData && rewardsApply && rewardsPointsToRedeem > 0) {
+          body.redeemPoints = rewardsPointsToRedeem;
+          body.rewardsToken = rewardsData.token;
+        }
+        if (rewardsData && storeCreditApply && storeCreditToRedeem > 0) {
+          body.redeemStoreCredit = storeCreditToRedeem;
+          body.rewardsToken = rewardsData.token;
+        }
+      } else {
+        body.paymentPlan = { frequency: planFrequency, installmentAmount: Number(planInstallmentAmount), collectionMethod: planCollectionMethod };
       }
       if (selectedShipping) {
         body.shippingAmount = selectedShipping.price;
@@ -290,7 +313,7 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, p
         body.toPostcode = shippingQuote?.toPostcode || '';
       }
       await ensureCsrf();
-      const resp = await fetch('/api/checkout', {
+      const resp = await fetch(checkoutMode === 'plan' ? '/api/checkout/payment-plan' : '/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() },
         body: JSON.stringify(body),
@@ -298,6 +321,7 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, p
       let data;
       try { data = await resp.json(); } catch { data = {}; }
       if (resp.status === 401 || data.error === 'login_required') { setError(data.message || 'Please sign in or create an account before checking out.'); }
+      else if (checkoutMode === 'plan' && data.ok && data.url) { window.location.href = data.url; }
       else if (data.url && (data.fullyCoveredByGiftCard || data.url.startsWith('https://checkout.stripe.com/'))) { window.location.href = data.url; }
       else if (data.url) { setError('Unexpected redirect URL from payment provider.'); }
       else setError(data.message || 'Checkout failed. Please try again.');
@@ -538,6 +562,36 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, p
                 <InlineAuthGate title="Sign in to check out" onAuthenticated={user => { onPortalUserChange?.(user); setError(null); }} />
               )}
 
+              {portalUser && planEligible && (
+                <div style={{marginBottom:16}}>
+                  <div className="tabs" style={{marginBottom:12}}>
+                    <div role="button" tabIndex={0} className={`tab ${checkoutMode === 'full' ? 'active' : ''}`} onClick={() => setCheckoutMode('full')}>Pay in full</div>
+                    <div role="button" tabIndex={0} className={`tab ${checkoutMode === 'plan' ? 'active' : ''}`} onClick={() => setCheckoutMode('plan')}>Split into instalments</div>
+                  </div>
+                  {checkoutMode === 'plan' && (
+                    <div style={{display:'grid', gap:8}}>
+                      <div style={{display:'flex', gap:8}}>
+                        <label className="field" style={{margin:0, flex:1}}><span className="label">Instalment ($)</span>
+                          <input className="input" type="number" min="0" step="0.01" value={planInstallmentAmount} onChange={e => setPlanInstallmentAmount(e.target.value)} style={{fontSize:13}} /></label>
+                        <label className="field" style={{margin:0, flex:1}}><span className="label">Frequency</span>
+                          <select className="select" value={planFrequency} onChange={e => setPlanFrequency(e.target.value)} style={{fontSize:13}}>
+                            <option value="weekly">Weekly</option>
+                            <option value="fortnightly">Fortnightly</option>
+                            <option value="monthly">Monthly</option>
+                          </select>
+                        </label>
+                      </div>
+                      <label className="field" style={{margin:0}}><span className="label">How you'll pay each instalment</span>
+                        <select className="select" value={planCollectionMethod} onChange={e => setPlanCollectionMethod(e.target.value)} style={{fontSize:13}}>
+                          <option value="manual">Outback Electronics will contact me to collect it</option>
+                          <option value="customer">I'll pay each one myself in the portal</option>
+                        </select>
+                      </label>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <label style={{display:'flex', alignItems:'flex-start', gap:10, marginBottom:12, cursor:'pointer'}}>
                 <input type="checkbox" checked={termsAccepted} onChange={e => { setTermsAccepted(e.target.checked); setError(null); }} style={{marginTop:2, flexShrink:0, accentColor:'var(--rust)', width:15, height:15, cursor:'pointer'}} />
                 <span style={{fontSize:12, color:'var(--ink-2)', lineHeight:1.5}}>
@@ -553,7 +607,9 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, p
               </label>
               <ErrorText style={{marginBottom:12}}>{error}</ErrorText>
               <button className="btn btn-rust" style={{width:'100%', justifyContent:'center', gap:8}} onClick={checkout} disabled={checkingOut || !portalUser} aria-busy={checkingOut}>
-                {checkingOut ? <><span className="spinner" aria-hidden="true" /> Redirecting…</> : `Checkout — $${total.toLocaleString('en-AU', {minimumFractionDigits:2})}${selectedShipping ? '' : cart.some(i=>!i.digital) ? ' + shipping' : ''}`}
+                {checkingOut ? <><span className="spinner" aria-hidden="true" /> Redirecting…</> : checkoutMode === 'plan'
+                  ? `Set Up Payment Plan — $${total.toLocaleString('en-AU', {minimumFractionDigits:2})} total`
+                  : `Checkout — $${total.toLocaleString('en-AU', {minimumFractionDigits:2})}${selectedShipping ? '' : cart.some(i=>!i.digital) ? ' + shipping' : ''}`}
               </button>
               <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginTop:10, textAlign:'center'}}>SECURE CHECKOUT VIA STRIPE</div>
 

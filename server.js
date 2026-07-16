@@ -4961,6 +4961,162 @@ const mainServer = http.createServer(async (req, res) => {
     return json(res, 200, { url: resp.body.url, sessionId: resp.body.id });
   }
 
+  // Checkout with an instalment plan instead of paying in full. Creates the
+  // order directly (no Stripe session — no money is collected upfront; the
+  // first instalment is collected like any other, via its due date), mirroring
+  // the gift-card-covers-the-order branch of /api/checkout above. Gift cards,
+  // rewards points, and store credit aren't supported on this path — those
+  // redemptions are for "pay in full" checkout only.
+  if (req.method === 'POST' && url.pathname === '/api/checkout/payment-plan') {
+    if (publicRateLimited(getIp(req), 'checkout')) return json(res, 429, { error: 'too_many_requests', message: 'Too many requests. Please wait a moment and try again.' });
+    const checkoutPortalSession = getPortalSession(req);
+    if (!checkoutPortalSession) return json(res, 401, { error: 'login_required', message: 'Please sign in or create an account to check out.' });
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+
+    const portalAccount = readUsers().find(u => u.id === checkoutPortalSession.id);
+    const customerEmail = (portalAccount && portalAccount.email) || '';
+    const { productId, name, priceAud, quantity = 1, items, shippingAmount, shippingService, paymentPlan: planReq } = body;
+
+    if (!planReq) return json(res, 400, { error: 'payment_plan_required' });
+    if (!['weekly', 'fortnightly', 'monthly'].includes(planReq.frequency)) return json(res, 422, { error: 'invalid_frequency' });
+    if (!['manual', 'customer', 'auto'].includes(planReq.collectionMethod)) return json(res, 422, { error: 'invalid_collection_method' });
+    if (!(Number(planReq.installmentAmount) > 0)) return json(res, 422, { error: 'invalid_amount', message: 'Instalment amount must be greater than zero.' });
+    if (planReq.collectionMethod === 'auto' && !(portalAccount && portalAccount.stripePaymentMethodId)) {
+      return json(res, 422, { error: 'no_saved_card', message: 'Add a saved card in your account before choosing auto-charge.' });
+    }
+
+    const rawLineItems = Array.isArray(items) && items.length > 0
+      ? items
+      : (name && priceAud ? [{ name, priceAud, quantity, productId: productId || '' }] : null);
+    if (!rawLineItems) return json(res, 422, { error: 'missing_fields', message: 'items array or name+priceAud required' });
+    if (rawLineItems.length > 100) return json(res, 422, { error: 'too_many_items', message: 'A checkout can contain at most 100 line items.' });
+
+    const catalogProducts = readProducts();
+    const catalogServices = readServices();
+    const { tiers: membershipTiers } = readMemberships();
+    function lookupCatalogPricePlan(pid, variantSku) {
+      if (!pid) return null;
+      const prod = catalogProducts.find(p => p.id === pid && p.status === 'published');
+      if (prod) {
+        if (prod.variants && prod.variants.length > 0) {
+          const variant = variantSku
+            ? (prod.variants.find(v => v.sku === variantSku) || prod.variants.find(v => v.name === variantSku))
+            : null;
+          if (!variant) return null;
+          const price = Number(variant.price);
+          return price > 0 ? { priceAud: price, name: `${prod.name}${variant.name ? ` — ${variant.name}` : ''}` } : null;
+        }
+        const price = Number(prod.priceAud);
+        return price > 0 ? { priceAud: price, name: prod.name } : null;
+      }
+      const svc = catalogServices.find(s => s.id === pid && s.status === 'published');
+      if (svc) { const price = Number(svc.priceAud); return price > 0 ? { priceAud: price, name: svc.name } : null; }
+      return null;
+    }
+    const lineItems = [];
+    for (const li of rawLineItems) {
+      const pid = String(li.productId || '');
+      const qty = Math.floor(Number(li.quantity) || 0);
+      if (qty < 1 || qty > 999) return json(res, 422, { error: 'invalid_quantity', message: `Quantity for item ${pid || '(unknown)'} must be between 1 and 999.` });
+      if (!pid || pid.startsWith('gc-') || membershipTiers.some(t => t.id === pid)) {
+        return json(res, 422, { error: 'invalid_item', message: 'Gift cards and memberships can\'t be bought on a payment plan — check out those separately.' });
+      }
+      const catalogEntry = lookupCatalogPricePlan(pid, li.variantSku ? String(li.variantSku) : null);
+      if (!catalogEntry) return json(res, 422, { error: 'invalid_item', message: `Product not found or variant not specified: ${pid}` });
+      lineItems.push({ ...li, priceAud: catalogEntry.priceAud, name: catalogEntry.name, quantity: qty, productId: pid });
+    }
+
+    let memberDiscountPercent = 0;
+    const mSub = (readMemberships().subscriptions || []).find(s => s.username === checkoutPortalSession.username && s.status === 'active');
+    if (mSub) {
+      const mTier = membershipTiers.find(t => t.id === mSub.tierId);
+      if (mTier) memberDiscountPercent = Number(mTier.discountPercent) || 0;
+    }
+    const cartHasPhysical = rawLineItems.some(li => {
+      const prod = catalogProducts.find(p => p.id === String(li.productId || ''));
+      return prod && !prod.digital;
+    });
+    let validatedShipping = 0;
+    if (cartHasPhysical && Number(shippingAmount) > 0) {
+      const toPostcode = String(body.toPostcode || '').trim();
+      const shippingCode = String(body.shippingCode || '').trim();
+      if (!/^\d{4}$/.test(toPostcode) || !shippingCode) {
+        return json(res, 422, { error: 'invalid_shipping', message: 'Shipping details are missing. Please re-select a shipping method.' });
+      }
+      const quote = await fetchAuspostServices(toPostcode, rawLineItems, catalogProducts);
+      if (quote.error) return json(res, 502, { error: 'auspost_error', message: 'Could not verify shipping cost. Please try again.' });
+      const matchedService = (quote.services || []).find(s => s.code === shippingCode);
+      if (!matchedService) return json(res, 422, { error: 'invalid_shipping', message: 'Selected shipping method is no longer available. Please get a new quote.' });
+      validatedShipping = matchedService.price;
+    }
+    if (validatedShipping < 0 || validatedShipping > 200) return json(res, 422, { error: 'invalid_shipping', message: 'Shipping amount is outside the accepted range.' });
+
+    const cartGross = lineItems.reduce((s, li) => s + Math.round(Number(li.priceAud) * 100) * (li.quantity || 1), 0) / 100;
+    const discountAmount = memberDiscountPercent > 0 ? Math.round(cartGross * memberDiscountPercent / 100 * 100) / 100 : 0;
+    const orderGross = Math.round((cartGross - discountAmount + validatedShipping) * 100) / 100;
+
+    const paymentPlanMinTotal = Number((readSettings().shop || {}).paymentPlanMinTotal) || 300;
+    if (orderGross < paymentPlanMinTotal) {
+      return json(res, 422, { error: 'below_minimum', message: `Payment plans are only available on orders of $${paymentPlanMinTotal} or more.` });
+    }
+
+    const order = await withFileLock(CHECKOUT_LOCK, async () => {
+      const orders = readOrders();
+      const newOrderId = nextOrderId(orders);
+      const nowStr = new Date().toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
+      const newOrder = {
+        id: newOrderId,
+        warrantyToken: crypto.randomBytes(16).toString('hex'),
+        cust: customerEmail || 'Online customer',
+        email: customerEmail || '',
+        items: lineItems.map(li => li.name).join(', '),
+        total: orderGross,
+        date: nowStr,
+        fulfilment: 'pending',
+        payments: [],
+        paymentPlan: {
+          status: 'active',
+          frequency: planReq.frequency,
+          collectionMethod: planReq.collectionMethod,
+          startDate: ymd(new Date()),
+          schedule: buildInstallmentSchedule({ total: orderGross, installmentAmount: Number(planReq.installmentAmount), frequency: planReq.frequency, startDate: ymd(new Date()) }),
+          reminderDaysBefore: 3,
+          lastReminderSentFor: null,
+          lastAutoAttempt: null,
+          createdAt: new Date().toISOString(),
+          createdBy: 'customer',
+        },
+      };
+      orders.push(newOrder);
+      writeOrders(orders);
+      // Decrement stock, same as the gift-card-covers-the-order branch above.
+      const prods = readProducts();
+      let stockChanged = false;
+      for (const li of lineItems) {
+        const idx = prods.findIndex(p => p.id === li.productId);
+        if (idx < 0) continue;
+        const prod = prods[idx];
+        if (prod.infiniteStock) continue;
+        const vsku = li.variantSku || null;
+        if (vsku && prod.variants && prod.variants.length > 0) {
+          const vi = prod.variants.findIndex(v => v.sku === vsku);
+          if (vi >= 0 && prod.variants[vi].stock != null) {
+            prod.variants[vi] = { ...prod.variants[vi], stock: Math.max(0, prod.variants[vi].stock - (li.quantity || 1)) };
+            prods[idx] = prod;
+            stockChanged = true;
+          }
+        } else if (prod.stock != null) {
+          prods[idx] = { ...prod, stock: Math.max(0, prod.stock - (li.quantity || 1)) };
+          stockChanged = true;
+        }
+      }
+      if (stockChanged) writeProducts(prods);
+      return newOrder;
+    });
+
+    return json(res, 200, { ok: true, orderId: order.id, url: `${getSiteUrl()}/order-success?order_id=${order.id}` });
+  }
+
   // ── Stripe: webhook ──────────────────────────────────────────────────────────
   if (req.method === 'POST' && url.pathname === '/api/stripe/webhook') {
     const stripeWebhookSecret = getStripeWebhookSecret();
