@@ -3284,6 +3284,15 @@ function AdminReviews() {
           </div>
           {edit.title && <h3 style={{ marginBottom: 10 }}>{edit.title}</h3>}
           <p style={{ fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{edit.body}</p>
+          {edit.photos?.length > 0 && (
+            <div className="row-flex" style={{ gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
+              {edit.photos.map(url => (
+                <a key={url} href={url} target="_blank" rel="noopener noreferrer">
+                  <img src={url} alt="" style={{ width: 90, height: 90, objectFit: 'cover', border: '1px solid var(--line)' }} />
+                </a>
+              ))}
+            </div>
+          )}
           <hr className="thin" />
           <div className="mono" style={{ fontSize: 11, color: 'var(--ink-2)', display: 'grid', gap: 6 }}>
             <div>CUSTOMER · {edit.customerName || '—'} {edit.customerEmail ? `<${edit.customerEmail}>` : ''}</div>

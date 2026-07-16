@@ -1412,6 +1412,15 @@ function ProductReviews({ productId }) {
             </div>
             {r.title && <div style={{fontWeight:600, marginTop:8}}>{r.title}</div>}
             <p style={{marginTop:6, fontSize:14, color:'var(--ink-2)'}}>{r.body}</p>
+            {r.photos?.length > 0 && (
+              <div className="row-flex" style={{gap:8, marginTop:10, flexWrap:'wrap'}}>
+                {r.photos.map(url => (
+                  <a key={url} href={url} target="_blank" rel="noopener noreferrer">
+                    <img src={url} alt="" style={{width:72, height:72, objectFit:'cover', border:'1px solid var(--line)'}} />
+                  </a>
+                ))}
+              </div>
+            )}
             <div className="mono" style={{marginTop:10, fontSize:11, color:'var(--ink-3)'}}>{r.customerName}</div>
           </div>
         ))}

@@ -91,7 +91,7 @@ const PUBLIC_CSP = "default-src 'self'; " +
 const HSTS_VALUE = 'max-age=31536000; includeSubDomains';
 const PERMISSIONS_POLICY = 'camera=(), microphone=(), geolocation=(), payment=(), usb=()';
 const PUBLIC_RATE_WINDOW_MS = 1000 * 60 * 10;
-const PUBLIC_RATE_LIMITS = { analytics: 120, checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10, 'forgot-password': 5, 'reset-password': 10, 'gift-card/apply': 10, 'gift-card/balance': 5, 'warranty/order-lookup': 10, 'cart/get': 20, 'weather_register': 3, 'stock-notify': 5, 'membership': 10, 'order-token': 30, 'bookings/request': 10, 'tutorials/view': 60, 'review/submit': 8 };
+const PUBLIC_RATE_LIMITS = { analytics: 120, checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10, 'forgot-password': 5, 'reset-password': 10, 'gift-card/apply': 10, 'gift-card/balance': 5, 'warranty/order-lookup': 10, 'cart/get': 20, 'weather_register': 3, 'stock-notify': 5, 'membership': 10, 'order-token': 30, 'bookings/request': 10, 'tutorials/view': 60, 'review/submit': 8, 'review/upload-photo': 20 };
 
 fs.mkdirSync(path.join(__dirname, 'assets/uploads'), { recursive: true });
 fs.mkdirSync(path.join(__dirname, 'assets/uploads/software'), { recursive: true });
@@ -5519,6 +5519,41 @@ const mainServer = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true, customerName: order.cust || '', orderId: order.id });
   }
 
+  if (req.method === 'POST' && url.pathname === '/api/review/upload-photo') {
+    if (publicRateLimited(getIp(req), 'review/upload-photo')) return json(res, 429, { error: 'too_many_requests' });
+    let body; try { body = await readJson(req, 15e6); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const orderId = String(body.orderId || '').trim();
+    const token = String(body.token || '').trim();
+    if (!orderId || !token) return json(res, 400, { error: 'missing_fields' });
+    const order = readOrders().find(o => o.id === orderId && o.warrantyToken && o.warrantyToken === token);
+    if (!order) return json(res, 404, { error: 'not_found' });
+    try {
+      // SVG excluded — see /api/admin/upload for why. No PDFs here: reviews take photos, not documents.
+      const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+      const ALLOWED_EXT = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp']);
+      const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
+      const dataUri = body.data || '';
+      const mimeMatch = dataUri.match(/^data:([^;]+);base64,/);
+      if (!mimeMatch) return json(res, 400, { error: 'invalid_data_uri' });
+      const mime = mimeMatch[1].toLowerCase();
+      if (!ALLOWED_MIME.has(mime)) return json(res, 400, { error: 'unsupported_mime_type' });
+      const origName = (body.filename || 'photo').replace(/[^a-zA-Z0-9._-]/g, '_');
+      const ext = path.extname(origName).toLowerCase();
+      if (!ALLOWED_EXT.has(ext)) return json(res, 400, { error: 'unsupported_file_extension' });
+      const raw = dataUri.slice(mimeMatch[0].length);
+      const buf = Buffer.from(raw, 'base64');
+      if (buf.length > MAX_BYTES) return json(res, 400, { error: 'file_too_large' });
+      const outBuf = await sharp(buf)
+        .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 82 })
+        .toBuffer();
+      const baseName = path.basename(origName, ext);
+      const safeFilename = 'review-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex') + '-' + baseName + '.webp';
+      fs.writeFileSync(path.join(__dirname, 'assets/uploads', safeFilename), outBuf);
+      return json(res, 200, { url: '/assets/uploads/' + safeFilename });
+    } catch { return json(res, 500, { error: 'upload_failed' }); }
+  }
+
   if (req.method === 'POST' && url.pathname === '/api/review/submit') {
     if (publicRateLimited(getIp(req), 'review/submit')) return json(res, 429, { error: 'too_many_requests' });
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
@@ -5540,6 +5575,11 @@ const mainServer = http.createServer(async (req, res) => {
       if (!product) return json(res, 422, { error: 'invalid_product', message: 'That product could not be found.' });
       productName = product.name;
     }
+    // Only accept URLs this same endpoint's own upload step could have produced —
+    // stops the review body from being used to smuggle in arbitrary URLs/markup.
+    const photos = Array.isArray(body.photos)
+      ? body.photos.filter(p => typeof p === 'string' && /^\/assets\/uploads\/review-[a-zA-Z0-9._-]+\.webp$/.test(p)).slice(0, 5)
+      : [];
     const reviews = readReviews();
     reviews.push({
       id: 'rev-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex'),
@@ -5548,6 +5588,7 @@ const mainServer = http.createServer(async (req, res) => {
       customerEmail: order.email || '',
       productId: productId || null,
       productName,
+      photos,
       rating,
       title,
       body: reviewText,
@@ -5566,7 +5607,7 @@ const mainServer = http.createServer(async (req, res) => {
     const items = readReviews()
       .filter(r => r.status === 'approved' && r.productId === productId)
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-      .map(r => ({ id: r.id, rating: r.rating, title: r.title, body: r.body, customerName: (r.customerName || '').split(' ')[0] || 'Customer', createdAt: r.createdAt }));
+      .map(r => ({ id: r.id, rating: r.rating, title: r.title, body: r.body, photos: r.photos || [], customerName: (r.customerName || '').split(' ')[0] || 'Customer', createdAt: r.createdAt }));
     return json(res, 200, { items });
   }
 

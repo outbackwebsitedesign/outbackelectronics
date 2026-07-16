@@ -642,9 +642,40 @@ function ReviewPage({ go }) {
   const [rating, setRating] = useState(0);
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
+  const [photos, setPhotos] = useState([]);
+  const [uploadingCount, setUploadingCount] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
   const [submitted, setSubmitted] = useState(false);
+  const MAX_PHOTOS = 5;
+
+  const readAsDataUri = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  const addPhotos = async (fileList) => {
+    const files = Array.from(fileList || []).slice(0, MAX_PHOTOS - photos.length);
+    if (!files.length) return;
+    setUploadingCount(c => c + files.length);
+    for (const file of files) {
+      try {
+        const data = await readAsDataUri(file);
+        const res = await fetch('/api/review/upload-photo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() },
+          body: JSON.stringify({ orderId, token, filename: file.name, data }),
+        });
+        const d = await res.json().catch(() => ({}));
+        if (res.ok && d.url) setPhotos(p => (p.length < MAX_PHOTOS ? [...p, d.url] : p));
+      } catch { /* skip failed photo, keep the rest */ }
+      finally { setUploadingCount(c => c - 1); }
+    }
+  };
+
+  const removePhoto = (url) => setPhotos(p => p.filter(u => u !== url));
 
   useEffect(() => {
     if (!orderId || !token) { setState('invalid'); return; }
@@ -665,7 +696,7 @@ function ReviewPage({ go }) {
 
   const resetForm = () => {
     setMode('general'); setSelectedProduct(null); setProductQuery('');
-    setRating(0); setTitle(''); setBody(''); setSubmitError(null); setSubmitted(false);
+    setRating(0); setTitle(''); setBody(''); setPhotos([]); setSubmitError(null); setSubmitted(false);
   };
 
   const submit = async (e) => {
@@ -679,7 +710,7 @@ function ReviewPage({ go }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() },
         body: JSON.stringify({
-          orderId, token, rating, title: title.trim(), body: body.trim(),
+          orderId, token, rating, title: title.trim(), body: body.trim(), photos,
           productId: mode === 'product' && selectedProduct ? (selectedProduct.id || selectedProduct.sku) : '',
         }),
       });
@@ -775,8 +806,29 @@ function ReviewPage({ go }) {
                 <textarea className="input textarea" rows={5} value={body} onChange={e => setBody(e.target.value)} placeholder="What was your experience?" maxLength={2000} required />
               </label>
 
+              <label className="field">
+                <span className="label">Photos (optional, up to {MAX_PHOTOS})</span>
+                {photos.length > 0 && (
+                  <div className="row-flex" style={{ gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
+                    {photos.map(url => (
+                      <div key={url} style={{ position: 'relative' }}>
+                        <img src={url} alt="" style={{ width: 72, height: 72, objectFit: 'cover', border: '1px solid var(--line)' }} />
+                        <button type="button" onClick={() => removePhoto(url)} aria-label="Remove photo"
+                          style={{ position: 'absolute', top: -8, right: -8, width: 22, height: 22, borderRadius: '50%', background: 'var(--ink)', color: '#fff', border: 'none', cursor: 'pointer', lineHeight: 1 }}>×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {photos.length < MAX_PHOTOS && (
+                  <input type="file" accept="image/*" multiple
+                    disabled={uploadingCount > 0}
+                    onChange={e => { addPhotos(e.target.files); e.target.value = ''; }} />
+                )}
+                {uploadingCount > 0 && <span className="mono" style={{ fontSize: 11, color: 'var(--ink-2)' }}>Uploading…</span>}
+              </label>
+
               {submitError && <ErrorText inline>{submitError}</ErrorText>}
-              <button className="btn btn-rust" type="submit" disabled={submitting} style={{ marginTop: 8 }}>{submitting ? 'Submitting…' : 'Submit review →'}</button>
+              <button className="btn btn-rust" type="submit" disabled={submitting || uploadingCount > 0} style={{ marginTop: 8 }}>{submitting ? 'Submitting…' : 'Submit review →'}</button>
             </form>
           )}
         </div>
