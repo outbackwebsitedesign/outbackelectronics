@@ -51,6 +51,31 @@ function fmtDate(iso) {
   catch { return iso; }
 }
 
+// Mirrors server.js's paymentPlanProgress() — progress is always derived from
+// actual payments received, never stored per-installment.
+function paymentPlanProgress(order) {
+  const plan = order.paymentPlan;
+  if (!plan) return null;
+  const paidSoFar = (order.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  const total = Number(order.total) || 0;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  let cumulative = 0;
+  let nextDue = null;
+  const entries = (plan.schedule || []).map(entry => {
+    const amt = Math.round((Number(entry.amount) || 0) * 100) / 100;
+    cumulative = Math.round((cumulative + amt) * 100) / 100;
+    const owed = Math.round(Math.max(0, Math.min(amt, cumulative - paidSoFar)) * 100) / 100;
+    let status;
+    if (owed <= 0.005) status = 'paid';
+    else status = new Date(entry.dueDate + 'T00:00:00') < today ? 'overdue' : 'upcoming';
+    if (status !== 'paid' && !nextDue) nextDue = { dueDate: entry.dueDate, amount: owed };
+    return { dueDate: entry.dueDate, amount: amt, owed, status };
+  });
+  const remaining = Math.max(0, Math.round((total - paidSoFar) * 100) / 100);
+  const completed = remaining <= 0.005;
+  return { paidSoFar, remaining, completed, nextDue: completed ? null : nextDue, entries };
+}
+
 function StatusTag({ status, label }) {
   const cls =
     /paid|complete|delivered|approved|solved|confirmed/i.test(status || '') ? 'tag tag-green' :
@@ -577,7 +602,7 @@ const UPDATE_TYPE_COLOR = {
   dispatched: 'var(--ink)',
 };
 
-function OrderDetail({ o, onPay, paying, onCollapse }) {
+function OrderDetail({ o, onPay, onPayInstallment, paying, onCollapse }) {
   const dq = o.draftQuote || {};
   const lineItems = [
     ...(dq.hardwareItems || []).filter(i => i.name).map(i => {
@@ -689,6 +714,40 @@ function OrderDetail({ o, onPay, paying, onCollapse }) {
         </div>
       )}
 
+      {/* Payment plan */}
+      {o.paymentPlan && o.paymentPlan.status === 'active' && (() => {
+        const progress = paymentPlanProgress(o);
+        return (
+          <div>
+            <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:8, letterSpacing:'.08em'}}>PAYMENT PLAN</div>
+            <div style={{border:'1px solid var(--line)', padding:'12px 14px', fontSize:13}}>
+              {progress.completed ? (
+                <span>Fully paid off.</span>
+              ) : (
+                <>
+                  <div style={{marginBottom:8}}>
+                    {progress.entries.filter(e => e.status === 'paid').length} of {progress.entries.length} instalments paid ·{' '}
+                    next <strong>${progress.nextDue.amount.toLocaleString('en-AU', {minimumFractionDigits:2})}</strong> due{' '}
+                    {new Date(progress.nextDue.dueDate + 'T00:00:00').toLocaleDateString('en-AU', {day:'2-digit', month:'short', year:'numeric'})}
+                  </div>
+                  {o.paymentPlan.collectionMethod === 'customer' && (
+                    <button className="btn btn-rust btn-sm" onClick={() => onPayInstallment(o.id)} disabled={paying === o.id}>
+                      {paying === o.id ? 'Redirecting…' : `Pay next instalment — $${progress.nextDue.amount.toLocaleString('en-AU', {minimumFractionDigits:2})} →`}
+                    </button>
+                  )}
+                  {o.paymentPlan.collectionMethod === 'auto' && (
+                    <span style={{color:'var(--ink-2)'}}>Your saved card will be charged automatically on the due date.</span>
+                  )}
+                  {o.paymentPlan.collectionMethod === 'manual' && (
+                    <span style={{color:'var(--ink-2)'}}>We'll collect this instalment directly — get in touch if you'd like to pay another way.</span>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Payment history */}
       <div>
         <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:8, letterSpacing:'.08em'}}>PAYMENTS</div>
@@ -788,6 +847,14 @@ function OrdersTab({ highlightId }) {
     else setPayErr(r.message || 'Could not start payment. Please try again or contact us.');
   }
 
+  async function handlePayInstallment(orderId) {
+    setPaying(orderId); setPayErr('');
+    const r = await api('/api/portal/orders/pay-installment', { method: 'POST', body: JSON.stringify({ orderId }) });
+    setPaying(null);
+    if (r.ok && r.url) { window.location.href = r.url; }
+    else setPayErr(r.message || 'Could not start payment. Please try again or contact us.');
+  }
+
   if (!items) return <LoadingSection />;
 
   const FULFILMENT_LABEL = { pending:'Pending', ordering:'Ordering parts', building:'Building', testing:'Testing', packed:'Packed', shipped:'Shipped', fulfilled:'Delivered', refunded:'Refunded' };
@@ -857,7 +924,7 @@ function OrdersTab({ highlightId }) {
                     <span style={{fontSize:16, color:'var(--ink-3)', userSelect:'none'}} aria-hidden="true">{isExpanded ? '▲' : '▼'}</span>
                   </div>
                 </div>
-                {isExpanded && <OrderDetail o={o} onPay={handlePay} paying={paying} onCollapse={() => setExpanded(null)} />}
+                {isExpanded && <OrderDetail o={o} onPay={handlePay} onPayInstallment={handlePayInstallment} paying={paying} onCollapse={() => setExpanded(null)} />}
               </div>
             );
           })

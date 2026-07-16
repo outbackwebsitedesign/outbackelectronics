@@ -7994,6 +7994,42 @@ const portalServer = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true, url: stripeSession.url });
   }
 
+  if (req.method === 'POST' && url.pathname === '/api/portal/orders/pay-installment') {
+    const session = getPortalSession(req);
+    if (!session) return json(res, 401, { error: 'login_required' });
+    if (!getStripeKey()) return json(res, 503, { error: 'stripe_not_configured', message: 'Online payment is not configured. Please contact us to arrange payment.' });
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    if (!body.orderId) return json(res, 400, { error: 'order_id_required' });
+    const portalUser = readUsers().find(u => u.id === session.id);
+    const sessionEmail = portalUser ? String(portalUser.email || '').toLowerCase() : '';
+    const orders = readOrders();
+    const oIdx = orders.findIndex(o => o.id === body.orderId && String(o.email || '').toLowerCase() === sessionEmail);
+    if (oIdx < 0) return json(res, 404, { error: 'order_not_found' });
+    const order = orders[oIdx];
+    if (!order.paymentPlan || order.paymentPlan.status !== 'active') return json(res, 409, { error: 'no_plan', message: 'This order has no active payment plan.' });
+    const progress = paymentPlanProgress(order);
+    if (progress.completed || !progress.nextDue) return json(res, 409, { error: 'already_paid', message: 'This payment plan is already fully paid.' });
+    const amountCents = Math.round(progress.nextDue.amount * 100);
+    const params = {
+      'mode': 'payment',
+      'success_url': `${getPortalUrl()}/orders?paid=${encodeURIComponent(order.id)}`,
+      'cancel_url': `${getPortalUrl()}/orders`,
+      'customer_email': order.email,
+      'payment_intent_data[metadata][source]': 'portal-instalment',
+      'payment_intent_data[metadata][existingOrderId]': order.id,
+      'line_items[0][price_data][currency]': 'aud',
+      'line_items[0][price_data][unit_amount]': String(amountCents),
+      'line_items[0][price_data][product_data][name]': `Instalment — order ${order.id}`,
+      'line_items[0][quantity]': '1',
+    };
+    const resp = await stripeRequest('POST', '/v1/checkout/sessions', params).catch(() => null);
+    if (!resp || resp.status !== 200) return json(res, 502, { error: 'stripe_error', message: 'Could not create payment session. Please try again.' });
+    const stripeSession = resp.body;
+    orders[oIdx] = { ...order, stripeSessionId: stripeSession.id };
+    writeOrders(orders);
+    return json(res, 200, { ok: true, url: stripeSession.url });
+  }
+
   if (req.method === 'POST' && url.pathname === '/api/portal/billing/setup-intent') {
     const session = getPortalSession(req);
     if (!session) return json(res, 401, { error: 'login_required' });
