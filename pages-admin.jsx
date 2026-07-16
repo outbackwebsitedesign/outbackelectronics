@@ -2385,7 +2385,9 @@ function AdminRepairs() {
 // QUOTE CREATOR
 // ============================================================
 function QuoteCreator({ context, onBack, onQuoteSent }) {
-  const DEFAULT_HARDWARE_MARGIN_PCT = 2;
+  // Same parts margin orders and repair jobs apply to linked expenses — kept
+  // in sync so hardware pricing in a quote matches what the order becomes.
+  const PARTS_MARGIN = 0.20;
   const PC_BUILD_RATE = 40;
   const genRef = () => 'QT-' + Date.now().toString().slice(-6);
 
@@ -2395,7 +2397,6 @@ function QuoteCreator({ context, onBack, onQuoteSent }) {
     customerName: dq.customerName || context?.name || '',
     customerEmail: dq.customerEmail || context?.email || '',
     validDays: dq.validDays || 30,
-    marginPct: dq.marginPct != null ? dq.marginPct : DEFAULT_HARDWARE_MARGIN_PCT,
     hardwareItems: dq.hardwareItems?.length ? dq.hardwareItems : [{ id: 'h' + Date.now(), name: '', qty: 1, basePrice: '' }],
     pcBuild: dq.pcBuild || false,
     pcHours: dq.pcHours || '',
@@ -2406,12 +2407,8 @@ function QuoteCreator({ context, onBack, onQuoteSent }) {
   const [sending, setSending] = useState(false);
   const [msg, setMsg] = useState({ text: '', ok: true });
 
-  // Margin is configurable per quote (defaults to 2%).
-  const marginPctNum = Math.max(0, parseFloat(form.marginPct) || 0);
-  const HARDWARE_MARGIN = marginPctNum / 100;
-
   const hw = form.hardwareItems;
-  const hardwareTotal = hw.reduce((s, i) => s + (parseFloat(i.basePrice) || 0) * (parseInt(i.qty) || 1) * (1 + HARDWARE_MARGIN), 0);
+  const hardwareTotal = hw.reduce((s, i) => s + (parseFloat(i.basePrice) || 0) * (parseInt(i.qty) || 1) * (1 + PARTS_MARGIN), 0);
   const pcBuildFee = form.pcBuild ? (parseFloat(form.pcHours) || 0) * PC_BUILD_RATE : 0;
   const otherItemTotal = (i) => (parseFloat(i.amount) || 0) * (parseInt(i.qty) || 1);
   const otherTotal = form.otherItems.reduce((s, i) => s + otherItemTotal(i), 0);
@@ -2467,6 +2464,18 @@ function QuoteCreator({ context, onBack, onQuoteSent }) {
 
   const fmtAUD = (n) => n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+  const [printing, setPrinting] = useState(false);
+  const doPrintPdf = async () => {
+    setPrinting(true); setMsg({ text: '', ok: true });
+    try {
+      const r = await fetch('/api/admin/quotes/pdf', { method: 'POST', headers: postHeaders(), credentials: 'include', body: JSON.stringify(buildPayload()) });
+      if (!r.ok) { setMsg({ text: 'Failed to generate PDF.', ok: false }); return; }
+      const blob = await r.blob();
+      window.open(URL.createObjectURL(blob), '_blank');
+    } catch { setMsg({ text: 'Network error.', ok: false }); }
+    finally { setPrinting(false); }
+  };
+
   return (
     <div style={{ padding: 32, maxWidth: 980, overflowY: 'auto' }}>
       {/* Page header */}
@@ -2477,6 +2486,10 @@ function QuoteCreator({ context, onBack, onQuoteSent }) {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {msg.text && <span style={{ fontSize: 13, color: msg.ok ? 'var(--eucalyptus)' : 'var(--rust)' }}>{msg.text}</span>}
+          <button className="btn btn-ghost btn-sm" disabled={printing} onClick={doPrintPdf}>
+            <Icon name="printer" size={14}/>
+            {printing ? 'Generating…' : 'Print PDF'}
+          </button>
           <button className="btn btn-ghost btn-sm" disabled={sending} onClick={doSaveDraft}>Save draft</button>
           <button className="btn btn-rust btn-sm" disabled={sending} onClick={doSend} style={{ minWidth: 130 }}>{sending ? 'Sending…' : <>Send quote <Icon name="chevronRight" size={11}/></>}</button>
         </div>
@@ -2497,15 +2510,12 @@ function QuoteCreator({ context, onBack, onQuoteSent }) {
                 <input className="input" type="email" aria-required="true" placeholder="jane@example.com" value={form.customerEmail} onChange={e => setForm({ ...form, customerEmail: e.target.value })} />
               </label>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px 130px', gap: 14, marginTop: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px', gap: 14, marginTop: 14 }}>
               <label className="field" style={{ margin: 0 }}><span className="label">Quote reference</span>
                 <input className="input" value={form.quoteRef} onChange={e => setForm({ ...form, quoteRef: e.target.value })} />
               </label>
               <label className="field" style={{ margin: 0 }}><span className="label">Valid (days)</span>
                 <input className="input" type="number" min="1" value={form.validDays} onChange={e => setForm({ ...form, validDays: Number(e.target.value) })} />
-              </label>
-              <label className="field" style={{ margin: 0 }}><span className="label">Hardware margin %</span>
-                <input className="input" type="number" min="0" step="0.5" value={form.marginPct} onChange={e => setForm({ ...form, marginPct: nonNegInput(e.target.value) })} />
               </label>
             </div>
           </section>
@@ -2515,7 +2525,7 @@ function QuoteCreator({ context, onBack, onQuoteSent }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
               <div>
                 <div className="eyebrow" style={{ margin: 0 }}>HARDWARE ITEMS</div>
-                <div className="mono" style={{ fontSize: 10, color: 'var(--ink-2)', marginTop: 4, letterSpacing: '.06em' }}>{marginPctNum}% MARGIN AUTO-APPLIED · NOT ITEMISED FOR CUSTOMER</div>
+                <div className="mono" style={{ fontSize: 10, color: 'var(--ink-2)', marginTop: 4, letterSpacing: '.06em' }}>{PARTS_MARGIN * 100}% MARGIN AUTO-APPLIED · NOT ITEMISED FOR CUSTOMER</div>
               </div>
               <button className="btn btn-ghost btn-sm" onClick={addHw}>+ Add item</button>
             </div>

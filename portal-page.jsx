@@ -582,7 +582,7 @@ function OrderDetail({ o, onPay, paying, onCollapse }) {
   const lineItems = [
     ...(dq.hardwareItems || []).filter(i => i.name).map(i => {
       const qty = parseInt(i.qty) || 1;
-      return { label: i.name + (qty > 1 ? ` × ${qty}` : ''), amount: (parseFloat(i.basePrice) || 0) * qty * 1.02 };
+      return { label: i.name + (qty > 1 ? ` × ${qty}` : ''), amount: (parseFloat(i.basePrice) || 0) * qty * 1.20 };
     }),
     ...(dq.pcBuild && dq.pcBuildFee > 0 ? [{ label: 'Custom PC Build', amount: dq.pcBuildFee }] : []),
     ...(dq.otherItems || []).filter(i => i.description).map(i => { const qty = parseInt(i.qty) || 1; return { label: i.description + (qty > 1 ? ` × ${qty}` : ''), amount: (parseFloat(i.amount) || 0) * qty }; }),
@@ -1068,7 +1068,7 @@ function QuotesTab({ user, onOrderCreated, highlightRef }) {
           const lineItems = [
             ...(dq.hardwareItems || []).filter(i => i.name).map(i => {
               const qty = parseInt(i.qty) || 1;
-              return { label: i.name + (qty > 1 ? ` × ${qty}` : ''), amount: (parseFloat(i.basePrice) || 0) * qty * 1.02 };
+              return { label: i.name + (qty > 1 ? ` × ${qty}` : ''), amount: (parseFloat(i.basePrice) || 0) * qty * 1.20 };
             }),
             ...(dq.pcBuild && dq.pcBuildFee > 0 ? [{ label: 'Custom PC Build', amount: dq.pcBuildFee }] : []),
             ...(dq.otherItems || []).filter(i => i.description).map(i => { const qty = parseInt(i.qty) || 1; return { label: i.description + (qty > 1 ? ` × ${qty}` : ''), amount: (parseFloat(i.amount) || 0) * qty }; }),
@@ -2314,7 +2314,7 @@ function QuoteTokenView({ token, onAccepted }) {
   const lineItems = quote ? [
     ...(quote.hardwareItems || []).filter(i => i.name).map(i => {
       const qty = parseInt(i.qty) || 1;
-      return { label: i.name + (qty > 1 ? ` × ${qty}` : ''), amount: (parseFloat(i.basePrice) || 0) * qty * 1.02 };
+      return { label: i.name + (qty > 1 ? ` × ${qty}` : ''), amount: (parseFloat(i.basePrice) || 0) * qty * 1.20 };
     }),
     ...(quote.pcBuild && quote.pcBuildFee > 0 ? [{ label: 'Custom PC Build', amount: quote.pcBuildFee }] : []),
     ...(quote.otherItems || []).filter(i => i.description).map(i => { const qty = parseInt(i.qty) || 1; return { label: i.description + (qty > 1 ? ` × ${qty}` : ''), amount: (parseFloat(i.amount) || 0) * qty }; }),

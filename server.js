@@ -142,6 +142,8 @@ const ORDERS_DB_PATH    = path.join(__dirname, 'orders.db');
 const CUSTOMERS_DB_PATH = path.join(__dirname, 'customers.db');
 const REPAIRS_DB_PATH   = path.join(__dirname, 'repairs.db');
 const QUOTES_DB_PATH    = path.join(__dirname, 'quotes.db');
+// Same margin orders/repair jobs apply to linked parts expenses (PARTS_MARGIN in pages-admin.jsx).
+const QUOTE_PARTS_MARGIN = 0.20;
 const EWASTE_DB_PATH    = path.join(__dirname, 'ewaste.db');
 const SELLERS_DB_PATH   = path.join(__dirname, 'sellers.db');
 const CLIENTS_DB_PATH   = path.join(__dirname, 'clients.db');
@@ -1969,7 +1971,7 @@ function emailQuoteFormal({ quoteRef, quoteId, quoteToken, customerName, validDa
     ...(hardwareItems || []).filter(i => i.name).map(i => {
       const base = parseFloat(i.basePrice) || 0;
       const qty = parseInt(i.qty) || 1;
-      return { label: i.name + (qty > 1 ? ` × ${qty}` : ''), amount: base * qty * 1.02 };
+      return { label: i.name + (qty > 1 ? ` × ${qty}` : ''), amount: base * qty * (1 + QUOTE_PARTS_MARGIN) };
     }),
     ...(pcBuild && pcBuildFee > 0 ? [{ label: 'Custom PC Build', amount: pcBuildFee }] : []),
     ...(otherItems || []).filter(i => i.description).map(i => {
@@ -2809,6 +2811,105 @@ function buildInvoicePdf(order, shop) {
 
     doc.font('Helvetica-Oblique').fontSize(12).fillColor(RUST)
       .text('Thanks for your order — we appreciate your business!', 50, y, { width: 495, align: 'center' });
+
+    doc.end();
+  });
+}
+
+function buildQuotePdf(quote, shop) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: 'A4', margin: 50 });
+    const chunks = [];
+    doc.on('data', c => chunks.push(c));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const RUST = '#b5451b';
+    const OCHRE = '#d39a37';
+    const fmtMoney = n => { const v = Number(n) || 0; return `${v < 0 ? '-' : ''}$${Math.abs(v).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; };
+    const shopName = shop.tradingName || shop.name || 'Outback Electronics';
+    const shopAddress = shop.address || [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ');
+    const logoPath = path.join(__dirname, 'assets', 'logo.png');
+    const hasLogo = fs.existsSync(logoPath);
+
+    // Header band
+    doc.rect(0, 0, doc.page.width, 110).fill(RUST);
+    if (hasLogo) {
+      try { doc.image(logoPath, 50, 22, { width: 66 }); } catch {}
+    }
+    doc.fillColor('#fff').font('Helvetica-Bold').fontSize(20).text(shopName, hasLogo ? 130 : 50, 30, { width: 280 });
+    doc.font('Helvetica').fontSize(9).fillColor('#fde6d6')
+      .text(shopAddress || '', hasLogo ? 130 : 50, 56, { width: 280 })
+      .text([shop.phone, shop.email].filter(Boolean).join('  ·  '), hasLogo ? 130 : 50, 70, { width: 280 });
+
+    const quoteRef = quote.quoteRef || quote.id || '';
+    const validDays = quote.validDays || 30;
+    const validUntil = new Date(Date.now() + validDays * 24 * 60 * 60 * 1000)
+      .toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
+
+    doc.font('Helvetica-Bold').fontSize(26).fillColor('#fff').text('QUOTE', 0, 30, { width: 545, align: 'right' });
+    doc.font('Helvetica').fontSize(10).fillColor('#fde6d6')
+      .text(`Quote #: ${quoteRef}`, 0, 64, { width: 545, align: 'right' })
+      .text(`Valid until: ${validUntil}`, 0, 78, { width: 545, align: 'right' });
+
+    doc.fillColor('#000');
+    doc.y = 140;
+
+    if (shop.abn) {
+      doc.font('Helvetica').fontSize(9).fillColor('#888').text(`ABN: ${shop.abn}`, 50, 140, { width: 495, align: 'right' });
+    }
+
+    doc.font('Helvetica-Bold').fontSize(11).fillColor(RUST).text('Quote For', 50, 150);
+    doc.font('Helvetica').fontSize(10).fillColor('#222')
+      .text(quote.customerName || quote.name || '')
+      .text(quote.customerEmail || quote.email || '');
+    doc.moveDown(1.5);
+
+    const lineItems = [
+      ...(quote.hardwareItems || []).filter(i => i.name).map(i => {
+        const base = parseFloat(i.basePrice) || 0;
+        const qty = parseInt(i.qty) || 1;
+        return { description: i.name + (qty > 1 ? ` × ${qty}` : ''), amount: base * qty * (1 + QUOTE_PARTS_MARGIN) };
+      }),
+      ...(quote.pcBuild && quote.pcBuildFee > 0 ? [{ description: 'Custom PC Build', amount: Number(quote.pcBuildFee) || 0 }] : []),
+      ...(quote.otherItems || []).filter(i => i.description).map(i => {
+        const qty = parseInt(i.qty) || 1;
+        return { description: i.description + (qty > 1 ? ` × ${qty}` : ''), amount: (parseFloat(i.amount) || 0) * qty };
+      }),
+    ];
+    if (!lineItems.length) lineItems.push({ description: quote.summary || quote.description || 'Goods / services', amount: Number(quote.grandTotal) || 0 });
+
+    const tableTop = doc.y;
+    const colDescX = 50, colAmountX = 460, colWidth = 500;
+    doc.rect(50, tableTop, 495, 22).fill(OCHRE);
+    doc.font('Helvetica-Bold').fontSize(10).fillColor('#fff');
+    doc.text('Description', colDescX + 6, tableTop + 6);
+    doc.text('Amount', colAmountX, tableTop + 6, { width: 79, align: 'right' });
+    let y = tableTop + 22 + 8;
+    doc.font('Helvetica').fontSize(10);
+    lineItems.forEach((li, i) => {
+      if (i % 2 === 1) doc.rect(50, y - 5, 495, 20).fill('#f7f1e8');
+      doc.fillColor('#222').text(li.description, colDescX + 6, y, { width: colWidth - 95 - 6 });
+      doc.text(fmtMoney(li.amount), colAmountX, y, { width: 79, align: 'right' });
+      y += 20;
+    });
+    doc.moveTo(50, y + 4).lineTo(545, y + 4).strokeColor('#ccc').stroke();
+    y += 14;
+
+    doc.rect(50, y - 6, 495, 28).fill('#eaf3ea');
+    doc.font('Helvetica-Bold').fontSize(12).fillColor('#2e7d32').text('Total (AUD)', colDescX + 6, y, { width: colWidth - 95 - 6 });
+    doc.text(fmtMoney(quote.grandTotal), colAmountX, y, { width: 79, align: 'right' });
+    y += 40;
+
+    if (quote.notes) {
+      doc.font('Helvetica-Bold').fontSize(10).fillColor(RUST).text('Notes', 50, y);
+      y += 16;
+      doc.font('Helvetica').fontSize(10).fillColor('#222').text(quote.notes, 50, y, { width: 495 });
+      y = doc.y + 20;
+    }
+
+    doc.font('Helvetica-Oblique').fontSize(12).fillColor(RUST)
+      .text('This quote is valid until the date shown above. Reply to accept or ask any questions!', 50, y, { width: 495, align: 'center' });
 
     doc.end();
   });
@@ -6588,6 +6689,21 @@ const adminServer = http.createServer(async (req, res) => {
       sendEmail({ to: body.email, ...tmpl });
     }
     return json(res, 200, { ok: true, item: body });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/quotes/pdf') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const { shop } = readSettings();
+    const buffer = await buildQuotePdf(body, shop);
+    const safeRef = String(body.quoteRef || body.id || 'draft').replace(/[^a-zA-Z0-9_-]+/g, '-');
+    res.writeHead(200, {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="quote-${safeRef}.pdf"`,
+      'Content-Length': buffer.length,
+      'X-Content-Type-Options': 'nosniff',
+    });
+    res.end(buffer);
+    return;
   }
   if (req.method === 'POST' && url.pathname === '/api/admin/quotes/delete') {
     const session = requireRole(req, res, 'technician'); if (!session) return;
