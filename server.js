@@ -2079,6 +2079,77 @@ function emailOrderRefunded({ orderId, customerName, amount, method }) {
   };
 }
 
+function emailInstallmentReminder({ orderId, customerName, amount, dueDate, overdue }) {
+  const name = customerName ? customerName.split(' ')[0] : '';
+  const amtStr = '$' + (Number(amount) || 0).toLocaleString('en-AU', { minimumFractionDigits: 2 });
+  const dueStr = new Date(dueDate + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
+  return {
+    subject: overdue ? `Payment overdue — order ${orderId}` : `Upcoming instalment due — order ${orderId}`,
+    html: emailHtml(overdue ? 'Your instalment is overdue' : 'An instalment is coming up', `
+      <p>Hi${name ? ` ${escHtml(name)}` : ''},</p>
+      <p>${overdue
+        ? `Your instalment of <strong>${escHtml(amtStr)}</strong> for order ${escHtml(orderId)} was due on ${escHtml(dueStr)} and hasn't been received yet.`
+        : `A reminder that your next instalment of <strong>${escHtml(amtStr)}</strong> for order ${escHtml(orderId)} is due on ${escHtml(dueStr)}.`}</p>
+      <div class="detail">
+        <dt>ORDER ID</dt><dd>${escHtml(orderId)}</dd>
+        <dt>AMOUNT DUE</dt><dd>${escHtml(amtStr)}</dd>
+        <dt>DUE DATE</dt><dd>${escHtml(dueStr)}</dd>
+      </div>
+      <p>You can pay this instalment yourself in the customer portal, or get in touch if you'd like to arrange payment another way.</p>
+      <a class="btn" href="${getPortalUrl()}/orders">View your order →</a>
+    `),
+  };
+}
+
+function emailInstallmentReceived({ orderId, customerName, amount, remaining, nextDueDate }) {
+  const name = customerName ? customerName.split(' ')[0] : '';
+  const amtStr = '$' + (Number(amount) || 0).toLocaleString('en-AU', { minimumFractionDigits: 2 });
+  const remainingStr = '$' + (Number(remaining) || 0).toLocaleString('en-AU', { minimumFractionDigits: 2 });
+  return {
+    subject: `Instalment received — order ${orderId}`,
+    html: emailHtml('Thanks — instalment received', `
+      <p>Hi${name ? ` ${escHtml(name)}` : ''},</p>
+      <p>We've received your instalment of <strong>${escHtml(amtStr)}</strong> for order ${escHtml(orderId)}.</p>
+      <div class="detail">
+        <dt>ORDER ID</dt><dd>${escHtml(orderId)}</dd>
+        <dt>AMOUNT RECEIVED</dt><dd>${escHtml(amtStr)}</dd>
+        <dt>REMAINING BALANCE</dt><dd>${escHtml(remainingStr)}</dd>
+        ${nextDueDate ? `<dt>NEXT INSTALMENT DUE</dt><dd>${escHtml(new Date(nextDueDate + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' }))}</dd>` : ''}
+      </div>
+      <a class="btn" href="${getPortalUrl()}/orders">View your order →</a>
+    `),
+  };
+}
+
+function emailInstallmentFailed({ orderId, customerName, amount, dueDate }) {
+  const name = customerName ? customerName.split(' ')[0] : '';
+  const amtStr = '$' + (Number(amount) || 0).toLocaleString('en-AU', { minimumFractionDigits: 2 });
+  return {
+    subject: `Payment failed — order ${orderId}`,
+    html: emailHtml('We couldn’t process your instalment', `
+      <p>Hi${name ? ` ${escHtml(name)}` : ''},</p>
+      <p>We tried to charge your saved card <strong>${escHtml(amtStr)}</strong> for order ${escHtml(orderId)} but the payment didn't go through.</p>
+      <p>Please update your card details in the customer portal, or get in touch so we can arrange another way to pay. We'll try again automatically, but it's best to sort this out as soon as you can.</p>
+      <a class="btn" href="${getPortalUrl()}/orders">Update payment details →</a>
+    `),
+  };
+}
+
+function emailStaffInstallmentFailed({ orderId, name, email, amount }) {
+  const amtStr = '$' + (Number(amount) || 0).toLocaleString('en-AU', { minimumFractionDigits: 2 });
+  return {
+    subject: `[PAYMENT PLAN] Auto-charge failed — ${orderId}`,
+    html: emailHtml('Auto-charge failed', `
+      <div class="detail">
+        <dt>ORDER ID</dt><dd>${escHtml(orderId)}</dd>
+        <dt>CUSTOMER</dt><dd>${escHtml(name || '')} &lt;${escHtml(email || '')}&gt;</dd>
+        <dt>AMOUNT</dt><dd>${escHtml(amtStr)}</dd>
+      </div>
+      <p>The customer has been notified. This will retry automatically on the next scheduled run.</p>
+    `),
+  };
+}
+
 function emailOrderShipped({ orderId, warrantyToken, customerName, trackingNumber }) {
   const name = customerName ? customerName.split(' ')[0] : '';
   const trackingUrl = `https://auspost.com.au/mypost/track/#/details/${encodeURIComponent(trackingNumber)}`;
@@ -6300,6 +6371,12 @@ const adminServer = http.createServer(async (req, res) => {
     return json(res, 200, { items, activeCount: items.length, overdueCount, dueSoonCount, needsAttention });
   }
 
+  if (req.method === 'POST' && url.pathname === '/api/admin/orders/payment-plan/charge-now') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    await runDuePaymentPlanCharges();
+    return json(res, 200, { ok: true });
+  }
+
   if (req.method === 'POST' && url.pathname === '/api/admin/orders/check-tracking') {
     const session = requireRole(req, res, 'staff'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
@@ -8905,7 +8982,46 @@ function backfillJobEmails() {
 
 backfillJobEmails();
 
-// ── Monthly listing fee cron ──────────────────────────────────────────────────
+// ── Payment plan cron ─────────────────────────────────────────────────────────
+// Runs once daily: sends reminder emails for manual/customer-collected instalments
+// that are due soon or overdue. Auto-charging (collectionMethod: 'auto') is
+// handled by a later extension of this same function.
+async function runDuePaymentPlanCharges() {
+  await withFileLock(CHECKOUT_LOCK, async () => {
+    const orders = readOrders();
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    let dirty = false;
+    for (let i = 0; i < orders.length; i++) {
+      const order = orders[i];
+      const plan = order.paymentPlan;
+      if (!plan || plan.status !== 'active') continue;
+      const progress = paymentPlanProgress(order);
+      if (progress.completed || !progress.nextDue) continue;
+      const dueDate = new Date(progress.nextDue.dueDate + 'T00:00:00');
+      const reminderFrom = new Date(dueDate);
+      reminderFrom.setDate(reminderFrom.getDate() - (Number(plan.reminderDaysBefore) || 3));
+      if (today < reminderFrom) continue; // not due for a reminder yet
+
+      if (plan.collectionMethod === 'manual' || plan.collectionMethod === 'customer') {
+        if (plan.lastReminderSentFor === progress.nextDue.dueDate) continue; // already reminded for this due date
+        if (order.email) {
+          const tmpl = emailInstallmentReminder({
+            orderId: order.id, customerName: order.cust,
+            amount: progress.nextDue.amount, dueDate: progress.nextDue.dueDate,
+            overdue: dueDate < today,
+          });
+          sendEmail({ to: order.email, ...tmpl }).catch(() => {});
+        }
+        orders[i] = { ...order, paymentPlan: { ...plan, lastReminderSentFor: progress.nextDue.dueDate } };
+        dirty = true;
+      }
+      // 'auto' is handled by a later phase of this cron.
+    }
+    if (dirty) writeOrders(orders);
+  });
+}
+
+// ── Daily cron (listing fees + payment plans) ────────────────────────────────
 (function scheduleDailyCheck() {
   function msUntilMidnight() {
     const now = new Date();
@@ -8924,6 +9040,8 @@ backfillJobEmails();
       console.log('[cron] Last day of month — running listing fees');
       runMonthlyListingFees().catch(err => console.error('[cron] listing fee error:', err));
     }
+    console.log('[cron] Checking payment plan reminders/charges');
+    runDuePaymentPlanCharges().catch(err => console.error('[cron] payment plan error:', err));
     setTimeout(tick, msUntilMidnight() + 1000);
   }
   setTimeout(tick, msUntilMidnight() + 1000);

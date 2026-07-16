@@ -7902,6 +7902,8 @@ function PaymentPlansView() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [runBusy, setRunBusy] = useState(false);
+  const [runMsg, setRunMsg] = useState('');
 
   const load = async () => {
     setLoading(true); setError(null);
@@ -7909,6 +7911,15 @@ function PaymentPlansView() {
     setLoading(false);
     if (!r || !r.ok) { setError('Failed to load payment plans.'); return; }
     setData(await r.json());
+  };
+
+  const runNow = async () => {
+    setRunBusy(true); setRunMsg('');
+    const r = await fetch('/api/admin/orders/payment-plan/charge-now', { method:'POST', headers:postHeaders(), credentials:'include' }).catch(()=>null);
+    setRunBusy(false);
+    setRunMsg(r && r.ok ? 'Reminders/charges run complete.' : 'Failed to run.');
+    if (r && r.ok) load();
+    setTimeout(() => setRunMsg(''), 4000);
   };
 
   useEffect(() => { load(); }, []);
@@ -7930,6 +7941,10 @@ function PaymentPlansView() {
     <>
       <div className="card" style={{padding:'14px 22px', marginBottom:20, display:'flex', alignItems:'center', gap:16}}>
         <button className="btn btn-rust" onClick={load} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</button>
+        <button className="btn btn-ghost" onClick={runNow} disabled={runBusy} title="Manually run today's reminder/charge check instead of waiting for the nightly cron">
+          {runBusy ? 'Running…' : 'Run reminders/charges now'}
+        </button>
+        {runMsg && <span className="mono" style={{fontSize:12, color:'var(--ink-2)'}}>{runMsg}</span>}
         {error && <span className="mono" style={{fontSize:12, color:'var(--rust)'}}>{error}</span>}
       </div>
 
