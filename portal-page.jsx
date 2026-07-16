@@ -1783,6 +1783,103 @@ function BookingsTab() {
 
 // ── Account ───────────────────────────────────────────────────────────────────
 
+async function loadStripeJs(publishableKey) {
+  if (window.Stripe) return window.Stripe(publishableKey);
+  await new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://js.stripe.com/v3/';
+    s.onload = resolve; s.onerror = reject;
+    document.head.appendChild(s);
+  });
+  return window.Stripe(publishableKey);
+}
+
+function BillingCard() {
+  const [billing, setBilling] = useState(null); // {hasCard, cardLast4, cardBrand}
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [showCardForm, setShowCardForm] = useState(false);
+  const [stripeElements, setStripeElements] = useState(null);
+  const cardDivRef = useRef(null);
+
+  const loadBilling = () => {
+    api('/api/portal/auth/me').then(d => {
+      if (d && d.user) setBilling({ hasCard: !!d.user.hasCard, cardLast4: d.user.cardLast4 || '', cardBrand: d.user.cardBrand || '' });
+    });
+  };
+  useEffect(() => { loadBilling(); }, []);
+
+  const openCardForm = async () => {
+    setMsg(''); setShowCardForm(true); setBusy(true);
+    try {
+      const [siResp, settingsResp] = await Promise.all([
+        api('/api/portal/billing/setup-intent', { method: 'POST' }),
+        api('/api/settings'),
+      ]);
+      const clientSecret = siResp.clientSecret;
+      const stripePublishableKey = settingsResp.stripePublishableKey;
+      if (!clientSecret || !stripePublishableKey) { setMsg('Online payment is not configured.'); setBusy(false); return; }
+      const stripe = await loadStripeJs(stripePublishableKey);
+      const elements = stripe.elements();
+      const cardEl = elements.create('card', { style: { base: { fontSize: '14px' } } });
+      setStripeElements({ stripe, cardEl });
+      setTimeout(() => { if (cardDivRef.current) cardEl.mount(cardDivRef.current); }, 50);
+    } catch {
+      setMsg('Failed to load card form.');
+    }
+    setBusy(false);
+  };
+
+  const submitCard = async () => {
+    if (!stripeElements) return;
+    const { stripe, cardEl } = stripeElements;
+    setBusy(true); setMsg('');
+    const siResp = await api('/api/portal/billing/setup-intent', { method: 'POST' });
+    if (!siResp.clientSecret) { setMsg('Failed to create setup intent.'); setBusy(false); return; }
+    const result = await stripe.confirmCardSetup(siResp.clientSecret, { payment_method: { card: cardEl } });
+    if (result.error) { setMsg(result.error.message || 'Card setup failed.'); setBusy(false); return; }
+    const saveResp = await api('/api/portal/billing/payment-method/save', { method: 'POST', body: JSON.stringify({ paymentMethodId: result.setupIntent.payment_method }) });
+    if (!saveResp.ok) { setMsg('Failed to save card.'); setBusy(false); return; }
+    cardEl.unmount();
+    setStripeElements(null); setShowCardForm(false); setBusy(false); setMsg('');
+    setBilling({ hasCard: true, cardLast4: saveResp.last4, cardBrand: saveResp.brand });
+  };
+
+  const removeCard = async () => {
+    setBusy(true);
+    const r = await api('/api/portal/billing/payment-method', { method: 'DELETE' });
+    setBusy(false);
+    if (r.ok) setBilling({ hasCard: false, cardLast4: '', cardBrand: '' });
+  };
+
+  return (
+    <div className="card-paper" style={{padding:28}}>
+      <h3 style={{marginBottom:6, fontSize:16}}>Payment Method</h3>
+      <p style={{color:'var(--ink-2)', fontSize:13, marginBottom:16}}>
+        Save a card to pay instalments yourself or have them charged automatically, if you're on a payment plan.
+      </p>
+      <div style={{fontSize:14, fontWeight:500, marginBottom:12}}>
+        {billing?.hasCard ? `${billing.cardBrand ? billing.cardBrand.toUpperCase() : 'Card'} •••• ${billing.cardLast4}` : 'No card saved'}
+      </div>
+      <div style={{display:'flex', gap:8, marginBottom:12}}>
+        <button className="btn btn-rust btn-sm" disabled={busy} onClick={openCardForm}>{billing?.hasCard ? 'Change card' : 'Add card'}</button>
+        {billing?.hasCard && <button className="btn btn-sm" disabled={busy} onClick={removeCard}>Remove card</button>}
+      </div>
+      {msg && <div className="alert alert-error" role="alert">{msg}</div>}
+      {showCardForm && (
+        <div style={{border:'1px solid var(--line)', borderRadius:6, padding:16, display:'grid', gap:12}}>
+          {busy && !stripeElements && <div style={{fontSize:13, color:'var(--ink-2)'}}>Loading…</div>}
+          <div ref={cardDivRef} style={{border:'1px solid var(--line)', borderRadius:4, padding:'10px 12px', background:'#fff', minHeight:38}} />
+          <div style={{display:'flex', gap:8}}>
+            <button className="btn btn-rust btn-sm" disabled={busy || !stripeElements} onClick={submitCard}>{busy ? 'Saving…' : 'Save card'}</button>
+            <button className="btn btn-sm" onClick={() => { setShowCardForm(false); if (stripeElements) { stripeElements.cardEl.unmount(); setStripeElements(null); } }}>Cancel</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AccountTab({ user, setUser }) {
   const [displayName, setDisplayName] = useState(user.displayName || '');
   const [currentPassword, setCurrentPassword] = useState('');
@@ -1862,6 +1959,8 @@ function AccountTab({ user, setUser }) {
               <button className="btn btn-rust" type="submit" disabled={passwordBusy}>{passwordBusy ? 'Updating…' : 'Update Password'}</button>
             </form>
           </div>
+
+          <BillingCard />
 
         </div>
       </div>

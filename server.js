@@ -4070,7 +4070,7 @@ function getAdminPasswordHash() {
   try { return readSettings().security?.adminPasswordHash || ADMIN_PASSWORD_HASH; } catch { return ADMIN_PASSWORD_HASH; }
 }
 
-function stripeRequest(method, path, params) {
+function stripeRequest(method, path, params, idempotencyKey) {
   return new Promise((resolve, reject) => {
     const body = params ? new URLSearchParams(params).toString() : '';
     const req = https.request({
@@ -4081,6 +4081,7 @@ function stripeRequest(method, path, params) {
         'Authorization': `Bearer ${getStripeKey()}`,
         'Content-Type': 'application/x-www-form-urlencoded',
         'Content-Length': Buffer.byteLength(body),
+        ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
       },
     }, (res) => {
       let data = '';
@@ -7739,10 +7740,23 @@ const portalServer = http.createServer(async (req, res) => {
     return json(res, 200, { shop, flags: flags || {}, portalUrl: getPortalUrl(), gamesUrl: getGamesUrl(), toolsUrl: getToolsUrl() });
   }
 
+  if (req.method === 'GET' && url.pathname === '/api/settings') {
+    const s = readSettings();
+    const stripeIntegration = (s.integrations || []).find(r => r[0] === 'Stripe');
+    const stripePublishableKey = (stripeIntegration && stripeIntegration[3] && stripeIntegration[3].publishableKey) || STRIPE_PUBLISHABLE_KEY || '';
+    return json(res, 200, { stripePublishableKey });
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/portal/auth/me') {
     const session = getPortalSession(req);
     if (!session) return json(res, 200, { user: null });
-    return json(res, 200, { user: { id: session.id, username: session.username, displayName: session.displayName, createdAt: session.createdAt } });
+    const fullUser = readUsers().find(u => u.id === session.id);
+    return json(res, 200, { user: {
+      id: session.id, username: session.username, displayName: session.displayName, createdAt: session.createdAt,
+      hasCard: !!(fullUser && fullUser.stripePaymentMethodId),
+      cardLast4: (fullUser && fullUser.stripeCardLast4) || '',
+      cardBrand: (fullUser && fullUser.stripeCardBrand) || '',
+    } });
   }
 
   // Universal auth aliases (same handlers as all other servers)
@@ -7978,6 +7992,67 @@ const portalServer = http.createServer(async (req, res) => {
     orders[oIdx] = { ...order, stripeSessionId: stripeSession.id };
     writeOrders(orders);
     return json(res, 200, { ok: true, url: stripeSession.url });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/portal/billing/setup-intent') {
+    const session = getPortalSession(req);
+    if (!session) return json(res, 401, { error: 'login_required' });
+    if (!getStripeKey()) return json(res, 503, { error: 'stripe_not_configured' });
+    const users = readUsers();
+    const userIdx = users.findIndex(u => u.id === session.id);
+    if (userIdx < 0) return json(res, 404, { error: 'not_found' });
+    let user = users[userIdx];
+    if (!user.stripeCustomerId) {
+      const custResp = await stripeRequest('POST', '/v1/customers', { email: user.email || '', name: user.displayName || '' }).catch(() => null);
+      if (!custResp || custResp.status !== 200) return json(res, 502, { error: 'stripe_customer_failed' });
+      user = { ...user, stripeCustomerId: custResp.body.id };
+      users[userIdx] = user;
+      writeUsers(users);
+    }
+    const siResp = await stripeRequest('POST', '/v1/setup_intents', { customer: user.stripeCustomerId, 'payment_method_types[]': 'card' }).catch(() => null);
+    if (!siResp || siResp.status !== 200) return json(res, 502, { error: 'stripe_setup_intent_failed' });
+    return json(res, 200, { clientSecret: siResp.body.client_secret });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/portal/billing/payment-method/save') {
+    const session = getPortalSession(req);
+    if (!session) return json(res, 401, { error: 'login_required' });
+    if (!getStripeKey()) return json(res, 503, { error: 'stripe_not_configured' });
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const { paymentMethodId } = body || {};
+    if (!paymentMethodId) return json(res, 400, { error: 'paymentMethodId required' });
+    const users = readUsers();
+    const userIdx = users.findIndex(u => u.id === session.id);
+    if (userIdx < 0) return json(res, 404, { error: 'not_found' });
+    const user = users[userIdx];
+    const pmResp = await stripeRequest('GET', `/v1/payment_methods/${encodeURIComponent(paymentMethodId)}`, null).catch(() => null);
+    if (!pmResp || pmResp.status !== 200) return json(res, 502, { error: 'stripe_pm_fetch_failed' });
+    const pm = pmResp.body;
+    const last4 = (pm.card && pm.card.last4) || '';
+    const brand = (pm.card && pm.card.brand) || '';
+    if (user.stripeCustomerId) {
+      await stripeRequest('POST', `/v1/payment_methods/${encodeURIComponent(paymentMethodId)}/attach`, { customer: user.stripeCustomerId }).catch(() => null);
+      await stripeRequest('POST', `/v1/customers/${encodeURIComponent(user.stripeCustomerId)}`, { 'invoice_settings[default_payment_method]': paymentMethodId }).catch(() => null);
+    }
+    users[userIdx] = { ...user, stripePaymentMethodId: paymentMethodId, stripeCardLast4: last4, stripeCardBrand: brand };
+    writeUsers(users);
+    return json(res, 200, { ok: true, last4, brand });
+  }
+
+  if (req.method === 'DELETE' && url.pathname === '/api/portal/billing/payment-method') {
+    const session = getPortalSession(req);
+    if (!session) return json(res, 401, { error: 'login_required' });
+    if (!getStripeKey()) return json(res, 503, { error: 'stripe_not_configured' });
+    const users = readUsers();
+    const userIdx = users.findIndex(u => u.id === session.id);
+    if (userIdx < 0) return json(res, 404, { error: 'not_found' });
+    const user = users[userIdx];
+    if (user.stripePaymentMethodId) {
+      await stripeRequest('POST', `/v1/payment_methods/${encodeURIComponent(user.stripePaymentMethodId)}/detach`, {}).catch(() => null);
+    }
+    users[userIdx] = { ...user, stripePaymentMethodId: '', stripeCardLast4: '', stripeCardBrand: '' };
+    writeUsers(users);
+    return json(res, 200, { ok: true });
   }
 
   if (req.method === 'GET' && url.pathname === '/api/portal/repairs') {
@@ -9103,8 +9178,10 @@ backfillJobEmails();
 // that are due soon or overdue. Auto-charging (collectionMethod: 'auto') is
 // handled by a later extension of this same function.
 async function runDuePaymentPlanCharges() {
+  const stripeConfigured = !!getStripeKey();
   await withFileLock(CHECKOUT_LOCK, async () => {
     const orders = readOrders();
+    const users = readUsers();
     const today = new Date(); today.setHours(0, 0, 0, 0);
     let dirty = false;
     for (let i = 0; i < orders.length; i++) {
@@ -9114,24 +9191,76 @@ async function runDuePaymentPlanCharges() {
       const progress = paymentPlanProgress(order);
       if (progress.completed || !progress.nextDue) continue;
       const dueDate = new Date(progress.nextDue.dueDate + 'T00:00:00');
+
+      if (plan.collectionMethod === 'auto') {
+        if (today < dueDate) continue; // only charge on/after the due date, never early
+        if (!stripeConfigured) continue;
+        const custUser = users.find(u => (u.email || '').toLowerCase() === (order.email || '').toLowerCase());
+        if (!custUser || !custUser.stripeCustomerId || !custUser.stripePaymentMethodId) continue;
+
+        const idempotencyKey = `plan-${order.id}-${progress.nextDue.dueDate}`;
+        let ok = false, errMsg = '';
+        try {
+          const resp = await stripeRequest('POST', '/v1/payment_intents', {
+            amount: String(Math.round(progress.nextDue.amount * 100)),
+            currency: 'aud',
+            customer: custUser.stripeCustomerId,
+            payment_method: custUser.stripePaymentMethodId,
+            confirm: 'true',
+            off_session: 'true',
+            description: `Outback Electronics — instalment for order ${order.id}`,
+          }, idempotencyKey);
+          if (resp && resp.status === 200 && resp.body && resp.body.id) ok = true;
+          else errMsg = (resp && resp.body && resp.body.error && resp.body.error.message) || 'stripe_error';
+        } catch (err) {
+          errMsg = (err && err.message) || 'request_failed';
+        }
+
+        if (ok) {
+          const nowStr = new Date().toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
+          const updatedOrder = {
+            ...order,
+            payments: [...(order.payments || []), { amount: progress.nextDue.amount, method: 'Stripe', note: `Auto-charge — instalment due ${progress.nextDue.dueDate}`, date: nowStr }],
+            paymentPlan: { ...plan, lastAutoAttempt: { dueDate: progress.nextDue.dueDate, date: new Date().toISOString(), status: 'ok', error: '' } },
+          };
+          orders[i] = updatedOrder;
+          dirty = true;
+          if (order.email) {
+            const newProgress = paymentPlanProgress(updatedOrder);
+            const tmpl = emailInstallmentReceived({
+              orderId: order.id, customerName: order.cust, amount: progress.nextDue.amount,
+              remaining: newProgress.remaining, nextDueDate: newProgress.nextDue ? newProgress.nextDue.dueDate : null,
+            });
+            sendEmail({ to: order.email, ...tmpl }).catch(() => {});
+          }
+        } else {
+          orders[i] = { ...order, paymentPlan: { ...plan, lastAutoAttempt: { dueDate: progress.nextDue.dueDate, date: new Date().toISOString(), status: 'failed', error: errMsg } } };
+          dirty = true;
+          if (order.email) {
+            sendEmail({ to: order.email, ...emailInstallmentFailed({ orderId: order.id, customerName: order.cust, amount: progress.nextDue.amount, dueDate: progress.nextDue.dueDate }) }).catch(() => {});
+          }
+          if (getNotifyEmail()) {
+            sendEmail({ to: getNotifyEmail(), ...emailStaffInstallmentFailed({ orderId: order.id, name: order.cust, email: order.email, amount: progress.nextDue.amount }) }).catch(() => {});
+          }
+        }
+        continue;
+      }
+
+      // manual / customer-initiated: reminder only, no charge attempt
       const reminderFrom = new Date(dueDate);
       reminderFrom.setDate(reminderFrom.getDate() - (Number(plan.reminderDaysBefore) || 3));
-      if (today < reminderFrom) continue; // not due for a reminder yet
-
-      if (plan.collectionMethod === 'manual' || plan.collectionMethod === 'customer') {
-        if (plan.lastReminderSentFor === progress.nextDue.dueDate) continue; // already reminded for this due date
-        if (order.email) {
-          const tmpl = emailInstallmentReminder({
-            orderId: order.id, customerName: order.cust,
-            amount: progress.nextDue.amount, dueDate: progress.nextDue.dueDate,
-            overdue: dueDate < today,
-          });
-          sendEmail({ to: order.email, ...tmpl }).catch(() => {});
-        }
-        orders[i] = { ...order, paymentPlan: { ...plan, lastReminderSentFor: progress.nextDue.dueDate } };
-        dirty = true;
+      if (today < reminderFrom) continue;
+      if (plan.lastReminderSentFor === progress.nextDue.dueDate) continue;
+      if (order.email) {
+        const tmpl = emailInstallmentReminder({
+          orderId: order.id, customerName: order.cust,
+          amount: progress.nextDue.amount, dueDate: progress.nextDue.dueDate,
+          overdue: dueDate < today,
+        });
+        sendEmail({ to: order.email, ...tmpl }).catch(() => {});
       }
-      // 'auto' is handled by a later phase of this cron.
+      orders[i] = { ...order, paymentPlan: { ...plan, lastReminderSentFor: progress.nextDue.dueDate } };
+      dirty = true;
     }
     if (dirty) writeOrders(orders);
   });
