@@ -2425,8 +2425,12 @@ function QuoteCreator({ context, onBack, onQuoteSent }) {
 
   // Keep the customer's original request kind (e.g. "Repair") when building a
   // quote from an inbox item — only fall back to a generic label for quotes
-  // started from scratch, and only call it "Custom Build" when that box is ticked.
-  const quoteKind = context?.kind || (form.pcBuild ? 'Custom Build' : 'Quote');
+  // started from scratch, and only call it "Custom Build" when that box is
+  // ticked. 'custom-pc-build' is the old hardcoded value every quote used to
+  // get stamped with — never carry that one forward, or it sticks forever.
+  const quoteKind = (context?.kind && context.kind !== 'custom-pc-build')
+    ? context.kind
+    : (form.pcBuild ? 'Custom Build' : 'Quote');
   const buildPayload = () => ({ ...form, hardwareTotal, pcBuildFee, otherTotal, grandTotal, kind: quoteKind });
 
   const doSend = async () => {
@@ -2462,7 +2466,14 @@ function QuoteCreator({ context, onBack, onQuoteSent }) {
         draftQuote: buildPayload(),
       };
       const r = await fetch('/api/admin/quotes/save', { method: 'POST', headers: postHeaders(), credentials: 'include', body: JSON.stringify(payload) });
-      setMsg(r.ok ? { text: 'Draft saved.', ok: true } : { text: 'Failed to save.', ok: false });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok) {
+        setMsg({ text: 'Draft saved.', ok: true });
+        setForm(f => ({ ...f, sourceQuoteId: (d.item && d.item.id) || payload.id }));
+        if (onQuoteSent) onQuoteSent(d);
+      } else {
+        setMsg({ text: 'Failed to save.', ok: false });
+      }
     } catch { setMsg({ text: 'Network error.', ok: false }); }
     finally { setSending(false); }
   };
