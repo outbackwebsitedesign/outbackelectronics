@@ -91,7 +91,7 @@ const PUBLIC_CSP = "default-src 'self'; " +
 const HSTS_VALUE = 'max-age=31536000; includeSubDomains';
 const PERMISSIONS_POLICY = 'camera=(), microphone=(), geolocation=(), payment=(), usb=()';
 const PUBLIC_RATE_WINDOW_MS = 1000 * 60 * 10;
-const PUBLIC_RATE_LIMITS = { analytics: 120, checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10, 'forgot-password': 5, 'reset-password': 10, 'gift-card/apply': 10, 'gift-card/balance': 5, 'warranty/order-lookup': 10, 'cart/get': 20, 'weather_register': 3, 'stock-notify': 5, 'membership': 10, 'order-token': 30, 'bookings/request': 10, 'tutorials/view': 60 };
+const PUBLIC_RATE_LIMITS = { analytics: 120, checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10, 'forgot-password': 5, 'reset-password': 10, 'gift-card/apply': 10, 'gift-card/balance': 5, 'warranty/order-lookup': 10, 'cart/get': 20, 'weather_register': 3, 'stock-notify': 5, 'membership': 10, 'order-token': 30, 'bookings/request': 10, 'tutorials/view': 60, 'review/submit': 8 };
 
 fs.mkdirSync(path.join(__dirname, 'assets/uploads'), { recursive: true });
 fs.mkdirSync(path.join(__dirname, 'assets/uploads/software'), { recursive: true });
@@ -144,6 +144,7 @@ const REPAIRS_DB_PATH   = path.join(__dirname, 'repairs.db');
 const QUOTES_DB_PATH    = path.join(__dirname, 'quotes.db');
 // Same margin orders/repair jobs apply to linked parts expenses (PARTS_MARGIN in pages-admin.jsx).
 const QUOTE_PARTS_MARGIN = 0.20;
+const REVIEWS_DB_PATH   = path.join(__dirname, 'reviews.db');
 const EWASTE_DB_PATH    = path.join(__dirname, 'ewaste.db');
 const SELLERS_DB_PATH   = path.join(__dirname, 'sellers.db');
 const CLIENTS_DB_PATH   = path.join(__dirname, 'clients.db');
@@ -505,6 +506,11 @@ function readQuotes() {
   try { const p = JSON.parse(cachedReadFile(QUOTES_DB_PATH)); return Array.isArray(p.quotes) ? p.quotes : []; } catch { return []; }
 }
 function writeQuotes(quotes) { atomicWriteFile(QUOTES_DB_PATH, JSON.stringify({ quotes }, null, 2)); }
+
+function readReviews() {
+  try { const p = JSON.parse(cachedReadFile(REVIEWS_DB_PATH)); return Array.isArray(p.reviews) ? p.reviews : []; } catch { return []; }
+}
+function writeReviews(reviews) { atomicWriteFile(REVIEWS_DB_PATH, JSON.stringify({ reviews }, null, 2)); }
 
 function readEwaste() {
   try { const p = JSON.parse(cachedReadFile(EWASTE_DB_PATH)); return Array.isArray(p.intakes) ? p.intakes : []; } catch { return []; }
@@ -2302,6 +2308,20 @@ function emailStaffNewQuote({ quoteId, name, email, description }) {
         <dt>REQUEST</dt><dd>${escHtml(description)}</dd>
       </div>
       <a class="btn" href="${getAdminUrl()}/admin#quotes">View in admin →</a>
+    `),
+  };
+}
+
+function emailStaffNewReview({ reviewerName, productName, rating }) {
+  return {
+    subject: `[REVIEW] New ${rating}★ review${productName ? ` — ${productName}` : ''}`,
+    html: emailHtml('New review awaiting approval', `
+      <div class="detail">
+        <dt>FROM</dt><dd>${escHtml(reviewerName || 'Anonymous')}</dd>
+        <dt>RATING</dt><dd>${'★'.repeat(rating)}${'☆'.repeat(5 - rating)}</dd>
+        <dt>ABOUT</dt><dd>${escHtml(productName || 'General feedback')}</dd>
+      </div>
+      <a class="btn" href="${getAdminUrl()}/admin#reviews">Review in admin →</a>
     `),
   };
 }
@@ -5489,6 +5509,67 @@ const mainServer = http.createServer(async (req, res) => {
     return json(res, 201, { ok: true });
   }
 
+  // ── Reviews ───────────────────────────────────────────────────────────────
+  if (req.method === 'GET' && url.pathname === '/api/review/context') {
+    const orderId = url.searchParams.get('order') || '';
+    const token = url.searchParams.get('token') || '';
+    if (!orderId || !token) return json(res, 400, { error: 'missing_fields' });
+    const order = readOrders().find(o => o.id === orderId && o.warrantyToken && o.warrantyToken === token);
+    if (!order) return json(res, 404, { error: 'not_found' });
+    return json(res, 200, { ok: true, customerName: order.cust || '', orderId: order.id });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/review/submit') {
+    if (publicRateLimited(getIp(req), 'review/submit')) return json(res, 429, { error: 'too_many_requests' });
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const orderId = String(body.orderId || '').trim();
+    const token = String(body.token || '').trim();
+    if (!orderId || !token) return json(res, 400, { error: 'missing_fields' });
+    const order = readOrders().find(o => o.id === orderId && o.warrantyToken && o.warrantyToken === token);
+    if (!order) return json(res, 404, { error: 'not_found' });
+    const rating = Math.round(Number(body.rating));
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) return json(res, 422, { error: 'invalid_rating', message: 'Rating must be between 1 and 5.' });
+    const reviewText = String(body.body || '').trim();
+    if (!reviewText) return json(res, 422, { error: 'missing_fields', message: 'Please write a few words about your experience.' });
+    if (reviewText.length > 2000) return json(res, 422, { error: 'body_too_long', message: 'Review must be 2000 characters or fewer.' });
+    const title = String(body.title || '').trim().slice(0, 120);
+    const productId = String(body.productId || '').trim();
+    let productName = null;
+    if (productId) {
+      const product = readProducts().find(p => p.id === productId);
+      if (!product) return json(res, 422, { error: 'invalid_product', message: 'That product could not be found.' });
+      productName = product.name;
+    }
+    const reviews = readReviews();
+    reviews.push({
+      id: 'rev-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex'),
+      orderId: order.id,
+      customerName: order.cust || '',
+      customerEmail: order.email || '',
+      productId: productId || null,
+      productName,
+      rating,
+      title,
+      body: reviewText,
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+    });
+    writeReviews(reviews);
+    const staffTmpl = emailStaffNewReview({ reviewerName: order.cust, productName, rating });
+    sendEmail({ to: getNotifyEmail(), ...staffTmpl });
+    return json(res, 201, { ok: true });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/reviews') {
+    const productId = url.searchParams.get('productId') || '';
+    if (!productId) return json(res, 422, { error: 'product_id_required' });
+    const items = readReviews()
+      .filter(r => r.status === 'approved' && r.productId === productId)
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .map(r => ({ id: r.id, rating: r.rating, title: r.title, body: r.body, customerName: (r.customerName || '').split(' ')[0] || 'Customer', createdAt: r.createdAt }));
+    return json(res, 200, { items });
+  }
+
   // ── Callout fee estimate (keeps pricing constants server-side) ───────────────
   if (req.method === 'GET' && url.pathname === '/api/callout-fee') {
     const FREE_KM = 10, LOCAL_CAP_KM = 200, HIVAL_THRESHOLD = 10000;
@@ -6100,6 +6181,10 @@ const adminServer = http.createServer(async (req, res) => {
     const session = requireRole(req, res, 'staff'); if (!session) return;
     return json(res, 200, { items: readQuotes() });
   }
+  if (req.method === 'GET' && url.pathname === '/api/admin/reviews') {
+    const session = requireRole(req, res, 'staff'); if (!session) return;
+    return json(res, 200, { items: readReviews() });
+  }
   if (req.method === 'GET' && url.pathname === '/api/admin/ewaste') {
     const session = requireRole(req, res, 'staff'); if (!session) return;
     return json(res, 200, { items: readEwaste() });
@@ -6407,6 +6492,10 @@ const adminServer = http.createServer(async (req, res) => {
     const idx = lookupId ? orders.findIndex(o => o.id && o.id === lookupId) : -1;
     const existing = idx >= 0 ? orders[idx] : null;
     const { draftQuote: _dq, _originalId: _oid, _isNew: _isNewFlag, ...bodyToStore } = body;
+    // Every order needs a stable secret token for customer-facing links (warranty
+    // registration, order lookup, review requests) — orders created via Stripe
+    // checkout already get one, but manually-entered orders never did until now.
+    if (!bodyToStore.warrantyToken) bodyToStore.warrantyToken = crypto.randomBytes(16).toString('hex');
     if (isNew) {
       // Never treat a same-ID match as "this row" for a brand-new order — another
       // request (e.g. a customer accepting a quote) may have claimed that number
@@ -6445,7 +6534,7 @@ const adminServer = http.createServer(async (req, res) => {
       const tmpl = emailOrderShipped({ orderId: body.id, warrantyToken: body.warrantyToken, customerName: body.cust, trackingNumber: body.trackingNumber });
       sendEmail({ to: body.email, ...tmpl });
     }
-    return json(res, 200, { ok: true, item: body });
+    return json(res, 200, { ok: true, item: bodyToStore });
   }
   if (req.method === 'GET' && url.pathname === '/api/admin/orders/invoice') {
     const session = requireRole(req, res, 'staff'); if (!session) return;
@@ -6868,6 +6957,24 @@ const adminServer = http.createServer(async (req, res) => {
     const session = requireRole(req, res, 'technician'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     writeQuotes(readQuotes().filter(q => q.id !== body.id));
+    return json(res, 200, { ok: true });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/reviews/save') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    if (!body.id) return json(res, 422, { error: 'id_required' });
+    const reviews = readReviews();
+    const idx = reviews.findIndex(r => r.id === body.id);
+    if (idx < 0) return json(res, 404, { error: 'not_found' });
+    reviews[idx] = { ...reviews[idx], ...body };
+    writeReviews(reviews);
+    return json(res, 200, { ok: true, item: reviews[idx] });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/reviews/delete') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    writeReviews(readReviews().filter(r => r.id !== body.id));
     return json(res, 200, { ok: true });
   }
 

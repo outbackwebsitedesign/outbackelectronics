@@ -611,6 +611,182 @@ function ContactPage({ go }) {
 
 
 // ============================================================
+// LEAVE A REVIEW
+// ============================================================
+function StarPicker({ value, onChange, size = 32 }) {
+  return (
+    <div className="row-flex" style={{ gap: 4 }} role="radiogroup" aria-label="Rating">
+      {[1, 2, 3, 4, 5].map(n => (
+        <button key={n} type="button" role="radio" aria-checked={value === n} aria-label={`${n} star${n > 1 ? 's' : ''}`}
+          onClick={() => onChange(n)}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, fontSize: size, lineHeight: 1, color: n <= value ? 'var(--ochre)' : 'var(--line)' }}>
+          ★
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ReviewPage({ go }) {
+  const shop = useShop();
+  const params = new URLSearchParams(window.location.search);
+  const orderId = params.get('order') || '';
+  const token = params.get('token') || '';
+
+  const [state, setState] = useState('loading'); // loading | invalid | ready
+  const [customerName, setCustomerName] = useState('');
+  const [mode, setMode] = useState('general'); // general | product
+  const [products, setProducts] = useState([]);
+  const [productQuery, setProductQuery] = useState('');
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [rating, setRating] = useState(0);
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
+  const [submitted, setSubmitted] = useState(false);
+
+  useEffect(() => {
+    if (!orderId || !token) { setState('invalid'); return; }
+    fetch(`/api/review/context?order=${encodeURIComponent(orderId)}&token=${encodeURIComponent(token)}`)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => { setCustomerName(d.customerName || ''); setState('ready'); })
+      .catch(() => setState('invalid'));
+  }, [orderId, token]);
+
+  useEffect(() => {
+    if (mode !== 'product' || products.length) return;
+    fetch('/api/catalog/products').then(r => r.ok ? r.json() : null).then(d => { if (d) setProducts(d.items || []); }).catch(() => {});
+  }, [mode]);
+
+  const matches = productQuery.trim().length >= 2
+    ? products.filter(p => (p.name || '').toLowerCase().includes(productQuery.trim().toLowerCase())).slice(0, 8)
+    : [];
+
+  const resetForm = () => {
+    setMode('general'); setSelectedProduct(null); setProductQuery('');
+    setRating(0); setTitle(''); setBody(''); setSubmitError(null); setSubmitted(false);
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!rating) { setSubmitError('Please choose a star rating.'); return; }
+    if (!body.trim()) { setSubmitError('Please write a few words about your experience.'); return; }
+    if (mode === 'product' && !selectedProduct) { setSubmitError('Please pick which product this review is about.'); return; }
+    setSubmitting(true); setSubmitError(null);
+    try {
+      const res = await fetch('/api/review/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() },
+        body: JSON.stringify({
+          orderId, token, rating, title: title.trim(), body: body.trim(),
+          productId: mode === 'product' && selectedProduct ? (selectedProduct.id || selectedProduct.sku) : '',
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || 'server_error');
+      setSubmitted(true);
+    } catch (err) {
+      setSubmitError(err.message === 'server_error' || !err.message ? 'Could not submit your review. Please try again.' : err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (state === 'loading') {
+    return (
+      <>
+        <PageHead crumbs={['Outback', 'Review']} title="Leave a Review" />
+        <section className="container" style={{ paddingTop: 32, paddingBottom: 60 }}>
+          <div className="skeleton" style={{ height: 240, maxWidth: 640 }} />
+        </section>
+      </>
+    );
+  }
+
+  if (state === 'invalid') {
+    return (
+      <>
+        <PageHead crumbs={['Outback', 'Review']} title="Link not valid"
+          lead="This review link is missing or no longer works. Please use the link exactly as it was sent to you, or get in touch and we'll send a new one." />
+        <section className="container" style={{ paddingTop: 8, paddingBottom: 60 }}>
+          <a className="btn btn-rust" href="/contact">Contact us →</a>
+        </section>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <PageHead crumbs={['Outback', 'Review']} title="Leave a Review"
+        lead={`Hi${customerName ? ` ${customerName.split(' ')[0]}` : ''} — tell us how we did. You can leave general feedback, or review a specific product you bought.`} />
+      <section className="container" style={{ paddingTop: 8, paddingBottom: 60 }}>
+        <div className="card-paper" style={{ padding: 32, maxWidth: 640 }}>
+          {submitted ? (
+            <>
+              <span className="tag tag-euc">SUBMITTED</span>
+              <h3 className="serif" style={{ fontSize: 30, marginTop: 14 }}>Thanks for the feedback.</h3>
+              <p style={{ marginTop: 10, color: 'var(--ink-2)' }}>Your review is in — it'll appear on the site once we've had a look.</p>
+              <button className="btn btn-rust" style={{ marginTop: 20 }} onClick={resetForm}>Leave another review →</button>
+            </>
+          ) : (
+            <form onSubmit={submit} noValidate>
+              <div className="row-flex" style={{ gap: 8, marginBottom: 20 }}>
+                <button type="button" className={`btn btn-sm ${mode === 'general' ? 'btn-rust' : 'btn-ghost'}`} onClick={() => setMode('general')}>General feedback</button>
+                <button type="button" className={`btn btn-sm ${mode === 'product' ? 'btn-rust' : 'btn-ghost'}`} onClick={() => setMode('product')}>Review a product</button>
+              </div>
+
+              {mode === 'product' && (
+                <label className="field">
+                  <span className="label">Which product?</span>
+                  {selectedProduct ? (
+                    <div className="row-flex" style={{ justifyContent: 'space-between', border: '1px solid var(--line)', padding: '10px 14px' }}>
+                      <span>{selectedProduct.name}</span>
+                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setSelectedProduct(null); setProductQuery(''); }}>Change</button>
+                    </div>
+                  ) : (
+                    <>
+                      <input className="input" value={productQuery} onChange={e => setProductQuery(e.target.value)} placeholder="Start typing a product name…" />
+                      {matches.length > 0 && (
+                        <div style={{ border: '1px solid var(--line)', borderTop: 'none' }}>
+                          {matches.map(p => (
+                            <div key={p.id || p.sku} role="button" tabIndex={0} onClick={() => { setSelectedProduct(p); }}
+                              style={{ padding: '10px 14px', cursor: 'pointer', borderTop: '1px solid var(--line)', fontSize: 14 }}>{p.name}</div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </label>
+              )}
+
+              <label className="field">
+                <span className="label">Rating</span>
+                <StarPicker value={rating} onChange={setRating} />
+              </label>
+
+              <label className="field">
+                <span className="label">Title (optional)</span>
+                <input className="input" value={title} onChange={e => setTitle(e.target.value)} placeholder="Sum it up in a few words" maxLength={120} />
+              </label>
+
+              <label className="field">
+                <span className="label">Your review</span>
+                <textarea className="input textarea" rows={5} value={body} onChange={e => setBody(e.target.value)} placeholder="What was your experience?" maxLength={2000} required />
+              </label>
+
+              {submitError && <ErrorText inline>{submitError}</ErrorText>}
+              <button className="btn btn-rust" type="submit" disabled={submitting} style={{ marginTop: 8 }}>{submitting ? 'Submitting…' : 'Submit review →'}</button>
+            </form>
+          )}
+        </div>
+      </section>
+    </>
+  );
+}
+
+
+// ============================================================
 // INFO FOR SELLERS — INDEX
 // ============================================================
 function SellersPage({ go }) {
@@ -1595,6 +1771,7 @@ window.OE_PAGES = Object.assign(window.OE_PAGES || {}, {
   quote: QuotePage,
   book: BookingPage,
   contact: ContactPage,
+  review: ReviewPage,
   sellers: SellersPage,
   'sell-gear': SellGearPage,
   policies: PoliciesPage,

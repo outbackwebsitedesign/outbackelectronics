@@ -1382,6 +1382,44 @@ function ImageLightbox({ images, startIndex, alt, onClose }) {
   );
 }
 
+function ProductReviews({ productId }) {
+  const [reviews, setReviews] = useState(null);
+
+  useEffect(() => {
+    setReviews(null);
+    if (!productId) return;
+    fetch(`/api/reviews?productId=${encodeURIComponent(productId)}`)
+      .then(r => r.ok ? r.json() : null).then(d => setReviews(d ? d.items : [])).catch(() => setReviews([]));
+  }, [productId]);
+
+  if (!productId || !reviews || reviews.length === 0) return null;
+
+  const avg = reviews.reduce((s, r) => s + r.rating, 0) / reviews.length;
+  const stars = n => '★'.repeat(n) + '☆'.repeat(5 - n);
+
+  return (
+    <section className="container" style={{paddingTop:40, paddingBottom:56}}>
+      <div className="row-flex" style={{gap:14, alignItems:'baseline', marginBottom:20}}>
+        <span className="eyebrow">CUSTOMER REVIEWS</span>
+        <span className="mono" style={{fontSize:13, color:'var(--ochre)'}}>{stars(Math.round(avg))} {avg.toFixed(1)} ({reviews.length})</span>
+      </div>
+      <div style={{display:'grid', gap:16}}>
+        {reviews.map(r => (
+          <div key={r.id} className="card-paper" style={{padding:20}}>
+            <div className="row-flex" style={{justifyContent:'space-between'}}>
+              <span className="mono" style={{color:'var(--ochre)'}}>{stars(r.rating)}</span>
+              <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-AU') : ''}</span>
+            </div>
+            {r.title && <div style={{fontWeight:600, marginTop:8}}>{r.title}</div>}
+            <p style={{marginTop:6, fontSize:14, color:'var(--ink-2)'}}>{r.body}</p>
+            <div className="mono" style={{marginTop:10, fontSize:11, color:'var(--ink-3)'}}>{r.customerName}</div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function ProductDetailPage({ go, addToCart, pageParams }) {
   const [product, setProduct] = useState(pageParams || null);
   const [selectedVariant, setSelectedVariant] = useState(
@@ -1596,6 +1634,7 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
           </div>
         </div>
       </section>
+      <ProductReviews productId={product.id || product.sku} />
       {relatedProducts.length > 0 && (
         <section className="container" style={{paddingTop:40, paddingBottom:56}}>
           <div className="row-flex" style={{justifyContent:'space-between', marginBottom:20, alignItems:'baseline'}}>

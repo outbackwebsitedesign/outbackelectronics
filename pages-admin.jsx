@@ -335,6 +335,7 @@ const NAV_ICONS = {
   orders:       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>,
   repairs:      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>,
   quotes:       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>,
+  reviews:      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
   ewaste:       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>,
   bookings:     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
   availability: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 14h2M8 17h2M14 14h2M14 17h2"/></svg>,
@@ -367,6 +368,7 @@ const ADMIN_SECTIONS = [
     { id:'payment-plans', label:'Payment Plans', minRole:'technician' },
     { id:'repairs',   label:'Repair Jobs',   minRole:'staff', excludeRoles:['seller'] },
     { id:'quotes',    label:'Quotes Inbox',  minRole:'staff', excludeRoles:['seller'] },
+    { id:'reviews',   label:'Reviews',       minRole:'staff', excludeRoles:['seller'] },
     { id:'ewaste',    label:'eWaste Intake', minRole:'technician' },
     { id:'bookings',  label:'Bookings',      minRole:'manager' },
     { id:'availability', label:'Availability', minRole:'manager' },
@@ -1116,7 +1118,7 @@ function ExpenseRow({ e, isEditing, expenseForm, setExpenseForm, setExpenseEdit,
 // ============================================================
 // OrderDrawer — edit panel for a single order
 // ============================================================
-function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, onExpensesChange, onCustomerCreated, onDelete, sessionInfo = {} }) {
+function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, onExpensesChange, onCustomerCreated, onDelete, sessionInfo = {}, siteUrl }) {
   const [form, setForm] = useState({ ...edit, id: edit.id || edit.suggestedId || '' });
   const findCustomerMatch = (c) => {
     const email = (c.email || '').toLowerCase().trim();
@@ -1361,6 +1363,17 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
                 onClick={() => window.open(`/api/admin/orders/invoice?id=${encodeURIComponent(form.id)}`, '_blank')}>
                 <Icon name="printer" size={14}/>
                 Print invoice
+              </button>
+              <button className="btn btn-ghost btn-sm"
+                title="Copy a link the customer can use to leave a review — general feedback, or for a specific product from this order"
+                onClick={() => {
+                  if (!form.warrantyToken) { adminToast('This order has no review token yet — save it first.'); return; }
+                  if (!siteUrl) { adminToast('Site URL not configured — set it in Settings first.'); return; }
+                  const url = `${siteUrl}/review?order=${encodeURIComponent(form.id)}&token=${encodeURIComponent(form.warrantyToken)}`;
+                  navigator.clipboard?.writeText(url).then(() => adminToast('Review link copied.', 'success')).catch(() => adminToast('Could not copy link.'));
+                }}>
+                <Icon name="star" size={14}/>
+                Copy review link
               </button>
               <button className="btn btn-ghost btn-sm"
                 disabled={trackingEmailStatus === 'sending' || !form.email}
@@ -1819,7 +1832,7 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
 // ============================================================
 // ORDERS
 // ============================================================
-function AdminOrders({ search, sessionInfo }) {
+function AdminOrders({ search, sessionInfo, siteUrl }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expenses, setExpenses] = useState([]);
@@ -1931,6 +1944,7 @@ function AdminOrders({ search, sessionInfo }) {
           expenses={expenses}
           customers={customers}
           sessionInfo={sessionInfo}
+          siteUrl={siteUrl}
           onClose={() => setEdit(null)}
           onRowUpdate={(updated) => setRows(rs => rs.map(r => r.id === (edit.id || updated.id) ? updated : r))}
           onSave={(saved, isNew) => {
@@ -3170,6 +3184,113 @@ function AdminAvailability() {
               })}
             </div>
           )}
+        </Drawer>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// REVIEWS
+// ============================================================
+function Stars({ n, size = 14 }) {
+  return <span className="mono" style={{ color: 'var(--ochre)', letterSpacing: 1, fontSize: size }}>{'★'.repeat(n)}{'☆'.repeat(5 - n)}</span>;
+}
+
+function AdminReviews() {
+  const [reviews, setReviews] = useState([]);
+  const [activeTab, setActiveTab] = useState('pending');
+  const [edit, setEdit] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/admin/reviews', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : Promise.reject()).then(d => setReviews(d.items || [])).catch(() => setReviews([]));
+  }, []);
+
+  const setStatus = async (status) => {
+    setBusy(true);
+    const r = await fetch('/api/admin/reviews/save', { method: 'POST', headers: postHeaders(), credentials: 'include', body: JSON.stringify({ ...edit, status }) }).catch(() => null);
+    setBusy(false);
+    if (r && r.ok) {
+      const d = await r.json();
+      setReviews(rs => rs.map(x => x.id === edit.id ? d.item : x));
+      setEdit(null);
+    } else adminToast('Failed to update review.');
+  };
+
+  const del = async () => {
+    if (!(await adminConfirm('Delete this review? This cannot be undone.', { title: 'Delete review', confirmLabel: 'Delete', danger: true }))) return;
+    setBusy(true);
+    const r = await fetch('/api/admin/reviews/delete', { method: 'POST', headers: postHeaders(), credentials: 'include', body: JSON.stringify({ id: edit.id }) }).catch(() => null);
+    setBusy(false);
+    if (!r || !r.ok) { adminToast('Failed to delete review.'); return; }
+    setReviews(rs => rs.filter(x => x.id !== edit.id));
+    setEdit(null);
+  };
+
+  const statusMap = {
+    pending: { bg: 'var(--ochre)', fg: 'var(--dark)' },
+    approved: { bg: '#d8e7d0', fg: '#345526' },
+    rejected: { bg: 'var(--bg-deep)', fg: 'var(--ink-2)' },
+  };
+
+  const visible = reviews.filter(r => (r.status || 'pending') === activeTab);
+
+  return (
+    <div style={{ padding: 32 }}>
+      <div className="tabs" style={{ marginBottom: 18 }}>
+        {[
+          { key: 'pending', label: `Pending (${reviews.filter(r => (r.status || 'pending') === 'pending').length})` },
+          { key: 'approved', label: `Approved (${reviews.filter(r => r.status === 'approved').length})` },
+          { key: 'rejected', label: `Rejected (${reviews.filter(r => r.status === 'rejected').length})` },
+        ].map(t => (
+          <div key={t.key} role="button" tabIndex={0} className={`tab ${activeTab === t.key ? 'active' : ''}`}
+            onClick={() => setActiveTab(t.key)}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveTab(t.key); } }}
+            style={{ cursor: 'pointer' }}>{t.label}</div>
+        ))}
+      </div>
+      <div style={{ display: 'grid', gap: 12 }}>
+        {visible.length === 0 && <div style={{ padding: 24, background: 'var(--paper)', border: '1px solid var(--line)', fontSize: 13, color: 'var(--ink-2)', textAlign: 'center' }}>No reviews here.</div>}
+        {visible.map(r => (
+          <div key={r.id} style={{ padding: 18, background: 'var(--paper)', border: '1px solid var(--line)', cursor: 'pointer' }} onClick={() => setEdit(r)}>
+            <div className="row-flex" style={{ justifyContent: 'space-between' }}>
+              <div className="row-flex" style={{ gap: 10 }}>
+                <Stars n={r.rating} />
+                <span style={{ fontWeight: 600 }}>{r.productName || 'General feedback'}</span>
+              </div>
+              <span className="mono" style={{ fontSize: 11, color: 'var(--ink-2)' }}>{r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-AU') : ''}</span>
+            </div>
+            {r.title && <div style={{ marginTop: 8, fontWeight: 600, fontSize: 14 }}>{r.title}</div>}
+            <p style={{ marginTop: 6, fontSize: 13, color: 'var(--ink-2)' }}>{r.body}</p>
+            <div className="mono" style={{ marginTop: 10, fontSize: 11, color: 'var(--ink-3)' }}>{r.customerName || 'Customer'} · ORDER {r.orderId}</div>
+          </div>
+        ))}
+      </div>
+      {edit !== null && (
+        <Drawer open={true} onClose={() => setEdit(null)} title={edit.productName || 'General feedback'}
+          footer={<div className="row-flex" style={{ justifyContent: 'space-between' }}>
+            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--rust)' }} disabled={busy} onClick={del}>Delete</button>
+            <div className="row-flex" style={{ gap: 8 }}>
+              {edit.status !== 'rejected' && <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setStatus('rejected')}>Reject</button>}
+              {edit.status !== 'approved' && <button className="btn btn-sm" disabled={busy} onClick={() => setStatus('approved')}>Approve</button>}
+            </div>
+          </div>}
+        >
+          <div className="row-flex" style={{ gap: 10, marginBottom: 14 }}>
+            <Stars n={edit.rating} size={18} />
+            <StatusPill value={edit.status || 'pending'} map={statusMap} />
+          </div>
+          {edit.title && <h3 style={{ marginBottom: 10 }}>{edit.title}</h3>}
+          <p style={{ fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{edit.body}</p>
+          <hr className="thin" />
+          <div className="mono" style={{ fontSize: 11, color: 'var(--ink-2)', display: 'grid', gap: 6 }}>
+            <div>CUSTOMER · {edit.customerName || '—'} {edit.customerEmail ? `<${edit.customerEmail}>` : ''}</div>
+            <div>ORDER · {edit.orderId || '—'}</div>
+            <div>ABOUT · {edit.productName || 'General feedback'}</div>
+            <div>SUBMITTED · {edit.createdAt ? new Date(edit.createdAt).toLocaleString('en-AU') : '—'}</div>
+          </div>
         </Drawer>
       )}
     </div>
@@ -9605,6 +9726,7 @@ const ADMIN_VIEWS = {
   'payment-plans': { c: PaymentPlansView, t:'Payment Plans', staticSubtitle:'active instalment plans · due dates · status' },
   repairs:    { c: AdminRepairs,    t:'Repair Jobs' },
   quotes:     { c: AdminQuotes,     t:'Quotes Inbox' },
+  reviews:    { c: AdminReviews,    t:'Reviews',           staticSubtitle:'pending · approved · rejected' },
   ewaste:     { c: AdminEwaste,     t:'eWaste Intake' },
   bookings:   { c: AdminBookings,   t:'Bookings' },
   availability: { c: AdminAvailability, t:'Availability', staticSubtitle:'operating hours · blocked days & slots' },
@@ -9631,7 +9753,7 @@ const ADMIN_VIEWS = {
 };
 
 const ADMIN_ALL_IDS = new Set([
-  'overview','orders','payment-plans','repairs','quotes','ewaste','bookings','availability',
+  'overview','orders','payment-plans','repairs','quotes','reviews','ewaste','bookings','availability',
   'products','services','software','tutorials','ai',
   'groups','customers','sellers','clients',
   'memberships','gift-cards','rewards','expenses','tax-reports','policies','seller-billing','settings','audit-log',
