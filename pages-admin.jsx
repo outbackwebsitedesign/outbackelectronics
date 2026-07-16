@@ -6650,11 +6650,12 @@ function AdminExpenses() {
 
   const parseDate = (s) => {
     if (!s) return new Date(0);
-    const [d, m, y] = s.split('/');
-    return new Date(y, m - 1, d);
+    const m = String(s).match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+    if (m) return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+    const d = new Date(s);
+    return isNaN(d) ? new Date(0) : d;
   };
-  const sorted = [...rows].sort((a, b) => parseDate(b.date) - parseDate(a.date));
-  const visible = catFilter === 'all' ? sorted : sorted.filter(r => (r.category || 'other') === catFilter);
+  const visible = catFilter === 'all' ? rows : rows.filter(r => (r.category || 'other') === catFilter);
   const total = visible.reduce((s, e) => s + expTotal(e), 0);
 
   return (
@@ -6674,24 +6675,25 @@ function AdminExpenses() {
       </div>
       <Table
         columns={[
-          { key:'description', label:'Description', w:'2fr', render:r => <span style={{fontWeight:500}}>{r.description}</span> },
-          { key:'category', label:'Category', w:'110px', render:r => { const c = catMap[r.category]||catMap.other; return <span className="tag" style={{background:c.bg,color:c.fg,borderColor:c.bg}}>{(r.category||'other').toUpperCase()}</span>; } },
-          { key:'isSecondHand', label:'Condition', w:'100px', render:r => r.isSecondHand ? <span className="tag tag-ochre">2ND HAND</span> : <span className="tag tag-euc">NEW</span> },
-          { key:'partStatus', label:'Part status', w:'110px', render:r => {
+          { key:'description', label:'Description', w:'2fr', sort:true, render:r => <span style={{fontWeight:500}}>{r.description}</span> },
+          { key:'category', label:'Category', w:'110px', sort:true, render:r => { const c = catMap[r.category]||catMap.other; return <span className="tag" style={{background:c.bg,color:c.fg,borderColor:c.bg}}>{(r.category||'other').toUpperCase()}</span>; } },
+          { key:'isSecondHand', label:'Condition', w:'100px', sort:r => r.isSecondHand ? 1 : 0, render:r => r.isSecondHand ? <span className="tag tag-ochre">2ND HAND</span> : <span className="tag tag-euc">NEW</span> },
+          { key:'partStatus', label:'Part status', w:'110px', sort:true, render:r => {
             if (!r.partStatus) return <span style={{color:'var(--ink-3)'}}>—</span>;
             const sc = { ordered:{bg:'#dceaf5',fg:'#1668c8'}, arrived:{bg:'#fff4d6',fg:'#7a5d10'}, installed:{bg:'#d8e7d0',fg:'#345526'}, returned:{bg:'#f3d5c5',fg:'#7a3a18'} };
             const s = sc[r.partStatus] || {bg:'var(--bg-deep)',fg:'var(--ink-2)'};
             return <span className="tag" style={{background:s.bg,color:s.fg,borderColor:s.bg}}>{r.partStatus.toUpperCase()}</span>;
           }},
-          { key:'quantity', label:'Qty', w:'60px', render:r => <span className="mono" style={{fontSize:12,color:'var(--ink-2)'}}>×{Number(r.quantity)||1}</span> },
-          { key:'amount', label:'Amount', w:'110px', render:r => <span className="mono" style={{fontWeight:600,color:'var(--rust)'}}>-${expTotal(r).toLocaleString('en-AU',{minimumFractionDigits:2})}</span> },
-          { key:'date', label:'Date', w:'120px', render:r => <span className="mono" style={{fontSize:11,color:'var(--ink-2)'}}>{r.date||'—'}</span> },
-          { key:'jobId', label:'Linked job', w:'140px', render:r => r.jobId ? <span className="mono" style={{fontSize:11,color:'var(--rust)'}}>{r.jobId}</span> : <span style={{color:'var(--ink-3)'}}>—</span> },
+          { key:'quantity', label:'Qty', w:'60px', sort:r => Number(r.quantity) || 1, render:r => <span className="mono" style={{fontSize:12,color:'var(--ink-2)'}}>×{Number(r.quantity)||1}</span> },
+          { key:'amount', label:'Amount', w:'110px', sort:r => expTotal(r), render:r => <span className="mono" style={{fontWeight:600,color:'var(--rust)'}}>-${expTotal(r).toLocaleString('en-AU',{minimumFractionDigits:2})}</span> },
+          { key:'date', label:'Date', w:'120px', sort:r => parseDate(r.date).getTime(), render:r => <span className="mono" style={{fontSize:11,color:'var(--ink-2)'}}>{r.date||'—'}</span> },
+          { key:'jobId', label:'Linked job', w:'140px', sort:true, render:r => r.jobId ? <span className="mono" style={{fontSize:11,color:'var(--rust)'}}>{r.jobId}</span> : <span style={{color:'var(--ink-3)'}}>—</span> },
           { key:'receipt', label:'Receipt', w:'90px', render:r => r.receipt ? <a href={r.receipt} target="_blank" rel="noopener noreferrer" style={{display:'inline-flex', alignItems:'center', gap:4, color:'var(--rust)',fontSize:12}}>View <Icon name="externalLink" size={10}/></a> : <span style={{color:'var(--ink-3)'}}>—</span> },
           { key:'notes', label:'Notes', w:'1fr', render:r => <span style={{fontSize:12,color:'var(--ink-2)'}}>{r.notes||''}</span> },
         ]}
         rows={visible}
         onRowClick={openRow}
+        defaultSort={{ key: 'date', dir: 'desc' }}
       />
       {edit !== null && (
         <Drawer open={true} onClose={() => setEdit(null)} title={edit.id ? `Edit — ${form.description}` : 'Log expense'}
