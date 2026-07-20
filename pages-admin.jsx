@@ -165,6 +165,61 @@ function useDirtyTracker(value, resetKey) {
   return snap !== baseRef.current;
 }
 
+// ── Deep-link URL state ──────────────────────────────────────────────────────
+// The admin section lives in the path (`/orders`, `/quotes`, …). Finer state —
+// which tab is active, which record is open — rides in the query string so a
+// reload lands on the exact same spot. Helpers below read/write that query
+// string without disturbing the path (which AdminPage owns).
+const readAdminQuery = () => new URLSearchParams(window.location.search);
+function writeAdminUrl(mutate, { push = false } = {}) {
+  const params = readAdminQuery();
+  mutate(params);
+  const qs = params.toString();
+  const url = window.location.pathname + (qs ? '?' + qs : '') + window.location.hash;
+  if (push) window.history.pushState({}, '', url);
+  else window.history.replaceState({}, '', url);
+}
+// Two-way binding between a piece of component state and a single query param.
+// `push:false` (default) rewrites history in place — right for tab switches.
+// `push:true` adds a history entry — right for opening a record, so Back closes
+// it. Popstate (Back/Forward) flows the URL value back into state.
+function useUrlState(key, defaultVal = null, { push = false } = {}) {
+  const [val, setVal] = useState(() => readAdminQuery().get(key) ?? defaultVal);
+  const valRef = React.useRef(val);
+  valRef.current = val;
+  const set = React.useCallback((next) => {
+    const resolved = typeof next === 'function' ? next(valRef.current) : next;
+    if (resolved === valRef.current) return;
+    valRef.current = resolved;
+    writeAdminUrl(p => {
+      if (resolved == null || resolved === '' || resolved === defaultVal) p.delete(key);
+      else p.set(key, String(resolved));
+    }, { push });
+    setVal(resolved);
+  }, [key, defaultVal, push]);
+  useEffect(() => {
+    const onPop = () => { const v = readAdminQuery().get(key) ?? defaultVal; valRef.current = v; setVal(v); };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [key, defaultVal]);
+  return [val, set];
+}
+// Guards against losing unsaved edits on a full-page reload / tab close, and
+// registers with the same counter the sidebar checks before navigating away.
+// Drawer wires this internally; use it directly for non-Drawer edit surfaces.
+function useUnsavedGuard(dirty) {
+  useEffect(() => {
+    if (!dirty) return;
+    adminDirtyDrawers++;
+    const onBeforeUnload = (e) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => {
+      adminDirtyDrawers = Math.max(0, adminDirtyDrawers - 1);
+      window.removeEventListener('beforeunload', onBeforeUnload);
+    };
+  }, [dirty]);
+}
+
 // ── ConfirmModal — styled replacement for window.confirm() ───────────────────
 function ConfirmModal({ title = 'Please confirm', message, confirmLabel = 'Confirm', cancelLabel = 'Cancel', danger = false, onConfirm, onCancel }) {
   const dialogRef = React.useRef(null);
@@ -1841,7 +1896,8 @@ function AdminOrders({ search, sessionInfo, siteUrl }) {
   const [expenses, setExpenses] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [edit, setEdit] = useState(null);
-  const [statusTab, setStatusTab] = useState('all');
+  const [statusTab, setStatusTab] = useUrlState('tab', 'all');
+  const [openId, setOpenId] = useUrlState('open', null, { push: true });
   const [dateRange, setDateRange] = useState({ from: '', to: '' });
   useEffect(() => {
     fetch('/api/admin/orders', { credentials:'include' })
@@ -1896,7 +1952,18 @@ function AdminOrders({ search, sessionInfo, siteUrl }) {
 
   const blankOrder = () => ({ id:'', suggestedId: nextOrderId(), cust:'', email:'', phone:'', loc:'', items:'', lineItems:[], date: todayOrderDate(), total:0, discountType:'percent', discountValue:'', discountAmount:0, fulfilment:'pending', payments:[], parts:[], updates:[] });
 
-  const openRow = (r) => { setEdit(r); };
+  const openRow = (r) => setOpenId(r.id);
+
+  // Reconcile the open order drawer with the URL's `open` param (restore on
+  // reload + Back/Forward). `new` opens a blank order; an id opens that order.
+  useEffect(() => {
+    const cur = edit === null ? null : (edit.id || 'new');
+    if (openId === cur) return;
+    if (openId == null) { setEdit(null); return; }
+    if (openId === 'new') { setEdit(blankOrder()); return; }
+    const r = rows.find(x => x.id === openId);
+    if (r) setEdit(r);
+  }, [openId, rows]);
 
   return (
     <div style={{padding:32}}>
@@ -1908,7 +1975,7 @@ function AdminOrders({ search, sessionInfo, siteUrl }) {
               onKeyDown={e => { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); setStatusTab(k); } }}>{l} ({tabCounts[k]})</div>
           ))}
         </div>
-        <button className="btn btn-rust btn-sm" onClick={() => setEdit(blankOrder())}>+ New order</button>
+        <button className="btn btn-rust btn-sm" onClick={() => setOpenId('new')}>+ New order</button>
       </div>
       <div className="row-flex" style={{gap:8, marginBottom:14, alignItems:'center'}}>
         <span className="mono" style={{fontSize:10, letterSpacing:'.08em', color:'var(--ink-2)'}}>DATE RANGE</span>
@@ -1948,12 +2015,12 @@ function AdminOrders({ search, sessionInfo, siteUrl }) {
           customers={customers}
           sessionInfo={sessionInfo}
           siteUrl={siteUrl}
-          onClose={() => setEdit(null)}
+          onClose={() => setOpenId(null)}
           onRowUpdate={(updated) => setRows(rs => rs.map(r => r.id === (edit.id || updated.id) ? updated : r))}
           onSave={(saved, isNew) => {
             if (isNew) setRows(rs => [saved, ...rs]);
             else setRows(rs => rs.map(r => r.id === edit.id ? saved : r));
-            setEdit(null);
+            setOpenId(null);
           }}
           onExpensesChange={setExpenses}
           onCustomerCreated={(cust) => setCustomers(cs => [...cs, cust])}
@@ -2425,6 +2492,18 @@ function QuoteCreator({ context, onBack, onQuoteSent }) {
   const [sending, setSending] = useState(false);
   const [msg, setMsg] = useState({ text: '', ok: true });
 
+  // Guard the in-progress quote against reload / tab close, and warn before
+  // leaving via Back. `sending` clears the flag so a successful send or draft
+  // save (which navigates away or updates the baseline) doesn't false-trip.
+  const initialFormRef = React.useRef(null);
+  if (initialFormRef.current === null) initialFormRef.current = JSON.stringify(form);
+  const dirty = !sending && JSON.stringify(form) !== initialFormRef.current;
+  useUnsavedGuard(dirty);
+  const requestBack = async () => {
+    if (dirty && !(await adminConfirm('You have unsaved changes to this quote that will be lost.\nLeave without saving?', { title: 'Unsaved changes', confirmLabel: 'Discard changes', cancelLabel: 'Keep editing', danger: true }))) return;
+    onBack();
+  };
+
   const hw = form.hardwareItems;
   const hardwareTotal = hw.reduce((s, i) => s + (parseFloat(i.basePrice) || 0) * (parseInt(i.qty) || 1) * (1 + PARTS_MARGIN), 0);
   const pcBuildFee = form.pcBuild ? (parseFloat(form.pcHours) || 0) * PC_BUILD_RATE : 0;
@@ -2486,7 +2565,7 @@ function QuoteCreator({ context, onBack, onQuoteSent }) {
       const d = await r.json().catch(() => ({}));
       if (r.ok) {
         setMsg({ text: 'Draft saved.', ok: true });
-        setForm(f => ({ ...f, sourceQuoteId: (d.item && d.item.id) || payload.id }));
+        setForm(f => { const nf = { ...f, sourceQuoteId: (d.item && d.item.id) || payload.id }; initialFormRef.current = JSON.stringify(nf); return nf; });
         if (onQuoteSent) onQuoteSent(d);
       } else {
         setMsg({ text: 'Failed to save.', ok: false });
@@ -2514,7 +2593,7 @@ function QuoteCreator({ context, onBack, onQuoteSent }) {
       {/* Page header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 28 }}>
         <div>
-          <a style={{ display:'inline-flex', alignItems:'center', gap:4, cursor: 'pointer', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--rust)', letterSpacing: '.08em' }} onClick={onBack}><Icon name="chevronLeft" size={10}/> BACK TO INBOX</a>
+          <a style={{ display:'inline-flex', alignItems:'center', gap:4, cursor: 'pointer', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--rust)', letterSpacing: '.08em' }} onClick={requestBack}><Icon name="chevronLeft" size={10}/> BACK TO INBOX</a>
           <h2 className="serif" style={{ fontSize: 30, marginTop: 6, fontWeight: 400 }}>{context?.draftQuote ? 'Edit Quote' : 'Quote Builder'}</h2>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -2750,25 +2829,25 @@ function QuoteCreator({ context, onBack, onQuoteSent }) {
 // QUOTES INBOX
 // ============================================================
 function AdminQuotes() {
-  const [view, setView] = useState('inbox'); // 'inbox' | 'create'
-  const [quoteContext, setQuoteContext] = useState(null);
   const [quotes, setQuotes] = useState([]);
+  const [quotesLoaded, setQuotesLoaded] = useState(false);
   const [staffMembers, setStaffMembers] = useState([]);
   const [edit, setEdit] = useState(null);
   const [form, setForm] = useState({});
   const [assignTarget, setAssignTarget] = useState(null);
   const [assignee, setAssignee] = useState('');
-  const [activeTab, setActiveTab] = useState('new');
+  const [activeTab, setActiveTab] = useUrlState('tab', 'new');
+  const [openId, setOpenId] = useUrlState('open', null, { push: true });
   const quoteDirty = useDirtyTracker(form, edit);
 
   useEffect(() => {
     fetch('/api/admin/quotes', { credentials:'include' })
-      .then(r => r.ok ? r.json() : Promise.reject()).then(d => setQuotes(d.items || [])).catch(() => setQuotes([]));
+      .then(r => r.ok ? r.json() : Promise.reject()).then(d => setQuotes(d.items || [])).catch(() => setQuotes([])).finally(() => setQuotesLoaded(true));
     fetch('/api/admin/staff', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject()).then(d => setStaffMembers(d.members || [])).catch(() => setStaffMembers([]));
   }, []);
 
-  const openQuoteCreator = (q) => { setQuoteContext(q || null); setView('create'); };
+  const openQuoteCreator = (q) => setOpenId(q && q.id ? q.id : 'new');
 
   const doAssign = async () => {
     if (!assignee) return;
@@ -2788,11 +2867,18 @@ function AdminQuotes() {
     'closed':    { bg:'var(--bg-deep)', fg:'var(--ink-2)' },
   };
 
-  if (view === 'create') {
+  const creating = openId != null;
+  const quoteContext = creating && openId !== 'new' ? quotes.find(q => q.id === openId) : null;
+  if (creating) {
+    // On reload with ?open=<id>, wait for the quotes list before mounting the
+    // creator so it initialises from the right quote rather than a blank form.
+    if (openId !== 'new' && !quoteContext && !quotesLoaded) {
+      return <div style={{padding:32, color:'var(--ink-2)'}}>Loading quote…</div>;
+    }
     return (
       <QuoteCreator
-        context={quoteContext}
-        onBack={() => setView('inbox')}
+        context={quoteContext || null}
+        onBack={() => setOpenId(null)}
         onQuoteSent={() => {
           fetch('/api/admin/quotes', { credentials:'include' })
             .then(r => r.ok ? r.json() : Promise.reject()).then(d => setQuotes(d.items || [])).catch(() => {});
@@ -3430,7 +3516,7 @@ function Stars({ n, size = 14 }) {
 
 function AdminReviews() {
   const [reviews, setReviews] = useState([]);
-  const [activeTab, setActiveTab] = useState('pending');
+  const [activeTab, setActiveTab] = useUrlState('tab', 'pending');
   const [edit, setEdit] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -6962,12 +7048,16 @@ function AdminAnalytics() {
 
 // EXPENSES
 // ============================================================
+const blankExpense = () => ({ description:'', category:'tools', amount:0, quantity:1, date:'', receipt:null, jobId:'', notes:'', isSecondHand:false, partStatus:'' });
+
 function AdminExpenses() {
   const [rows, setRows] = useState([]);
   const [edit, setEdit] = useState(null);
   const [form, setForm] = useState({});
   const [jobOptions, setJobOptions] = useState([]);
-  const [catFilter, setCatFilter] = useState('all');
+  const [catFilter, setCatFilter] = useUrlState('cat', 'all');
+  const [openId, setOpenId] = useUrlState('open', null, { push: true });
+  const dirty = useDirtyTracker(form, edit && (edit.id || 'new'));
 
   useEffect(() => {
     fetch('/api/admin/expenses', { credentials:'include' })
@@ -6976,8 +7066,20 @@ function AdminExpenses() {
       .then(r => r.ok ? r.json() : Promise.reject()).then(d => setJobOptions(d.items || [])).catch(() => {});
   }, []);
 
-  const openRow = (r) => { setEdit(r); setForm({...r}); };
-  const openNew = () => { setEdit({}); setForm({ description:'', category:'tools', amount:0, quantity:1, date:'', receipt:null, jobId:'', notes:'', isSecondHand:false, partStatus:'' }); };
+  const openRow = (r) => setOpenId(r.id);
+  const openNew = () => setOpenId('new');
+  const closeDrawer = () => setOpenId(null);
+
+  // Reconcile the open drawer with the URL's `open` param — drives both the
+  // initial restore on reload and Back/Forward navigation.
+  useEffect(() => {
+    const cur = edit === null ? null : (edit.id || 'new');
+    if (openId === cur) return;
+    if (openId == null) { setEdit(null); return; }
+    if (openId === 'new') { setEdit({}); setForm(blankExpense()); return; }
+    const r = rows.find(x => x.id === openId);
+    if (r) { setEdit(r); setForm({ ...r }); }
+  }, [openId, rows]);
 
   const save = async () => {
     const r = await fetch('/api/admin/expenses/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(form) }).catch(()=>null);
@@ -6985,7 +7087,7 @@ function AdminExpenses() {
       const d = await r.json();
       if (!edit.id) setRows(rs => [...rs, d.item]);
       else setRows(rs => rs.map(x => x.id === edit.id ? d.item : x));
-      setEdit(null);
+      closeDrawer();
     } else {
       adminToast('Failed to save expense — changes not persisted.');
     }
@@ -6996,7 +7098,7 @@ function AdminExpenses() {
     const r = await fetch('/api/admin/expenses/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: form.id }) }).catch(()=>null);
     if (!r || !r.ok) { adminToast('Failed to delete expense.'); return; }
     setRows(rs => rs.filter(x => x.id !== form.id));
-    setEdit(null);
+    closeDrawer();
   };
 
   const handleReceiptUpload = async (file) => {
@@ -7057,12 +7159,12 @@ function AdminExpenses() {
         defaultSort={{ key: 'date', dir: 'desc' }}
       />
       {edit !== null && (
-        <Drawer open={true} onClose={() => setEdit(null)} title={edit.id ? `Edit — ${form.description}` : 'Log expense'}
+        <Drawer open={true} onClose={closeDrawer} dirty={dirty} title={edit.id ? `Edit — ${form.description}` : 'Log expense'}
           footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
             {edit.id && <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={del}>Delete</button>}
             {!edit.id && <span/>}
             <div className="row-flex" style={{gap:8}}>
-              <button className="btn btn-ghost btn-sm" onClick={() => setEdit(null)}>Cancel</button>
+              <button className="btn btn-ghost btn-sm" onClick={closeDrawer}>Cancel</button>
               <button className="btn btn-sm" onClick={save}>Save</button>
             </div>
           </div>}
@@ -10073,7 +10175,12 @@ function AdminPage({ go }) {
   const Body = view.c;
   return (
     <div style={{display:'flex', minHeight:'100vh', background:'var(--bg)'}}>
-      <AdminSidebar section={effectiveSection} setSection={s => { setSection(s); setSearch(''); }} role={sessionInfo.role} username={sessionInfo.username}
+      <AdminSidebar section={effectiveSection} setSection={s => {
+        // Reset the query string synchronously so one section's record/tab
+        // params don't leak into the next section's freshly-mounted view.
+        if (s !== effectiveSection) window.history.pushState({}, '', '/' + s);
+        setSection(s); setSearch('');
+      }} role={sessionInfo.role} username={sessionInfo.username}
         onSignOut={async () => { await fetch('/api/admin/logout', { method:'POST', headers:postHeaders(), credentials:'include' }); setSessionInfo({ authed: false, role: null, username: null }); }} />
       <div style={{flex:1, minWidth:0}}>
         <AdminTopbar title={view.t} subtitle={subtitle} search={search} onSearch={setSearch}
