@@ -3470,7 +3470,7 @@ function buildHddReportPdf(report, shop) {
     if (report.conditionNotes) {
       y = sectionTitle('Physical Condition', y);
       doc.font('Helvetica').fontSize(10).fillColor('#222').text(report.conditionNotes, 50, y, { width: 495 });
-      y = doc.y + 20;
+      y = doc.y + 16;
     }
 
     if (y > pageBottom - 50) { doc.addPage(); y = 50; }
@@ -3479,15 +3479,19 @@ function buildHddReportPdf(report, shop) {
     doc.rect(50, y - 6, 495, 28).fill(verdict.bg);
     doc.font('Helvetica-Bold').fontSize(12).fillColor(verdict.fg).text('Overall Verdict', 56, y, { width: 300 });
     doc.text(verdict.label, 460, y, { width: 79, align: 'right' });
-    y += 40;
+    y += 30;
 
     if (isRepair && report.recommendation) {
+      // Guard before the heading, not just the block after — otherwise PDFKit's own
+      // overflow handling can orphan the title alone at the bottom of a page.
+      if (y > pageBottom - 60) { doc.addPage(); y = 50; }
       y = sectionTitle('Recommendation', y);
       doc.font('Helvetica').fontSize(10).fillColor('#222').text(report.recommendation, 50, y, { width: 495 });
       y = doc.y + 20;
     }
 
     if (report.notes) {
+      if (y > pageBottom - 60) { doc.addPage(); y = 50; }
       doc.font('Helvetica-Bold').fontSize(10).fillColor(RUST).text('Notes', 50, y);
       y += 16;
       doc.font('Helvetica').fontSize(10).fillColor('#222').text(report.notes, 50, y, { width: 495 });
@@ -3496,8 +3500,10 @@ function buildHddReportPdf(report, shop) {
 
     const signerName = report.signedBy || report.technician || '';
     if (signerName) {
-      y += 10;
-      if (y > pageBottom - 70) { doc.addPage(); y = 50; }
+      y += 4;
+      // Reserve room for the full block: signature image (~55pt) + line + two
+      // trailing text lines (~31pt) ≈ 86pt measured, plus a small safety margin.
+      if (y > pageBottom - 92) { doc.addPage(); y = 50; }
 
       let signatureImagePath = null;
       if (report.signedByStaffId) {
