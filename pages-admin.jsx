@@ -367,6 +367,7 @@ const ADMIN_SECTIONS = [
     { id:'orders',    label:'Orders',        minRole:'technician' },
     { id:'payment-plans', label:'Payment Plans', minRole:'technician' },
     { id:'repairs',   label:'Repair Jobs',   minRole:'staff', excludeRoles:['seller'] },
+    { id:'hdd-reports', label:'HDD Condition Reports', minRole:'staff', excludeRoles:['seller'] },
     { id:'quotes',    label:'Quotes Inbox',  minRole:'staff', excludeRoles:['seller'] },
     { id:'reviews',   label:'Reviews',       minRole:'staff', excludeRoles:['seller'] },
     { id:'ewaste',    label:'eWaste Intake', minRole:'technician' },
@@ -2927,6 +2928,184 @@ function AdminQuotes() {
               {staffMembers.map(s => <option key={s.id} value={s.name}>{s.name}{s.role ? ` · ${s.role}` : ''}</option>)}
             </select>
           </label>
+        </Drawer>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// HDD CONDITION REPORTS
+// ============================================================
+function blankHddReport() {
+  return {
+    type: 'repair',
+    repairJobId: '', customerName: '', customerEmail: '', customerPhone: '',
+    driveModel: '', driveSerial: '', driveCapacity: '', driveInterface: '', driveFormFactor: '', driveManufactureDate: '',
+    smartStatus: 'PASS', reallocatedSectors: 0, pendingSectors: 0, uncorrectableSectors: 0, powerOnHours: '', powerCycles: '', temperature: '', smartNotes: '',
+    conditionNotes: '', verdict: 'healthy', recommendation: '', notes: '', technician: '',
+  };
+}
+
+function AdminHddReports() {
+  const [reports, setReports] = useState([]);
+  const [edit, setEdit] = useState(null);
+  const [form, setForm] = useState({});
+  const dirty = useDirtyTracker(form, edit);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  useEffect(() => {
+    fetch('/api/admin/hdd-reports', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject()).then(d => setReports(d.items || [])).catch(() => setReports([]));
+  }, []);
+
+  const openRow = (r) => { setEdit(r); setForm({ ...blankHddReport(), ...r }); };
+  const openNew = () => { setEdit({}); setForm(blankHddReport()); };
+
+  const verdictMap = {
+    healthy:  { bg:'#d8e7d0', fg:'#345526' },
+    degraded: { bg:'var(--ochre)', fg:'var(--dark)' },
+    failing:  { bg:'var(--rust)', fg:'#fff' },
+  };
+
+  const save = async () => {
+    const r = await fetch('/api/admin/hdd-reports/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(form) }).catch(()=>null);
+    if (r && r.ok) {
+      const d = await r.json();
+      if (!edit.id) setReports(rs => [...rs, d.item]); else setReports(rs => rs.map(x => x.id === edit.id ? d.item : x));
+      setEdit(null);
+    } else {
+      adminToast('Failed to save report — changes not persisted.');
+    }
+  };
+
+  const del = async () => {
+    if (!form.id || !(await adminConfirm(`Delete report ${form.id}? This cannot be undone.`, { title:'Delete report', confirmLabel:'Delete', danger:true }))) return;
+    const r = await fetch('/api/admin/hdd-reports/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: form.id }) }).catch(()=>null);
+    if (!r || !r.ok) { adminToast('Failed to delete report.'); return; }
+    setReports(rs => rs.filter(x => x.id !== form.id));
+    setEdit(null);
+  };
+
+  const doPrintPdf = async () => {
+    const r = await fetch('/api/admin/hdd-reports/pdf', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(form) }).catch(()=>null);
+    if (!r || !r.ok) { adminToast('Failed to generate PDF.'); return; }
+    const blob = await r.blob();
+    window.open(URL.createObjectURL(blob), '_blank');
+  };
+
+  return (
+    <div style={{padding:32}}>
+      <div className="row-flex" style={{justifyContent:'space-between', marginBottom:18}}>
+        <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{reports.length} REPORT{reports.length===1?'':'S'}</span>
+        <button className="btn btn-rust btn-sm" onClick={openNew}>+ New report</button>
+      </div>
+      <Table
+        columns={[
+          { key:'id', label:'#', w:'110px', sort:true, render:r => <span className="mono" style={{fontSize:11, color:'var(--rust)'}}>{r.id}</span> },
+          { key:'createdAt', label:'Date', w:'120px', sort:true, render:r => <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-AU') : '—'}</span> },
+          { key:'type', label:'Type', w:'100px', sort:true, render:r => <span className="tag tag-outline">{(r.type||'repair').toUpperCase()}</span> },
+          { key:'drive', label:'Drive', w:'1.5fr', render:r => <span>{r.driveModel || '—'}{r.driveSerial ? <span className="mono" style={{color:'var(--ink-2)', fontSize:11}}> · {r.driveSerial}</span> : null}</span> },
+          { key:'who', label:'Customer / job', w:'1.5fr', render:r => r.type === 'repair' ? <span style={{fontSize:13, color:'var(--ink-2)'}}>{r.customerName || r.repairJobId || '—'}</span> : <span style={{fontSize:13, color:'var(--ink-3)'}}>For sale</span> },
+          { key:'verdict', label:'Verdict', w:'120px', sort:true, render:r => <StatusPill value={r.verdict || 'healthy'} map={verdictMap} /> },
+        ]}
+        rows={reports}
+        onRowClick={openRow}
+        defaultSort={{ key:'createdAt', dir:'desc' }}
+        emptyMessage="No hard drive condition reports yet."
+      />
+
+      {edit !== null && (
+        <Drawer open={true} onClose={() => setEdit(null)} dirty={dirty} title={edit.id ? `Report ${edit.id}` : 'New HDD condition report'}
+          footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
+            {edit.id ? <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={del}>Delete</button> : <span/>}
+            <div className="row-flex" style={{gap:8}}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setEdit(null)}>Cancel</button>
+              <button className="btn btn-ghost btn-sm" onClick={doPrintPdf}>Print / PDF</button>
+              <button className="btn btn-sm" onClick={save}>Save</button>
+            </div>
+          </div>}
+        >
+          <label className="field"><span className="label">Report type</span>
+            <select className="select" value={form.type||'repair'} onChange={e=>set('type', e.target.value)}>
+              <option value="repair">Repair job (customer recommendation)</option>
+              <option value="sale">For sale (pre-sale inspection)</option>
+            </select>
+          </label>
+
+          {form.type === 'repair' && (
+            <>
+              <label className="field"><span className="label">Repair job ID</span><input className="input" style={{fontFamily:'monospace'}} value={form.repairJobId||''} onChange={e=>set('repairJobId', e.target.value)} placeholder="e.g. REP-0042"/></label>
+              <div className="grid-2" style={{gap:10, marginBottom:10}}>
+                <label className="field" style={{margin:0}}><span className="label">Customer name</span><input className="input" value={form.customerName||''} onChange={e=>set('customerName', e.target.value)}/></label>
+                <label className="field" style={{margin:0}}><span className="label">Customer email</span><input className="input" value={form.customerEmail||''} onChange={e=>set('customerEmail', e.target.value)}/></label>
+              </div>
+              <label className="field"><span className="label">Customer phone</span><input className="input" value={form.customerPhone||''} onChange={e=>set('customerPhone', e.target.value)}/></label>
+            </>
+          )}
+
+          <hr className="thin"/>
+          <span className="eyebrow">Drive identification</span>
+          <div className="grid-2" style={{gap:10, margin:'10px 0'}}>
+            <label className="field" style={{margin:0}}><span className="label">Model</span><input className="input" value={form.driveModel||''} onChange={e=>set('driveModel', e.target.value)} placeholder="e.g. Seagate Barracuda ST2000DM008"/></label>
+            <label className="field" style={{margin:0}}><span className="label">Serial number</span><input className="input" style={{fontFamily:'monospace'}} value={form.driveSerial||''} onChange={e=>set('driveSerial', e.target.value)}/></label>
+          </div>
+          <div className="grid-2" style={{gap:10, marginBottom:10}}>
+            <label className="field" style={{margin:0}}><span className="label">Capacity</span><input className="input" value={form.driveCapacity||''} onChange={e=>set('driveCapacity', e.target.value)} placeholder="e.g. 2TB"/></label>
+            <label className="field" style={{margin:0}}><span className="label">Interface</span><input className="input" value={form.driveInterface||''} onChange={e=>set('driveInterface', e.target.value)} placeholder="e.g. SATA III / NVMe"/></label>
+          </div>
+          <div className="grid-2" style={{gap:10, marginBottom:10}}>
+            <label className="field" style={{margin:0}}><span className="label">Form factor</span><input className="input" value={form.driveFormFactor||''} onChange={e=>set('driveFormFactor', e.target.value)} placeholder="e.g. 3.5&quot; / 2.5&quot; / M.2"/></label>
+            <label className="field" style={{margin:0}}><span className="label">Manufacture date</span><input className="input" value={form.driveManufactureDate||''} onChange={e=>set('driveManufactureDate', e.target.value)}/></label>
+          </div>
+
+          <hr className="thin"/>
+          <span className="eyebrow">S.M.A.R.T. data</span>
+          <label className="field" style={{marginTop:10}}><span className="label">Overall status</span>
+            <select className="select" value={form.smartStatus||'PASS'} onChange={e=>set('smartStatus', e.target.value)}>
+              {['PASS','CAUTION','FAIL'].map(s => <option key={s}>{s}</option>)}
+            </select>
+          </label>
+          <div className="grid-2" style={{gap:10, marginBottom:10}}>
+            <label className="field" style={{margin:0}}><span className="label">Reallocated sectors</span><input className="input" type="number" min="0" value={form.reallocatedSectors ?? 0} onChange={e=>set('reallocatedSectors', e.target.value)}/></label>
+            <label className="field" style={{margin:0}}><span className="label">Pending sectors</span><input className="input" type="number" min="0" value={form.pendingSectors ?? 0} onChange={e=>set('pendingSectors', e.target.value)}/></label>
+          </div>
+          <div className="grid-2" style={{gap:10, marginBottom:10}}>
+            <label className="field" style={{margin:0}}><span className="label">Uncorrectable sectors</span><input className="input" type="number" min="0" value={form.uncorrectableSectors ?? 0} onChange={e=>set('uncorrectableSectors', e.target.value)}/></label>
+            <label className="field" style={{margin:0}}><span className="label">Power-on hours</span><input className="input" type="number" min="0" value={form.powerOnHours||''} onChange={e=>set('powerOnHours', e.target.value)}/></label>
+          </div>
+          <div className="grid-2" style={{gap:10, marginBottom:10}}>
+            <label className="field" style={{margin:0}}><span className="label">Power cycles</span><input className="input" type="number" min="0" value={form.powerCycles||''} onChange={e=>set('powerCycles', e.target.value)}/></label>
+            <label className="field" style={{margin:0}}><span className="label">Temperature (°C)</span><input className="input" type="number" value={form.temperature||''} onChange={e=>set('temperature', e.target.value)}/></label>
+          </div>
+          <label className="field"><span className="label">SMART notes</span>
+            <textarea className="textarea" rows={2} value={form.smartNotes||''} onChange={e=>set('smartNotes', e.target.value)} placeholder="Raw attribute readout, anything notable..."/>
+          </label>
+
+          <hr className="thin"/>
+          <label className="field"><span className="label">Physical condition</span>
+            <textarea className="textarea" rows={3} value={form.conditionNotes||''} onChange={e=>set('conditionNotes', e.target.value)} placeholder="Casing, connectors, unusual noise, physical damage..."/>
+          </label>
+
+          <label className="field"><span className="label">Overall verdict</span>
+            <select className="select" value={form.verdict||'healthy'} onChange={e=>set('verdict', e.target.value)}>
+              <option value="healthy">Healthy</option>
+              <option value="degraded">Degraded</option>
+              <option value="failing">Failing</option>
+            </select>
+          </label>
+
+          {form.type === 'repair' && (
+            <label className="field"><span className="label">Recommendation to customer</span>
+              <textarea className="textarea" rows={3} value={form.recommendation||''} onChange={e=>set('recommendation', e.target.value)} placeholder="e.g. Drive is degrading — recommend backing up immediately and replacing within 2-4 weeks."/>
+            </label>
+          )}
+
+          <label className="field"><span className="label">Internal notes</span>
+            <textarea className="textarea" rows={2} value={form.notes||''} onChange={e=>set('notes', e.target.value)} placeholder="Staff-only notes..."/>
+          </label>
+
+          <label className="field"><span className="label">Prepared by</span><input className="input" value={form.technician||''} onChange={e=>set('technician', e.target.value)}/></label>
         </Drawer>
       )}
     </div>
@@ -9734,6 +9913,7 @@ const ADMIN_VIEWS = {
   orders:     { c: AdminOrders,     t:'Orders' },
   'payment-plans': { c: PaymentPlansView, t:'Payment Plans', staticSubtitle:'active instalment plans · due dates · status' },
   repairs:    { c: AdminRepairs,    t:'Repair Jobs' },
+  'hdd-reports': { c: AdminHddReports, t:'HDD Condition Reports', staticSubtitle:'S.M.A.R.T. summary · condition notes · printable PDF' },
   quotes:     { c: AdminQuotes,     t:'Quotes Inbox' },
   reviews:    { c: AdminReviews,    t:'Reviews',           staticSubtitle:'pending · approved · rejected' },
   ewaste:     { c: AdminEwaste,     t:'eWaste Intake' },
@@ -9762,7 +9942,7 @@ const ADMIN_VIEWS = {
 };
 
 const ADMIN_ALL_IDS = new Set([
-  'overview','orders','payment-plans','repairs','quotes','reviews','ewaste','bookings','availability',
+  'overview','orders','payment-plans','repairs','hdd-reports','quotes','reviews','ewaste','bookings','availability',
   'products','services','software','tutorials','ai',
   'groups','customers','sellers','clients',
   'memberships','gift-cards','rewards','expenses','tax-reports','policies','seller-billing','settings','audit-log',

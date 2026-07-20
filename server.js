@@ -142,6 +142,7 @@ const ORDERS_DB_PATH    = path.join(__dirname, 'orders.db');
 const CUSTOMERS_DB_PATH = path.join(__dirname, 'customers.db');
 const REPAIRS_DB_PATH   = path.join(__dirname, 'repairs.db');
 const QUOTES_DB_PATH    = path.join(__dirname, 'quotes.db');
+const HDD_REPORTS_DB_PATH = path.join(__dirname, 'hdd-reports.db');
 // Same margin orders/repair jobs apply to linked parts expenses (PARTS_MARGIN in pages-admin.jsx).
 const QUOTE_PARTS_MARGIN = 0.20;
 const REVIEWS_DB_PATH   = path.join(__dirname, 'reviews.db');
@@ -506,6 +507,15 @@ function readQuotes() {
   try { const p = JSON.parse(cachedReadFile(QUOTES_DB_PATH)); return Array.isArray(p.quotes) ? p.quotes : []; } catch { return []; }
 }
 function writeQuotes(quotes) { atomicWriteFile(QUOTES_DB_PATH, JSON.stringify({ quotes }, null, 2)); }
+
+function readHddReports() {
+  try { const p = JSON.parse(cachedReadFile(HDD_REPORTS_DB_PATH)); return Array.isArray(p.reports) ? p.reports : []; } catch { return []; }
+}
+function writeHddReports(reports) { atomicWriteFile(HDD_REPORTS_DB_PATH, JSON.stringify({ reports }, null, 2)); }
+function nextHddReportId(reports) {
+  const maxN = reports.reduce((max, r) => { const m = String(r.id || '').match(/^HDD-(\d+)$/); return m ? Math.max(max, parseInt(m[1])) : max; }, 0);
+  return `HDD-${String(maxN + 1).padStart(4, '0')}`;
+}
 
 function readReviews() {
   try { const p = JSON.parse(cachedReadFile(REVIEWS_DB_PATH)); return Array.isArray(p.reviews) ? p.reviews : []; } catch { return []; }
@@ -3209,6 +3219,145 @@ function buildBASData(fromStr, toStr) {
     box1A, box1B, netGST,
     refunds, orderCount, repairCount, expenseCount,
   };
+}
+
+function buildHddReportPdf(report, shop) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: 'A4', margin: 50 });
+    const chunks = [];
+    doc.on('data', c => chunks.push(c));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const RUST = '#b5451b';
+    const OCHRE = '#d39a37';
+    const VERDICT_STYLE = {
+      healthy:  { bg: '#eaf3ea', fg: '#2e7d32', label: 'HEALTHY' },
+      degraded: { bg: '#fbf1de', fg: '#8a6116', label: 'DEGRADED' },
+      failing:  { bg: '#fbe9e4', fg: RUST,      label: 'FAILING' },
+    };
+    const shopName = shop.tradingName || shop.name || 'Outback Electronics';
+    const shopAddress = shop.address || [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ');
+    const logoPath = path.join(__dirname, 'assets', 'logo.png');
+    const hasLogo = fs.existsSync(logoPath);
+
+    // Header band
+    doc.rect(0, 0, doc.page.width, 110).fill(RUST);
+    if (hasLogo) {
+      try { doc.image(logoPath, 50, 22, { width: 66 }); } catch {}
+    }
+    doc.fillColor('#fff').font('Helvetica-Bold').fontSize(18).text(shopName, hasLogo ? 130 : 50, 26, { width: 220 });
+    doc.font('Helvetica').fontSize(9).fillColor('#fde6d6')
+      .text(shopAddress || '', hasLogo ? 130 : 50, 50, { width: 220 })
+      .text([shop.phone, shop.email].filter(Boolean).join('  ·  '), hasLogo ? 130 : 50, 64, { width: 220 });
+
+    const reportDate = report.createdAt ? new Date(report.createdAt).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date().toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
+
+    doc.font('Helvetica-Bold').fontSize(18).fillColor('#fff').text('CONDITION REPORT', 0, 26, { width: 545, align: 'right' });
+    doc.font('Helvetica-Bold').fontSize(10).fillColor('#fde6d6').text('HARD DRIVE DIAGNOSTIC', 0, 50, { width: 545, align: 'right' });
+    doc.font('Helvetica').fontSize(9).fillColor('#fde6d6')
+      .text(`Report #: ${report.id || 'DRAFT'}`, 0, 66, { width: 545, align: 'right' })
+      .text(`Date: ${reportDate}`, 0, 80, { width: 545, align: 'right' });
+
+    doc.fillColor('#000');
+    doc.y = 140;
+
+    const isRepair = report.type === 'repair';
+    if (isRepair && (report.customerName || report.customerEmail || report.customerPhone || report.repairJobId)) {
+      doc.font('Helvetica-Bold').fontSize(11).fillColor(RUST).text('Prepared For', 50, 140);
+      doc.font('Helvetica').fontSize(10).fillColor('#222')
+        .text(report.customerName || '')
+        .text(report.customerEmail || '')
+        .text(report.customerPhone || '');
+      if (report.repairJobId) doc.text(`Repair job: ${report.repairJobId}`);
+      doc.moveDown(1.2);
+    } else {
+      doc.font('Helvetica').fontSize(9).fillColor('#888').text('Pre-sale drive inspection', 50, 140);
+      doc.moveDown(1.2);
+    }
+
+    const sectionTitle = (label, y) => { doc.font('Helvetica-Bold').fontSize(11).fillColor(RUST).text(label, 50, y); return y + 18; };
+
+    // Drive identification table
+    let y = doc.y + 4;
+    y = sectionTitle('Drive Identification', y);
+    const driveRows = [
+      ['Model', report.driveModel || '—'],
+      ['Serial number', report.driveSerial || '—'],
+      ['Capacity', report.driveCapacity || '—'],
+      ['Interface', report.driveInterface || '—'],
+      ['Form factor', report.driveFormFactor || '—'],
+      ['Manufacture date', report.driveManufactureDate || '—'],
+    ];
+    doc.font('Helvetica').fontSize(10);
+    driveRows.forEach(([label, val], i) => {
+      if (i % 2 === 1) doc.rect(50, y - 4, 495, 18).fill('#f7f1e8');
+      doc.fillColor('#666').text(label, 56, y, { width: 160 });
+      doc.fillColor('#222').text(val, 220, y, { width: 320 });
+      y += 18;
+    });
+    y += 16;
+
+    // SMART summary
+    y = sectionTitle('S.M.A.R.T. Summary', y);
+    const smartRows = [
+      ['Overall status', report.smartStatus || '—'],
+      ['Reallocated sectors', report.reallocatedSectors ?? '—'],
+      ['Pending sectors', report.pendingSectors ?? '—'],
+      ['Uncorrectable sectors', report.uncorrectableSectors ?? '—'],
+      ['Power-on hours', report.powerOnHours ?? '—'],
+      ['Power cycles', report.powerCycles ?? '—'],
+      ['Temperature', report.temperature ? `${report.temperature}°C` : '—'],
+    ];
+    doc.font('Helvetica').fontSize(10);
+    smartRows.forEach(([label, val], i) => {
+      if (i % 2 === 1) doc.rect(50, y - 4, 495, 18).fill('#f7f1e8');
+      doc.fillColor('#666').text(label, 56, y, { width: 160 });
+      doc.fillColor('#222').text(String(val), 220, y, { width: 320 });
+      y += 18;
+    });
+    y += 8;
+    if (report.smartNotes) {
+      doc.font('Helvetica').fontSize(9).fillColor('#444').text(report.smartNotes, 56, y, { width: 489 });
+      y = doc.y + 12;
+    }
+    y += 8;
+
+    if (y > 620) { doc.addPage(); y = 50; }
+
+    if (report.conditionNotes) {
+      y = sectionTitle('Physical Condition', y);
+      doc.font('Helvetica').fontSize(10).fillColor('#222').text(report.conditionNotes, 50, y, { width: 495 });
+      y = doc.y + 20;
+    }
+
+    if (y > 640) { doc.addPage(); y = 50; }
+
+    const verdict = VERDICT_STYLE[report.verdict] || VERDICT_STYLE.healthy;
+    doc.rect(50, y - 6, 495, 28).fill(verdict.bg);
+    doc.font('Helvetica-Bold').fontSize(12).fillColor(verdict.fg).text('Overall Verdict', 56, y, { width: 300 });
+    doc.text(verdict.label, 460, y, { width: 79, align: 'right' });
+    y += 40;
+
+    if (isRepair && report.recommendation) {
+      y = sectionTitle('Recommendation', y);
+      doc.font('Helvetica').fontSize(10).fillColor('#222').text(report.recommendation, 50, y, { width: 495 });
+      y = doc.y + 20;
+    }
+
+    if (report.notes) {
+      doc.font('Helvetica-Bold').fontSize(10).fillColor(RUST).text('Notes', 50, y);
+      y += 16;
+      doc.font('Helvetica').fontSize(10).fillColor('#222').text(report.notes, 50, y, { width: 495 });
+      y = doc.y + 20;
+    }
+
+    if (report.technician) {
+      doc.font('Helvetica').fontSize(9).fillColor('#888').text(`Prepared by: ${report.technician}`, 50, y);
+    }
+
+    doc.end();
+  });
 }
 
 function buildBASPdf(data, shop) {
@@ -6222,6 +6371,14 @@ const adminServer = http.createServer(async (req, res) => {
     const session = requireRole(req, res, 'staff'); if (!session) return;
     return json(res, 200, { items: readQuotes() });
   }
+  if (req.method === 'GET' && url.pathname === '/api/admin/hdd-reports') {
+    const session = requireRole(req, res, 'staff'); if (!session) return;
+    return json(res, 200, { items: readHddReports() });
+  }
+  if (req.method === 'GET' && url.pathname === '/api/admin/hdd-reports/next-id') {
+    const session = requireRole(req, res, 'staff'); if (!session) return;
+    return json(res, 200, { id: nextHddReportId(readHddReports()) });
+  }
   if (req.method === 'GET' && url.pathname === '/api/admin/reviews') {
     const session = requireRole(req, res, 'staff'); if (!session) return;
     return json(res, 200, { items: readReviews() });
@@ -6998,6 +7155,41 @@ const adminServer = http.createServer(async (req, res) => {
     const session = requireRole(req, res, 'technician'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     writeQuotes(readQuotes().filter(q => q.id !== body.id));
+    return json(res, 200, { ok: true });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/hdd-reports/save') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const reports = readHddReports();
+    const idx = reports.findIndex(r => r.id && r.id === body.id);
+    if (idx >= 0) { reports[idx] = body; } else {
+      body.id = nextHddReportId(reports);
+      body.createdAt = body.createdAt || new Date().toISOString();
+      reports.push(body);
+    }
+    writeHddReports(reports);
+    return json(res, 200, { ok: true, item: body });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/hdd-reports/pdf') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const { shop } = readSettings();
+    const buffer = await buildHddReportPdf(body, shop);
+    const safeRef = String(body.id || 'draft').replace(/[^a-zA-Z0-9_-]+/g, '-');
+    res.writeHead(200, {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="hdd-report-${safeRef}.pdf"`,
+      'Content-Length': buffer.length,
+      'X-Content-Type-Options': 'nosniff',
+    });
+    res.end(buffer);
+    return;
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/hdd-reports/delete') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    writeHddReports(readHddReports().filter(r => r.id !== body.id));
     return json(res, 200, { ok: true });
   }
 
