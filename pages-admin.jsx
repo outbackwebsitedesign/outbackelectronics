@@ -3056,8 +3056,9 @@ function AdminHddReports() {
     setSmartParsing(true);
     const r = await fetch('/api/admin/hdd-reports/parse-smart', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ output: smartPaste }) }).catch(()=>null);
     setSmartParsing(false);
-    if (!r || !r.ok) { adminToast('Could not parse that output — make sure you ran smartctl with the -j flag.'); return; }
-    const d = await r.json();
+    if (!r) { adminToast('Could not reach the server — please try again.'); return; }
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { adminToast(d.message || 'Could not parse that output — make sure you ran smartctl with the -j flag.'); return; }
     const n = Object.keys(d.fields || {}).length;
     if (!n) { adminToast('No recognisable fields found in that output.'); return; }
     setForm(f => ({ ...f, ...d.fields }));

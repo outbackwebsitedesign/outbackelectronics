@@ -3297,6 +3297,20 @@ function parseSmartctlJson(raw) {
   }
   if (noteLines.length) out.smartNotes = noteLines.join('\n');
 
+  // The JSON can be well-formed but still carry no real SMART data — e.g. a USB bridge
+  // chip that smartctl detects but can't actually pass NVMe/ATA commands through. Surface
+  // that as a specific failure rather than reporting a hollow "success" with 0-1 fields.
+  const gotRealData = out.driveModel || out.driveSerial || out.smartStatus || out.reallocatedSectors != null
+    || out.pendingSectors != null || out.uncorrectableSectors != null || j.nvme_smart_health_information_log || table;
+  if (!gotRealData) {
+    const errMsgs = ((j.smartctl && j.smartctl.messages) || []).filter(m => m.severity === 'error').map(m => m.string);
+    const err = new Error(errMsgs.length
+      ? `smartctl could not read this drive: ${errMsgs[0]}. This is common with USB enclosure bridge chips that don't pass SMART commands through — try a different -d type from smartctl --scan, a different adapter, or connect the drive directly.`
+      : 'smartctl returned no readable SMART data for this drive.');
+    err.userMessage = err.message;
+    throw err;
+  }
+
   return out;
 }
 
@@ -6464,8 +6478,8 @@ const adminServer = http.createServer(async (req, res) => {
     try {
       const fields = parseSmartctlJson(body.output || '');
       return json(res, 200, { ok: true, fields });
-    } catch {
-      return json(res, 400, { error: 'parse_failed' });
+    } catch (e) {
+      return json(res, 400, { error: 'parse_failed', message: e.userMessage || null });
     }
   }
   if (req.method === 'GET' && url.pathname === '/api/admin/reviews') {
