@@ -3036,7 +3036,18 @@ function blankHddReport() {
 }
 
 const SMARTCTL_SCAN_CMD = 'sudo smartctl --scan';
-const SMARTCTL_READ_CMD = 'sudo smartctl -a -j /dev/sdX';
+// Tries auto-detect, then forces SATA/NVMe/SCSI passthrough in turn and keeps the first
+// attempt that actually returns SMART data — works across USB bridge chips without the
+// tech needing to know or guess which -d type the enclosure needs.
+const SMARTCTL_READ_CMD = [
+  'D=/dev/sdX',
+  'for t in "" sat nvme scsi; do',
+  '  if [ -z "$t" ]; then FLAG=""; else FLAG="-d $t"; fi',
+  '  OUT=$(sudo smartctl -a -j $FLAG "$D" 2>/dev/null)',
+  '  echo "$OUT" | grep -qE "smart_status|nvme_smart_health_information_log" && break',
+  'done',
+  'echo "$OUT"',
+].join('\n');
 
 function AdminHddReports() {
   const [reports, setReports] = useState([]);
@@ -3142,26 +3153,26 @@ function AdminHddReports() {
             <p style={{fontSize:12, color:'var(--ink-2)', margin:'6px 0 8px'}}>
               On the bench PC, find the drive then read its full S.M.A.R.T. data as JSON. Paste the output below and click Autofill.
             </p>
-            <div style={{display:'grid', gap:6, marginBottom:10}}>
-              {[
-                { cmd: SMARTCTL_SCAN_CMD, help: '1. List drives to find the device (e.g. /dev/sda, /dev/nvme0)' },
-                { cmd: SMARTCTL_READ_CMD, help: '2. Read it — replace sdX with the device found above' },
-              ].map(({cmd, help}) => (
-                <div key={cmd}>
-                  <div style={{fontSize:11, color:'var(--ink-3)', marginBottom:2}}>{help}</div>
-                  <div className="row-flex" style={{gap:6}}>
-                    <code className="mono" style={{flex:1, padding:'6px 8px', background:'var(--paper)', border:'1px solid var(--line)', fontSize:12, overflowX:'auto', whiteSpace:'pre'}}>{cmd}</code>
-                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => copyCmd(cmd)}>Copy</button>
-                  </div>
+            <div style={{display:'grid', gap:10, marginBottom:10}}>
+              <div>
+                <div style={{fontSize:11, color:'var(--ink-3)', marginBottom:2}}>1. List drives to find the device (e.g. /dev/sda, /dev/nvme0)</div>
+                <div className="row-flex" style={{gap:6}}>
+                  <code className="mono" style={{flex:1, padding:'6px 8px', background:'var(--paper)', border:'1px solid var(--line)', fontSize:12, overflowX:'auto', whiteSpace:'pre'}}>{SMARTCTL_SCAN_CMD}</code>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => copyCmd(SMARTCTL_SCAN_CMD)}>Copy</button>
                 </div>
-              ))}
+              </div>
+              <div>
+                <div style={{fontSize:11, color:'var(--ink-3)', marginBottom:2}}>2. Read it — set D to the device found above, then paste the whole block into the terminal. It tries auto-detect, SATA, NVMe and SCSI passthrough in turn and keeps whichever one actually returns data, so it works through USB bridge chips without you needing to know the right -d type.</div>
+                <pre className="mono" style={{margin:0, padding:'8px', background:'var(--paper)', border:'1px solid var(--line)', fontSize:12, overflowX:'auto', whiteSpace:'pre'}}>{SMARTCTL_READ_CMD}</pre>
+                <button type="button" className="btn btn-ghost btn-sm" style={{marginTop:4}} onClick={() => copyCmd(SMARTCTL_READ_CMD)}>Copy</button>
+              </div>
             </div>
             <textarea className="textarea" rows={4} value={smartPaste} onChange={e=>setSmartPaste(e.target.value)} placeholder="Paste the full smartctl JSON output here…"/>
             <button type="button" className="btn btn-rust btn-sm" style={{marginTop:8}} disabled={!smartPaste.trim() || smartParsing} onClick={doParseSmart}>
               {smartParsing ? 'Parsing…' : 'Autofill from output'}
             </button>
             <p style={{fontSize:11, color:'var(--ink-3)', margin:'8px 0 0'}}>
-              Requires smartmontools (<code className="mono">sudo apt install smartmontools</code> if not already installed). Fills model, serial, capacity, interface, SMART status and counters — form factor, manufacture date, physical condition and the verdict still need your eyes on the drive.
+              Requires smartmontools (<code className="mono">sudo apt install smartmontools</code> if not already installed). Fills model, serial, capacity, interface, SMART status and counters — form factor, manufacture date, physical condition and the verdict still need your eyes on the drive. If all four attempts fail, paste whatever it printed anyway — the error message tells you what to try next.
             </p>
           </div>
 
