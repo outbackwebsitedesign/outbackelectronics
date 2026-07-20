@@ -3369,6 +3369,7 @@ function buildHddReportPdf(report, shop) {
       degraded: { bg: '#fbf1de', fg: '#8a6116', label: 'DEGRADED' },
       failing:  { bg: '#fbe9e4', fg: RUST,      label: 'FAILING' },
     };
+    const pageBottom = doc.page.height - 50; // matches the bottom margin
     const shopName = shop.tradingName || shop.name || 'Outback Electronics';
     const shopAddress = shop.address || [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ');
     const logoPath = path.join(__dirname, 'assets', 'logo.png');
@@ -3464,7 +3465,7 @@ function buildHddReportPdf(report, shop) {
     }
     y += 8;
 
-    if (y > 620) { doc.addPage(); y = 50; }
+    if (y > pageBottom - 90) { doc.addPage(); y = 50; }
 
     if (report.conditionNotes) {
       y = sectionTitle('Physical Condition', y);
@@ -3472,7 +3473,7 @@ function buildHddReportPdf(report, shop) {
       y = doc.y + 20;
     }
 
-    if (y > 640) { doc.addPage(); y = 50; }
+    if (y > pageBottom - 50) { doc.addPage(); y = 50; }
 
     const verdict = VERDICT_STYLE[report.verdict] || VERDICT_STYLE.healthy;
     doc.rect(50, y - 6, 495, 28).fill(verdict.bg);
@@ -3496,7 +3497,7 @@ function buildHddReportPdf(report, shop) {
     const signerName = report.signedBy || report.technician || '';
     if (signerName) {
       y += 10;
-      if (y > 680) { doc.addPage(); y = 50; }
+      if (y > pageBottom - 70) { doc.addPage(); y = 50; }
       doc.font('Helvetica-Oblique').fontSize(20).fillColor('#222').text(signerName, 50, y, { width: 300 });
       const lineY = y + 30;
       doc.moveTo(50, lineY).lineTo(300, lineY).strokeColor('#999').stroke();
