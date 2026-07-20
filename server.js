@@ -3221,6 +3221,85 @@ function buildBASData(fromStr, toStr) {
   };
 }
 
+function parseSmartctlJson(raw) {
+  let text = String(raw || '').trim();
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start === -1 || end === -1 || end < start) throw new Error('no_json');
+  text = text.slice(start, end + 1);
+  const j = JSON.parse(text);
+
+  const out = {};
+  const humanBytes = (n) => {
+    if (n == null) return undefined;
+    const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+    let v = Number(n), i = 0;
+    while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+    return `${v < 10 && i > 0 ? v.toFixed(2) : Math.round(v)} ${units[i]}`;
+  };
+  const ataAttr = (id) => {
+    const table = j.ata_smart_attributes && j.ata_smart_attributes.table;
+    if (!Array.isArray(table)) return null;
+    return table.find(a => a.id === id) || null;
+  };
+
+  if (j.model_name) out.driveModel = j.model_name;
+  if (j.serial_number) out.driveSerial = j.serial_number;
+  if (j.user_capacity && j.user_capacity.bytes) out.driveCapacity = humanBytes(j.user_capacity.bytes);
+  if (j.form_factor && j.form_factor.name) out.driveFormFactor = j.form_factor.name;
+
+  const protocol = j.device && j.device.protocol;
+  if (protocol === 'NVMe') out.driveInterface = 'NVMe';
+  else if (protocol === 'ATA' || protocol === 'SATA') out.driveInterface = (j.sata_version && j.sata_version.string) || 'SATA';
+  else if (protocol) out.driveInterface = protocol;
+
+  if (j.smart_status && typeof j.smart_status.passed === 'boolean') {
+    out.smartStatus = j.smart_status.passed ? 'PASS' : 'FAIL';
+  }
+
+  if (j.power_on_time && j.power_on_time.hours != null) out.powerOnHours = j.power_on_time.hours;
+  else { const a = ataAttr(9); if (a) out.powerOnHours = a.raw.value; }
+
+  if (j.power_cycle_count != null) out.powerCycles = j.power_cycle_count;
+  else { const a = ataAttr(12); if (a) out.powerCycles = a.raw.value; }
+
+  if (j.temperature && j.temperature.current != null) out.temperature = j.temperature.current;
+  else { const a = ataAttr(194); if (a) out.temperature = a.raw.value; }
+
+  const realloc = ataAttr(5); if (realloc) out.reallocatedSectors = realloc.raw.value;
+  const pending = ataAttr(197); if (pending) out.pendingSectors = pending.raw.value;
+  const uncorrect = ataAttr(198); if (uncorrect) out.uncorrectableSectors = uncorrect.raw.value;
+
+  const noteLines = [];
+  if (j.firmware_version) noteLines.push(`Firmware: ${j.firmware_version}`);
+  if (typeof j.rotation_rate === 'number') {
+    noteLines.push(j.rotation_rate === 0 ? 'Solid state drive (no moving parts)' : `Rotational speed: ${j.rotation_rate} RPM`);
+  }
+  if (j.nvme_smart_health_information_log) {
+    const n = j.nvme_smart_health_information_log;
+    if (n.media_errors != null) out.uncorrectableSectors = n.media_errors;
+    if (n.power_on_hours != null && out.powerOnHours == null) out.powerOnHours = n.power_on_hours;
+    if (n.power_cycles != null && out.powerCycles == null) out.powerCycles = n.power_cycles;
+    if (n.critical_warning != null) noteLines.push(`Critical warning flags: ${n.critical_warning}`);
+    if (n.available_spare != null) noteLines.push(`Available spare: ${n.available_spare}% (threshold ${n.available_spare_threshold ?? '—'}%)`);
+    if (n.percentage_used != null) noteLines.push(`Percentage used (wear): ${n.percentage_used}%`);
+    if (n.unsafe_shutdowns != null) noteLines.push(`Unsafe shutdowns: ${n.unsafe_shutdowns}`);
+  }
+  const table = j.ata_smart_attributes && j.ata_smart_attributes.table;
+  if (Array.isArray(table)) {
+    const failing = table.filter(a => a.when_failed);
+    if (failing.length) noteLines.push(`Attributes at/below threshold: ${failing.map(a => a.name).join(', ')}`);
+  }
+  const selfTest = j.ata_smart_self_test_log && j.ata_smart_self_test_log.standard;
+  if (selfTest && Array.isArray(selfTest.table) && selfTest.table.length) {
+    const last = selfTest.table[0];
+    noteLines.push(`Last self-test: ${(last.type && last.type.string) || 'test'} — ${(last.status && last.status.string) || 'unknown'}`);
+  }
+  if (noteLines.length) out.smartNotes = noteLines.join('\n');
+
+  return out;
+}
+
 function buildHddReportPdf(report, shop) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 50 });
@@ -6378,6 +6457,16 @@ const adminServer = http.createServer(async (req, res) => {
   if (req.method === 'GET' && url.pathname === '/api/admin/hdd-reports/next-id') {
     const session = requireRole(req, res, 'staff'); if (!session) return;
     return json(res, 200, { id: nextHddReportId(readHddReports()) });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/hdd-reports/parse-smart') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    try {
+      const fields = parseSmartctlJson(body.output || '');
+      return json(res, 200, { ok: true, fields });
+    } catch {
+      return json(res, 400, { error: 'parse_failed' });
+    }
   }
   if (req.method === 'GET' && url.pathname === '/api/admin/reviews') {
     const session = requireRole(req, res, 'staff'); if (!session) return;

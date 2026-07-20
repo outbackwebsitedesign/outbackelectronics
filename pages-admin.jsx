@@ -2949,12 +2949,34 @@ function blankHddReport() {
   };
 }
 
+const SMARTCTL_SCAN_CMD = 'sudo smartctl --scan';
+const SMARTCTL_READ_CMD = 'sudo smartctl -a -j /dev/sdX';
+
 function AdminHddReports() {
   const [reports, setReports] = useState([]);
   const [edit, setEdit] = useState(null);
   const [form, setForm] = useState({});
+  const [smartPaste, setSmartPaste] = useState('');
+  const [smartParsing, setSmartParsing] = useState(false);
   const dirty = useDirtyTracker(form, edit);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const copyCmd = (cmd) => {
+    navigator.clipboard?.writeText(cmd).then(() => adminToast('Command copied.', 'success')).catch(() => adminToast('Could not copy command.'));
+  };
+
+  const doParseSmart = async () => {
+    if (!smartPaste.trim()) return;
+    setSmartParsing(true);
+    const r = await fetch('/api/admin/hdd-reports/parse-smart', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ output: smartPaste }) }).catch(()=>null);
+    setSmartParsing(false);
+    if (!r || !r.ok) { adminToast('Could not parse that output — make sure you ran smartctl with the -j flag.'); return; }
+    const d = await r.json();
+    const n = Object.keys(d.fields || {}).length;
+    if (!n) { adminToast('No recognisable fields found in that output.'); return; }
+    setForm(f => ({ ...f, ...d.fields }));
+    adminToast(`Autofilled ${n} field${n===1?'':'s'} from smartctl.`, 'success');
+  };
 
   useEffect(() => {
     fetch('/api/admin/hdd-reports', { credentials:'include' })
@@ -3028,6 +3050,34 @@ function AdminHddReports() {
             </div>
           </div>}
         >
+          <div style={{padding:14, background:'var(--bg-elev)', border:'1px solid var(--line)', marginBottom:18}}>
+            <span className="eyebrow">Autofill from smartctl (Linux)</span>
+            <p style={{fontSize:12, color:'var(--ink-2)', margin:'6px 0 8px'}}>
+              On the bench PC, find the drive then read its full S.M.A.R.T. data as JSON. Paste the output below and click Autofill.
+            </p>
+            <div style={{display:'grid', gap:6, marginBottom:10}}>
+              {[
+                { cmd: SMARTCTL_SCAN_CMD, help: '1. List drives to find the device (e.g. /dev/sda, /dev/nvme0)' },
+                { cmd: SMARTCTL_READ_CMD, help: '2. Read it — replace sdX with the device found above' },
+              ].map(({cmd, help}) => (
+                <div key={cmd}>
+                  <div style={{fontSize:11, color:'var(--ink-3)', marginBottom:2}}>{help}</div>
+                  <div className="row-flex" style={{gap:6}}>
+                    <code className="mono" style={{flex:1, padding:'6px 8px', background:'var(--paper)', border:'1px solid var(--line)', fontSize:12, overflowX:'auto', whiteSpace:'pre'}}>{cmd}</code>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => copyCmd(cmd)}>Copy</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <textarea className="textarea" rows={4} value={smartPaste} onChange={e=>setSmartPaste(e.target.value)} placeholder="Paste the full smartctl JSON output here…"/>
+            <button type="button" className="btn btn-rust btn-sm" style={{marginTop:8}} disabled={!smartPaste.trim() || smartParsing} onClick={doParseSmart}>
+              {smartParsing ? 'Parsing…' : 'Autofill from output'}
+            </button>
+            <p style={{fontSize:11, color:'var(--ink-3)', margin:'8px 0 0'}}>
+              Requires smartmontools (<code className="mono">sudo apt install smartmontools</code> if not already installed). Fills model, serial, capacity, interface, SMART status and counters — form factor, manufacture date, physical condition and the verdict still need your eyes on the drive.
+            </p>
+          </div>
+
           <label className="field"><span className="label">Report type</span>
             <select className="select" value={form.type||'repair'} onChange={e=>set('type', e.target.value)}>
               <option value="repair">Repair job (customer recommendation)</option>
