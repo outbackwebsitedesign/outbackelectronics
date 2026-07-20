@@ -6677,7 +6677,10 @@ const adminServer = http.createServer(async (req, res) => {
       fs.mkdirSync(signaturesDir, { recursive: true });
       fs.writeFileSync(path.join(signaturesDir, `${session.staffId}.png`), outBuf);
       return json(res, 200, { url: `/assets/signatures/${session.staffId}.png` });
-    } catch { return json(res, 500, { error: 'upload_failed' }); }
+    } catch (err) {
+      console.error('[staff/signature] upload failed →', err && err.message, err && err.stack);
+      return json(res, 500, { error: 'upload_failed' });
+    }
   }
   if (req.method === 'POST' && url.pathname === '/api/admin/staff/signature/delete') {
     const session = requireRole(req, res, 'staff'); if (!session) return;

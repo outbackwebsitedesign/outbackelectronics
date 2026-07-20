@@ -306,7 +306,7 @@ async function saveSignature(dataUrl) {
     body: JSON.stringify({ data: dataUrl }),
   });
   const d = await r.json().catch(() => ({}));
-  if (!r.ok || !d.url) throw new Error('upload failed');
+  if (!r.ok || !d.url) throw new Error(`${r.status} ${d.error || 'upload failed'}`);
   return d.url;
 }
 async function deleteSignature() {
@@ -9401,8 +9401,8 @@ function SettingsStaffTab({ staffMembers, staffForm, setStaffForm, staffBusy, on
       setSigExists(true);
       setShowPad(false);
       adminToast('Signature saved.', 'success');
-    } catch {
-      adminToast('Failed to save signature.');
+    } catch (err) {
+      adminToast(`Failed to save signature (${err.message}).`);
     } finally {
       setSigSaving(false);
     }
