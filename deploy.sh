@@ -66,6 +66,13 @@ sudo chmod g+s "$APP_DIR"
 sudo chown -R "$SERVICE_USER:$APP_GROUP" "$APP_DIR/assets/uploads"
 sudo chmod -R ug+rwX "$APP_DIR/assets/uploads"
 
+# Ensure the signatures directory (technician e-signatures) is writable by the
+# service user so signature capture succeeds at runtime. Created here since it
+# may not exist yet on a server that predates this feature.
+sudo mkdir -p "$APP_DIR/assets/signatures"
+sudo chown -R "$SERVICE_USER:$APP_GROUP" "$APP_DIR/assets/signatures"
+sudo chmod -R ug+rwX "$APP_DIR/assets/signatures"
+
 # Make existing .db, .log, and .tmp files in the app root group-writable.
 # (node_modules and dist/ are deliberately excluded — max-depth 1.)
 sudo find "$APP_DIR" -maxdepth 1 \( -name "*.db" -o -name "*.log" -o -name "*.tmp" \) \
