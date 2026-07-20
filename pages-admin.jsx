@@ -296,6 +296,83 @@ async function uploadImage(file) {
   });
 }
 
+// Kept as PNG server-side (not converted to WebP like uploadImage) — pdfkit can only
+// embed JPEG/PNG on the certificate PDF, and PNG preserves the transparent background
+// a canvas signature pad produces. The file is always saved under the caller's own
+// staffId server-side, so there's nothing client-supplied to restrict here.
+async function saveSignature(dataUrl) {
+  const r = await fetch('/api/admin/staff/signature', {
+    method: 'POST', headers: postHeaders(), credentials: 'include',
+    body: JSON.stringify({ data: dataUrl }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || !d.url) throw new Error('upload failed');
+  return d.url;
+}
+async function deleteSignature() {
+  const r = await fetch('/api/admin/staff/signature/delete', { method:'POST', headers:postHeaders(), credentials:'include' });
+  return r.ok;
+}
+
+// Signature capture pad — works with mouse, touch, and stylus (e.g. S Pen) via the
+// Pointer Events API, which unifies all three input types with no special-casing.
+function SignaturePad({ onSave, saving }) {
+  const canvasRef = React.useRef(null);
+  const drawingRef = React.useRef(false);
+  const lastPointRef = React.useRef(null);
+  const [hasDrawn, setHasDrawn] = useState(false);
+
+  useEffect(() => {
+    const ctx = canvasRef.current.getContext('2d');
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#1a1a1a';
+  }, []);
+
+  const posFromEvent = (e) => {
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) * (canvas.width / rect.width),
+      y: (e.clientY - rect.top) * (canvas.height / rect.height),
+    };
+  };
+
+  const start = (e) => { e.preventDefault(); drawingRef.current = true; lastPointRef.current = posFromEvent(e); setHasDrawn(true); };
+  const move = (e) => {
+    if (!drawingRef.current) return;
+    e.preventDefault();
+    const ctx = canvasRef.current.getContext('2d');
+    const pos = posFromEvent(e);
+    ctx.beginPath();
+    ctx.moveTo(lastPointRef.current.x, lastPointRef.current.y);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+    lastPointRef.current = pos;
+  };
+  const end = () => { drawingRef.current = false; };
+  const clear = () => {
+    const canvas = canvasRef.current;
+    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+    setHasDrawn(false);
+  };
+  const save = () => onSave(canvasRef.current.toDataURL('image/png'));
+
+  return (
+    <div>
+      <canvas ref={canvasRef} width={600} height={200}
+        style={{width:'100%', maxWidth:600, height:150, background:'#fff', border:'1px solid var(--line)', touchAction:'none', cursor:'crosshair', display:'block'}}
+        onPointerDown={start} onPointerMove={move} onPointerUp={end} onPointerLeave={end} onPointerCancel={end}
+      />
+      <div className="row-flex" style={{gap:8, marginTop:8}}>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={clear} disabled={!hasDrawn}>Clear</button>
+        <button type="button" className="btn btn-rust btn-sm" disabled={!hasDrawn || saving} onClick={save}>{saving ? 'Saving…' : 'Save signature'}</button>
+      </div>
+    </div>
+  );
+}
+
 // ============================================================
 // LOGIN
 // ============================================================
@@ -9305,7 +9382,37 @@ function SettingsGeneralTab({ shop, setShop, savedShop, announcement, setAnnounc
 }
 SettingsGeneralTab = React.memo(SettingsGeneralTab);
 
-function SettingsStaffTab({ staffMembers, staffForm, setStaffForm, staffBusy, onSave, onDelete, onOpenForm }) {
+function SettingsStaffTab({ staffMembers, staffForm, setStaffForm, staffBusy, onSave, onDelete, onOpenForm, sessionInfo = {} }) {
+  const [sigSaving, setSigSaving] = useState(false);
+  const [sigVersion, setSigVersion] = useState(() => Date.now());
+  const [sigExists, setSigExists] = useState(true); // optimistic; flips false if the image 404s
+  const [showPad, setShowPad] = useState(false);
+  const isOwnRecord = staffForm && staffForm.id && staffForm.id === sessionInfo.staffId;
+
+  useEffect(() => {
+    if (isOwnRecord) { setSigExists(true); setSigVersion(Date.now()); setShowPad(false); }
+  }, [isOwnRecord, staffForm && staffForm.id]);
+
+  const handleSaveSignature = async (dataUrl) => {
+    setSigSaving(true);
+    try {
+      await saveSignature(dataUrl);
+      setSigVersion(Date.now());
+      setSigExists(true);
+      setShowPad(false);
+      adminToast('Signature saved.', 'success');
+    } catch {
+      adminToast('Failed to save signature.');
+    } finally {
+      setSigSaving(false);
+    }
+  };
+  const handleRemoveSignature = async () => {
+    const ok = await deleteSignature();
+    if (ok) { setSigExists(false); setSigVersion(Date.now()); adminToast('Signature removed.', 'success'); }
+    else adminToast('Failed to remove signature.');
+  };
+
   return (
     <div style={{display:'grid', gap:24}}>
       <div style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24}}>
@@ -9345,6 +9452,27 @@ function SettingsStaffTab({ staffMembers, staffForm, setStaffForm, staffBusy, on
             </label>
             <label className="field"><span className="label">PIN{staffForm.id ? ' (leave blank to keep current)' : ''}</span><input className="input" type="password" inputMode="numeric" maxLength={6} value={staffForm.pin||''} onChange={e=>setStaffForm({...staffForm,pin:e.target.value.replace(/\D/g,'').slice(0,6)})} placeholder={staffForm.id ? '4–6 digits' : '4–6 digits (required)'}/></label>
             <label className="field"><span className="label">Avatar colour</span><input type="color" value={staffForm.color||'#d7c7a6'} onChange={e=>setStaffForm({...staffForm,color:e.target.value})} style={{width:48,height:32,padding:2,border:'1px solid var(--line)',borderRadius:4,cursor:'pointer'}}/></label>
+
+            {isOwnRecord && (
+              <div className="field">
+                <span className="label">Signature</span>
+                {sigExists && !showPad && (
+                  <div style={{display:'flex', alignItems:'center', gap:12}}>
+                    <img src={`/assets/signatures/${sessionInfo.staffId}.png?v=${sigVersion}`} alt="Your signature" onError={()=>setSigExists(false)} style={{height:40, background:'#fff', border:'1px solid var(--line)', padding:4}}/>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={()=>setShowPad(true)}>Re-sign</button>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={handleRemoveSignature}>Remove</button>
+                  </div>
+                )}
+                {(!sigExists || showPad) && (
+                  <>
+                    <SignaturePad onSave={handleSaveSignature} saving={sigSaving} />
+                    {sigExists && <button type="button" className="btn btn-ghost btn-sm" style={{marginTop:6}} onClick={()=>setShowPad(false)}>Cancel</button>}
+                  </>
+                )}
+                <span style={{fontSize:11, color:'var(--ink-3)', marginTop:4, display:'block'}}>Draw with a mouse, finger, or stylus. Used to sign hard drive condition reports and other certificates.</span>
+              </div>
+            )}
+
             <div className="row-flex" style={{gap:8, marginTop:4}}>
               <button className="btn btn-rust btn-sm" disabled={!staffForm.name.trim()||staffBusy} onClick={onSave}>{staffBusy?'Saving…':'Save'}</button>
               <button type="button" className="btn btn-ghost btn-sm" onClick={()=>setStaffForm(null)}>Cancel</button>
@@ -9808,6 +9936,7 @@ function AdminSettingsFull({ sessionInfo = {} }) {
           staffMembers={staffMembers}
           staffForm={staffForm} setStaffForm={setStaffForm} staffBusy={staffBusy}
           onSave={saveStaffMember} onDelete={deleteStaffMember} onOpenForm={openStaffForm}
+          sessionInfo={sessionInfo}
         />
       )}
 

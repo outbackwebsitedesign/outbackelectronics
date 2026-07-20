@@ -3498,8 +3498,21 @@ function buildHddReportPdf(report, shop) {
     if (signerName) {
       y += 10;
       if (y > pageBottom - 70) { doc.addPage(); y = 50; }
-      doc.font('Helvetica-Oblique').fontSize(20).fillColor('#222').text(signerName, 50, y, { width: 300 });
-      const lineY = y + 30;
+
+      let signatureImagePath = null;
+      if (report.signedByStaffId) {
+        const candidate = path.join(__dirname, 'assets/signatures', `${report.signedByStaffId}.png`);
+        if (fs.existsSync(candidate)) signatureImagePath = candidate;
+      }
+
+      let lineY;
+      if (signatureImagePath) {
+        try { doc.image(signatureImagePath, 50, y, { fit: [180, 50] }); lineY = y + 55; }
+        catch { doc.font('Helvetica-Oblique').fontSize(20).fillColor('#222').text(signerName, 50, y, { width: 300 }); lineY = y + 30; }
+      } else {
+        doc.font('Helvetica-Oblique').fontSize(20).fillColor('#222').text(signerName, 50, y, { width: 300 });
+        lineY = y + 30;
+      }
       doc.moveTo(50, lineY).lineTo(300, lineY).strokeColor('#999').stroke();
       doc.font('Helvetica').fontSize(9).fillColor('#888').text(`Technician: ${signerName}`, 50, lineY + 6);
       if (report.signedAt) {
@@ -6634,6 +6647,45 @@ const adminServer = http.createServer(async (req, res) => {
     } catch { return json(res, 500, { error: 'upload_failed' }); }
   }
 
+  if (req.method === 'POST' && url.pathname === '/api/admin/staff/signature') {
+    const session = requireRole(req, res, 'staff'); if (!session) return;
+    if (!session.staffId) return json(res, 400, { error: 'no_staff_record' });
+    let body; try { body = await readJson(req, 15e6); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    try {
+      const RASTER_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+      const MAX_BYTES = 5 * 1024 * 1024; // 5 MB — a signature is a small image
+      const dataUri = body.data || '';
+      const mimeMatch = dataUri.match(/^data:([^;]+);base64,/);
+      if (!mimeMatch) return json(res, 400, { error: 'invalid_data_uri' });
+      const mime = mimeMatch[1].toLowerCase();
+      if (!RASTER_MIME.has(mime)) return json(res, 400, { error: 'unsupported_mime_type' });
+      const raw = dataUri.slice(mimeMatch[0].length);
+      const buf = Buffer.from(raw, 'base64');
+      if (buf.length > MAX_BYTES) return json(res, 400, { error: 'file_too_large' });
+
+      // Kept as PNG (not converted to WebP like the general upload endpoint) — pdfkit
+      // can only embed JPEG/PNG in the certificate PDF, and PNG preserves the
+      // transparent background a signature stamp needs to look right on the page.
+      const outBuf = await sharp(buf)
+        .resize({ width: 600, height: 240, fit: 'inside', withoutEnlargement: true })
+        .png()
+        .toBuffer();
+
+      // Filename is derived entirely from the authenticated session — a tech can only
+      // ever overwrite their own signature file, never anyone else's, by construction.
+      const signaturesDir = path.join(__dirname, 'assets/signatures');
+      fs.mkdirSync(signaturesDir, { recursive: true });
+      fs.writeFileSync(path.join(signaturesDir, `${session.staffId}.png`), outBuf);
+      return json(res, 200, { url: `/assets/signatures/${session.staffId}.png` });
+    } catch { return json(res, 500, { error: 'upload_failed' }); }
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/staff/signature/delete') {
+    const session = requireRole(req, res, 'staff'); if (!session) return;
+    if (!session.staffId) return json(res, 400, { error: 'no_staff_record' });
+    try { fs.unlinkSync(path.join(__dirname, 'assets/signatures', `${session.staffId}.png`)); } catch {}
+    return json(res, 200, { ok: true });
+  }
+
   if (req.method === 'POST' && url.pathname === '/api/admin/upload/delete') {
     const session = requireRole(req, res, 'staff'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
@@ -7359,6 +7411,7 @@ const adminServer = http.createServer(async (req, res) => {
     // Signature is tied to the authenticated session, not the client-supplied body —
     // it can't be spoofed by editing the "technician" text field.
     body.signedBy = session.username;
+    body.signedByStaffId = session.staffId || null;
     body.signedAt = new Date().toISOString();
     if (idx >= 0) { reports[idx] = body; } else {
       body.id = nextHddReportId(reports);
