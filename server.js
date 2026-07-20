@@ -3297,6 +3297,16 @@ function parseSmartctlJson(raw) {
   }
   if (noteLines.length) out.smartNotes = noteLines.join('\n');
 
+  // Suggest an overall verdict from what we found. It's a starting point, not a
+  // certification — a drive can pass SMART and still fail on physical inspection,
+  // so the tech can still override it before saving.
+  const nvmeLog = j.nvme_smart_health_information_log;
+  const hasBadSectors = out.reallocatedSectors > 0 || out.pendingSectors > 0 || out.uncorrectableSectors > 0;
+  const nvmeWarning = !!(nvmeLog && ((nvmeLog.critical_warning && nvmeLog.critical_warning !== 0) || (nvmeLog.percentage_used != null && nvmeLog.percentage_used >= 80)));
+  if (out.smartStatus === 'FAIL') out.verdict = 'failing';
+  else if (out.smartStatus === 'PASS' && (hasBadSectors || nvmeWarning)) out.verdict = 'degraded';
+  else if (out.smartStatus === 'PASS') out.verdict = 'healthy';
+
   // The JSON can be well-formed but still carry no real SMART data — e.g. a USB bridge
   // chip that smartctl detects but can't actually pass NVMe/ATA commands through. Surface
   // that as a specific failure rather than reporting a hollow "success" with 0-1 fields.

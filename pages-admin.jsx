@@ -862,7 +862,7 @@ function Drawer({ open, onClose, title, children, footer, dirty = false }) {
             </button>
           </div>
         </div>
-        <div style={{flex:1, overflowY:'auto', padding:24}}>{children}</div>
+        <div style={{flex:1, minWidth:0, overflowY:'auto', overflowX:'hidden', padding:24}}>{children}</div>
         {footer && <div style={{padding:'14px 24px', borderTop:'1px solid var(--line)', background:'var(--bg-elev)'}}>{footer}</div>}
       </div>
     </div>
@@ -3153,17 +3153,17 @@ function AdminHddReports() {
             <p style={{fontSize:12, color:'var(--ink-2)', margin:'6px 0 8px'}}>
               On the bench PC, find the drive then read its full S.M.A.R.T. data as JSON. Paste the output below and click Autofill.
             </p>
-            <div style={{display:'grid', gap:10, marginBottom:10}}>
-              <div>
+            <div style={{display:'grid', gridTemplateColumns:'minmax(0, 1fr)', gap:10, marginBottom:10}}>
+              <div style={{minWidth:0}}>
                 <div style={{fontSize:11, color:'var(--ink-3)', marginBottom:2}}>1. List drives to find the device (e.g. /dev/sda, /dev/nvme0)</div>
-                <div className="row-flex" style={{gap:6}}>
-                  <code className="mono" style={{flex:1, padding:'6px 8px', background:'var(--paper)', border:'1px solid var(--line)', fontSize:12, overflowX:'auto', whiteSpace:'pre'}}>{SMARTCTL_SCAN_CMD}</code>
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => copyCmd(SMARTCTL_SCAN_CMD)}>Copy</button>
+                <div className="row-flex" style={{gap:6, width:'100%', flexWrap:'nowrap'}}>
+                  <code className="mono" style={{flex:1, minWidth:0, padding:'6px 8px', background:'var(--paper)', border:'1px solid var(--line)', fontSize:12, overflowX:'auto', whiteSpace:'pre'}}>{SMARTCTL_SCAN_CMD}</code>
+                  <button type="button" className="btn btn-ghost btn-sm" style={{flexShrink:0}} onClick={() => copyCmd(SMARTCTL_SCAN_CMD)}>Copy</button>
                 </div>
               </div>
-              <div>
+              <div style={{minWidth:0}}>
                 <div style={{fontSize:11, color:'var(--ink-3)', marginBottom:2}}>2. Read it — set D to the device found above, then paste the whole block into the terminal. It tries auto-detect, SATA, NVMe and SCSI passthrough in turn and keeps whichever one actually returns data, so it works through USB bridge chips without you needing to know the right -d type.</div>
-                <pre className="mono" style={{margin:0, padding:'8px', background:'var(--paper)', border:'1px solid var(--line)', fontSize:12, overflowX:'auto', whiteSpace:'pre'}}>{SMARTCTL_READ_CMD}</pre>
+                <pre className="mono" style={{margin:0, minWidth:0, padding:'8px', background:'var(--paper)', border:'1px solid var(--line)', fontSize:12, overflowX:'auto', whiteSpace:'pre'}}>{SMARTCTL_READ_CMD}</pre>
                 <button type="button" className="btn btn-ghost btn-sm" style={{marginTop:4}} onClick={() => copyCmd(SMARTCTL_READ_CMD)}>Copy</button>
               </div>
             </div>
@@ -3172,7 +3172,7 @@ function AdminHddReports() {
               {smartParsing ? 'Parsing…' : 'Autofill from output'}
             </button>
             <p style={{fontSize:11, color:'var(--ink-3)', margin:'8px 0 0'}}>
-              Requires smartmontools (<code className="mono">sudo apt install smartmontools</code> if not already installed). Fills model, serial, capacity, interface, SMART status and counters — form factor, manufacture date, physical condition and the verdict still need your eyes on the drive. If all four attempts fail, paste whatever it printed anyway — the error message tells you what to try next.
+              Requires smartmontools (<code className="mono">sudo apt install smartmontools</code> if not already installed). Fills model, serial, capacity, interface, SMART status, counters, and suggests an overall verdict from the SMART data — form factor, manufacture date and physical condition still need your eyes on the drive, and the suggested verdict is a starting point, not a certification, so check it against what you actually see before saving. If all four attempts fail, paste whatever it printed anyway — the error message tells you what to try next.
             </p>
           </div>
 
