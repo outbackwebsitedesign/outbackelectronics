@@ -1876,7 +1876,7 @@ function getMailer() {
   });
 }
 
-async function sendEmail({ to, subject, html, replyTo }) {
+async function sendEmail({ to, subject, html, replyTo, attachments }) {
   if (!to) return;
   const transport = getMailer();
   if (!transport) return;
@@ -1885,6 +1885,7 @@ async function sendEmail({ to, subject, html, replyTo }) {
   const text = html.replace(/<[^>]+>/g, '').replace(/\n{3,}/g, '\n\n').trim();
   const msg = { from: fromAddress, to, subject, html, text };
   if (replyTo) msg.replyTo = replyTo;
+  if (attachments && attachments.length) msg.attachments = attachments;
   try {
     await transport.sendMail(msg);
   } catch (err) {
@@ -1942,6 +1943,21 @@ function emailOrderConfirmation({ orderId, customerName, amountAud, items }) {
       </div>
       <p>Our team will be in touch shortly. For pickups or repairs, please bring this confirmation.</p>
       <a class="btn" href="${getSiteUrl()}/orders">View your orders →</a>
+    `),
+  };
+}
+
+function emailHddCertificate({ orderId, customerName, driveModel }) {
+  const name = customerName ? `, ${escHtml(customerName.split(' ')[0])}` : '';
+  return {
+    subject: `Your hard drive condition certificate — ${orderId}`,
+    html: emailHtml('Condition certificate', `
+      <p>Thanks${name}! Attached is the S.M.A.R.T. condition certificate for the drive in your order.</p>
+      <div class="detail">
+        <dt>ORDER</dt><dd>${escHtml(orderId)}</dd>
+        ${driveModel ? `<dt>DRIVE</dt><dd>${escHtml(driveModel)}</dd>` : ''}
+      </div>
+      <p>Keep this for your records — it covers the drive's condition and S.M.A.R.T. health at the time of sale.</p>
     `),
   };
 }
@@ -5550,6 +5566,27 @@ const mainServer = http.createServer(async (req, res) => {
           if (stockChanged) writeProducts(prods);
         }
 
+        // If a purchased line is linked to a "for sale" HDD condition report, flag the
+        // order so staff know a printed certificate is owed, and email the PDF now.
+        let hddCertificate = null;
+        if (stockItems.length > 0) {
+          const hddReports = readHddReports();
+          hddCertificate = hddReports.find(r => r.type === 'sale' && stockItems.some(si =>
+            r.linkedProductId && r.linkedProductId === si.productId &&
+            (!r.linkedVariantSku || r.linkedVariantSku === si.variantSku)
+          )) || null;
+          if (hddCertificate) {
+            const updatedOrders = readOrders();
+            const oIdx = updatedOrders.findIndex(o => o.id === order.id);
+            if (oIdx >= 0) {
+              updatedOrders[oIdx] = { ...updatedOrders[oIdx], pendingCertificatePrint: {
+                reportId: hddCertificate.id, driveModel: hddCertificate.driveModel, driveSerial: hddCertificate.driveSerial,
+              } };
+              writeOrders(updatedOrders);
+            }
+          }
+        }
+
         // Deduct rewards points if redeemed at checkout
         const rewardsUserId = meta.rewardsUserId || '';
         const rewardsPoints = Math.floor(Number(meta.rewardsPoints || 0));
@@ -5622,7 +5659,7 @@ const mainServer = http.createServer(async (req, res) => {
           }
         }
 
-        return { type: 'new', order, membershipWelcomeEmail };
+        return { type: 'new', order, membershipWelcomeEmail, hddCertificate };
       });
 
       // Send emails outside the lock.
@@ -5632,10 +5669,20 @@ const mainServer = http.createServer(async (req, res) => {
           if (custEmail) sendEmail({ to: custEmail, ...emailOrderConfirmation({ orderId, customerName: cust || details.name, amountAud: amt, items }) });
           sendEmail({ to: getNotifyEmail(), ...emailStaffNewOrder({ orderId, customerName: cust || details.name || details.email, amountAud: amt, items }) });
         } else if (webhookEmails.type === 'new') {
-          const { order, membershipWelcomeEmail } = webhookEmails;
+          const { order, membershipWelcomeEmail, hddCertificate } = webhookEmails;
           if (membershipWelcomeEmail) sendEmail({ to: membershipWelcomeEmail.to, ...membershipWelcomeEmail.tmpl });
           if (details.email) sendEmail({ to: details.email, ...emailOrderConfirmation({ orderId: order.id, customerName: details.name, amountAud: order.total, items: order.items }) });
           sendEmail({ to: getNotifyEmail(), ...emailStaffNewOrder({ orderId: order.id, customerName: details.name || details.email, amountAud: order.total, items: order.items }) });
+          if (hddCertificate && details.email) {
+            const { shop } = readSettings();
+            buildHddReportPdf(hddCertificate, shop).then(buffer => {
+              sendEmail({
+                to: details.email,
+                ...emailHddCertificate({ orderId: order.id, customerName: details.name, driveModel: hddCertificate.driveModel }),
+                attachments: [{ filename: `hdd-certificate-${hddCertificate.id}.pdf`, content: buffer }],
+              });
+            }).catch(err => console.error('[hdd-certificate] pdf build failed →', err.message));
+          }
         }
       }
     }
@@ -7997,6 +8044,17 @@ const adminServer = http.createServer(async (req, res) => {
     writeOrders(orders);
     const tmpl = emailMembershipWelcome({ customerName: user.displayName || user.username, tierName: tier.name });
     sendEmail({ to: email, ...tmpl }).catch(() => {});
+    return json(res, 200, { ok: true });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/orders/certificate-printed') {
+    const session = requireRole(req, res, 'staff'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const orders = readOrders();
+    const order = orders.find(o => o.id === body.orderId);
+    if (!order || !order.pendingCertificatePrint) return json(res, 404, { error: 'not_found' });
+    delete order.pendingCertificatePrint;
+    writeOrders(orders);
     return json(res, 200, { ok: true });
   }
 

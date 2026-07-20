@@ -3029,6 +3029,7 @@ function blankHddReport() {
   return {
     type: 'repair',
     repairJobId: '', customerName: '', customerEmail: '', customerPhone: '',
+    linkedProductId: '', linkedVariantSku: '',
     driveModel: '', driveSerial: '', driveCapacity: '', driveInterface: '', driveFormFactor: '', driveManufactureDate: '',
     smartStatus: 'PASS', reallocatedSectors: 0, pendingSectors: 0, uncorrectableSectors: 0, powerOnHours: '', powerCycles: '', temperature: '', smartNotes: '',
     conditionNotes: '', verdict: 'healthy', recommendation: '', notes: '', technician: '',
@@ -3055,8 +3056,22 @@ function AdminHddReports() {
   const [form, setForm] = useState({});
   const [smartPaste, setSmartPaste] = useState('');
   const [smartParsing, setSmartParsing] = useState(false);
+  const [products, setProducts] = useState([]);
+  const [pendingCerts, setPendingCerts] = useState([]);
   const dirty = useDirtyTracker(form, edit);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const reloadPendingCerts = () => {
+    fetch('/api/admin/orders', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setPendingCerts((d.items || []).filter(o => o.pendingCertificatePrint)))
+      .catch(() => setPendingCerts([]));
+  };
+  const markPrinted = async (orderId) => {
+    const r = await fetch('/api/admin/orders/certificate-printed', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ orderId }) }).catch(()=>null);
+    if (!r || !r.ok) { adminToast('Failed to mark certificate as printed.'); return; }
+    setPendingCerts(cs => cs.filter(o => o.id !== orderId));
+  };
 
   const copyCmd = (cmd) => {
     navigator.clipboard?.writeText(cmd).then(() => adminToast('Command copied.', 'success')).catch(() => adminToast('Could not copy command.'));
@@ -3079,6 +3094,9 @@ function AdminHddReports() {
   useEffect(() => {
     fetch('/api/admin/hdd-reports', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject()).then(d => setReports(d.items || [])).catch(() => setReports([]));
+    fetch('/api/admin/catalog', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject()).then(d => setProducts(d.products || [])).catch(() => setProducts([]));
+    reloadPendingCerts();
   }, []);
 
   const openRow = (r) => { setEdit(r); setForm({ ...blankHddReport(), ...r }); };
@@ -3118,6 +3136,24 @@ function AdminHddReports() {
 
   return (
     <div style={{padding:32}}>
+      {pendingCerts.length > 0 && (
+        <div style={{marginBottom:24}}>
+          <span className="eyebrow">Certificates to print ({pendingCerts.length})</span>
+          <div style={{display:'grid', gap:10, marginTop:10}}>
+            {pendingCerts.map(o => (
+              <div key={o.id} style={{padding:16, background:'var(--paper)', border:'1px solid var(--line)', borderLeft:'3px solid var(--ochre)', display:'flex', justifyContent:'space-between', alignItems:'center', gap:16}}>
+                <div>
+                  <div style={{fontWeight:600}}>{o.cust || 'Unknown customer'}</div>
+                  <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:4}}>
+                    Order {o.id} · {o.pendingCertificatePrint.driveModel || 'Drive'}{o.pendingCertificatePrint.driveSerial ? ` · ${o.pendingCertificatePrint.driveSerial}` : ''}
+                  </div>
+                </div>
+                <button className="btn btn-ghost btn-sm" onClick={() => markPrinted(o.id)}>Mark printed</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="row-flex" style={{justifyContent:'space-between', marginBottom:18}}>
         <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{reports.length} REPORT{reports.length===1?'':'S'}</span>
         <button className="btn btn-rust btn-sm" onClick={openNew}>+ New report</button>
@@ -3128,7 +3164,13 @@ function AdminHddReports() {
           { key:'createdAt', label:'Date', w:'120px', sort:true, render:r => <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-AU') : '—'}</span> },
           { key:'type', label:'Type', w:'100px', sort:true, render:r => <span className="tag tag-outline">{(r.type||'repair').toUpperCase()}</span> },
           { key:'drive', label:'Drive', w:'1.5fr', render:r => <span>{r.driveModel || '—'}{r.driveSerial ? <span className="mono" style={{color:'var(--ink-2)', fontSize:11}}> · {r.driveSerial}</span> : null}</span> },
-          { key:'who', label:'Customer / job', w:'1.5fr', render:r => r.type === 'repair' ? <span style={{fontSize:13, color:'var(--ink-2)'}}>{r.customerName || r.repairJobId || '—'}</span> : <span style={{fontSize:13, color:'var(--ink-3)'}}>For sale</span> },
+          { key:'who', label:'Customer / job', w:'1.5fr', render:r => {
+            if (r.type === 'repair') return <span style={{fontSize:13, color:'var(--ink-2)'}}>{r.customerName || r.repairJobId || '—'}</span>;
+            const linkedProduct = products.find(p => p.id === r.linkedProductId);
+            return linkedProduct
+              ? <span style={{fontSize:13, color:'var(--ink-2)'}}>For sale · {linkedProduct.name}</span>
+              : <span style={{fontSize:13, color:'var(--ink-3)'}}>For sale</span>;
+          } },
           { key:'verdict', label:'Verdict', w:'120px', sort:true, render:r => <StatusPill value={r.verdict || 'healthy'} map={verdictMap} /> },
         ]}
         rows={reports}
@@ -3193,6 +3235,34 @@ function AdminHddReports() {
               <label className="field"><span className="label">Customer phone</span><input className="input" value={form.customerPhone||''} onChange={e=>set('customerPhone', e.target.value)}/></label>
             </>
           )}
+
+          {form.type === 'sale' && (() => {
+            const linkedProduct = products.find(p => p.id === form.linkedProductId);
+            const variants = (linkedProduct && linkedProduct.variants) || [];
+            return (
+              <>
+                <label className="field"><span className="label">Linked product</span>
+                  <select className="select" value={form.linkedProductId||''} onChange={e=>setForm(f=>({...f, linkedProductId:e.target.value, linkedVariantSku:''}))}>
+                    <option value="">— not linked —</option>
+                    {products.map(p => <option key={p.id} value={p.id}>{p.name} {p.sku ? `(${p.sku})` : ''}</option>)}
+                  </select>
+                </label>
+                {linkedProduct && variants.length > 0 && (
+                  <label className="field"><span className="label">Linked variant</span>
+                    <select className="select" value={form.linkedVariantSku||''} onChange={e=>set('linkedVariantSku', e.target.value)}>
+                      <option value="">Any variant of this product</option>
+                      {variants.map(v => <option key={v.sku} value={v.sku}>{v.name} {v.sku ? `(${v.sku})` : ''}</option>)}
+                    </select>
+                  </label>
+                )}
+                {linkedProduct && (
+                  <p style={{fontSize:11, color:'var(--ink-3)', margin:'-4px 0 14px'}}>
+                    When a customer buys{variants.length > 0 && form.linkedVariantSku ? ` the "${(variants.find(v=>v.sku===form.linkedVariantSku)||{}).name || form.linkedVariantSku}" variant of` : ''} this product, this certificate is emailed to them automatically and a print job appears above.
+                  </p>
+                )}
+              </>
+            );
+          })()}
 
           <hr className="thin"/>
           <span className="eyebrow">Drive identification</span>
