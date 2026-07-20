@@ -3032,6 +3032,7 @@ function blankHddReport() {
     linkedProductId: '', linkedVariantSku: '',
     driveModel: '', driveSerial: '', driveCapacity: '', driveInterface: '', driveFormFactor: '', driveManufactureDate: '',
     smartStatus: 'PASS', reallocatedSectors: 0, pendingSectors: 0, uncorrectableSectors: 0, powerOnHours: '', powerCycles: '', temperature: '', smartNotes: '',
+    udmaCrcErrors: 0, reportedUncorrect: 0, spinRetryCount: 0, loadCycleCount: '', startStopCount: '', gSenseErrorRate: 0, wearPercent: '', totalBytesWritten: '',
     conditionNotes: '', verdict: 'healthy', recommendation: '', notes: '', technician: '',
   };
 }
@@ -3050,7 +3051,7 @@ const SMARTCTL_READ_CMD = [
   'echo "$OUT"',
 ].join('\n');
 
-function AdminHddReports() {
+function AdminHddReports({ sessionInfo = {} }) {
   const [reports, setReports] = useState([]);
   const [edit, setEdit] = useState(null);
   const [form, setForm] = useState({});
@@ -3100,7 +3101,7 @@ function AdminHddReports() {
   }, []);
 
   const openRow = (r) => { setEdit(r); setForm({ ...blankHddReport(), ...r }); };
-  const openNew = () => { setEdit({}); setForm(blankHddReport()); };
+  const openNew = () => { setEdit({}); setForm({ ...blankHddReport(), technician: sessionInfo.username || '' }); };
 
   const verdictMap = {
     healthy:  { bg:'#d8e7d0', fg:'#345526' },
@@ -3298,6 +3299,25 @@ function AdminHddReports() {
             <label className="field" style={{margin:0}}><span className="label">Power cycles</span><input className="input" type="number" min="0" value={form.powerCycles||''} onChange={e=>set('powerCycles', e.target.value)}/></label>
             <label className="field" style={{margin:0}}><span className="label">Temperature (°C)</span><input className="input" type="number" value={form.temperature||''} onChange={e=>set('temperature', e.target.value)}/></label>
           </div>
+
+          <span className="eyebrow" style={{display:'block', marginTop:14}}>Additional counters</span>
+          <div className="grid-2" style={{gap:10, margin:'10px 0'}}>
+            <label className="field" style={{margin:0}}><span className="label">UDMA CRC errors</span><input className="input" type="number" min="0" value={form.udmaCrcErrors ?? 0} onChange={e=>set('udmaCrcErrors', e.target.value)}/></label>
+            <label className="field" style={{margin:0}}><span className="label">Reported uncorrectable</span><input className="input" type="number" min="0" value={form.reportedUncorrect ?? 0} onChange={e=>set('reportedUncorrect', e.target.value)}/></label>
+          </div>
+          <div className="grid-2" style={{gap:10, marginBottom:10}}>
+            <label className="field" style={{margin:0}}><span className="label">Spin retry count</span><input className="input" type="number" min="0" value={form.spinRetryCount ?? 0} onChange={e=>set('spinRetryCount', e.target.value)}/></label>
+            <label className="field" style={{margin:0}}><span className="label">G-sense error rate</span><input className="input" type="number" min="0" value={form.gSenseErrorRate ?? 0} onChange={e=>set('gSenseErrorRate', e.target.value)}/></label>
+          </div>
+          <div className="grid-2" style={{gap:10, marginBottom:10}}>
+            <label className="field" style={{margin:0}}><span className="label">Load cycle count</span><input className="input" type="number" min="0" value={form.loadCycleCount||''} onChange={e=>set('loadCycleCount', e.target.value)}/></label>
+            <label className="field" style={{margin:0}}><span className="label">Start/stop count</span><input className="input" type="number" min="0" value={form.startStopCount||''} onChange={e=>set('startStopCount', e.target.value)}/></label>
+          </div>
+          <div className="grid-2" style={{gap:10, marginBottom:10}}>
+            <label className="field" style={{margin:0}}><span className="label">SSD/NVMe wear (%)</span><input className="input" type="number" min="0" max="100" value={form.wearPercent||''} onChange={e=>set('wearPercent', e.target.value)} placeholder="NVMe only"/></label>
+            <label className="field" style={{margin:0}}><span className="label">Total bytes written</span><input className="input" value={form.totalBytesWritten||''} onChange={e=>set('totalBytesWritten', e.target.value)} placeholder="e.g. 12.4 TB"/></label>
+          </div>
+
           <label className="field"><span className="label">SMART notes</span>
             <textarea className="textarea" rows={2} value={form.smartNotes||''} onChange={e=>set('smartNotes', e.target.value)} placeholder="Raw attribute readout, anything notable..."/>
           </label>
@@ -3326,6 +3346,12 @@ function AdminHddReports() {
           </label>
 
           <label className="field"><span className="label">Prepared by</span><input className="input" value={form.technician||''} onChange={e=>set('technician', e.target.value)}/></label>
+
+          <div style={{padding:'10px 12px', background:'var(--bg-elev)', border:'1px solid var(--line)', fontSize:11, color:'var(--ink-2)'}}>
+            {form.signedBy
+              ? <>Signed by <strong>{form.signedBy}</strong>{form.signedAt ? ` · ${new Date(form.signedAt).toLocaleString('en-AU')}` : ''} — will be re-signed as {sessionInfo.username || 'you'} on next save.</>
+              : <>Will be signed electronically as <strong>{sessionInfo.username || 'you'}</strong> when saved.</>}
+          </div>
         </Drawer>
       )}
     </div>

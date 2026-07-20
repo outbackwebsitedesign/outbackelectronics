@@ -3286,6 +3286,15 @@ function parseSmartctlJson(raw) {
   const pending = ataAttr(197); if (pending) out.pendingSectors = pending.raw.value;
   const uncorrect = ataAttr(198); if (uncorrect) out.uncorrectableSectors = uncorrect.raw.value;
 
+  const udmaCrc = ataAttr(199); if (udmaCrc) out.udmaCrcErrors = udmaCrc.raw.value;
+  const reportedUncorrect = ataAttr(187); if (reportedUncorrect) out.reportedUncorrect = reportedUncorrect.raw.value;
+  const spinRetry = ataAttr(10); if (spinRetry) out.spinRetryCount = spinRetry.raw.value;
+  const loadCycle = ataAttr(193); if (loadCycle) out.loadCycleCount = loadCycle.raw.value;
+  const startStop = ataAttr(4); if (startStop) out.startStopCount = startStop.raw.value;
+  const gSense = ataAttr(191); if (gSense) out.gSenseErrorRate = gSense.raw.value;
+  const totalLbasWritten = ataAttr(241);
+  if (totalLbasWritten) out.totalBytesWritten = humanBytes(totalLbasWritten.raw.value * (j.logical_block_size || 512));
+
   const noteLines = [];
   if (j.firmware_version) noteLines.push(`Firmware: ${j.firmware_version}`);
   if (typeof j.rotation_rate === 'number') {
@@ -3298,14 +3307,16 @@ function parseSmartctlJson(raw) {
     if (n.power_cycles != null && out.powerCycles == null) out.powerCycles = n.power_cycles;
     if (n.critical_warning != null) noteLines.push(`Critical warning flags: ${n.critical_warning}`);
     if (n.available_spare != null) noteLines.push(`Available spare: ${n.available_spare}% (threshold ${n.available_spare_threshold ?? '—'}%)`);
-    if (n.percentage_used != null) noteLines.push(`Percentage used (wear): ${n.percentage_used}%`);
+    if (n.percentage_used != null) { noteLines.push(`Percentage used (wear): ${n.percentage_used}%`); out.wearPercent = n.percentage_used; }
     if (n.unsafe_shutdowns != null) noteLines.push(`Unsafe shutdowns: ${n.unsafe_shutdowns}`);
+    if (n.data_units_written != null) out.totalBytesWritten = humanBytes(n.data_units_written * 512000);
   }
   const table = j.ata_smart_attributes && j.ata_smart_attributes.table;
   if (Array.isArray(table)) {
     const failing = table.filter(a => a.when_failed);
     if (failing.length) noteLines.push(`Attributes at/below threshold: ${failing.map(a => a.name).join(', ')}`);
   }
+  if (out.udmaCrcErrors > 0) noteLines.push('UDMA CRC errors present — usually a cable/connection issue, not the drive itself. Worth reseating or swapping the SATA cable before condemning the drive.');
   const selfTest = j.ata_smart_self_test_log && j.ata_smart_self_test_log.standard;
   if (selfTest && Array.isArray(selfTest.table) && selfTest.table.length) {
     const last = selfTest.table[0];
@@ -3317,7 +3328,10 @@ function parseSmartctlJson(raw) {
   // certification — a drive can pass SMART and still fail on physical inspection,
   // so the tech can still override it before saving.
   const nvmeLog = j.nvme_smart_health_information_log;
-  const hasBadSectors = out.reallocatedSectors > 0 || out.pendingSectors > 0 || out.uncorrectableSectors > 0;
+  // UDMA CRC errors are deliberately excluded here — they usually indicate a bad cable/
+  // connection, not a failing drive, so they shouldn't push the verdict down on their own.
+  const hasBadSectors = out.reallocatedSectors > 0 || out.pendingSectors > 0 || out.uncorrectableSectors > 0
+    || out.reportedUncorrect > 0 || out.spinRetryCount > 0 || out.gSenseErrorRate > 0;
   const nvmeWarning = !!(nvmeLog && ((nvmeLog.critical_warning && nvmeLog.critical_warning !== 0) || (nvmeLog.percentage_used != null && nvmeLog.percentage_used >= 80)));
   if (out.smartStatus === 'FAIL') out.verdict = 'failing';
   else if (out.smartStatus === 'PASS' && (hasBadSectors || nvmeWarning)) out.verdict = 'degraded';
@@ -3424,10 +3438,18 @@ function buildHddReportPdf(report, shop) {
       ['Reallocated sectors', report.reallocatedSectors ?? '—'],
       ['Pending sectors', report.pendingSectors ?? '—'],
       ['Uncorrectable sectors', report.uncorrectableSectors ?? '—'],
+      ['UDMA CRC errors', report.udmaCrcErrors ?? '—'],
+      ['Reported uncorrectable', report.reportedUncorrect ?? '—'],
+      ['Spin retry count', report.spinRetryCount ?? '—'],
+      ['G-sense error rate', report.gSenseErrorRate ?? '—'],
       ['Power-on hours', report.powerOnHours ?? '—'],
       ['Power cycles', report.powerCycles ?? '—'],
       ['Temperature', report.temperature ? `${report.temperature}°C` : '—'],
     ];
+    if (report.loadCycleCount) smartRows.push(['Load cycle count', report.loadCycleCount]);
+    if (report.startStopCount) smartRows.push(['Start/stop count', report.startStopCount]);
+    if (report.wearPercent !== '' && report.wearPercent != null) smartRows.push(['SSD/NVMe wear', `${report.wearPercent}%`]);
+    if (report.totalBytesWritten) smartRows.push(['Total bytes written', report.totalBytesWritten]);
     doc.font('Helvetica').fontSize(10);
     smartRows.forEach(([label, val], i) => {
       if (i % 2 === 1) doc.rect(50, y - 4, 495, 18).fill('#f7f1e8');
@@ -3471,8 +3493,18 @@ function buildHddReportPdf(report, shop) {
       y = doc.y + 20;
     }
 
-    if (report.technician) {
-      doc.font('Helvetica').fontSize(9).fillColor('#888').text(`Prepared by: ${report.technician}`, 50, y);
+    const signerName = report.signedBy || report.technician || '';
+    if (signerName) {
+      y += 10;
+      if (y > 680) { doc.addPage(); y = 50; }
+      doc.font('Helvetica-Oblique').fontSize(20).fillColor('#222').text(signerName, 50, y, { width: 300 });
+      const lineY = y + 30;
+      doc.moveTo(50, lineY).lineTo(300, lineY).strokeColor('#999').stroke();
+      doc.font('Helvetica').fontSize(9).fillColor('#888').text(`Technician: ${signerName}`, 50, lineY + 6);
+      if (report.signedAt) {
+        const signedDateStr = new Date(report.signedAt).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
+        doc.text(`Signed electronically · ${signedDateStr}`, 50, lineY + 20);
+      }
     }
 
     doc.end();
@@ -7323,6 +7355,10 @@ const adminServer = http.createServer(async (req, res) => {
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     const reports = readHddReports();
     const idx = reports.findIndex(r => r.id && r.id === body.id);
+    // Signature is tied to the authenticated session, not the client-supplied body —
+    // it can't be spoofed by editing the "technician" text field.
+    body.signedBy = session.username;
+    body.signedAt = new Date().toISOString();
     if (idx >= 0) { reports[idx] = body; } else {
       body.id = nextHddReportId(reports);
       body.createdAt = body.createdAt || new Date().toISOString();
