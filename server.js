@@ -549,6 +549,10 @@ function deriveOrderReviewItems(order) {
   const tokens = [];
   if (Array.isArray(order.lineItems) && order.lineItems.length) {
     for (const li of order.lineItems) tokens.push(li.name || li.description || '');
+  } else if (Array.isArray(order.parts) && order.parts.length) {
+    // Custom builds (quotes → orders) itemise their components here rather than
+    // as catalog products, so these become the reviewable items by name.
+    for (const pt of order.parts) tokens.push(pt.name || '');
   } else {
     for (const t of String(order.items || '').split(',')) tokens.push(t);
   }
