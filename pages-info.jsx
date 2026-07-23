@@ -636,10 +636,8 @@ function ReviewPage({ go }) {
   const [state, setState] = useState('loading'); // loading | invalid | ready
   const [customerName, setCustomerName] = useState('');
   const [mode, setMode] = useState('general'); // general | product
-  const [orderItems, setOrderItems] = useState([]); // reviewable items on this order
-  const [products, setProducts] = useState([]);
-  const [productQuery, setProductQuery] = useState('');
-  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [orderItems, setOrderItems] = useState([]); // this order's items, offered in the picker
+  const [selectedItem, setSelectedItem] = useState(null); // { productId, name } from orderItems
   const [rating, setRating] = useState(0);
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
@@ -686,19 +684,8 @@ function ReviewPage({ go }) {
       .catch(() => setState('invalid'));
   }, [orderId, token]);
 
-  // Only load the full catalog for the free-text fallback — when this order has
-  // no captured items to offer as a dropdown.
-  useEffect(() => {
-    if (mode !== 'product' || orderItems.length || products.length) return;
-    fetch('/api/catalog/products').then(r => r.ok ? r.json() : null).then(d => { if (d) setProducts(d.items || []); }).catch(() => {});
-  }, [mode, orderItems]);
-
-  const matches = productQuery.trim().length >= 2
-    ? products.filter(p => (p.name || '').toLowerCase().includes(productQuery.trim().toLowerCase())).slice(0, 8)
-    : [];
-
   const resetForm = () => {
-    setMode('general'); setSelectedProduct(null); setProductQuery('');
+    setMode('general'); setSelectedItem(null);
     setRating(0); setTitle(''); setBody(''); setPhotos([]); setSubmitError(null); setSubmitted(false);
   };
 
@@ -706,7 +693,7 @@ function ReviewPage({ go }) {
     e.preventDefault();
     if (!rating) { setSubmitError('Please choose a star rating.'); return; }
     if (!body.trim()) { setSubmitError('Please write a few words about your experience.'); return; }
-    if (mode === 'product' && !selectedProduct) { setSubmitError('Please pick which item this review is about.'); return; }
+    if (mode === 'product' && !selectedItem) { setSubmitError('Please pick which item this review is about.'); return; }
     setSubmitting(true); setSubmitError(null);
     try {
       const res = await fetch('/api/review/submit', {
@@ -714,7 +701,8 @@ function ReviewPage({ go }) {
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() },
         body: JSON.stringify({
           orderId, token, rating, title: title.trim(), body: body.trim(), photos,
-          productId: mode === 'product' && selectedProduct ? (selectedProduct.id || selectedProduct.sku) : '',
+          productId: mode === 'product' && selectedItem ? (selectedItem.productId || '') : '',
+          productName: mode === 'product' && selectedItem ? selectedItem.name : '',
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -767,37 +755,22 @@ function ReviewPage({ go }) {
             <form onSubmit={submit} noValidate>
               <div className="row-flex" style={{ gap: 8, marginBottom: 20 }}>
                 <button type="button" className={`btn btn-sm ${mode === 'general' ? 'btn-rust' : 'btn-ghost'}`} onClick={() => setMode('general')}>The whole order</button>
-                <button type="button" className={`btn btn-sm ${mode === 'product' ? 'btn-rust' : 'btn-ghost'}`} onClick={() => setMode('product')}>A specific item</button>
+                {orderItems.length > 0 && (
+                  <button type="button" className={`btn btn-sm ${mode === 'product' ? 'btn-rust' : 'btn-ghost'}`} onClick={() => setMode('product')}>A specific item</button>
+                )}
               </div>
 
-              {mode === 'product' && (
+              {mode === 'product' && orderItems.length > 0 && (
                 <label className="field">
                   <span className="label">Which item?</span>
-                  {orderItems.length > 0 ? (
-                    // This order's actual items — a verified purchase, no free-text search.
-                    <select className="select" value={selectedProduct ? selectedProduct.id : ''}
-                      onChange={e => { const it = orderItems.find(i => i.productId === e.target.value); setSelectedProduct(it ? { id: it.productId, name: it.name } : null); }}>
-                      <option value="">Choose an item from your order…</option>
-                      {orderItems.map(it => <option key={it.productId} value={it.productId}>{it.name}</option>)}
-                    </select>
-                  ) : selectedProduct ? (
-                    <div className="row-flex" style={{ justifyContent: 'space-between', border: '1px solid var(--line)', padding: '10px 14px' }}>
-                      <span>{selectedProduct.name}</span>
-                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setSelectedProduct(null); setProductQuery(''); }}>Change</button>
-                    </div>
-                  ) : (
-                    <>
-                      <input className="input" value={productQuery} onChange={e => setProductQuery(e.target.value)} placeholder="Start typing a product name…" />
-                      {matches.length > 0 && (
-                        <div style={{ border: '1px solid var(--line)', borderTop: 'none' }}>
-                          {matches.map(p => (
-                            <div key={p.id || p.sku} role="button" tabIndex={0} onClick={() => { setSelectedProduct(p); }}
-                              style={{ padding: '10px 14px', cursor: 'pointer', borderTop: '1px solid var(--line)', fontSize: 14 }}>{p.name}</div>
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  )}
+                  {/* Only this order's own items — the dropdown value is the item's index so
+                      duplicate names and items without a catalog id still select cleanly. */}
+                  <select className="select"
+                    value={selectedItem ? String(orderItems.indexOf(selectedItem)) : ''}
+                    onChange={e => { const i = Number(e.target.value); setSelectedItem(Number.isInteger(i) && orderItems[i] ? orderItems[i] : null); }}>
+                    <option value="">Choose an item from your order…</option>
+                    {orderItems.map((it, i) => <option key={i} value={i}>{it.name}</option>)}
+                  </select>
                 </label>
               )}
 

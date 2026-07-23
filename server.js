@@ -539,6 +539,34 @@ function buildReviewItems(productIds) {
   return out;
 }
 
+// Read-time resolution of an order's items for the review picker. Prefers the
+// list captured at checkout; for older orders it reconstructs from the order's
+// stored fields, resolving each token (a product id or a name) to a published
+// catalog product where it can, and otherwise keeping the item's own name so
+// the picker still reflects the order. Generic placeholders are dropped.
+function deriveOrderReviewItems(order) {
+  if (Array.isArray(order.reviewItems) && order.reviewItems.length) return order.reviewItems;
+  const tokens = [];
+  if (Array.isArray(order.lineItems) && order.lineItems.length) {
+    for (const li of order.lineItems) tokens.push(li.name || li.description || '');
+  } else {
+    for (const t of String(order.items || '').split(',')) tokens.push(t);
+  }
+  const products = readProducts().filter(p => p.status === 'published');
+  const out = [];
+  const seen = new Set();
+  for (const raw of tokens) {
+    const t = String(raw || '').trim();
+    if (!t || /^(online order|order|custom build|goods\s*\/\s*services)$/i.test(t)) continue;
+    const p = products.find(pr => pr.id === t) || products.find(pr => (pr.name || '').toLowerCase() === t.toLowerCase());
+    const key = p ? `id:${p.id}` : `name:${t.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(p ? { productId: p.id, name: p.name } : { productId: null, name: t });
+  }
+  return out;
+}
+
 function readEwaste() {
   try { const p = JSON.parse(cachedReadFile(EWASTE_DB_PATH)); return Array.isArray(p.intakes) ? p.intakes : []; } catch { return []; }
 }
@@ -5887,12 +5915,7 @@ const mainServer = http.createServer(async (req, res) => {
     if (!orderId || !token) return json(res, 400, { error: 'missing_fields' });
     const order = readOrders().find(o => o.id === orderId && o.warrantyToken && o.warrantyToken === token);
     if (!order) return json(res, 404, { error: 'not_found' });
-    // Prefer the reviewable items captured at checkout. For orders created before
-    // that was stored, fall back to deriving them from `items` (older online
-    // orders kept the purchased product id there) — non-matches drop out safely.
-    let reviewItems = Array.isArray(order.reviewItems) ? order.reviewItems : null;
-    if (!reviewItems) reviewItems = buildReviewItems(String(order.items || '').split(',').map(s => s.trim()));
-    return json(res, 200, { ok: true, customerName: order.cust || '', orderId: order.id, products: reviewItems });
+    return json(res, 200, { ok: true, customerName: order.cust || '', orderId: order.id, products: deriveOrderReviewItems(order) });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/review/upload-photo') {
@@ -5950,6 +5973,10 @@ const mainServer = http.createServer(async (req, res) => {
       const product = readProducts().find(p => p.id === productId);
       if (!product) return json(res, 422, { error: 'invalid_product', message: 'That product could not be found.' });
       productName = product.name;
+    } else if (body.productName) {
+      // An order item that isn't a linkable catalog product — keep its name so
+      // staff still know which item the review is about.
+      productName = String(body.productName).trim().slice(0, 200) || null;
     }
     // Only accept URLs this same endpoint's own upload step could have produced —
     // stops the review body from being used to smuggle in arbitrary URLs/markup.
