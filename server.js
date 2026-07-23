@@ -1861,6 +1861,7 @@ const MAIN_SPA_ROUTES = new Set([
   'cart',
   'register',
   'about', 'repairs', 'humanly-ai', 'capability-statement',
+  'review',
 ]);
 
 // ── Email ─────────────────────────────────────────────────────────────────────
