@@ -522,6 +522,23 @@ function readReviews() {
 }
 function writeReviews(reviews) { atomicWriteFile(REVIEWS_DB_PATH, JSON.stringify({ reviews }, null, 2)); }
 
+// Build the list of reviewable catalog products for an order from the product
+// IDs actually purchased. Only published catalog products can be reviewed (the
+// review-submit endpoint validates productId against readProducts), so gift
+// cards, memberships, services and fees are naturally excluded. Deduped and
+// order-preserving.
+function buildReviewItems(productIds) {
+  const ids = [...new Set((productIds || []).map(id => String(id || '').trim()).filter(Boolean))];
+  if (!ids.length) return [];
+  const products = readProducts();
+  const out = [];
+  for (const id of ids) {
+    const p = products.find(pr => pr.id === id && pr.status === 'published');
+    if (p) out.push({ productId: p.id, name: p.name });
+  }
+  return out;
+}
+
 function readEwaste() {
   try { const p = JSON.parse(cachedReadFile(EWASTE_DB_PATH)); return Array.isArray(p.intakes) ? p.intakes : []; } catch { return []; }
 }
@@ -5104,6 +5121,7 @@ const mainServer = http.createServer(async (req, res) => {
           cust: customerEmail || 'Online customer',
           email: customerEmail || '',
           items: lineItems.map(li => li.name).join(', '),
+          reviewItems: buildReviewItems(lineItems.map(li => li.productId)),
           total: orderGross,
           date: new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' }),
           fulfilment: 'pending',
@@ -5551,6 +5569,7 @@ const mainServer = http.createServer(async (req, res) => {
           loc: [shipAddr.city, shipAddr.state].filter(Boolean).join(', ') || [details.address?.city, details.address?.country].filter(Boolean).join(', ') || '',
           shippingAddress,
           items: productId || 'Online order',
+          reviewItems: buildReviewItems(meta.cartItems ? meta.cartItems.split('|').map(e => e.split(':')[0]) : (productId ? [productId] : [])),
           total: amountAud + gcDiscount,
           date: new Date().toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' }),
           fulfilment: 'pending',
@@ -5868,7 +5887,12 @@ const mainServer = http.createServer(async (req, res) => {
     if (!orderId || !token) return json(res, 400, { error: 'missing_fields' });
     const order = readOrders().find(o => o.id === orderId && o.warrantyToken && o.warrantyToken === token);
     if (!order) return json(res, 404, { error: 'not_found' });
-    return json(res, 200, { ok: true, customerName: order.cust || '', orderId: order.id });
+    // Prefer the reviewable items captured at checkout. For orders created before
+    // that was stored, fall back to deriving them from `items` (older online
+    // orders kept the purchased product id there) — non-matches drop out safely.
+    let reviewItems = Array.isArray(order.reviewItems) ? order.reviewItems : null;
+    if (!reviewItems) reviewItems = buildReviewItems(String(order.items || '').split(',').map(s => s.trim()));
+    return json(res, 200, { ok: true, customerName: order.cust || '', orderId: order.id, products: reviewItems });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/review/upload-photo') {

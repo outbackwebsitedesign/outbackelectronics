@@ -636,6 +636,7 @@ function ReviewPage({ go }) {
   const [state, setState] = useState('loading'); // loading | invalid | ready
   const [customerName, setCustomerName] = useState('');
   const [mode, setMode] = useState('general'); // general | product
+  const [orderItems, setOrderItems] = useState([]); // reviewable items on this order
   const [products, setProducts] = useState([]);
   const [productQuery, setProductQuery] = useState('');
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -681,14 +682,16 @@ function ReviewPage({ go }) {
     if (!orderId || !token) { setState('invalid'); return; }
     fetch(`/api/review/context?order=${encodeURIComponent(orderId)}&token=${encodeURIComponent(token)}`)
       .then(r => r.ok ? r.json() : Promise.reject())
-      .then(d => { setCustomerName(d.customerName || ''); setState('ready'); })
+      .then(d => { setCustomerName(d.customerName || ''); setOrderItems(Array.isArray(d.products) ? d.products : []); setState('ready'); })
       .catch(() => setState('invalid'));
   }, [orderId, token]);
 
+  // Only load the full catalog for the free-text fallback — when this order has
+  // no captured items to offer as a dropdown.
   useEffect(() => {
-    if (mode !== 'product' || products.length) return;
+    if (mode !== 'product' || orderItems.length || products.length) return;
     fetch('/api/catalog/products').then(r => r.ok ? r.json() : null).then(d => { if (d) setProducts(d.items || []); }).catch(() => {});
-  }, [mode]);
+  }, [mode, orderItems]);
 
   const matches = productQuery.trim().length >= 2
     ? products.filter(p => (p.name || '').toLowerCase().includes(productQuery.trim().toLowerCase())).slice(0, 8)
@@ -703,7 +706,7 @@ function ReviewPage({ go }) {
     e.preventDefault();
     if (!rating) { setSubmitError('Please choose a star rating.'); return; }
     if (!body.trim()) { setSubmitError('Please write a few words about your experience.'); return; }
-    if (mode === 'product' && !selectedProduct) { setSubmitError('Please pick which product this review is about.'); return; }
+    if (mode === 'product' && !selectedProduct) { setSubmitError('Please pick which item this review is about.'); return; }
     setSubmitting(true); setSubmitError(null);
     try {
       const res = await fetch('/api/review/submit', {
@@ -750,7 +753,7 @@ function ReviewPage({ go }) {
   return (
     <>
       <PageHead crumbs={['Outback', 'Review']} title="Leave a Review"
-        lead={`Hi${customerName ? ` ${customerName.split(' ')[0]}` : ''} — tell us how we did. You can leave general feedback, or review a specific product you bought.`} />
+        lead={`Hi${customerName ? ` ${customerName.split(' ')[0]}` : ''} — tell us how we did. You can review your whole order, or a specific item you bought.`} />
       <section className="container" style={{ paddingTop: 8, paddingBottom: 60 }}>
         <div className="card-paper" style={{ padding: 32, maxWidth: 640 }}>
           {submitted ? (
@@ -763,14 +766,21 @@ function ReviewPage({ go }) {
           ) : (
             <form onSubmit={submit} noValidate>
               <div className="row-flex" style={{ gap: 8, marginBottom: 20 }}>
-                <button type="button" className={`btn btn-sm ${mode === 'general' ? 'btn-rust' : 'btn-ghost'}`} onClick={() => setMode('general')}>General feedback</button>
-                <button type="button" className={`btn btn-sm ${mode === 'product' ? 'btn-rust' : 'btn-ghost'}`} onClick={() => setMode('product')}>Review a product</button>
+                <button type="button" className={`btn btn-sm ${mode === 'general' ? 'btn-rust' : 'btn-ghost'}`} onClick={() => setMode('general')}>The whole order</button>
+                <button type="button" className={`btn btn-sm ${mode === 'product' ? 'btn-rust' : 'btn-ghost'}`} onClick={() => setMode('product')}>A specific item</button>
               </div>
 
               {mode === 'product' && (
                 <label className="field">
-                  <span className="label">Which product?</span>
-                  {selectedProduct ? (
+                  <span className="label">Which item?</span>
+                  {orderItems.length > 0 ? (
+                    // This order's actual items — a verified purchase, no free-text search.
+                    <select className="select" value={selectedProduct ? selectedProduct.id : ''}
+                      onChange={e => { const it = orderItems.find(i => i.productId === e.target.value); setSelectedProduct(it ? { id: it.productId, name: it.name } : null); }}>
+                      <option value="">Choose an item from your order…</option>
+                      {orderItems.map(it => <option key={it.productId} value={it.productId}>{it.name}</option>)}
+                    </select>
+                  ) : selectedProduct ? (
                     <div className="row-flex" style={{ justifyContent: 'space-between', border: '1px solid var(--line)', padding: '10px 14px' }}>
                       <span>{selectedProduct.name}</span>
                       <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setSelectedProduct(null); setProductQuery(''); }}>Change</button>
