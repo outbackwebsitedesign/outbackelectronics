@@ -1378,7 +1378,7 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
       setRefundError(`Refund exceeds the amount paid on this order — maximum refundable is $${Math.max(0, maxRefund).toFixed(2)}.`);
       return;
     }
-    const methodLabel = refundEntry.method === 'stripe' ? 'refund to the original card via Stripe' : 'issue store credit';
+    const methodLabel = refundEntry.method === 'stripe' ? 'refund to the original card via Stripe' : refundEntry.method === 'cash' ? 'record a cash refund' : 'issue store credit';
     const ok = await adminConfirm(`This will ${methodLabel} of $${amt.toFixed(2)} for order ${form.id} and mark it refunded.`, { title: 'Issue refund', confirmLabel: 'Issue refund', danger: true });
     if (!ok) return;
     setRefundBusy(true); setRefundError(null);
@@ -1916,7 +1916,7 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
           <div className="mono" style={{fontSize:10, letterSpacing:'.1em', color:'#7a3a18', marginBottom:10}}>REFUND</div>
           {form.refund ? (
             <div style={{fontSize:13, color:'#7a3a18'}}>
-              Refunded <strong>${Number(form.refund.amount).toLocaleString('en-AU',{minimumFractionDigits:2})}</strong> via {form.refund.method === 'stripe' ? 'Stripe (original payment)' : 'store credit'} on {new Date(form.refund.date).toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'})}.
+              Refunded <strong>${Number(form.refund.amount).toLocaleString('en-AU',{minimumFractionDigits:2})}</strong> via {form.refund.method === 'stripe' ? 'Stripe (original payment)' : form.refund.method === 'cash' ? 'cash' : 'store credit'} on {new Date(form.refund.date).toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'})}.
             </div>
           ) : (
             <>
@@ -1925,6 +1925,7 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
                 <label className="field" style={{margin:0}}><span className="label">Method</span>
                   <select className="select" value={refundEntry.method} onChange={e=>setRefundEntry(v=>({...v,method:e.target.value}))}>
                     <option value="stripe">Money back (Stripe)</option>
+                    <option value="cash">Cash</option>
                     <option value="store-credit">Store credit</option>
                   </select>
                 </label>

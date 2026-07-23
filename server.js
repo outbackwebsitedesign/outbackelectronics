@@ -7009,7 +7009,7 @@ const adminServer = http.createServer(async (req, res) => {
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     const { id, method } = body || {};
     if (!id) return json(res, 422, { error: 'id_required' });
-    if (method !== 'stripe' && method !== 'store-credit') return json(res, 422, { error: 'invalid_method', message: 'Refund method must be "stripe" or "store-credit".' });
+    if (method !== 'stripe' && method !== 'store-credit' && method !== 'cash') return json(res, 422, { error: 'invalid_method', message: 'Refund method must be "stripe", "store-credit" or "cash".' });
     const orders = readOrders();
     const idx = orders.findIndex(o => o.id === id);
     if (idx < 0) return json(res, 404, { error: 'not_found' });
@@ -7017,14 +7017,18 @@ const adminServer = http.createServer(async (req, res) => {
     if (order.refund) return json(res, 409, { error: 'already_refunded', message: `Order ${id} has already been refunded.` });
 
     const stripePaid = roundCents((order.payments || []).filter(p => p.method === 'Stripe').reduce((s, p) => s + (Number(p.amount) || 0), 0));
+    const totalPaid = roundCents((order.payments || []).filter(p => (Number(p.amount) || 0) > 0).reduce((s, p) => s + (Number(p.amount) || 0), 0));
     const orderTotal = roundCents(order.total);
-    const maxRefund = method === 'stripe' ? stripePaid : orderTotal;
+    const maxRefund = method === 'stripe' ? stripePaid : method === 'cash' ? (totalPaid > 0 ? totalPaid : orderTotal) : orderTotal;
     const requested = body.amount != null ? roundCents(body.amount) : maxRefund;
     if (!(requested > 0)) return json(res, 422, { error: 'invalid_amount', message: 'Refund amount must be greater than zero.' });
-    if (requested > maxRefund) return json(res, 422, { error: 'amount_too_high', message: `Maximum refundable via ${method === 'stripe' ? 'Stripe' : 'store credit'} is $${maxRefund.toFixed(2)}.` });
+    const maxLabel = method === 'stripe' ? 'Stripe' : method === 'cash' ? 'cash' : 'store credit';
+    if (requested > maxRefund) return json(res, 422, { error: 'amount_too_high', message: `Maximum refundable via ${maxLabel} is $${maxRefund.toFixed(2)}.` });
 
     const nowStr = new Date().toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
-    if (method === 'store-credit') {
+    if (method === 'cash') {
+      // Cash is handed back in person — nothing to call externally, we only record it.
+    } else if (method === 'store-credit') {
       const ok = grantStoreCredit(order.email, requested, 'refund', `Refund for order ${id}`, `refund-${id}`);
       if (!ok) return json(res, 422, { error: 'no_account', message: 'Store credit requires the customer to have an account with this email. Use a Stripe refund instead, or ask the customer to register.' });
     } else {
@@ -7046,12 +7050,14 @@ const adminServer = http.createServer(async (req, res) => {
 
     order.fulfilment = 'refunded';
     order.refund = { method, amount: requested, date: new Date().toISOString(), by: session.username || session.role || 'admin' };
-    order.payments = [...(order.payments || []), { amount: -requested, method: method === 'stripe' ? 'Stripe Refund' : 'Store Credit', note: `Refund for ${id}`, date: nowStr }];
+    const refundPayMethod = method === 'stripe' ? 'Stripe Refund' : method === 'cash' ? 'Cash Refund' : 'Store Credit';
+    order.payments = [...(order.payments || []), { amount: -requested, method: refundPayMethod, note: `Refund for ${id}`, date: nowStr }];
     orders[idx] = order;
     writeOrders(orders);
     auditAdminAction({ req, session, action: 'order.refund', result: { status: 'ok', changed: { id, method, amount: requested } } });
     if (order.email) {
-      const tmpl = emailOrderRefunded({ orderId: id, customerName: order.cust, amount: requested, method: method === 'stripe' ? 'your original payment method' : 'store credit' });
+      const refundEmailMethod = method === 'stripe' ? 'your original payment method' : method === 'cash' ? 'cash' : 'store credit';
+      const tmpl = emailOrderRefunded({ orderId: id, customerName: order.cust, amount: requested, method: refundEmailMethod });
       sendEmail({ to: order.email, ...tmpl }).catch(() => {});
     }
     return json(res, 200, { ok: true, order });
