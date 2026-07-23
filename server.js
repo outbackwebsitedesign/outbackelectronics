@@ -1910,7 +1910,7 @@ const MAIN_SPA_ROUTES = new Set([
   'cart',
   'register',
   'about', 'repairs', 'humanly-ai', 'capability-statement',
-  'review',
+  'review', 'reviews',
 ]);
 
 // ── Email ─────────────────────────────────────────────────────────────────────
@@ -4688,6 +4688,22 @@ const mainServer = http.createServer(async (req, res) => {
     return json(res, 200, { testimonial: { quote: featured.testimonial, name: featured.name, loc: featured.loc } });
   }
 
+  // A rotation of quotes for the homepage: staff-curated customer testimonials
+  // first, then approved customer reviews (so real reviews surface here too).
+  if (req.method === 'GET' && url.pathname === '/api/testimonials') {
+    const out = [];
+    for (const c of readCustomers()) {
+      if (c.testimonialFeatured && c.testimonial) out.push({ quote: c.testimonial, name: c.name || 'Customer', loc: c.loc || '', rating: 5 });
+    }
+    const reviews = readReviews()
+      .filter(r => r.status === 'approved' && r.body)
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    for (const r of reviews) {
+      out.push({ quote: r.body, name: (r.customerName || '').split(' ')[0] || 'Customer', loc: r.productName || 'Verified order', rating: r.rating });
+    }
+    return json(res, 200, { testimonials: out.slice(0, 12) });
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/clients') {
     const items = readClients()
       .filter(c => c.active !== false && c.name)
@@ -6009,12 +6025,13 @@ const mainServer = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'GET' && url.pathname === '/api/reviews') {
+    // With a productId → that product's reviews (product page). Without one →
+    // every approved review, for the public all-reviews page.
     const productId = url.searchParams.get('productId') || '';
-    if (!productId) return json(res, 422, { error: 'product_id_required' });
     const items = readReviews()
-      .filter(r => r.status === 'approved' && r.productId === productId)
+      .filter(r => r.status === 'approved' && (productId ? r.productId === productId : true))
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-      .map(r => ({ id: r.id, rating: r.rating, title: r.title, body: r.body, photos: r.photos || [], customerName: (r.customerName || '').split(' ')[0] || 'Customer', createdAt: r.createdAt }));
+      .map(r => ({ id: r.id, rating: r.rating, title: r.title, body: r.body, photos: r.photos || [], customerName: (r.customerName || '').split(' ')[0] || 'Customer', productName: r.productName || null, createdAt: r.createdAt }));
     return json(res, 200, { items });
   }
 

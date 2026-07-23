@@ -1802,11 +1802,71 @@ function HumanlyAIPage({ go }) {
   );
 }
 
+// Public listing of every approved review — product, custom-build and
+// whole-order alike (linked from the footer and the homepage testimonial).
+function AllReviewsPage() {
+  const [reviews, setReviews] = useState(null);
+
+  useEffect(() => {
+    fetch('/api/reviews').then(r => r.ok ? r.json() : null)
+      .then(d => setReviews(d ? d.items : [])).catch(() => setReviews([]));
+  }, []);
+
+  const stars = n => '★'.repeat(n) + '☆'.repeat(5 - n);
+  const avg = reviews && reviews.length ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0;
+
+  return (
+    <>
+      <PageHead crumbs={['Outback', 'Reviews']} title="Customer Reviews"
+        lead="What our customers say about their orders, custom builds and repairs." />
+      <section className="container" style={{ paddingTop: 8, paddingBottom: 60 }}>
+        {reviews === null ? (
+          <div className="skeleton" style={{ height: 220, maxWidth: 720 }} />
+        ) : reviews.length === 0 ? (
+          <p style={{ color: 'var(--ink-2)' }}>No reviews yet — check back soon.</p>
+        ) : (
+          <>
+            <div className="row-flex" style={{ gap: 14, alignItems: 'baseline', marginBottom: 22 }}>
+              <span className="mono" style={{ fontSize: 15, color: 'var(--ochre)' }}>{stars(Math.round(avg))} {avg.toFixed(1)}</span>
+              <span className="mono" style={{ fontSize: 12, color: 'var(--ink-2)' }}>{reviews.length} review{reviews.length === 1 ? '' : 's'}</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+              {reviews.map(r => (
+                <div key={r.id} className="card-paper" style={{ padding: 20 }}>
+                  <div className="row-flex" style={{ justifyContent: 'space-between' }}>
+                    <span className="mono" style={{ color: 'var(--ochre)' }}>{stars(r.rating)}</span>
+                    <span className="mono" style={{ fontSize: 11, color: 'var(--ink-2)' }}>{r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-AU') : ''}</span>
+                  </div>
+                  {r.title && <div style={{ fontWeight: 600, marginTop: 8 }}>{r.title}</div>}
+                  <p style={{ marginTop: 6, fontSize: 14, color: 'var(--ink-2)' }}>{r.body}</p>
+                  {r.photos?.length > 0 && (
+                    <div className="row-flex" style={{ gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                      {r.photos.map(url => (
+                        <a key={url} href={url} target="_blank" rel="noopener noreferrer">
+                          <img src={url} alt="" style={{ width: 72, height: 72, objectFit: 'cover', border: '1px solid var(--line)' }} />
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                  <div className="mono" style={{ marginTop: 10, fontSize: 11, color: 'var(--ink-3)' }}>
+                    {r.customerName}{r.productName ? ` · ${r.productName}` : ''}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </section>
+    </>
+  );
+}
+
 window.OE_PAGES = Object.assign(window.OE_PAGES || {}, {
   quote: QuotePage,
   book: BookingPage,
   contact: ContactPage,
   review: ReviewPage,
+  reviews: AllReviewsPage,
   sellers: SellersPage,
   'sell-gear': SellGearPage,
   policies: PoliciesPage,

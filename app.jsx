@@ -648,6 +648,7 @@ function Footer({ go }) {
               <li><a href="/tutorials" onClick={(e) => { e.preventDefault(); go('tutorials'); }}>Tutorials</a></li>
               <li><a href="/groups" onClick={(e) => { e.preventDefault(); go('groups'); }}>Groups</a></li>
               <li><a href="/memberships" onClick={(e) => { e.preventDefault(); go('memberships'); }}>Memberships</a></li>
+              <li><a href="/reviews" onClick={(e) => { e.preventDefault(); go('reviews'); }}>Reviews</a></li>
               <li><a href="/about" onClick={(e) => { e.preventDefault(); go('about'); }}>About</a></li>
               <li><a href="/sell-gear" onClick={(e) => { e.preventDefault(); go('sell-gear'); }}>Sell Your Gear</a></li>
             </ul>
@@ -876,7 +877,7 @@ function TweaksUI() {
   );
 }
 // ---------------- Router ----------------
-const KNOWN_PAGES = [...PRIMARY_PAGES, ...UTILITY_PAGES, ...ACCOUNT_PAGES, {id:'cart'}, {id:'order-success'}, {id:'order-cancelled'}, {id:'register'}, {id:'about'}, {id:'repairs'}, {id:'humanly-ai'}, {id:'capability-statement'}, {id:'review'}].map(p => p.id);
+const KNOWN_PAGES = [...PRIMARY_PAGES, ...UTILITY_PAGES, ...ACCOUNT_PAGES, {id:'cart'}, {id:'order-success'}, {id:'order-cancelled'}, {id:'register'}, {id:'about'}, {id:'repairs'}, {id:'humanly-ai'}, {id:'capability-statement'}, {id:'review'}, {id:'reviews'}].map(p => p.id);
 
 function App() {
   useEffect(() => { ensureCsrf(); }, []);
@@ -1019,6 +1020,7 @@ function App() {
     'gift-cards': 'Outback Electronics gift cards — redeemable on products and services, sent by email instantly, never expire.',
     contact:      'Contact Outback Electronics — appointment-only workshop serving remote NT, SA and WA.',
     cart:         'Your Outback Electronics cart — review items, get a shipping quote, and check out securely via Stripe.',
+    reviews:      'Real customer reviews of Outback Electronics — orders, custom PC builds, and repairs, rated by the people we built them for.',
   };
   const PAGE_TITLES = {
     home:         'Outback Electronics — Built for where the signal ends',
@@ -1040,6 +1042,7 @@ function App() {
     about:        'About — Outback Electronics',
     repairs:      'Repairs — Outback Electronics',
     cart:         'Cart — Outback Electronics',
+    reviews:      'Customer Reviews — Outback Electronics',
   };
 
   useEffect(() => {

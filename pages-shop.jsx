@@ -25,7 +25,8 @@ function HomePage({ go, addToCart, portalUser }) {
   const [featuredProducts, setFeaturedProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [metrics, setMetrics] = useState({ repairCount: null, ewasteTonnes: null });
-  const [testimonial, setTestimonial] = useState(null);
+  const [testimonials, setTestimonials] = useState([]);
+  const [tIdx, setTIdx] = useState(0);
   const [clients, setClients] = useState([]);
   const heroProduct = useMemo(() => featuredProducts.find(p => p.infiniteStock || p.stock > 0) || featuredProducts[0] || null, [featuredProducts]);
   const [aiData, setAiData] = useState(null);
@@ -53,7 +54,7 @@ function HomePage({ go, addToCart, portalUser }) {
       fetch('/api/catalog/products').then(r => r.json()).then(d => setFeaturedProducts(d.items || [])).catch(() => setFeaturedProducts(window.CATALOG_DATA?.getPublicProducts?.() || [])),
       fetch('/api/catalog/filters').then(r => r.ok ? r.json() : Promise.reject()).then(d => setCategories(d.categories || [])).catch(() => {}),
       fetch('/api/metrics').then(r => r.json()).then(d => setMetrics(d)).catch(() => {}),
-      fetch('/api/testimonial').then(r => r.ok ? r.json() : Promise.reject()).then(d => setTestimonial(d.testimonial)).catch(() => {}),
+      fetch('/api/testimonials').then(r => r.ok ? r.json() : Promise.reject()).then(d => setTestimonials(d.testimonials || [])).catch(() => {}),
       fetch('/api/clients').then(r => r.ok ? r.json() : Promise.reject()).then(d => setClients(d.items || [])).catch(() => {}),
       fetch('/api/ai').then(r => r.ok ? r.json() : Promise.reject()).then(d => setAiData(d)).catch(() => {}),
       fetch('/api/catalog/services').then(r => r.ok ? r.json() : Promise.reject()).then(d => setRepairServices(d.items || [])).catch(() => {}),
@@ -61,6 +62,13 @@ function HomePage({ go, addToCart, portalUser }) {
       fetch('/api/forum/recent').then(r => r.ok ? r.json() : Promise.reject()).then(d => setRecentThreads(d.topics || [])).catch(() => {}),
     ]).finally(() => { setLoading(false); setTimeout(() => window.observeReveal && window.observeReveal(), 80); });
   }, []);
+  // Gently cycle through the featured testimonials + approved reviews.
+  useEffect(() => {
+    if (testimonials.length < 2) return;
+    const t = setInterval(() => setTIdx(i => (i + 1) % testimonials.length), 6000);
+    return () => clearInterval(t);
+  }, [testimonials]);
+  const testimonial = testimonials[tIdx] || null;
   if (loading) {
     return (
       <div style={{padding: '56px 0'}}>
@@ -139,9 +147,13 @@ function HomePage({ go, addToCart, portalUser }) {
                 </div>
               )}
               {testimonial && (
-                <div className="card" style={{position:'absolute', top: -20, right: -16, padding:14, width:200}}>
-                  <div className="mono" style={{fontSize:10, color:'var(--ink-2)', marginBottom:6}}>// CUSTOMER NOTE</div>
-                  <p style={{fontFamily:'Instrument Serif, serif', fontSize: 18, lineHeight:1.25}}>
+                <div className="card" style={{position:'absolute', top: -20, right: -16, padding:14, width:200, cursor:'pointer'}}
+                  onClick={() => go('reviews')} title="Read all customer reviews">
+                  <div className="row-flex" style={{justifyContent:'space-between', marginBottom:6}}>
+                    <div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>// CUSTOMER NOTE</div>
+                    {testimonial.rating > 0 && <div className="mono" style={{fontSize:10, color:'var(--ochre)'}}>{'★'.repeat(testimonial.rating)}</div>}
+                  </div>
+                  <p style={{fontFamily:'Instrument Serif, serif', fontSize: 18, lineHeight:1.25, display:'-webkit-box', WebkitLineClamp:6, WebkitBoxOrient:'vertical', overflow:'hidden'}}>
                     "{testimonial.quote}"
                   </p>
                   <div className="mono" style={{fontSize:10, marginTop:8}}>— {testimonial.name.toUpperCase()}{testimonial.loc ? ` · ${testimonial.loc.toUpperCase()}` : ''}</div>
