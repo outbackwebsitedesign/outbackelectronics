@@ -6910,11 +6910,23 @@ function AdminCustomers() {
   const [edit, setEdit] = useState(null);
   const [form, setForm] = useState({});
   const [mergeOpen, setMergeOpen] = useState(false);
+  const [openId, setOpenId] = useUrlState('open', null, { push: true });
   useEffect(() => {
     fetch('/api/admin/customers', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject()).then(d => setRows(d.items || [])).catch(() => setRows([]));
   }, []);
-  const openCustomer = (r) => { setEdit(r); setForm({...r, tagsStr: (r.tags||[]).join(', ')}); };
+  const openCustomer = (r) => setOpenId(r.id);
+
+  // Reconcile the open customer editor with the URL's `open` param (restore on
+  // reload + Back/Forward), same as Orders/Quotes/Repairs/Expenses/Products/HDD Reports.
+  useEffect(() => {
+    const cur = edit === null ? null : (edit.id || 'new');
+    if (openId === cur) return;
+    if (openId == null) { setEdit(null); return; }
+    if (openId === 'new') { setEdit({}); setForm({ name:'', loc:'', email:'', phone:'', tagsStr:'' }); return; }
+    const r = rows.find(x => x.id === openId);
+    if (r) { setEdit(r); setForm({...r, tagsStr: (r.tags||[]).join(', ')}); }
+  }, [openId, rows]);
 
   const now = new Date();
   const msPerDay = 86400000;
@@ -6926,6 +6938,58 @@ function AdminCustomers() {
   const totalSpent   = rows.reduce((s, r) => s + (r.spent||0), 0);
   const avgOrder     = totalOrders ? (totalSpent / totalOrders) : 0;
   const fmtAUD = n => `$${n.toLocaleString('en-AU', {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+
+  if (edit !== null) {
+    return (
+      <OrderPage onClose={() => setOpenId(null)} title={edit.name || 'New customer'}
+        footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
+          {edit.id && <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={async () => {
+            if (!(await adminConfirm('Delete this customer?', { title:'Delete customer', confirmLabel:'Delete', danger:true }))) return;
+            const r = await fetch('/api/admin/customers/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: edit.id }) }).catch(()=>null);
+            if (!r || !r.ok) { adminToast('Failed to delete customer.'); return; }
+            setRows(rs => rs.filter(r => r.id !== edit.id));
+            setOpenId(null);
+          }}>Delete</button>}
+          {!edit.id && <span/>}
+          <div className="row-flex" style={{gap:8}}>
+            <button className="btn btn-ghost btn-sm" onClick={() => setOpenId(null)}>Cancel</button>
+            <button className="btn btn-sm" onClick={async () => {
+              const item = { ...form, tags: (form.tagsStr||'').split(',').map(t=>t.trim()).filter(Boolean) };
+              delete item.tagsStr;
+              const r = await fetch('/api/admin/customers/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(item) }).catch(()=>null);
+              if (r && r.ok) {
+                const d = await r.json();
+                if (!edit.id) setRows(rs => [...rs, d.item]);
+                else setRows(rs => rs.map(row => row.id === edit.id ? d.item : row));
+              } else {
+                if (!edit.id) setRows(rs => [...rs, item]);
+                else setRows(rs => rs.map(row => row.id === edit.id ? item : row));
+              }
+              setOpenId(null);
+            }}>Save</button>
+          </div>
+        </div>}
+      >
+        <label className="field"><span className="label">Name</span><input className="input" value={form.name||''} onChange={e=>setForm({...form,name:e.target.value})}/></label>
+        <label className="field"><span className="label">Location</span><input className="input" value={form.loc||''} onChange={e=>setForm({...form,loc:e.target.value})}/></label>
+        <label className="field"><span className="label">Email</span><input className="input" type="email" value={form.email||''} onChange={e=>setForm({...form,email:e.target.value})}/></label>
+        <label className="field"><span className="label">Phone</span><input className="input" type="tel" value={form.phone||''} onChange={e=>setForm({...form,phone:e.target.value})}/></label>
+        <label className="field"><span className="label">Tags (comma-separated)</span><input className="input" value={form.tagsStr||''} onChange={e=>setForm({...form,tagsStr:e.target.value})}/></label>
+
+        <label className="field"><span className="label">Testimonial quote</span><textarea className="input" rows={3} style={{resize:'vertical'}} value={form.testimonial||''} onChange={e=>setForm({...form,testimonial:e.target.value})} placeholder="In their own words…"/></label>
+        <label className="field" style={{flexDirection:'row', alignItems:'center', gap:10, cursor:'pointer'}}>
+          <input type="checkbox" checked={!!form.testimonialFeatured} onChange={e=>setForm({...form,testimonialFeatured:e.target.checked})}/>
+          <span className="label" style={{marginBottom:0}}>Feature on shop page</span>
+        </label>
+        <CustomerLinkedJobs
+          customerId={edit.id}
+          email={form.email}
+          manualLinks={form.manualLinks}
+          onLinksChange={links => setForm(f => ({ ...f, manualLinks: links }))}
+        />
+      </OrderPage>
+    );
+  }
 
   return (
     <div style={{padding:32, display:'grid', gap:24}}>
@@ -6943,7 +7007,7 @@ function AdminCustomers() {
           setRows(d.items||[]);
         }}>Re-link all jobs</button>
         <button className="btn btn-ghost btn-sm" onClick={() => setMergeOpen(true)}>Merge duplicates</button>
-        <button className="btn btn-rust btn-sm" onClick={() => { setEdit({}); setForm({ name:'', loc:'', email:'', phone:'', tagsStr:'' }); }}>+ New customer</button>
+        <button className="btn btn-rust btn-sm" onClick={() => setOpenId('new')}>+ New customer</button>
       </div>
       <Table
         columns={[
@@ -6965,55 +7029,6 @@ function AdminCustomers() {
             setRows(rs => rs.filter(r => r.id !== deletedId).map(r => r.id === updated.id ? updated : r));
           }}
         />
-      )}
-      {edit !== null && (
-        <Drawer open={true} onClose={() => setEdit(null)} title={edit.name || 'New customer'}
-          footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
-            {edit.id && <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={async () => {
-              if (!(await adminConfirm('Delete this customer?', { title:'Delete customer', confirmLabel:'Delete', danger:true }))) return;
-              const r = await fetch('/api/admin/customers/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: edit.id }) }).catch(()=>null);
-              if (!r || !r.ok) { adminToast('Failed to delete customer.'); return; }
-              setRows(rs => rs.filter(r => r.id !== edit.id));
-              setEdit(null);
-            }}>Delete</button>}
-            {!edit.id && <span/>}
-            <div className="row-flex" style={{gap:8}}>
-              <button className="btn btn-ghost btn-sm" onClick={() => setEdit(null)}>Cancel</button>
-              <button className="btn btn-sm" onClick={async () => {
-                const item = { ...form, tags: (form.tagsStr||'').split(',').map(t=>t.trim()).filter(Boolean) };
-                delete item.tagsStr;
-                const r = await fetch('/api/admin/customers/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(item) }).catch(()=>null);
-                if (r && r.ok) {
-                  const d = await r.json();
-                  if (!edit.id) setRows(rs => [...rs, d.item]);
-                  else setRows(rs => rs.map(row => row.id === edit.id ? d.item : row));
-                } else {
-                  if (!edit.id) setRows(rs => [...rs, item]);
-                  else setRows(rs => rs.map(row => row.id === edit.id ? item : row));
-                }
-                setEdit(null);
-              }}>Save</button>
-            </div>
-          </div>}
-        >
-          <label className="field"><span className="label">Name</span><input className="input" value={form.name||''} onChange={e=>setForm({...form,name:e.target.value})}/></label>
-          <label className="field"><span className="label">Location</span><input className="input" value={form.loc||''} onChange={e=>setForm({...form,loc:e.target.value})}/></label>
-          <label className="field"><span className="label">Email</span><input className="input" type="email" value={form.email||''} onChange={e=>setForm({...form,email:e.target.value})}/></label>
-          <label className="field"><span className="label">Phone</span><input className="input" type="tel" value={form.phone||''} onChange={e=>setForm({...form,phone:e.target.value})}/></label>
-          <label className="field"><span className="label">Tags (comma-separated)</span><input className="input" value={form.tagsStr||''} onChange={e=>setForm({...form,tagsStr:e.target.value})}/></label>
-
-          <label className="field"><span className="label">Testimonial quote</span><textarea className="input" rows={3} style={{resize:'vertical'}} value={form.testimonial||''} onChange={e=>setForm({...form,testimonial:e.target.value})} placeholder="In their own words…"/></label>
-          <label className="field" style={{flexDirection:'row', alignItems:'center', gap:10, cursor:'pointer'}}>
-            <input type="checkbox" checked={!!form.testimonialFeatured} onChange={e=>setForm({...form,testimonialFeatured:e.target.checked})}/>
-            <span className="label" style={{marginBottom:0}}>Feature on shop page</span>
-          </label>
-          <CustomerLinkedJobs
-            customerId={edit.id}
-            email={form.email}
-            manualLinks={form.manualLinks}
-            onLinksChange={links => setForm(f => ({ ...f, manualLinks: links }))}
-          />
-        </Drawer>
       )}
     </div>
   );
