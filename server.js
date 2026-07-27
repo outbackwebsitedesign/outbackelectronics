@@ -381,7 +381,7 @@ function normalisePhone(p) { return (p||'').replace(/[\s\-().+]/g, '').toLowerCa
 
 // Cash-basis: an order counts as income once any payment has been received.
 function isOrderPaid(o) {
-  if (o.gratis) return false;
+  if (o.gratis || o.cancelled) return false;
   return (o.payments || []).some(p => (Number(p.amount) || 0) > 0);
 }
 // Returns cash actually received for an order (sum of payments, capped at order total).
@@ -391,7 +391,7 @@ function orderCashReceived(o) {
 }
 // Returns the outstanding balance, mirroring the frontend CLEAR logic (cash rounding applied).
 function orderRemainingBalance(o) {
-  if (o.gratis) return 0;
+  if (o.gratis || o.cancelled) return 0;
   const pmts = o.payments || [];
   const received = Math.round(pmts.reduce((s, p) => s + (Number(p.amount) || 0), 0) * 100) / 100;
   const lastMethod = pmts.length ? (pmts[pmts.length - 1].method || '').toLowerCase() : '';
@@ -3180,11 +3180,16 @@ function buildTaxReportData(fromStr, toStr) {
 
   const totalRevenue = netOrderRevenue + repairRevenue;
 
-  // Expenses
+  // Expenses — skip anything linked to a cancelled order. The parts/costs were
+  // never actually realised as part of a sale, so they shouldn't count as a
+  // real business deduction just because a job card or expense was logged
+  // before the order fell through.
+  const cancelledOrderIds = new Set(readOrders().filter(o => o.cancelled).map(o => o.id));
   const expByCat = {};
   const expLines = {};
   let totalExpenses = 0, expenseCount = 0;
   for (const e of readExpenses()) {
+    if (e.jobId && cancelledOrderIds.has(e.jobId)) continue;
     const d = parseExpDateForReport(e.date);
     if (!inRange(d)) continue;
     const amt = (Number(e.amount) || 0) * (Number(e.quantity) || 1);
@@ -3930,7 +3935,7 @@ function buildReceivablesData() {
 
   // Orders with an outstanding balance
   for (const o of readOrders()) {
-    if (o.gratis) continue; // complimentary — not a receivable
+    if (o.gratis || o.cancelled) continue; // complimentary or cancelled — not a receivable
     const balance = orderRemainingBalance(o);
     if (balance <= 0) continue; // fully cleared
     const received = orderCashReceived(o);

@@ -1154,6 +1154,7 @@ const ORDER_PAYMENT_MAP = {
   'part-paid':{ bg:'#fff4d6', fg:'#7a5d10' },
   unpaid:     { bg:'#f3d5c5', fg:'#7a3a18' },
   gratis:     { bg:'#ede7f6', fg:'#4527a0', label:'Gratis' },
+  cancelled:  { bg:'#f3d5c5', fg:'#7a3a18', label:'Cancelled' },
 };
 const ORDER_FULFILMENT_MAP = {
   pending:   { bg:'var(--bg-deep)', fg:'var(--ink-2)' },
@@ -1278,6 +1279,7 @@ function paymentPlanProgress(order) {
   return { paidSoFar, remaining, completed, nextDue: completed ? null : nextDue, entries };
 }
 function orderPaymentStatus(f) {
+  if (f.cancelled) return 'cancelled';
   if (f.gratis) return 'gratis';
   if ((f.payments || []).length > 0) {
     if (orderAmountPaid(f) >= orderEffectiveTotal(f)) return 'paid';
@@ -1409,18 +1411,104 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
   const [payEntry, setPayEntry] = useState({ amount:'', method: localStorage.getItem('oe_lastPaymentMethod') || 'Cash', note:'', date: todayISODate() });
   const [deleteBusy, setDeleteBusy] = useState(false);
   const canDeleteOrder = (ROLE_LEVELS[sessionInfo.role] ?? 0) >= ROLE_LEVELS.manager;
+  // Money taken but not yet refunded blocks cancel/delete/revert — those actions
+  // make the order stop being a real sale, so the customer needs their money
+  // back (or store credit) first rather than the order just vanishing with
+  // cash unaccounted for.
+  const blockIfUnrefunded = () => {
+    if (maxRefund > 0.005) {
+      adminToast(`This order has $${maxRefund.toFixed(2)} paid and not yet refunded. Issue a refund first (see the Refund section below).`);
+      return true;
+    }
+    return false;
+  };
+
+  // Asks whether linked expenses (parts bought for this job) should be deleted
+  // too. Once the order record is gone there's no other way to keep them out
+  // of the tax report — unlike Cancel, which the server already excludes by
+  // jobId, deleting/reverting removes the order those expenses are anchored to.
+  const resolveLinkedExpenseDeletion = async (actionLabel) => {
+    if (linkedExpenses.length === 0) return true;
+    const total = linkedExpenses.reduce((s, e) => s + expTotal(e), 0);
+    return await adminConfirm(
+      `This order has ${linkedExpenses.length} linked expense(s) totalling $${total.toFixed(2)}. Since ${actionLabel}, keeping them would still count them as real business expenses in tax reports even though the parts were never sold. Delete them too?`,
+      { title: 'Delete linked expenses?', confirmLabel: 'Delete expenses', cancelLabel: 'Keep expenses', danger: true }
+    );
+  };
+
   const deleteOrderNow = async () => {
+    if (blockIfUnrefunded()) return;
     const ok = await adminConfirm(
       `This will permanently delete order ${form.id} for ${form.cust || 'this customer'} and cannot be undone.`,
       { title: 'Delete order', confirmLabel: 'Delete order', danger: true }
     );
     if (!ok) return;
+    const deleteExpensesToo = await resolveLinkedExpenseDeletion('this order is being deleted');
     setDeleteBusy(true);
+    if (deleteExpensesToo && linkedExpenses.length > 0) {
+      await Promise.all(linkedExpenses.map(e => fetch('/api/admin/expenses/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: e.id }) }).catch(()=>null)));
+      onExpensesChange(expenses.filter(e => !linkedExpenses.some(le => le.id === e.id)));
+    }
     const r = await fetch('/api/admin/orders/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: form.id }) }).catch(()=>null);
     setDeleteBusy(false);
     if (!r || !r.ok) { adminToast('Failed to delete order.'); return; }
     onDelete?.(form.id);
     onClose();
+  };
+
+  const [cancelBusy, setCancelBusy] = useState(false);
+  const toggleCancelled = async () => {
+    if (!form.cancelled && blockIfUnrefunded()) return;
+    setCancelBusy(true);
+    await saveNow({ cancelled: !form.cancelled });
+    setCancelBusy(false);
+  };
+
+  const [revertBusy, setRevertBusy] = useState(false);
+  const revertToQuote = async () => {
+    if (blockIfUnrefunded()) return;
+    const ok = await adminConfirm(
+      `This will create a new quote from this order's details and permanently delete order ${form.id}. Use this when the work hasn't actually gone ahead yet.`,
+      { title: 'Revert to quote', confirmLabel: 'Revert to quote', danger: true }
+    );
+    if (!ok) return;
+    const deleteExpensesToo = await resolveLinkedExpenseDeletion("this order is reverting to a quote — the work hasn't happened");
+    setRevertBusy(true);
+    try {
+      const qr = await fetch('/api/admin/quotes', { credentials:'include' });
+      const quotesList = qr.ok ? (await qr.json()).items || [] : [];
+      const used = new Set(quotesList.map(q => { const m = String(q.quoteRef || '').match(/^OEQ-(\d+)$/); return m ? parseInt(m[1]) : null; }).filter(n => n != null));
+      let n = 1; while (used.has(n)) n++;
+      const quoteRef = `OEQ-${String(n).padStart(4, '0')}`;
+      const summary = (form.lineItems || []).map(i => i.description).filter(Boolean).join(', ') || form.items || '';
+      const quotePayload = {
+        id: 'quot-' + Date.now(),
+        quoteRef,
+        name: form.cust || '',
+        email: form.email || '',
+        loc: form.loc || form.shippingAddress || '',
+        kind: 'Reverted order',
+        budget: String(form.total || ''),
+        urgency: '',
+        description: `Reverted from order ${form.id}.${summary ? ` Items: ${summary}` : ''}`,
+        status: 'new',
+        createdAt: new Date().toISOString(),
+        revertedFromOrderId: form.id,
+      };
+      const qs = await fetch('/api/admin/quotes/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(quotePayload) }).catch(()=>null);
+      if (!qs || !qs.ok) { adminToast('Failed to create the quote — order was not touched.'); setRevertBusy(false); return; }
+      if (deleteExpensesToo && linkedExpenses.length > 0) {
+        await Promise.all(linkedExpenses.map(e => fetch('/api/admin/expenses/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: e.id }) }).catch(()=>null)));
+        onExpensesChange(expenses.filter(e => !linkedExpenses.some(le => le.id === e.id)));
+      }
+      const dr = await fetch('/api/admin/orders/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: form.id }) }).catch(()=>null);
+      if (!dr || !dr.ok) { adminToast(`Quote ${quoteRef} was created, but the order could not be deleted — please delete it manually.`); setRevertBusy(false); return; }
+      adminToast(`Reverted to quote ${quoteRef}.`, 'success');
+      onDelete?.(form.id);
+      onClose();
+    } finally {
+      setRevertBusy(false);
+    }
   };
   const [updateEntry, setUpdateEntry] = useState({ text:'', type:'note' });
   const [expenseEdit, setExpenseEdit] = useState(null);
@@ -1670,6 +1758,12 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
                 <Icon name="mail" size={14}/>
                 {trackingEmailStatus === 'sending' ? 'Sending…' : trackingEmailStatus === 'sent' ? 'Email sent' : trackingEmailStatus === 'error' ? 'Failed' : 'Send tracking email'}
               </button>
+              {canDeleteOrder && (
+                <button className="btn btn-ghost btn-sm" disabled={revertBusy} onClick={revertToQuote} title="The work hasn't happened yet — move this back to a quote instead of it being a real order.">
+                  <Icon name="refresh" size={14}/>
+                  {revertBusy ? 'Reverting…' : 'Revert to quote'}
+                </button>
+              )}
               {canDeleteOrder && (
                 <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} disabled={deleteBusy} onClick={deleteOrderNow}>
                   <Icon name="trash" size={14}/>
@@ -2046,11 +2140,28 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
             title={form.gratis ? 'Remove gratis flag — order will appear in reports again' : 'Mark as complimentary — hides from receivables and revenue reports'}>
             {form.gratis ? <><Icon name="check" size={11}/> Gratis — click to unmark</> : 'Mark as Gratis'}
           </button>
+          {form.id && (
+            <button
+              className="btn btn-sm"
+              disabled={cancelBusy}
+              style={form.cancelled
+                ? {background:'#f3d5c5', color:'#7a3a18', border:'1px solid #e3b9a3', fontSize:11}
+                : {background:'transparent', color:'var(--ink-3)', border:'1px solid var(--border)', fontSize:11}}
+              onClick={toggleCancelled}
+              title={form.cancelled ? 'Un-cancel — order will count in reports again' : "Mark cancelled — the work didn't go ahead. Excludes this order and its linked expenses from revenue/tax reports, but keeps the record."}>
+              {cancelBusy ? 'Saving…' : form.cancelled ? <><Icon name="check" size={11}/> Cancelled — click to unmark</> : 'Mark as Cancelled'}
+            </button>
+          )}
         </div>
       </div>
       {form.gratis && (
         <div style={{background:'#ede7f6', border:'1px solid #b39ddb', borderRadius:5, padding:'8px 12px', marginBottom:12, fontSize:12, color:'#4527a0'}}>
           This order is marked <strong>gratis</strong> — it is excluded from revenue, receivables, and GST reports. The price on record is kept for reference only.
+        </div>
+      )}
+      {form.cancelled && (
+        <div style={{background:'#f3d5c5', border:'1px solid #e3b9a3', borderRadius:5, padding:'8px 12px', marginBottom:12, fontSize:12, color:'#7a3a18'}}>
+          This order is marked <strong>cancelled</strong> — the work never went ahead. It's excluded from revenue, receivables, and tax reports, and so are any expenses linked to it. The record is kept for reference only.
         </div>
       )}
       {!form.gratis && (form.payments || []).length === 0 && <div className="mono" style={{fontSize:11, color:'var(--ink-3)', marginBottom:12}}>No payments recorded.</div>}
@@ -2248,6 +2359,7 @@ function AdminOrders({ search, sessionInfo, siteUrl }) {
       out = out.filter(r => ['shipped','refunded'].includes(statusTab)
         ? (r.fulfilment || 'pending') === statusTab
         : statusTab === 'gratis' ? !!r.gratis
+        : statusTab === 'cancelled' ? !!r.cancelled
         : orderPaymentStatus(r) === statusTab);
     }
     if (dateRange.from || dateRange.to) {
@@ -2268,6 +2380,7 @@ function AdminOrders({ search, sessionInfo, siteUrl }) {
     'part-paid': rows.filter(r => orderPaymentStatus(r) === 'part-paid').length,
     paid: rows.filter(r => orderPaymentStatus(r) === 'paid').length,
     gratis: rows.filter(r => r.gratis).length,
+    cancelled: rows.filter(r => r.cancelled).length,
     shipped: rows.filter(r => (r.fulfilment||'pending') === 'shipped').length,
     refunded: rows.filter(r => (r.fulfilment||'pending') === 'refunded').length,
   }), [rows]);
@@ -2324,7 +2437,7 @@ function AdminOrders({ search, sessionInfo, siteUrl }) {
     <div style={{padding:32}}>
       <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14, flexWrap:'wrap', gap:10}}>
         <div className="tabs tabs-row" style={{margin:0}}>
-          {[['all','All'],['unpaid','Unpaid'],['part-paid','Part paid'],['paid','Paid'],['gratis','Gratis'],['shipped','Shipped'],['refunded','Refunded']].map(([k,l]) => (
+          {[['all','All'],['unpaid','Unpaid'],['part-paid','Part paid'],['paid','Paid'],['gratis','Gratis'],['cancelled','Cancelled'],['shipped','Shipped'],['refunded','Refunded']].map(([k,l]) => (
             <div key={k} role="button" tabIndex={0} className={`tab ${statusTab===k?'active':''}`} style={{cursor:'pointer'}}
               onClick={() => setStatusTab(k)}
               onKeyDown={e => { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); setStatusTab(k); } }}>{l} ({tabCounts[k]})</div>
@@ -2805,12 +2918,20 @@ function AdminRepairs() {
 // ============================================================
 // QUOTE CREATOR
 // ============================================================
-function QuoteCreator({ context, onBack, onQuoteSent }) {
+function QuoteCreator({ context, quotes = [], onBack, onQuoteSent }) {
   // Same parts margin orders and repair jobs apply to linked expenses — kept
   // in sync so hardware pricing in a quote matches what the order becomes.
   const PARTS_MARGIN = 0.20;
   const PC_BUILD_RATE = 40;
-  const genRef = () => 'QT-' + Date.now().toString().slice(-6);
+  // Identical scheme to order numbers (OE-0031, gap-filling) but OEQ- prefixed,
+  // instead of the old QT-<timestamp-tail> refs which weren't sequential and
+  // could theoretically collide.
+  const genRef = () => {
+    const used = new Set((quotes || []).map(q => { const m = String(q.quoteRef || '').match(/^OEQ-(\d+)$/); return m ? parseInt(m[1]) : null; }).filter(n => n != null));
+    let n = 1;
+    while (used.has(n)) n++;
+    return `OEQ-${String(n).padStart(4, '0')}`;
+  };
 
   const dq = context?.draftQuote || {};
   const [form, setForm] = useState({
@@ -3214,6 +3335,7 @@ function AdminQuotes() {
     return (
       <QuoteCreator
         context={quoteContext || null}
+        quotes={quotes}
         onBack={() => setOpenId(null)}
         onQuoteSent={() => {
           fetch('/api/admin/quotes', { credentials:'include' })
