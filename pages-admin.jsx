@@ -4503,7 +4503,20 @@ function AdminProducts({ sessionInfo = {} }) {
   }, []);
   const [edit, setEdit] = useState(null);
   const [form, setForm] = useState({});
-  const open = (i) => { setEdit(i); setForm(i === 'new' ? { id:'', sku:'', status:'draft', cat: catOptions[0] || '', cond: condOptions[0] || '', stock:0, price:0 } : rows[i]); };
+  const [openId, setOpenId] = useUrlState('open', null, { push: true });
+  const openRow = (r) => setOpenId(r.id);
+
+  // Reconcile the open product editor with the URL's `open` param (restore on
+  // reload + Back/Forward), same as Orders/Quotes/Repairs/Expenses/HDD Reports.
+  useEffect(() => {
+    const cur = edit === null ? null : (edit === 'new' ? 'new' : edit.id);
+    if (openId === cur) return;
+    if (openId == null) { setEdit(null); return; }
+    if (openId === 'new') { setEdit('new'); setForm({ id:'', sku:'', status:'draft', cat: catOptions[0] || '', cond: condOptions[0] || '', stock:0, price:0 }); return; }
+    const r = rows.find(x => x.id === openId);
+    if (r) { setEdit(r); setForm(r); }
+  }, [openId, rows]);
+
   const save = async () => {
     const item = { ...form, category: form.cat };
     const r = await fetch('/api/admin/catalog/products/save', {
@@ -4513,70 +4526,38 @@ function AdminProducts({ sessionInfo = {} }) {
     if (r && r.ok) {
       const d = await r.json();
       if (edit === 'new') setRows(rs => [...rs, d.item]);
-      else setRows(rs => rs.map((row, i) => i === edit ? d.item : row));
+      else setRows(rs => rs.map(row => row.id === edit.id ? d.item : row));
     } else {
       if (edit === 'new') setRows(rs => [...rs, item]);
-      else setRows(rs => rs.map((row, i) => i === edit ? item : row));
+      else setRows(rs => rs.map(row => row.id === edit.id ? item : row));
     }
-    setEdit(null);
+    setOpenId(null);
   };
   const remove = async () => {
-    const item = rows[edit];
+    const item = edit;
     await fetch('/api/admin/catalog/products/delete', {
       method: 'POST', headers: postHeaders(),
       credentials: 'include', body: JSON.stringify({ id: item.id }),
     }).catch(() => null);
-    setRows(rs => rs.filter((_, i) => i !== edit));
-    setEdit(null);
+    setRows(rs => rs.filter(row => row.id !== item.id));
+    setOpenId(null);
   };
   const moveAllToDraft = async () => {
     setRows(rs => rs.map(r => ({ ...r, status:'draft' })));
     await fetch('/api/admin/catalog/products/status', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ status:'draft' }) }).catch(() => {});
   };
 
-  return (
-    <div style={{padding:32}}>
-      <div className="tabs" style={{marginBottom:18}}>
-        {[`All (${rows.length})`,`Published (${rows.filter(r=>r.status==='published').length})`,`Draft (${rows.filter(r=>r.status==='draft').length})`,'Out of stock','Refurbished'].map((t,i) => (
-          <div key={i} className={`tab ${i===0?'active':''}`}>{t}</div>
-        ))}
-        <div style={{flex:1}}></div>
-        <button className="btn btn-ghost btn-sm" style={{color:'var(--ink-2)'}} onClick={moveAllToDraft}>Move all to draft</button>
-        <button className="btn btn-rust btn-sm" onClick={() => open('new')}>+ New product</button>
-      </div>
-      <Table
-        columns={[
-          { key:'sku', label:'SKU', w:'130px', render:r => <span className="mono" style={{fontSize:11, color:'var(--rust)'}}>{r.sku}</span> },
-          { key:'name', label:'Name', w:'2fr', render:r => (<><div style={{fontWeight:600}}>{r.name}</div><div className="mono" style={{fontSize:10, color:'var(--ink-2)', marginTop:2}}>{r.cond}</div></>) },
-          { key:'cat', label:'Category', w:'1.2fr' },
-          { key:'price', label:'Price', w:'90px', render:r => {
-            if (r.variants && r.variants.length) {
-              const prices = r.variants.map(v => v.price);
-              const lo = Math.min(...prices), hi = Math.max(...prices);
-              return <span className="mono" style={{fontWeight:600}}>{lo===hi ? `$${lo}` : `$${lo}–$${hi}`}</span>;
-            }
-            return <span className="mono" style={{fontWeight:600}}>${(r.price ?? 0).toLocaleString()}</span>;
-          }},
-          { key:'stock', label:'Stock', w:'80px', render:r => {
-            if (r.infiniteStock) return <span className="mono" style={{color:'var(--ink-2)'}}>∞</span>;
-            const s = r.variants && r.variants.length ? r.variants.reduce((a,v) => a + (v.stock||0), 0) : (r.stock ?? 0);
-            return <span className="mono" style={{color: s<3?'var(--rust)':'var(--ink)'}}>{s}</span>;
-          }},
-          { key:'status', label:'Status', w:'120px', render:r => <span className={`tag ${r.status==='published'?'tag-euc':'tag-outline'}`}>{r.status.toUpperCase()}</span> },
-        ]}
-        rows={rows}
-        onRowClick={(_,i) => open(i)}
-      />
-      {edit !== null && (
-        <Drawer open={true} onClose={() => setEdit(null)} title={edit==='new'?'New product':form.name}
-          footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
-            {edit!=='new' && <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={remove}>Delete</button>}
-            <div className="row-flex" style={{gap:8, marginLeft:'auto'}}>
-              <button className="btn btn-ghost btn-sm" onClick={() => setEdit(null)}>Cancel</button>
-              <button className="btn btn-sm" onClick={save}>Save</button>
-            </div>
-          </div>}
-        >
+  if (edit !== null) {
+    return (
+      <OrderPage onClose={() => setOpenId(null)} title={edit==='new'?'New product':form.name}
+        footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
+          {edit!=='new' && <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={remove}>Delete</button>}
+          <div className="row-flex" style={{gap:8, marginLeft:'auto'}}>
+            <button className="btn btn-ghost btn-sm" onClick={() => setOpenId(null)}>Cancel</button>
+            <button className="btn btn-sm" onClick={save}>Save</button>
+          </div>
+        </div>}
+      >
           <div style={{marginBottom:18}}>
             <div className="eyebrow" style={{marginBottom:8}}>IMAGES</div>
             <div style={{display:'flex', flexWrap:'wrap', gap:8, marginBottom:8}}>
@@ -4753,8 +4734,43 @@ function AdminProducts({ sessionInfo = {} }) {
             </div>
           ))}
           <button className="btn btn-ghost btn-sm" style={{marginTop:4}} onClick={() => setForm({...form, variants: [...(form.variants||[]), {sku:'', name:'', price:0, stock:0}]})}>Add variant</button>
-        </Drawer>
-      )}
+      </OrderPage>
+    );
+  }
+
+  return (
+    <div style={{padding:32}}>
+      <div className="tabs" style={{marginBottom:18}}>
+        {[`All (${rows.length})`,`Published (${rows.filter(r=>r.status==='published').length})`,`Draft (${rows.filter(r=>r.status==='draft').length})`,'Out of stock','Refurbished'].map((t,i) => (
+          <div key={i} className={`tab ${i===0?'active':''}`}>{t}</div>
+        ))}
+        <div style={{flex:1}}></div>
+        <button className="btn btn-ghost btn-sm" style={{color:'var(--ink-2)'}} onClick={moveAllToDraft}>Move all to draft</button>
+        <button className="btn btn-rust btn-sm" onClick={() => setOpenId('new')}>+ New product</button>
+      </div>
+      <Table
+        columns={[
+          { key:'sku', label:'SKU', w:'130px', render:r => <span className="mono" style={{fontSize:11, color:'var(--rust)'}}>{r.sku}</span> },
+          { key:'name', label:'Name', w:'2fr', render:r => (<><div style={{fontWeight:600}}>{r.name}</div><div className="mono" style={{fontSize:10, color:'var(--ink-2)', marginTop:2}}>{r.cond}</div></>) },
+          { key:'cat', label:'Category', w:'1.2fr' },
+          { key:'price', label:'Price', w:'90px', render:r => {
+            if (r.variants && r.variants.length) {
+              const prices = r.variants.map(v => v.price);
+              const lo = Math.min(...prices), hi = Math.max(...prices);
+              return <span className="mono" style={{fontWeight:600}}>{lo===hi ? `$${lo}` : `$${lo}–$${hi}`}</span>;
+            }
+            return <span className="mono" style={{fontWeight:600}}>${(r.price ?? 0).toLocaleString()}</span>;
+          }},
+          { key:'stock', label:'Stock', w:'80px', render:r => {
+            if (r.infiniteStock) return <span className="mono" style={{color:'var(--ink-2)'}}>∞</span>;
+            const s = r.variants && r.variants.length ? r.variants.reduce((a,v) => a + (v.stock||0), 0) : (r.stock ?? 0);
+            return <span className="mono" style={{color: s<3?'var(--rust)':'var(--ink)'}}>{s}</span>;
+          }},
+          { key:'status', label:'Status', w:'120px', render:r => <span className={`tag ${r.status==='published'?'tag-euc':'tag-outline'}`}>{r.status.toUpperCase()}</span> },
+        ]}
+        rows={rows}
+        onRowClick={openRow}
+      />
     </div>
   );
 }
