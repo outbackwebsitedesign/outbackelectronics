@@ -1178,7 +1178,10 @@ function priceLineToAmount(priceLine) {
 // than asking staff to enter kilometres by hand.
 async function buildServiceLineItems(svc, customerLoc) {
   const price = String(svc.price ?? svc.priceLine ?? '').trim();
-  const mk = (description, amount) => ({ id: 'li-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6), description, amount, qty: 1 });
+  // `kind` and `needsDistanceRecalc` are explicit flags carried on the line item
+  // itself — not re-derived later by pattern-matching the description text,
+  // which breaks the instant a staff member rewords it.
+  const mk = (description, amount, extra = {}) => ({ id: 'li-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6), description, amount, qty: 1, ...extra });
   const isFree = /no charge/i.test(price);
   const perKmMatch = price.match(/\$\s*(\d+(\.\d+)?)\s*\/\s*km/i);
   const flatCalloutMatch = price.match(/\$\s*(\d+(\.\d+)?)\s*call-?out/i);
@@ -1194,23 +1197,23 @@ async function buildServiceLineItems(svc, customerLoc) {
       const rate = Number(perKmMatch[1]);
       const loc = (customerLoc || '').trim();
       if (!loc) {
-        items.push(mk(`${svc.name} — travel (set the order's Location so km is worked out automatically)`, ''));
+        items.push(mk(`${svc.name} — travel (set the order's Location or Shipping Address so km is worked out automatically)`, '', { needsDistanceRecalc: true, serviceName: svc.name, kmRate: rate }));
       } else {
         try {
           const r = await fetch(`/api/admin/geocode-distance?address=${encodeURIComponent(loc)}`, { credentials: 'include' });
           if (r.ok) {
             const d = await r.json();
-            items.push(mk(`${svc.name} — travel (${d.distKm}km from shop to "${loc}" @ $${rate}/km)`, Math.round(rate * d.distKm * 100) / 100));
+            items.push(mk(`${svc.name} — travel (${d.distKm}km from shop to "${loc}" @ $${rate}/km)`, Math.round(rate * d.distKm * 100) / 100, { needsDistanceRecalc: true, serviceName: svc.name, kmRate: rate }));
           } else {
-            items.push(mk(`${svc.name} — travel (couldn't locate "${loc}" — confirm km manually)`, ''));
+            items.push(mk(`${svc.name} — travel (couldn't locate "${loc}" — confirm km manually)`, '', { needsDistanceRecalc: true, serviceName: svc.name, kmRate: rate }));
           }
         } catch {
-          items.push(mk(`${svc.name} — travel (distance lookup failed — confirm km manually)`, ''));
+          items.push(mk(`${svc.name} — travel (distance lookup failed — confirm km manually)`, '', { needsDistanceRecalc: true, serviceName: svc.name, kmRate: rate }));
         }
       }
     }
     if (flatCalloutMatch) items.push(mk(`${svc.name} — call-out fee`, Number(flatCalloutMatch[1])));
-    if (hourlyMatch) items.push(mk(`${svc.name} — labour (set qty to hours worked)`, Number(hourlyMatch[1])));
+    if (hourlyMatch) items.push(mk(`${svc.name} — labour (set qty to hours worked)`, Number(hourlyMatch[1]), { kind: 'hourly' }));
     return items;
   }
 
@@ -1219,7 +1222,7 @@ async function buildServiceLineItems(svc, customerLoc) {
     // a line item pulled from thin air — they go through the expense tracker so
     // the parts-auto line item (cost + margin) is what actually gets billed,
     // instead of a naked customer-facing number nothing backs.
-    return [mk(`${svc.name} — labour (set qty to hours worked)`, Number(hourlyMatch[1]))];
+    return [mk(`${svc.name} — labour (set qty to hours worked)`, Number(hourlyMatch[1]), { kind: 'hourly' })];
   }
 
   if (isRange || isQuoted) return [mk(`${svc.name} (${price} — confirm price before saving)`, '')];
@@ -1391,7 +1394,7 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
     const typed = customerQuery.trim();
     setCustomerQuery(c ? `${c.name}${c.email ? ` (${c.email})` : ''}` : '');
     setCustomerDropdownOpen(false);
-    if (c) setForm(f => ({ ...f, cust: c.name || f.cust, email: c.email || f.email, phone: c.phone || f.phone, loc: c.loc || f.loc }));
+    if (c) setForm(f => ({ ...f, cust: c.name || f.cust, email: c.email || f.email, phone: c.phone || f.phone, loc: c.loc || f.loc, shippingAddress: c.shippingAddress || f.shippingAddress }));
     else if (typed && !form.cust) setForm(f => ({ ...f, cust: typed }));
   };
   const customerMatches = useMemo(() => {
@@ -1403,7 +1406,7 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
       (c.phone || '').toLowerCase().includes(q)
     ).slice(0, 8);
   }, [customers, customerQuery]);
-  const [payEntry, setPayEntry] = useState({ amount:'', method:'Cash', note:'', date: todayISODate() });
+  const [payEntry, setPayEntry] = useState({ amount:'', method: localStorage.getItem('oe_lastPaymentMethod') || 'Cash', note:'', date: todayISODate() });
   const [deleteBusy, setDeleteBusy] = useState(false);
   const canDeleteOrder = (ROLE_LEVELS[sessionInfo.role] ?? 0) >= ROLE_LEVELS.manager;
   const deleteOrderNow = async () => {
@@ -1597,9 +1600,15 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
     const amt = isCash ? cashRound(rawAmt) : Math.round(rawAmt * 100) / 100;
     const payment = { amount: amt, method: payEntry.method, note: payEntry.note, date: orderDateFromISO(payEntry.date) };
     setForm(f => ({ ...f, payments: [...(f.payments || []), payment] }));
-    setPayEntry({ amount:'', method:'Cash', note:'', date: todayISODate() });
+    localStorage.setItem('oe_lastPaymentMethod', payEntry.method);
+    setPayEntry({ amount:'', method: payEntry.method, note:'', date: todayISODate() });
   };
-  const removePayment = (i) => setForm(f => ({ ...f, payments: (f.payments || []).filter((_,idx) => idx !== i) }));
+  const removePayment = async (i) => {
+    const p = (form.payments || [])[i];
+    const ok = await adminConfirm(`Delete the ${p ? `$${Number(p.amount).toFixed(2)} ${p.method} payment` : 'payment'} logged on ${p?.date || 'this order'}? This cannot be undone.`, { title: 'Delete payment', confirmLabel: 'Delete', danger: true });
+    if (!ok) return;
+    setForm(f => ({ ...f, payments: (f.payments || []).filter((_,idx) => idx !== i) }));
+  };
   const addUpdate = () => {
     if (!updateEntry.text.trim()) return;
     const u = { text: updateEntry.text.trim(), type: updateEntry.type, date: todayOrderDate(), ts: new Date().toISOString() };
@@ -1624,6 +1633,7 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
   const amountPaid = orderAmountPaid(form);
   const profitRevenue = amountPaid > 0 ? amountPaid : (Number(form.total) || 0);
   const profit = profitRevenue - partsCost;
+  const maxRefund = Math.max(0, Math.round(((amountPaid > 0 ? amountPaid : orderEffectiveTotal(form)) - (form.refund ? Number(form.refund.amount) || 0 : 0)) * 100) / 100);
 
   return (
     <OrderPage onClose={onClose} dirty={dirty} title={edit.id ? `Order ${edit.id}` : 'New order'}
@@ -1691,11 +1701,28 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
               // record picked or matched), create that customer record now so they
               // immediately appear in the Customers list rather than waiting on backfill.
               if (!selectedCustomerId && form.cust && form.cust.trim() && !findCustomerMatch(form)) {
-                const custPayload = { name: form.cust.trim(), email: form.email || '', phone: form.phone || '', loc: form.loc || '' };
+                const custPayload = { name: form.cust.trim(), email: form.email || '', phone: form.phone || '', loc: form.loc || '', shippingAddress: form.shippingAddress || '' };
                 const cr = await fetch('/api/admin/customers/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(custPayload) }).catch(()=>null);
                 if (cr && cr.ok) {
                   const cd = await cr.json();
                   if (cd.item) onCustomerCreated?.(cd.item);
+                }
+              } else if (selectedCustomerId) {
+                // Keep the existing customer record in sync so their next order
+                // doesn't need this retyped — e.g. a shipping address added or
+                // corrected on this order should stick to the customer, not just
+                // this one order.
+                const existing = (customers || []).find(c => c.id === selectedCustomerId);
+                if (existing) {
+                  const changed = ['loc','phone','email','shippingAddress'].some(k => (form[k] || '') !== (existing[k] || ''));
+                  if (changed) {
+                    const cr = await fetch('/api/admin/customers/save', { method:'POST', headers:postHeaders(), credentials:'include',
+                      body: JSON.stringify({ ...existing, loc: form.loc || existing.loc || '', phone: form.phone || existing.phone || '', email: form.email || existing.email || '', shippingAddress: form.shippingAddress || existing.shippingAddress || '' }) }).catch(()=>null);
+                    if (cr && cr.ok) {
+                      const cd = await cr.json();
+                      if (cd.item) onCustomerCreated?.(cd.item);
+                    }
+                  }
                 }
               }
               onSave(savedItem, !edit.id);
@@ -1733,15 +1760,19 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
       <label className="field"><span className="label">{selectedCustomerId ? 'Customer name' : 'New customer name'}<ReqMark/></span><input className="input" aria-required="true" value={form.cust||''} onChange={e=>setForm({...form,cust:e.target.value})}/></label>
       <label className="field"><span className="label">Email</span><input className="input" type="email" value={form.email||''} onChange={e=>setForm({...form,email:e.target.value})}/></label>
       <label className="field"><span className="label">Phone</span><input className="input" type="tel" value={form.phone||''} onChange={e=>setForm({...form,phone:e.target.value})}/></label>
-      <label className="field"><span className="label">Shipping Address</span><input className="input" value={form.shippingAddress||''} onChange={e=>setForm({...form,shippingAddress:e.target.value})} placeholder="Street, City, State, Postcode"/></label>
-      <label className="field"><span className="label">Location</span><input className="input" value={form.loc||''} onChange={e=>setForm({...form,loc:e.target.value})}/></label>
+      <label className="field"><span className="label">Shipping Address</span><input className="input" value={form.shippingAddress||''} onChange={e=>setForm({...form,shippingAddress:e.target.value})} placeholder="Street, City, State, Postcode"/>
+        <div style={{fontSize:11, color:'var(--ink-3)', marginTop:4}}>Where a physical order gets posted.</div>
+      </label>
+      <label className="field"><span className="label">Location</span><input className="input" value={form.loc||''} onChange={e=>setForm({...form,loc:e.target.value})} placeholder="e.g. suburb or full address"/>
+        <div style={{fontSize:11, color:'var(--ink-3)', marginTop:4}}>Used for callout distance. Falls back to Shipping Address if left blank.</div>
+      </label>
       <label className="field"><span className="label">Date</span><input className="input" type="date" value={isoFromOrderDate(form.date)} onChange={e=>setForm({...form,date:orderDateFromISO(e.target.value)})}/></label>
 
       <div className="field">
         <span className="label">Line items</span>
         {(form.lineItems||[]).map(li => {
-          const isHourly = /set qty to hours worked/i.test(li.description || '');
-          const needsRecalc = /travel.*—.*\((set the order's Location|couldn't locate|distance lookup failed)/i.test(li.description || '');
+          const isHourly = li.kind === 'hourly';
+          const needsRecalc = !!li.needsDistanceRecalc;
           return (
           <div key={li.id} style={{display:'grid', gridTemplateColumns: needsRecalc ? '1fr 60px 110px 28px 28px' : '1fr 60px 110px 28px', gap:8, marginBottom:8}}>
             <input className="input" placeholder="e.g. Custom software development" value={li.description}
@@ -1751,18 +1782,16 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
             <input className="input" type="number" min="0" step="0.01" placeholder="Price ea." value={li.amount}
               onChange={e => setForm(f => ({...f, lineItems: f.lineItems.map(x => x.id === li.id ? {...x, amount: nonNegInput(e.target.value)} : x)}))}/>
             {needsRecalc && (
-              <button className="btn btn-ghost btn-sm" style={{padding:0}} title="Recalculate distance from the order's Location"
+              <button className="btn btn-ghost btn-sm" style={{padding:0}} title="Recalculate distance from the order's Location (or Shipping Address if Location is blank)"
                 onClick={async () => {
-                  const m = (li.description || '').match(/^(.*?) — travel/);
-                  const svcName = m ? m[1] : 'Callout';
-                  const rateM = (li.description || '').match(/@\s*\$([\d.]+)\/km/);
-                  const loc = (form.loc || '').trim();
-                  if (!loc) { adminToast("Add the order's Location first, then retry."); return; }
+                  const svcName = li.serviceName || 'Callout';
+                  const rate = li.kmRate;
+                  const loc = (form.loc || form.shippingAddress || '').trim();
+                  if (!loc) { adminToast("Add the order's Location or Shipping Address first, then retry."); return; }
                   try {
                     const r = await fetch(`/api/admin/geocode-distance?address=${encodeURIComponent(loc)}`, { credentials:'include' });
                     if (!r.ok) { adminToast(`Couldn't locate "${loc}" — check the address.`); return; }
                     const d = await r.json();
-                    const rate = rateM ? Number(rateM[1]) : NaN;
                     const amount = Number.isFinite(rate) ? Math.round(rate * d.distKm * 100) / 100 : li.amount;
                     const description = Number.isFinite(rate)
                       ? `${svcName} — travel (${d.distKm}km from shop to "${loc}" @ $${rate}/km)`
@@ -1786,7 +1815,7 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
           }
           const svc = services.find(s => s.id === val);
           if (!svc) return;
-          const items = await buildServiceLineItems(svc, form.loc);
+          const items = await buildServiceLineItems(svc, form.loc || form.shippingAddress);
           setForm(f => ({...f, lineItems: [...(f.lineItems||[]), ...items]}));
           if (serviceNeedsPartsExpense(svc)) { setExpenseEdit('new'); setExpenseForm({ ...blankExpense(form.id), description: `${svc.name} — parts` }); }
         }}>
@@ -2130,6 +2159,12 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
           ) : (
             <>
               <div style={{fontSize:12, color:'var(--ink-2)', marginBottom:10}}>Ask the customer whether they want their money back or store credit, then choose below. The customer is emailed automatically and the order is marked refunded.</div>
+              {maxRefund > 0 && (
+                <button className="btn btn-ghost btn-sm" style={{fontSize:11, marginBottom:8}}
+                  onClick={() => setRefundEntry(v => ({...v, amount: maxRefund.toFixed(2)}))}>
+                  Refund in full (${maxRefund.toLocaleString('en-AU',{minimumFractionDigits:2})})
+                </button>
+              )}
               <div style={{display:'grid', gridTemplateColumns:'1fr 120px auto', gap:8, alignItems:'end'}}>
                 <label className="field" style={{margin:0}}><span className="label">Method</span>
                   <select className="select" value={refundEntry.method} onChange={e=>setRefundEntry(v=>({...v,method:e.target.value}))}>
@@ -2138,7 +2173,7 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
                     <option value="store-credit">Store credit</option>
                   </select>
                 </label>
-                <label className="field" style={{margin:0}}><span className="label">Amount</span><input className="input" type="number" min="0" max={(orderAmountPaid(form) > 0 ? orderAmountPaid(form) : orderEffectiveTotal(form)).toFixed(2)} step="0.01" placeholder={Number(form.total||0).toFixed(2)} value={refundEntry.amount} onChange={e=>setRefundEntry(v=>({...v,amount:nonNegInput(e.target.value)}))}/></label>
+                <label className="field" style={{margin:0}}><span className="label">Amount</span><input className="input" type="number" min="0" max={maxRefund.toFixed(2)} step="0.01" placeholder={Number(form.total||0).toFixed(2)} value={refundEntry.amount} onChange={e=>setRefundEntry(v=>({...v,amount:nonNegInput(e.target.value)}))}/></label>
                 <button className="btn btn-sm" style={{background:'#7a3a18', color:'#fff', border:'none', marginBottom:1}} onClick={doRefund} disabled={refundBusy}>{refundBusy ? 'Processing…' : 'Issue Refund'}</button>
               </div>
               {refundEntry.method === 'store-credit' && <div style={{fontSize:11, color:'var(--ink-3)', marginTop:6}}>Store credit requires the customer to have an account with email {form.email || '(none set)'}.</div>}
@@ -2237,9 +2272,14 @@ function AdminOrders({ search, sessionInfo, siteUrl }) {
     refunded: rows.filter(r => (r.fulfilment||'pending') === 'refunded').length,
   }), [rows]);
 
+  // Fills the lowest deleted/unused number first (e.g. OE-0031 reopens after being
+  // deleted, even with OE-0035 already on file) rather than always incrementing
+  // past every gap.
   const nextOrderId = () => {
-    const maxN = rows.reduce((max, o) => { const m = String(o.id || '').match(/^OE-(\d+)$/); return m ? Math.max(max, parseInt(m[1])) : max; }, 0);
-    return `OE-${String(maxN + 1).padStart(4, '0')}`;
+    const used = new Set(rows.map(o => { const m = String(o.id || '').match(/^OE-(\d+)$/); return m ? parseInt(m[1]) : null; }).filter(n => n != null));
+    let n = 1;
+    while (used.has(n)) n++;
+    return `OE-${String(n).padStart(4, '0')}`;
   };
 
   const blankOrder = () => ({ id:'', suggestedId: nextOrderId(), cust:'', email:'', phone:'', loc:'', items:'', lineItems:[], date: todayOrderDate(), total:0, discountType:'percent', discountValue:'', discountAmount:0, fulfilment:'pending', payments:[], parts:[], updates:[] });
@@ -2274,7 +2314,7 @@ function AdminOrders({ search, sessionInfo, siteUrl }) {
           setOpenId(null);
         }}
         onExpensesChange={setExpenses}
-        onCustomerCreated={(cust) => setCustomers(cs => [...cs, cust])}
+        onCustomerCreated={(cust) => setCustomers(cs => cs.some(c => c.id === cust.id) ? cs.map(c => c.id === cust.id ? cust : c) : [...cs, cust])}
         onDelete={(id) => setRows(rs => rs.filter(r => r.id !== id))}
       />
     );
