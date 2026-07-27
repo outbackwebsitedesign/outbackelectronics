@@ -7256,6 +7256,12 @@ const adminServer = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true, order: orders[idx] });
   }
 
+  if (req.method === 'GET' && url.pathname === '/api/admin/portal-users') {
+    const session = requireRole(req, res, 'staff'); if (!session) return;
+    const items = readUsers().map(u => ({ username: u.username, displayName: u.displayName || u.username, email: u.email || '' }));
+    return json(res, 200, { items });
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/admin/portal-users/lookup') {
     const session = requireRole(req, res, 'staff'); if (!session) return;
     const email = String(url.searchParams.get('email') || '').toLowerCase().trim();

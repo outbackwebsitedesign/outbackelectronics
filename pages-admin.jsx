@@ -6520,6 +6520,8 @@ function AdminGroups() {
   const [drawerTab, setDrawerTab] = useState('details');
   const [newMember, setNewMember] = useState('');
   const [membershipTiers, setMembershipTiers] = useState([]);
+  const [portalUsers, setPortalUsers] = useState([]);
+  const [memberDropdownOpen, setMemberDropdownOpen] = useState(false);
 
   useEffect(() => {
     fetch('/api/admin/groups', { credentials:'include' })
@@ -6530,6 +6532,10 @@ function AdminGroups() {
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(d => setMembershipTiers((d.tiers || []).filter(t => t.status === 'published')))
       .catch(() => {});
+    fetch('/api/admin/portal-users', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setPortalUsers(d.items || []))
+      .catch(() => setPortalUsers([]));
   }, []);
 
   useEffect(() => {
@@ -6576,14 +6582,23 @@ function AdminGroups() {
     setEdit(null);
   };
 
-  const addMember = () => {
-    const name = newMember.trim();
+  const addMember = (username) => {
+    const name = (username ?? newMember).trim();
     if (!name || form.members.find(m=>m.username===name)) return;
     setForm(f => ({ ...f, members: [...f.members, { username: name, joinedAt: new Date().toISOString().slice(0,10) }] }));
     setNewMember('');
+    setMemberDropdownOpen(false);
   };
 
   const removeMember = (username) => setForm(f => ({ ...f, members: f.members.filter(m=>m.username!==username) }));
+
+  const memberMatches = useMemo(() => {
+    const q = newMember.trim().toLowerCase();
+    const existing = new Set(form.members.map(m => m.username));
+    const pool = portalUsers.filter(u => !existing.has(u.username));
+    if (!q) return pool.slice(0, 8);
+    return pool.filter(u => (u.username||'').toLowerCase().includes(q) || (u.displayName||'').toLowerCase().includes(q) || (u.email||'').toLowerCase().includes(q)).slice(0, 8);
+  }, [portalUsers, newMember, form.members]);
 
   const joinTypeTag = (t) => t==='subscription'?'tag-rust':t==='one-time'?'tag-ochre':'tag-outline';
 
@@ -6664,9 +6679,26 @@ function AdminGroups() {
           </>)}
 
           {drawerTab==='members' && (<>
-            <div className="row-flex" style={{gap:8, marginBottom:16}}>
-              <input className="input" style={{flex:1}} placeholder="Username" value={newMember} onChange={e=>setNewMember(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addMember()}/>
-              <button className="btn btn-ghost btn-sm" onClick={addMember}>Add</button>
+            <div style={{position:'relative', marginBottom:16}}>
+              <div className="row-flex" style={{gap:8}}>
+                <input className="input" style={{flex:1}} placeholder="Search portal users by username, name, or email…" value={newMember}
+                  onChange={e => { setNewMember(e.target.value); setMemberDropdownOpen(true); }}
+                  onFocus={() => setMemberDropdownOpen(true)}
+                  onBlur={() => setTimeout(() => setMemberDropdownOpen(false), 150)}
+                  onKeyDown={e=>e.key==='Enter'&&addMember()}/>
+                <button className="btn btn-ghost btn-sm" onClick={() => addMember()}>Add</button>
+              </div>
+              {memberDropdownOpen && (
+                <div style={{position:'absolute', top:'100%', left:0, right:0, zIndex:20, background:'var(--bg)', border:'1px solid var(--line)', boxShadow:'0 4px 12px rgba(0,0,0,.12)', maxHeight:240, overflowY:'auto'}}>
+                  {memberMatches.length === 0 && <div style={{padding:'8px 12px', fontSize:12, color:'var(--ink-3)'}}>{newMember.trim() ? 'No matching portal users — press Add to use this exact username.' : 'No portal users found.'}</div>}
+                  {memberMatches.map(u => (
+                    <div key={u.username} role="button" tabIndex={0} onMouseDown={e => { e.preventDefault(); addMember(u.username); }} style={{padding:'8px 12px', fontSize:13, cursor:'pointer'}}>
+                      <div style={{fontWeight:600}}>{u.displayName}{u.displayName !== u.username ? <span style={{fontWeight:400, color:'var(--ink-3)'}}> ({u.username})</span> : ''}</div>
+                      <div style={{fontSize:11, color:'var(--ink-3)'}}>{u.email || '—'}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             {form.members.length === 0 && <p style={{fontSize:13, color:'var(--ink-3)'}}>No members yet.</p>}
             {form.members.map(m => (
