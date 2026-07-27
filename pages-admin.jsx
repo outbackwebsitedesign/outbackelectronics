@@ -1603,6 +1603,8 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
             if (form.email && !isValidEmail(form.email)) { adminToast('Customer email looks invalid — please check it.'); return; }
             if (form.phone && !isValidPhone(form.phone)) { adminToast('Phone number looks invalid — please check it.'); return; }
             if (Number(form.total) < 0) { adminToast('Order total cannot be negative.'); return; }
+            const blankLineItem = (form.lineItems || []).find(li => li.id !== 'parts-auto' && li.description && (li.amount === '' || li.amount === null || li.amount === undefined || Number.isNaN(Number(li.amount))));
+            if (blankLineItem) { adminToast(`"${blankLineItem.description}" has no price set — confirm it before saving, or it'll bill as $0.`); return; }
             const payload = { ...form, _originalId: edit.id || form.id, _isNew: !edit.id };
             const r = await fetch('/api/admin/orders/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(payload) }).catch(()=>null);
             if (r && r.ok) {
@@ -1655,18 +1657,43 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
 
       <div className="field">
         <span className="label">Line items</span>
-        {(form.lineItems||[]).map(li => (
-          <div key={li.id} style={{display:'grid', gridTemplateColumns:'1fr 60px 110px 28px', gap:8, marginBottom:8}}>
+        {(form.lineItems||[]).map(li => {
+          const isHourly = /set qty to hours worked/i.test(li.description || '');
+          const needsRecalc = /travel.*—.*\((set the order's Location|couldn't locate|distance lookup failed)/i.test(li.description || '');
+          return (
+          <div key={li.id} style={{display:'grid', gridTemplateColumns: needsRecalc ? '1fr 60px 110px 28px 28px' : '1fr 60px 110px 28px', gap:8, marginBottom:8}}>
             <input className="input" placeholder="e.g. Custom software development" value={li.description}
               onChange={e => setForm(f => ({...f, lineItems: f.lineItems.map(x => x.id === li.id ? {...x, description: e.target.value} : x)}))}/>
-            <input className="input" type="number" min="1" step="1" placeholder="Qty" value={li.qty||1}
+            <input className="input" type="number" min="1" step="1" placeholder={isHourly ? 'Hrs' : 'Qty'} value={li.qty||1}
               onChange={e => setForm(f => ({...f, lineItems: f.lineItems.map(x => x.id === li.id ? {...x, qty: Math.max(1, parseInt(e.target.value)||1)} : x)}))}/>
             <input className="input" type="number" min="0" step="0.01" placeholder="Price ea." value={li.amount}
               onChange={e => setForm(f => ({...f, lineItems: f.lineItems.map(x => x.id === li.id ? {...x, amount: nonNegInput(e.target.value)} : x)}))}/>
+            {needsRecalc && (
+              <button className="btn btn-ghost btn-sm" style={{padding:0}} title="Recalculate distance from the order's Location"
+                onClick={async () => {
+                  const m = (li.description || '').match(/^(.*?) — travel/);
+                  const svcName = m ? m[1] : 'Callout';
+                  const rateM = (li.description || '').match(/@\s*\$([\d.]+)\/km/);
+                  const loc = (form.loc || '').trim();
+                  if (!loc) { adminToast("Add the order's Location first, then retry."); return; }
+                  try {
+                    const r = await fetch(`/api/admin/geocode-distance?address=${encodeURIComponent(loc)}`, { credentials:'include' });
+                    if (!r.ok) { adminToast(`Couldn't locate "${loc}" — check the address.`); return; }
+                    const d = await r.json();
+                    const rate = rateM ? Number(rateM[1]) : NaN;
+                    const amount = Number.isFinite(rate) ? Math.round(rate * d.distKm * 100) / 100 : li.amount;
+                    const description = Number.isFinite(rate)
+                      ? `${svcName} — travel (${d.distKm}km from shop to "${loc}" @ $${rate}/km)`
+                      : `${svcName} — travel (${d.distKm}km from shop to "${loc}")`;
+                    setForm(f => ({...f, lineItems: f.lineItems.map(x => x.id === li.id ? {...x, description, amount} : x)}));
+                  } catch { adminToast('Distance lookup failed — try again.'); }
+                }}><Icon name="refresh" size={12}/></button>
+            )}
             <button className="btn btn-ghost btn-sm" style={{padding:0, color:'var(--rust)'}}
               onClick={() => setForm(f => ({...f, lineItems: f.lineItems.filter(x => x.id !== li.id)}))}><Icon name="x" size={12}/></button>
           </div>
-        ))}
+          );
+        })}
         <select className="select" value="" onChange={async e => {
           const val = e.target.value;
           if (!val) return;
@@ -1679,7 +1706,7 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
           if (!svc) return;
           const items = await buildServiceLineItems(svc, form.loc);
           setForm(f => ({...f, lineItems: [...(f.lineItems||[]), ...items]}));
-          if (serviceNeedsPartsExpense(svc)) { setExpenseEdit('new'); setExpenseForm(blankExpense(form.id)); }
+          if (serviceNeedsPartsExpense(svc)) { setExpenseEdit('new'); setExpenseForm({ ...blankExpense(form.id), description: `${svc.name} — parts` }); }
         }}>
           <option value="">+ Add line item…</option>
           <option value="__custom__">Custom line item</option>
@@ -1710,8 +1737,11 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
           <input className="input" type="number" min="0" step="0.01" placeholder={form.discountType === 'fixed' ? 'e.g. 20.00' : 'e.g. 10'}
             value={form.discountValue || ''} onChange={e=>setForm({...form, discountValue:nonNegInput(e.target.value)})}/>
         </div>
-        <input className="input" value={form.discountLabel || ''} onChange={e=>setForm({...form, discountLabel:e.target.value})}
+        <input className="input" list="discount-reason-presets" value={form.discountLabel || ''} onChange={e=>setForm({...form, discountLabel:e.target.value})}
           placeholder="Reason (optional) — e.g. Multi-service discount, Loyalty discount"/>
+        <datalist id="discount-reason-presets">
+          {['Multi-service discount','Loyalty discount','Returning customer','Goodwill / service recovery','Staff discount','Bundle discount','Referral discount'].map(l => <option key={l} value={l}/>)}
+        </datalist>
         {Number(form.discountAmount) > 0 && (
           <div style={{marginTop:8, fontSize:12, color:'var(--rust)'}}>{form.discountLabel || 'Discount'} applied: <strong>-${Number(form.discountAmount).toLocaleString('en-AU',{minimumFractionDigits:2})}</strong></div>
         )}
@@ -1924,6 +1954,12 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
           <button className="icon-btn" style={{width:22, height:22, fontSize:14, color:'var(--ink-3)'}} onClick={() => removePayment(i)}>×</button>
         </div>
       ))}
+      {!form.gratis && orderBalance(form) > 0 && (
+        <button className="btn btn-ghost btn-sm" style={{fontSize:11, marginTop:4, marginBottom:4}}
+          onClick={() => setPayEntry(v => ({...v, amount: orderBalance(form).toFixed(2)}))}>
+          Pay in full (${orderBalance(form).toLocaleString('en-AU',{minimumFractionDigits:2})})
+        </button>
+      )}
       <div style={{display:'grid', gridTemplateColumns:'100px 100px 130px 1fr auto', gap:8, alignItems:'end', marginTop:8}}>
         <label className="field" style={{margin:0}}><span className="label">Amount</span><input className="input" type="number" min="0" step="0.01" placeholder="0.00" value={payEntry.amount} onChange={e=>setPayEntry(v=>({...v,amount:nonNegInput(e.target.value)}))}/></label>
         <label className="field" style={{margin:0}}><span className="label">Method</span>
