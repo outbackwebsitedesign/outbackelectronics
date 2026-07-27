@@ -7962,6 +7962,19 @@ const adminServer = http.createServer(async (req, res) => {
     const session = requireRole(req, res, 'staff'); if (!session) return;
     return json(res, 200, { items: readExpenses() });
   }
+
+  // ── Admin: distance from shop to a free-text customer address (for callout
+  // line items — staff should never have to manually work out km themselves) ─
+  if (req.method === 'GET' && url.pathname === '/api/admin/geocode-distance') {
+    const session = requireRole(req, res, 'staff'); if (!session) return;
+    const address = String(url.searchParams.get('address') || '').trim();
+    if (!address) return json(res, 422, { error: 'missing_address' });
+    const coords = await geocodeAddress(address);
+    if (!coords) return json(res, 404, { error: 'not_found', message: 'Could not locate that address.' });
+    const shop = await getShopCoords();
+    const distKm = Math.round(haversineKm(shop.lat, shop.lng, coords.lat, coords.lng));
+    return json(res, 200, { distKm });
+  }
   if (req.method === 'POST' && url.pathname === '/api/admin/expenses/save') {
     const session = requireRole(req, res, 'manager'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }

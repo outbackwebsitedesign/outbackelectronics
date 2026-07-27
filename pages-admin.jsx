@@ -1123,34 +1123,62 @@ function priceLineToAmount(priceLine) {
 // Builds one or more sensible line items from a service's pricing model instead of
 // blindly grabbing the first number in priceLine — an hourly rate, a range, a quote,
 // a per-km callout fee, or an "hourly + parts" job should never collapse into a
-// single flat one-off price times a single "quantity."
-function serviceToLineItem(svc) {
+// single flat one-off price times a single "quantity." Per-km travel is worked out
+// automatically from the order's Location field (shop → customer distance) rather
+// than asking staff to enter kilometres by hand.
+async function buildServiceLineItems(svc, customerLoc) {
   const price = String(svc.price ?? svc.priceLine ?? '').trim();
-  const isFree = /no charge/i.test(price);
-  const isHourly = /\/\s*hr\b/i.test(price);
-  const hasParts = /\+\s*parts\b/i.test(price);
-  const isVariable = /\/\s*km\b|call-?out/i.test(price);
-  const isRange = /–|-\s*\$/.test(price) && !isHourly && !isVariable;
-  const isQuoted = /quoted/i.test(price);
   const mk = (description, amount) => ({ id: 'li-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6), description, amount, qty: 1 });
+  const isFree = /no charge/i.test(price);
+  const perKmMatch = price.match(/\$\s*(\d+(\.\d+)?)\s*\/\s*km/i);
+  const flatCalloutMatch = price.match(/\$\s*(\d+(\.\d+)?)\s*call-?out/i);
+  const hourlyMatch = price.match(/\$\s*(\d+(\.\d+)?)\s*\/\s*hr/i);
+  const isRange = /–|-\s*\$/.test(price) && !hourlyMatch && !perKmMatch && !flatCalloutMatch;
+  const isQuoted = /quoted/i.test(price);
 
   if (isFree) return [mk(svc.name || '', 0)];
 
-  if (isHourly) {
-    const m = price.match(/\$\s*(\d+(\.\d+)?)\s*\/\s*hr/i);
-    const amount = m ? Number(m[1]) : priceLineToAmount(price);
-    // Labour is billed per hour (qty = hours worked); parts are a separate flat
-    // cost, not multiplied by hours, so they need their own line item.
-    if (hasParts) return [
-      mk(`${svc.name} — labour (set qty to hours worked)`, amount),
-      mk(`${svc.name} — parts (confirm cost before saving)`, ''),
-    ];
-    return [mk(`${svc.name} (hourly — set qty to hours worked)`, amount)];
+  if (perKmMatch || flatCalloutMatch) {
+    const items = [];
+    if (perKmMatch) {
+      const rate = Number(perKmMatch[1]);
+      const loc = (customerLoc || '').trim();
+      if (!loc) {
+        items.push(mk(`${svc.name} — travel (set the order's Location so km is worked out automatically)`, ''));
+      } else {
+        try {
+          const r = await fetch(`/api/admin/geocode-distance?address=${encodeURIComponent(loc)}`, { credentials: 'include' });
+          if (r.ok) {
+            const d = await r.json();
+            items.push(mk(`${svc.name} — travel (${d.distKm}km from shop to "${loc}" @ $${rate}/km)`, Math.round(rate * d.distKm * 100) / 100));
+          } else {
+            items.push(mk(`${svc.name} — travel (couldn't locate "${loc}" — confirm km manually)`, ''));
+          }
+        } catch {
+          items.push(mk(`${svc.name} — travel (distance lookup failed — confirm km manually)`, ''));
+        }
+      }
+    }
+    if (flatCalloutMatch) items.push(mk(`${svc.name} — call-out fee`, Number(flatCalloutMatch[1])));
+    if (hourlyMatch) items.push(mk(`${svc.name} — labour (set qty to hours worked)`, Number(hourlyMatch[1])));
+    return items;
   }
 
-  if (isRange || isQuoted || isVariable) return [mk(`${svc.name} (${price} — confirm price before saving)`, '')];
+  if (hourlyMatch) {
+    // Labour is billed per hour (qty = hours worked). Parts are a real cost, not
+    // a line item pulled from thin air — they go through the expense tracker so
+    // the parts-auto line item (cost + margin) is what actually gets billed,
+    // instead of a naked customer-facing number nothing backs.
+    return [mk(`${svc.name} — labour (set qty to hours worked)`, Number(hourlyMatch[1]))];
+  }
+
+  if (isRange || isQuoted) return [mk(`${svc.name} (${price} — confirm price before saving)`, '')];
 
   return [mk(svc.name || '', priceLineToAmount(price))];
+}
+function serviceNeedsPartsExpense(svc) {
+  const price = String(svc.price ?? svc.priceLine ?? '').trim();
+  return /\/\s*hr\b/i.test(price) && /\+\s*parts\b/i.test(price);
 }
 function discountAmountFor(subtotal, type, value) {
   const v = Number(value) || 0;
@@ -1639,7 +1667,7 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
               onClick={() => setForm(f => ({...f, lineItems: f.lineItems.filter(x => x.id !== li.id)}))}><Icon name="x" size={12}/></button>
           </div>
         ))}
-        <select className="select" value="" onChange={e => {
+        <select className="select" value="" onChange={async e => {
           const val = e.target.value;
           if (!val) return;
           e.target.value = '';
@@ -1649,7 +1677,9 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
           }
           const svc = services.find(s => s.id === val);
           if (!svc) return;
-          setForm(f => ({...f, lineItems: [...(f.lineItems||[]), ...serviceToLineItem(svc)]}));
+          const items = await buildServiceLineItems(svc, form.loc);
+          setForm(f => ({...f, lineItems: [...(f.lineItems||[]), ...items]}));
+          if (serviceNeedsPartsExpense(svc)) { setExpenseEdit('new'); setExpenseForm(blankExpense(form.id)); }
         }}>
           <option value="">+ Add line item…</option>
           <option value="__custom__">Custom line item</option>
