@@ -3867,6 +3867,8 @@ function AdminBookings() {
   const [bookings, setBookings] = useState([]);
   const [edit, setEdit] = useState(null);
   const [form, setForm] = useState({});
+  const [statusTab, setStatusTab] = useUrlState('tab', 'all');
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
     fetch('/api/admin/bookings', { credentials:'include' })
@@ -3885,8 +3887,39 @@ function AdminBookings() {
 
   const typeLabel = { dropoff: 'Drop-off', appointment: 'Appointment', callout: 'Callout' };
 
+  const q = search.trim().toLowerCase();
+  const visibleBookings = useMemo(() => {
+    let out = bookings;
+    if (statusTab !== 'all') out = out.filter(b => (b.status || 'new') === statusTab);
+    if (q) out = out.filter(b =>
+      (b.name || b.username || '').toLowerCase().includes(q) ||
+      (b.email || '').toLowerCase().includes(q) ||
+      (b.device || b.serviceName || '').toLowerCase().includes(q)
+    );
+    return out;
+  }, [bookings, statusTab, q]);
+
+  const tabCounts = useMemo(() => ({
+    all: bookings.length,
+    new: bookings.filter(b => (b.status||'new') === 'new').length,
+    pending: bookings.filter(b => b.status === 'pending').length,
+    confirmed: bookings.filter(b => b.status === 'confirmed').length,
+    completed: bookings.filter(b => b.status === 'completed').length,
+    cancelled: bookings.filter(b => b.status === 'cancelled').length,
+  }), [bookings]);
+
   return (
     <div style={{padding:32, display:'grid', gap:24}}>
+      <div className="row-flex" style={{justifyContent:'space-between', flexWrap:'wrap', gap:10}}>
+        <div className="tabs tabs-row" style={{margin:0}}>
+          {[['all','All'],['new','New'],['pending','Pending'],['confirmed','Confirmed'],['completed','Completed'],['cancelled','Cancelled']].map(([k,l]) => (
+            <div key={k} role="button" tabIndex={0} className={`tab ${statusTab===k?'active':''}`} style={{cursor:'pointer'}}
+              onClick={() => setStatusTab(k)}
+              onKeyDown={e => { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); setStatusTab(k); } }}>{l} ({tabCounts[k]})</div>
+          ))}
+        </div>
+        <input className="input" style={{maxWidth:260}} placeholder="Search name, email, device…" value={search} onChange={e=>setSearch(e.target.value)} />
+      </div>
       <Table
         columns={[
           { key:'id', label:'#', w:'120px', render:r => <span className="mono" style={{fontSize:11, color:'var(--rust)'}}>{r.id}</span> },
@@ -3896,10 +3929,10 @@ function AdminBookings() {
           { key:'device', label:'Device / Service', w:'1.5fr', render:r => <span style={{fontSize:13, color:'var(--ink-2)'}}>{r.device || r.serviceName || '—'}</span> },
           { key:'status', label:'Status', w:'120px', render:r => <StatusPill value={r.status || 'new'} map={statusMap} /> },
         ]}
-        rows={bookings}
+        rows={visibleBookings}
         onRowClick={open}
       />
-      {bookings.length === 0 && <div style={{ padding: 24, background: 'var(--paper)', border: '1px solid var(--line)', fontSize: 13, color: 'var(--ink-2)', textAlign: 'center' }}>No bookings yet.</div>}
+      {visibleBookings.length === 0 && <div style={{ padding: 24, background: 'var(--paper)', border: '1px solid var(--line)', fontSize: 13, color: 'var(--ink-2)', textAlign: 'center' }}>{bookings.length === 0 ? 'No bookings yet.' : 'No bookings match this filter.'}</div>}
 
       {edit !== null && (
         <Drawer open={true} onClose={() => setEdit(null)} title={`Booking ${edit.id}`}
