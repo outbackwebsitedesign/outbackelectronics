@@ -4365,15 +4365,20 @@ function AdminProducts({ sessionInfo = {} }) {
 // ============================================================
 function AdminServices() {
   const [rows, setRows] = useState([]);
+  const [catOptions, setCatOptions] = useState([]);
   useEffect(() => {
     fetch('/api/admin/catalog', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject())
-      .then(data => setRows((data.services || []).map(s => ({ ...s, cat:s.category, price:s.priceLine }))))
+      .then(data => {
+        const allServices = data.services || [];
+        setRows(allServices.map(s => ({ ...s, cat:s.category, price:s.priceLine })));
+        setCatOptions([...new Set(allServices.map(s => s.category).filter(Boolean))].sort());
+      })
       .catch(() => setRows((window.CATALOG_DATA?.getAdminServices?.() || window.CATALOG_DATA?.getAdminCatalog?.().filter(item => item.priceLine !== undefined) || []).map(s => ({ ...s, cat:s.category, price:s.priceLine }))));
   }, []);
   const [edit, setEdit] = useState(null);
   const [form, setForm] = useState({});
-  const open = (i) => { setEdit(i); setForm(i==='new' ? { id:'', sku:'', status:'draft', cat:'Repair', active:true } : rows[i]); };
+  const open = (i) => { setEdit(i); setForm(i==='new' ? { id:'', sku:'', status:'draft', cat: catOptions[0] || '', active:true } : rows[i]); };
   const save = async () => {
     const item = { ...form, category: form.cat, priceLine: form.price, description: form.description };
     const r = await fetch('/api/admin/catalog/services/save', {
@@ -4385,6 +4390,7 @@ function AdminServices() {
       const saved = { ...d.item, cat: d.item.category, price: d.item.priceLine };
       if (edit === 'new') setRows(rs => [...rs, saved]);
       else setRows(rs => rs.map((row, i) => i === edit ? saved : row));
+      if (saved.cat && !catOptions.includes(saved.cat)) setCatOptions(cs => [...cs, saved.cat].sort());
       setEdit(null);
     } else {
       const err = r ? await r.json().catch(() => ({})) : {};
@@ -4435,9 +4441,13 @@ function AdminServices() {
           <label className="field"><span className="label">Service name</span><input className="input" value={form.name||''} onChange={e=>setForm({...form, name:e.target.value})}/></label>
           <div className="grid-2" style={{gap:14}}>
             <label className="field"><span className="label">Category</span>
-              <select className="select" value={form.cat||'Repair'} onChange={e=>setForm({...form, cat:e.target.value})}>
-                {['Repair','Off-grid','Build','Field','AI'].map(c => <option key={c}>{c}</option>)}
+              <select className="select" value={catOptions.includes(form.cat) ? form.cat : '__new__'} onChange={e => { if (e.target.value !== '__new__') setForm({...form, cat: e.target.value}); }}>
+                {catOptions.map(c => <option key={c} value={c}>{c}</option>)}
+                <option value="__new__">+ New category…</option>
               </select>
+              {(!catOptions.includes(form.cat) || form.cat === '') && (
+                <input className="input" style={{marginTop:6}} placeholder="Type new category name" value={form.cat||''} onChange={e=>setForm({...form, cat:e.target.value})} autoFocus />
+              )}
             </label>
             <label className="field"><span className="label">Turnaround</span><input className="input" placeholder="e.g. 3–7 days" value={form.tat||''} onChange={e=>setForm({...form, tat:e.target.value})}/></label>
           </div>
