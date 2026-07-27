@@ -603,15 +603,19 @@ const UPDATE_TYPE_COLOR = {
 };
 
 function OrderDetail({ o, onPay, onPayInstallment, paying, onCollapse }) {
+  // Orders carry their own lineItems directly now. draftQuote-derived items
+  // are legacy-only, for orders placed before this existed.
   const dq = o.draftQuote || {};
-  const lineItems = [
-    ...(dq.hardwareItems || []).filter(i => i.name).map(i => {
-      const qty = parseInt(i.qty) || 1;
-      return { label: i.name + (qty > 1 ? ` × ${qty}` : ''), amount: (parseFloat(i.basePrice) || 0) * qty * 1.20 };
-    }),
-    ...(dq.pcBuild && dq.pcBuildFee > 0 ? [{ label: 'Custom PC Build', amount: dq.pcBuildFee }] : []),
-    ...(dq.otherItems || []).filter(i => i.description).map(i => { const qty = parseInt(i.qty) || 1; return { label: i.description + (qty > 1 ? ` × ${qty}` : ''), amount: (parseFloat(i.amount) || 0) * qty }; }),
-  ];
+  const lineItems = (o.lineItems && o.lineItems.length)
+    ? o.lineItems.map(li => { const qty = parseInt(li.qty) || 1; return { label: (li.description || '') + (qty > 1 ? ` × ${qty}` : ''), amount: (Number(li.amount) || 0) * qty }; })
+    : [
+        ...(dq.hardwareItems || []).filter(i => i.name).map(i => {
+          const qty = parseInt(i.qty) || 1;
+          return { label: i.name + (qty > 1 ? ` × ${qty}` : ''), amount: (parseFloat(i.basePrice) || 0) * qty * 1.20 };
+        }),
+        ...(dq.pcBuild && dq.pcBuildFee > 0 ? [{ label: 'Custom PC Build', amount: dq.pcBuildFee }] : []),
+        ...(dq.otherItems || []).filter(i => i.description).map(i => { const qty = parseInt(i.qty) || 1; return { label: i.description + (qty > 1 ? ` × ${qty}` : ''), amount: (parseFloat(i.amount) || 0) * qty }; }),
+      ];
   const paid = (o.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
   const outstanding = o.total != null ? Math.max(0, Number(o.total) - paid) : null;
   const needsPayment = outstanding != null && outstanding > 0;
@@ -796,10 +800,10 @@ function OrderDetail({ o, onPay, onPayInstallment, paying, onCollapse }) {
         </div>
       )}
 
-      {dq.notes && (
+      {(o.notes || dq.notes) && (
         <div>
           <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:6, letterSpacing:'.08em'}}>NOTES FROM US</div>
-          <p style={{fontSize:13, color:'var(--ink-2)'}}>{dq.notes}</p>
+          <p style={{fontSize:13, color:'var(--ink-2)'}}>{o.notes || dq.notes}</p>
         </div>
       )}
 
@@ -1144,17 +1148,24 @@ function QuotesTab({ user, onOrderCreated, highlightRef }) {
 
         {/* Quotes awaiting acceptance */}
         {actionable.map(q => {
+          // Quotes carry their own lineItems/total/notes/validDays directly now.
+          // draftQuote-derived items are legacy-only, for quotes sent before this existed.
           const dq = q.draftQuote || {};
           const accepted = acceptedOrders[q.id];
-          const lineItems = [
-            ...(dq.hardwareItems || []).filter(i => i.name).map(i => {
-              const qty = parseInt(i.qty) || 1;
-              return { label: i.name + (qty > 1 ? ` × ${qty}` : ''), amount: (parseFloat(i.basePrice) || 0) * qty * 1.20 };
-            }),
-            ...(dq.pcBuild && dq.pcBuildFee > 0 ? [{ label: 'Custom PC Build', amount: dq.pcBuildFee }] : []),
-            ...(dq.otherItems || []).filter(i => i.description).map(i => { const qty = parseInt(i.qty) || 1; return { label: i.description + (qty > 1 ? ` × ${qty}` : ''), amount: (parseFloat(i.amount) || 0) * qty }; }),
-          ];
-          const validUntil = dq.validDays ? new Date(Date.now() + dq.validDays * 86400000).toLocaleDateString('en-AU', { day:'numeric', month:'long', year:'numeric' }) : null;
+          const lineItems = (q.lineItems && q.lineItems.length)
+            ? q.lineItems.map(li => { const qty = parseInt(li.qty) || 1; return { label: (li.description || '') + (qty > 1 ? ` × ${qty}` : ''), amount: (Number(li.amount) || 0) * qty }; })
+            : [
+                ...(dq.hardwareItems || []).filter(i => i.name).map(i => {
+                  const qty = parseInt(i.qty) || 1;
+                  return { label: i.name + (qty > 1 ? ` × ${qty}` : ''), amount: (parseFloat(i.basePrice) || 0) * qty * 1.20 };
+                }),
+                ...(dq.pcBuild && dq.pcBuildFee > 0 ? [{ label: 'Custom PC Build', amount: dq.pcBuildFee }] : []),
+                ...(dq.otherItems || []).filter(i => i.description).map(i => { const qty = parseInt(i.qty) || 1; return { label: i.description + (qty > 1 ? ` × ${qty}` : ''), amount: (parseFloat(i.amount) || 0) * qty }; }),
+              ];
+          const quoteTotal = q.lineItems ? (Number(q.total) || 0) : (Number(dq.grandTotal) || 0);
+          const quoteNotes = q.lineItems ? q.notes : dq.notes;
+          const validDaysVal = q.lineItems ? q.validDays : dq.validDays;
+          const validUntil = validDaysVal ? new Date(Date.now() + validDaysVal * 86400000).toLocaleDateString('en-AU', { day:'numeric', month:'long', year:'numeric' }) : null;
           const isHighlighted = highlightRef && (q.quoteRef === highlightRef || q.id === highlightRef);
           return (
             <div key={q.id} id={`quote-${q.quoteRef || q.id}`} className="card-paper" ref={isHighlighted ? el => el && el.scrollIntoView({ behavior: 'smooth', block: 'start' }) : null} style={{padding:28, marginBottom:20, borderLeft:`3px solid ${isHighlighted ? 'var(--rust)' : 'var(--ochre)'}`}}>
@@ -1180,7 +1191,7 @@ function QuotesTab({ user, onOrderCreated, highlightRef }) {
                   <div style={{display:'flex', justifyContent:'space-between', padding:'12px 14px', background:'var(--ink)', color:'var(--paper)'}}>
                     <span style={{fontWeight:600}}>Total (AUD)</span>
                     <span className="mono" style={{fontWeight:700, fontSize:16, color:'var(--ochre)'}}>
-                      ${Number(dq.grandTotal||0).toLocaleString('en-AU',{minimumFractionDigits:2})}
+                      ${quoteTotal.toLocaleString('en-AU',{minimumFractionDigits:2})}
                     </span>
                   </div>
                 </div>
@@ -1193,14 +1204,14 @@ function QuotesTab({ user, onOrderCreated, highlightRef }) {
                 </div>
               )}
 
-              {dq.notes && <p style={{fontSize:13, color:'var(--ink-2)', marginBottom:16}}>{dq.notes}</p>}
+              {quoteNotes && <p style={{fontSize:13, color:'var(--ink-2)', marginBottom:16}}>{quoteNotes}</p>}
 
               {accepted ? (
                 <div className="alert alert-success">Order created — <strong>{accepted}</strong>. Check your Orders tab and your email for confirmation.</div>
               ) : (() => {
                 const choice = planChoice[q.id] || { mode: 'full', frequency: 'fortnightly', installmentAmount: '', collectionMethod: 'manual' };
                 const setChoice = patch => setPlanChoice(pc => ({ ...pc, [q.id]: { ...choice, ...patch } }));
-                const eligible = Number(dq.grandTotal || 0) >= planMinTotal;
+                const eligible = quoteTotal >= planMinTotal;
                 return (
                   <div>
                     {eligible && (
@@ -2529,14 +2540,11 @@ function QuoteTokenView({ token, onAccepted }) {
     }).catch(() => {});
   }, [token]);
 
-  const lineItems = quote ? [
-    ...(quote.hardwareItems || []).filter(i => i.name).map(i => {
-      const qty = parseInt(i.qty) || 1;
-      return { label: i.name + (qty > 1 ? ` × ${qty}` : ''), amount: (parseFloat(i.basePrice) || 0) * qty * 1.20 };
-    }),
-    ...(quote.pcBuild && quote.pcBuildFee > 0 ? [{ label: 'Custom PC Build', amount: quote.pcBuildFee }] : []),
-    ...(quote.otherItems || []).filter(i => i.description).map(i => { const qty = parseInt(i.qty) || 1; return { label: i.description + (qty > 1 ? ` × ${qty}` : ''), amount: (parseFloat(i.amount) || 0) * qty }; }),
-  ] : [];
+  const lineItems = quote ? (quote.lineItems || []).map(li => {
+    const qty = parseInt(li.qty) || 1;
+    return { label: (li.description || '') + (qty > 1 ? ` × ${qty}` : ''), amount: (Number(li.amount) || 0) * qty };
+  }) : [];
+  const quoteTotal = quote ? Number(quote.total) || 0 : 0;
 
   const validUntil = quote?.validDays
     ? new Date(Date.now() + quote.validDays * 86400000).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -2619,7 +2627,7 @@ function QuoteTokenView({ token, onAccepted }) {
               <div style={{display:'flex', justifyContent:'space-between', padding:'12px 14px', background:'var(--ink)', color:'var(--paper)'}}>
                 <span style={{fontWeight:600}}>Total (AUD)</span>
                 <span className="mono" style={{fontWeight:700, fontSize:16, color:'var(--ochre)'}}>
-                  ${Number(quote.grandTotal||0).toLocaleString('en-AU',{minimumFractionDigits:2})}
+                  ${quoteTotal.toLocaleString('en-AU',{minimumFractionDigits:2})}
                 </span>
               </div>
             </div>
@@ -2656,7 +2664,7 @@ function QuoteTokenView({ token, onAccepted }) {
                 <input className="input" type="password" placeholder="At least 8 characters" value={form.password} onChange={e => setForm(f => ({...f, password: e.target.value}))} required minLength={8} />
               </label>
 
-              {Number(quote.grandTotal || 0) >= planMinTotal && (
+              {quoteTotal >= planMinTotal && (
                 <div style={{marginBottom:20}}>
                   <div className="tabs" style={{marginBottom:14}}>
                     <div role="button" tabIndex={0} className={`tab ${planChoice.mode === 'full' ? 'active' : ''}`} onClick={() => setPlanChoice(c => ({ ...c, mode: 'full' }))}>Pay in full</div>

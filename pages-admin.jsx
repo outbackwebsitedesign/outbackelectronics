@@ -2976,6 +2976,23 @@ function QuotePage({ edit, quotes, customers, services = [], onClose, onSave, on
     }
   }, [form.lineItems, form.discountType, form.discountValue]);
 
+  // Planned expenses (parts staff intend to buy but haven't yet — nothing's
+  // purchased, so there's no real expenses.db entry) get the same cost+20%
+  // margin treatment as Orders' linked-expenses auto line item, kept in sync
+  // under the same 'parts-auto' id so it becomes a real expense cleanly once
+  // this quote converts to an order.
+  const PARTS_MARGIN = 0.20;
+  React.useEffect(() => {
+    const cost = (form.plannedExpenses || []).reduce((s, e) => s + (Number(e.amount) || 0) * (Number(e.quantity) || 1), 0);
+    const partsCharge = Math.round(cost * (1 + PARTS_MARGIN) * 100) / 100;
+    setForm(f => {
+      const others = (f.lineItems || []).filter(li => li.id !== 'parts-auto');
+      const lineItems = partsCharge > 0 ? [...others, { id: 'parts-auto', description: 'Parts', amount: partsCharge, qty: 1 }] : others;
+      if (JSON.stringify(lineItems) === JSON.stringify(f.lineItems || [])) return f;
+      return { ...f, lineItems };
+    });
+  }, [form.plannedExpenses]);
+
   const [busy, setBusy] = useState(null); // 'save' | 'send' | 'convert' | 'delete' | 'pdf'
   const [err, setErr] = useState(null);
 
@@ -3029,12 +3046,19 @@ function QuotePage({ edit, quotes, customers, services = [], onClose, onSave, on
       items: (form.lineItems || []).map(i => i.description).filter(Boolean).join(', ') || form.quoteRef || 'Order',
       lineItems: form.lineItems || [],
       discountType: form.discountType, discountValue: form.discountValue, discountAmount: form.discountAmount,
+      notes: form.notes || '',
       date: todayOrderDate(), total: form.total || 0, fulfilment: 'pending', payments: [],
       sourceQuoteId: form.id, quoteRef: form.quoteRef || '',
     };
     const or = await fetch('/api/admin/orders/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(orderPayload) }).catch(()=>null);
     if (!or || !or.ok) { setBusy(null); setErr('Failed to create the order — quote was not touched.'); return; }
     const od = await or.json();
+    // Planned expenses were never real — this is the moment they become actual
+    // costs, now that there's a real order to link them to for tax reporting.
+    if (od.item?.id && (form.plannedExpenses || []).length > 0) {
+      await Promise.all(form.plannedExpenses.map(pe => fetch('/api/admin/expenses/save', { method:'POST', headers:postHeaders(), credentials:'include',
+        body: JSON.stringify({ ...pe, jobId: od.item.id, date: pe.date || new Date().toLocaleDateString('en-AU',{day:'2-digit',month:'2-digit',year:'numeric'}) }) }).catch(()=>null)));
+    }
     const updated = { ...form, status: 'won', orderId: od.item?.id };
     const qr = await fetch('/api/admin/quotes/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(updated) }).catch(()=>null);
     setBusy(null);
@@ -3199,17 +3223,30 @@ function QuotePage({ edit, quotes, customers, services = [], onClose, onSave, on
         <input className="input" type="number" min="0" step="0.01" disabled={(form.lineItems||[]).length > 0} value={form.total||''} onChange={e=>setForm({...form,total:Number(e.target.value)})}/>
       </label>
 
-      {(form.plannedExpenses || []).length > 0 && (
-        <div className="field">
-          <span className="label">Planned expenses (reference only — not counted as real costs until this becomes an order)</span>
-          {form.plannedExpenses.map((e, i) => (
-            <div key={i} style={{display:'flex', justifyContent:'space-between', padding:'6px 10px', background:'var(--bg-elev)', border:'1px solid var(--line)', marginBottom:4, fontSize:12}}>
-              <span>{e.description}{e.quantity > 1 ? ` × ${e.quantity}` : ''}</span>
-              <span className="mono">${(Number(e.amount)*(Number(e.quantity)||1)).toFixed(2)}</span>
+      <div className="field">
+        <span className="label">Parts (your cost — {PARTS_MARGIN*100}% margin auto-added to the "Parts" line item above)</span>
+        {(form.plannedExpenses||[]).map((pe, i) => (
+          <div key={i} style={{display:'grid', gridTemplateColumns:'2fr 60px 130px 28px', gap:8, marginBottom:8, alignItems:'center'}}>
+            <input className="input" placeholder="e.g. Ryzen 7 5800X CPU" value={pe.description||''}
+              onChange={e => setForm(f => ({...f, plannedExpenses: f.plannedExpenses.map((x,xi) => xi===i ? {...x, description:e.target.value} : x)}))}/>
+            <input className="input" type="number" min="1" step="1" placeholder="Qty" value={pe.quantity||1}
+              onChange={e => setForm(f => ({...f, plannedExpenses: f.plannedExpenses.map((x,xi) => xi===i ? {...x, quantity: Math.max(1, parseInt(e.target.value)||1)} : x)}))}/>
+            <div style={{position:'relative'}}>
+              <span style={{position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', fontSize:13, color:'var(--ink-2)', pointerEvents:'none'}}>$</span>
+              <input className="input" type="number" min="0" step="0.01" placeholder="0.00 (your cost)" value={pe.amount}
+                onChange={e => setForm(f => ({...f, plannedExpenses: f.plannedExpenses.map((x,xi) => xi===i ? {...x, amount: nonNegInput(e.target.value)} : x)}))} style={{paddingLeft:22}}/>
             </div>
-          ))}
-        </div>
-      )}
+            <button className="btn btn-ghost btn-sm" style={{padding:0, color:'var(--rust)'}}
+              onClick={() => setForm(f => ({...f, plannedExpenses: f.plannedExpenses.filter((_,xi) => xi!==i)}))}><Icon name="x" size={12}/></button>
+          </div>
+        ))}
+        <button className="btn btn-ghost btn-sm" onClick={() => setForm(f => ({...f, plannedExpenses: [...(f.plannedExpenses||[]), { description:'', quantity:1, amount:'', category:'parts' }]}))}>+ Add part</button>
+        {(form.plannedExpenses||[]).length > 0 && (
+          <div style={{marginTop:8, fontSize:12, color:'var(--ink-3)'}}>
+            Cost: <strong>${(form.plannedExpenses||[]).reduce((s,e)=>s+(Number(e.amount)||0)*(Number(e.quantity)||1),0).toFixed(2)}</strong> → charged at cost+{PARTS_MARGIN*100}%: <strong>${Math.round((form.plannedExpenses||[]).reduce((s,e)=>s+(Number(e.amount)||0)*(Number(e.quantity)||1),0)*(1+PARTS_MARGIN)*100)/100}</strong>. Not a real expense yet — becomes one automatically if this quote converts to an order.
+          </div>
+        )}
+      </div>
 
       <label className="field"><span className="label">Notes to customer</span>
         <textarea className="textarea" style={{minHeight:80}} placeholder="Turnaround time, warranty, pickup/delivery, any conditions…" value={form.notes||''} onChange={e=>setForm({...form,notes:e.target.value})} />

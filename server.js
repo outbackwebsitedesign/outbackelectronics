@@ -2839,6 +2839,7 @@ function orderFromQuote(quote, { paymentPlan } = {}) {
     discountType: quote.discountType,
     discountValue: quote.discountValue,
     discountAmount: quote.discountAmount,
+    notes: quote.notes || '',
     date: nowStr,
     total,
     fulfilment: 'pending',
