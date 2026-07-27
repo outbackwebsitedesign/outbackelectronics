@@ -7595,6 +7595,70 @@ function AdminExpenses() {
   const visible = catFilter === 'all' ? rows : rows.filter(r => (r.category || 'other') === catFilter);
   const total = visible.reduce((s, e) => s + expTotal(e), 0);
 
+  if (edit !== null) {
+    return (
+      <OrderPage onClose={closeDrawer} dirty={dirty} title={edit.id ? `Expense — ${form.description || edit.id}` : 'Log expense'}
+        footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
+          {edit.id ? <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={del}>Delete</button> : <span/>}
+          <div className="row-flex" style={{gap:8}}>
+            <button className="btn btn-ghost btn-sm" onClick={closeDrawer}>Cancel</button>
+            <button className="btn btn-sm" onClick={save}>Save</button>
+          </div>
+        </div>}
+      >
+        <label className="field"><span className="label">Description</span><input className="input" value={form.description||''} onChange={e=>setForm({...form,description:e.target.value})}/></label>
+        <div className="grid-2" style={{gap:14}}>
+          <label className="field"><span className="label">Category</span>
+            <select className="select" value={form.category||'tools'} onChange={e=>setForm({...form,category:e.target.value})}>
+              {['tools','equipment','parts','software','other'].map(c => <option key={c}>{c}</option>)}
+            </select>
+          </label>
+          <label className="field"><span className="label">Quantity</span>
+            <QuantityInput value={form.quantity} onCommit={q => setForm(f=>({...f,quantity:q}))}/>
+          </label>
+        </div>
+        <div className="grid-2" style={{gap:14}}>
+          <label className="field"><span className="label">Amount (AUD, per item)</span><input className="input" type="number" min="0" step="0.01" value={form.amount||0} onChange={e=>setForm({...form,amount:Number(nonNegInput(e.target.value))||0})}/></label>
+          <label className="field"><span className="label">Total</span><input className="input" disabled value={`$${expTotal(form).toLocaleString('en-AU',{minimumFractionDigits:2})}`}/></label>
+        </div>
+        <label className="field"><span className="label">Date</span><input className="input" type="date" value={auDateToISO(form.date)} onChange={e=>setForm({...form,date:isoToAuDate(e.target.value)})}/></label>
+        <label className="field"><span className="label">Link to job</span>
+          <select className="select" value={form.jobId||''} onChange={e=>setForm({...form,jobId:e.target.value})}>
+            <option value="">— No job link —</option>
+            {jobOptions.map(j => <option key={j.id} value={j.id}>{j.id} · {j.cust} · {j.items}</option>)}
+          </select>
+        </label>
+        <label className="field"><span className="label">Notes</span><input className="input" value={form.notes||''} onChange={e=>setForm({...form,notes:e.target.value})}/></label>
+        <label className="field"><span className="label">Part status</span>
+          <select className="select" value={form.partStatus||''} onChange={e=>setForm({...form,partStatus:e.target.value})}>
+            <option value="">— Not applicable —</option>
+            <option value="ordered">Ordered</option>
+            <option value="arrived">Arrived</option>
+            <option value="installed">Installed</option>
+            <option value="returned">Returned</option>
+          </select>
+        </label>
+        <label style={{display:'flex',alignItems:'center',gap:10,cursor:'pointer',marginBottom:14}}>
+          <input type="checkbox" checked={!!form.isSecondHand} onChange={e=>setForm({...form,isSecondHand:e.target.checked})} style={{width:16,height:16,cursor:'pointer'}}/>
+          <span style={{fontSize:13,fontWeight:500}}>Second-hand part / item</span>
+        </label>
+        <div className="field">
+          <span className="label">Receipt</span>
+          {form.receipt && (
+            <div style={{marginBottom:8,display:'flex',gap:8,alignItems:'center'}}>
+              <a href={form.receipt} target="_blank" rel="noopener noreferrer" style={{display:'inline-flex', alignItems:'center', gap:4, color:'var(--rust)',fontSize:13}}>View current receipt <Icon name="externalLink" size={11}/></a>
+              <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={() => setForm(f=>({...f,receipt:null}))}>Remove</button>
+            </div>
+          )}
+          <label style={{cursor:'pointer',display:'inline-block'}}>
+            <input type="file" accept="image/*,application/pdf" style={{display:'none'}} onChange={e => { if(e.target.files[0]) handleReceiptUpload(e.target.files[0]); }}/>
+            <span className="btn btn-ghost btn-sm">{form.receipt ? 'Replace receipt' : 'Upload receipt'}</span>
+          </label>
+        </div>
+      </OrderPage>
+    );
+  }
+
   return (
     <div style={{padding:32}}>
       <div className="row-flex" style={{justifyContent:'space-between', marginBottom:18}}>
@@ -7632,68 +7696,6 @@ function AdminExpenses() {
         onRowClick={openRow}
         defaultSort={{ key: 'date', dir: 'desc' }}
       />
-      {edit !== null && (
-        <Drawer open={true} onClose={closeDrawer} dirty={dirty} title={edit.id ? `Edit — ${form.description}` : 'Log expense'}
-          footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
-            {edit.id && <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={del}>Delete</button>}
-            {!edit.id && <span/>}
-            <div className="row-flex" style={{gap:8}}>
-              <button className="btn btn-ghost btn-sm" onClick={closeDrawer}>Cancel</button>
-              <button className="btn btn-sm" onClick={save}>Save</button>
-            </div>
-          </div>}
-        >
-          <label className="field"><span className="label">Description</span><input className="input" value={form.description||''} onChange={e=>setForm({...form,description:e.target.value})}/></label>
-          <div className="grid-2" style={{gap:14}}>
-            <label className="field"><span className="label">Category</span>
-              <select className="select" value={form.category||'tools'} onChange={e=>setForm({...form,category:e.target.value})}>
-                {['tools','equipment','parts','software','other'].map(c => <option key={c}>{c}</option>)}
-              </select>
-            </label>
-            <label className="field"><span className="label">Quantity</span>
-              <QuantityInput value={form.quantity} onCommit={q => setForm(f=>({...f,quantity:q}))}/>
-            </label>
-          </div>
-          <div className="grid-2" style={{gap:14}}>
-            <label className="field"><span className="label">Amount (AUD, per item)</span><input className="input" type="number" min="0" step="0.01" value={form.amount||0} onChange={e=>setForm({...form,amount:Number(nonNegInput(e.target.value))||0})}/></label>
-            <label className="field"><span className="label">Total</span><input className="input" disabled value={`$${expTotal(form).toLocaleString('en-AU',{minimumFractionDigits:2})}`}/></label>
-          </div>
-          <label className="field"><span className="label">Date</span><input className="input" type="date" value={auDateToISO(form.date)} onChange={e=>setForm({...form,date:isoToAuDate(e.target.value)})}/></label>
-          <label className="field"><span className="label">Link to job</span>
-            <select className="select" value={form.jobId||''} onChange={e=>setForm({...form,jobId:e.target.value})}>
-              <option value="">— No job link —</option>
-              {jobOptions.map(j => <option key={j.id} value={j.id}>{j.id} · {j.cust} · {j.items}</option>)}
-            </select>
-          </label>
-          <label className="field"><span className="label">Notes</span><input className="input" value={form.notes||''} onChange={e=>setForm({...form,notes:e.target.value})}/></label>
-          <label className="field"><span className="label">Part status</span>
-            <select className="select" value={form.partStatus||''} onChange={e=>setForm({...form,partStatus:e.target.value})}>
-              <option value="">— Not applicable —</option>
-              <option value="ordered">Ordered</option>
-              <option value="arrived">Arrived</option>
-              <option value="installed">Installed</option>
-              <option value="returned">Returned</option>
-            </select>
-          </label>
-          <label style={{display:'flex',alignItems:'center',gap:10,cursor:'pointer',marginBottom:14}}>
-            <input type="checkbox" checked={!!form.isSecondHand} onChange={e=>setForm({...form,isSecondHand:e.target.checked})} style={{width:16,height:16,cursor:'pointer'}}/>
-            <span style={{fontSize:13,fontWeight:500}}>Second-hand part / item</span>
-          </label>
-          <div className="field">
-            <span className="label">Receipt</span>
-            {form.receipt && (
-              <div style={{marginBottom:8,display:'flex',gap:8,alignItems:'center'}}>
-                <a href={form.receipt} target="_blank" rel="noopener noreferrer" style={{display:'inline-flex', alignItems:'center', gap:4, color:'var(--rust)',fontSize:13}}>View current receipt <Icon name="externalLink" size={11}/></a>
-                <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={() => setForm(f=>({...f,receipt:null}))}>Remove</button>
-              </div>
-            )}
-            <label style={{cursor:'pointer',display:'inline-block'}}>
-              <input type="file" accept="image/*,application/pdf" style={{display:'none'}} onChange={e => { if(e.target.files[0]) handleReceiptUpload(e.target.files[0]); }}/>
-              <span className="btn btn-ghost btn-sm">{form.receipt ? 'Replace receipt' : 'Upload receipt'}</span>
-            </label>
-          </div>
-        </Drawer>
-      )}
     </div>
   );
 }
