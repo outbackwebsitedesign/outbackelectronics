@@ -461,9 +461,20 @@ function readOrders() {
   try { const p = JSON.parse(cachedReadFile(ORDERS_DB_PATH)); return Array.isArray(p.orders) ? p.orders : []; } catch { return []; }
 }
 function writeOrders(orders) { atomicWriteFile(ORDERS_DB_PATH, JSON.stringify({ orders }, null, 2)); }
+// Fills the lowest deleted/unused number first, matching the admin order
+// creator, rather than always incrementing past every gap.
 function nextOrderId(orders) {
-  const maxN = orders.reduce((max, o) => { const m = String(o.id || '').match(/^OE-(\d+)$/); return m ? Math.max(max, parseInt(m[1])) : max; }, 0);
-  return `OE-${String(maxN + 1).padStart(4, '0')}`;
+  const used = new Set(orders.map(o => { const m = String(o.id || '').match(/^OE-(\d+)$/); return m ? parseInt(m[1]) : null; }).filter(n => n != null));
+  let n = 1;
+  while (used.has(n)) n++;
+  return `OE-${String(n).padStart(4, '0')}`;
+}
+// Same scheme for quote references (OEQ-0001).
+function nextQuoteRef(quotes) {
+  const used = new Set(quotes.map(q => { const m = String(q.quoteRef || '').match(/^OEQ-(\d+)$/); return m ? parseInt(m[1]) : null; }).filter(n => n != null));
+  let n = 1;
+  while (used.has(n)) n++;
+  return `OEQ-${String(n).padStart(4, '0')}`;
 }
 function nextRepairId(board) {
   const allCards = (board.columns || []).flatMap(c => c.cards || []);
@@ -2957,23 +2968,20 @@ function buildQuotePdf(quote, shop) {
 
     doc.font('Helvetica-Bold').fontSize(11).fillColor(RUST).text('Quote For', 50, 150);
     doc.font('Helvetica').fontSize(10).fillColor('#222')
-      .text(quote.customerName || quote.name || '')
-      .text(quote.customerEmail || quote.email || '');
+      .text(quote.cust || quote.customerName || quote.name || '')
+      .text(quote.email || quote.customerEmail || '')
+      .text(quote.phone || '')
+      .text(quote.shippingAddress || quote.loc || '');
     doc.moveDown(1.5);
 
-    const lineItems = [
-      ...(quote.hardwareItems || []).filter(i => i.name).map(i => {
-        const base = parseFloat(i.basePrice) || 0;
-        const qty = parseInt(i.qty) || 1;
-        return { description: i.name + (qty > 1 ? ` × ${qty}` : ''), amount: base * qty * (1 + QUOTE_PARTS_MARGIN) };
-      }),
-      ...(quote.pcBuild && quote.pcBuildFee > 0 ? [{ description: 'Custom PC Build', amount: Number(quote.pcBuildFee) || 0 }] : []),
-      ...(quote.otherItems || []).filter(i => i.description).map(i => {
-        const qty = parseInt(i.qty) || 1;
-        return { description: i.description + (qty > 1 ? ` × ${qty}` : ''), amount: (parseFloat(i.amount) || 0) * qty };
-      }),
-    ];
-    if (!lineItems.length) lineItems.push({ description: quote.summary || quote.description || 'Goods / services', amount: Number(quote.grandTotal) || 0 });
+    const lineItems = (quote.lineItems && quote.lineItems.length)
+      ? quote.lineItems.map(li => { const qty = parseInt(li.qty) || 1; return { description: (li.description || '') + (qty > 1 ? ` × ${qty}` : ''), amount: (Number(li.amount) || 0) * qty }; })
+      : [{ description: quote.summary || quote.description || 'Goods / services', amount: Number(quote.total ?? quote.grandTotal) || 0 }];
+    if (Number(quote.discountAmount) > 0) {
+      const base = quote.discountLabel || 'Discount';
+      const label = quote.discountType === 'fixed' ? base : `${base} (${Number(quote.discountValue) || 0}%)`;
+      lineItems.push({ description: label, amount: -Number(quote.discountAmount) });
+    }
 
     const tableTop = doc.y;
     const colDescX = 50, colAmountX = 460, colWidth = 500;
@@ -2994,7 +3002,7 @@ function buildQuotePdf(quote, shop) {
 
     doc.rect(50, y - 6, 495, 28).fill('#eaf3ea');
     doc.font('Helvetica-Bold').fontSize(12).fillColor('#2e7d32').text('Total (AUD)', colDescX + 6, y, { width: colWidth - 95 - 6 });
-    doc.text(fmtMoney(quote.grandTotal), colAmountX, y, { width: 79, align: 'right' });
+    doc.text(fmtMoney(quote.total ?? quote.grandTotal), colAmountX, y, { width: 79, align: 'right' });
     y += 40;
 
     if (quote.notes) {
