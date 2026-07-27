@@ -699,9 +699,8 @@ function ServicesPage({ go }) {
   const shop = useShop();
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [visibleCount, setVisibleCount] = useState(6);
   const [siteContent, setSiteContent] = useState({});
-  const chunkSize = 6;
+  const [activeCategory, setActiveCategory] = useState(null);
 
   useEffect(() => {
     Promise.all([
@@ -710,21 +709,14 @@ function ServicesPage({ go }) {
     ]).finally(() => setLoading(false));
   }, []);
 
-  const visible = services.slice(0, visibleCount);
+  const categories = useMemo(() => [...new Set(services.map(s => s.category).filter(Boolean))].sort(), [services]);
+  useEffect(() => { if (activeCategory === null && categories.length) setActiveCategory(categories[0]); }, [categories, activeCategory]);
 
-  useEffect(() => { setVisibleCount(chunkSize); }, [services.length]);
-  useEffect(() => {
-    const onScroll = () => {
-      const nearBottom = window.innerHeight + window.scrollY >= document.body.offsetHeight - 240;
-      if (nearBottom) setVisibleCount(v => Math.min(services.length, v + chunkSize));
-    };
-    window.addEventListener('scroll', onScroll);
-    return () => window.removeEventListener('scroll', onScroll);
-  }, [services.length]);
+  const visible = services.filter(s => s.category === activeCategory);
 
   return (
     <>
-      <PageHead crumbs={['Outback','Services']} title="Services" lead={`${services.length} services · ${siteContent.workshopBlurb}`} />
+      <PageHead crumbs={['Outback','Services']} title="Services" lead={`${services.length} services across ${categories.length} categories · ${siteContent.workshopBlurb}`} />
       <section className="container" style={{paddingTop: 40, paddingBottom: 40}}>
         {loading ? (
           <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:24}}>
@@ -734,7 +726,22 @@ function ServicesPage({ go }) {
           </div>
         ) : (
         <>
-        <div className="mono" style={{fontSize:12, color:'var(--ink-2)', marginBottom:18}}>SHOWING {visible.length} OF {services.length} SERVICES</div>
+        <div className="row-flex" style={{gap:8, flexWrap:'wrap', marginBottom:24}}>
+          {categories.map(c => (
+            <button
+              key={c}
+              className="mono"
+              onClick={() => setActiveCategory(c)}
+              style={{
+                fontSize:11, padding:'8px 14px', cursor:'pointer', borderRadius:2,
+                border: c === activeCategory ? '1px solid var(--rust)' : '1px solid var(--line)',
+                background: c === activeCategory ? 'var(--rust)' : 'transparent',
+                color: c === activeCategory ? '#fff' : 'var(--ink-2)',
+              }}
+            >{c.toUpperCase()} ({services.filter(s => s.category === c).length})</button>
+          ))}
+        </div>
+        <div className="mono" style={{fontSize:12, color:'var(--ink-2)', marginBottom:18}}>SHOWING {visible.length} OF {services.length} SERVICES · {(activeCategory||'').toUpperCase()}</div>
         <div className="grid-3" style={{gap: 24}}>
           {visible.map((s,i) => (
             <div key={i} className="card-paper" style={{padding: 24}}>
@@ -751,7 +758,6 @@ function ServicesPage({ go }) {
             </div>
           ))}
         </div>
-        {visible.length < services.length && <div className="mono" style={{fontSize:12, color:'var(--ink-2)', marginTop:18, textAlign:'center'}}>Scroll for more…</div>}
         </>
         )}
       </section>
