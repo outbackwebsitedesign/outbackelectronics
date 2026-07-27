@@ -4,6 +4,14 @@ import { getCsrf, ensureCsrf } from './src/lib/api.js';
 const _fallbackShopCtx = React.createContext({});
 const useShop = () => useContext(window.__ShopContext__ || _fallbackShopCtx);
 
+// Service descriptions are authored with {{serviceArea}} placeholders (see
+// services.db) so location text stays correct across shop setting changes
+// without a redeploy — fill it in with the live shop suburb just before render.
+function interpolateServiceText(text, shop) {
+  const area = [shop.suburb, shop.state].filter(Boolean).join('–') || 'our local area';
+  return String(text || '').replace(/\{\{serviceArea\}\}/g, area);
+}
+
 function thumbUrl(src, w, q) {
   if (!src || !src.startsWith('/assets/uploads/')) return src;
   const qs = q ? `&q=${q}` : '';
@@ -688,6 +696,7 @@ function PublicJobLog() {
 // SERVICES
 // ============================================================
 function ServicesPage({ go }) {
+  const shop = useShop();
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [visibleCount, setVisibleCount] = useState(6);
@@ -734,7 +743,7 @@ function ServicesPage({ go }) {
                 <span className="tag">TAT · {s.tat.toUpperCase()}</span>
               </div>
               <h3 className="serif" style={{fontSize: 28, marginTop: 14, lineHeight:1.1}}>{s.name}</h3>
-              <p style={{marginTop: 10, color:'var(--ink-2)', fontSize:14}}>{s.description}</p>
+              <p style={{marginTop: 10, color:'var(--ink-2)', fontSize:14}}>{interpolateServiceText(s.description, shop)}</p>
               <div className="row-flex" style={{justifyContent:'space-between', marginTop: 18, borderTop:'1px solid var(--line)', paddingTop:14}}>
                 <span className="price" style={{fontSize:20}}>{s.priceLine}</span>
                 <button className="mono" style={{fontSize:11, color:'var(--rust)', cursor:'pointer', background:'none', border:'none', padding:0}} onClick={() => go('service', s)}>VIEW →</button>
@@ -1713,6 +1722,7 @@ function calloutFeeBreakdown(distKm) {
 }
 
 function ServiceDetailPage({ go, pageParams, portalUser, onPortalUserChange }) {
+  const shop = useShop();
   const { InlineAuthGate } = window.__OE_HELPERS__ || {};
   const [service, setService] = useState(pageParams || null);
   const [bookForm, setBookForm] = useState({ name: '', email: '', loc: '', date: '', notes: '' });
@@ -1846,7 +1856,7 @@ function ServiceDetailPage({ go, pageParams, portalUser, onPortalUserChange }) {
           </div>
           <h2 className="serif" style={{fontSize:40, lineHeight:1.05, marginBottom:16}}>{service.name}</h2>
           {service.description && (
-            <p style={{color:'var(--ink-2)', fontSize:15, lineHeight:1.7, marginBottom:24}}>{service.description}</p>
+            <p style={{color:'var(--ink-2)', fontSize:15, lineHeight:1.7, marginBottom:24}}>{interpolateServiceText(service.description, shop)}</p>
           )}
           <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginBottom:28}}>
             <div style={{padding:18, background:'var(--bg-elev)', border:'1px solid var(--line)'}}>
