@@ -6641,7 +6641,8 @@ function CustomerLinkedJobs({ customerId, email, manualLinks, onLinksChange }) {
   const [jobs, setJobs] = useState(null);
   const [allJobs, setAllJobs] = useState([]);
   const [claimedByOther, setClaimedByOther] = useState(new Set());
-  const [selected, setSelected] = useState('');
+  const [query, setQuery] = useState('');
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   useEffect(() => {
     if (!customerId) return;
@@ -6688,11 +6689,12 @@ function CustomerLinkedJobs({ customerId, email, manualLinks, onLinksChange }) {
     }).catch(() => {});
   }, [customerId]);
 
-  function addLink() {
-    if (!selected) return;
-    if ((manualLinks||[]).includes(selected)) return;
-    onLinksChange([...(manualLinks||[]), selected]);
-    setSelected('');
+  function addLink(id) {
+    if (!id) return;
+    if ((manualLinks||[]).includes(id)) return;
+    onLinksChange([...(manualLinks||[]), id]);
+    setQuery('');
+    setDropdownOpen(false);
   }
 
   function removeLink(v) {
@@ -6712,6 +6714,11 @@ function CustomerLinkedJobs({ customerId, email, manualLinks, onLinksChange }) {
   // Jobs available to manually link (not already auto-matched by email, not claimed by another customer)
   const autoIds = new Set(autoLinked.map(j => j.id));
   const available = allJobs.filter(j => !autoIds.has(j.id) && !(manualLinks||[]).includes(j.id) && !claimedByOther.has(j.id));
+  const jobMatches = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const pool = !q ? available : available.filter(j => (j.ref||j.id||'').toLowerCase().includes(q) || (j.label||'').toLowerCase().includes(q));
+    return pool.slice(0, 8);
+  }, [available, query]);
 
   return (
     <div style={{marginTop:16}}>
@@ -6746,26 +6753,25 @@ function CustomerLinkedJobs({ customerId, email, manualLinks, onLinksChange }) {
           })}
         </div>
       )}
-      <div className="row-flex" style={{gap:8}}>
-        <select className="input" style={{flex:1,fontSize:13}} value={selected} onChange={e=>setSelected(e.target.value)}>
-          <option value="">— link a job —</option>
-          {available.filter(j=>j._type==='order').length > 0 && (
-            <optgroup label="Orders">
-              {available.filter(j=>j._type==='order').map(j=><option key={j.id} value={j.id}>{j.ref || j.id}{j.label && j.label !== j.ref ? ` — ${j.label}` : ''}</option>)}
-            </optgroup>
-          )}
-          {available.filter(j=>j._type==='repair').length > 0 && (
-            <optgroup label="Repairs">
-              {available.filter(j=>j._type==='repair').map(j=><option key={j.id} value={j.id}>{j.ref || j.id}{j.label && j.label !== j.ref ? ` — ${j.label}` : ''}</option>)}
-            </optgroup>
-          )}
-          {available.filter(j=>j._type==='quote').length > 0 && (
-            <optgroup label="Quotes">
-              {available.filter(j=>j._type==='quote').map(j=><option key={j.id} value={j.id}>{j.ref || j.id}{j.label && j.label !== j.ref ? ` — ${j.label}` : ''}</option>)}
-            </optgroup>
-          )}
-        </select>
-        <button className="btn btn-ghost btn-sm" disabled={!selected} onClick={addLink}>Add</button>
+      <div style={{position:'relative'}}>
+        <input className="input" style={{fontSize:13}} placeholder="Search by order/repair/quote # or description…" value={query}
+          onChange={e => { setQuery(e.target.value); setDropdownOpen(true); }}
+          onFocus={() => setDropdownOpen(true)}
+          onBlur={() => setTimeout(() => setDropdownOpen(false), 150)}
+        />
+        {dropdownOpen && (
+          <div style={{position:'absolute', top:'100%', left:0, right:0, zIndex:20, background:'var(--bg)', border:'1px solid var(--line)', boxShadow:'0 4px 12px rgba(0,0,0,.12)', maxHeight:240, overflowY:'auto'}}>
+            {jobMatches.length === 0 && <div style={{padding:'8px 12px', fontSize:12, color:'var(--ink-3)'}}>No matching jobs.</div>}
+            {jobMatches.map(j => (
+              <div key={j.id} role="button" tabIndex={0} onMouseDown={e => { e.preventDefault(); addLink(j.id); }}
+                style={{display:'flex', alignItems:'center', gap:8, padding:'8px 12px', fontSize:13, cursor:'pointer'}}>
+                <span style={{fontWeight:600, fontFamily:'monospace', fontSize:12}}>{j.ref || j.id}</span>
+                <span style={{color:'var(--ink-2)', flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{j.label && j.label !== j.ref ? j.label : ''}</span>
+                <span style={{fontSize:10, color:'var(--ink-3)', fontWeight:600, letterSpacing:'0.05em'}}>{typeLabel[j._type] || j._type?.toUpperCase()}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
