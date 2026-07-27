@@ -502,7 +502,7 @@ const ADMIN_SECTIONS = [
     { id:'payment-plans', label:'Payment Plans', minRole:'technician' },
     { id:'repairs',   label:'Repair Jobs',   minRole:'staff', excludeRoles:['seller'] },
     { id:'hdd-reports', label:'HDD Condition Reports', minRole:'staff', excludeRoles:['seller'] },
-    { id:'quotes',    label:'Quotes Inbox',  minRole:'staff', excludeRoles:['seller'] },
+    { id:'quotes',    label:'Quotes',  minRole:'staff', excludeRoles:['seller'] },
     { id:'reviews',   label:'Reviews',       minRole:'staff', excludeRoles:['seller'] },
     { id:'ewaste',    label:'eWaste Intake', minRole:'technician' },
     { id:'bookings',  label:'Bookings',      minRole:'manager' },
@@ -2925,566 +2925,418 @@ function AdminRepairs() {
 
 
 // ============================================================
-// QUOTE CREATOR
+// QUOTES — identical model/UI to Orders (customer combobox, service-driven
+// lineItems, discount, standalone full page), with OEQ-xxxx refs instead of
+// OE-xxxx and no payments/fulfilment section since nothing's been sold yet.
 // ============================================================
-function QuoteCreator({ context, quotes = [], onBack, onQuoteSent }) {
-  // Same parts margin orders and repair jobs apply to linked expenses — kept
-  // in sync so hardware pricing in a quote matches what the order becomes.
-  const PARTS_MARGIN = 0.20;
-  const PC_BUILD_RATE = 40;
-  // Identical scheme to order numbers (OE-0031, gap-filling) but OEQ- prefixed,
-  // instead of the old QT-<timestamp-tail> refs which weren't sequential and
-  // could theoretically collide.
-  const genRef = () => {
-    const used = new Set((quotes || []).map(q => { const m = String(q.quoteRef || '').match(/^OEQ-(\d+)$/); return m ? parseInt(m[1]) : null; }).filter(n => n != null));
-    let n = 1;
-    while (used.has(n)) n++;
-    return `OEQ-${String(n).padStart(4, '0')}`;
+function nextQuoteRefClient(quotes) {
+  const used = new Set((quotes || []).map(q => { const m = String(q.quoteRef || '').match(/^OEQ-(\d+)$/); return m ? parseInt(m[1]) : null; }).filter(n => n != null));
+  let n = 1;
+  while (used.has(n)) n++;
+  return `OEQ-${String(n).padStart(4, '0')}`;
+}
+
+function QuotePage({ edit, quotes, customers, services = [], onClose, onSave, onDelete, onCustomerCreated }) {
+  const [form, setForm] = useState({ ...edit, quoteRef: edit.quoteRef || nextQuoteRefClient(quotes) });
+  const findCustomerMatch = (q) => {
+    const email = (q.email || '').toLowerCase().trim();
+    const name = (q.cust || '').toLowerCase().trim();
+    return (customers || []).find(x =>
+      (email && (x.email || '').toLowerCase().trim() === email) ||
+      (name && (x.name || '').toLowerCase().trim() === name)
+    );
+  };
+  const [selectedCustomerId, setSelectedCustomerId] = useState(() => { const m = findCustomerMatch(edit); return m ? m.id : ''; });
+  const [customerQuery, setCustomerQuery] = useState(() => { const m = findCustomerMatch(edit); return m ? `${m.name}${m.email ? ` (${m.email})` : ''}` : ''; });
+  const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
+  const applyCustomer = (c) => {
+    setSelectedCustomerId(c ? c.id : '');
+    const typed = customerQuery.trim();
+    setCustomerQuery(c ? `${c.name}${c.email ? ` (${c.email})` : ''}` : '');
+    setCustomerDropdownOpen(false);
+    if (c) setForm(f => ({ ...f, cust: c.name || f.cust, email: c.email || f.email, phone: c.phone || f.phone, loc: c.loc || f.loc, shippingAddress: c.shippingAddress || f.shippingAddress }));
+    else if (typed && !form.cust) setForm(f => ({ ...f, cust: typed }));
+  };
+  const customerMatches = useMemo(() => {
+    const q = customerQuery.trim().toLowerCase();
+    if (!q) return (customers || []).slice(0, 8);
+    return (customers || []).filter(c => (c.name||'').toLowerCase().includes(q) || (c.email||'').toLowerCase().includes(q) || (c.phone||'').toLowerCase().includes(q)).slice(0, 8);
+  }, [customers, customerQuery]);
+
+  const savedSnapRef = React.useRef(JSON.stringify({ ...edit }));
+  const dirty = JSON.stringify(form) !== savedSnapRef.current;
+
+  React.useEffect(() => {
+    if (!form.lineItems || form.lineItems.length === 0) return;
+    const lineItemsTotal = Math.round(form.lineItems.reduce((s,i)=>s+liTotal(i),0) * 100) / 100;
+    const discountAmount = discountAmountFor(lineItemsTotal, form.discountType, form.discountValue);
+    const total = Math.round((lineItemsTotal - discountAmount) * 100) / 100;
+    if (total !== Number(form.total) || discountAmount !== Number(form.discountAmount || 0)) {
+      setForm(f => ({ ...f, total, discountAmount }));
+    }
+  }, [form.lineItems, form.discountType, form.discountValue]);
+
+  const [busy, setBusy] = useState(null); // 'save' | 'send' | 'convert' | 'delete' | 'pdf'
+  const [err, setErr] = useState(null);
+
+  const validateLineItems = () => {
+    const blank = (form.lineItems || []).find(li => li.description && (li.amount === '' || li.amount == null || Number.isNaN(Number(li.amount))));
+    if (blank) { adminToast(`"${blank.description}" has no price set — confirm it before saving.`); return false; }
+    return true;
   };
 
-  const dq = context?.draftQuote || {};
-  const [form, setForm] = useState({
-    quoteRef: dq.quoteRef || context?.quoteRef || genRef(),
-    customerName: dq.customerName || context?.name || '',
-    customerEmail: dq.customerEmail || context?.email || '',
-    validDays: dq.validDays || 30,
-    hardwareItems: dq.hardwareItems?.length ? dq.hardwareItems : [{ id: 'h' + Date.now(), name: '', qty: 1, basePrice: '' }],
-    pcBuild: dq.pcBuild || false,
-    pcHours: dq.pcHours || '',
-    otherItems: dq.otherItems || [],
-    notes: dq.notes || '',
-    sourceQuoteId: context?.id || null,
-  });
-  const [sending, setSending] = useState(false);
-  const [msg, setMsg] = useState({ text: '', ok: true });
-
-  // Guard the in-progress quote against reload / tab close, and warn before
-  // leaving via Back. `sending` clears the flag so a successful send or draft
-  // save (which navigates away or updates the baseline) doesn't false-trip.
-  const initialFormRef = React.useRef(null);
-  if (initialFormRef.current === null) initialFormRef.current = JSON.stringify(form);
-  const dirty = !sending && JSON.stringify(form) !== initialFormRef.current;
-  useUnsavedGuard(dirty);
-  const requestBack = async () => {
-    if (dirty && !(await adminConfirm('You have unsaved changes to this quote that will be lost.\nLeave without saving?', { title: 'Unsaved changes', confirmLabel: 'Discard changes', cancelLabel: 'Keep editing', danger: true }))) return;
-    onBack();
+  const persistNewCustomerIfNeeded = async () => {
+    if (selectedCustomerId || !form.cust || !form.cust.trim() || findCustomerMatch(form)) return;
+    const cr = await fetch('/api/admin/customers/save', { method:'POST', headers:postHeaders(), credentials:'include',
+      body: JSON.stringify({ name: form.cust.trim(), email: form.email||'', phone: form.phone||'', loc: form.loc||'', shippingAddress: form.shippingAddress||'' }) }).catch(()=>null);
+    if (cr && cr.ok) { const cd = await cr.json(); if (cd.item) onCustomerCreated?.(cd.item); }
   };
 
-  const hw = form.hardwareItems;
-  const hardwareTotal = hw.reduce((s, i) => s + (parseFloat(i.basePrice) || 0) * (parseInt(i.qty) || 1) * (1 + PARTS_MARGIN), 0);
-  const pcBuildFee = form.pcBuild ? (parseFloat(form.pcHours) || 0) * PC_BUILD_RATE : 0;
-  const otherItemTotal = (i) => (parseFloat(i.amount) || 0) * (parseInt(i.qty) || 1);
-  const otherTotal = form.otherItems.reduce((s, i) => s + otherItemTotal(i), 0);
-  const grandTotal = Math.round((hardwareTotal + pcBuildFee + otherTotal) * 100) / 100;
-
-  const addHw = () => setForm(f => ({ ...f, hardwareItems: [...f.hardwareItems, { id: 'h' + Date.now(), name: '', qty: 1, basePrice: '' }] }));
-  const updHw = (id, patch) => setForm(f => ({ ...f, hardwareItems: f.hardwareItems.map(i => i.id === id ? { ...i, ...patch } : i) }));
-  const remHw = (id) => setForm(f => ({ ...f, hardwareItems: f.hardwareItems.filter(i => i.id !== id) }));
-
-  const addOther = () => setForm(f => ({ ...f, otherItems: [...f.otherItems, { id: 'o' + Date.now(), description: '', amount: '', qty: 1 }] }));
-  const updOther = (id, patch) => setForm(f => ({ ...f, otherItems: f.otherItems.map(i => i.id === id ? { ...i, ...patch } : i) }));
-  const remOther = (id) => setForm(f => ({ ...f, otherItems: f.otherItems.filter(i => i.id !== id) }));
-
-  // Keep the customer's original request kind (e.g. "Repair") when building a
-  // quote from an inbox item — only fall back to a generic label for quotes
-  // started from scratch, and only call it "Custom Build" when that box is
-  // ticked. 'custom-pc-build' is the old hardcoded value every quote used to
-  // get stamped with — never carry that one forward, or it sticks forever.
-  const quoteKind = (context?.kind && context.kind !== 'custom-pc-build')
-    ? context.kind
-    : (form.pcBuild ? 'Custom Build' : 'Quote');
-  const buildPayload = () => ({ ...form, hardwareTotal, pcBuildFee, otherTotal, grandTotal, kind: quoteKind });
+  const doSave = async () => {
+    if (!validateLineItems()) return;
+    setBusy('save'); setErr(null);
+    await persistNewCustomerIfNeeded();
+    const r = await fetch('/api/admin/quotes/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(form) }).catch(()=>null);
+    setBusy(null);
+    if (!r || !r.ok) { setErr('Failed to save — please try again.'); return; }
+    const d = await r.json();
+    savedSnapRef.current = JSON.stringify(d.item || form);
+    onSave(d.item || form, !edit.id);
+  };
 
   const doSend = async () => {
-    if (!form.customerEmail) { setMsg({ text: 'Customer email is required.', ok: false }); return; }
-    if (!isValidEmail(form.customerEmail)) { setMsg({ text: 'Customer email looks invalid — please check it.', ok: false }); return; }
-    setSending(true); setMsg({ text: '', ok: true });
-    try {
-      const r = await fetch('/api/admin/quotes/send', { method: 'POST', headers: postHeaders(), credentials: 'include', body: JSON.stringify(buildPayload()) });
-      const d = await r.json().catch(() => ({}));
-      if (r.ok) {
-        setMsg({ text: `Quote sent to ${form.customerEmail}`, ok: true });
-        if (onQuoteSent) onQuoteSent(d);
-        setTimeout(() => onBack(), 2200);
-      } else {
-        setMsg({ text: d.error || 'Failed to send. Check SMTP settings in Settings → Integrations.', ok: false });
-      }
-    } catch { setMsg({ text: 'Network error.', ok: false }); }
-    finally { setSending(false); }
+    if (!form.email) { setErr('Customer email is required to send a quote.'); return; }
+    if (!isValidEmail(form.email)) { setErr('Customer email looks invalid — please check it.'); return; }
+    if (!validateLineItems()) return;
+    setBusy('send'); setErr(null);
+    await persistNewCustomerIfNeeded();
+    const r = await fetch('/api/admin/quotes/send', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(form) }).catch(()=>null);
+    setBusy(null);
+    if (!r || !r.ok) { setErr('Failed to send — check SMTP settings in Settings → Integrations.'); return; }
+    const d = await r.json();
+    savedSnapRef.current = JSON.stringify(d.item || form);
+    adminToast(`Quote sent to ${form.email}.`, 'success');
+    onSave(d.item || form, !edit.id);
   };
 
-  const doSaveDraft = async () => {
-    setSending(true); setMsg({ text: '', ok: true });
-    try {
-      const payload = {
-        id: form.sourceQuoteId || ('quot-' + Date.now()),
-        name: form.customerName,
-        email: form.customerEmail,
-        status: 'in-review',
-        kind: quoteKind,
-        quoteRef: form.quoteRef,
-        summary: `Draft quote — $${grandTotal.toLocaleString('en-AU', { minimumFractionDigits: 2 })} AUD`,
-        age: '0m',
-        draftQuote: buildPayload(),
-      };
-      const r = await fetch('/api/admin/quotes/save', { method: 'POST', headers: postHeaders(), credentials: 'include', body: JSON.stringify(payload) });
-      const d = await r.json().catch(() => ({}));
-      if (r.ok) {
-        setMsg({ text: 'Draft saved.', ok: true });
-        setForm(f => { const nf = { ...f, sourceQuoteId: (d.item && d.item.id) || payload.id }; initialFormRef.current = JSON.stringify(nf); return nf; });
-        if (onQuoteSent) onQuoteSent(d);
-      } else {
-        setMsg({ text: 'Failed to save.', ok: false });
-      }
-    } catch { setMsg({ text: 'Network error.', ok: false }); }
-    finally { setSending(false); }
+  const doConvertToOrder = async () => {
+    if (!(await adminConfirm(`This will create a real order from quote ${form.quoteRef || form.id} and mark it won.`, { title: 'Convert to order', confirmLabel: 'Convert to order' }))) return;
+    setBusy('convert'); setErr(null);
+    const orderPayload = {
+      _isNew: true,
+      cust: form.cust || '', email: form.email || '', phone: form.phone || '',
+      loc: form.loc || '', shippingAddress: form.shippingAddress || '',
+      items: (form.lineItems || []).map(i => i.description).filter(Boolean).join(', ') || form.quoteRef || 'Order',
+      lineItems: form.lineItems || [],
+      discountType: form.discountType, discountValue: form.discountValue, discountAmount: form.discountAmount,
+      date: todayOrderDate(), total: form.total || 0, fulfilment: 'pending', payments: [],
+      sourceQuoteId: form.id, quoteRef: form.quoteRef || '',
+    };
+    const or = await fetch('/api/admin/orders/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(orderPayload) }).catch(()=>null);
+    if (!or || !or.ok) { setBusy(null); setErr('Failed to create the order — quote was not touched.'); return; }
+    const od = await or.json();
+    const updated = { ...form, status: 'won', orderId: od.item?.id };
+    const qr = await fetch('/api/admin/quotes/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(updated) }).catch(()=>null);
+    setBusy(null);
+    if (!qr || !qr.ok) { adminToast(`Order ${od.item?.id} was created, but the quote couldn't be marked won.`); }
+    adminToast(`Converted to order ${od.item?.id}.`, 'success');
+    onSave(qr && qr.ok ? (await qr.json()).item : updated, false);
   };
 
-  const fmtAUD = (n) => n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const doDelete = async () => {
+    if (!(await adminConfirm(`Delete quote ${form.quoteRef || form.id}? This cannot be undone.`, { title: 'Delete quote', confirmLabel: 'Delete', danger: true }))) return;
+    setBusy('delete');
+    const r = await fetch('/api/admin/quotes/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: form.id }) }).catch(()=>null);
+    setBusy(null);
+    if (!r || !r.ok) { adminToast('Failed to delete quote.'); return; }
+    onDelete?.(form.id);
+    onClose();
+  };
 
-  const [printing, setPrinting] = useState(false);
-  const doPrintPdf = async () => {
-    setPrinting(true); setMsg({ text: '', ok: true });
-    try {
-      const r = await fetch('/api/admin/quotes/pdf', { method: 'POST', headers: postHeaders(), credentials: 'include', body: JSON.stringify(buildPayload()) });
-      if (!r.ok) { setMsg({ text: 'Failed to generate PDF.', ok: false }); return; }
-      const blob = await r.blob();
-      window.open(URL.createObjectURL(blob), '_blank');
-    } catch { setMsg({ text: 'Network error.', ok: false }); }
-    finally { setPrinting(false); }
+  const doPdf = async () => {
+    setBusy('pdf');
+    const r = await fetch('/api/admin/quotes/pdf', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(form) }).catch(()=>null);
+    setBusy(null);
+    if (!r || !r.ok) { adminToast('Failed to generate PDF.'); return; }
+    const blob = await r.blob();
+    window.open(URL.createObjectURL(blob), '_blank');
   };
 
   return (
-    <div style={{ padding: 32, maxWidth: 980, overflowY: 'auto' }}>
-      {/* Page header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 28 }}>
-        <div>
-          <a style={{ display:'inline-flex', alignItems:'center', gap:4, cursor: 'pointer', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--rust)', letterSpacing: '.08em' }} onClick={requestBack}><Icon name="chevronLeft" size={10}/> BACK TO INBOX</a>
-          <h2 className="serif" style={{ fontSize: 30, marginTop: 6, fontWeight: 400 }}>{context?.draftQuote ? 'Edit Quote' : 'Quote Builder'}</h2>
+    <OrderPage onClose={onClose} dirty={dirty} title={edit.id ? `Quote ${form.quoteRef || edit.id}` : 'New quote'}
+      footer={<div className="row-flex" style={{gap:8, justifyContent:'space-between'}}>
+        <div className="row-flex" style={{gap:8}}>
+          {edit.id && <button className="btn btn-ghost btn-sm" disabled={busy==='pdf'} onClick={doPdf}><Icon name="printer" size={14}/>{busy==='pdf'?'Generating…':'Print PDF'}</button>}
+          {edit.id && form.status !== 'won' && <button className="btn btn-ghost btn-sm" disabled={busy==='convert'} onClick={doConvertToOrder}><Icon name="refresh" size={14}/>{busy==='convert'?'Converting…':'Convert to order'}</button>}
+          {edit.id && <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} disabled={busy==='delete'} onClick={doDelete}><Icon name="trash" size={14}/>{busy==='delete'?'Deleting…':'Delete quote'}</button>}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {msg.text && <span style={{ fontSize: 13, color: msg.ok ? 'var(--eucalyptus)' : 'var(--rust)' }}>{msg.text}</span>}
-          <button className="btn btn-ghost btn-sm" disabled={printing} onClick={doPrintPdf}>
-            <Icon name="printer" size={14}/>
-            {printing ? 'Generating…' : 'Print PDF'}
-          </button>
-          <button className="btn btn-ghost btn-sm" disabled={sending} onClick={doSaveDraft}>Save draft</button>
-          <button className="btn btn-rust btn-sm" disabled={sending} onClick={doSend} style={{ minWidth: 130 }}>{sending ? 'Sending…' : <>Send quote <Icon name="chevronRight" size={11}/></>}</button>
+        <div className="row-flex" style={{gap:8}}>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
+          <button className="btn btn-ghost btn-sm" disabled={busy==='save'} onClick={doSave}>{busy==='save'?'Saving…':'Save draft'}</button>
+          <button className="btn btn-sm" disabled={busy==='send'} onClick={doSend}>{busy==='send'?'Sending…':'Send to customer'}</button>
         </div>
+      </div>}
+    >
+      {err && <div style={{marginBottom:14, padding:'10px 14px', background:'#fbeae1', border:'1px solid #e3b9a3', color:'#7a3a18', fontSize:13}}>{err}</div>}
+      <label className="field"><span className="label">Quote Reference</span><input className="input" style={{fontFamily:'monospace', fontWeight:700}} value={form.quoteRef||''} onChange={e=>setForm({...form,quoteRef:e.target.value})}/></label>
+      <label className="field" style={{position:'relative'}}><span className="label">Customer<ReqMark/></span>
+        <input className="input" placeholder="Search by name, email, or phone…" value={customerQuery}
+          onChange={e => { setCustomerQuery(e.target.value); setCustomerDropdownOpen(true); if (selectedCustomerId) setSelectedCustomerId(''); }}
+          onFocus={() => setCustomerDropdownOpen(true)}
+          onBlur={() => setTimeout(() => setCustomerDropdownOpen(false), 150)}
+        />
+        {customerDropdownOpen && (
+          <div style={{position:'absolute', top:'100%', left:0, right:0, zIndex:20, background:'var(--bg)', border:'1px solid var(--line)', boxShadow:'0 4px 12px rgba(0,0,0,.12)', maxHeight:240, overflowY:'auto'}}>
+            <div role="button" tabIndex={0} onMouseDown={e => { e.preventDefault(); applyCustomer(null); }}
+              style={{padding:'8px 12px', fontSize:13, cursor:'pointer', color:'var(--rust)', borderBottom:'1px solid var(--line)'}}>+ New customer{customerQuery.trim() ? ` "${customerQuery.trim()}"` : ''}</div>
+            {customerMatches.length === 0 && <div style={{padding:'8px 12px', fontSize:12, color:'var(--ink-3)'}}>No matching customers.</div>}
+            {customerMatches.map(c => (
+              <div key={c.id} role="button" tabIndex={0} onMouseDown={e => { e.preventDefault(); applyCustomer(c); }} style={{padding:'8px 12px', fontSize:13, cursor:'pointer'}}>
+                <div style={{fontWeight:600}}>{c.name}</div>
+                <div style={{fontSize:11, color:'var(--ink-3)'}}>{[c.email, c.phone].filter(Boolean).join(' · ') || '—'}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </label>
+      <label className="field"><span className="label">{selectedCustomerId ? 'Customer name' : 'New customer name'}<ReqMark/></span><input className="input" value={form.cust||''} onChange={e=>setForm({...form,cust:e.target.value})}/></label>
+      <label className="field"><span className="label">Email</span><input className="input" type="email" value={form.email||''} onChange={e=>setForm({...form,email:e.target.value})}/></label>
+      <label className="field"><span className="label">Phone</span><input className="input" type="tel" value={form.phone||''} onChange={e=>setForm({...form,phone:e.target.value})}/></label>
+      <label className="field"><span className="label">Shipping Address</span><input className="input" value={form.shippingAddress||''} onChange={e=>setForm({...form,shippingAddress:e.target.value})} placeholder="Street, City, State, Postcode"/>
+        <div style={{fontSize:11, color:'var(--ink-3)', marginTop:4}}>Where a physical order gets posted.</div>
+      </label>
+      <label className="field"><span className="label">Location</span><input className="input" value={form.loc||''} onChange={e=>setForm({...form,loc:e.target.value})} placeholder="e.g. suburb or full address"/>
+        <div style={{fontSize:11, color:'var(--ink-3)', marginTop:4}}>Used for callout distance. Falls back to Shipping Address if left blank.</div>
+      </label>
+      <label className="field"><span className="label">Valid for (days)</span><input className="input" type="number" min="1" value={form.validDays||30} onChange={e=>setForm({...form,validDays:Number(e.target.value)})}/></label>
+
+      <div className="field">
+        <span className="label">Line items</span>
+        {(form.lineItems||[]).map(li => {
+          const isHourly = li.kind === 'hourly';
+          const needsRecalc = !!li.needsDistanceRecalc;
+          return (
+          <div key={li.id} style={{display:'grid', gridTemplateColumns: needsRecalc ? '1fr 60px 110px 28px 28px' : '1fr 60px 110px 28px', gap:8, marginBottom:8}}>
+            <input className="input" placeholder="e.g. Custom software development" value={li.description}
+              onChange={e => setForm(f => ({...f, lineItems: f.lineItems.map(x => x.id === li.id ? {...x, description: e.target.value} : x)}))}/>
+            <input className="input" type="number" min="1" step="1" placeholder={isHourly ? 'Hrs' : 'Qty'} value={li.qty||1}
+              onChange={e => setForm(f => ({...f, lineItems: f.lineItems.map(x => x.id === li.id ? {...x, qty: Math.max(1, parseInt(e.target.value)||1)} : x)}))}/>
+            <input className="input" type="number" min="0" step="0.01" placeholder="Price ea." value={li.amount}
+              onChange={e => setForm(f => ({...f, lineItems: f.lineItems.map(x => x.id === li.id ? {...x, amount: nonNegInput(e.target.value)} : x)}))}/>
+            {needsRecalc && (
+              <button className="btn btn-ghost btn-sm" style={{padding:0}} title="Recalculate distance from the quote's Location (or Shipping Address if Location is blank)"
+                onClick={async () => {
+                  const svcName = li.serviceName || 'Callout';
+                  const rate = li.kmRate;
+                  const loc = (form.loc || form.shippingAddress || '').trim();
+                  if (!loc) { adminToast("Add the quote's Location or Shipping Address first, then retry."); return; }
+                  try {
+                    const r = await fetch(`/api/admin/geocode-distance?address=${encodeURIComponent(loc)}`, { credentials:'include' });
+                    if (!r.ok) { adminToast(`Couldn't locate "${loc}" — check the address.`); return; }
+                    const d = await r.json();
+                    const amount = Number.isFinite(rate) ? Math.round(rate * d.distKm * 100) / 100 : li.amount;
+                    const description = Number.isFinite(rate)
+                      ? `${svcName} — travel (${d.distKm}km from shop to "${loc}" @ $${rate}/km)`
+                      : `${svcName} — travel (${d.distKm}km from shop to "${loc}")`;
+                    setForm(f => ({...f, lineItems: f.lineItems.map(x => x.id === li.id ? {...x, description, amount} : x)}));
+                  } catch { adminToast('Distance lookup failed — try again.'); }
+                }}><Icon name="refresh" size={12}/></button>
+            )}
+            <button className="btn btn-ghost btn-sm" style={{padding:0, color:'var(--rust)'}}
+              onClick={() => setForm(f => ({...f, lineItems: f.lineItems.filter(x => x.id !== li.id)}))}><Icon name="x" size={12}/></button>
+          </div>
+          );
+        })}
+        <select className="select" value="" onChange={async e => {
+          const val = e.target.value;
+          if (!val) return;
+          e.target.value = '';
+          if (val === '__custom__') {
+            setForm(f => ({...f, lineItems: [...(f.lineItems||[]), { id: 'li-' + Date.now(), description:'', amount:'', qty:1 }]}));
+            return;
+          }
+          const svc = services.find(s => s.id === val);
+          if (!svc) return;
+          const items = await buildServiceLineItems(svc, form.loc || form.shippingAddress);
+          setForm(f => ({...f, lineItems: [...(f.lineItems||[]), ...items]}));
+        }}>
+          <option value="">+ Add line item…</option>
+          <option value="__custom__">Custom line item</option>
+          {Object.entries(
+            services.reduce((groups, s) => { const cat = s.category || 'Other'; (groups[cat] = groups[cat] || []).push(s); return groups; }, {})
+          ).sort(([a], [b]) => a.localeCompare(b)).map(([cat, svcs]) => (
+            <optgroup key={cat} label={cat}>
+              {svcs.map(s => <option key={s.id} value={s.id}>{s.name}{(s.price ?? s.priceLine) ? ` — ${s.price ?? s.priceLine}` : ''}</option>)}
+            </optgroup>
+          ))}
+        </select>
+        {(form.lineItems||[]).length > 0 && (
+          <div style={{marginTop:8, fontSize:12, color:'var(--ink-3)'}}>Line items total: <strong>${(form.lineItems||[]).reduce((s,i)=>s+liTotal(i),0).toLocaleString('en-AU',{minimumFractionDigits:2})}</strong> — quote total below is kept in sync.</div>
+        )}
       </div>
 
-      <div className="admin-split" style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 24, alignItems: 'start' }}>
-        {/* ── Left column ── */}
-        <div style={{ display: 'grid', gap: 20 }}>
-
-          {/* Customer details */}
-          <section style={{ background: 'var(--paper)', border: '1px solid var(--line)', padding: 24 }}>
-            <div className="eyebrow" style={{ marginBottom: 16 }}>CUSTOMER DETAILS</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-              <label className="field" style={{ margin: 0 }}><span className="label">Customer name</span>
-                <input className="input" placeholder="Jane Smith" value={form.customerName} onChange={e => setForm({ ...form, customerName: e.target.value })} />
-              </label>
-              <label className="field" style={{ margin: 0 }}><span className="label">Customer email<ReqMark/></span>
-                <input className="input" type="email" aria-required="true" placeholder="jane@example.com" value={form.customerEmail} onChange={e => setForm({ ...form, customerEmail: e.target.value })} />
-              </label>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px', gap: 14, marginTop: 14 }}>
-              <label className="field" style={{ margin: 0 }}><span className="label">Quote reference</span>
-                <input className="input" value={form.quoteRef} onChange={e => setForm({ ...form, quoteRef: e.target.value })} />
-              </label>
-              <label className="field" style={{ margin: 0 }}><span className="label">Valid (days)</span>
-                <input className="input" type="number" min="1" value={form.validDays} onChange={e => setForm({ ...form, validDays: Number(e.target.value) })} />
-              </label>
-            </div>
-          </section>
-
-          {/* Hardware items */}
-          <section style={{ background: 'var(--paper)', border: '1px solid var(--line)', padding: 24 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-              <div>
-                <div className="eyebrow" style={{ margin: 0 }}>HARDWARE ITEMS</div>
-                <div className="mono" style={{ fontSize: 10, color: 'var(--ink-2)', marginTop: 4, letterSpacing: '.06em' }}>{PARTS_MARGIN * 100}% MARGIN AUTO-APPLIED · NOT ITEMISED FOR CUSTOMER</div>
-              </div>
-              <button className="btn btn-ghost btn-sm" onClick={addHw}>+ Add item</button>
-            </div>
-
-            {hw.length > 0 && (
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 70px 130px 120px 28px', gap: 8, marginBottom: 6 }}>
-                {['ITEM', 'QTY', 'YOUR COST', 'CUSTOMER PRICE', ''].map((h, i) => (
-                  <div key={i} className="mono" style={{ fontSize: 10, color: 'var(--ink-2)', letterSpacing: '.06em' }}>{h}</div>
-                ))}
-              </div>
-            )}
-
-            <div style={{ display: 'grid', gap: 8 }}>
-              {hw.map(item => {
-                const base = parseFloat(item.basePrice) || 0;
-                const qty = parseInt(item.qty) || 1;
-                const customerPrice = base * qty * (1 + PARTS_MARGIN);
-                return (
-                  <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '2fr 70px 130px 120px 28px', gap: 8, alignItems: 'center' }}>
-                    <input className="input" placeholder="e.g. Ryzen 7 5800X CPU" value={item.name} onChange={e => updHw(item.id, { name: e.target.value })} />
-                    <input className="input" type="number" min="1" placeholder="1" value={item.qty} onChange={e => updHw(item.id, { qty: e.target.value })} />
-                    <div style={{ position: 'relative' }}>
-                      <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--ink-2)', pointerEvents: 'none' }}>$</span>
-                      <input className="input" type="number" min="0" step="0.01" placeholder="0.00" value={item.basePrice} onChange={e => updHw(item.id, { basePrice: nonNegInput(e.target.value) })} style={{ paddingLeft: 22 }} />
-                    </div>
-                    <div className="mono" style={{ fontSize: 13, fontWeight: 600, textAlign: 'right', color: 'var(--ink)' }}>
-                      ${fmtAUD(customerPrice)}
-                    </div>
-                    <button className="icon-btn" style={{ width: 24, height: 24, fontSize: 16, color: 'var(--ink-3)' }} onClick={() => remHw(item.id)}>×</button>
-                  </div>
-                );
-              })}
-            </div>
-
-            {hw.length === 0 && (
-              <div style={{ fontSize: 13, color: 'var(--ink-2)', padding: '12px 0', textAlign: 'center' }}>No hardware items — click + Add item.</div>
-            )}
-
-            {hw.length > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--line)' }}>
-                <span className="mono" style={{ fontSize: 12, color: 'var(--ink-2)' }}>Hardware subtotal: <strong style={{ color: 'var(--ink)' }}>${fmtAUD(hardwareTotal)}</strong></span>
-              </div>
-            )}
-          </section>
-
-          {/* PC Build */}
-          <section style={{ background: 'var(--paper)', border: '1px solid var(--line)', padding: 24 }}>
-            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', marginBottom: form.pcBuild ? 20 : 0 }}>
-              <input type="checkbox" checked={form.pcBuild} onChange={e => setForm({ ...form, pcBuild: e.target.checked })} style={{ marginTop: 3 }} />
-              <div style={{ flex: 1 }}>
-                <div className="eyebrow" style={{ margin: 0 }}>CUSTOM PC BUILD</div>
-                <div className="mono" style={{ fontSize: 10, color: 'var(--ink-2)', marginTop: 4, letterSpacing: '.06em' }}>$40/HR · SHOWN AS FLAT FEE TO CUSTOMER · HOURS NOT DISCLOSED</div>
-              </div>
-              {form.pcBuild && pcBuildFee > 0 && (
-                <span className="mono" style={{ fontWeight: 700, fontSize: 14, color: 'var(--ink)' }}>${fmtAUD(pcBuildFee)}</span>
-              )}
-            </label>
-
-            {form.pcBuild && (
-              <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: 14, alignItems: 'end' }}>
-                <label className="field" style={{ margin: 0 }}>
-                  <span className="label">Build hours</span>
-                  <input className="input" type="number" min="0" step="0.25" placeholder="0" value={form.pcHours} onChange={e => setForm({ ...form, pcHours: e.target.value })} />
-                </label>
-                <div style={{ paddingBottom: 4 }}>
-                  {form.pcHours ? (
-                    <div>
-                      <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>{parseFloat(form.pcHours)} hr{parseFloat(form.pcHours) !== 1 ? 's' : ''} × $40 = </span>
-                      <strong style={{ fontSize: 14, color: 'var(--ink)' }}>${fmtAUD(pcBuildFee)} flat fee</strong>
-                      <div className="mono" style={{ fontSize: 10, color: 'var(--ink-3)', marginTop: 6, letterSpacing: '.06em' }}>CUSTOMER SEES: "Custom PC Build — ${fmtAUD(pcBuildFee)}"</div>
-                    </div>
-                  ) : (
-                    <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>Enter hours above</span>
-                  )}
-                </div>
-              </div>
-            )}
-          </section>
-
-          {/* Other items */}
-          <section style={{ background: 'var(--paper)', border: '1px solid var(--line)', padding: 24 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <div className="eyebrow" style={{ margin: 0 }}>OTHER ITEMS / SERVICES</div>
-              <button className="btn btn-ghost btn-sm" onClick={addOther}>+ Add</button>
-            </div>
-            <div style={{ display: 'grid', gap: 8 }}>
-              {form.otherItems.map(item => (
-                <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '1fr 60px 150px 28px', gap: 8, alignItems: 'center' }}>
-                  <input className="input" placeholder="e.g. Cable management, OS installation" value={item.description} onChange={e => updOther(item.id, { description: e.target.value })} />
-                  <input className="input" type="number" min="1" step="1" placeholder="Qty" value={item.qty || 1} onChange={e => updOther(item.id, { qty: Math.max(1, parseInt(e.target.value) || 1) })} />
-                  <div style={{ position: 'relative' }}>
-                    <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--ink-2)', pointerEvents: 'none' }}>$</span>
-                    <input className="input" type="number" min="0" step="0.01" placeholder="0.00 ea." value={item.amount} onChange={e => updOther(item.id, { amount: nonNegInput(e.target.value) })} style={{ paddingLeft: 22 }} />
-                  </div>
-                  <button className="icon-btn" style={{ width: 24, height: 24, fontSize: 16, color: 'var(--ink-3)' }} onClick={() => remOther(item.id)}>×</button>
-                </div>
-              ))}
-            </div>
-            {form.otherItems.length === 0 && (
-              <div style={{ fontSize: 13, color: 'var(--ink-2)', textAlign: 'center', padding: '10px 0' }}>No additional items.</div>
-            )}
-          </section>
-
-          {/* Notes */}
-          <section style={{ background: 'var(--paper)', border: '1px solid var(--line)', padding: 24 }}>
-            <div className="eyebrow" style={{ marginBottom: 12 }}>NOTES TO CUSTOMER</div>
-            <textarea className="textarea" style={{ minHeight: 90 }}
-              placeholder="Turnaround time, warranty, pickup/delivery, any conditions…"
-              value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
-          </section>
+      <div className="field">
+        <span className="label">Discount</span>
+        <div style={{display:'grid', gridTemplateColumns:'110px 1fr', gap:8, marginBottom:8}}>
+          <select className="select" value={form.discountType || 'percent'} onChange={e=>setForm({...form, discountType:e.target.value})}>
+            <option value="percent">Percent (%)</option>
+            <option value="fixed">Dollar ($)</option>
+          </select>
+          <input className="input" type="number" min="0" step="0.01" placeholder={form.discountType === 'fixed' ? 'e.g. 20.00' : 'e.g. 10'}
+            value={form.discountValue || ''} onChange={e=>setForm({...form, discountValue:nonNegInput(e.target.value)})}/>
         </div>
-
-        {/* ── Right column: live preview ── */}
-        <aside style={{ display: 'grid', gap: 16, position: 'sticky', top: 24 }}>
-          {/* Total summary */}
-          <div style={{ background: 'var(--dark)', color: 'var(--paper)', padding: 22 }}>
-            <div className="eyebrow" style={{ color: 'var(--ochre)', marginBottom: 16 }}>QUOTE TOTAL</div>
-            <div style={{ display: 'grid', gap: 10 }}>
-              {hardwareTotal > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                  <span style={{ color: 'rgba(244,237,225,.65)' }}>Hardware</span>
-                  <span className="mono">${fmtAUD(hardwareTotal)}</span>
-                </div>
-              )}
-              {form.pcBuild && pcBuildFee > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                  <span style={{ color: 'rgba(244,237,225,.65)' }}>PC Build</span>
-                  <span className="mono">${fmtAUD(pcBuildFee)}</span>
-                </div>
-              )}
-              {form.otherItems.filter(i => parseFloat(i.amount) > 0).map((item, idx) => (
-                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                  <span style={{ color: 'rgba(244,237,225,.65)', flex: 1, marginRight: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.description || 'Other'}{(parseInt(item.qty) || 1) > 1 ? ` × ${parseInt(item.qty)}` : ''}</span>
-                  <span className="mono">${fmtAUD(otherItemTotal(item))}</span>
-                </div>
-              ))}
-              <div style={{ borderTop: '1px solid rgba(255,255,255,.15)', paddingTop: 12, marginTop: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <span style={{ fontSize: 13, fontWeight: 600 }}>Total (AUD)</span>
-                <span className="mono" style={{ fontSize: 20, fontWeight: 700, color: 'var(--ochre)' }}>${fmtAUD(grandTotal)}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Customer-facing preview */}
-          <div style={{ background: 'var(--paper)', border: '1px solid var(--line)', padding: 20 }}>
-            <div className="eyebrow" style={{ marginBottom: 12 }}>CUSTOMER SEES</div>
-            <div style={{ fontSize: 12, color: 'var(--ink-2)' }}>
-              {[
-                ...hw.filter(i => i.name || i.basePrice).map(i => {
-                  const base = parseFloat(i.basePrice) || 0;
-                  const qty = parseInt(i.qty) || 1;
-                  return { label: (i.name || '(item)') + (qty > 1 ? ` × ${qty}` : ''), amount: base * qty * (1 + PARTS_MARGIN) };
-                }),
-                ...(form.pcBuild && pcBuildFee > 0 ? [{ label: 'Custom PC Build', amount: pcBuildFee }] : []),
-                ...form.otherItems.filter(i => i.description || i.amount).map(i => ({ label: (i.description || '(item)') + ((parseInt(i.qty) || 1) > 1 ? ` × ${parseInt(i.qty)}` : ''), amount: otherItemTotal(i) })),
-              ].map((row, idx, arr) => (
-                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: idx < arr.length - 1 ? '1px dashed var(--line)' : 'none' }}>
-                  <span style={{ flex: 1, marginRight: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.label}</span>
-                  <span className="mono" style={{ fontWeight: 600 }}>${fmtAUD(row.amount)}</span>
-                </div>
-              ))}
-              {grandTotal > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 10, marginTop: 4, borderTop: '1px solid var(--line)', fontWeight: 700 }}>
-                  <span>Total</span>
-                  <span className="mono" style={{ color: 'var(--rust)' }}>${fmtAUD(grandTotal)}</span>
-                </div>
-              )}
-              {grandTotal === 0 && <div style={{ textAlign: 'center', color: 'var(--ink-3)', padding: '8px 0' }}>Add items to see preview.</div>}
-            </div>
-          </div>
-
-          {/* Quote meta */}
-          <div style={{ background: 'var(--paper)', border: '1px solid var(--line)', padding: 18 }}>
-            <div className="eyebrow" style={{ marginBottom: 10 }}>QUOTE META</div>
-            <div style={{ fontSize: 12, color: 'var(--ink-2)', lineHeight: 1.8 }}>
-              <div><span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--ink-3)' }}>REF</span><br />{form.quoteRef}</div>
-              <div><span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--ink-3)' }}>VALID</span><br />{form.validDays} days</div>
-              {form.customerName && <div><span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--ink-3)' }}>TO</span><br />{form.customerName}</div>}
-              {form.customerEmail && <div><span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--ink-3)' }}>EMAIL</span><br />{form.customerEmail}</div>}
-            </div>
-          </div>
-        </aside>
+        <input className="input" list="discount-reason-presets" value={form.discountLabel || ''} onChange={e=>setForm({...form, discountLabel:e.target.value})}
+          placeholder="Reason (optional) — e.g. Multi-service discount, Loyalty discount"/>
+        <datalist id="discount-reason-presets">
+          {['Multi-service discount','Loyalty discount','Returning customer','Goodwill / service recovery','Staff discount','Bundle discount','Referral discount'].map(l => <option key={l} value={l}/>)}
+        </datalist>
+        {Number(form.discountAmount) > 0 && (
+          <div style={{marginTop:8, fontSize:12, color:'var(--rust)'}}>{form.discountLabel || 'Discount'} applied: <strong>-${Number(form.discountAmount).toLocaleString('en-AU',{minimumFractionDigits:2})}</strong></div>
+        )}
       </div>
-    </div>
+
+      <label className="field"><span className="label">Total (AUD){(form.lineItems||[]).length > 0 && <span style={{color:'var(--ink-3)', fontWeight:400}}> — set by line items{Number(form.discountAmount) > 0 ? ' less discount' : ''}</span>}</span>
+        <input className="input" type="number" min="0" step="0.01" disabled={(form.lineItems||[]).length > 0} value={form.total||''} onChange={e=>setForm({...form,total:Number(e.target.value)})}/>
+      </label>
+
+      {(form.plannedExpenses || []).length > 0 && (
+        <div className="field">
+          <span className="label">Planned expenses (reference only — not counted as real costs until this becomes an order)</span>
+          {form.plannedExpenses.map((e, i) => (
+            <div key={i} style={{display:'flex', justifyContent:'space-between', padding:'6px 10px', background:'var(--bg-elev)', border:'1px solid var(--line)', marginBottom:4, fontSize:12}}>
+              <span>{e.description}{e.quantity > 1 ? ` × ${e.quantity}` : ''}</span>
+              <span className="mono">${(Number(e.amount)*(Number(e.quantity)||1)).toFixed(2)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <label className="field"><span className="label">Notes to customer</span>
+        <textarea className="textarea" style={{minHeight:80}} placeholder="Turnaround time, warranty, pickup/delivery, any conditions…" value={form.notes||''} onChange={e=>setForm({...form,notes:e.target.value})} />
+      </label>
+
+      <label className="field"><span className="label">Status</span>
+        <select className="select" value={form.status||'new'} onChange={e=>setForm({...form, status:e.target.value})}>
+          {['new','in-review','quoted','won','closed','declined'].map(s => <option key={s} value={s}>{s.replace(/-/g,' ')}</option>)}
+        </select>
+      </label>
+    </OrderPage>
   );
 }
 
 // ============================================================
-// QUOTES INBOX
+// QUOTES
 // ============================================================
-function AdminQuotes() {
-  const [quotes, setQuotes] = useState([]);
-  const [quotesLoaded, setQuotesLoaded] = useState(false);
-  const [staffMembers, setStaffMembers] = useState([]);
+function AdminQuotes({ search, sessionInfo, siteUrl }) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [customers, setCustomers] = useState([]);
+  const [services, setServices] = useState([]);
   const [edit, setEdit] = useState(null);
-  const [form, setForm] = useState({});
-  const [assignTarget, setAssignTarget] = useState(null);
-  const [assignee, setAssignee] = useState('');
-  const [activeTab, setActiveTab] = useUrlState('tab', 'new');
+  const [statusTab, setStatusTab] = useUrlState('tab', 'all');
   const [openId, setOpenId] = useUrlState('open', null, { push: true });
-  const quoteDirty = useDirtyTracker(form, edit);
 
   useEffect(() => {
     fetch('/api/admin/quotes', { credentials:'include' })
-      .then(r => r.ok ? r.json() : Promise.reject()).then(d => setQuotes(d.items || [])).catch(() => setQuotes([])).finally(() => setQuotesLoaded(true));
-    fetch('/api/admin/staff', { credentials:'include' })
-      .then(r => r.ok ? r.json() : Promise.reject()).then(d => setStaffMembers(d.members || [])).catch(() => setStaffMembers([]));
+      .then(r => r.ok ? r.json() : Promise.reject()).then(d => setRows(d.items || [])).catch(() => setRows([])).finally(() => setLoading(false));
+    fetch('/api/admin/customers', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject()).then(d => setCustomers(d.items || [])).catch(() => {});
+    fetch('/api/admin/catalog', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setServices((d.services || []).filter(s => s.status === 'published')))
+      .catch(() => {});
   }, []);
 
-  const openQuoteCreator = (q) => setOpenId(q && q.id ? q.id : 'new');
+  const q = (search || '').toLowerCase().trim();
+  const visibleRows = useMemo(() => {
+    let out = rows;
+    if (q) out = out.filter(r =>
+      (r.id || '').toLowerCase().includes(q) ||
+      (r.quoteRef || '').toLowerCase().includes(q) ||
+      (r.cust || r.name || '').toLowerCase().includes(q) ||
+      (r.email || '').toLowerCase().includes(q)
+    );
+    if (statusTab !== 'all') out = out.filter(r => (r.status || 'new') === statusTab);
+    return out;
+  }, [rows, q, statusTab]);
 
-  const doAssign = async () => {
-    if (!assignee) return;
-    const prevQuotes = quotes;
-    const target = assignTarget;
-    const updated = quotes.map(q => q.id === target.id ? {...q, assignee, status: q.status === 'new' ? 'in-review' : q.status} : q);
-    setQuotes(updated);
-    setAssignTarget(null);
-    const r = await fetch('/api/admin/quotes/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({...target, assignee, status: target.status === 'new' ? 'in-review' : target.status}) }).catch(()=>null);
-    if (!r || !r.ok) { setQuotes(prevQuotes); adminToast('Failed to assign quote — please try again.'); }
-  };
+  const tabCounts = useMemo(() => ({
+    all: rows.length,
+    new: rows.filter(r => (r.status||'new') === 'new').length,
+    'in-review': rows.filter(r => r.status === 'in-review').length,
+    quoted: rows.filter(r => r.status === 'quoted').length,
+    won: rows.filter(r => r.status === 'won').length,
+    closed: rows.filter(r => r.status === 'closed').length,
+    declined: rows.filter(r => r.status === 'declined').length,
+  }), [rows]);
 
-  const statusMap = {
-    'new':       { bg:'var(--rust)', fg:'#fff' },
-    'in-review': { bg:'var(--ochre)', fg:'var(--dark)' },
-    'quoted':    { bg:'#d8e7d0', fg:'#345526' },
-    'closed':    { bg:'var(--bg-deep)', fg:'var(--ink-2)' },
-  };
+  const blankQuote = () => ({ id:'', quoteRef:'', cust:'', email:'', phone:'', loc:'', shippingAddress:'', lineItems:[], validDays:30, discountType:'percent', discountValue:'', discountAmount:0, total:0, notes:'', status:'new' });
 
-  const creating = openId != null;
-  const quoteContext = creating && openId !== 'new' ? quotes.find(q => q.id === openId) : null;
-  if (creating) {
-    // On reload with ?open=<id>, wait for the quotes list before mounting the
-    // creator so it initialises from the right quote rather than a blank form.
-    if (openId !== 'new' && !quoteContext && !quotesLoaded) {
-      return <div style={{padding:32, color:'var(--ink-2)'}}>Loading quote…</div>;
-    }
+  const openRow = (r) => setOpenId(r.id);
+
+  useEffect(() => {
+    const cur = edit === null ? null : (edit.id || 'new');
+    if (openId === cur) return;
+    if (openId == null) { setEdit(null); return; }
+    if (openId === 'new') { setEdit(blankQuote()); return; }
+    const r = rows.find(x => x.id === openId);
+    if (r) setEdit(r);
+  }, [openId, rows]);
+
+  if (edit !== null) {
     return (
-      <QuoteCreator
-        context={quoteContext || null}
-        quotes={quotes}
-        onBack={() => setOpenId(null)}
-        onQuoteSent={() => {
-          fetch('/api/admin/quotes', { credentials:'include' })
-            .then(r => r.ok ? r.json() : Promise.reject()).then(d => setQuotes(d.items || [])).catch(() => {});
+      <QuotePage
+        edit={edit}
+        quotes={rows}
+        customers={customers}
+        services={services}
+        onClose={() => setOpenId(null)}
+        onSave={(saved, isNew) => {
+          if (isNew) setRows(rs => [saved, ...rs]);
+          else setRows(rs => rs.map(r => r.id === edit.id ? saved : r));
+          setOpenId(null);
         }}
+        onDelete={(id) => setRows(rs => rs.filter(r => r.id !== id))}
+        onCustomerCreated={(cust) => setCustomers(cs => cs.some(c => c.id === cust.id) ? cs.map(c => c.id === cust.id ? cust : c) : [...cs, cust])}
       />
     );
   }
 
+  const statusMap = {
+    new:        { bg:'var(--rust)', fg:'#fff' },
+    'in-review':{ bg:'var(--ochre)', fg:'var(--dark)' },
+    quoted:     { bg:'#d8e7d0', fg:'#345526' },
+    won:        { bg:'#345526', fg:'#fff' },
+    closed:     { bg:'var(--bg-deep)', fg:'var(--ink-2)' },
+    declined:   { bg:'#f3d5c5', fg:'#7a3a18' },
+  };
+
   return (
-    <div className="admin-split" style={{padding:32, display:'grid', gridTemplateColumns:'1fr 360px', gap:24}}>
-      <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, flexWrap:'wrap', gap:10 }}>
-          <div className="tabs" style={{marginBottom:0}}>
-            {[
-              { key:'new',       label:`Inbox (${quotes.filter(q=>q.status==='new').length})` },
-              { key:'in-review', label:`In review (${quotes.filter(q=>q.status==='in-review').length})` },
-              { key:'quoted',    label:`Quoted (${quotes.filter(q=>q.status==='quoted').length})` },
-              { key:'won',       label:`Won (${quotes.filter(q=>q.status==='won').length})` },
-              { key:'closed',    label:'Closed' },
-            ].map(t => (
-              <div key={t.key} role="button" tabIndex={0} className={`tab ${activeTab===t.key?'active':''}`} onClick={() => setActiveTab(t.key)} onKeyDown={e => { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); setActiveTab(t.key); } }} style={{cursor:'pointer'}}>{t.label}</div>
-            ))}
-          </div>
-          <button className="btn btn-rust btn-sm" onClick={() => openQuoteCreator(null)}>+ New quote</button>
-        </div>
-        <div style={{display:'grid', gap:12}}>
-          {quotes.filter(q => (q.status||'new') === activeTab).length === 0 && <div style={{ padding: 24, background: 'var(--paper)', border: '1px solid var(--line)', fontSize: 13, color: 'var(--ink-2)', textAlign: 'center' }}>No quotes in this category.</div>}
-          {quotes.filter(q => (q.status||'new') === activeTab).map((q,i) => (
-            <div key={i} style={{padding:18, background:'var(--paper)', border:'1px solid var(--line)', borderLeft: q.status==='new'?'3px solid var(--rust)':'1px solid var(--line)'}}>
-              <div className="row-flex" style={{justifyContent:'space-between'}}>
-                <div className="row-flex" style={{gap:10}}>
-                  <span className="mono" style={{fontSize:11, color:'var(--rust)'}}>{q.id}</span>
-                  {q.kind && <span className="tag tag-outline">{q.kind.toUpperCase()}</span>}
-                  <StatusPill value={q.status || 'new'} map={statusMap} />
-                  {q.priority && <span className="tag tag-rust" style={{fontSize:10}}>PRIORITY</span>}
-                  {q.memberTier && <span className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>{q.memberTier.toUpperCase()}</span>}
-                </div>
-                {q.age && <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{q.age.toUpperCase()} AGO</span>}
-              </div>
-              <div style={{marginTop:10, display:'grid', gridTemplateColumns:'1fr auto', gap:14}}>
-                <div>
-                  <div style={{fontWeight:600}}>{q.name} {q.loc && <span style={{color:'var(--ink-2)', fontWeight:400}}>· {q.loc}</span>}</div>
-                  {q.summary && <p style={{marginTop:6, fontSize:13, color:'var(--ink-2)'}}>{q.summary}</p>}
-                </div>
-                {(q.urgency || q.budget) && (
-                  <div style={{textAlign:'right'}}>
-                    {q.urgency && <><div className="mono" style={{fontSize:10, color:'var(--ink-3)'}}>URGENCY</div>
-                    <div style={{fontWeight:600, fontSize:14, color: q.urgency==='Yesterday'?'var(--rust)':'var(--ink)'}}>{q.urgency}</div></>}
-                    {q.budget && <><div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginTop:6}}>BUDGET</div>
-                    <div style={{fontWeight:600, fontSize:13}}>{q.budget}</div></>}
-                  </div>
-                )}
-              </div>
-              <div className="row-flex" style={{marginTop:14, gap:8, justifyContent:'flex-end'}}>
-                <button className="btn btn-ghost btn-sm" onClick={() => { setAssignee(''); setAssignTarget(q); }}>Assign</button>
-                <button className="btn btn-rust btn-sm" onClick={() => openQuoteCreator(q)}>{q.status === 'quoted' ? <>Edit &amp; Resend <Icon name="chevronRight" size={11}/></> : <>Build quote <Icon name="chevronRight" size={11}/></>}</button>
-              </div>
-            </div>
+    <div style={{padding:32}}>
+      <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14, flexWrap:'wrap', gap:10}}>
+        <div className="tabs tabs-row" style={{margin:0}}>
+          {[['all','All'],['new','New'],['in-review','In review'],['quoted','Quoted'],['won','Won'],['closed','Closed'],['declined','Declined']].map(([k,l]) => (
+            <div key={k} role="button" tabIndex={0} className={`tab ${statusTab===k?'active':''}`} style={{cursor:'pointer'}}
+              onClick={() => setStatusTab(k)}
+              onKeyDown={e => { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); setStatusTab(k); } }}>{l} ({tabCounts[k]})</div>
           ))}
         </div>
+        <button className="btn btn-rust btn-sm" onClick={() => setOpenId('new')}>+ New quote</button>
       </div>
-
-      <aside>
-        <div style={{padding:20, background:'var(--paper)', border:'1px solid var(--line)'}}>
-          <span className="eyebrow">SLA — RESPONSE TIME</span>
-          <div className="serif" style={{fontSize:40, marginTop:6, color:'var(--eucalyptus)'}}>—</div>
-          <div className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>AVG · LAST 30 DAYS · TARGET 24H</div>
-          <hr className="thin"/>
-          <span className="eyebrow">UNASSIGNED</span>
-          <ul style={{listStyle:'none', padding:0, margin:'10px 0 0', display:'grid', gap:6, fontSize:13}}>
-            {quotes.filter(q => q.status === 'new').length === 0
-              ? <li style={{fontSize:13, color:'var(--ink-2)'}}>None — all assigned.</li>
-              : quotes.filter(q => q.status === 'new').map((q,i) => (
-                <li key={i} style={{display:'flex', justifyContent:'space-between'}}>
-                  <span className="mono" style={{fontSize:12}}>{q.id}</span>
-                  <a className="mono" style={{display:'inline-flex', alignItems:'center', gap:4, fontSize:11, color:'var(--rust)', cursor:'pointer'}} onClick={() => openQuoteCreator(q)}>BUILD <Icon name="chevronRight" size={10}/></a>
-                </li>
-              ))
-            }
-          </ul>
-        </div>
-      </aside>
-
-      {edit !== null && (
-        <Drawer open={true} onClose={() => setEdit(null)} dirty={quoteDirty} title={`Quote ${edit.id}`}
-          footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
-            <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={async () => {
-              if (!(await adminConfirm(`Delete quote ${edit.id}? This cannot be undone.`, { title: 'Delete quote', confirmLabel: 'Delete', danger: true }))) return;
-              const r = await fetch('/api/admin/quotes/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: edit.id }) }).catch(()=>null);
-              if (!r || !r.ok) { adminToast('Failed to delete quote.'); return; }
-              setQuotes(qs => qs.filter(q => q.id !== edit.id));
-              setEdit(null);
-            }}>Delete</button>
-            <div className="row-flex" style={{gap:8}}>
-              <button className="btn btn-ghost btn-sm" onClick={() => setEdit(null)}>Cancel</button>
-              <button className="btn btn-sm" onClick={async () => {
-                const r = await fetch('/api/admin/quotes/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(form) }).catch(()=>null);
-                if (r && r.ok) {
-                  const d = await r.json();
-                  setQuotes(qs => qs.map(q => q.id === edit.id ? d.item : q));
-                  setEdit(null);
-                } else {
-                  adminToast('Failed to save quote — changes not persisted.');
-                }
-              }}>Save</button>
-            </div>
-          </div>}
-        >
-          <label className="field"><span className="label">Order Number</span>
-            <div style={{display:'flex', gap:8}}>
-              <input className="input" style={{fontFamily:'monospace', fontWeight:700}} value={form.id||''} onChange={e=>setForm({...form,id:e.target.value})} placeholder="e.g. OE-1001"/>
-            </div>
-          </label>
-          <label className="field"><span className="label">Name</span><input className="input" value={form.name||''} onChange={e=>setForm({...form,name:e.target.value})}/></label>
-          <label className="field"><span className="label">Location</span><input className="input" value={form.loc||''} onChange={e=>setForm({...form,loc:e.target.value})}/></label>
-          <label className="field"><span className="label">Kind</span><input className="input" value={form.kind||''} onChange={e=>setForm({...form,kind:e.target.value})}/></label>
-          <label className="field"><span className="label">Status</span>
-            <select className="select" value={form.status||'new'} onChange={e=>setForm({...form,status:e.target.value})}>
-              {['new','in-review','quoted','closed'].map(s => <option key={s}>{s}</option>)}
-            </select>
-          </label>
-        </Drawer>
-      )}
-
-      {assignTarget && (
-        <Drawer open={true} onClose={() => setAssignTarget(null)} title={`Assign ${assignTarget.id}`}
-          footer={<div className="row-flex" style={{gap:8, justifyContent:'flex-end'}}>
-            <button className="btn btn-ghost btn-sm" onClick={() => setAssignTarget(null)}>Cancel</button>
-            <button className="btn btn-rust btn-sm" onClick={doAssign} disabled={!assignee}>Assign</button>
-          </div>}>
-          <div style={{fontSize:13, color:'var(--ink-2)', marginBottom:16}}>{assignTarget.name} · {assignTarget.summary}</div>
-          <label className="field"><span className="label">Assign to</span>
-            <select className="select" value={assignee} onChange={e => setAssignee(e.target.value)}>
-              <option value="">— select staff —</option>
-              {staffMembers.map(s => <option key={s.id} value={s.name}>{s.name}{s.role ? ` · ${s.role}` : ''}</option>)}
-            </select>
-          </label>
-        </Drawer>
-      )}
+      <Table
+        loading={loading}
+        columns={[
+          { key:'quoteRef', label:'Quote #', w:'120px', sort:true, render:r => <span className="mono" style={{fontSize:12, color:'var(--rust)'}}>{r.quoteRef || r.id}</span> },
+          { key:'cust', label:'Customer', w:'1.5fr', sort:r => r.cust || r.name, render:r => r.cust || r.name || '—' },
+          { key:'items', label:'Items', w:'2fr', render:r => <span style={{fontSize:13}}>{(r.lineItems||[]).map(i=>i.description).filter(Boolean).join(', ') || r.description || r.summary || '—'}</span> },
+          { key:'total', label:'Total', w:'90px', sort:r => Number(r.total ?? r.grandTotal) || 0, render:r => <span className="mono" style={{fontWeight:600}}>${(Number(r.total ?? r.grandTotal)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}</span> },
+          { key:'status', label:'Status', w:'110px', sort:r => r.status || 'new', render:r => <StatusPill value={r.status || 'new'} map={statusMap} /> },
+          { key:'date', label:'When', w:'110px', sort:r => { const d = r.createdAt ? new Date(r.createdAt) : null; return d ? d.getTime() : 0; }, render:r => <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{r.date || (r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'}) : '—')}</span> },
+        ]}
+        rows={visibleRows}
+        onRowClick={openRow}
+        defaultSort={{ key: 'quoteRef', dir: 'desc' }}
+      />
     </div>
   );
 }
@@ -10705,7 +10557,7 @@ const ADMIN_VIEWS = {
   'payment-plans': { c: PaymentPlansView, t:'Payment Plans', staticSubtitle:'active instalment plans · due dates · status' },
   repairs:    { c: AdminRepairs,    t:'Repair Jobs' },
   'hdd-reports': { c: AdminHddReports, t:'HDD Condition Reports', staticSubtitle:'S.M.A.R.T. summary · condition notes · printable PDF' },
-  quotes:     { c: AdminQuotes,     t:'Quotes Inbox' },
+  quotes:     { c: AdminQuotes,     t:'Quotes' },
   reviews:    { c: AdminReviews,    t:'Reviews',           staticSubtitle:'pending · approved · rejected' },
   ewaste:     { c: AdminEwaste,     t:'eWaste Intake' },
   bookings:   { c: AdminBookings,   t:'Bookings' },
