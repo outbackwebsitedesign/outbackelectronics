@@ -7050,6 +7050,10 @@ function AdminSellers() {
   }, []);
   const map = { Live:{bg:'#d8e7d0', fg:'#345526'}, Sold:{bg:'var(--ink)', fg:'var(--paper)'}, Bench:{bg:'#fff4d6', fg:'#7a5d10'}, Recycle:{bg:'var(--bg-deep)', fg:'var(--ink-2)'} };
   const openSeller = (r) => { setEdit(r); setForm({...r}); };
+  // Sellers repeat constantly across listings but have no separate record of
+  // their own — a free-text field silently fragments payout totals on typos,
+  // so suggest every seller name already on file instead of typing blind.
+  const sellerOptions = useMemo(() => [...new Set(rows.map(r => r.seller).filter(Boolean))].sort(), [rows]);
   const soldRows = rows.filter(r => r.status === 'Sold');
   const totalPayout = soldRows.reduce((s, r) => {
     const n = parseFloat((r.payout || '').replace(/[^0-9.]/g, ''));
@@ -7136,9 +7140,18 @@ function AdminSellers() {
             </div>
           </div>}
         >
-          <label className="field"><span className="label">Seller</span><input className="input" value={form.seller||''} onChange={e=>setForm({...form,seller:e.target.value})}/></label>
+          <label className="field"><span className="label">Seller</span>
+            <input className="input" list="consignment-seller-options" value={form.seller||''} onChange={e=>setForm({...form,seller:e.target.value})}/>
+            <datalist id="consignment-seller-options">
+              {sellerOptions.map(s => <option key={s} value={s}/>)}
+            </datalist>
+          </label>
           <label className="field"><span className="label">Item</span><input className="input" value={form.item||''} onChange={e=>setForm({...form,item:e.target.value})}/></label>
-          <label className="field"><span className="label">Tier</span><input className="input" value={form.tier||''} onChange={e=>setForm({...form,tier:e.target.value})}/></label>
+          <label className="field"><span className="label">Tier</span>
+            <select className="select" value={form.tier||'A'} onChange={e=>setForm({...form,tier:e.target.value})}>
+              {['A','B','C','D'].map(t => <option key={t}>{t}</option>)}
+            </select>
+          </label>
           <label className="field"><span className="label">Listed price (AUD)</span><input className="input" type="number" value={form.listed||0} onChange={e=>setForm({...form,listed:Number(e.target.value)})}/></label>
           <label className="field"><span className="label">Payout terms</span><input className="input" value={form.payout||''} onChange={e=>setForm({...form,payout:e.target.value})}/></label>
           <label className="field"><span className="label">Status</span>
