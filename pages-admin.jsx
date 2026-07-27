@@ -1600,7 +1600,7 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
     if (!amt || amt <= 0) { setRefundError('Enter a refund amount greater than zero.'); return; }
     // Never refund more than has actually been taken for this order.
     const paid = orderAmountPaid(form);
-    const maxRefund = Math.round(((paid > 0 ? paid : orderEffectiveTotal(form)) - (form.refund ? Number(form.refund.amount) || 0 : 0)) * 100) / 100;
+    const maxRefund = Math.max(0, Math.round((paid - (form.refund ? Number(form.refund.amount) || 0 : 0)) * 100) / 100);
     if (amt > maxRefund + 0.005) {
       setRefundError(`Refund exceeds the amount paid on this order — maximum refundable is $${Math.max(0, maxRefund).toFixed(2)}.`);
       return;
@@ -1721,7 +1721,7 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
   const amountPaid = orderAmountPaid(form);
   const profitRevenue = amountPaid > 0 ? amountPaid : (Number(form.total) || 0);
   const profit = profitRevenue - partsCost;
-  const maxRefund = Math.max(0, Math.round(((amountPaid > 0 ? amountPaid : orderEffectiveTotal(form)) - (form.refund ? Number(form.refund.amount) || 0 : 0)) * 100) / 100);
+  const maxRefund = Math.max(0, Math.round((amountPaid - (form.refund ? Number(form.refund.amount) || 0 : 0)) * 100) / 100);
 
   return (
     <OrderPage onClose={onClose} dirty={dirty} title={edit.id ? `Order ${edit.id}` : 'New order'}
