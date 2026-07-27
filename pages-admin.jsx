@@ -1096,6 +1096,56 @@ function AdminOverview({ go }) {
   );
 }
 
+// Full-page chrome for the order editor — a standalone, URL-addressable page
+// (/orders?open=OE-0001) rather than a slide-over Drawer, so an order can be
+// bookmarked, shared, or reopened straight from a refresh. Mirrors Drawer's
+// unsaved-changes guard and beforeunload warning without the overlay/panel
+// styling, since this replaces the Orders list in place rather than floating
+// over it.
+function OrderPage({ title, dirty, onClose, footer, children }) {
+  const confirmingRef = React.useRef(false);
+  const dirtyRef = React.useRef(dirty);
+  dirtyRef.current = dirty;
+
+  const requestClose = React.useCallback(async () => {
+    if (confirmingRef.current) return;
+    if (dirtyRef.current) {
+      confirmingRef.current = true;
+      const ok = await adminConfirm('You have unsaved changes that will be lost.\nGo back without saving?', {
+        title: 'Unsaved changes', confirmLabel: 'Discard changes', cancelLabel: 'Keep editing', danger: true,
+      });
+      confirmingRef.current = false;
+      if (!ok) return;
+    }
+    onClose();
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!dirty) return;
+    adminDirtyDrawers++;
+    const onBeforeUnload = (e) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => {
+      adminDirtyDrawers = Math.max(0, adminDirtyDrawers - 1);
+      window.removeEventListener('beforeunload', onBeforeUnload);
+    };
+  }, [dirty]);
+
+  return (
+    <div style={{padding:32, maxWidth:860}}>
+      <div className="row-flex" style={{justifyContent:'space-between', marginBottom:18, gap:12}}>
+        <button className="btn btn-ghost btn-sm" onClick={requestClose}>
+          <Icon name="chevronLeft" size={12}/> Back to Orders
+        </button>
+        {dirty && <span className="mono" title="Unsaved changes" style={{display:'inline-flex', alignItems:'center', gap:4, fontSize:9, letterSpacing:'.08em', color:'var(--ochre)'}}><Icon name="dot" size={8}/> UNSAVED</span>}
+      </div>
+      <h2 style={{fontSize:22, fontWeight:600, margin:'0 0 20px'}}>{title}</h2>
+      <div>{children}</div>
+      {footer && <div style={{marginTop:24, padding:'14px 0', borderTop:'1px solid var(--line)'}}>{footer}</div>}
+    </div>
+  );
+}
+
 // ============================================================
 // ORDER helpers — shared by AdminOrders and OrderDrawer
 // ============================================================
@@ -1554,7 +1604,7 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
   const profit = profitRevenue - partsCost;
 
   return (
-    <Drawer open={true} onClose={onClose} dirty={dirty} title={edit.id ? `Order ${edit.id}` : 'New order'}
+    <OrderPage onClose={onClose} dirty={dirty} title={edit.id ? `Order ${edit.id}` : 'New order'}
       footer={<div className="row-flex" style={{gap:8, justifyContent:'space-between'}}>
         {edit.id
           ? <div className="row-flex" style={{gap:8}}>
@@ -2088,7 +2138,7 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
         <label className="field" style={{margin:0}}><span className="label">Message</span><input className="input" placeholder="e.g. RAM and SSD have arrived, waiting on GPU" value={updateEntry.text} onChange={e=>setUpdateEntry(v=>({...v,text:e.target.value}))} onKeyDown={e=>e.key==='Enter'&&addUpdate()}/></label>
         <button className="btn btn-sm" style={{marginBottom:1}} onClick={addUpdate}>Post</button>
       </div>
-    </Drawer>
+    </OrderPage>
   );
 }
 
@@ -2175,6 +2225,29 @@ function AdminOrders({ search, sessionInfo, siteUrl }) {
     if (r) setEdit(r);
   }, [openId, rows]);
 
+  if (edit !== null) {
+    return (
+      <OrderDrawer
+        edit={edit}
+        expenses={expenses}
+        customers={customers}
+        services={services}
+        sessionInfo={sessionInfo}
+        siteUrl={siteUrl}
+        onClose={() => setOpenId(null)}
+        onRowUpdate={(updated) => setRows(rs => rs.map(r => r.id === (edit.id || updated.id) ? updated : r))}
+        onSave={(saved, isNew) => {
+          if (isNew) setRows(rs => [saved, ...rs]);
+          else setRows(rs => rs.map(r => r.id === edit.id ? saved : r));
+          setOpenId(null);
+        }}
+        onExpensesChange={setExpenses}
+        onCustomerCreated={(cust) => setCustomers(cs => [...cs, cust])}
+        onDelete={(id) => setRows(rs => rs.filter(r => r.id !== id))}
+      />
+    );
+  }
+
   return (
     <div style={{padding:32}}>
       <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14, flexWrap:'wrap', gap:10}}>
@@ -2218,26 +2291,6 @@ function AdminOrders({ search, sessionInfo, siteUrl }) {
         onRowClick={openRow}
         defaultSort={{ key: 'id', dir: 'desc' }}
       />
-      {edit !== null && (
-        <OrderDrawer
-          edit={edit}
-          expenses={expenses}
-          customers={customers}
-          services={services}
-          sessionInfo={sessionInfo}
-          siteUrl={siteUrl}
-          onClose={() => setOpenId(null)}
-          onRowUpdate={(updated) => setRows(rs => rs.map(r => r.id === (edit.id || updated.id) ? updated : r))}
-          onSave={(saved, isNew) => {
-            if (isNew) setRows(rs => [saved, ...rs]);
-            else setRows(rs => rs.map(r => r.id === edit.id ? saved : r));
-            setOpenId(null);
-          }}
-          onExpensesChange={setExpenses}
-          onCustomerCreated={(cust) => setCustomers(cs => [...cs, cust])}
-          onDelete={(id) => setRows(rs => rs.filter(r => r.id !== id))}
-        />
-      )}
     </div>
   );
 }
