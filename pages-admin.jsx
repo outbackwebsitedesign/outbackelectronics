@@ -3449,8 +3449,37 @@ function AdminHddReports({ sessionInfo = {} }) {
   const [smartParsing, setSmartParsing] = useState(false);
   const [products, setProducts] = useState([]);
   const [pendingCerts, setPendingCerts] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [repairJobs, setRepairJobs] = useState([]);
+  const [openId, setOpenId] = useUrlState('open', null, { push: true });
   const dirty = useDirtyTracker(form, edit);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const [customerQuery, setCustomerQuery] = useState('');
+  const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
+  const applyCustomer = (c) => {
+    setCustomerQuery(c ? `${c.name}${c.email ? ` (${c.email})` : ''}` : '');
+    setCustomerDropdownOpen(false);
+    if (c) setForm(f => ({ ...f, customerName: c.name || f.customerName, customerEmail: c.email || f.customerEmail, customerPhone: c.phone || f.customerPhone }));
+  };
+  const customerMatches = useMemo(() => {
+    const q = customerQuery.trim().toLowerCase();
+    if (!q) return (customers || []).slice(0, 8);
+    return (customers || []).filter(c => (c.name||'').toLowerCase().includes(q) || (c.email||'').toLowerCase().includes(q) || (c.phone||'').toLowerCase().includes(q)).slice(0, 8);
+  }, [customers, customerQuery]);
+
+  const [jobQuery, setJobQuery] = useState('');
+  const [jobDropdownOpen, setJobDropdownOpen] = useState(false);
+  const applyJob = (j) => {
+    setJobQuery(j ? `${j.id}${j.customer ? ` — ${j.customer}` : ''}` : '');
+    setJobDropdownOpen(false);
+    if (j) setForm(f => ({ ...f, repairJobId: j.id, customerName: j.customer || f.customerName, customerEmail: j.email || f.customerEmail, customerPhone: j.phone || f.customerPhone }));
+  };
+  const jobMatches = useMemo(() => {
+    const q = jobQuery.trim().toLowerCase();
+    if (!q) return (repairJobs || []).slice(0, 8);
+    return (repairJobs || []).filter(j => (j.id||'').toLowerCase().includes(q) || (j.customer||'').toLowerCase().includes(q)).slice(0, 8);
+  }, [repairJobs, jobQuery]);
 
   const reloadPendingCerts = () => {
     fetch('/api/admin/orders', { credentials:'include' })
@@ -3487,11 +3516,38 @@ function AdminHddReports({ sessionInfo = {} }) {
       .then(r => r.ok ? r.json() : Promise.reject()).then(d => setReports(d.items || [])).catch(() => setReports([]));
     fetch('/api/admin/catalog', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject()).then(d => setProducts(d.products || [])).catch(() => setProducts([]));
+    fetch('/api/admin/customers', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject()).then(d => setCustomers(d.items || [])).catch(() => setCustomers([]));
+    fetch('/api/admin/repairs', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setRepairJobs((d.columns||[]).flatMap(c => (c.cards||[]).map(cd => ({ id: cd.id, customer: cd.customer || cd.name, email: cd.email, phone: cd.phone })))))
+      .catch(() => setRepairJobs([]));
     reloadPendingCerts();
   }, []);
 
-  const openRow = (r) => { setEdit(r); setForm({ ...blankHddReport(), ...r }); };
-  const openNew = () => { setEdit({}); setForm({ ...blankHddReport(), technician: sessionInfo.username || '' }); };
+  const openRow = (r) => setOpenId(r.id);
+  const openNew = () => setOpenId('new');
+
+  // Reconcile the open report editor with the URL's `open` param (restore on
+  // reload + Back/Forward), same as Orders/Quotes/Expenses/Repairs.
+  useEffect(() => {
+    const cur = edit === null ? null : (edit.id || 'new');
+    if (openId === cur) return;
+    if (openId == null) { setEdit(null); return; }
+    if (openId === 'new') {
+      setEdit({});
+      setForm({ ...blankHddReport(), technician: sessionInfo.username || '' });
+      setCustomerQuery(''); setJobQuery('');
+      return;
+    }
+    const r = reports.find(x => x.id === openId);
+    if (r) {
+      setEdit(r);
+      setForm({ ...blankHddReport(), ...r });
+      setCustomerQuery(r.customerName ? `${r.customerName}${r.customerEmail ? ` (${r.customerEmail})` : ''}` : '');
+      setJobQuery(r.repairJobId || '');
+    }
+  }, [openId, reports]);
 
   const verdictMap = {
     healthy:  { bg:'#d8e7d0', fg:'#345526' },
@@ -3504,7 +3560,7 @@ function AdminHddReports({ sessionInfo = {} }) {
     if (r && r.ok) {
       const d = await r.json();
       if (!edit.id) setReports(rs => [...rs, d.item]); else setReports(rs => rs.map(x => x.id === edit.id ? d.item : x));
-      setEdit(null);
+      setOpenId(null);
     } else {
       adminToast('Failed to save report — changes not persisted.');
     }
@@ -3515,7 +3571,7 @@ function AdminHddReports({ sessionInfo = {} }) {
     const r = await fetch('/api/admin/hdd-reports/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: form.id }) }).catch(()=>null);
     if (!r || !r.ok) { adminToast('Failed to delete report.'); return; }
     setReports(rs => rs.filter(x => x.id !== form.id));
-    setEdit(null);
+    setOpenId(null);
   };
 
   const doPrintPdf = async () => {
@@ -3524,6 +3580,17 @@ function AdminHddReports({ sessionInfo = {} }) {
     const blob = await r.blob();
     window.open(URL.createObjectURL(blob), '_blank');
   };
+
+  if (edit !== null) return (
+    <HddReportPage
+      edit={edit} form={form} set={set} setForm={setForm} sessionInfo={sessionInfo}
+      products={products} dirty={dirty}
+      smartPaste={smartPaste} setSmartPaste={setSmartPaste} smartParsing={smartParsing} doParseSmart={doParseSmart} copyCmd={copyCmd}
+      customerQuery={customerQuery} setCustomerQuery={setCustomerQuery} customerDropdownOpen={customerDropdownOpen} setCustomerDropdownOpen={setCustomerDropdownOpen} customerMatches={customerMatches} applyCustomer={applyCustomer}
+      jobQuery={jobQuery} setJobQuery={setJobQuery} jobDropdownOpen={jobDropdownOpen} setJobDropdownOpen={setJobDropdownOpen} jobMatches={jobMatches} applyJob={applyJob}
+      onClose={() => setOpenId(null)} onSave={save} onDelete={del} onPrintPdf={doPrintPdf}
+    />
+  );
 
   return (
     <div style={{padding:32}}>
@@ -3570,17 +3637,25 @@ function AdminHddReports({ sessionInfo = {} }) {
         emptyMessage="No hard drive condition reports yet."
       />
 
-      {edit !== null && (
-        <Drawer open={true} onClose={() => setEdit(null)} dirty={dirty} title={edit.id ? `Report ${edit.id}` : 'New HDD condition report'}
-          footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
-            {edit.id ? <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={del}>Delete</button> : <span/>}
-            <div className="row-flex" style={{gap:8}}>
-              <button className="btn btn-ghost btn-sm" onClick={() => setEdit(null)}>Cancel</button>
-              <button className="btn btn-ghost btn-sm" onClick={doPrintPdf}>Print / PDF</button>
-              <button className="btn btn-sm" onClick={save}>Save</button>
-            </div>
-          </div>}
-        >
+    </div>
+  );
+}
+
+function HddReportPage({ edit, form, set, setForm, sessionInfo, products, dirty, smartPaste, setSmartPaste, smartParsing, doParseSmart, copyCmd,
+  customerQuery, setCustomerQuery, customerDropdownOpen, setCustomerDropdownOpen, customerMatches, applyCustomer,
+  jobQuery, setJobQuery, jobDropdownOpen, setJobDropdownOpen, jobMatches, applyJob,
+  onClose, onSave, onDelete, onPrintPdf }) {
+  return (
+    <OrderPage onClose={onClose} dirty={dirty} title={edit.id ? `Report ${edit.id}` : 'New HDD condition report'}
+      footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
+        {edit.id ? <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={onDelete}>Delete</button> : <span/>}
+        <div className="row-flex" style={{gap:8}}>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
+          <button className="btn btn-ghost btn-sm" onClick={onPrintPdf}>Print / PDF</button>
+          <button className="btn btn-sm" onClick={onSave}>Save</button>
+        </div>
+      </div>}
+    >
           <div style={{padding:14, background:'var(--bg-elev)', border:'1px solid var(--line)', marginBottom:18}}>
             <span className="eyebrow">Autofill from smartctl (Linux)</span>
             <p style={{fontSize:12, color:'var(--ink-2)', margin:'6px 0 8px'}}>
@@ -3618,7 +3693,46 @@ function AdminHddReports({ sessionInfo = {} }) {
 
           {form.type === 'repair' && (
             <>
-              <label className="field"><span className="label">Repair job ID</span><input className="input" style={{fontFamily:'monospace'}} value={form.repairJobId||''} onChange={e=>set('repairJobId', e.target.value)} placeholder="e.g. REP-0042"/></label>
+              <label className="field" style={{position:'relative'}}><span className="label">Repair job</span>
+                <input className="input" style={{fontFamily:'monospace'}} placeholder="Search by job # or customer…" value={jobQuery}
+                  onChange={e => { setJobQuery(e.target.value); setJobDropdownOpen(true); }}
+                  onFocus={() => setJobDropdownOpen(true)}
+                  onBlur={() => setTimeout(() => setJobDropdownOpen(false), 150)}
+                />
+                {jobDropdownOpen && (
+                  <div style={{position:'absolute', top:'100%', left:0, right:0, zIndex:20, background:'var(--bg)', border:'1px solid var(--line)', boxShadow:'0 4px 12px rgba(0,0,0,.12)', maxHeight:240, overflowY:'auto'}}>
+                    <div role="button" tabIndex={0} onMouseDown={e => { e.preventDefault(); applyJob(null); }}
+                      style={{padding:'8px 12px', fontSize:13, cursor:'pointer', color:'var(--rust)', borderBottom:'1px solid var(--line)'}}>No job link{jobQuery.trim() ? ` — keep "${jobQuery.trim()}" as typed` : ''}</div>
+                    {jobMatches.length === 0 && <div style={{padding:'8px 12px', fontSize:12, color:'var(--ink-3)'}}>No matching jobs.</div>}
+                    {jobMatches.map(j => (
+                      <div key={j.id} role="button" tabIndex={0} onMouseDown={e => { e.preventDefault(); applyJob(j); }} style={{padding:'8px 12px', fontSize:13, cursor:'pointer'}}>
+                        <div style={{fontWeight:600, fontFamily:'monospace', fontSize:12}}>{j.id}</div>
+                        <div style={{fontSize:11, color:'var(--ink-3)'}}>{j.customer || '—'}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </label>
+              <label className="field" style={{position:'relative'}}><span className="label">Customer</span>
+                <input className="input" placeholder="Search by name, email, or phone…" value={customerQuery}
+                  onChange={e => { setCustomerQuery(e.target.value); setCustomerDropdownOpen(true); }}
+                  onFocus={() => setCustomerDropdownOpen(true)}
+                  onBlur={() => setTimeout(() => setCustomerDropdownOpen(false), 150)}
+                />
+                {customerDropdownOpen && (
+                  <div style={{position:'absolute', top:'100%', left:0, right:0, zIndex:20, background:'var(--bg)', border:'1px solid var(--line)', boxShadow:'0 4px 12px rgba(0,0,0,.12)', maxHeight:240, overflowY:'auto'}}>
+                    <div role="button" tabIndex={0} onMouseDown={e => { e.preventDefault(); applyCustomer(null); }}
+                      style={{padding:'8px 12px', fontSize:13, cursor:'pointer', color:'var(--rust)', borderBottom:'1px solid var(--line)'}}>Not on file{customerQuery.trim() ? ` — keep "${customerQuery.trim()}" as typed` : ''}</div>
+                    {customerMatches.length === 0 && <div style={{padding:'8px 12px', fontSize:12, color:'var(--ink-3)'}}>No matching customers.</div>}
+                    {customerMatches.map(c => (
+                      <div key={c.id} role="button" tabIndex={0} onMouseDown={e => { e.preventDefault(); applyCustomer(c); }} style={{padding:'8px 12px', fontSize:13, cursor:'pointer'}}>
+                        <div style={{fontWeight:600}}>{c.name}</div>
+                        <div style={{fontSize:11, color:'var(--ink-3)'}}>{[c.email, c.phone].filter(Boolean).join(' · ') || '—'}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </label>
               <div className="grid-2" style={{gap:10, marginBottom:10}}>
                 <label className="field" style={{margin:0}}><span className="label">Customer name</span><input className="input" value={form.customerName||''} onChange={e=>set('customerName', e.target.value)}/></label>
                 <label className="field" style={{margin:0}}><span className="label">Customer email</span><input className="input" value={form.customerEmail||''} onChange={e=>set('customerEmail', e.target.value)}/></label>
@@ -3742,9 +3856,7 @@ function AdminHddReports({ sessionInfo = {} }) {
               ? <>Signed by <strong>{form.signedBy}</strong>{form.signedAt ? ` · ${new Date(form.signedAt).toLocaleString('en-AU')}` : ''} — will be re-signed as {sessionInfo.username || 'you'} on next save.</>
               : <>Will be signed electronically as <strong>{sessionInfo.username || 'you'}</strong> when saved.</>}
           </div>
-        </Drawer>
-      )}
-    </div>
+    </OrderPage>
   );
 }
 
