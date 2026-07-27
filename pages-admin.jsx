@@ -1120,6 +1120,32 @@ function priceLineToAmount(priceLine) {
   const m = String(priceLine || '').match(/[\d,]+(\.\d+)?/);
   return m ? Number(m[0].replace(/,/g, '')) : '';
 }
+// Builds a sensible line item from a service's pricing model instead of blindly
+// grabbing the first number in priceLine — an hourly rate, a range, a quote, or a
+// per-km callout fee should never be silently dropped in as a flat one-off price.
+function serviceToLineItem(svc) {
+  const price = String(svc.price ?? svc.priceLine ?? '').trim();
+  const isFree = /no charge/i.test(price);
+  const isHourly = /\/\s*hr\b/i.test(price);
+  const isVariable = /\/\s*km\b|call-?out/i.test(price);
+  const isRange = /–|-\s*\$/.test(price) && !isHourly && !isVariable;
+  const isQuoted = /quoted/i.test(price);
+  let amount = '';
+  let description = svc.name || '';
+  if (isFree) {
+    amount = 0;
+  } else if (isHourly) {
+    const m = price.match(/\$\s*(\d+(\.\d+)?)\s*\/\s*hr/i);
+    amount = m ? Number(m[1]) : priceLineToAmount(price);
+    description = `${svc.name} (hourly — set qty to hours worked)`;
+  } else if (isRange || isQuoted || isVariable) {
+    amount = '';
+    description = `${svc.name} (${price} — confirm price before saving)`;
+  } else {
+    amount = priceLineToAmount(price);
+  }
+  return { id: 'li-' + Date.now(), description, amount, qty: 1 };
+}
 function discountAmountFor(subtotal, type, value) {
   const v = Number(value) || 0;
   if (!v || subtotal <= 0) return 0;
@@ -1617,11 +1643,21 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
           }
           const svc = services.find(s => s.id === val);
           if (!svc) return;
-          setForm(f => ({...f, lineItems: [...(f.lineItems||[]), { id: 'li-' + Date.now(), description: svc.name || '', amount: priceLineToAmount(svc.price ?? svc.priceLine), qty:1 }]}));
+          setForm(f => ({...f, lineItems: [...(f.lineItems||[]), serviceToLineItem(svc)]}));
         }}>
           <option value="">+ Add line item…</option>
           <option value="__custom__">Custom line item</option>
-          {services.map(s => <option key={s.id} value={s.id}>{s.name}{(s.price ?? s.priceLine) ? ` — ${s.price ?? s.priceLine}` : ''}</option>)}
+          {Object.entries(
+            services.reduce((groups, s) => {
+              const cat = s.category || 'Other';
+              (groups[cat] = groups[cat] || []).push(s);
+              return groups;
+            }, {})
+          ).sort(([a], [b]) => a.localeCompare(b)).map(([cat, svcs]) => (
+            <optgroup key={cat} label={cat}>
+              {svcs.map(s => <option key={s.id} value={s.id}>{s.name}{(s.price ?? s.priceLine) ? ` — ${s.price ?? s.priceLine}` : ''}</option>)}
+            </optgroup>
+          ))}
         </select>
         {(form.lineItems||[]).length > 0 && (
           <div style={{marginTop:8, fontSize:12, color:'var(--ink-3)'}}>Line items total: <strong>${(form.lineItems||[]).reduce((s,i)=>s+liTotal(i),0).toLocaleString('en-AU',{minimumFractionDigits:2})}</strong> — order total below is kept in sync.</div>
