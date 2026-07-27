@@ -2792,13 +2792,10 @@ function getAdminUrl() {
     return base.replace(/(:\d+)?(\/|$)/, ':8082$2');
   return base.replace(/^(https?:\/\/)/, '$1admin.');
 }
-function hydrateOrder(o, quotes) {
-  const srcQuote = o.sourceQuoteId ? quotes.find(q => q.id === o.sourceQuoteId) : null;
-  const dq = srcQuote?.draftQuote || null;
-  const parts = (o.parts && o.parts.length > 0) ? o.parts : (dq ? buildPartsFromDraftQuote(dq) : []);
-  return { ...o, draftQuote: dq, parts };
-}
-
+// Legacy-only: pre-rebuild quotes stored their hardware/build/other items under
+// draftQuote instead of lineItems. Orders sourced from one of those old quotes
+// never got a real `parts` array of their own — this derives one on read so
+// they still display correctly. New quotes/orders never hit this path.
 function buildPartsFromDraftQuote(dq) {
   if (!dq) return [];
   const parts = [];
@@ -2814,6 +2811,53 @@ function buildPartsFromDraftQuote(dq) {
     parts.push({ id: item.id || ('p-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex')), name: item.description, qty: parseInt(item.qty) || 1, status: 'pending', orderedAt: null, deliveredAt: null, installedAt: null });
   }
   return parts;
+}
+function hydrateOrder(o, quotes) {
+  const srcQuote = o.sourceQuoteId ? quotes.find(q => q.id === o.sourceQuoteId) : null;
+  const dq = srcQuote?.draftQuote || null;
+  const parts = (o.parts && o.parts.length > 0) ? o.parts : (dq ? buildPartsFromDraftQuote(dq) : []);
+  return { ...o, draftQuote: dq, parts };
+}
+
+// Builds an order from an accepted quote — same lineItems/discount/total shape
+// a staff-created order uses, so an accepted quote is indistinguishable from
+// one entered by hand.
+function orderFromQuote(quote, { paymentPlan } = {}) {
+  const nowStr = new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
+  const total = Math.round((Number(quote.total) || 0) * 100) / 100;
+  const paymentPlanMinTotal = Number((readSettings().shop || {}).paymentPlanMinTotal) || 300;
+  return {
+    id: nextOrderId(readOrders()),
+    warrantyToken: crypto.randomBytes(16).toString('hex'),
+    cust: quote.cust || quote.name || '',
+    email: quote.email || '',
+    phone: quote.phone || '',
+    loc: quote.loc || '',
+    shippingAddress: quote.shippingAddress || '',
+    items: (quote.lineItems || []).map(li => li.description).filter(Boolean).join(', ') || quote.summary || quote.quoteRef || 'Order',
+    lineItems: quote.lineItems || [],
+    discountType: quote.discountType,
+    discountValue: quote.discountValue,
+    discountAmount: quote.discountAmount,
+    date: nowStr,
+    total,
+    fulfilment: 'pending',
+    payments: [],
+    sourceQuoteId: quote.id,
+    quoteRef: quote.quoteRef || '',
+    ...(paymentPlan && total >= paymentPlanMinTotal ? { paymentPlan: {
+      status: 'active',
+      frequency: paymentPlan.frequency,
+      collectionMethod: paymentPlan.collectionMethod,
+      startDate: ymd(new Date()),
+      schedule: buildInstallmentSchedule({ total, installmentAmount: Number(paymentPlan.installmentAmount), frequency: paymentPlan.frequency, startDate: ymd(new Date()) }),
+      reminderDaysBefore: 3,
+      lastReminderSentFor: null,
+      lastAutoAttempt: null,
+      createdAt: new Date().toISOString(),
+      createdBy: 'customer',
+    } } : {}),
+  };
 }
 
 function buildInvoicePdf(order, shop) {
@@ -7561,43 +7605,43 @@ const adminServer = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/admin/quotes/send') {
     const session = requireRole(req, res, 'technician'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
-    if (!body.customerEmail) return json(res, 400, { error: 'customer_email_required' });
+    const email = body.email || body.customerEmail;
+    if (!email) return json(res, 400, { error: 'customer_email_required' });
     const quotes = readQuotes();
-    const quoteRef = body.quoteRef || ('QT-' + Date.now());
+    const existingQuote = body.id ? quotes.find(q => q.id === body.id) : null;
+    const quoteRef = body.quoteRef || existingQuote?.quoteRef || nextQuoteRef(quotes);
     const now = new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
-    const existingQuote = body.sourceQuoteId ? quotes.find(q => q.id === body.sourceQuoteId) : null;
     const quoteToken = existingQuote?.quoteToken || randomId();
     const savedQuote = {
-      id: body.sourceQuoteId || ('quot-' + Date.now()),
-      name: body.customerName || '',
-      email: body.customerEmail,
+      ...existingQuote,
+      ...body,
+      id: body.id || existingQuote?.id || ('quot-' + Date.now()),
+      email,
       status: 'quoted',
-      kind: [body.kind, existingQuote?.kind].find(k => k && k !== 'custom-pc-build') || (body.pcBuild ? 'Custom Build' : 'Quote'),
       quoteRef,
       quoteToken,
-      draftQuote: body,
       age: '0m',
       date: now,
-      summary: `Quote ${quoteRef} — $${(body.grandTotal||0).toLocaleString('en-AU',{minimumFractionDigits:2})} AUD`,
     };
     const idx = quotes.findIndex(q => q.id === savedQuote.id);
-    if (idx >= 0) { quotes[idx] = { ...quotes[idx], ...savedQuote }; } else { quotes.push(savedQuote); }
+    if (idx >= 0) { quotes[idx] = savedQuote; } else { quotes.push(savedQuote); }
     writeQuotes(quotes);
     const tmpl = emailQuoteFormal({
       quoteRef,
       quoteId: savedQuote.id,
       quoteToken,
-      customerName: body.customerName,
+      customerName: savedQuote.cust || savedQuote.name,
       validDays: body.validDays || 30,
-      hardwareItems: body.hardwareItems || [],
-      pcBuild: body.pcBuild,
-      pcBuildFee: body.pcBuildFee || 0,
-      otherItems: body.otherItems || [],
-      grandTotal: body.grandTotal || 0,
-      notes: body.notes || '',
+      lineItems: savedQuote.lineItems || [],
+      discountAmount: savedQuote.discountAmount,
+      discountLabel: savedQuote.discountLabel,
+      discountType: savedQuote.discountType,
+      discountValue: savedQuote.discountValue,
+      total: savedQuote.total || 0,
+      notes: savedQuote.notes || '',
     });
-    const sent = await sendEmail({ to: body.customerEmail, ...tmpl });
-    return json(res, 200, { ok: true, quoteRef, sent });
+    const sent = await sendEmail({ to: email, ...tmpl });
+    return json(res, 200, { ok: true, quoteRef, sent, item: savedQuote });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/admin/ewaste/save') {
@@ -8997,22 +9041,22 @@ const portalServer = http.createServer(async (req, res) => {
     const quotes = readQuotes();
     const quote = quotes.find(q => q.quoteToken === token);
     if (!quote) return json(res, 404, { error: 'not_found' });
-    const dq = quote.draftQuote || {};
     return json(res, 200, {
       ok: true,
       quote: {
         id: quote.id,
         quoteRef: quote.quoteRef || quote.id,
-        name: quote.name,
+        name: quote.cust || quote.name,
         email: quote.email,
         status: quote.status,
-        validDays: dq.validDays,
-        hardwareItems: dq.hardwareItems || [],
-        pcBuild: dq.pcBuild || false,
-        pcBuildFee: dq.pcBuildFee || 0,
-        otherItems: dq.otherItems || [],
-        grandTotal: dq.grandTotal || 0,
-        notes: dq.notes || '',
+        validDays: quote.validDays,
+        lineItems: quote.lineItems || [],
+        discountAmount: quote.discountAmount || 0,
+        discountLabel: quote.discountLabel || '',
+        discountType: quote.discountType || 'percent',
+        discountValue: quote.discountValue || 0,
+        total: quote.total || 0,
+        notes: quote.notes || '',
       },
     });
   }
@@ -9043,40 +9087,11 @@ const portalServer = http.createServer(async (req, res) => {
     if (planReq && !['weekly', 'fortnightly', 'monthly'].includes(planReq.frequency)) return json(res, 422, { error: 'invalid_frequency' });
     if (planReq && !['manual', 'customer'].includes(planReq.collectionMethod)) return json(res, 422, { error: 'invalid_collection_method' });
     if (planReq && !(Number(planReq.installmentAmount) > 0)) return json(res, 422, { error: 'invalid_amount', message: 'Instalment amount must be greater than zero.' });
-    const resolvedDisplayName = (typeof displayName === 'string' ? displayName.trim() : '') || quote.name || username;
+    const resolvedDisplayName = (typeof displayName === 'string' ? displayName.trim() : '') || quote.cust || quote.name || username;
     const newUser = { id: 'U-' + Date.now(), username, displayName: resolvedDisplayName, email: quoteEmail, passwordHash: hashPassword(password), createdAt: new Date().toISOString() };
     users.push(newUser);
     writeUsers(users);
-    const dq = quote.draftQuote || {};
-    const nowStr = new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
-    const orderTotal = Math.round((dq.grandTotal || 0) * 100) / 100;
-    const paymentPlanMinTotal = Number((readSettings().shop || {}).paymentPlanMinTotal) || 300;
-    const order = {
-      id: nextOrderId(readOrders()),
-      warrantyToken: crypto.randomBytes(16).toString('hex'),
-      cust: quote.name,
-      email: quote.email,
-      items: quote.summary || quote.quoteRef || quote.description || 'Custom build',
-      date: nowStr,
-      total: orderTotal,
-      fulfilment: 'pending',
-      payments: [],
-      sourceQuoteId: quote.id,
-      quoteRef: quote.quoteRef || '',
-      parts: buildPartsFromDraftQuote(dq),
-      ...(planReq && orderTotal >= paymentPlanMinTotal ? { paymentPlan: {
-        status: 'active',
-        frequency: planReq.frequency,
-        collectionMethod: planReq.collectionMethod,
-        startDate: ymd(new Date()),
-        schedule: buildInstallmentSchedule({ total: orderTotal, installmentAmount: Number(planReq.installmentAmount), frequency: planReq.frequency, startDate: ymd(new Date()) }),
-        reminderDaysBefore: 3,
-        lastReminderSentFor: null,
-        lastAutoAttempt: null,
-        createdAt: new Date().toISOString(),
-        createdBy: 'customer',
-      } } : {}),
-    };
+    const order = orderFromQuote(quote, { paymentPlan: planReq });
     const orders = readOrders();
     orders.push(order);
     writeOrders(orders);
@@ -9086,9 +9101,9 @@ const portalServer = http.createServer(async (req, res) => {
     portalSessions.set(sid, { id: newUser.id, username: newUser.username, displayName: newUser.displayName, createdAt: newUser.createdAt, expiresAt: now() + PORTAL_SESSION_TTL_MS });
     saveSessionsToDisk(PORTAL_SESSIONS_DB_PATH, portalSessions);
     res.setHeader('Set-Cookie', customerSessionCookie('oe_portal_session', sid, Math.floor(PORTAL_SESSION_TTL_MS / 1000), req));
-    const custTmpl = emailQuoteAccepted({ orderId: order.id, quoteRef: quote.quoteRef || quote.id, customerName: quote.name, grandTotal: order.total });
+    const custTmpl = emailQuoteAccepted({ orderId: order.id, quoteRef: quote.quoteRef || quote.id, customerName: order.cust, grandTotal: order.total });
     sendEmail({ to: quote.email, ...custTmpl });
-    const staffTmpl = emailStaffQuoteAccepted({ orderId: order.id, quoteRef: quote.quoteRef || quote.id, name: quote.name, email: quote.email, grandTotal: order.total });
+    const staffTmpl = emailStaffQuoteAccepted({ orderId: order.id, quoteRef: quote.quoteRef || quote.id, name: order.cust, email: quote.email, grandTotal: order.total });
     sendEmail({ to: getNotifyEmail(), ...staffTmpl });
     const welcomeTmpl = emailPortalWelcome({ username: newUser.username, displayName: newUser.displayName });
     sendEmail({ to: quoteEmail, ...welcomeTmpl });
@@ -9145,44 +9160,15 @@ const portalServer = http.createServer(async (req, res) => {
     if (planReq && planReq.collectionMethod === 'auto' && !(portalUser && portalUser.stripePaymentMethodId)) {
       return json(res, 422, { error: 'no_saved_card', message: 'Add a saved card in your account before choosing auto-charge.' });
     }
-    const dq = quote.draftQuote || {};
-    const now = new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
-    const orderTotal = Math.round((dq.grandTotal || 0) * 100) / 100;
-    const paymentPlanMinTotal = Number((readSettings().shop || {}).paymentPlanMinTotal) || 300;
-    const order = {
-      id: nextOrderId(readOrders()),
-      warrantyToken: crypto.randomBytes(16).toString('hex'),
-      cust: quote.name,
-      email: quote.email,
-      items: quote.summary || quote.quoteRef || quote.description || 'Custom build',
-      date: now,
-      total: orderTotal,
-      fulfilment: 'pending',
-      payments: [],
-      sourceQuoteId: quote.id,
-      quoteRef: quote.quoteRef || '',
-      parts: buildPartsFromDraftQuote(dq),
-      ...(planReq && orderTotal >= paymentPlanMinTotal ? { paymentPlan: {
-        status: 'active',
-        frequency: planReq.frequency,
-        collectionMethod: planReq.collectionMethod,
-        startDate: ymd(new Date()),
-        schedule: buildInstallmentSchedule({ total: orderTotal, installmentAmount: Number(planReq.installmentAmount), frequency: planReq.frequency, startDate: ymd(new Date()) }),
-        reminderDaysBefore: 3,
-        lastReminderSentFor: null,
-        lastAutoAttempt: null,
-        createdAt: new Date().toISOString(),
-        createdBy: 'customer',
-      } } : {}),
-    };
+    const order = orderFromQuote(quote, { paymentPlan: planReq });
     const orders = readOrders();
     orders.push(order);
     writeOrders(orders);
     quotes[qIdx] = { ...quote, status: 'accepted', orderId: order.id };
     writeQuotes(quotes);
-    const custTmpl = emailQuoteAccepted({ orderId: order.id, quoteRef: quote.quoteRef || quote.id, customerName: quote.name, grandTotal: order.total });
+    const custTmpl = emailQuoteAccepted({ orderId: order.id, quoteRef: quote.quoteRef || quote.id, customerName: order.cust, grandTotal: order.total });
     sendEmail({ to: quote.email, ...custTmpl });
-    const staffTmpl = emailStaffQuoteAccepted({ orderId: order.id, quoteRef: quote.quoteRef || quote.id, name: quote.name, email: quote.email, grandTotal: order.total });
+    const staffTmpl = emailStaffQuoteAccepted({ orderId: order.id, quoteRef: quote.quoteRef || quote.id, name: order.cust, email: quote.email, grandTotal: order.total });
     sendEmail({ to: getNotifyEmail(), ...staffTmpl });
     return json(res, 200, { ok: true, orderId: order.id });
   }
