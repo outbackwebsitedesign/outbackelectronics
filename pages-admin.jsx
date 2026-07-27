@@ -1381,6 +1381,28 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
     const match = findCustomerMatch(edit);
     return match ? match.id : '';
   });
+  const [customerQuery, setCustomerQuery] = useState(() => {
+    const match = findCustomerMatch(edit);
+    return match ? `${match.name}${match.email ? ` (${match.email})` : ''}` : '';
+  });
+  const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
+  const applyCustomer = (c) => {
+    setSelectedCustomerId(c ? c.id : '');
+    const typed = customerQuery.trim();
+    setCustomerQuery(c ? `${c.name}${c.email ? ` (${c.email})` : ''}` : '');
+    setCustomerDropdownOpen(false);
+    if (c) setForm(f => ({ ...f, cust: c.name || f.cust, email: c.email || f.email, phone: c.phone || f.phone, loc: c.loc || f.loc }));
+    else if (typed && !form.cust) setForm(f => ({ ...f, cust: typed }));
+  };
+  const customerMatches = useMemo(() => {
+    const q = customerQuery.trim().toLowerCase();
+    if (!q) return (customers || []).slice(0, 8);
+    return (customers || []).filter(c =>
+      (c.name || '').toLowerCase().includes(q) ||
+      (c.email || '').toLowerCase().includes(q) ||
+      (c.phone || '').toLowerCase().includes(q)
+    ).slice(0, 8);
+  }, [customers, customerQuery]);
   const [payEntry, setPayEntry] = useState({ amount:'', method:'Cash', note:'', date: todayISODate() });
   const [deleteBusy, setDeleteBusy] = useState(false);
   const canDeleteOrder = (ROLE_LEVELS[sessionInfo.role] ?? 0) >= ROLE_LEVELS.manager;
@@ -1685,18 +1707,28 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
       </div>}
     >
       <label className="field"><span className="label">Order Number<ReqMark/></span><input className="input" aria-required="true" style={{fontFamily:'monospace', fontWeight:700}} value={form.id||''} onChange={e=>setForm({...form,id:e.target.value})} placeholder="e.g. OE-1001"/></label>
-      <label className="field"><span className="label">Customer<ReqMark/></span>
-        <select className="select" value={selectedCustomerId} onChange={e => {
-          const id = e.target.value;
-          setSelectedCustomerId(id);
-          if (!id) return; // "+ New customer" — leave fields as typed
-          const c = (customers || []).find(x => x.id === id);
-          if (!c) return;
-          setForm(f => ({ ...f, cust: c.name || f.cust, email: c.email || f.email, phone: c.phone || f.phone, loc: c.loc || f.loc }));
-        }}>
-          <option value="">+ New customer</option>
-          {(customers || []).map(c => <option key={c.id} value={c.id}>{c.name}{c.email ? ` (${c.email})` : ''}</option>)}
-        </select>
+      <label className="field" style={{position:'relative'}}><span className="label">Customer<ReqMark/></span>
+        <input className="input" placeholder="Search by name, email, or phone…" value={customerQuery}
+          onChange={e => { setCustomerQuery(e.target.value); setCustomerDropdownOpen(true); if (selectedCustomerId) setSelectedCustomerId(''); }}
+          onFocus={() => setCustomerDropdownOpen(true)}
+          onBlur={() => setTimeout(() => setCustomerDropdownOpen(false), 150)}
+        />
+        {customerDropdownOpen && (
+          <div style={{position:'absolute', top:'100%', left:0, right:0, zIndex:20, background:'var(--bg)', border:'1px solid var(--line)', boxShadow:'0 4px 12px rgba(0,0,0,.12)', maxHeight:240, overflowY:'auto'}}>
+            <div role="button" tabIndex={0} onMouseDown={e => { e.preventDefault(); applyCustomer(null); }}
+              style={{padding:'8px 12px', fontSize:13, cursor:'pointer', color:'var(--rust)', borderBottom:'1px solid var(--line)'}}>+ New customer{customerQuery.trim() ? ` "${customerQuery.trim()}"` : ''}</div>
+            {customerMatches.length === 0 && (
+              <div style={{padding:'8px 12px', fontSize:12, color:'var(--ink-3)'}}>No matching customers.</div>
+            )}
+            {customerMatches.map(c => (
+              <div key={c.id} role="button" tabIndex={0} onMouseDown={e => { e.preventDefault(); applyCustomer(c); }}
+                style={{padding:'8px 12px', fontSize:13, cursor:'pointer'}}>
+                <div style={{fontWeight:600}}>{c.name}</div>
+                <div style={{fontSize:11, color:'var(--ink-3)'}}>{[c.email, c.phone].filter(Boolean).join(' · ') || '—'}</div>
+              </div>
+            ))}
+          </div>
+        )}
       </label>
       <label className="field"><span className="label">{selectedCustomerId ? 'Customer name' : 'New customer name'}<ReqMark/></span><input className="input" aria-required="true" value={form.cust||''} onChange={e=>setForm({...form,cust:e.target.value})}/></label>
       <label className="field"><span className="label">Email</span><input className="input" type="email" value={form.email||''} onChange={e=>setForm({...form,email:e.target.value})}/></label>
