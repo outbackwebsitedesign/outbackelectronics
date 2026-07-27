@@ -476,6 +476,14 @@ function nextQuoteRef(quotes) {
   while (used.has(n)) n++;
   return `OEQ-${String(n).padStart(4, '0')}`;
 }
+// Same scheme for expense ids (EXP-0001) — replaces the old exp-<Date.now()>
+// ids, which were never sequential or human-referenceable.
+function nextExpenseId(expenses) {
+  const used = new Set(expenses.map(e => { const m = String(e.id || '').match(/^EXP-(\d+)$/); return m ? parseInt(m[1]) : null; }).filter(n => n != null));
+  let n = 1;
+  while (used.has(n)) n++;
+  return `EXP-${String(n).padStart(4, '0')}`;
+}
 function nextRepairId(board) {
   const allCards = (board.columns || []).flatMap(c => c.cards || []);
   const maxN = allCards.reduce((max, c) => { const m = String(c.id || '').match(/^REP-(\d+)$/); return m ? Math.max(max, parseInt(m[1])) : max; }, 0);
@@ -8034,7 +8042,7 @@ const adminServer = http.createServer(async (req, res) => {
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     const items = readExpenses();
     const idx = items.findIndex(e => e.id && e.id === body.id);
-    if (idx >= 0) { items[idx] = body; } else { body.id = 'exp-' + Date.now(); items.push(body); }
+    if (idx >= 0) { items[idx] = body; } else { body.id = nextExpenseId(items); items.push(body); }
     writeExpenses(items);
     return json(res, 200, { ok: true, item: body });
   }

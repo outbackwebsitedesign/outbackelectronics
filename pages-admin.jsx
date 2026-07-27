@@ -1667,7 +1667,6 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
 
   const saveExpense = async (exp) => {
     const payload = { ...exp, amount: Number(exp.amount) || 0 };
-    if (!payload.id) payload.id = 'exp-' + Date.now();
     const r = await fetch('/api/admin/expenses/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(payload) }).catch(()=>null);
     if (r && r.ok) {
       const d = await r.json();
@@ -2521,15 +2520,28 @@ function RepairJobDrawer({ card, expenses, customers, staff, onSave, onDelete, o
     payments:    card.payments || [],
     notes:       card.notes || '',
   }));
-  const [selectedCustomerId, setSelectedCustomerId] = useState(() => {
+  const findCustomerMatch = () => {
     const email = (card.email || '').toLowerCase().trim();
     const name  = (card.customer || card.name || '').toLowerCase().trim();
-    const match = (customers || []).find(x =>
+    return (customers || []).find(x =>
       (email && (x.email||'').toLowerCase().trim() === email) ||
       (name  && (x.name ||'').toLowerCase().trim() === name)
     );
-    return match ? match.id : '';
-  });
+  };
+  const [selectedCustomerId, setSelectedCustomerId] = useState(() => { const m = findCustomerMatch(); return m ? m.id : ''; });
+  const [customerQuery, setCustomerQuery] = useState(() => { const m = findCustomerMatch(); return m ? `${m.name}${m.email ? ` (${m.email})` : ''}` : ''; });
+  const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
+  const applyCustomer = (c) => {
+    setSelectedCustomerId(c ? c.id : '');
+    setCustomerQuery(c ? `${c.name}${c.email ? ` (${c.email})` : ''}` : '');
+    setCustomerDropdownOpen(false);
+    if (c) setForm(f => ({ ...f, customer: c.name || f.customer, email: c.email || f.email, phone: c.phone || f.phone }));
+  };
+  const customerMatches = useMemo(() => {
+    const q = customerQuery.trim().toLowerCase();
+    if (!q) return (customers || []).slice(0, 8);
+    return (customers || []).filter(c => (c.name||'').toLowerCase().includes(q) || (c.email||'').toLowerCase().includes(q) || (c.phone||'').toLowerCase().includes(q)).slice(0, 8);
+  }, [customers, customerQuery]);
   const [expenseEdit, setExpenseEdit] = useState(null);
   const [expenseForm, setExpenseForm] = useState({});
   const [payEntry, setPayEntry] = useState({ amount:'', method:'Cash', note:'', date: todayISODate() });
@@ -2571,7 +2583,6 @@ function RepairJobDrawer({ card, expenses, customers, staff, onSave, onDelete, o
 
   const saveExpense = async (exp) => {
     const payload = { ...exp, amount: Number(exp.amount) || 0 };
-    if (!payload.id) payload.id = 'exp-' + Date.now();
     const r = await fetch('/api/admin/expenses/save', { method:'POST', headers:postHeaders(), credentials:'include', body:JSON.stringify(payload) }).catch(()=>null);
     if (r && r.ok) {
       const d = await r.json();
@@ -2622,7 +2633,7 @@ function RepairJobDrawer({ card, expenses, customers, staff, onSave, onDelete, o
 
   const S = { mb12:{ marginBottom:12 }, mt20:{ marginTop:20, marginBottom:12 } };
   return (
-    <Drawer open={true} onClose={onClose} dirty={dirty}
+    <OrderPage onClose={onClose} dirty={dirty}
       title={<span><span className="mono" style={{fontSize:11,color:'var(--rust)',marginRight:8}}>{card.id}</span>{form.t||'Repair Job'}</span>}
       footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
         <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)',borderColor:'var(--rust)'}}
@@ -2638,18 +2649,25 @@ function RepairJobDrawer({ card, expenses, customers, staff, onSave, onDelete, o
 
       {/* ── Customer ── */}
       <div className="eyebrow" style={S.mb12}>Customer</div>
-      <label className="field" style={S.mb12}><span className="label">Select existing or add new</span>
-        <select className="select" value={selectedCustomerId} onChange={e => {
-          const id = e.target.value;
-          setSelectedCustomerId(id);
-          if (!id) return;
-          const c = (customers||[]).find(x => x.id === id);
-          if (!c) return;
-          setForm(f => ({ ...f, customer: c.name||f.customer, email: c.email||f.email, phone: c.phone||f.phone }));
-        }}>
-          <option value="">+ New customer</option>
-          {(customers||[]).map(c => <option key={c.id} value={c.id}>{c.name}{c.email?` (${c.email})`:''}</option>)}
-        </select>
+      <label className="field" style={{...S.mb12, position:'relative'}}><span className="label">Select existing or add new</span>
+        <input className="input" placeholder="Search by name, email, or phone…" value={customerQuery}
+          onChange={e => { setCustomerQuery(e.target.value); setCustomerDropdownOpen(true); if (selectedCustomerId) setSelectedCustomerId(''); }}
+          onFocus={() => setCustomerDropdownOpen(true)}
+          onBlur={() => setTimeout(() => setCustomerDropdownOpen(false), 150)}
+        />
+        {customerDropdownOpen && (
+          <div style={{position:'absolute', top:'100%', left:0, right:0, zIndex:20, background:'var(--bg)', border:'1px solid var(--line)', boxShadow:'0 4px 12px rgba(0,0,0,.12)', maxHeight:240, overflowY:'auto'}}>
+            <div role="button" tabIndex={0} onMouseDown={e => { e.preventDefault(); applyCustomer(null); }}
+              style={{padding:'8px 12px', fontSize:13, cursor:'pointer', color:'var(--rust)', borderBottom:'1px solid var(--line)'}}>+ New customer{customerQuery.trim() ? ` "${customerQuery.trim()}"` : ''}</div>
+            {customerMatches.length === 0 && <div style={{padding:'8px 12px', fontSize:12, color:'var(--ink-3)'}}>No matching customers.</div>}
+            {customerMatches.map(c => (
+              <div key={c.id} role="button" tabIndex={0} onMouseDown={e => { e.preventDefault(); applyCustomer(c); }} style={{padding:'8px 12px', fontSize:13, cursor:'pointer'}}>
+                <div style={{fontWeight:600}}>{c.name}</div>
+                <div style={{fontSize:11, color:'var(--ink-3)'}}>{[c.email, c.phone].filter(Boolean).join(' · ') || '—'}</div>
+              </div>
+            ))}
+          </div>
+        )}
       </label>
       <div className="grid-2" style={S.mb12}>
         <label className="field"><span className="label">{selectedCustomerId ? 'Customer name' : 'New customer name'}<ReqMark/></span>
@@ -2779,7 +2797,7 @@ function RepairJobDrawer({ card, expenses, customers, staff, onSave, onDelete, o
       <div className="eyebrow" style={S.mt20}>Internal Notes</div>
       <label className="field"><span className="label">Not visible to customer</span>
         <textarea className="textarea" rows={3} value={form.notes} onChange={e=>set('notes',e.target.value)} placeholder="Staff-only notes..." /></label>
-    </Drawer>
+    </OrderPage>
   );
 }
 
@@ -2790,6 +2808,19 @@ function AdminRepairs() {
   const [staff, setStaff] = useState([]);
   const [editCard, setEditCard] = useState(null);
   const [dragOverCol, setDragOverCol] = useState(null);
+  const [openId, setOpenId] = useUrlState('open', null, { push: true });
+
+  // Reconcile the open job editor with the URL's `open` param (restore on
+  // reload + Back/Forward), same as Orders/Quotes/Expenses.
+  useEffect(() => {
+    const cur = editCard ? editCard.card.id : null;
+    if (openId === cur) return;
+    if (openId == null) { setEditCard(null); return; }
+    for (const c of cols) {
+      const card = (c.cards || []).find(cd => cd.id === openId);
+      if (card) { setEditCard({ card, colId: c.id }); return; }
+    }
+  }, [openId, cols]);
 
   useEffect(() => {
     fetch('/api/admin/repairs', { credentials:'include' })
@@ -2824,14 +2855,14 @@ function AdminRepairs() {
     const card = { id, t:'New job', who:'', age:'0h', dateIn:new Date().toISOString().slice(0,10) };
     const updated = cols.map(c => c.id===colId ? { ...c, cards:[...(c.cards||[]),card] } : c);
     setCols(updated);
-    setEditCard({ card, colId });
+    setOpenId(id);
     await persist(updated);
   };
 
   const saveCard = async (updatedCard) => {
     const updated = cols.map(c => ({ ...c, cards:(c.cards||[]).map(cd => cd.id===updatedCard.id ? updatedCard : cd) }));
     setCols(updated);
-    setEditCard(null);
+    setOpenId(null);
     const ok = await persist(updated);
     if (!ok) adminToast('Save failed — check your connection.'); else adminToast('Job saved.','success');
   };
@@ -2839,7 +2870,7 @@ function AdminRepairs() {
   const deleteCard = async (cardId) => {
     const updated = cols.map(c => ({ ...c, cards:(c.cards||[]).filter(cd => cd.id!==cardId) }));
     setCols(updated);
-    setEditCard(null);
+    setOpenId(null);
     const ok = await persist(updated);
     if (!ok) adminToast('Delete may not have saved.'); else adminToast('Job deleted.','success');
   };
@@ -2859,25 +2890,28 @@ function AdminRepairs() {
     else adminToast(`Moved to ${updated.find(c=>c.id===toId)?.label||toId}.`,'success');
   };
 
+  if (editCard) {
+    return (
+      <RepairJobDrawer
+        card={editCard.card}
+        expenses={expenses}
+        customers={customers}
+        staff={staff}
+        onSave={saveCard}
+        onDelete={deleteCard}
+        onExpensesChange={setExpenses}
+        onCustomerCreated={c => setCustomers(cs => [...cs, c])}
+        onClose={() => setOpenId(null)}
+      />
+    );
+  }
+
   return (
     <div style={{padding:32}}>
       <div className="row-flex" style={{justifyContent:'space-between', marginBottom:18}}>
         <div className="mono" style={{fontSize:12,color:'var(--ink-2)'}}>{openCount} OPEN</div>
         <button className="btn btn-rust btn-sm" onClick={() => newCard((cols[0]||{}).id)}>+ New job</button>
       </div>
-      {editCard && (
-        <RepairJobDrawer
-          card={editCard.card}
-          expenses={expenses}
-          customers={customers}
-          staff={staff}
-          onSave={saveCard}
-          onDelete={deleteCard}
-          onExpensesChange={setExpenses}
-          onCustomerCreated={c => setCustomers(cs => [...cs, c])}
-          onClose={() => setEditCard(null)}
-        />
-      )}
       <div className="admin-kanban-grid" style={{display:'grid',gridTemplateColumns:'repeat(5,minmax(240px,1fr))',gap:16,minWidth:1200}}>
         {cols.map(c => (
           <div key={c.id}
@@ -2895,7 +2929,7 @@ function AdminRepairs() {
                 return (
                   <div key={card.id} draggable
                     onDragStart={e=>{e.dataTransfer.setData('text/plain',JSON.stringify({cardId:card.id,from:c.id}));e.dataTransfer.effectAllowed='move';}}
-                    onClick={()=>setEditCard({card,colId:c.id})}
+                    onClick={()=>setOpenId(card.id)}
                     title="Click to view / edit"
                     style={{padding:14,background:'var(--paper)',border:'1px solid var(--line)',cursor:'pointer'}}>
                     <div className="row-flex" style={{justifyContent:'space-between'}}>
