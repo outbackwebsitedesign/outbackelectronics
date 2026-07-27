@@ -1467,12 +1467,14 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
   const [revertBusy, setRevertBusy] = useState(false);
   const revertToQuote = async () => {
     if (blockIfUnrefunded()) return;
+    const expNote = linkedExpenses.length > 0
+      ? ` Its ${linkedExpenses.length} linked expense(s) (totalling $${linkedExpenses.reduce((s,e)=>s+expTotal(e),0).toFixed(2)}) will be copied into the quote for reference, then removed from expense tracking so they stop counting as real business expenses in tax reports — nothing's actually been bought yet.`
+      : '';
     const ok = await adminConfirm(
-      `This will create a new quote from this order's details and permanently delete order ${form.id}. Use this when the work hasn't actually gone ahead yet.`,
+      `This will create a new quote from this order's details and permanently delete order ${form.id}. Use this when the work hasn't actually gone ahead yet.${expNote}`,
       { title: 'Revert to quote', confirmLabel: 'Revert to quote', danger: true }
     );
     if (!ok) return;
-    const deleteExpensesToo = await resolveLinkedExpenseDeletion("this order is reverting to a quote — the work hasn't happened");
     setRevertBusy(true);
     try {
       const qr = await fetch('/api/admin/quotes', { credentials:'include' });
@@ -1480,24 +1482,31 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
       const used = new Set(quotesList.map(q => { const m = String(q.quoteRef || '').match(/^OEQ-(\d+)$/); return m ? parseInt(m[1]) : null; }).filter(n => n != null));
       let n = 1; while (used.has(n)) n++;
       const quoteRef = `OEQ-${String(n).padStart(4, '0')}`;
-      const summary = (form.lineItems || []).map(i => i.description).filter(Boolean).join(', ') || form.items || '';
+      // Plain data snapshot only — no jobId/id carried over, so these can't be
+      // mistaken for live expense records if the quote object is inspected later.
+      const plannedExpenses = linkedExpenses.map(e => ({ description: e.description, amount: e.amount, quantity: e.quantity, category: e.category, date: e.date, notes: e.notes }));
       const quotePayload = {
         id: 'quot-' + Date.now(),
         quoteRef,
-        name: form.cust || '',
+        cust: form.cust || '',
         email: form.email || '',
-        loc: form.loc || form.shippingAddress || '',
-        kind: 'Reverted order',
-        budget: String(form.total || ''),
-        urgency: '',
-        description: `Reverted from order ${form.id}.${summary ? ` Items: ${summary}` : ''}`,
+        phone: form.phone || '',
+        loc: form.loc || '',
+        shippingAddress: form.shippingAddress || '',
+        lineItems: form.lineItems || [],
+        discountType: form.discountType,
+        discountValue: form.discountValue,
+        discountAmount: form.discountAmount,
+        total: form.total || 0,
+        notes: `Reverted from order ${form.id}.`,
+        plannedExpenses,
         status: 'new',
         createdAt: new Date().toISOString(),
         revertedFromOrderId: form.id,
       };
       const qs = await fetch('/api/admin/quotes/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(quotePayload) }).catch(()=>null);
       if (!qs || !qs.ok) { adminToast('Failed to create the quote — order was not touched.'); setRevertBusy(false); return; }
-      if (deleteExpensesToo && linkedExpenses.length > 0) {
+      if (linkedExpenses.length > 0) {
         await Promise.all(linkedExpenses.map(e => fetch('/api/admin/expenses/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: e.id }) }).catch(()=>null)));
         onExpensesChange(expenses.filter(e => !linkedExpenses.some(le => le.id === e.id)));
       }

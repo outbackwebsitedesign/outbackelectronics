@@ -2056,24 +2056,20 @@ function emailQuoteReply({ quoteId, customerName, reply, status }) {
   };
 }
 
-function emailQuoteFormal({ quoteRef, quoteId, quoteToken, customerName, validDays, hardwareItems, pcBuild, pcBuildFee, otherItems, grandTotal, notes }) {
+function emailQuoteFormal({ quoteRef, quoteId, quoteToken, customerName, validDays, lineItems, discountAmount, discountLabel, discountType, discountValue, total, notes }) {
   const validUntil = new Date(Date.now() + (validDays || 30) * 24 * 60 * 60 * 1000)
     .toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
 
-  const lineItems = [
-    ...(hardwareItems || []).filter(i => i.name).map(i => {
-      const base = parseFloat(i.basePrice) || 0;
-      const qty = parseInt(i.qty) || 1;
-      return { label: i.name + (qty > 1 ? ` × ${qty}` : ''), amount: base * qty * (1 + QUOTE_PARTS_MARGIN) };
-    }),
-    ...(pcBuild && pcBuildFee > 0 ? [{ label: 'Custom PC Build', amount: pcBuildFee }] : []),
-    ...(otherItems || []).filter(i => i.description).map(i => {
-      const qty = parseInt(i.qty) || 1;
-      return { label: i.description + (qty > 1 ? ` × ${qty}` : ''), amount: (parseFloat(i.amount) || 0) * qty };
-    }),
-  ];
+  const rowItems = (lineItems || []).filter(i => i.description).map(i => {
+    const qty = parseInt(i.qty) || 1;
+    return { label: i.description + (qty > 1 ? ` × ${qty}` : ''), amount: (Number(i.amount) || 0) * qty };
+  });
+  if (Number(discountAmount) > 0) {
+    const base = discountLabel || 'Discount';
+    rowItems.push({ label: discountType === 'fixed' ? base : `${base} (${Number(discountValue) || 0}%)`, amount: -Number(discountAmount) });
+  }
 
-  const rows = lineItems.map(item =>
+  const rows = rowItems.map(item =>
     `<tr><td style="padding:8px 12px;border-bottom:1px solid #d8cdb6;font-size:13px;">${escHtml(item.label)}</td>` +
     `<td style="padding:8px 12px;border-bottom:1px solid #d8cdb6;font-size:13px;text-align:right;font-family:monospace;font-weight:600;">$${item.amount.toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr>`
   ).join('');
@@ -2096,7 +2092,7 @@ function emailQuoteFormal({ quoteRef, quoteId, quoteToken, customerName, validDa
           ${rows}
           <tr style="background:#1f1a14;">
             <td style="padding:12px;font-weight:700;color:#fbf7ed;font-size:14px;">Total (AUD)</td>
-            <td style="padding:12px;text-align:right;font-weight:700;color:#d39a37;font-family:monospace;font-size:16px;">$${(grandTotal||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+            <td style="padding:12px;text-align:right;font-weight:700;color:#d39a37;font-family:monospace;font-size:16px;">$${(total||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
           </tr>
         </tbody>
       </table>
