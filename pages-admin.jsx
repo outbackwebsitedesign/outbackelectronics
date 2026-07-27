@@ -1116,6 +1116,10 @@ const ORDER_FULFILMENT_MAP = {
   refunded:  { bg:'#f3d5c5', fg:'#7a3a18' },
 };
 function liTotal(i) { return (Number(i.amount) || 0) * (Number(i.qty) || 1); }
+function priceLineToAmount(priceLine) {
+  const m = String(priceLine || '').match(/[\d,]+(\.\d+)?/);
+  return m ? Number(m[0].replace(/,/g, '')) : '';
+}
 function discountAmountFor(subtotal, type, value) {
   const v = Number(value) || 0;
   if (!v || subtotal <= 0) return 0;
@@ -1253,7 +1257,7 @@ function ExpenseRow({ e, isEditing, expenseForm, setExpenseForm, setExpenseEdit,
 // ============================================================
 // OrderDrawer — edit panel for a single order
 // ============================================================
-function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, onExpensesChange, onCustomerCreated, onDelete, sessionInfo = {}, siteUrl }) {
+function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowUpdate, onSave, onExpensesChange, onCustomerCreated, onDelete, sessionInfo = {}, siteUrl }) {
   const [form, setForm] = useState({ ...edit, id: edit.id || edit.suggestedId || '' });
   const findCustomerMatch = (c) => {
     const email = (c.email || '').toLowerCase().trim();
@@ -1603,7 +1607,22 @@ function OrderDrawer({ edit, expenses, customers, onClose, onRowUpdate, onSave, 
               onClick={() => setForm(f => ({...f, lineItems: f.lineItems.filter(x => x.id !== li.id)}))}><Icon name="x" size={12}/></button>
           </div>
         ))}
-        <button className="btn btn-ghost btn-sm" onClick={() => setForm(f => ({...f, lineItems: [...(f.lineItems||[]), { id: 'li-' + Date.now(), description:'', amount:'', qty:1 }]}))}>+ Add line item</button>
+        <select className="select" value="" onChange={e => {
+          const val = e.target.value;
+          if (!val) return;
+          e.target.value = '';
+          if (val === '__custom__') {
+            setForm(f => ({...f, lineItems: [...(f.lineItems||[]), { id: 'li-' + Date.now(), description:'', amount:'', qty:1 }]}));
+            return;
+          }
+          const svc = services.find(s => s.id === val);
+          if (!svc) return;
+          setForm(f => ({...f, lineItems: [...(f.lineItems||[]), { id: 'li-' + Date.now(), description: svc.name || '', amount: priceLineToAmount(svc.price ?? svc.priceLine), qty:1 }]}));
+        }}>
+          <option value="">+ Add line item…</option>
+          <option value="__custom__">Custom line item</option>
+          {services.map(s => <option key={s.id} value={s.id}>{s.name}{(s.price ?? s.priceLine) ? ` — ${s.price ?? s.priceLine}` : ''}</option>)}
+        </select>
         {(form.lineItems||[]).length > 0 && (
           <div style={{marginTop:8, fontSize:12, color:'var(--ink-3)'}}>Line items total: <strong>${(form.lineItems||[]).reduce((s,i)=>s+liTotal(i),0).toLocaleString('en-AU',{minimumFractionDigits:2})}</strong> — order total below is kept in sync.</div>
         )}
@@ -1973,6 +1992,7 @@ function AdminOrders({ search, sessionInfo, siteUrl }) {
   const [loading, setLoading] = useState(true);
   const [expenses, setExpenses] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [services, setServices] = useState([]);
   const [edit, setEdit] = useState(null);
   const [statusTab, setStatusTab] = useUrlState('tab', 'all');
   const [openId, setOpenId] = useUrlState('open', null, { push: true });
@@ -1984,6 +2004,10 @@ function AdminOrders({ search, sessionInfo, siteUrl }) {
       .then(r => r.ok ? r.json() : Promise.reject()).then(d => setExpenses(d.items || [])).catch(() => {});
     fetch('/api/admin/customers', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject()).then(d => setCustomers(d.items || [])).catch(() => {});
+    fetch('/api/admin/catalog', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setServices((d.services || []).filter(s => s.status === 'published')))
+      .catch(() => {});
   }, []);
 
   const q = (search || '').toLowerCase().trim();
@@ -2091,6 +2115,7 @@ function AdminOrders({ search, sessionInfo, siteUrl }) {
           edit={edit}
           expenses={expenses}
           customers={customers}
+          services={services}
           sessionInfo={sessionInfo}
           siteUrl={siteUrl}
           onClose={() => setOpenId(null)}
