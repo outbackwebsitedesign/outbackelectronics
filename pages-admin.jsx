@@ -1120,31 +1120,37 @@ function priceLineToAmount(priceLine) {
   const m = String(priceLine || '').match(/[\d,]+(\.\d+)?/);
   return m ? Number(m[0].replace(/,/g, '')) : '';
 }
-// Builds a sensible line item from a service's pricing model instead of blindly
-// grabbing the first number in priceLine — an hourly rate, a range, a quote, or a
-// per-km callout fee should never be silently dropped in as a flat one-off price.
+// Builds one or more sensible line items from a service's pricing model instead of
+// blindly grabbing the first number in priceLine — an hourly rate, a range, a quote,
+// a per-km callout fee, or an "hourly + parts" job should never collapse into a
+// single flat one-off price times a single "quantity."
 function serviceToLineItem(svc) {
   const price = String(svc.price ?? svc.priceLine ?? '').trim();
   const isFree = /no charge/i.test(price);
   const isHourly = /\/\s*hr\b/i.test(price);
+  const hasParts = /\+\s*parts\b/i.test(price);
   const isVariable = /\/\s*km\b|call-?out/i.test(price);
   const isRange = /–|-\s*\$/.test(price) && !isHourly && !isVariable;
   const isQuoted = /quoted/i.test(price);
-  let amount = '';
-  let description = svc.name || '';
-  if (isFree) {
-    amount = 0;
-  } else if (isHourly) {
+  const mk = (description, amount) => ({ id: 'li-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6), description, amount, qty: 1 });
+
+  if (isFree) return [mk(svc.name || '', 0)];
+
+  if (isHourly) {
     const m = price.match(/\$\s*(\d+(\.\d+)?)\s*\/\s*hr/i);
-    amount = m ? Number(m[1]) : priceLineToAmount(price);
-    description = `${svc.name} (hourly — set qty to hours worked)`;
-  } else if (isRange || isQuoted || isVariable) {
-    amount = '';
-    description = `${svc.name} (${price} — confirm price before saving)`;
-  } else {
-    amount = priceLineToAmount(price);
+    const amount = m ? Number(m[1]) : priceLineToAmount(price);
+    // Labour is billed per hour (qty = hours worked); parts are a separate flat
+    // cost, not multiplied by hours, so they need their own line item.
+    if (hasParts) return [
+      mk(`${svc.name} — labour (set qty to hours worked)`, amount),
+      mk(`${svc.name} — parts (confirm cost before saving)`, ''),
+    ];
+    return [mk(`${svc.name} (hourly — set qty to hours worked)`, amount)];
   }
-  return { id: 'li-' + Date.now(), description, amount, qty: 1 };
+
+  if (isRange || isQuoted || isVariable) return [mk(`${svc.name} (${price} — confirm price before saving)`, '')];
+
+  return [mk(svc.name || '', priceLineToAmount(price))];
 }
 function discountAmountFor(subtotal, type, value) {
   const v = Number(value) || 0;
@@ -1643,7 +1649,7 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
           }
           const svc = services.find(s => s.id === val);
           if (!svc) return;
-          setForm(f => ({...f, lineItems: [...(f.lineItems||[]), serviceToLineItem(svc)]}));
+          setForm(f => ({...f, lineItems: [...(f.lineItems||[]), ...serviceToLineItem(svc)]}));
         }}>
           <option value="">+ Add line item…</option>
           <option value="__custom__">Custom line item</option>
