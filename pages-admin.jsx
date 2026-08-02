@@ -4619,6 +4619,7 @@ function AdminProducts({ sessionInfo = {} }) {
     setOpenId(null);
   };
   const [bulkError, setBulkError] = useState(null);
+  const [tab, setTab] = useState('all');
   const moveAllToDraft = async () => {
     if (!await adminConfirm(
       `Unpublish all ${rows.length} products? Every listing comes off the public shop until republished individually.`,
@@ -4629,6 +4630,17 @@ function AdminProducts({ sessionInfo = {} }) {
     if (!r || !r.ok) { setBulkError('Could not move products to draft. Nothing has been changed.'); return; }
     setRows(rs => rs.map(r2 => ({ ...r2, status:'draft' })));
   };
+
+  // Stock for a product is the sum of its variants when it has any.
+  const rowStock = (r) => (r.variants && r.variants.length ? r.variants.reduce((a, v) => a + (Number(v.stock) || 0), 0) : (Number(r.stock) || 0));
+  const TABS = [
+    { key:'all',       label:'All',          match: () => true },
+    { key:'published', label:'Published',    match: r => r.status === 'published' },
+    { key:'draft',     label:'Draft',        match: r => r.status !== 'published' },
+    { key:'oos',       label:'Out of stock', match: r => !r.infiniteStock && rowStock(r) <= 0 },
+    { key:'refurb',    label:'Refurbished',  match: r => (r.cond || '').toLowerCase().startsWith('refurb') },
+  ];
+  const visibleRows = rows.filter((TABS.find(t => t.key === tab) || TABS[0]).match);
 
   if (edit !== null) {
     return (
@@ -4893,8 +4905,12 @@ function AdminProducts({ sessionInfo = {} }) {
   return (
     <div style={{padding:32}}>
       <div className="tabs" style={{marginBottom:18}}>
-        {[`All (${rows.length})`,`Published (${rows.filter(r=>r.status==='published').length})`,`Draft (${rows.filter(r=>r.status==='draft').length})`,'Out of stock','Refurbished'].map((t,i) => (
-          <div key={i} className={`tab ${i===0?'active':''}`}>{t}</div>
+        {TABS.map(t => (
+          <button key={t.key} type="button" className={`tab ${tab===t.key?'active':''}`}
+            aria-pressed={tab===t.key} onClick={() => setTab(t.key)}
+            style={{font:'inherit', color:'inherit', background:'none', cursor:'pointer'}}>
+            {t.label} ({rows.filter(t.match).length})
+          </button>
         ))}
         <div style={{flex:1}}></div>
         <button className="btn btn-ghost btn-sm" style={{color:'var(--ink-2)'}} onClick={moveAllToDraft}>Move all to draft</button>
@@ -4923,7 +4939,7 @@ function AdminProducts({ sessionInfo = {} }) {
           }},
           { key:'status', label:'Status', w:'120px', render:r => <span className={`tag ${r.status==='published'?'tag-euc':'tag-outline'}`}>{r.status.toUpperCase()}</span> },
         ]}
-        rows={rows}
+        rows={visibleRows}
         onRowClick={openRow}
       />
     </div>
