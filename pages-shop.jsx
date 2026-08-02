@@ -405,6 +405,9 @@ function ProductCard({ p, onClick }) {
   }
   const thumb = p.images && p.images.length > 0 ? p.images[0] : null;
   const soldOut = displayTag === 'Out of stock';
+  // Advertise a bulk rate on the card too: an offer meant to shift volume is
+  // wasted if it only appears once the shopper has opened the product.
+  const bulkEntry = hasVariants ? (p.variants.find(v => bulkOfferAvailable(v)) || null) : (bulkOfferAvailable(p) ? p : null);
   return (
     <div className="product" onClick={onClick} style={soldOut ? {opacity:0.62} : undefined}>
       {thumb
@@ -420,6 +423,11 @@ function ProductCard({ p, onClick }) {
           </div>
           <span className={`tag ${displayTagClass || 'tag-outline'}`}>{(displayTag || '').toUpperCase()}</span>
         </div>
+        {bulkEntry && (
+          <div className="mono" style={{fontSize:10, color:'var(--eucalyptus)', marginTop:6, letterSpacing:'.04em'}}>
+            {Math.floor(Number(bulkEntry.bulkQty))}+ FOR ${Number(bulkEntry.bulkPrice).toLocaleString()} EA
+          </div>
+        )}
       </div>
     </div>
   );
