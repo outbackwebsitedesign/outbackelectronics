@@ -4578,7 +4578,7 @@ function AdminProducts({ sessionInfo = {} }) {
     setNewCat(false);
     if (openId == null) { setEdit(null); return; }
     if (openId === 'new') {
-      const blank = { id:'', sku:'', status:'draft', cat: catOptions[0] || '', cond: condOptions[0] || '', stock:0, price:0 };
+      const blank = { id:'', sku:'', status:'draft', cat: catOptions[0] || '', cond: condOptions[0] || '', stock:0, priceAud:0 };
       setEdit('new'); setForm(blank); savedSnapRef.current = JSON.stringify(blank);
       return;
     }
@@ -4793,7 +4793,7 @@ function AdminProducts({ sessionInfo = {} }) {
             <span className="label" style={{marginBottom:0}}>Digital product (gift card, software licence, download)</span>
           </label>
           <div className="grid-2" style={{gap:14}}>
-            <label className="field"><span className="label">Price (AUD)</span><input className="input" type="number" value={form.price||0} onChange={e=>setForm({...form, price:Number(e.target.value)})}/></label>
+            <label className="field"><span className="label">Price (AUD)</span><input className="input" type="number" value={form.priceAud ?? form.price ?? 0} onChange={e=>setForm({...form, priceAud:Number(e.target.value), price:undefined})}/></label>
             <label className="field">
               <span className="label">Cost Price (AUD) <span style={{fontWeight:400, color:'var(--ink-3)', fontSize:11}}>internal, for stock reports</span></span>
               <input className="input" type="number" step="0.01" min="0" placeholder="0.00" value={form.costPrice||''} onChange={e=>setForm({...form, costPrice:e.target.value ? Number(e.target.value) : ''})} />
@@ -4824,7 +4824,7 @@ function AdminProducts({ sessionInfo = {} }) {
           </div>
           {!!(form.bulkQty && form.bulkPrice) && (
             <div style={{fontSize:12, color:'var(--ink-2)', marginTop:-6, marginBottom:4}}>
-              Buying {form.bulkQty}+ charges ${Number(form.bulkPrice).toLocaleString()} each instead of ${Number(form.price||0).toLocaleString()}.
+              Buying {form.bulkQty}+ charges ${Number(form.bulkPrice).toLocaleString()} each instead of ${Number(form.priceAud ?? form.price ?? 0).toLocaleString()}.
               {' '}The offer hides itself once stock drops below {form.bulkQty}.
             </div>
           )}
@@ -5025,7 +5025,7 @@ function AdminProducts({ sessionInfo = {} }) {
               const lo = Math.min(...prices), hi = Math.max(...prices);
               return <span className="mono" style={{fontWeight:600}}>{lo===hi ? `$${lo}` : `$${lo}–$${hi}`}</span>;
             }
-            return <span className="mono" style={{fontWeight:600}}>${(r.price ?? 0).toLocaleString()}</span>;
+            return <span className="mono" style={{fontWeight:600}}>${Number(r.priceAud ?? r.price ?? 0).toLocaleString()}</span>;
           }},
           { key:'stock', label:'Stock', w:'80px', sort:true, render:r => {
             if (r.infiniteStock) return <span className="mono" style={{color:'var(--ink-2)'}}>∞</span>;

@@ -45,3 +45,11 @@ export function bulkOfferAvailable(entry) {
   const stock = availableStock(entry);
   return stock === null || stock >= Math.floor(Number(entry.bulkQty) || 0);
 }
+
+// A product's own price. Products carry it as `priceAud`; older records may
+// still have the legacy `price` key until the migration has been run. Variants
+// are unaffected: their price has always lived on `price`.
+export function productPrice(p) {
+  if (!p) return 0;
+  return Number(p.priceAud ?? p.price) || 0;
+}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useContext, useRef } from 'react';
 import { getCsrf, ensureCsrf } from './src/lib/api.js';
-import { bulkUnitPrice, hasBulkPrice, bulkOfferAvailable, availableStock } from './src/lib/pricing.js';
+import { bulkUnitPrice, hasBulkPrice, bulkOfferAvailable, availableStock, productPrice } from './src/lib/pricing.js';
 import { CONDITION_COLORS } from './src/lib/conditions.js';
 
 const _fallbackShopCtx = React.createContext({});
@@ -151,7 +151,7 @@ function HomePage({ go, addToCart, portalUser }) {
                   <div className="eyebrow">FIELD-TESTED</div>
                   <div className="serif" style={{fontSize:22, marginTop:6, lineHeight:1.1}}>{heroProduct.name}{heroProduct.cond ? ` // ${heroProduct.cond}` : ''}</div>
                   <div className="row-flex" style={{justifyContent:'space-between', marginTop:10}}>
-                    <span className="price">${Number(heroProduct.price).toLocaleString('en-AU')}</span>
+                    <span className="price">${productPrice(heroProduct).toLocaleString('en-AU')}</span>
                     <span className={`tag ${(heroProduct.infiniteStock || heroProduct.stock > 0) ? 'tag-euc' : 'tag-outline'}`}>{(heroProduct.infiniteStock || heroProduct.stock > 0) ? 'IN STOCK' : 'OUT OF STOCK'}</span>
                   </div>
                 </div>
@@ -386,12 +386,12 @@ function ProductCard({ p, onClick }) {
     else { displayTag = 'In stock'; displayTagClass = 'tag-euc'; }
     displaySku = p.variants[0].sku;
   } else if (p.infiniteStock) {
-    displayPrice = `$${(Number(p.price) || 0).toLocaleString()}`;
+    displayPrice = `$${productPrice(p).toLocaleString()}`;
     displayTag = 'In stock';
     displayTagClass = 'tag-euc';
     displaySku = p.sku;
   } else {
-    displayPrice = `$${(Number(p.price) || 0).toLocaleString()}`;
+    displayPrice = `$${productPrice(p).toLocaleString()}`;
     // The product editor has no tag field, so p.tag is unset on everything
     // created through the admin UI. Derive the badge from stock the same way
     // the variant branch above does, and treat p.tag as an override for the
@@ -552,9 +552,9 @@ function ShopPage({ go, addToCart, pageParams }) {
     const min = parseFloat(priceMin);
     const max = parseFloat(priceMax);
     const effectivePrice = p => {
-      if (p.price != null) return p.price;
-      if (p.variants && p.variants.length > 0) return Math.min(...p.variants.map(v => v.price));
-      return null;
+      if (p.variants && p.variants.length > 0) return Math.min(...p.variants.map(v => Number(v.price) || 0));
+      const own = productPrice(p);
+      return own > 0 ? own : null;
     };
     if (!isNaN(min)) f = f.filter(p => { const ep = effectivePrice(p); return ep != null && ep >= min; });
     if (!isNaN(max)) f = f.filter(p => { const ep = effectivePrice(p); return ep != null && ep <= max; });
@@ -1598,7 +1598,7 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
   if (product._notFound) return <CatalogNotFound go={go} kind="product" />;
 
   const hasVariants = product.variants && product.variants.length > 0;
-  const activePrice = selectedVariant ? selectedVariant.price : product.price;
+  const activePrice = selectedVariant ? selectedVariant.price : productPrice(product);
   const inStock = product.infiniteStock
     ? true
     : hasVariants
@@ -1617,7 +1617,10 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
   const maxQty = stockLeft === null ? 999 : Math.max(1, stockLeft);
   const safeQty = Math.min(Math.max(1, qty), maxQty);
   const unitPrice = bulkUnitPrice(priced, safeQty);
-  const bulkApplied = hasBulkPrice(priced) && unitPrice < Number(priced.price);
+  // The bulk comparison base: a variant carries its own `price`, a product
+  // carries `priceAud`.
+  const pricedBase = hasVariants ? (Number(priced && priced.price) || 0) : productPrice(product);
+  const bulkApplied = hasBulkPrice(priced) && unitPrice < pricedBase;
   const unitsToBulk = bulkAvailable && !bulkApplied ? bulkQty - safeQty : 0;
   const addSelection = () => addToCart(
     hasVariants ? { ...product, ...selectedVariant, _variantSku: selectedVariant.sku || selectedVariant.name || '' } : product,
@@ -1670,8 +1673,8 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
             <div className="mono" style={{fontSize:12, color:'var(--ink-3)', marginBottom:20}}>SKU: {product.sku || (hasVariants && selectedVariant ? selectedVariant.sku : '—')}</div>
             <div style={{display:'flex', alignItems:'baseline', gap:12, marginBottom: bulkApplied ? 6 : 24, flexWrap:'wrap'}}>
               <span className="price" style={{fontSize:36}}>${unitPrice ? unitPrice.toLocaleString() : (activePrice ? activePrice.toLocaleString() : '—')}</span>
-              {bulkApplied && <span className="price-strike" style={{fontSize:20}}>${Number(priced.price).toLocaleString()}</span>}
-              {!bulkApplied && !hasVariants && product.was && <span className="price-strike" style={{fontSize:20}}>${product.was.toLocaleString()}</span>}
+              {bulkApplied && <span className="price-strike" style={{fontSize:20}}>${pricedBase.toLocaleString()}</span>}
+              {!bulkApplied && !hasVariants && product.was && <span className="price-strike" style={{fontSize:20}}>${Number(product.was).toLocaleString()}</span>}
               {safeQty > 1 && <span className="mono" style={{fontSize:13, color:'var(--ink-2)'}}>each · ${(unitPrice * safeQty).toLocaleString()} total</span>}
             </div>
             {bulkApplied && (
@@ -1708,7 +1711,7 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
                 {bulkAvailable ? (
                   <div style={{fontSize:14}}>
                     Buy <strong>{bulkQty} or more</strong> for <strong>${Number(priced.bulkPrice).toLocaleString()} each</strong>
-                    <span style={{color:'var(--ink-3)'}}> save ${((Number(priced.price) - Number(priced.bulkPrice)) * bulkQty).toLocaleString()}</span>
+                    <span style={{color:'var(--ink-3)'}}> save ${((pricedBase - Number(priced.bulkPrice)) * bulkQty).toLocaleString()}</span>
                     {unitsToBulk > 0 && (
                       <div className="mono" style={{fontSize:12, color:'var(--ink-3)', marginTop:6}}>
                         ADD {unitsToBulk} MORE TO QUALIFY
