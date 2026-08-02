@@ -1838,6 +1838,46 @@ function readIndexTemplate(distPath, cb) {
 }
 
 function buildJsonLd(og, pathname) {
+  // Product pages describe the product itself, including its specifications as
+  // additionalProperty, so search engines can read the spec table rather than
+  // guessing at prose.
+  if (pathname.startsWith('/product/')) {
+    const id = decodeURIComponent(pathname.slice('/product/'.length));
+    if (!id) return '';
+    const p = readProducts().filter(x => x.status === 'published')
+      .find(x => x.sku === id || String(x.id) === id || (x.slug && x.slug === id));
+    if (!p) return '';
+    const hasVariants = Array.isArray(p.variants) && p.variants.length > 0;
+    const price = hasVariants
+      ? Math.min(...p.variants.map(v => Number(v.price) || 0).filter(n => n > 0))
+      : Number(p.priceAud ?? p.price) || 0;
+    const inStock = p.infiniteStock
+      ? true
+      : hasVariants
+        ? p.variants.some(v => (Number(v.stock) || 0) > 0)
+        : (Number(p.stock) || 0) > 0;
+    const specs = (Array.isArray(p.specs) ? p.specs : [])
+      .filter(sp => sp && sp.name && sp.value)
+      .map(sp => ({ '@type': 'PropertyValue', name: String(sp.name), value: String(sp.value) }));
+    const ldProduct = {
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      name: p.name,
+      ...(p.description ? { description: stripHtml(p.description).slice(0, 500) } : {}),
+      ...(p.sku ? { sku: p.sku } : {}),
+      ...(p.brand ? { brand: { '@type': 'Brand', name: p.brand } } : {}),
+      ...(p.images && p.images.length > 0 ? { image: p.images.map(u => (u.startsWith('http') ? u : OG_BASE_URL + u)) } : {}),
+      ...(specs.length > 0 ? { additionalProperty: specs } : {}),
+      ...(price > 0 ? { offers: {
+        '@type': 'Offer',
+        price: price.toFixed(2),
+        priceCurrency: 'AUD',
+        availability: inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+        url: `${OG_BASE_URL}/product/${encodeURIComponent(id)}`,
+      } } : {}),
+    };
+    return `<script type="application/ld+json">${JSON.stringify(ldProduct)}</script>`;
+  }
   const isHome = pathname === '/' || pathname === '/home';
   if (!isHome) return '';
   let shopData = {};

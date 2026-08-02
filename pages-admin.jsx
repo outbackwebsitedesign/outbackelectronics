@@ -4895,6 +4895,31 @@ function AdminProducts({ sessionInfo = {} }) {
               </select>
             </label>
           )}
+          <div className="eyebrow" style={{marginTop:18, marginBottom:4}}>SPECIFICATIONS</div>
+          <div style={{fontSize:11, color:'var(--ink-3)', marginBottom:10}}>
+            Name and value pairs shown as a table on the product page. Better than
+            listing specs in the description: they read clearly and search engines
+            can understand them.
+          </div>
+          {(form.specs || []).map((sp, i) => {
+            const specs = form.specs || [];
+            const setSpecs = next => setForm({...form, specs: next});
+            const move = to => { if (to < 0 || to >= specs.length) return; const n2 = [...specs]; const [m] = n2.splice(i,1); n2.splice(to,0,m); setSpecs(n2); };
+            return (
+              <div key={i} style={{display:'grid', gridTemplateColumns:'1fr 1.4fr 28px 28px 28px', gap:8, marginBottom:6}}>
+                <input className="input" placeholder="e.g. Voc" value={sp.name||''}
+                  onChange={e => { const n2=[...specs]; n2[i]={...n2[i], name:e.target.value}; setSpecs(n2); }} />
+                <input className="input" placeholder="e.g. 37.8V" value={sp.value||''}
+                  onChange={e => { const n2=[...specs]; n2[i]={...n2[i], value:e.target.value}; setSpecs(n2); }} />
+                <button type="button" className="icon-btn" title="Move up" aria-label="Move specification up" disabled={i===0} onClick={() => move(i-1)}>↑</button>
+                <button type="button" className="icon-btn" title="Move down" aria-label="Move specification down" disabled={i===specs.length-1} onClick={() => move(i+1)}>↓</button>
+                <button type="button" className="icon-btn" title="Remove specification" aria-label="Remove specification" onClick={() => setSpecs(specs.filter((_,j)=>j!==i))}>×</button>
+              </div>
+            );
+          })}
+          <button className="btn btn-ghost btn-sm" style={{marginTop:4}}
+            onClick={() => setForm({...form, specs: [...(form.specs||[]), {name:'', value:''}]})}>Add specification</button>
+
           <div className="eyebrow" style={{marginTop:18, marginBottom:10}}>VARIANTS</div>
           {(form.variants || []).map((v, i) => (
             <div key={i} style={{marginBottom:14, padding:10, border:'1px solid var(--line)', background:'var(--bg-elev)'}}>

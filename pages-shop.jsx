@@ -1721,6 +1721,22 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
               <p style={{color:'var(--ink-2)', fontSize:15, lineHeight:1.7, marginBottom:24, whiteSpace:'pre-wrap'}}>{product.description}</p>
             )}
 
+            {Array.isArray(product.specs) && product.specs.filter(sp => sp && (sp.name || sp.value)).length > 0 && (
+              <div style={{marginBottom:24}}>
+                <div className="eyebrow" id="specs-label" style={{marginBottom:10}}>SPECIFICATIONS</div>
+                <table aria-labelledby="specs-label" style={{width:'100%', borderCollapse:'collapse', fontSize:14}}>
+                  <tbody>
+                    {product.specs.filter(sp => sp && (sp.name || sp.value)).map((sp, i) => (
+                      <tr key={i} style={{borderBottom:'1px solid var(--line)'}}>
+                        <th scope="row" style={{textAlign:'left', fontWeight:600, color:'var(--ink-2)', padding:'7px 12px 7px 0', width:'40%', verticalAlign:'top'}}>{sp.name}</th>
+                        <td style={{padding:'7px 0', color:'var(--ink)'}}>{sp.value}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
             {inStock && (
               <div className="row-flex" style={{gap:12, alignItems:'center', marginBottom:12}}>
                 <span className="eyebrow" id="qty-label">QUANTITY</span>
