@@ -67,7 +67,7 @@ function QuotePage({ go, pageParams }) {
   if (submitted) {
     return (
       <>
-        <PageHead crumbs={['Outback','Request a Quote']} title="Quote received." lead="A real human will get back to you within 24 hours, usually sooner for urgent jobs." />
+        <PageHead crumbs={['Outback','Request a Quote']} title="Quote received." lead="Someone will get back to you within 24 hours, and sooner if the job is urgent." />
         <section className="container" style={{paddingTop: 32, paddingBottom: 60}}>
           <div className="card-paper" style={{padding: 40, maxWidth: 640}}>
             <div className="row-flex"><span className="tag tag-euc">TICKET · {ticketId ? `#${ticketId}` : 'SUBMITTED'}</span></div>
@@ -94,7 +94,7 @@ function QuotePage({ go, pageParams }) {
   return (
     <>
       <PageHead crumbs={['Outback','Request a Quote']} title="Request a Quote"
-        lead="Tell us what you're trying to do, in plain English. We'll scope it, price it, and either say yes, no, or 'here's who can.'" />
+        lead="Tell us what you are trying to do in your own words. We will work out what it involves, price it, and tell you honestly if it is not something we can do." />
       <section className="container quote-layout" style={{paddingTop: 32, paddingBottom: 60, display:'grid', gridTemplateColumns:'1fr 320px', gap: 48}}>
         <form onSubmit={async (e) => {
           e.preventDefault();
@@ -194,7 +194,7 @@ function QuotePage({ go, pageParams }) {
 
             <hr className="thin" />
             <span className="eyebrow">05 · DESCRIBE THE JOB</span>
-            <p style={{fontSize:13, color:'var(--ink-2)', marginTop:6, marginBottom: 10}}>Plain English is great. Photos can come later, we'll reply with an upload link.</p>
+            <p style={{fontSize:13, color:'var(--ink-2)', marginTop:6, marginBottom: 10}}>Describe it in your own words. You can send photos later, we will reply with a link to upload them.</p>
             <label className="field">
               <textarea className="textarea" value={form.desc} onChange={e => update('desc', e.target.value)} placeholder="My 6kW Fronius inverter is throwing 'AC Voltage High' once it gets over 38°C in the shed. Worked fine all winter. House is 80km west of Birdsville." style={{minHeight: 160}} />
               <div style={{display:'flex', justifyContent:'flex-end', marginTop:4}}>
@@ -215,17 +215,17 @@ function QuotePage({ go, pageParams }) {
           <div className="card" style={{padding: 22}}>
             <span className="tag tag-rust">PHONE FIRST</span>
             <h3 className="serif" style={{fontSize:28, marginTop:12, lineHeight:1.05}}>Or just call.</h3>
-            <p style={{marginTop:8, fontSize:13, color:'var(--ink-2)'}}>If it's actively smoking, on fire, or sinking, save the form.</p>
+            <p style={{marginTop:8, fontSize:13, color:'var(--ink-2)'}}>If something is on fire or under water, do not fill in a form.</p>
             <a href={`tel:${(shop.phone||'').replace(/\s/g,'')}`} className="serif" style={{fontSize:32, marginTop:14, color:'var(--rust)', textDecoration:'none', display:'block'}}>{shop.phone}</a>
             <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:6}}>BY APPOINTMENT ONLY</div>
           </div>
           <div className="card" style={{padding: 22, marginTop: 16, background:'var(--dark)', color:'var(--paper)', borderColor:'var(--dark)'}}>
             <span className="eyebrow" style={{color:'var(--ochre)'}}>WHAT TO INCLUDE</span>
             <ul className="checks" style={{marginTop:12, fontSize:13}}>
-              <li>Model numbers + serials</li>
-              <li>Photos of nameplates &amp; faults</li>
-              <li>What you've already tried</li>
-              <li>How far from a tarmac road</li>
+              <li>Model and serial numbers</li>
+              <li>Photos of the nameplate and the fault</li>
+              <li>Anything you have already tried</li>
+              <li>How far you are from a sealed road</li>
             </ul>
           </div>
         </aside>
@@ -474,7 +474,7 @@ function BookingPage({ go, pageParams }) {
           <div className="card" style={{padding: 22}}>
             <span className="tag tag-rust">PHONE FIRST</span>
             <h3 className="serif" style={{fontSize:28, marginTop:12, lineHeight:1.05}}>Or just call.</h3>
-            <p style={{marginTop:8, fontSize:13, color:'var(--ink-2)'}}>Need it sooner than the next available slot? Call us directly.</p>
+            <p style={{marginTop:8, fontSize:13, color:'var(--ink-2)'}}>If you need it sooner than the next available slot, call us directly.</p>
             <a href={`tel:${(shop.phone||'').replace(/\s/g,'')}`} className="serif" style={{fontSize:32, marginTop:14, color:'var(--rust)', textDecoration:'none', display:'block'}}>{shop.phone}</a>
             <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:6}}>BY APPOINTMENT ONLY</div>
           </div>
@@ -517,14 +517,14 @@ function ContactPage({ go }) {
   return (
     <>
       <PageHead crumbs={['Outback','Contact']} title="Contact"
-        lead="Outback Electronics is appointment-only. Call or email to arrange a visit." />
+        lead="We work by appointment only. Call or email us and we will arrange a time." />
       <section className="container" style={{paddingTop: 32, paddingBottom: 40}}>
         <div className="grid-2" style={{gap: 36}}>
           <div className="stack" style={{gap:18}}>
             <div className="card-paper" style={{padding: 28}}>
               <span className="eyebrow">THE SHOP</span>
               <h3 className="serif" style={{fontSize: 36, marginTop: 8}}>{[shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ')}</h3>
-              <p style={{marginTop: 12, color:'var(--ink-2)', fontSize:14}}>No public access, arrive by appointment only.</p>
+              <p style={{marginTop: 12, color:'var(--ink-2)', fontSize:14}}>There is no public access. Please come by appointment.</p>
               <table style={{width:'100%', marginTop: 18, borderCollapse:'collapse', fontSize:14}}>
                 <tbody>
                   {[
@@ -748,7 +748,7 @@ function ReviewPage({ go }) {
             <>
               <span className="tag tag-euc">SUBMITTED</span>
               <h3 className="serif" style={{ fontSize: 30, marginTop: 14 }}>Thanks for the feedback.</h3>
-              <p style={{ marginTop: 10, color: 'var(--ink-2)' }}>Your review is in - it'll appear on the site once we've had a look.</p>
+              <p style={{ marginTop: 10, color: 'var(--ink-2)' }}>Thank you. Your review will appear on the site once we have read it.</p>
               <button className="btn btn-rust" style={{ marginTop: 20 }} onClick={resetForm}>Leave another review →</button>
             </>
           ) : (
@@ -1029,7 +1029,7 @@ function WarrantyRegisterPage({ go }) {
     return (
       <>
         <PageHead crumbs={['Outback', 'Warranty Registration']} title="Registration received."
-          lead="We've logged your build. Keep this confirmation for your records." />
+          lead="Your build is registered. Keep this confirmation for your records." />
         <section className="container" style={{ paddingTop: 32, paddingBottom: 60 }}>
           <div className="card-paper" style={{ padding: 40, maxWidth: 640 }}>
             <div className="row-flex"><span className="tag tag-euc">WARRANTY · {regId ? `#${regId}` : 'REGISTERED'}</span></div>
@@ -1065,7 +1065,7 @@ function WarrantyRegisterPage({ go }) {
   return (
     <>
       <PageHead crumbs={['Outback', 'Warranty Registration']} title="Register Your Build"
-        lead="Enter your order ID and we'll pull up your build details automatically." />
+        lead="Enter your order ID and we will look up the details of your build." />
       <section className="container quote-layout" style={{ paddingTop: 32, paddingBottom: 60, display: 'grid', gridTemplateColumns: '1fr 300px', gap: 48 }}>
         <form onSubmit={async (e) => {
           e.preventDefault();
@@ -1225,7 +1225,7 @@ function AboutPage({ go }) {
   return (
     <>
       <PageHead crumbs={['Outback', 'About']} title="About Outback Electronics"
-        lead={shop?.workshopBlurb || 'One desk, one tech, one ute. Arduino &amp; microcontroller builds, PC &amp; phone repairs, software, AI, and off-grid electronics. We travel, we ship worldwide.'} />
+        lead={shop?.workshopBlurb || 'A one-person workshop covering Arduino and microcontroller builds, PC and phone repairs, software, AI and off-grid electronics. We travel to jobs and ship worldwide.'} />
       <section className="container" style={{ paddingTop: 32, paddingBottom: 64 }}>
         <div style={{ maxWidth: 720 }}>
           <h2 className="serif" style={{ fontSize: 28, marginBottom: 16 }}>The workshop</h2>
@@ -1250,7 +1250,7 @@ function AboutPage({ go }) {
             <div style={{ fontSize: 15, lineHeight: 1.8 }}>
               <div>{[shop?.suburb, shop?.state, shop?.postcode].filter(Boolean).join(' ')}</div>
               {shop?.phone && <div style={{ marginTop: 6 }}>{shop.phone}</div>}
-              <div style={{ marginTop: 6, color: 'var(--ink-3)', fontSize: 13 }}>No public access - appointment only.</div>
+              <div style={{ marginTop: 6, color: 'var(--ink-3)', fontSize: 13 }}>No public access. By appointment only.</div>
             </div>
           </div>
         </div>
@@ -1409,7 +1409,7 @@ function SellGearPage({ go }) {
   return (
     <>
       <PageHead crumbs={['Outback','Sell Your Gear']} title="Sell Your Gear"
-        lead="We resell other people's gear too. Here's how to sell yours through us, consignment, outright, or a trade." />
+        lead="We sell other people's gear as well as our own. You can put yours through us on consignment, sell it to us outright, or trade it in." />
 
       <section className="container" style={{paddingTop: 40}}>
         <div className="grid-3" style={{gap: 24}}>
@@ -1434,7 +1434,7 @@ function SellGearPage({ go }) {
         <div className="grid-2" style={{gap: 36}}>
           <div>
             <span className="eyebrow">THE PROCESS · 4 STEPS</span>
-            <h2 className="serif" style={{fontSize: 44, marginTop: 8, lineHeight:1.02}}>How a piece of gear becomes someone else's win.</h2>
+            <h2 className="serif" style={{fontSize: 44, marginTop: 8, lineHeight:1.02}}>What happens to gear you sell through us.</h2>
             <div style={{marginTop: 24, display:'grid', gap: 16}}>
               {[
                 {n:'A',t:'Inventory form',d:'List what you\'ve got. Photos welcome but optional.'},
