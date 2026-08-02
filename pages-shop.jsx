@@ -561,7 +561,9 @@ function ShopPage({ go, addToCart, pageParams }) {
   const totalResults = filtered.length;
   const visible = filtered.slice(0, visibleCount);
 
-  useEffect(() => { setVisibleCount(chunkSize); }, [cat, cond, sort, priceMin, priceMax, query, products.length]);
+  // selectedBrands was missing here, so changing the brand filter kept a
+  // previously expanded page length instead of starting from the first chunk.
+  useEffect(() => { setVisibleCount(chunkSize); }, [cat, cond, sort, priceMin, priceMax, query, selectedBrands.join(','), products.length]);
   useEffect(() => {
     const onScroll = () => {
       const nearBottom = window.innerHeight + window.scrollY >= document.body.offsetHeight - 240;
