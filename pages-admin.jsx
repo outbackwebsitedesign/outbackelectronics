@@ -4617,7 +4617,8 @@ function AdminProducts({ sessionInfo = {} }) {
     if (saving) return;
     setSaving(true);
     setSaveError(null);
-    const item = { ...form, category: form.cat };
+    const { _inCarts: _ignored, ...formData } = form;
+    const item = { ...formData, category: form.cat };
     const r = await fetch('/api/admin/catalog/products/save', {
       method: 'POST', headers: postHeaders(),
       credentials: 'include', body: JSON.stringify(item),
@@ -4863,6 +4864,11 @@ function AdminProducts({ sessionInfo = {} }) {
           {(form.variants && form.variants.length > 0) && (
             <div style={{fontSize:12, color:'var(--ink-2)', marginTop:4}}>When variants are set, per-variant price and stock are used on the public site.</div>
           )}
+          {Number(form._inCarts) > 0 && (
+            <div style={{fontSize:12, color:'var(--ochre)', marginTop:4}}>
+              Currently sitting in {form._inCarts} shopper cart{Number(form._inCarts) === 1 ? '' : 's'} (not yet ordered, stock not reserved).
+            </div>
+          )}
           {!form.digital && (
             <>
               <div className="eyebrow" style={{marginTop:18, marginBottom:10}}>SHIPPING</div>
@@ -5010,6 +5016,11 @@ function AdminProducts({ sessionInfo = {} }) {
             if (r.infiniteStock) return <span className="mono" style={{color:'var(--ink-2)'}}>∞</span>;
             const s = r.variants && r.variants.length ? r.variants.reduce((a,v) => a + (v.stock||0), 0) : (r.stock ?? 0);
             return <span className="mono" style={{color: s<3?'var(--rust)':'var(--ink)'}}>{s}</span>;
+          }},
+          { key:'_inCarts', label:'In carts', w:'90px', sort:true, render:r => {
+            const n = Number(r._inCarts) || 0;
+            if (n === 0) return <span className="mono" style={{color:'var(--ink-3)'}}>0</span>;
+            return <span className="mono" title={`Sitting in ${n} shopper cart${n===1?'':'s'} right now`} style={{color:'var(--ochre)', fontWeight:600}}>{n}</span>;
           }},
           { key:'status', label:'Status', w:'120px', sort:true, render:r => <span className={`tag ${r.status==='published'?'tag-euc':'tag-outline'}`}>{(r.status || 'draft').toUpperCase()}</span> },
         ]}

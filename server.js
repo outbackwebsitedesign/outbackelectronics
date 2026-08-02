@@ -91,7 +91,7 @@ const PUBLIC_CSP = "default-src 'self'; " +
 const HSTS_VALUE = 'max-age=31536000; includeSubDomains';
 const PERMISSIONS_POLICY = 'camera=(), microphone=(), geolocation=(), payment=(), usb=()';
 const PUBLIC_RATE_WINDOW_MS = 1000 * 60 * 10;
-const PUBLIC_RATE_LIMITS = { analytics: 120, checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10, 'forgot-password': 5, 'reset-password': 10, 'gift-card/apply': 10, 'gift-card/balance': 5, 'warranty/order-lookup': 10, 'cart/get': 20, 'cart/validate': 60, 'weather_register': 3, 'stock-notify': 5, 'membership': 10, 'order-token': 30, 'bookings/request': 10, 'tutorials/view': 60, 'review/submit': 8, 'review/upload-photo': 20 };
+const PUBLIC_RATE_LIMITS = { analytics: 120, checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10, 'forgot-password': 5, 'reset-password': 10, 'gift-card/apply': 10, 'gift-card/balance': 5, 'warranty/order-lookup': 10, 'cart/get': 20, 'cart/validate': 60, 'cart/activity': 60, 'weather_register': 3, 'stock-notify': 5, 'membership': 10, 'order-token': 30, 'bookings/request': 10, 'tutorials/view': 60, 'review/submit': 8, 'review/upload-photo': 20 };
 
 fs.mkdirSync(path.join(__dirname, 'assets/uploads'), { recursive: true });
 fs.mkdirSync(path.join(__dirname, 'assets/uploads/software'), { recursive: true });
@@ -174,6 +174,7 @@ const SESSIONS_DB_PATH        = path.join(__dirname, 'sessions.db');
 const PORTAL_SESSIONS_DB_PATH = path.join(__dirname, 'portal-sessions.db');
 const RESET_TOKENS_DB_PATH = path.join(__dirname, 'password-reset-tokens.db');
 const CARTS_DB_PATH = path.join(__dirname, 'carts.db');
+const CART_ACTIVITY_DB_PATH = path.join(__dirname, 'cart-activity.db');
 const STOCK_NOTIFY_DB_PATH = path.join(__dirname, 'stock-notify.db');
 const RAG_CACHE_DB_PATH = path.join(__dirname, 'rag-cache.db');
 const RESET_TOKEN_TTL_MS = 1000 * 60 * 60; // 1 hour
@@ -350,6 +351,28 @@ function readCarts() {
   try { const p = JSON.parse(cachedReadFile(CARTS_DB_PATH)); return Array.isArray(p.carts) ? p.carts : []; } catch { return []; }
 }
 function writeCarts(carts) { atomicWriteFile(CARTS_DB_PATH, JSON.stringify({ carts }, null, 2)); }
+
+// Live shopper carts live in each browser's localStorage, so the server cannot
+// see them directly. Browsers report the product ids in their cart as they
+// change; this is that log, keyed by an anonymous per-browser cart id and
+// pruned to CART_ACTIVITY_TTL_MS so "in N carts" means currently, not ever.
+const CART_ACTIVITY_TTL_MS = 24 * 60 * 60 * 1000;
+function readCartActivity() {
+  try {
+    const p = JSON.parse(cachedReadFile(CART_ACTIVITY_DB_PATH));
+    const cutoff = Date.now() - CART_ACTIVITY_TTL_MS;
+    return Array.isArray(p.carts) ? p.carts.filter(c => Number(c.ts) > cutoff) : [];
+  } catch { return []; }
+}
+function writeCartActivity(carts) { atomicWriteFile(CART_ACTIVITY_DB_PATH, JSON.stringify({ carts }, null, 2)); }
+// How many live carts hold each product id.
+function cartCountsByProduct() {
+  const counts = {};
+  for (const c of readCartActivity()) {
+    for (const pid of new Set(c.productIds || [])) counts[pid] = (counts[pid] || 0) + 1;
+  }
+  return counts;
+}
 
 function readStockNotify() {
   try { const p = JSON.parse(cachedReadFile(STOCK_NOTIFY_DB_PATH)); return Array.isArray(p.requests) ? p.requests : []; } catch { return []; }
@@ -5991,6 +6014,23 @@ const mainServer = http.createServer(async (req, res) => {
     return json(res, 200, { items });
   }
 
+  // Browsers report which products are sitting in their cart so staff can see
+  // demand before it becomes an order. Anonymous: an opaque per-browser id and
+  // product ids only, no customer identity and nothing about quantities.
+  if (req.method === 'POST' && url.pathname === '/api/cart/activity') {
+    if (publicRateLimited(getIp(req), 'cart/activity')) return json(res, 429, { error: 'too_many_requests' });
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const cartId = String(body.cartId || '').slice(0, 40);
+    if (!/^[a-zA-Z0-9_-]{8,40}$/.test(cartId)) return json(res, 400, { error: 'invalid_cart_id' });
+    const productIds = Array.isArray(body.productIds)
+      ? [...new Set(body.productIds.map(x => String(x || '').slice(0, 80)).filter(Boolean))].slice(0, 100)
+      : [];
+    const carts = readCartActivity().filter(c => c.cartId !== cartId);
+    if (productIds.length > 0) carts.push({ cartId, productIds, ts: Date.now() });
+    writeCartActivity(carts);
+    return json(res, 200, { ok: true });
+  }
+
   // ── Shared carts ─────────────────────────────────────────────────────────────
   if (req.method === 'POST' && url.pathname === '/api/cart/save') {
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
@@ -6584,6 +6624,8 @@ const adminServer = http.createServer(async (req, res) => {
   if (req.method === 'GET' && url.pathname === '/api/admin/catalog') {
     const session = requireRole(req, res, 'staff'); if (!session) return;
     const catalog = readCatalog();
+    const cartCounts = cartCountsByProduct();
+    catalog.products = catalog.products.map(p => ({ ...p, _inCarts: cartCounts[p.id] || 0 }));
     if (session.role === 'seller') {
       // Sellers only see their own products, with sellerPrice shown as the editable price
       const sellerProducts = catalog.products

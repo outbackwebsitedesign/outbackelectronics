@@ -1155,6 +1155,28 @@ function App() {
   };
   const clearCart = () => setCart([]);
   const replaceCart = (next) => setCart(next);
+
+  // Report which products are sitting in this cart so staff can see demand
+  // before it becomes an order. Anonymous and debounced: an opaque per-browser
+  // id and product ids only, never customer details or quantities.
+  useEffect(() => {
+    let cartId;
+    try {
+      cartId = localStorage.getItem('oe_cart_id');
+      if (!cartId) {
+        cartId = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2)).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40);
+        localStorage.setItem('oe_cart_id', cartId);
+      }
+    } catch { return; }
+    const productIds = [...new Set(cart.map(i => i.id).filter(Boolean))];
+    const t = setTimeout(() => {
+      fetch('/api/cart/activity', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cartId, productIds }),
+      }).catch(() => {});
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [cart.map(i => i.id).join(',')]);
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
 
   const PAGES = window.OE_PAGES || {};
