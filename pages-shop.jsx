@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useContext, useRef } from 'react';
 import { getCsrf, ensureCsrf } from './src/lib/api.js';
 import { hasBulkPrice, bulkOfferAvailable, availableStock } from './src/lib/pricing.js';
+import { CONDITION_COLORS } from './src/lib/conditions.js';
 
 const _fallbackShopCtx = React.createContext({});
 const useShop = () => useContext(window.__ShopContext__ || _fallbackShopCtx);
@@ -358,15 +359,9 @@ function HomePage({ go, addToCart, portalUser }) {
 // SHOP
 // ============================================================
 
-// Colour-coded product condition so "New" vs "Refurbished" reads at a glance
-const COND_COLORS = {
-  'New': 'var(--eucalyptus)',
-  'Refurbished': 'var(--ochre)',
-  'Used': 'var(--rust)',
-};
 function CondLabel({ cond }) {
   if (!cond) return null;
-  const color = COND_COLORS[cond] || 'var(--ink-2)';
+  const color = CONDITION_COLORS[cond] || 'var(--ink-2)';
   return (
     <span style={{color, fontWeight:600}}>
       <span aria-hidden="true" style={{display:'inline-block', width:7, height:7, borderRadius:'50%', background:color, marginRight:5, verticalAlign:'1px'}} />

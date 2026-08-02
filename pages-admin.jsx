@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { getCsrf, ensureCsrf } from './src/lib/api.js';
 import { renderMarkdown, estimateReadTime, slugify } from './markdown.jsx';
+import { PRODUCT_CONDITIONS } from './src/lib/conditions.js';
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 // Canonical date format for all order dates: "27 May 2026"
@@ -4517,7 +4518,7 @@ function AdminProducts({ sessionInfo = {} }) {
   const canAssignOwner = (ROLE_LEVELS[sessionInfo.role] ?? 0) >= ROLE_LEVELS.manager;
   const [rows, setRows] = useState([]);
   const [catOptions, setCatOptions] = useState([]);
-  const [condOptions, setCondOptions] = useState([]);
+  const [condOptions, setCondOptions] = useState(PRODUCT_CONDITIONS);
   const [brandOptions, setBrandOptions] = useState([]);
   const [sellerMembers, setSellerMembers] = useState([]);
   useEffect(() => {
@@ -4529,7 +4530,10 @@ function AdminProducts({ sessionInfo = {} }) {
         if (isSeller) products = allProducts.filter(p => p.createdBy === sessionInfo.staffId);
         setRows(products.map(p => ({ ...p, cat: p.category, stock: p.stock ?? 0 })));
         setCatOptions([...new Set(allProducts.map(p => p.category).filter(Boolean))].sort());
-        setCondOptions([...new Set(allProducts.map(p => p.cond).filter(Boolean))].sort());
+        // Fixed vocabulary, plus any legacy value still in use so editing an
+        // older product doesn't silently drop its condition.
+        const inUse = [...new Set(allProducts.map(p => p.cond).filter(Boolean))].sort();
+        setCondOptions([...PRODUCT_CONDITIONS, ...inUse.filter(c => !PRODUCT_CONDITIONS.includes(c))]);
         setBrandOptions([...new Set(allProducts.map(p => p.brand).filter(Boolean))].sort());
       })
       .catch(() => setRows((window.CATALOG_DATA?.getAdminProducts?.() || window.CATALOG_DATA?.getAdminCatalog?.().filter(item => item.price !== undefined) || []).map(p => ({ ...p, cat: p.category, stock: p.stock ?? 0 }))));
