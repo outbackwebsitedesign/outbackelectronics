@@ -6025,6 +6025,10 @@ const mainServer = http.createServer(async (req, res) => {
       const buf = Buffer.from(raw, 'base64');
       if (buf.length > MAX_BYTES) return json(res, 400, { error: 'file_too_large' });
       const outBuf = await sharp(buf)
+        // Apply the EXIF orientation flag before resizing. Phone cameras store
+        // portrait shots as landscape pixels plus an orientation tag; sharp drops
+        // that tag on output, so without .rotate() the photo comes out sideways.
+        .rotate()
         .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
         .webp({ quality: 82 })
         .toBuffer();
@@ -6351,7 +6355,7 @@ const mainServer = http.createServer(async (req, res) => {
     try {
       if (fs.existsSync(thumbPath)) return serveThumb(fs.readFileSync(thumbPath));
       const buf = fs.readFileSync(srcPath);
-      const thumb = await sharp(buf).resize({ width: w, withoutEnlargement: true }).webp({ quality: THUMB_QUALITY }).toBuffer();
+      const thumb = await sharp(buf).rotate().resize({ width: w, withoutEnlargement: true }).webp({ quality: THUMB_QUALITY }).toBuffer();
       try { fs.writeFileSync(thumbPath, thumb); } catch {}
       serveThumb(thumb);
     } catch (thumbErr) {
@@ -6776,6 +6780,9 @@ const adminServer = http.createServer(async (req, res) => {
       if (RASTER_MIME.has(mime)) {
         outExt = '.webp';
         outBuf = await sharp(buf)
+          // Bake in the EXIF orientation before resizing — sharp strips the tag on
+          // output, so a portrait phone photo would otherwise be saved sideways.
+          .rotate()
           .resize({ width: 1200, height: 1200, fit: 'inside', withoutEnlargement: true })
           .webp({ quality: 82 })
           .toBuffer();
@@ -6808,6 +6815,7 @@ const adminServer = http.createServer(async (req, res) => {
       // can only embed JPEG/PNG in the certificate PDF, and PNG preserves the
       // transparent background a signature stamp needs to look right on the page.
       const outBuf = await sharp(buf)
+        .rotate()
         .resize({ width: 600, height: 240, fit: 'inside', withoutEnlargement: true })
         .png()
         .toBuffer();
