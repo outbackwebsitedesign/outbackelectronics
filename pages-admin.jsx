@@ -4518,6 +4518,7 @@ function AdminProducts({ sessionInfo = {} }) {
   const [rows, setRows] = useState([]);
   const [catOptions, setCatOptions] = useState([]);
   const [condOptions, setCondOptions] = useState([]);
+  const [brandOptions, setBrandOptions] = useState([]);
   const [sellerMembers, setSellerMembers] = useState([]);
   useEffect(() => {
     fetch('/api/admin/catalog', { credentials:'include' })
@@ -4529,6 +4530,7 @@ function AdminProducts({ sessionInfo = {} }) {
         setRows(products.map(p => ({ ...p, cat: p.category, stock: p.stock ?? 0 })));
         setCatOptions([...new Set(allProducts.map(p => p.category).filter(Boolean))].sort());
         setCondOptions([...new Set(allProducts.map(p => p.cond).filter(Boolean))].sort());
+        setBrandOptions([...new Set(allProducts.map(p => p.brand).filter(Boolean))].sort());
       })
       .catch(() => setRows((window.CATALOG_DATA?.getAdminProducts?.() || window.CATALOG_DATA?.getAdminCatalog?.().filter(item => item.price !== undefined) || []).map(p => ({ ...p, cat: p.category, stock: p.stock ?? 0 }))));
     if (canAssignOwner) {
@@ -4658,6 +4660,19 @@ function AdminProducts({ sessionInfo = {} }) {
                 {condOptions.map(c => <option key={c}>{c}</option>)}
               </select>
             </label>
+          </div>
+          <div className="grid-2" style={{gap:14}}>
+            <label className="field">
+              <span className="label">Brand <span style={{fontWeight:400, color:'var(--ink-3)', fontSize:11}}>optional — drives the shop's brand filter</span></span>
+              {/* Free text with a datalist rather than a select: brands are
+                  derived from products in use, so the first product of a new
+                  brand has nothing to pick from. */}
+              <input className="input" list="product-brand-options" placeholder="e.g. Victron" value={form.brand||''} onChange={e=>setForm({...form, brand:e.target.value})} />
+              <datalist id="product-brand-options">
+                {brandOptions.map(b => <option key={b} value={b} />)}
+              </datalist>
+            </label>
+            <div />
           </div>
           <label className="field" style={{flexDirection:'row', alignItems:'center', gap:10}}>
             <input type="checkbox" checked={!!form.digital} onChange={e=>setForm({...form, digital:e.target.checked, stock: e.target.checked && form.infiniteStock ? null : (form.stock||0)})} />
