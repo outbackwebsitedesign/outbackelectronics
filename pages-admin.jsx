@@ -4536,6 +4536,10 @@ function AdminProducts({ sessionInfo = {} }) {
   }, []);
   const [edit, setEdit] = useState(null);
   const [form, setForm] = useState({});
+  // Explicit "typing a brand-new category" flag. Deriving this from whether
+  // form.cat is in catOptions breaks while typing — the free-text box would
+  // vanish the moment the partial name matched an existing category.
+  const [newCat, setNewCat] = useState(false);
   const [openId, setOpenId] = useUrlState('open', null, { push: true });
   const openRow = (r) => setOpenId(r.id);
 
@@ -4544,6 +4548,7 @@ function AdminProducts({ sessionInfo = {} }) {
   useEffect(() => {
     const cur = edit === null ? null : (edit === 'new' ? 'new' : edit.id);
     if (openId === cur) return;
+    setNewCat(false);
     if (openId == null) { setEdit(null); return; }
     if (openId === 'new') { setEdit('new'); setForm({ id:'', sku:'', status:'draft', cat: catOptions[0] || '', cond: condOptions[0] || '', stock:0, price:0 }); return; }
     const r = rows.find(x => x.id === openId);
@@ -4558,11 +4563,16 @@ function AdminProducts({ sessionInfo = {} }) {
     }).catch(() => null);
     if (r && r.ok) {
       const d = await r.json();
-      if (edit === 'new') setRows(rs => [...rs, d.item]);
-      else setRows(rs => rs.map(row => row.id === edit.id ? d.item : row));
+      // The API speaks `category`; the table rows use `cat`. Without this the
+      // saved row's Category column reads blank until the next page load.
+      const saved = { ...d.item, cat: d.item.category };
+      if (edit === 'new') setRows(rs => [...rs, saved]);
+      else setRows(rs => rs.map(row => row.id === edit.id ? saved : row));
+      if (saved.cat && !catOptions.includes(saved.cat)) setCatOptions(cs => [...cs, saved.cat].sort());
     } else {
       if (edit === 'new') setRows(rs => [...rs, item]);
       else setRows(rs => rs.map(row => row.id === edit.id ? item : row));
+      if (item.cat && !catOptions.includes(item.cat)) setCatOptions(cs => [...cs, item.cat].sort());
     }
     setOpenId(null);
   };
@@ -4628,11 +4638,14 @@ function AdminProducts({ sessionInfo = {} }) {
           <label className="field"><span className="label">Name</span><input className="input" value={form.name||''} onChange={e=>setForm({...form, name:e.target.value})}/></label>
           <div className="grid-2" style={{gap:14}}>
             <label className="field"><span className="label">Category</span>
-              <select className="select" value={catOptions.includes(form.cat) ? form.cat : '__new__'} onChange={e => { if (e.target.value !== '__new__') setForm({...form, cat: e.target.value}); }}>
+              <select className="select" value={!newCat && catOptions.includes(form.cat) ? form.cat : '__new__'} onChange={e => {
+                if (e.target.value === '__new__') { setNewCat(true); setForm({...form, cat: ''}); }
+                else { setNewCat(false); setForm({...form, cat: e.target.value}); }
+              }}>
                 {catOptions.map(c => <option key={c} value={c}>{c}</option>)}
                 <option value="__new__">+ New category…</option>
               </select>
-              {(!catOptions.includes(form.cat) || form.cat === '') && (
+              {(newCat || !catOptions.includes(form.cat)) && (
                 <input className="input" style={{marginTop:6}} placeholder="Type new category name" value={form.cat||''} onChange={e=>setForm({...form, cat:e.target.value})} autoFocus />
               )}
             </label>
@@ -4826,7 +4839,8 @@ function AdminServices() {
   }, []);
   const [edit, setEdit] = useState(null);
   const [form, setForm] = useState({});
-  const open = (i) => { setEdit(i); setForm(i==='new' ? { id:'', sku:'', status:'draft', cat: catOptions[0] || '', active:true } : rows[i]); };
+  const [newCat, setNewCat] = useState(false);
+  const open = (i) => { setEdit(i); setNewCat(false); setForm(i==='new' ? { id:'', sku:'', status:'draft', cat: catOptions[0] || '', active:true } : rows[i]); };
   const save = async () => {
     const item = { ...form, category: form.cat, priceLine: form.price, description: form.description };
     const r = await fetch('/api/admin/catalog/services/save', {
@@ -4868,7 +4882,7 @@ function AdminServices() {
       <Table
         columns={[
           { key:'name', label:'Service', w:'2fr', render:r => <span style={{fontWeight:600}}>{r.name}</span> },
-          { key:'cat', label:'Category', w:'1fr', render:r => <span className="tag tag-outline">{r.cat.toUpperCase()}</span> },
+          { key:'cat', label:'Category', w:'1fr', render:r => <span className="tag tag-outline">{(r.cat || '').toUpperCase()}</span> },
           { key:'price', label:'Price', w:'1.5fr' },
           { key:'tat', label:'Turnaround', w:'130px', render:r => <span className="mono" style={{fontSize:12}}>{r.tat}</span> },
           { key:'status', label:'Status', w:'120px', render:r => <span className={`tag ${r.status==='published'?'tag-euc':'tag-outline'}`}>{(r.status || 'draft').toUpperCase()}</span> },
@@ -4889,11 +4903,14 @@ function AdminServices() {
           <label className="field"><span className="label">Service name</span><input className="input" value={form.name||''} onChange={e=>setForm({...form, name:e.target.value})}/></label>
           <div className="grid-2" style={{gap:14}}>
             <label className="field"><span className="label">Category</span>
-              <select className="select" value={catOptions.includes(form.cat) ? form.cat : '__new__'} onChange={e => { if (e.target.value !== '__new__') setForm({...form, cat: e.target.value}); }}>
+              <select className="select" value={!newCat && catOptions.includes(form.cat) ? form.cat : '__new__'} onChange={e => {
+                if (e.target.value === '__new__') { setNewCat(true); setForm({...form, cat: ''}); }
+                else { setNewCat(false); setForm({...form, cat: e.target.value}); }
+              }}>
                 {catOptions.map(c => <option key={c} value={c}>{c}</option>)}
                 <option value="__new__">+ New category…</option>
               </select>
-              {(!catOptions.includes(form.cat) || form.cat === '') && (
+              {(newCat || !catOptions.includes(form.cat)) && (
                 <input className="input" style={{marginTop:6}} placeholder="Type new category name" value={form.cat||''} onChange={e=>setForm({...form, cat:e.target.value})} autoFocus />
               )}
             </label>
