@@ -379,10 +379,70 @@ function readStockNotify() {
 }
 function writeStockNotify(requests) { atomicWriteFile(STOCK_NOTIFY_DB_PATH, JSON.stringify({ requests }, null, 2)); }
 
+// Stock levels only change through writeProducts, so comparing before and
+// after there catches every restock: an admin edit, a cancelled order putting
+// units back, or a correction. Requests are marked notified before the send so
+// a failing mailbox cannot cause the same person to be mailed repeatedly.
+function stockOnHand(prod, variantSku) {
+  if (!prod) return 0;
+  if (prod.infiniteStock) return Infinity;
+  if (variantSku && Array.isArray(prod.variants) && prod.variants.length > 0) {
+    const v = prod.variants.find(x => x.sku === variantSku);
+    return v ? (Number(v.stock) || 0) : 0;
+  }
+  if (Array.isArray(prod.variants) && prod.variants.length > 0) {
+    return prod.variants.reduce((a, v) => a + (Number(v.stock) || 0), 0);
+  }
+  return Number(prod.stock) || 0;
+}
+
+function notifyRestocked(before, after) {
+  let pending;
+  try { pending = readStockNotify().filter(r => !r.notifiedAt); } catch { return; }
+  if (pending.length === 0) return;
+  const beforeById = new Map(before.map(p => [p.id, p]));
+  const afterById = new Map(after.map(p => [p.id, p]));
+  const toSend = [];
+  for (const req of pending) {
+    const prevProd = beforeById.get(req.productId);
+    const nextProd = afterById.get(req.productId);
+    if (!nextProd || nextProd.status !== 'published') continue;
+    const was = stockOnHand(prevProd, req.variantSku);
+    const now = stockOnHand(nextProd, req.variantSku);
+    if (was > 0 || now <= 0) continue;
+    req.notifiedAt = new Date().toISOString();
+    const variant = req.variantSku && Array.isArray(nextProd.variants)
+      ? (nextProd.variants.find(v => v.sku === req.variantSku) || null)
+      : null;
+    toSend.push({
+      to: req.email,
+      productName: nextProd.name,
+      variantName: variant ? variant.name : '',
+      url: `${OG_BASE_URL}/product/${encodeURIComponent(nextProd.sku || nextProd.id)}`,
+    });
+  }
+  if (toSend.length === 0) return;
+  // Mark first, then send: a duplicate email is worse than a missed one.
+  try {
+    const all = readStockNotify();
+    const stamped = new Map(pending.filter(r => r.notifiedAt).map(r => [r.id, r.notifiedAt]));
+    writeStockNotify(all.map(r => (stamped.has(r.id) ? { ...r, notifiedAt: stamped.get(r.id) } : r)));
+  } catch { return; }
+  for (const msg of toSend) {
+    const { subject, html } = emailBackInStock(msg);
+    sendEmail({ to: msg.to, subject, html }).catch(err => console.error('[stock-notify] send failed:', msg.to, err && err.message));
+  }
+}
+
 function readProducts() {
   try { const p = JSON.parse(cachedReadFile(PRODUCTS_DB_PATH)); return Array.isArray(p.products) ? p.products : []; } catch { return []; }
 }
-function writeProducts(products) { atomicWriteFile(PRODUCTS_DB_PATH, JSON.stringify({ products }, null, 2)); }
+function writeProducts(products) {
+  let before = [];
+  try { before = readProducts(); } catch {}
+  atomicWriteFile(PRODUCTS_DB_PATH, JSON.stringify({ products }, null, 2));
+  try { notifyRestocked(before, products); } catch (err) { console.error('[stock-notify]', err && err.message); }
+}
 
 function readServices() {
   try {
@@ -2449,6 +2509,19 @@ function emailEwasteConfirmation({ intakeId, customerName, description }) {
         ${description ? `<dt>ITEMS</dt><dd>${escHtml(description)}</dd>` : ''}
       </div>
       <p>We'll be in touch to confirm next steps.</p>
+    `),
+  };
+}
+
+function emailBackInStock({ productName, variantName, url }) {
+  const label = variantName ? `${productName} (${variantName})` : productName;
+  return {
+    subject: `Back in stock: ${label}`,
+    html: emailHtml('Back in stock', `
+      <p>Good news, <strong>${escHtml(label)}</strong> is back in stock at Outback Electronics.</p>
+      <p>Stock on these is limited and we can't hold it, so it is first in, first served.</p>
+      <a class="btn" href="${escHtml(url)}">View the product &rarr;</a>
+      <p style="margin-top:24px;font-size:12px;color:#8b7e69">You asked to be told when this came back in. This is a one-off message, you are not subscribed to anything.</p>
     `),
   };
 }
@@ -8568,6 +8641,23 @@ const adminServer = http.createServer(async (req, res) => {
     if (!order || !order.pendingCertificatePrint) return json(res, 404, { error: 'not_found' });
     delete order.pendingCertificatePrint;
     writeOrders(orders);
+    return json(res, 200, { ok: true });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/admin/stock-notify') {
+    const session = requireRole(req, res, 'staff'); if (!session) return;
+    const products = readProducts();
+    const requests = readStockNotify().map(r => {
+      const prod = products.find(p => p.id === r.productId);
+      return { ...r, inStock: stockOnHand(prod, r.variantSku) > 0, productName: (prod && prod.name) || r.productName || r.productId };
+    });
+    return json(res, 200, { requests });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/stock-notify/delete') {
+    const session = requireRole(req, res, 'staff'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const id = String(body.id || '');
+    writeStockNotify(readStockNotify().filter(r => r.id !== id));
     return json(res, 200, { ok: true });
   }
 

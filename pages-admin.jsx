@@ -4638,6 +4638,21 @@ function AdminProducts({ sessionInfo = {} }) {
   };
   const [bulkError, setBulkError] = useState(null);
   const [tab, setTab] = useState('all');
+  // Who is waiting on an out-of-stock product. The email goes out
+  // automatically when stock returns; this is so staff can see the demand.
+  const [waiting, setWaiting] = useState([]);
+  useEffect(() => {
+    fetch('/api/admin/stock-notify', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setWaiting(d.requests || []))
+      .catch(() => {});
+  }, []);
+  const dismissWaiting = async (id) => {
+    const r = await fetch('/api/admin/stock-notify/delete', {
+      method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id }),
+    }).catch(() => null);
+    if (r && r.ok) setWaiting(ws => ws.filter(w => w.id !== id));
+  };
   const moveAllToDraft = async () => {
     if (!await adminConfirm(
       `Unpublish all ${rows.length} products? Every listing comes off the public shop until republished individually.`,
@@ -5027,6 +5042,32 @@ function AdminProducts({ sessionInfo = {} }) {
         rows={visibleRows}
         onRowClick={openRow}
       />
+
+      {waiting.length > 0 && (
+        <div style={{marginTop:28}}>
+          <div className="eyebrow" style={{marginBottom:4}}>WAITING ON STOCK ({waiting.filter(w => !w.notifiedAt).length})</div>
+          <div style={{fontSize:11, color:'var(--ink-3)', marginBottom:10}}>
+            Customers are emailed automatically when stock returns. Listed here so you can see what demand is being missed.
+          </div>
+          <div style={{border:'1px solid var(--line)'}}>
+            {waiting.map(w => (
+              <div key={w.id} style={{display:'grid', gridTemplateColumns:'1.6fr 1.4fr 120px 90px 32px', gap:10, alignItems:'center', padding:'8px 12px', borderBottom:'1px solid var(--line)', fontSize:13}}>
+                <div style={{fontWeight:600}}>{w.productName}{w.variantSku ? ` / ${w.variantSku}` : ''}</div>
+                <div className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{w.email}</div>
+                <div className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>{(w.createdAt || '').slice(0, 10)}</div>
+                <div>
+                  {w.notifiedAt
+                    ? <span className="tag tag-euc">EMAILED</span>
+                    : w.inStock
+                      ? <span className="tag tag-ochre">IN STOCK</span>
+                      : <span className="tag tag-outline">WAITING</span>}
+                </div>
+                <button className="icon-btn" title="Remove request" aria-label="Remove request" onClick={() => dismissWaiting(w.id)}>×</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
