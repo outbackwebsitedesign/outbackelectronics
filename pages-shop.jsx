@@ -664,7 +664,17 @@ function ShopPage({ go, addToCart, pageParams }) {
                     <ProductCard key={p.id || i} p={p} onClick={() => go('product', p)} />
                   ))}
                 </div>
-                {visible.length < totalResults && <div className="mono" style={{fontSize:12, color:'var(--ink-2)', marginTop:18, textAlign:'center'}}>Scroll for more…</div>}
+                {/* Infinite scroll alone is unreachable by keyboard and never
+                    fires for anyone who cannot scroll the window, so the same
+                    action is offered as a real button. */}
+                {visible.length < totalResults && (
+                  <div style={{marginTop:18, textAlign:'center'}}>
+                    <button className="btn btn-ghost btn-sm"
+                      onClick={() => setVisibleCount(v => Math.min(totalResults, v + chunkSize))}>
+                      Load more ({totalResults - visible.length} remaining)
+                    </button>
+                  </div>
+                )}
               </>
             )}
           </div>
