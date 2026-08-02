@@ -5144,6 +5144,10 @@ const mainServer = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'GET' && url.pathname === '/api/catalog/products') {
+    // Sweep here too, not only at checkout: an abandoned checkout would
+    // otherwise hold its units until the next customer happened to check out,
+    // leaving the product showing as sold out in the meantime.
+    try { releaseExpiredReservations(); } catch (err) { console.error('[reservations]', err && err.message); }
     return json(res, 200, { items: readProducts().filter(p => p.status === 'published') });
   }
   if (req.method === 'GET' && url.pathname.startsWith('/api/catalog/products/')) {
@@ -6280,6 +6284,7 @@ const mainServer = http.createServer(async (req, res) => {
     if (publicRateLimited(getIp(req), 'cart/validate')) return json(res, 429, { error: 'too_many_requests' });
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     if (!Array.isArray(body.items)) return json(res, 422, { error: 'invalid_items' });
+    try { releaseExpiredReservations(); } catch (err) { console.error('[reservations]', err && err.message); }
     if (body.items.length > 100) return json(res, 422, { error: 'too_many_items' });
     const liveProducts = readProducts();
     const liveServices = readServices();
@@ -6928,6 +6933,7 @@ const adminServer = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && url.pathname === '/api/admin/catalog') {
     const session = requireRole(req, res, 'staff'); if (!session) return;
+    try { releaseExpiredReservations(); } catch (err) { console.error('[reservations]', err && err.message); }
     const catalog = readCatalog();
     const cartCounts = cartCountsByProduct();
     catalog.products = catalog.products.map(p => ({ ...p, _inCarts: cartCounts[p.id] || 0 }));
