@@ -4939,7 +4939,7 @@ function AdminProducts({ sessionInfo = {} }) {
       <Table
         columns={[
           { key:'sku', label:'SKU', w:'130px', render:r => <span className="mono" style={{fontSize:11, color:'var(--rust)'}}>{r.sku}</span> },
-          { key:'name', label:'Name', w:'2fr', render:r => (<><div style={{fontWeight:600}}>{r.name}</div><div className="mono" style={{fontSize:10, color:'var(--ink-2)', marginTop:2}}>{r.cond}</div></>) },
+          { key:'name', label:'Name', w:'2fr', render:r => (<><div style={{fontWeight:600}}>{r.name || '(untitled)'}</div><div className="mono" style={{fontSize:10, color:'var(--ink-2)', marginTop:2}}>{r.cond || ''}</div></>) },
           { key:'cat', label:'Category', w:'1.2fr' },
           { key:'price', label:'Price', w:'90px', render:r => {
             if (r.variants && r.variants.length) {
@@ -4954,7 +4954,7 @@ function AdminProducts({ sessionInfo = {} }) {
             const s = r.variants && r.variants.length ? r.variants.reduce((a,v) => a + (v.stock||0), 0) : (r.stock ?? 0);
             return <span className="mono" style={{color: s<3?'var(--rust)':'var(--ink)'}}>{s}</span>;
           }},
-          { key:'status', label:'Status', w:'120px', render:r => <span className={`tag ${r.status==='published'?'tag-euc':'tag-outline'}`}>{r.status.toUpperCase()}</span> },
+          { key:'status', label:'Status', w:'120px', render:r => <span className={`tag ${r.status==='published'?'tag-euc':'tag-outline'}`}>{(r.status || 'draft').toUpperCase()}</span> },
         ]}
         rows={visibleRows}
         onRowClick={openRow}
