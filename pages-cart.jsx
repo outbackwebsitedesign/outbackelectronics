@@ -210,6 +210,11 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, r
       if (data.id) {
         const link = `${location.origin}/cart?share=${data.id}`;
         setShareLink(link);
+        // Unresolvable lines are left out of the shared cart — say which,
+        // rather than handing over a link that is quietly short of items.
+        if (Array.isArray(data.dropped) && data.dropped.length > 0) {
+          setShareError(`Not included in the link (no longer available): ${data.dropped.join(', ')}.`);
+        }
         try { await navigator.clipboard.writeText(link); } catch {}
       } else {
         setShareError('Could not create share link. Please try again.');

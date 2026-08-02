@@ -5999,6 +5999,9 @@ const mainServer = http.createServer(async (req, res) => {
     const cartProducts = readProducts();
     const cartServices = readServices();
     const items = [];
+    // Anything that can't be resolved used to vanish without a word, so a
+    // shared cart could arrive short of items with no explanation.
+    const dropped = [];
     for (const i of body.items) {
       const pid = String(i.id || i.sku || '');
       const variantSku = i._variantSku ? String(i._variantSku) : null;
@@ -6015,20 +6018,23 @@ const mainServer = http.createServer(async (req, res) => {
           price = Number(variant.price);
           name = `${prod.name}${variant.name ? ` — ${variant.name}` : ''}`;
         } else {
-          price = Number(prod.priceAud);
+          // Products created through the admin editor store the price under
+          // `price`; older records use `priceAud`.
+          price = Number(prod.priceAud ?? prod.price);
           name = prod.name;
         }
-        if (!price || price <= 0) continue;
+        if (!price || price <= 0) { dropped.push(i.name || prod.name || pid); continue; }
         items.push({ id: prod.id, sku: variantSku || prod.sku || '', name, price, qty, _variantSku: variantSku || undefined, cond: i.cond || '' });
         continue;
       }
       const svc = cartServices.find(s => s.id === pid && s.status === 'published');
       if (svc) {
         const price = Number(svc.priceAud);
-        if (!price || price <= 0) continue;
+        if (!price || price <= 0) { dropped.push(svc.name || pid); continue; }
         items.push({ id: svc.id, sku: svc.sku || '', name: svc.name, price, qty, cond: i.cond || '' });
+        continue;
       }
-      // Items not found in catalog are silently dropped
+      dropped.push(i.name || pid);
     }
     if (items.length === 0) return json(res, 422, { error: 'empty_cart' });
     const id = crypto.randomBytes(4).toString('hex');
@@ -6036,7 +6042,7 @@ const mainServer = http.createServer(async (req, res) => {
     const carts = readCarts().filter(c => c.expiresAt > Date.now());
     carts.push({ id, items, expiresAt });
     writeCarts(carts);
-    return json(res, 200, { id });
+    return json(res, 200, { id, dropped });
   }
 
   if (req.method === 'GET' && url.pathname.startsWith('/api/cart/')) {
