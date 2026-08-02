@@ -4508,6 +4508,10 @@ function CatalogList({ title, columns, initial, drawer, addLabel }) {
 // ============================================================
 // PRODUCTS
 // ============================================================
+// Column captions for the variant editor rows. `.label` is scoped to
+// `label.field > .label` in the page CSS, so these need their own styling.
+const variantLabelStyle = { fontSize:10, letterSpacing:'.08em', textTransform:'uppercase', color:'var(--ink-3)', marginBottom:4 };
+
 function AdminProducts({ sessionInfo = {} }) {
   const isSeller = sessionInfo.role === 'seller';
   const canAssignOwner = (ROLE_LEVELS[sessionInfo.role] ?? 0) >= ROLE_LEVELS.manager;
@@ -4747,12 +4751,24 @@ function AdminProducts({ sessionInfo = {} }) {
           <div className="eyebrow" style={{marginTop:18, marginBottom:10}}>VARIANTS</div>
           {(form.variants || []).map((v, i) => (
             <div key={i} style={{marginBottom:14, padding:10, border:'1px solid var(--line)', background:'var(--bg-elev)'}}>
-              <div style={{display:'grid', gridTemplateColumns:'1.5fr 1.2fr 80px 70px 28px', gap:8, marginBottom: (form.images||[]).length > 0 ? 8 : 0}}>
-                <input className="input" placeholder="e.g. With Certificate" value={v.name||''} onChange={e => { const vs = [...(form.variants||[])]; vs[i] = {...vs[i], name: e.target.value}; setForm({...form, variants: vs}); }} />
-                <input className="input" value={v.sku||''} onChange={e => { const vs = [...(form.variants||[])]; vs[i] = {...vs[i], sku: e.target.value}; setForm({...form, variants: vs}); }} />
-                <input className="input" type="number" value={v.price||0} onChange={e => { const vs = [...(form.variants||[])]; vs[i] = {...vs[i], price: Number(e.target.value)}; setForm({...form, variants: vs}); }} />
-                <input className="input" type="number" value={v.stock||0} onChange={e => { const vs = [...(form.variants||[])]; vs[i] = {...vs[i], stock: Number(e.target.value)}; setForm({...form, variants: vs}); }} />
-                <button className="icon-btn" onClick={() => { const vs = (form.variants||[]).filter((_,j) => j!==i); setForm({...form, variants: vs}); }}>×</button>
+              <div style={{display:'grid', gridTemplateColumns:'1.5fr 1.2fr 80px 70px 28px', gap:8, alignItems:'end', marginBottom: (form.images||[]).length > 0 ? 8 : 0}}>
+                <div>
+                  <div style={variantLabelStyle}>Name</div>
+                  <input className="input" placeholder="e.g. With Certificate" value={v.name||''} onChange={e => { const vs = [...(form.variants||[])]; vs[i] = {...vs[i], name: e.target.value}; setForm({...form, variants: vs}); }} />
+                </div>
+                <div>
+                  <div style={variantLabelStyle}>SKU</div>
+                  <input className="input" value={v.sku||''} onChange={e => { const vs = [...(form.variants||[])]; vs[i] = {...vs[i], sku: e.target.value}; setForm({...form, variants: vs}); }} />
+                </div>
+                <div>
+                  <div style={variantLabelStyle}>Price AUD</div>
+                  <input className="input" type="number" value={v.price||0} onChange={e => { const vs = [...(form.variants||[])]; vs[i] = {...vs[i], price: Number(e.target.value)}; setForm({...form, variants: vs}); }} />
+                </div>
+                <div>
+                  <div style={variantLabelStyle}>Stock</div>
+                  <input className="input" type="number" value={v.stock||0} onChange={e => { const vs = [...(form.variants||[])]; vs[i] = {...vs[i], stock: Number(e.target.value)}; setForm({...form, variants: vs}); }} />
+                </div>
+                <button className="icon-btn" title="Remove variant" aria-label="Remove variant" onClick={() => { const vs = (form.variants||[]).filter((_,j) => j!==i); setForm({...form, variants: vs}); }}>×</button>
               </div>
               {(form.images||[]).length > 0 && (
                 <div>
