@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback, createContext, useContext } from 'react';
 import { getCsrf, ensureCsrf, makePortalHelpers } from './src/lib/api.js';
 import { availableStock } from './src/lib/pricing.js';
+import { cartKey } from './src/lib/cart.js';
 
 const ShopContext = createContext({});
 const useShop = () => useContext(ShopContext);
@@ -1140,17 +1141,17 @@ function App() {
     return Math.max(1, Math.min(qty, stock));
   };
   const addToCart = (item, qty = 1) => {
-    const key = item.sku || item.id || item.name;
+    const key = cartKey(item);
     setCart(prev => {
-      const existing = prev.find(i => (i.sku || i.id || i.name) === key);
-      if (existing) return prev.map(i => (i.sku || i.id || i.name) === key ? { ...i, qty: capToStock(i, i.qty + qty) } : i);
+      const existing = prev.find(i => cartKey(i) === key);
+      if (existing) return prev.map(i => cartKey(i) === key ? { ...i, qty: capToStock(i, i.qty + qty) } : i);
       return [...prev, { ...item, qty: capToStock(item, qty) }];
     });
   };
-  const removeFromCart = (key) => setCart(prev => prev.filter(i => (i.sku || i.id || i.name) !== key));
+  const removeFromCart = (key) => setCart(prev => prev.filter(i => cartKey(i) !== key));
   const updateQty = (key, qty) => {
     if (qty < 1) { removeFromCart(key); return; }
-    setCart(prev => prev.map(i => (i.sku || i.id || i.name) === key ? { ...i, qty: capToStock(i, qty) } : i));
+    setCart(prev => prev.map(i => cartKey(i) === key ? { ...i, qty: capToStock(i, qty) } : i));
   };
   const clearCart = () => setCart([]);
   const replaceCart = (next) => setCart(next);

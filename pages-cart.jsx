@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getCsrf, ensureCsrf } from './src/lib/api.js';
 import { bulkUnitPrice, hasBulkPrice, availableStock } from './src/lib/pricing.js';
+import { cartKey } from './src/lib/cart.js';
 
 const PageHead = window.PageHead;
 const ErrorText = window.ErrorText;
@@ -94,7 +95,7 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, r
   const [revalidated, setRevalidated] = useState(false);
   useEffect(() => {
     if (revalidated || cart.length === 0 || !replaceCart) { if (cart.length === 0) setRevalidated(true); return; }
-    const keyOf = (i) => i.sku || i.id || i.name;
+    const keyOf = cartKey;
     const payload = cart.map(i => ({ key: keyOf(i), id: i.id, sku: i.sku, _variantSku: i._variantSku, qty: i.qty }));
     let cancelled = false;
     fetch('/api/cart/validate', {
@@ -427,7 +428,7 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, r
               </div>
             </div>
             {cart.map((item) => {
-              const key = item.sku || item.id || item.name;
+              const key = cartKey(item);
               const unitPrice = bulkUnitPrice(item, item.qty);
               const bulkActive = hasBulkPrice(item) && unitPrice < (Number(item.price) || 0);
               const stock = availableStock(item);
@@ -470,7 +471,7 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, r
             <div className="card-paper" style={{padding:28}}>
               <div className="eyebrow" style={{marginBottom:14}}>ORDER SUMMARY</div>
               {cart.map(item => {
-                const key = item.sku || item.id || item.name;
+                const key = cartKey(item);
                 return (
                   <div key={key} style={{display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:8, color:'var(--ink-2)'}}>
                     <span>{item.name} × {item.qty}</span>
