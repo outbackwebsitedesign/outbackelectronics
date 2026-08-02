@@ -4963,10 +4963,10 @@ function AdminProducts({ sessionInfo = {} }) {
       )}
       <Table
         columns={[
-          { key:'sku', label:'SKU', w:'130px', render:r => <span className="mono" style={{fontSize:11, color:'var(--rust)'}}>{r.sku}</span> },
-          { key:'name', label:'Name', w:'2fr', render:r => (<><div style={{fontWeight:600}}>{r.name || '(untitled)'}</div><div className="mono" style={{fontSize:10, color:'var(--ink-2)', marginTop:2}}>{r.cond || ''}</div></>) },
-          { key:'cat', label:'Category', w:'1.2fr' },
-          { key:'price', label:'Price', w:'90px', render:r => {
+          { key:'sku', label:'SKU', w:'130px', sort:true, render:r => <span className="mono" style={{fontSize:11, color:'var(--rust)'}}>{r.sku}</span> },
+          { key:'name', label:'Name', w:'2fr', sort:true, render:r => (<><div style={{fontWeight:600}}>{r.name || '(untitled)'}</div><div className="mono" style={{fontSize:10, color:'var(--ink-2)', marginTop:2}}>{r.cond || ''}</div></>) },
+          { key:'cat', label:'Category', w:'1.2fr', sort:true },
+          { key:'price', label:'Price', w:'90px', sort:true, render:r => {
             if (r.variants && r.variants.length) {
               const prices = r.variants.map(v => v.price);
               const lo = Math.min(...prices), hi = Math.max(...prices);
@@ -4974,12 +4974,12 @@ function AdminProducts({ sessionInfo = {} }) {
             }
             return <span className="mono" style={{fontWeight:600}}>${(r.price ?? 0).toLocaleString()}</span>;
           }},
-          { key:'stock', label:'Stock', w:'80px', render:r => {
+          { key:'stock', label:'Stock', w:'80px', sort:true, render:r => {
             if (r.infiniteStock) return <span className="mono" style={{color:'var(--ink-2)'}}>∞</span>;
             const s = r.variants && r.variants.length ? r.variants.reduce((a,v) => a + (v.stock||0), 0) : (r.stock ?? 0);
             return <span className="mono" style={{color: s<3?'var(--rust)':'var(--ink)'}}>{s}</span>;
           }},
-          { key:'status', label:'Status', w:'120px', render:r => <span className={`tag ${r.status==='published'?'tag-euc':'tag-outline'}`}>{(r.status || 'draft').toUpperCase()}</span> },
+          { key:'status', label:'Status', w:'120px', sort:true, render:r => <span className={`tag ${r.status==='published'?'tag-euc':'tag-outline'}`}>{(r.status || 'draft').toUpperCase()}</span> },
         ]}
         rows={visibleRows}
         onRowClick={openRow}
