@@ -4557,6 +4557,18 @@ function AdminProducts({ sessionInfo = {} }) {
   const [newCat, setNewCat] = useState(false);
   const [openId, setOpenId] = useUrlState('open', null, { push: true });
   const openRow = (r) => setOpenId(r.id);
+  // Dirty tracking against the last persisted snapshot, so closing the editor
+  // with unsaved edits warns instead of silently discarding them.
+  const savedSnapRef = React.useRef('{}');
+  const dirty = JSON.stringify(form) !== savedSnapRef.current;
+  // The footer's Cancel closes directly rather than through OrderPage's own
+  // back button, so it needs the same guard.
+  const closeGuarded = async () => {
+    if (dirty && !await adminConfirm('You have unsaved changes that will be lost.\nClose without saving?', {
+      title: 'Unsaved changes', confirmLabel: 'Discard changes', cancelLabel: 'Keep editing', danger: true,
+    })) return;
+    setOpenId(null);
+  };
 
   // Reconcile the open product editor with the URL's `open` param (restore on
   // reload + Back/Forward), same as Orders/Quotes/Repairs/Expenses/HDD Reports.
@@ -4565,9 +4577,13 @@ function AdminProducts({ sessionInfo = {} }) {
     if (openId === cur) return;
     setNewCat(false);
     if (openId == null) { setEdit(null); return; }
-    if (openId === 'new') { setEdit('new'); setForm({ id:'', sku:'', status:'draft', cat: catOptions[0] || '', cond: condOptions[0] || '', stock:0, price:0 }); return; }
+    if (openId === 'new') {
+      const blank = { id:'', sku:'', status:'draft', cat: catOptions[0] || '', cond: condOptions[0] || '', stock:0, price:0 };
+      setEdit('new'); setForm(blank); savedSnapRef.current = JSON.stringify(blank);
+      return;
+    }
     const r = rows.find(x => x.id === openId);
-    if (r) { setEdit(r); setForm(r); }
+    if (r) { setEdit(r); setForm(r); savedSnapRef.current = JSON.stringify(r); }
   }, [openId, rows]);
 
   // A failed save used to fall through to the same optimistic row update as a
@@ -4599,6 +4615,7 @@ function AdminProducts({ sessionInfo = {} }) {
     if (edit === 'new') setRows(rs => [...rs, saved]);
     else setRows(rs => rs.map(row => row.id === edit.id ? saved : row));
     if (saved.cat && !catOptions.includes(saved.cat)) setCatOptions(cs => [...cs, saved.cat].sort());
+    savedSnapRef.current = JSON.stringify(form);
     setSaving(false);
     setOpenId(null);
   };
@@ -4644,7 +4661,7 @@ function AdminProducts({ sessionInfo = {} }) {
 
   if (edit !== null) {
     return (
-      <OrderPage onClose={() => setOpenId(null)} backLabel="Back to Products" title={edit==='new'?'New product':form.name}
+      <OrderPage onClose={() => setOpenId(null)} dirty={dirty} backLabel="Back to Products" title={edit==='new'?'New product':form.name}
         footer={<div>
           {saveError && (
             <div role="alert" style={{marginBottom:12, padding:'10px 14px', border:'1px solid var(--rust)', color:'var(--rust)', fontSize:13}}>{saveError}</div>
@@ -4652,7 +4669,7 @@ function AdminProducts({ sessionInfo = {} }) {
           <div className="row-flex" style={{justifyContent:'space-between'}}>
             {edit!=='new' && <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={remove}>Delete</button>}
             <div className="row-flex" style={{gap:8, marginLeft:'auto'}}>
-              <button className="btn btn-ghost btn-sm" onClick={() => setOpenId(null)}>Cancel</button>
+              <button className="btn btn-ghost btn-sm" onClick={closeGuarded}>Cancel</button>
               <button className="btn btn-sm" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
             </div>
           </div>
