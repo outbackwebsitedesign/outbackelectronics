@@ -4670,7 +4670,8 @@ function AdminProducts({ sessionInfo = {} }) {
     { key:'all',       label:'All',          match: () => true },
     { key:'published', label:'Published',    match: r => r.status === 'published' },
     { key:'draft',     label:'Draft',        match: r => r.status !== 'published' },
-    { key:'oos',       label:'Out of stock', match: r => !r.infiniteStock && rowStock(r) <= 0 },
+    { key:'oos',       label:'Out of stock', match: r => !r.infiniteStock && !r.allowBackorder && rowStock(r) <= 0 },
+    { key:'owed',      label:'Owed',         match: r => rowStock(r) < 0 },
     { key:'refurb',    label:'Refurbished',  match: r => (r.cond || '').toLowerCase().startsWith('refurb') },
   ];
   const visibleRows = rows.filter((TABS.find(t => t.key === tab) || TABS[0]).match);
@@ -4849,6 +4850,21 @@ function AdminProducts({ sessionInfo = {} }) {
               )}
             </div>
           </div>
+          <label className="field" style={{flexDirection:'row', alignItems:'flex-start', gap:10, marginTop:10}}>
+            <input type="checkbox" style={{marginTop:3}} checked={!!form.allowBackorder}
+              onChange={e=>setForm({...form, allowBackorder:e.target.checked})} />
+            <span className="label" style={{marginBottom:0, fontWeight:400}}>
+              Accept backorders. Customers can keep buying once stock reaches zero, and the
+              stock figure goes negative to show how many units are owed.
+            </span>
+          </label>
+          {!!form.allowBackorder && (
+            <label className="field">
+              <span className="label">Expected wait <span style={{fontWeight:400, color:'var(--ink-3)', fontSize:11}}>shown to the customer before they buy</span></span>
+              <input className="input" placeholder="e.g. 2 to 3 weeks" value={form.backorderEta||''}
+                onChange={e=>setForm({...form, backorderEta:e.target.value})} />
+            </label>
+          )}
           {(form.variants && form.variants.length > 0) && (
             <div style={{fontSize:12, color:'var(--ink-2)', marginTop:4}}>When variants are set, per-variant price and stock are used on the public site.</div>
           )}
@@ -5030,6 +5046,9 @@ function AdminProducts({ sessionInfo = {} }) {
           { key:'stock', label:'Stock', w:'80px', sort:true, render:r => {
             if (r.infiniteStock) return <span className="mono" style={{color:'var(--ink-2)'}}>∞</span>;
             const s = r.variants && r.variants.length ? r.variants.reduce((a,v) => a + (v.stock||0), 0) : (r.stock ?? 0);
+            // Negative stock on a backorder product is the number owed to
+            // customers, which staff need to see rather than a plain zero.
+            if (s < 0) return <span className="mono" title={`${Math.abs(s)} owed on backorder`} style={{color:'var(--ochre)', fontWeight:600}}>{s}</span>;
             return <span className="mono" style={{color: s<3?'var(--rust)':'var(--ink)'}}>{s}</span>;
           }},
           { key:'_inCarts', label:'In carts', w:'90px', sort:true, render:r => {

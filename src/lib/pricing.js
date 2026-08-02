@@ -32,11 +32,27 @@ export function hasBulkPrice(entry) {
     && Number(entry.bulkPrice) < base;
 }
 
-// Stock actually on hand for a product or variant, or null when unlimited.
+// How many units a customer may put in their cart, or null when uncapped.
+// A backorder product is uncapped: the point of accepting backorders is that
+// running out does not stop the sale.
 export function availableStock(entry) {
+  if (!entry) return 0;
+  if (entry.infiniteStock || entry.allowBackorder) return null;
+  return Number(entry.stock) || 0;
+}
+
+// Units physically on the shelf, ignoring any backorder allowance. Goes
+// negative once more has been sold than held, which is the number owed.
+export function onHandStock(entry) {
   if (!entry) return 0;
   if (entry.infiniteStock) return null;
   return Number(entry.stock) || 0;
+}
+
+// Buyable, but not from stock: it will be ordered in.
+export function isBackorder(entry) {
+  if (!entry || entry.infiniteStock || !entry.allowBackorder) return false;
+  return (Number(entry.stock) || 0) <= 0;
 }
 
 // A bulk offer is only real while enough units remain to reach the threshold.

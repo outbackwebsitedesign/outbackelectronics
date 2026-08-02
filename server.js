@@ -481,16 +481,20 @@ function adjustStock(prods, productId, variantSku, delta) {
   if (idx < 0) return false;
   const prod = prods[idx];
   if (prod.infiniteStock) return false;
+  // A backorder product is allowed below zero: the negative figure is how many
+  // units are owed to customers, which staff need to see. Everything else
+  // clamps, so a miscount cannot invent stock.
+  const floor = prod.allowBackorder ? -1e9 : 0;
   if (variantSku && Array.isArray(prod.variants) && prod.variants.length > 0) {
     const vi = prod.variants.findIndex(v => v.sku === variantSku);
     if (vi < 0 || prod.variants[vi].stock == null) return false;
     const variants = [...prod.variants];
-    variants[vi] = { ...variants[vi], stock: Math.max(0, (Number(variants[vi].stock) || 0) + delta) };
+    variants[vi] = { ...variants[vi], stock: Math.max(floor, (Number(variants[vi].stock) || 0) + delta) };
     prods[idx] = { ...prod, variants };
     return true;
   }
   if (prod.stock == null) return false;
-  prods[idx] = { ...prod, stock: Math.max(0, (Number(prod.stock) || 0) + delta) };
+  prods[idx] = { ...prod, stock: Math.max(floor, (Number(prod.stock) || 0) + delta) };
   return true;
 }
 
@@ -519,7 +523,7 @@ function reserveStock(key, items) {
   const prods = readProducts();
   for (const it of items) {
     const prod = prods.find(p => p.id === it.productId);
-    if (!prod || prod.infiniteStock) continue;
+    if (!prod || prod.infiniteStock || prod.allowBackorder) continue;
     const have = stockOnHand(prod, it.variantSku || null);
     if (have < (Number(it.quantity) || 0)) return prod.name || it.productId;
   }
@@ -5354,11 +5358,11 @@ const mainServer = http.createServer(async (req, res) => {
             : null;
           if (!variant) return null;
           const price = applyBulkPrice(variant, qty, Number(variant.price));
-          return price > 0 ? { priceAud: price, name: `${prod.name}${variant.name ? ` — ${variant.name}` : ''}`, stock: variant.stock == null ? null : Number(variant.stock) || 0 } : null;
+          return price > 0 ? { priceAud: price, name: `${prod.name}${variant.name ? ` — ${variant.name}` : ''}`, stock: variant.stock == null ? null : Number(variant.stock) || 0, allowBackorder: !!prod.allowBackorder } : null;
         }
         const price = applyBulkPrice(prod, qty, Number(prod.priceAud ?? prod.price));
         const stock = (prod.infiniteStock || prod.stock == null) ? null : Number(prod.stock) || 0;
-        return price > 0 ? { priceAud: price, name: prod.name, stock } : null;
+        return price > 0 ? { priceAud: price, name: prod.name, stock, allowBackorder: !!prod.allowBackorder } : null;
       }
       const svc = catalogServices.find(s => s.id === pid && s.status === 'published');
       if (svc) { const price = Number(svc.priceAud); return price > 0 ? { priceAud: price, name: svc.name, stock: null } : null; }
@@ -5385,7 +5389,7 @@ const mainServer = http.createServer(async (req, res) => {
         // Stock is only decremented after payment, so without this an order
         // could be placed for more units than exist — which would also let a
         // customer claim a bulk price the remaining stock can no longer reach.
-        if (catalogEntry.stock != null && qty > catalogEntry.stock) {
+        if (catalogEntry.stock != null && !catalogEntry.allowBackorder && qty > catalogEntry.stock) {
           return json(res, 422, {
             error: 'insufficient_stock',
             message: catalogEntry.stock > 0
@@ -5823,11 +5827,11 @@ const mainServer = http.createServer(async (req, res) => {
             : null;
           if (!variant) return null;
           const price = applyBulkPrice(variant, qty, Number(variant.price));
-          return price > 0 ? { priceAud: price, name: `${prod.name}${variant.name ? ` — ${variant.name}` : ''}`, stock: variant.stock == null ? null : Number(variant.stock) || 0 } : null;
+          return price > 0 ? { priceAud: price, name: `${prod.name}${variant.name ? ` — ${variant.name}` : ''}`, stock: variant.stock == null ? null : Number(variant.stock) || 0, allowBackorder: !!prod.allowBackorder } : null;
         }
         const price = applyBulkPrice(prod, qty, Number(prod.priceAud ?? prod.price));
         const stock = (prod.infiniteStock || prod.stock == null) ? null : Number(prod.stock) || 0;
-        return price > 0 ? { priceAud: price, name: prod.name, stock } : null;
+        return price > 0 ? { priceAud: price, name: prod.name, stock, allowBackorder: !!prod.allowBackorder } : null;
       }
       const svc = catalogServices.find(s => s.id === pid && s.status === 'published');
       if (svc) { const price = Number(svc.priceAud); return price > 0 ? { priceAud: price, name: svc.name, stock: null } : null; }
@@ -5843,7 +5847,7 @@ const mainServer = http.createServer(async (req, res) => {
       }
       const catalogEntry = lookupCatalogPricePlan(pid, li.variantSku ? String(li.variantSku) : null, qty);
       if (!catalogEntry) return json(res, 422, { error: 'invalid_item', message: `Product not found or variant not specified: ${pid}` });
-      if (catalogEntry.stock != null && qty > catalogEntry.stock) {
+      if (catalogEntry.stock != null && !catalogEntry.allowBackorder && qty > catalogEntry.stock) {
         return json(res, 422, {
           error: 'insufficient_stock',
           message: catalogEntry.stock > 0
@@ -6295,6 +6299,7 @@ const mainServer = http.createServer(async (req, res) => {
             name: `${prod.name}${variant.name ? ` — ${variant.name}` : ''}`,
             price: Number(variant.price) || 0,
             stock: variant.stock == null ? null : Number(variant.stock) || 0,
+            allowBackorder: !!prod.allowBackorder, backorderEta: prod.backorderEta || '',
             bulkQty: variant.bulkQty ?? null, bulkPrice: variant.bulkPrice ?? null,
           };
         }
@@ -6303,6 +6308,7 @@ const mainServer = http.createServer(async (req, res) => {
           name: prod.name,
           price: Number(prod.priceAud ?? prod.price) || 0,
           stock: (prod.infiniteStock || prod.stock == null) ? null : Number(prod.stock) || 0,
+          allowBackorder: !!prod.allowBackorder, backorderEta: prod.backorderEta || '',
           bulkQty: prod.bulkQty ?? null, bulkPrice: prod.bulkPrice ?? null,
         };
       }

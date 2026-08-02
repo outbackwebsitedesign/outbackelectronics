@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useContext, useRef } from 'react';
 import { getCsrf, ensureCsrf } from './src/lib/api.js';
-import { bulkUnitPrice, hasBulkPrice, bulkOfferAvailable, availableStock, productPrice } from './src/lib/pricing.js';
+import { bulkUnitPrice, hasBulkPrice, bulkOfferAvailable, availableStock, productPrice, isBackorder, onHandStock } from './src/lib/pricing.js';
 import { CONDITION_COLORS } from './src/lib/conditions.js';
 
 const _fallbackShopCtx = React.createContext({});
@@ -381,7 +381,8 @@ function ProductCard({ p, onClick }) {
       ? `$${minPrice.toLocaleString()}`
       : `$${minPrice.toLocaleString()} – $${maxPrice.toLocaleString()}`;
     const totalStock = p.variants.reduce((s, v) => s + (v.stock || 0), 0);
-    if (totalStock === 0) { displayTag = 'Out of stock'; displayTagClass = 'tag-outline'; }
+    if (totalStock <= 0 && p.allowBackorder) { displayTag = 'Backorder'; displayTagClass = 'tag-ochre'; }
+    else if (totalStock <= 0) { displayTag = 'Out of stock'; displayTagClass = 'tag-outline'; }
     else if (totalStock <= 3) { displayTag = `${totalStock} left`; displayTagClass = 'tag-ochre'; }
     else { displayTag = 'In stock'; displayTagClass = 'tag-euc'; }
     displaySku = p.variants[0].sku;
@@ -398,7 +399,8 @@ function ProductCard({ p, onClick }) {
     // hand-authored listings that do carry one.
     const stock = Number(p.stock) || 0;
     if (p.tag) { displayTag = p.tag; displayTagClass = p.tagClass || 'tag-outline'; }
-    else if (stock === 0) { displayTag = 'Out of stock'; displayTagClass = 'tag-outline'; }
+    else if (stock <= 0 && p.allowBackorder) { displayTag = 'Backorder'; displayTagClass = 'tag-ochre'; }
+    else if (stock <= 0) { displayTag = 'Out of stock'; displayTagClass = 'tag-outline'; }
     else if (stock <= 3) { displayTag = `${stock} left`; displayTagClass = 'tag-ochre'; }
     else { displayTag = 'In stock'; displayTagClass = 'tag-euc'; }
     displaySku = p.sku;
@@ -529,8 +531,10 @@ function ShopPage({ go, addToCart, pageParams }) {
     return () => window.removeEventListener('popstate', onPop);
   }, []);
 
+  // "Available" means buyable, so a backorder product counts: it ranks with
+  // the in-stock items and survives the hide-out-of-stock filter.
   const inStockNow = p => {
-    if (p.infiniteStock) return true;
+    if (p.infiniteStock || p.allowBackorder) return true;
     if (p.variants && p.variants.length > 0) return p.variants.some(v => (Number(v.stock) || 0) > 0);
     return (Number(p.stock) || 0) > 0;
   };
@@ -1599,7 +1603,10 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
 
   const hasVariants = product.variants && product.variants.length > 0;
   const activePrice = selectedVariant ? selectedVariant.price : productPrice(product);
-  const inStock = product.infiniteStock
+  const onBackorder = !!product.allowBackorder && !product.infiniteStock && (hasVariants
+    ? !(selectedVariant && (Number(selectedVariant.stock) || 0) > 0)
+    : (Number(product.stock) || 0) <= 0);
+  const inStock = product.infiniteStock || product.allowBackorder
     ? true
     : hasVariants
       ? (selectedVariant ? (selectedVariant.stock || 0) > 0 : false)
@@ -1764,7 +1771,9 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
                     aria-label="Increase quantity"
                     style={{width:32, height:32, border:'1px solid var(--line)', background:'var(--bg-elev)', cursor: safeQty >= maxQty ? 'not-allowed' : 'pointer', opacity: safeQty >= maxQty ? 0.4 : 1, fontSize:18}}>+</button>
                 </div>
-                {stockLeft !== null && <span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>{stockLeft} AVAILABLE</span>}
+                {onBackorder
+                  ? <span className="mono" style={{fontSize:11, color:'var(--ochre)'}}>ON BACKORDER{product.backorderEta ? ` - SHIPS IN ${String(product.backorderEta).toUpperCase()}` : ''}</span>
+                  : stockLeft !== null && <span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>{stockLeft} AVAILABLE</span>}
               </div>
             )}
 
@@ -1772,7 +1781,7 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
               <button className="btn btn-rust" style={{flex:1, justifyContent:'center'}}
                 disabled={!inStock}
                 onClick={addSelection}>
-                {inStock ? (safeQty > 1 ? `Add ${safeQty} to Cart` : 'Add to Cart') : 'Out of Stock'}
+                {!inStock ? 'Out of Stock' : onBackorder ? (safeQty > 1 ? `Backorder ${safeQty}` : 'Backorder') : (safeQty > 1 ? `Add ${safeQty} to Cart` : 'Add to Cart')}
               </button>
               <button className="btn btn-ghost" onClick={() => go('quote')}>Request a Quote</button>
             </div>
