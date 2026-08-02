@@ -4769,8 +4769,12 @@ function AdminProducts({ sessionInfo = {} }) {
               <div style={{fontSize:11, color:'var(--ink-3)', marginTop:-6, marginBottom:8}}>Used for AusPost shipping quotes. Defaults applied if left blank.</div>
             </>
           )}
-          <label className="field"><span className="label">Description</span>
-            <textarea className="textarea" placeholder="Bench-tested, 38-point check, ships with charger…" value={form.desc||''} onChange={e=>setForm({...form, desc:e.target.value})} />
+          <label className="field">
+            <span className="label">Description <span style={{fontWeight:400, color:'var(--ink-3)', fontSize:11}}>shown on the public product page</span></span>
+            {/* Stored as `description` — the shop reads that key. Older products
+                saved the text under `desc`, which nothing ever read; fall back to
+                it here and drop it on the next save. */}
+            <textarea className="textarea" placeholder="Bench-tested, 38-point check, ships with charger…" value={form.description ?? form.desc ?? ''} onChange={e=>setForm({...form, description:e.target.value, desc:undefined})} />
           </label>
           <label className="field"><span className="label">Bench check notes (internal)</span>
             <textarea className="textarea" placeholder="Battery cycle count, BIOS rev, replaced components…" value={form.benchNotes||''} onChange={e=>setForm({...form, benchNotes:e.target.value})} />

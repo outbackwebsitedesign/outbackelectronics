@@ -5059,7 +5059,7 @@ const mainServer = http.createServer(async (req, res) => {
           const price = applyBulkPrice(variant, qty, Number(variant.price));
           return price > 0 ? { priceAud: price, name: `${prod.name}${variant.name ? ` — ${variant.name}` : ''}`, stock: variant.stock == null ? null : Number(variant.stock) || 0 } : null;
         }
-        const price = applyBulkPrice(prod, qty, Number(prod.priceAud));
+        const price = applyBulkPrice(prod, qty, Number(prod.priceAud ?? prod.price));
         const stock = (prod.infiniteStock || prod.stock == null) ? null : Number(prod.stock) || 0;
         return price > 0 ? { priceAud: price, name: prod.name, stock } : null;
       }
@@ -5507,7 +5507,7 @@ const mainServer = http.createServer(async (req, res) => {
           const price = applyBulkPrice(variant, qty, Number(variant.price));
           return price > 0 ? { priceAud: price, name: `${prod.name}${variant.name ? ` — ${variant.name}` : ''}`, stock: variant.stock == null ? null : Number(variant.stock) || 0 } : null;
         }
-        const price = applyBulkPrice(prod, qty, Number(prod.priceAud));
+        const price = applyBulkPrice(prod, qty, Number(prod.priceAud ?? prod.price));
         const stock = (prod.infiniteStock || prod.stock == null) ? null : Number(prod.stock) || 0;
         return price > 0 ? { priceAud: price, name: prod.name, stock } : null;
       }
