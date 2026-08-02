@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getCsrf, ensureCsrf } from './src/lib/api.js';
-import { bulkUnitPrice, hasBulkPrice, availableStock, isBackorder, backorderLead } from './src/lib/pricing.js';
+import { bulkUnitPrice, hasBulkPrice, availableStock, isBackorder, backorderLead, productPrice } from './src/lib/pricing.js';
 import { cartKey } from './src/lib/cart.js';
 
 const PageHead = window.PageHead;
@@ -121,8 +121,9 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, r
             notices.push(`${item.name}: only ${live.stock} left, quantity reduced.`);
             qty = live.stock;
           }
-          if (Number(live.price) !== Number(item.price)) {
-            notices.push(`${item.name}: price changed from $${Number(item.price).toLocaleString()} to $${Number(live.price).toLocaleString()}.`);
+          const wasPrice = productPrice(item);
+          if (wasPrice > 0 && Number(live.price) !== wasPrice) {
+            notices.push(`${item.name}: price changed from $${wasPrice.toLocaleString()} to $${Number(live.price).toLocaleString()}.`);
           }
           next.push({ ...item, name: live.name || item.name, price: live.price, stock: live.stock, allowBackorder: live.allowBackorder, backorderWeeks: live.backorderWeeks, backorderEta: live.backorderEta, bulkQty: live.bulkQty, bulkPrice: live.bulkPrice, qty });
         }
@@ -441,7 +442,7 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, r
             {cart.map((item) => {
               const key = cartKey(item);
               const unitPrice = bulkUnitPrice(item, item.qty);
-              const bulkActive = hasBulkPrice(item) && unitPrice < (Number(item.price) || 0);
+              const bulkActive = hasBulkPrice(item) && unitPrice < productPrice(item);
               const stock = availableStock(item);
               const atStockLimit = stock !== null && item.qty >= stock;
               // How many more units until the bulk rate kicks in — only worth
