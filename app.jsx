@@ -1153,6 +1153,7 @@ function App() {
     setCart(prev => prev.map(i => (i.sku || i.id || i.name) === key ? { ...i, qty: capToStock(i, qty) } : i));
   };
   const clearCart = () => setCart([]);
+  const replaceCart = (next) => setCart(next);
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
 
   const PAGES = window.OE_PAGES || {};
@@ -1189,7 +1190,7 @@ function App() {
       <TopNav page={page} go={go} cart={cartCount} onSearchOpen={() => setSearchOpen(true)} accountOpen={accountOpen} setAccountOpen={setAccountOpen} portalUser={portalUser} />
       <main id="main-content" tabIndex={-1}>
         <div key={page} className="page-in">
-          <PageComponent go={go} addToCart={addToCart} pageParams={pageParams} cart={cart} removeFromCart={removeFromCart} updateQty={updateQty} clearCart={clearCart} portalUser={portalUser} onPortalUserChange={setPortalUser} />
+          <PageComponent go={go} addToCart={addToCart} pageParams={pageParams} cart={cart} removeFromCart={removeFromCart} updateQty={updateQty} clearCart={clearCart} replaceCart={replaceCart} portalUser={portalUser} onPortalUserChange={setPortalUser} />
         </div>
       </main>
       <Footer go={go} />

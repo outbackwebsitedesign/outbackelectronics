@@ -91,7 +91,7 @@ const PUBLIC_CSP = "default-src 'self'; " +
 const HSTS_VALUE = 'max-age=31536000; includeSubDomains';
 const PERMISSIONS_POLICY = 'camera=(), microphone=(), geolocation=(), payment=(), usb=()';
 const PUBLIC_RATE_WINDOW_MS = 1000 * 60 * 10;
-const PUBLIC_RATE_LIMITS = { analytics: 120, checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10, 'forgot-password': 5, 'reset-password': 10, 'gift-card/apply': 10, 'gift-card/balance': 5, 'warranty/order-lookup': 10, 'cart/get': 20, 'weather_register': 3, 'stock-notify': 5, 'membership': 10, 'order-token': 30, 'bookings/request': 10, 'tutorials/view': 60, 'review/submit': 8, 'review/upload-photo': 20 };
+const PUBLIC_RATE_LIMITS = { analytics: 120, checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10, 'forgot-password': 5, 'reset-password': 10, 'gift-card/apply': 10, 'gift-card/balance': 5, 'warranty/order-lookup': 10, 'cart/get': 20, 'cart/validate': 60, 'weather_register': 3, 'stock-notify': 5, 'membership': 10, 'order-token': 30, 'bookings/request': 10, 'tutorials/view': 60, 'review/submit': 8, 'review/upload-photo': 20 };
 
 fs.mkdirSync(path.join(__dirname, 'assets/uploads'), { recursive: true });
 fs.mkdirSync(path.join(__dirname, 'assets/uploads/software'), { recursive: true });
@@ -5945,6 +5945,50 @@ const mainServer = http.createServer(async (req, res) => {
     if (!gc) return json(res, 422, { error: 'invalid_gift_card', message: 'Gift card code is invalid, already used, or has no remaining balance.' });
     const discount = cartTotal > 0 ? Math.min(gc.balance, cartTotal) : gc.balance;
     return json(res, 200, { valid: true, code: gc.code, balance: gc.balance, discount });
+  }
+
+  // Re-resolve a browser's stored cart against the live catalog. The cart
+  // lives in localStorage and can be weeks old, so its prices, stock and
+  // availability are all potentially stale by the time it is opened again.
+  if (req.method === 'POST' && url.pathname === '/api/cart/validate') {
+    if (publicRateLimited(getIp(req), 'cart/validate')) return json(res, 429, { error: 'too_many_requests' });
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    if (!Array.isArray(body.items)) return json(res, 422, { error: 'invalid_items' });
+    if (body.items.length > 100) return json(res, 422, { error: 'too_many_items' });
+    const liveProducts = readProducts();
+    const liveServices = readServices();
+    const items = body.items.slice(0, 100).map(i => {
+      const pid = String(i.id || i.sku || '');
+      const variantSku = i._variantSku ? String(i._variantSku) : null;
+      const key = String(i.key || '');
+      const prod = liveProducts.find(p => p.id === pid && p.status === 'published');
+      if (prod) {
+        if (prod.variants && prod.variants.length > 0) {
+          const variant = variantSku
+            ? (prod.variants.find(v => v.sku === variantSku) || prod.variants.find(v => v.name === variantSku))
+            : null;
+          if (!variant) return { key, available: false, reason: 'variant_unavailable' };
+          return {
+            key, available: true,
+            name: `${prod.name}${variant.name ? ` — ${variant.name}` : ''}`,
+            price: Number(variant.price) || 0,
+            stock: variant.stock == null ? null : Number(variant.stock) || 0,
+            bulkQty: variant.bulkQty ?? null, bulkPrice: variant.bulkPrice ?? null,
+          };
+        }
+        return {
+          key, available: true,
+          name: prod.name,
+          price: Number(prod.priceAud ?? prod.price) || 0,
+          stock: (prod.infiniteStock || prod.stock == null) ? null : Number(prod.stock) || 0,
+          bulkQty: prod.bulkQty ?? null, bulkPrice: prod.bulkPrice ?? null,
+        };
+      }
+      const svc = liveServices.find(x => x.id === pid && x.status === 'published');
+      if (svc) return { key, available: true, name: svc.name, price: Number(svc.priceAud) || 0, stock: null, bulkQty: null, bulkPrice: null };
+      return { key, available: false, reason: 'not_found' };
+    });
+    return json(res, 200, { items });
   }
 
   // ── Shared carts ─────────────────────────────────────────────────────────────

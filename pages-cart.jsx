@@ -83,7 +83,56 @@ function OrderCancelledPage({ go }) {
 }
 
 // ---------------- Cart Page ----------------
-function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, portalUser, onPortalUserChange }) {
+function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, replaceCart, portalUser, onPortalUserChange }) {
+  // The cart is restored from localStorage and can be weeks old, so its
+  // prices, stock and availability are all potentially stale. Re-resolve it
+  // against the live catalog once on load: reprice lines, re-cap quantities to
+  // current stock, and drop anything that is no longer purchasable — telling
+  // the customer here rather than letting checkout fail on an item they can't
+  // identify.
+  const [staleNotices, setStaleNotices] = useState([]);
+  const [revalidated, setRevalidated] = useState(false);
+  useEffect(() => {
+    if (revalidated || cart.length === 0 || !replaceCart) { if (cart.length === 0) setRevalidated(true); return; }
+    const keyOf = (i) => i.sku || i.id || i.name;
+    const payload = cart.map(i => ({ key: keyOf(i), id: i.id, sku: i.sku, _variantSku: i._variantSku, qty: i.qty }));
+    let cancelled = false;
+    fetch('/api/cart/validate', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: payload }),
+    })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => {
+        if (cancelled) return;
+        const byKey = new Map((d.items || []).map(x => [x.key, x]));
+        const notices = [];
+        const next = [];
+        for (const item of cart) {
+          const live = byKey.get(keyOf(item));
+          if (!live) { next.push(item); continue; }
+          if (!live.available) {
+            notices.push(`${item.name} is no longer available and has been removed.`);
+            continue;
+          }
+          let qty = item.qty;
+          if (live.stock !== null && qty > live.stock) {
+            if (live.stock <= 0) { notices.push(`${item.name} is out of stock and has been removed.`); continue; }
+            notices.push(`${item.name} — only ${live.stock} left, quantity reduced.`);
+            qty = live.stock;
+          }
+          if (Number(live.price) !== Number(item.price)) {
+            notices.push(`${item.name} — price changed from $${Number(item.price).toLocaleString()} to $${Number(live.price).toLocaleString()}.`);
+          }
+          next.push({ ...item, name: live.name || item.name, price: live.price, stock: live.stock, bulkQty: live.bulkQty, bulkPrice: live.bulkPrice, qty });
+        }
+        setStaleNotices(notices);
+        if (notices.length > 0) replaceCart(next);
+        setRevalidated(true);
+      })
+      .catch(() => { if (!cancelled) setRevalidated(true); });
+    return () => { cancelled = true; };
+  }, [revalidated, cart.length]);
+
   const { getPortalUrl, InlineAuthGate } = window.__OE_HELPERS__ || {};
   const [checkingOut, setCheckingOut] = useState(false);
   const [error, setError] = useState(null);
@@ -362,6 +411,14 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, p
     <>
       <PageHead crumbs={['Outback', 'Cart']} title="Your Cart" lead={`${cart.length} item${cart.length !== 1 ? 's' : ''} ready to checkout.`} />
       <section className="container" style={{paddingTop:32, paddingBottom:56}}>
+        {staleNotices.length > 0 && (
+          <div role="status" style={{marginBottom:24, padding:'14px 18px', border:'1px solid var(--ochre)', background:'var(--bg-elev)'}}>
+            <div className="mono" style={{fontSize:11, letterSpacing:'.08em', color:'var(--ochre)', marginBottom:8}}>YOUR CART WAS UPDATED</div>
+            <ul style={{margin:0, paddingLeft:18, fontSize:14, color:'var(--ink-2)', lineHeight:1.7}}>
+              {staleNotices.map((n, i) => <li key={i}>{n}</li>)}
+            </ul>
+          </div>
+        )}
         <div className="cart-layout" style={{display:'grid', gridTemplateColumns:'1fr 320px', gap:40, alignItems:'start'}}>
           <div>
             <div style={{borderTop:'2px solid var(--ink)', marginBottom:4}}>
