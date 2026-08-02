@@ -532,6 +532,11 @@ function ShopPage({ go, addToCart, pageParams }) {
     if (selectedBrands.length > 0) f = f.filter(p => selectedBrands.includes(p.brand));
     const min = parseFloat(priceMin);
     const max = parseFloat(priceMax);
+    const inStockNow = p => {
+      if (p.infiniteStock) return true;
+      if (p.variants && p.variants.length > 0) return p.variants.some(v => (Number(v.stock) || 0) > 0);
+      return (Number(p.stock) || 0) > 0;
+    };
     const effectivePrice = p => {
       if (p.price != null) return p.price;
       if (p.variants && p.variants.length > 0) return Math.min(...p.variants.map(v => v.price));
@@ -539,8 +544,17 @@ function ShopPage({ go, addToCart, pageParams }) {
     };
     if (!isNaN(min)) f = f.filter(p => { const ep = effectivePrice(p); return ep != null && ep >= min; });
     if (!isNaN(max)) f = f.filter(p => { const ep = effectivePrice(p); return ep != null && ep <= max; });
-    if (sort === 'price-asc') f.sort((a,b) => a.price-b.price);
-    if (sort === 'price-desc') f.sort((a,b) => b.price-a.price);
+    // Sort on the same effective price the min/max filter uses — a product
+    // whose price lives on its variants has no top-level price, and comparing
+    // undefined sorted it arbitrarily.
+    const sortPrice = p => { const ep = effectivePrice(p); return ep == null ? Infinity : ep; };
+    if (sort === 'price-asc') f.sort((a,b) => sortPrice(a) - sortPrice(b));
+    else if (sort === 'price-desc') f.sort((a,b) => sortPrice(b) - sortPrice(a));
+    else {
+      // Relevance: in-stock first, then leave the catalog's own order intact.
+      // Nothing out of stock should outrank something a customer can buy.
+      f.sort((a,b) => (inStockNow(a) === inStockNow(b)) ? 0 : (inStockNow(a) ? -1 : 1));
+    }
     return f;
   }, [products, cat, cond, selectedBrands, priceMin, priceMax, sort, query]);
 
