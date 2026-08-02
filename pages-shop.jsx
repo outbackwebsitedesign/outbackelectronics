@@ -391,14 +391,21 @@ function ProductCard({ p, onClick }) {
     else { displayTag = 'In stock'; displayTagClass = 'tag-euc'; }
     displaySku = p.variants[0].sku;
   } else if (p.infiniteStock) {
-    displayPrice = `$${p.price.toLocaleString()}`;
+    displayPrice = `$${(Number(p.price) || 0).toLocaleString()}`;
     displayTag = 'In stock';
     displayTagClass = 'tag-euc';
     displaySku = p.sku;
   } else {
-    displayPrice = `$${p.price.toLocaleString()}`;
-    displayTag = p.tag;
-    displayTagClass = p.tagClass;
+    displayPrice = `$${(Number(p.price) || 0).toLocaleString()}`;
+    // The product editor has no tag field, so p.tag is unset on everything
+    // created through the admin UI. Derive the badge from stock the same way
+    // the variant branch above does, and treat p.tag as an override for the
+    // hand-authored listings that do carry one.
+    const stock = Number(p.stock) || 0;
+    if (p.tag) { displayTag = p.tag; displayTagClass = p.tagClass || 'tag-outline'; }
+    else if (stock === 0) { displayTag = 'Out of stock'; displayTagClass = 'tag-outline'; }
+    else if (stock <= 3) { displayTag = `${stock} left`; displayTagClass = 'tag-ochre'; }
+    else { displayTag = 'In stock'; displayTagClass = 'tag-euc'; }
     displaySku = p.sku;
   }
   const thumb = p.images && p.images.length > 0 ? p.images[0] : null;
@@ -406,7 +413,7 @@ function ProductCard({ p, onClick }) {
     <div className="product" onClick={onClick}>
       {thumb
         ? <img src={thumbUrl(thumb, 600)} srcSet={thumbSrcSet(thumb, [300, 450, 600])} sizes="(max-width: 600px) 50vw, (max-width: 1100px) 33vw, 300px" alt={p.name} loading="lazy" style={{width:'100%', aspectRatio:'4/3', objectFit:'cover', display:'block'}} />
-        : <div className="slot" style={{aspectRatio:'4/3'}}>{p.name.toUpperCase()}</div>}
+        : <div className="slot" style={{aspectRatio:'4/3'}}>{(p.name || '').toUpperCase()}</div>}
       <div className="body">
         <div className="meta"><CondLabel cond={p.cond} />{p.cond ? ' · ' : ''}{displaySku}</div>
         <div className="name">{p.name}</div>
@@ -415,7 +422,7 @@ function ProductCard({ p, onClick }) {
             <span className="price">{displayPrice}</span>
             {!hasVariants && p.was && <span className="price-strike" style={{marginLeft:8}}>${p.was.toLocaleString()}</span>}
           </div>
-          <span className={`tag ${displayTagClass}`}>{displayTag.toUpperCase()}</span>
+          <span className={`tag ${displayTagClass || 'tag-outline'}`}>{(displayTag || '').toUpperCase()}</span>
         </div>
       </div>
     </div>
@@ -739,7 +746,7 @@ function ServicesPage({ go }) {
                 background: c === activeCategory ? 'var(--rust)' : 'transparent',
                 color: c === activeCategory ? '#fff' : 'var(--ink-2)',
               }}
-            >{c.toUpperCase()} ({services.filter(s => s.category === c).length})</button>
+            >{(c || '').toUpperCase()} ({services.filter(s => s.category === c).length})</button>
           ))}
         </div>
         <div className="mono" style={{fontSize:12, color:'var(--ink-2)', marginBottom:18}}>SHOWING {visible.length} OF {services.length} SERVICES · {(activeCategory||'').toUpperCase()}</div>
@@ -748,7 +755,7 @@ function ServicesPage({ go }) {
             <div key={i} className="card-paper" style={{padding: 24}}>
               <div className="row-flex" style={{justifyContent:'space-between'}}>
                 <span className="mono" style={{fontSize:11, color:'var(--rust)'}}>S/{(i+1).toString().padStart(2,'0')}</span>
-                <span className="tag">TAT · {s.tat.toUpperCase()}</span>
+                {s.tat && <span className="tag">TAT · {s.tat.toUpperCase()}</span>}
               </div>
               <h3 className="serif" style={{fontSize: 28, marginTop: 14, lineHeight:1.1}}>{s.name}</h3>
               <p style={{marginTop: 10, color:'var(--ink-2)', fontSize:14}}>{interpolateServiceText(s.description, shop)}</p>
@@ -1576,7 +1583,7 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
                   style={{display:'block', width:'100%', padding:0, border:'none', background:'none', cursor:'zoom-in'}}>
                   <img src={thumbUrl(activeImage, 800)} srcSet={thumbSrcSet(activeImage, [400, 600, 800])} sizes="(max-width: 900px) 100vw, 50vw" alt={product.name} loading="lazy" style={{width:'100%', aspectRatio:'4/3', maxHeight:'70vh', objectFit:'contain', display:'block', background:'var(--bg-deep)'}} />
                 </button>
-              : <div className="slot" style={{aspectRatio:'4/3', width:'100%'}}>{product.name.toUpperCase()}</div>}
+              : <div className="slot" style={{aspectRatio:'4/3', width:'100%'}}>{(product.name || '').toUpperCase()}</div>}
             {activeImage && (
               <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginTop:6, textAlign:'center'}}>CLICK IMAGE TO ZOOM</div>
             )}
