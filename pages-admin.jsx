@@ -4511,47 +4511,6 @@ function CatalogList({ title, columns, initial, drawer, addLabel }) {
 // ============================================================
 // Column captions for the variant editor rows. `.label` is scoped to
 // `label.field > .label` in the page CSS, so these need their own styling.
-// Auto-generated SKUs follow OHE[cat][nnn]: the house prefix, a three letter
-// category code, then a zero padded sequence number, e.g. OHESOL004.
-// Only ever suggested for a product with no SKU yet, so a SKU already in use
-// is never rewritten.
-const SKU_HOUSE_PREFIX = 'OHE';
-function skuPrefixFor(category) {
-  const words = String(category || '').toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').split(/\s+/).filter(Boolean);
-  if (words.length === 0) return '';
-  // First word, not initials: "Solar Panels" reads better as SOL than SPX, and
-  // sibling categories sharing a code simply share one number sequence.
-  return SKU_HOUSE_PREFIX + words[0].slice(0, 3).padEnd(3, 'X');
-}
-// Variant SKUs hang off the product's own: OHE[cat][nnn]-[nn], e.g.
-// OHESOL004-01. Derived from the parent so a variant is always traceable to
-// its product, and only ever filled when blank.
-function nextVariantSku(productSku, variants) {
-  const parent = String(productSku || '').trim();
-  if (!parent) return '';
-  const re = new RegExp(`^${parent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-(\\d+)$`, 'i');
-  const used = (variants || [])
-    .map(v => re.exec(String(v.sku || '')))
-    .filter(Boolean)
-    .map(m => parseInt(m[1], 10));
-  const next = used.length > 0 ? Math.max(...used) + 1 : 1;
-  return `${parent}-${String(next).padStart(2, '0')}`;
-}
-function nextSkuFor(category, rows) {
-  const prefix = skuPrefixFor(category);
-  if (!prefix) return '';
-  // Count product and variant SKUs alike, so a variant never takes a number a
-  // product already holds.
-  const re = new RegExp(`^${prefix}(\\d+)$`, 'i');
-  const all = rows.flatMap(r => [r.sku, ...((r.variants || []).map(v => v.sku))]);
-  const used = all
-    .map(sku => re.exec(String(sku || '')))
-    .filter(Boolean)
-    .map(m => parseInt(m[1], 10));
-  const next = used.length > 0 ? Math.max(...used) + 1 : 1;
-  return `${prefix}${String(next).padStart(3, '0')}`;
-}
-
 const variantLabelStyle = { fontSize:10, letterSpacing:'.08em', textTransform:'uppercase', color:'var(--ink-3)', marginBottom:4 };
 
 function AdminProducts({ sessionInfo = {} }) {
@@ -4770,8 +4729,10 @@ function AdminProducts({ sessionInfo = {} }) {
           </div>
           <div className="grid-2" style={{gap:14}}>
             <label className="field">
-              <span className="label">SKU <span style={{fontWeight:400, color:'var(--ink-3)', fontSize:11}}>auto-filled as OHE[cat][nnn], editable</span></span>
-              <input className="input" value={form.sku||''} onChange={e=>setForm({...form, sku:e.target.value})}/>
+              <span className="label">SKU <span style={{fontWeight:400, color:'var(--ink-3)', fontSize:11}}>assigned on save</span></span>
+              <input className="input mono" value={form.sku||''} readOnly tabIndex={-1}
+                placeholder="OHE[cat][nnn] on save"
+                style={{background:'var(--bg-elev)', color:'var(--ink-2)', cursor:'default'}} />
             </label>
             <label className="field"><span className="label">Status</span>
               <select className="select" value={form.status||'draft'} onChange={e=>setForm({...form, status:e.target.value})}>
@@ -4784,20 +4745,13 @@ function AdminProducts({ sessionInfo = {} }) {
             <label className="field"><span className="label">Category</span>
               <select className="select" value={!newCat && catOptions.includes(form.cat) ? form.cat : '__new__'} onChange={e => {
                 if (e.target.value === '__new__') { setNewCat(true); setForm({...form, cat: ''}); }
-                else {
-                  setNewCat(false);
-                  // Only fill a SKU that is still blank; never overwrite one.
-                  setForm({...form, cat: e.target.value, sku: form.sku || nextSkuFor(e.target.value, rows)});
-                }
+                else { setNewCat(false); setForm({...form, cat: e.target.value}); }
               }}>
                 {catOptions.map(c => <option key={c} value={c}>{c}</option>)}
                 <option value="__new__">+ New category…</option>
               </select>
               {(newCat || !catOptions.includes(form.cat)) && (
-                <input className="input" style={{marginTop:6}} placeholder="Type new category name" value={form.cat||''}
-                  onChange={e=>setForm({...form, cat:e.target.value})}
-                  onBlur={e=>{ if (!form.sku && e.target.value.trim()) setForm(f => ({...f, sku: nextSkuFor(e.target.value, rows)})); }}
-                  autoFocus />
+                <input className="input" style={{marginTop:6}} placeholder="Type new category name" value={form.cat||''} onChange={e=>setForm({...form, cat:e.target.value})} autoFocus />
               )}
             </label>
             <label className="field"><span className="label">Condition</span>
@@ -4950,8 +4904,10 @@ function AdminProducts({ sessionInfo = {} }) {
                   <input className="input" placeholder="e.g. With Certificate" value={v.name||''} onChange={e => { const vs = [...(form.variants||[])]; vs[i] = {...vs[i], name: e.target.value}; setForm({...form, variants: vs}); }} />
                 </div>
                 <div>
-                  <div style={variantLabelStyle} title="Auto-filled as the product SKU plus a two digit suffix">SKU</div>
-                  <input className="input" placeholder={nextVariantSku(form.sku, []) || 'SKU'} value={v.sku||''} onChange={e => { const vs = [...(form.variants||[])]; vs[i] = {...vs[i], sku: e.target.value}; setForm({...form, variants: vs}); }} />
+                  <div style={variantLabelStyle} title="Assigned on save as the product SKU plus a two digit suffix">SKU</div>
+                  <input className="input mono" value={v.sku||''} readOnly tabIndex={-1}
+                    placeholder="on save"
+                    style={{background:'var(--bg-elev)', color:'var(--ink-2)', cursor:'default'}} />
                 </div>
                 <div>
                   <div style={variantLabelStyle}>Price AUD</div>
@@ -4996,7 +4952,7 @@ function AdminProducts({ sessionInfo = {} }) {
               )}
             </div>
           ))}
-          <button className="btn btn-ghost btn-sm" style={{marginTop:4}} onClick={() => setForm({...form, variants: [...(form.variants||[]), {sku: nextVariantSku(form.sku, form.variants), name:'', price:0, stock:0, bulkQty:'', bulkPrice:''}]})}>Add variant</button>
+          <button className="btn btn-ghost btn-sm" style={{marginTop:4}} onClick={() => setForm({...form, variants: [...(form.variants||[]), {sku:'', name:'', price:0, stock:0, bulkQty:'', bulkPrice:''}]})}>Add variant</button>
       </OrderPage>
     );
   }

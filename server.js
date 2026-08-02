@@ -400,6 +400,64 @@ function writeServices(services) { atomicWriteFile(SERVICES_DB_PATH, JSON.string
 
 function readCatalog() { return { products: readProducts(), services: readServices() }; }
 
+// ── SKU generation ───────────────────────────────────────────────────────────
+// House format: OHE[cat][nnn] for a product, OHE[cat][nnn]-[nn] for a variant.
+// Generated here rather than in the browser so the numbering is decided by
+// whoever holds the catalog, not by whichever admin tab happens to be open.
+const SKU_HOUSE_PREFIX = 'OHE';
+function skuPrefixFor(category) {
+  const words = String(category || '').toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '';
+  // First word rather than initials: "Solar Panels" reads better as SOL than
+  // SPX, and sibling categories share one number sequence.
+  return SKU_HOUSE_PREFIX + words[0].slice(0, 3).padEnd(3, 'X');
+}
+function generateProductSku(category, products, excludeId) {
+  const prefix = skuPrefixFor(category);
+  if (!prefix) return '';
+  const re = new RegExp(`^${prefix}(\\d+)$`, 'i');
+  const used = products
+    .filter(p => p.id !== excludeId)
+    .flatMap(p => [p.sku, ...((p.variants || []).map(v => v.sku))])
+    .map(sku => re.exec(String(sku || '')))
+    .filter(Boolean)
+    .map(m => parseInt(m[1], 10));
+  const next = used.length > 0 ? Math.max(...used) + 1 : 1;
+  return `${prefix}${String(next).padStart(3, '0')}`;
+}
+function generateVariantSku(productSku, variants, takenIdx) {
+  const parent = String(productSku || '').trim();
+  if (!parent) return '';
+  const re = new RegExp(`^${parent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-(\\d+)$`, 'i');
+  const used = (variants || [])
+    .filter((_, i) => i !== takenIdx)
+    .map(v => re.exec(String(v.sku || '')))
+    .filter(Boolean)
+    .map(m => parseInt(m[1], 10));
+  const next = used.length > 0 ? Math.max(...used) + 1 : 1;
+  return `${parent}-${String(next).padStart(2, '0')}`;
+}
+// Fill in any missing SKU on a product about to be saved. Never rewrites one
+// that already exists: a SKU may be printed on physical stock or sitting in a
+// customer's order history.
+function assignMissingSkus(body, products) {
+  if (!String(body.sku || '').trim()) {
+    body.sku = generateProductSku(body.category || body.cat, products, body.id);
+  }
+  if (Array.isArray(body.variants)) {
+    // Assign in sequence against the running list: mapping over the original
+    // array hands every new variant the same number, because none of them can
+    // see the SKUs assigned to their siblings in the same save.
+    const assigned = [...body.variants];
+    for (let i = 0; i < assigned.length; i++) {
+      if (String(assigned[i].sku || '').trim()) continue;
+      assigned[i] = { ...assigned[i], sku: generateVariantSku(body.sku, assigned, i) };
+    }
+    body.variants = assigned;
+  }
+  return body;
+}
+
 // Bulk ("buy N or more") unit price. A product — or a variant, when the
 // product has variants — may carry a `bulkQty` threshold and a `bulkPrice`
 // unit rate; reaching the threshold reprices every unit on that line.
@@ -7137,6 +7195,7 @@ const adminServer = http.createServer(async (req, res) => {
     }
     const products = readProducts();
     const idx = products.findIndex(p => p.id && p.id === body.id);
+    assignMissingSkus(body, products);
     // SKUs identify a line in the cart and resolve a variant at checkout, so a
     // duplicate silently merges two different things. Reject rather than store.
     const skuOf = v => String(v || '').trim().toLowerCase();
