@@ -69,3 +69,12 @@ export function productPrice(p) {
   if (!p) return 0;
   return Number(p.priceAud ?? p.price) || 0;
 }
+
+// How long a backorder takes, as weeks. Falls back to the earlier free-text
+// field for any product saved before this became a number.
+export function backorderLead(entry) {
+  if (!entry) return '';
+  const weeks = Number(entry.backorderWeeks);
+  if (Number.isFinite(weeks) && weeks > 0) return `${weeks} week${weeks === 1 ? '' : 's'}`;
+  return String(entry.backorderEta || '');
+}

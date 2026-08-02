@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getCsrf, ensureCsrf } from './src/lib/api.js';
-import { bulkUnitPrice, hasBulkPrice, availableStock, isBackorder } from './src/lib/pricing.js';
+import { bulkUnitPrice, hasBulkPrice, availableStock, isBackorder, backorderLead } from './src/lib/pricing.js';
 import { cartKey } from './src/lib/cart.js';
 
 const PageHead = window.PageHead;
@@ -124,7 +124,7 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, r
           if (Number(live.price) !== Number(item.price)) {
             notices.push(`${item.name}: price changed from $${Number(item.price).toLocaleString()} to $${Number(live.price).toLocaleString()}.`);
           }
-          next.push({ ...item, name: live.name || item.name, price: live.price, stock: live.stock, allowBackorder: live.allowBackorder, backorderEta: live.backorderEta, bulkQty: live.bulkQty, bulkPrice: live.bulkPrice, qty });
+          next.push({ ...item, name: live.name || item.name, price: live.price, stock: live.stock, allowBackorder: live.allowBackorder, backorderWeeks: live.backorderWeeks, backorderEta: live.backorderEta, bulkQty: live.bulkQty, bulkPrice: live.bulkPrice, qty });
         }
         setStaleNotices(notices);
         if (notices.length > 0) replaceCart(next);
@@ -456,7 +456,7 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, r
                     {item.cond && <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:2}}>{item.cond}</div>}
                     {isBackorder(item) && (
                       <div className="mono" style={{fontSize:11, color:'var(--ochre)', marginTop:4}}>
-                        ON BACKORDER{item.backorderEta ? ` - SHIPS IN ${String(item.backorderEta).toUpperCase()}` : ''}
+                        ON BACKORDER{backorderLead(item) ? ` - SHIPS IN ${backorderLead(item).toUpperCase()}` : ''}
                       </div>
                     )}
                     {toBulk > 0 && (

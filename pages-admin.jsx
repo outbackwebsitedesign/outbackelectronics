@@ -4859,11 +4859,15 @@ function AdminProducts({ sessionInfo = {} }) {
             </span>
           </label>
           {!!form.allowBackorder && (
-            <label className="field">
-              <span className="label">Expected wait <span style={{fontWeight:400, color:'var(--ink-3)', fontSize:11}}>shown to the customer before they buy</span></span>
-              <input className="input" placeholder="e.g. 2 to 3 weeks" value={form.backorderEta||''}
-                onChange={e=>setForm({...form, backorderEta:e.target.value})} />
-            </label>
+            <div className="grid-2" style={{gap:14}}>
+              <label className="field">
+                <span className="label">Backorder lead time (weeks) <span style={{fontWeight:400, color:'var(--ink-3)', fontSize:11}}>shown to the customer before they buy</span></span>
+                <input className="input" type="number" min="1" step="1" placeholder="e.g. 3"
+                  value={form.backorderWeeks ?? ''}
+                  onChange={e=>setForm({...form, backorderWeeks: e.target.value === '' ? '' : Math.max(1, Math.floor(Number(e.target.value) || 1))})} />
+              </label>
+              <div />
+            </div>
           )}
           {(form.variants && form.variants.length > 0) && (
             <div style={{fontSize:12, color:'var(--ink-2)', marginTop:4}}>When variants are set, per-variant price and stock are used on the public site.</div>

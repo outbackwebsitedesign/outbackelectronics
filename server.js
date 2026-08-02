@@ -6299,7 +6299,7 @@ const mainServer = http.createServer(async (req, res) => {
             name: `${prod.name}${variant.name ? ` — ${variant.name}` : ''}`,
             price: Number(variant.price) || 0,
             stock: variant.stock == null ? null : Number(variant.stock) || 0,
-            allowBackorder: !!prod.allowBackorder, backorderEta: prod.backorderEta || '',
+            allowBackorder: !!prod.allowBackorder, backorderWeeks: prod.backorderWeeks ?? null, backorderEta: prod.backorderEta || '',
             bulkQty: variant.bulkQty ?? null, bulkPrice: variant.bulkPrice ?? null,
           };
         }
@@ -6308,7 +6308,7 @@ const mainServer = http.createServer(async (req, res) => {
           name: prod.name,
           price: Number(prod.priceAud ?? prod.price) || 0,
           stock: (prod.infiniteStock || prod.stock == null) ? null : Number(prod.stock) || 0,
-          allowBackorder: !!prod.allowBackorder, backorderEta: prod.backorderEta || '',
+          allowBackorder: !!prod.allowBackorder, backorderWeeks: prod.backorderWeeks ?? null, backorderEta: prod.backorderEta || '',
           bulkQty: prod.bulkQty ?? null, bulkPrice: prod.bulkPrice ?? null,
         };
       }

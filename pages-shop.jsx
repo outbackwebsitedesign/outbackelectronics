@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useContext, useRef } from 'react';
 import { getCsrf, ensureCsrf } from './src/lib/api.js';
-import { bulkUnitPrice, hasBulkPrice, bulkOfferAvailable, availableStock, productPrice, isBackorder, onHandStock } from './src/lib/pricing.js';
+import { bulkUnitPrice, hasBulkPrice, bulkOfferAvailable, availableStock, productPrice, isBackorder, onHandStock, backorderLead } from './src/lib/pricing.js';
 import { CONDITION_COLORS } from './src/lib/conditions.js';
 
 const _fallbackShopCtx = React.createContext({});
@@ -1772,7 +1772,7 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
                     style={{width:32, height:32, border:'1px solid var(--line)', background:'var(--bg-elev)', cursor: safeQty >= maxQty ? 'not-allowed' : 'pointer', opacity: safeQty >= maxQty ? 0.4 : 1, fontSize:18}}>+</button>
                 </div>
                 {onBackorder
-                  ? <span className="mono" style={{fontSize:11, color:'var(--ochre)'}}>ON BACKORDER{product.backorderEta ? ` - SHIPS IN ${String(product.backorderEta).toUpperCase()}` : ''}</span>
+                  ? <span className="mono" style={{fontSize:11, color:'var(--ochre)'}}>ON BACKORDER{backorderLead(product) ? ` - SHIPS IN ${backorderLead(product).toUpperCase()}` : ''}</span>
                   : stockLeft !== null && <span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>{stockLeft} AVAILABLE</span>}
               </div>
             )}
