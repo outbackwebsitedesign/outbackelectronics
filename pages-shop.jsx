@@ -404,8 +404,9 @@ function ProductCard({ p, onClick }) {
     displaySku = p.sku;
   }
   const thumb = p.images && p.images.length > 0 ? p.images[0] : null;
+  const soldOut = displayTag === 'Out of stock';
   return (
-    <div className="product" onClick={onClick}>
+    <div className="product" onClick={onClick} style={soldOut ? {opacity:0.62} : undefined}>
       {thumb
         ? <img src={thumbUrl(thumb, 600)} srcSet={thumbSrcSet(thumb, [300, 450, 600])} sizes="(max-width: 600px) 50vw, (max-width: 1100px) 33vw, 300px" alt={(p.imageAlts||{})[thumb] || p.name} loading="lazy" style={{width:'100%', aspectRatio:'4/3', objectFit:'cover', display:'block'}} />
         : <div className="slot" style={{aspectRatio:'4/3'}}>{(p.name || '').toUpperCase()}</div>}
@@ -435,6 +436,7 @@ function readShopParamsFromUrl() {
     min: sp.get('min') || '',
     max: sp.get('max') || '',
     sort: sp.get('sort') || null,
+    oos: sp.get('oos') || '',
     q: sp.get('q') || '',
   };
 }
@@ -447,6 +449,7 @@ function ShopPage({ go, addToCart, pageParams }) {
   const [filterMeta, setFilterMeta] = useState({ categories: [], brands: [], conditions: [] });
   const [selectedBrands, setSelectedBrands] = useState(urlInit.brands);
   const [catalogError, setCatalogError] = useState(null);
+  const [hideOutOfStock, setHideOutOfStock] = useState(urlInit.oos === '1');
   const [priceMin, setPriceMin] = useState(urlInit.min);
   const [priceMax, setPriceMax] = useState(urlInit.max);
   const [query, setQuery] = useState(pageParams?.initialQuery || urlInit.q || '');
@@ -492,12 +495,13 @@ function ShopPage({ go, addToCart, pageParams }) {
     if (selectedBrands.length > 0) sp.set('brands', selectedBrands.join(','));
     if (priceMin !== '') sp.set('min', priceMin);
     if (priceMax !== '') sp.set('max', priceMax);
+    if (hideOutOfStock) sp.set('oos', '1');
     if (sort !== 'relevance') sp.set('sort', sort);
     if (query.trim()) sp.set('q', query.trim());
     const qs = sp.toString();
     const target = qs ? `/shop?${qs}` : '/shop';
     if (location.pathname + location.search !== target) window.history.replaceState({}, '', target);
-  }, [cat, cond, selectedBrands, priceMin, priceMax, sort, query, urlSyncTick]);
+  }, [cat, cond, selectedBrands, priceMin, priceMax, sort, query, hideOutOfStock, urlSyncTick]);
 
   // Restore filters from the URL on back/forward navigation
   useEffect(() => {
@@ -510,14 +514,20 @@ function ShopPage({ go, addToCart, pageParams }) {
       setPriceMin(p.min);
       setPriceMax(p.max);
       setSort(p.sort || 'relevance');
+      setHideOutOfStock(p.oos === '1');
       setQuery(p.q);
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
 
-  const activeFilterCount = [cat !== 'All', cond !== 'Any', selectedBrands.length > 0, priceMin !== '', priceMax !== '', query.trim() !== ''].filter(Boolean).length;
-  const clearFilters = () => { setCat('All'); setCond('Any'); setSelectedBrands([]); setPriceMin(''); setPriceMax(''); setQuery(''); };
+  const inStockNow = p => {
+    if (p.infiniteStock) return true;
+    if (p.variants && p.variants.length > 0) return p.variants.some(v => (Number(v.stock) || 0) > 0);
+    return (Number(p.stock) || 0) > 0;
+  };
+  const activeFilterCount = [cat !== 'All', cond !== 'Any', selectedBrands.length > 0, priceMin !== '', priceMax !== '', query.trim() !== '', hideOutOfStock].filter(Boolean).length;
+  const clearFilters = () => { setCat('All'); setCond('Any'); setSelectedBrands([]); setPriceMin(''); setPriceMax(''); setQuery(''); setHideOutOfStock(false); };
   const filtered = useMemo(() => {
     let f = [...products];
     const q = query.trim().toLowerCase();
@@ -530,13 +540,9 @@ function ShopPage({ go, addToCart, pageParams }) {
     if (cat !== 'All') f = f.filter(p => p.category === cat);
     if (cond !== 'Any') f = f.filter(p => p.cond === cond);
     if (selectedBrands.length > 0) f = f.filter(p => selectedBrands.includes(p.brand));
+    if (hideOutOfStock) f = f.filter(inStockNow);
     const min = parseFloat(priceMin);
     const max = parseFloat(priceMax);
-    const inStockNow = p => {
-      if (p.infiniteStock) return true;
-      if (p.variants && p.variants.length > 0) return p.variants.some(v => (Number(v.stock) || 0) > 0);
-      return (Number(p.stock) || 0) > 0;
-    };
     const effectivePrice = p => {
       if (p.price != null) return p.price;
       if (p.variants && p.variants.length > 0) return Math.min(...p.variants.map(v => v.price));
@@ -556,7 +562,7 @@ function ShopPage({ go, addToCart, pageParams }) {
       f.sort((a,b) => (inStockNow(a) === inStockNow(b)) ? 0 : (inStockNow(a) ? -1 : 1));
     }
     return f;
-  }, [products, cat, cond, selectedBrands, priceMin, priceMax, sort, query]);
+  }, [products, cat, cond, selectedBrands, priceMin, priceMax, sort, query, hideOutOfStock]);
 
   const totalResults = filtered.length;
   const visible = filtered.slice(0, visibleCount);
@@ -628,12 +634,17 @@ function ShopPage({ go, addToCart, pageParams }) {
                 </label>
               ))}
             </div>
+            <hr className="thin" />
+            <label style={{display:'flex', alignItems:'center', gap:8, cursor:'pointer', fontSize:14}}>
+              <input type="checkbox" checked={hideOutOfStock} onChange={e => setHideOutOfStock(e.target.checked)} />
+              Hide out of stock
+            </label>
           </aside>
 
           <div>
             {catalogError && (
               <div role="alert" style={{background:'#fff3f3', border:'1px solid #f5a5a5', borderRadius:6, padding:'12px 16px', marginBottom:18, color:'#c0392b', fontSize:14}}>
-                Unable to load products — {catalogError}. Please refresh the page or try again later.
+                Unable to load products: {catalogError}. Please refresh the page or try again later.
               </div>
             )}
             <div className="row-flex" style={{justifyContent:'space-between', marginBottom: 18, flexWrap:'wrap', gap:10}}>
