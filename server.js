@@ -7095,6 +7095,19 @@ const adminServer = http.createServer(async (req, res) => {
     }
     const products = readProducts();
     const idx = products.findIndex(p => p.id && p.id === body.id);
+    // SKUs identify a line in the cart and resolve a variant at checkout, so a
+    // duplicate silently merges two different things. Reject rather than store.
+    const skuOf = v => String(v || '').trim().toLowerCase();
+    const mySku = skuOf(body.sku);
+    if (mySku) {
+      const clash = products.find((p, i) => i !== idx && skuOf(p.sku) === mySku);
+      if (clash) return json(res, 422, { error: 'duplicate_sku', message: `SKU "${body.sku}" is already used by "${clash.name || clash.id}".` });
+    }
+    const variantSkus = (body.variants || []).map(v => skuOf(v.sku)).filter(Boolean);
+    const dupVariant = variantSkus.find((v, i) => variantSkus.indexOf(v) !== i);
+    if (dupVariant) return json(res, 422, { error: 'duplicate_sku', message: `Two variants share the SKU "${dupVariant}". Variant SKUs must be unique.` });
+    const variantClash = (body.variants || []).find(v => skuOf(v.sku) && products.some((p, i) => i !== idx && (skuOf(p.sku) === skuOf(v.sku) || (p.variants || []).some(pv => skuOf(pv.sku) === skuOf(v.sku)))));
+    if (variantClash) return json(res, 422, { error: 'duplicate_sku', message: `Variant SKU "${variantClash.sku}" is already used by another product.` });
     if (session.role === 'seller') {
       if (idx >= 0 && products[idx].createdBy !== session.staffId) return json(res, 403, { error: 'forbidden' });
       body.createdBy = session.staffId;
