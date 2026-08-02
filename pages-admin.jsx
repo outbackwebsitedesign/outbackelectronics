@@ -4523,6 +4523,20 @@ function skuPrefixFor(category) {
   // sibling categories sharing a code simply share one number sequence.
   return SKU_HOUSE_PREFIX + words[0].slice(0, 3).padEnd(3, 'X');
 }
+// Variant SKUs hang off the product's own: OHE[cat][nnn]-[nn], e.g.
+// OHESOL004-01. Derived from the parent so a variant is always traceable to
+// its product, and only ever filled when blank.
+function nextVariantSku(productSku, variants) {
+  const parent = String(productSku || '').trim();
+  if (!parent) return '';
+  const re = new RegExp(`^${parent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-(\\d+)$`, 'i');
+  const used = (variants || [])
+    .map(v => re.exec(String(v.sku || '')))
+    .filter(Boolean)
+    .map(m => parseInt(m[1], 10));
+  const next = used.length > 0 ? Math.max(...used) + 1 : 1;
+  return `${parent}-${String(next).padStart(2, '0')}`;
+}
 function nextSkuFor(category, rows) {
   const prefix = skuPrefixFor(category);
   if (!prefix) return '';
@@ -4936,8 +4950,8 @@ function AdminProducts({ sessionInfo = {} }) {
                   <input className="input" placeholder="e.g. With Certificate" value={v.name||''} onChange={e => { const vs = [...(form.variants||[])]; vs[i] = {...vs[i], name: e.target.value}; setForm({...form, variants: vs}); }} />
                 </div>
                 <div>
-                  <div style={variantLabelStyle}>SKU</div>
-                  <input className="input" value={v.sku||''} onChange={e => { const vs = [...(form.variants||[])]; vs[i] = {...vs[i], sku: e.target.value}; setForm({...form, variants: vs}); }} />
+                  <div style={variantLabelStyle} title="Auto-filled as the product SKU plus a two digit suffix">SKU</div>
+                  <input className="input" placeholder={nextVariantSku(form.sku, []) || 'SKU'} value={v.sku||''} onChange={e => { const vs = [...(form.variants||[])]; vs[i] = {...vs[i], sku: e.target.value}; setForm({...form, variants: vs}); }} />
                 </div>
                 <div>
                   <div style={variantLabelStyle}>Price AUD</div>
@@ -4982,7 +4996,7 @@ function AdminProducts({ sessionInfo = {} }) {
               )}
             </div>
           ))}
-          <button className="btn btn-ghost btn-sm" style={{marginTop:4}} onClick={() => setForm({...form, variants: [...(form.variants||[]), {sku:'', name:'', price:0, stock:0, bulkQty:'', bulkPrice:''}]})}>Add variant</button>
+          <button className="btn btn-ghost btn-sm" style={{marginTop:4}} onClick={() => setForm({...form, variants: [...(form.variants||[]), {sku: nextVariantSku(form.sku, form.variants), name:'', price:0, stock:0, bulkQty:'', bulkPrice:''}]})}>Add variant</button>
       </OrderPage>
     );
   }
