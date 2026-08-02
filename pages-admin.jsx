@@ -1102,7 +1102,7 @@ function AdminOverview({ go }) {
 // unsaved-changes guard and beforeunload warning without the overlay/panel
 // styling, since this replaces the Orders list in place rather than floating
 // over it.
-function OrderPage({ title, dirty, onClose, footer, children }) {
+function OrderPage({ title, dirty, onClose, footer, children, backLabel = 'Back' }) {
   const confirmingRef = React.useRef(false);
   const dirtyRef = React.useRef(dirty);
   dirtyRef.current = dirty;
@@ -1135,7 +1135,7 @@ function OrderPage({ title, dirty, onClose, footer, children }) {
     <div style={{padding:32, maxWidth:860}}>
       <div className="row-flex" style={{justifyContent:'space-between', marginBottom:18, gap:12}}>
         <button className="btn btn-ghost btn-sm" onClick={requestClose}>
-          <Icon name="chevronLeft" size={12}/> Back to Orders
+          <Icon name="chevronLeft" size={12}/> {backLabel}
         </button>
         {dirty && <span className="mono" title="Unsaved changes" style={{display:'inline-flex', alignItems:'center', gap:4, fontSize:9, letterSpacing:'.08em', color:'var(--ochre)'}}><Icon name="dot" size={8}/> UNSAVED</span>}
       </div>
@@ -1732,7 +1732,7 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
   const maxRefund = Math.max(0, Math.round((amountPaid - (form.refund ? Number(form.refund.amount) || 0 : 0)) * 100) / 100);
 
   return (
-    <OrderPage onClose={onClose} dirty={dirty} title={edit.id ? `Order ${edit.id}` : 'New order'}
+    <OrderPage onClose={onClose} dirty={dirty} backLabel="Back to Orders" title={edit.id ? `Order ${edit.id}` : 'New order'}
       footer={<div className="row-flex" style={{gap:8, justifyContent:'space-between'}}>
         {edit.id
           ? <div className="row-flex" style={{gap:8}}>
@@ -2633,7 +2633,7 @@ function RepairJobDrawer({ card, expenses, customers, staff, onSave, onDelete, o
 
   const S = { mb12:{ marginBottom:12 }, mt20:{ marginTop:20, marginBottom:12 } };
   return (
-    <OrderPage onClose={onClose} dirty={dirty}
+    <OrderPage onClose={onClose} dirty={dirty} backLabel="Back to Repairs"
       title={<span><span className="mono" style={{fontSize:11,color:'var(--rust)',marginRight:8}}>{card.id}</span>{form.t||'Repair Job'}</span>}
       footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
         <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)',borderColor:'var(--rust)'}}
@@ -3121,7 +3121,7 @@ function QuotePage({ edit, quotes, customers, services = [], onClose, onSave, on
   };
 
   return (
-    <OrderPage onClose={onClose} dirty={dirty} title={edit.id ? `Quote ${form.quoteRef || edit.id}` : 'New quote'}
+    <OrderPage onClose={onClose} dirty={dirty} backLabel="Back to Quotes" title={edit.id ? `Quote ${form.quoteRef || edit.id}` : 'New quote'}
       footer={<div className="row-flex" style={{gap:8, justifyContent:'space-between'}}>
         <div className="row-flex" style={{gap:8}}>
           {edit.id && <button className="btn btn-ghost btn-sm" disabled={busy==='pdf'} onClick={doPdf}><Icon name="printer" size={14}/>{busy==='pdf'?'Generating…':'Print PDF'}</button>}
@@ -3646,7 +3646,7 @@ function HddReportPage({ edit, form, set, setForm, sessionInfo, products, dirty,
   jobQuery, setJobQuery, jobDropdownOpen, setJobDropdownOpen, jobMatches, applyJob,
   onClose, onSave, onDelete, onPrintPdf }) {
   return (
-    <OrderPage onClose={onClose} dirty={dirty} title={edit.id ? `Report ${edit.id}` : 'New HDD condition report'}
+    <OrderPage onClose={onClose} dirty={dirty} backLabel="Back to HDD Reports" title={edit.id ? `Report ${edit.id}` : 'New HDD condition report'}
       footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
         {edit.id ? <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={onDelete}>Delete</button> : <span/>}
         <div className="row-flex" style={{gap:8}}>
@@ -4592,7 +4592,7 @@ function AdminProducts({ sessionInfo = {} }) {
 
   if (edit !== null) {
     return (
-      <OrderPage onClose={() => setOpenId(null)} title={edit==='new'?'New product':form.name}
+      <OrderPage onClose={() => setOpenId(null)} backLabel="Back to Products" title={edit==='new'?'New product':form.name}
         footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
           {edit!=='new' && <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={remove}>Delete</button>}
           <div className="row-flex" style={{gap:8, marginLeft:'auto'}}>
@@ -7023,7 +7023,7 @@ function AdminCustomers() {
 
   if (edit !== null) {
     return (
-      <OrderPage onClose={() => setOpenId(null)} title={edit.name || 'New customer'}
+      <OrderPage onClose={() => setOpenId(null)} backLabel="Back to Customers" title={edit.name || 'New customer'}
         footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
           {edit.id && <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={async () => {
             if (!(await adminConfirm('Delete this customer?', { title:'Delete customer', confirmLabel:'Delete', danger:true }))) return;
@@ -7875,7 +7875,7 @@ function AdminExpenses() {
 
   if (edit !== null) {
     return (
-      <OrderPage onClose={closeDrawer} dirty={dirty} title={edit.id ? `Expense — ${form.description || edit.id}` : 'Log expense'}
+      <OrderPage onClose={closeDrawer} dirty={dirty} backLabel="Back to Expenses" title={edit.id ? `Expense — ${form.description || edit.id}` : 'Log expense'}
         footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
           {edit.id ? <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={del}>Delete</button> : <span/>}
           <div className="row-flex" style={{gap:8}}>
