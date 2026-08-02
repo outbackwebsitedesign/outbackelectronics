@@ -1721,7 +1721,8 @@ function resolveOgTags(pathname) {
       const p = products.find(x => x.sku === id || String(x.id) === id || (x.slug && x.slug === id));
       if (p) {
         const price = p.price != null ? ` — $${Number(p.price).toLocaleString('en-AU', { minimumFractionDigits: 2 })}` : '';
-        const desc = p.description ? stripHtml(p.description).slice(0, 160) : `${p.name}. Available at Outback Electronics — rugged gear for remote Australia.`;
+        const body = p.description || p.desc;
+        const desc = body ? stripHtml(body).slice(0, 160) : `${p.name}. Available at Outback Electronics — rugged gear for remote Australia.`;
         return {
           title: `${p.name}${price} — Outback Electronics`,
           description: desc,
@@ -1863,7 +1864,7 @@ function buildJsonLd(og, pathname) {
       '@context': 'https://schema.org',
       '@type': 'Product',
       name: p.name,
-      ...(p.description ? { description: stripHtml(p.description).slice(0, 500) } : {}),
+      ...((p.description || p.desc) ? { description: stripHtml(p.description || p.desc).slice(0, 500) } : {}),
       ...(p.sku ? { sku: p.sku } : {}),
       ...(p.brand ? { brand: { '@type': 'Brand', name: p.brand } } : {}),
       ...(p.images && p.images.length > 0 ? { image: p.images.map(u => (u.startsWith('http') ? u : OG_BASE_URL + u)) } : {}),

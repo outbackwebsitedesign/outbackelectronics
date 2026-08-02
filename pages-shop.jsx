@@ -1715,10 +1715,12 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
               </div>
             )}
 
-            {product.description && (
+            {(product.description || product.desc) && (
               // Descriptions are plain text typed into a textarea, so the line
               // breaks the author put in are the only structure they have.
-              <p style={{color:'var(--ink-2)', fontSize:15, lineHeight:1.7, marginBottom:24, whiteSpace:'pre-wrap'}}>{product.description}</p>
+              // `desc` is the key the editor wrote before it was corrected;
+              // reading it here saves re-saving every older product.
+              <p style={{color:'var(--ink-2)', fontSize:15, lineHeight:1.7, marginBottom:24, whiteSpace:'pre-wrap'}}>{product.description || product.desc}</p>
             )}
 
             {Array.isArray(product.specs) && product.specs.filter(sp => sp && (sp.name || sp.value)).length > 0 && (
