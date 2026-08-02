@@ -175,6 +175,7 @@ const PORTAL_SESSIONS_DB_PATH = path.join(__dirname, 'portal-sessions.db');
 const RESET_TOKENS_DB_PATH = path.join(__dirname, 'password-reset-tokens.db');
 const CARTS_DB_PATH = path.join(__dirname, 'carts.db');
 const CART_ACTIVITY_DB_PATH = path.join(__dirname, 'cart-activity.db');
+const RESERVATIONS_DB_PATH = path.join(__dirname, 'reservations.db');
 const STOCK_NOTIFY_DB_PATH = path.join(__dirname, 'stock-notify.db');
 const RAG_CACHE_DB_PATH = path.join(__dirname, 'rag-cache.db');
 const RESET_TOKEN_TTL_MS = 1000 * 60 * 60; // 1 hour
@@ -459,6 +460,105 @@ function readServices() {
 function writeServices(services) { atomicWriteFile(SERVICES_DB_PATH, JSON.stringify({ services }, null, 2)); }
 
 function readCatalog() { return { products: readProducts(), services: readServices() }; }
+
+// ── Stock reservations ───────────────────────────────────────────────────────
+// Stock used to be taken only once payment completed, so two customers could
+// both pass the availability check for the last unit, both pay, and one order
+// be unfillable. Units are now taken when the Stripe session is created and
+// handed back if that session is abandoned, so the second customer is refused
+// at checkout instead of finding out later.
+const RESERVATION_TTL_MS = 35 * 60 * 1000;
+function readReservations() {
+  try { const p = JSON.parse(cachedReadFile(RESERVATIONS_DB_PATH)); return Array.isArray(p.reservations) ? p.reservations : []; }
+  catch { return []; }
+}
+function writeReservations(reservations) { atomicWriteFile(RESERVATIONS_DB_PATH, JSON.stringify({ reservations }, null, 2)); }
+
+// Apply a stock delta to a product or one of its variants. Positive returns
+// units, negative takes them.
+function adjustStock(prods, productId, variantSku, delta) {
+  const idx = prods.findIndex(p => p.id === productId);
+  if (idx < 0) return false;
+  const prod = prods[idx];
+  if (prod.infiniteStock) return false;
+  if (variantSku && Array.isArray(prod.variants) && prod.variants.length > 0) {
+    const vi = prod.variants.findIndex(v => v.sku === variantSku);
+    if (vi < 0 || prod.variants[vi].stock == null) return false;
+    const variants = [...prod.variants];
+    variants[vi] = { ...variants[vi], stock: Math.max(0, (Number(variants[vi].stock) || 0) + delta) };
+    prods[idx] = { ...prod, variants };
+    return true;
+  }
+  if (prod.stock == null) return false;
+  prods[idx] = { ...prod, stock: Math.max(0, (Number(prod.stock) || 0) + delta) };
+  return true;
+}
+
+// Hand back anything whose checkout was abandoned. Called before every
+// availability check so an abandoned cart never holds stock hostage.
+function releaseExpiredReservations() {
+  const all = readReservations();
+  const now = Date.now();
+  const expired = all.filter(r => Number(r.expiresAt) <= now);
+  if (expired.length === 0) return;
+  const prods = readProducts();
+  let changed = false;
+  for (const r of expired) {
+    for (const it of (r.items || [])) {
+      if (adjustStock(prods, it.productId, it.variantSku || null, Number(it.quantity) || 0)) changed = true;
+    }
+  }
+  if (changed) writeProducts(prods);
+  writeReservations(all.filter(r => Number(r.expiresAt) > now));
+}
+
+// Take the units for a checkout. Re-checks availability against current stock
+// under the same read, so whoever gets here first wins and the next customer
+// is told it has gone. Returns null on success or the unavailable item's name.
+function reserveStock(key, items) {
+  const prods = readProducts();
+  for (const it of items) {
+    const prod = prods.find(p => p.id === it.productId);
+    if (!prod || prod.infiniteStock) continue;
+    const have = stockOnHand(prod, it.variantSku || null);
+    if (have < (Number(it.quantity) || 0)) return prod.name || it.productId;
+  }
+  let changed = false;
+  for (const it of items) {
+    if (adjustStock(prods, it.productId, it.variantSku || null, -(Number(it.quantity) || 0))) changed = true;
+  }
+  if (changed) writeProducts(prods);
+  const all = readReservations().filter(r => r.key !== key);
+  all.push({ key, items, expiresAt: Date.now() + RESERVATION_TTL_MS });
+  writeReservations(all);
+  return null;
+}
+
+// The sale went through: drop the record without returning the units, which
+// were taken when the reservation was made. Returns true if one existed, so
+// callers know not to decrement a second time.
+function consumeReservation(key) {
+  const all = readReservations();
+  if (!all.some(r => r.key === key)) return false;
+  writeReservations(all.filter(r => r.key !== key));
+  return true;
+}
+
+// Checkout could not be started: give the units straight back.
+function releaseReservation(key) {
+  const all = readReservations();
+  const mine = all.filter(r => r.key === key);
+  if (mine.length === 0) return;
+  const prods = readProducts();
+  let changed = false;
+  for (const r of mine) {
+    for (const it of (r.items || [])) {
+      if (adjustStock(prods, it.productId, it.variantSku || null, Number(it.quantity) || 0)) changed = true;
+    }
+  }
+  if (changed) writeProducts(prods);
+  writeReservations(all.filter(r => r.key !== key));
+}
 
 // ── SKU generation ───────────────────────────────────────────────────────────
 // House format: OHE[cat][nnn] for a product, OHE[cat][nnn]-[nn] for a variant.
@@ -5234,6 +5334,8 @@ const mainServer = http.createServer(async (req, res) => {
     if (!rawLineItems) return json(res, 422, { error: 'missing_fields', message: 'items array or name+priceAud required' });
     if (rawLineItems.length > 100) return json(res, 422, { error: 'too_many_items', message: 'A checkout can contain at most 100 line items.' });
 
+    // Hand back stock held by abandoned checkouts before reading availability.
+    try { releaseExpiredReservations(); } catch (err) { console.error('[reservations]', err && err.message); }
     // Resolve authoritative server-side prices from the catalog.
     // Client-supplied priceAud is ignored for any item with a recognised productId.
     const catalogProducts = readProducts();
@@ -5288,7 +5390,7 @@ const mainServer = http.createServer(async (req, res) => {
             error: 'insufficient_stock',
             message: catalogEntry.stock > 0
               ? `Only ${catalogEntry.stock} of "${catalogEntry.name}" ${catalogEntry.stock === 1 ? 'is' : 'are'} available.`
-              : `"${catalogEntry.name}" is out of stock.`,
+              : `"${catalogEntry.name}" is no longer in stock.`,
           });
         }
         const resolvedPrice = Number(catalogEntry.priceAud);
@@ -5643,15 +5745,36 @@ const mainServer = http.createServer(async (req, res) => {
     if (shippingServiceName) params['payment_intent_data[metadata][shippingService]'] = shippingServiceName;
     if (customerEmail) params['customer_email'] = customerEmail;
 
+    // Take the stock now, not when payment lands. Whoever reaches this line
+    // first gets the units; anyone behind them is refused above rather than
+    // paying for something that has already gone.
+    const reservationItems = stockableItems.map(li => ({
+      productId: li.productId, variantSku: li.variantSku || null, quantity: li.quantity || 1,
+    }));
+    const reservationKey = 'pending-' + crypto.randomBytes(12).toString('hex');
+    if (reservationItems.length > 0) {
+      const soldOut = reserveStock(reservationKey, reservationItems);
+      if (soldOut) {
+        return json(res, 409, { error: 'insufficient_stock', message: `"${soldOut}" is no longer in stock.` });
+      }
+      params['metadata[reservationKey]'] = reservationKey;
+      params['payment_intent_data[metadata][reservationKey]'] = reservationKey;
+      // Give the units back well before Stripe's own session expiry, so an
+      // abandoned checkout does not sit on stock for a day.
+      params['expires_at'] = String(Math.floor((Date.now() + 30 * 60 * 1000) / 1000));
+    }
+
     let resp;
     try { resp = await stripeRequest('POST', '/v1/checkout/sessions', params); }
     catch (err) {
       console.error('[checkout] stripeRequest threw:', err);
+      releaseReservation(reservationKey);
       return json(res, 502, { error: 'stripe_error', message: 'Payment provider unreachable. Please try again.' });
     }
     if (!resp || resp.status !== 200) {
       const stripeMsg = resp?.body?.error?.message || '';
       console.error('[checkout] Stripe error response:', resp?.status, stripeMsg);
+      releaseReservation(reservationKey);
       return json(res, 502, { error: 'stripe_error', message: stripeMsg || 'Payment provider error. Please try again.' });
     }
     return json(res, 200, { url: resp.body.url, sessionId: resp.body.id });
@@ -5961,7 +6084,11 @@ const mainServer = http.createServer(async (req, res) => {
         const stockItems = cartItemsMeta
           ? cartItemsMeta.split('|').map(entry => { const [pid, vsku, qty] = entry.split(':'); return { productId: pid, variantSku: vsku === '_' ? null : vsku, quantity: Number(qty) || 1 }; })
           : (productId && !productId.startsWith('gc-') ? [{ productId, variantSku: null, quantity: 1 }] : []);
-        if (stockItems.length > 0) {
+        // The units were taken when the checkout session was created, so the
+        // sale only needs to drop the reservation. Older sessions created
+        // before reservations existed still fall through to decrementing here.
+        const reserved = meta.reservationKey ? consumeReservation(meta.reservationKey) : false;
+        if (stockItems.length > 0 && !reserved) {
           const prods = readProducts();
           let stockChanged = false;
           for (const si of stockItems) {

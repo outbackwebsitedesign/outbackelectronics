@@ -382,6 +382,12 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, r
       else if (checkoutMode === 'plan' && data.ok && data.url) { window.location.href = data.url; }
       else if (data.url && (data.fullyCoveredByGiftCard || data.url.startsWith('https://checkout.stripe.com/'))) { window.location.href = data.url; }
       else if (data.url) { setError('Unexpected redirect URL from payment provider.'); }
+      else if (data.error === 'insufficient_stock') {
+        // Someone else took the last of it while this cart sat open. Force a
+        // revalidation so the cart corrects itself rather than retrying blind.
+        setError(data.message || 'One of your items is no longer in stock.');
+        setRevalidated(false);
+      }
       else setError(data.message || 'Checkout failed. Please try again.');
     } catch (err) {
       setError('Could not connect to payment provider. Please try again.');
