@@ -18,8 +18,8 @@ This mistake was made once and wiped the entire live database. Do not let it hap
 ## Writing style
 
 **Never use em dashes (—).** Not in UI copy, not in code comments, not in commit
-messages, not in chat replies. Use a comma, a colon, a full stop, or brackets
-instead. This applies to every string that ships and every word written about
+messages, not in chat replies. Use a hyphen, a comma, a colon, a full stop, or
+brackets instead. This applies to every string that ships and every word written about
 the code.
 
 ## Git workflow

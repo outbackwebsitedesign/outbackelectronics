@@ -4511,6 +4511,28 @@ function CatalogList({ title, columns, initial, drawer, addLabel }) {
 // ============================================================
 // Column captions for the variant editor rows. `.label` is scoped to
 // `label.field > .label` in the page CSS, so these need their own styling.
+// Auto-generated SKUs: a short prefix from the category plus the next free
+// number for that prefix, e.g. "Solar Panels" -> SOL-004. Only ever suggested
+// for a product with no SKU yet, so a SKU already in use is never rewritten.
+function skuPrefixFor(category) {
+  const words = String(category || '').toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '';
+  // First word, not initials: "Solar Panels" reads better as SOL than SPX, and
+  // sibling categories sharing a prefix simply share one number sequence.
+  return words[0].slice(0, 3).padEnd(3, 'X');
+}
+function nextSkuFor(category, rows) {
+  const prefix = skuPrefixFor(category);
+  if (!prefix) return '';
+  const re = new RegExp(`^${prefix}-(\\d+)$`, 'i');
+  const used = rows
+    .map(r => re.exec(String(r.sku || '')))
+    .filter(Boolean)
+    .map(m => parseInt(m[1], 10));
+  const next = used.length > 0 ? Math.max(...used) + 1 : 1;
+  return `${prefix}-${String(next).padStart(3, '0')}`;
+}
+
 const variantLabelStyle = { fontSize:10, letterSpacing:'.08em', textTransform:'uppercase', color:'var(--ink-3)', marginBottom:4 };
 
 function AdminProducts({ sessionInfo = {} }) {
@@ -4727,7 +4749,10 @@ function AdminProducts({ sessionInfo = {} }) {
             </div>
           </div>
           <div className="grid-2" style={{gap:14}}>
-            <label className="field"><span className="label">SKU</span><input className="input" value={form.sku||''} onChange={e=>setForm({...form, sku:e.target.value})}/></label>
+            <label className="field">
+              <span className="label">SKU <span style={{fontWeight:400, color:'var(--ink-3)', fontSize:11}}>auto-filled from the category, editable</span></span>
+              <input className="input" value={form.sku||''} onChange={e=>setForm({...form, sku:e.target.value})}/>
+            </label>
             <label className="field"><span className="label">Status</span>
               <select className="select" value={form.status||'draft'} onChange={e=>setForm({...form, status:e.target.value})}>
                 <option value="draft">Draft</option><option value="published">Published</option>
@@ -4739,13 +4764,20 @@ function AdminProducts({ sessionInfo = {} }) {
             <label className="field"><span className="label">Category</span>
               <select className="select" value={!newCat && catOptions.includes(form.cat) ? form.cat : '__new__'} onChange={e => {
                 if (e.target.value === '__new__') { setNewCat(true); setForm({...form, cat: ''}); }
-                else { setNewCat(false); setForm({...form, cat: e.target.value}); }
+                else {
+                  setNewCat(false);
+                  // Only fill a SKU that is still blank; never overwrite one.
+                  setForm({...form, cat: e.target.value, sku: form.sku || nextSkuFor(e.target.value, rows)});
+                }
               }}>
                 {catOptions.map(c => <option key={c} value={c}>{c}</option>)}
                 <option value="__new__">+ New category…</option>
               </select>
               {(newCat || !catOptions.includes(form.cat)) && (
-                <input className="input" style={{marginTop:6}} placeholder="Type new category name" value={form.cat||''} onChange={e=>setForm({...form, cat:e.target.value})} autoFocus />
+                <input className="input" style={{marginTop:6}} placeholder="Type new category name" value={form.cat||''}
+                  onChange={e=>setForm({...form, cat:e.target.value})}
+                  onBlur={e=>{ if (!form.sku && e.target.value.trim()) setForm(f => ({...f, sku: nextSkuFor(e.target.value, rows)})); }}
+                  autoFocus />
               )}
             </label>
             <label className="field"><span className="label">Condition</span>
