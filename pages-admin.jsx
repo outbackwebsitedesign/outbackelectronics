@@ -4570,49 +4570,79 @@ function AdminProducts({ sessionInfo = {} }) {
     if (r) { setEdit(r); setForm(r); }
   }, [openId, rows]);
 
+  // A failed save used to fall through to the same optimistic row update as a
+  // successful one, so a 403, a 422 or a dropped connection looked identical to
+  // success and left the admin believing a product was saved when it was not.
+  const [saveError, setSaveError] = useState(null);
+  const [saving, setSaving] = useState(false);
   const save = async () => {
+    if (saving) return;
+    setSaving(true);
+    setSaveError(null);
     const item = { ...form, category: form.cat };
     const r = await fetch('/api/admin/catalog/products/save', {
       method: 'POST', headers: postHeaders(),
       credentials: 'include', body: JSON.stringify(item),
     }).catch(() => null);
-    if (r && r.ok) {
-      const d = await r.json();
-      // The API speaks `category`; the table rows use `cat`. Without this the
-      // saved row's Category column reads blank until the next page load.
-      const saved = { ...d.item, cat: d.item.category };
-      if (edit === 'new') setRows(rs => [...rs, saved]);
-      else setRows(rs => rs.map(row => row.id === edit.id ? saved : row));
-      if (saved.cat && !catOptions.includes(saved.cat)) setCatOptions(cs => [...cs, saved.cat].sort());
-    } else {
-      if (edit === 'new') setRows(rs => [...rs, item]);
-      else setRows(rs => rs.map(row => row.id === edit.id ? item : row));
-      if (item.cat && !catOptions.includes(item.cat)) setCatOptions(cs => [...cs, item.cat].sort());
+    if (!r) { setSaving(false); setSaveError('Could not reach the server. Your changes have not been saved.'); return; }
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      setSaving(false);
+      setSaveError(d.message || `Save failed (${r.status}). Your changes have not been saved.`);
+      return;
     }
+    const d = await r.json().catch(() => ({}));
+    if (!d.item) { setSaving(false); setSaveError('The server returned an unexpected response. Reload before making further changes.'); return; }
+    // The API speaks `category`; the table rows use `cat`. Without this the
+    // saved row's Category column reads blank until the next page load.
+    const saved = { ...d.item, cat: d.item.category };
+    if (edit === 'new') setRows(rs => [...rs, saved]);
+    else setRows(rs => rs.map(row => row.id === edit.id ? saved : row));
+    if (saved.cat && !catOptions.includes(saved.cat)) setCatOptions(cs => [...cs, saved.cat].sort());
+    setSaving(false);
     setOpenId(null);
   };
   const remove = async () => {
     const item = edit;
-    await fetch('/api/admin/catalog/products/delete', {
+    if (!await adminConfirm(`Delete "${item.name || 'this product'}"? This cannot be undone.`, { title: 'Delete product', confirmLabel: 'Delete', danger: true })) return;
+    setSaveError(null);
+    const r = await fetch('/api/admin/catalog/products/delete', {
       method: 'POST', headers: postHeaders(),
       credentials: 'include', body: JSON.stringify({ id: item.id }),
     }).catch(() => null);
+    if (!r || !r.ok) {
+      const d = r ? await r.json().catch(() => ({})) : {};
+      setSaveError(d.message || 'Delete failed. The product has not been removed.');
+      return;
+    }
     setRows(rs => rs.filter(row => row.id !== item.id));
     setOpenId(null);
   };
+  const [bulkError, setBulkError] = useState(null);
   const moveAllToDraft = async () => {
-    setRows(rs => rs.map(r => ({ ...r, status:'draft' })));
-    await fetch('/api/admin/catalog/products/status', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ status:'draft' }) }).catch(() => {});
+    if (!await adminConfirm(
+      `Unpublish all ${rows.length} products? Every listing comes off the public shop until republished individually.`,
+      { title: 'Move all to draft', confirmLabel: 'Unpublish all', danger: true },
+    )) return;
+    setBulkError(null);
+    const r = await fetch('/api/admin/catalog/products/status', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ status:'draft' }) }).catch(() => null);
+    if (!r || !r.ok) { setBulkError('Could not move products to draft. Nothing has been changed.'); return; }
+    setRows(rs => rs.map(r2 => ({ ...r2, status:'draft' })));
   };
 
   if (edit !== null) {
     return (
       <OrderPage onClose={() => setOpenId(null)} backLabel="Back to Products" title={edit==='new'?'New product':form.name}
-        footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
-          {edit!=='new' && <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={remove}>Delete</button>}
-          <div className="row-flex" style={{gap:8, marginLeft:'auto'}}>
-            <button className="btn btn-ghost btn-sm" onClick={() => setOpenId(null)}>Cancel</button>
-            <button className="btn btn-sm" onClick={save}>Save</button>
+        footer={<div>
+          {saveError && (
+            <div role="alert" style={{marginBottom:12, padding:'10px 14px', border:'1px solid var(--rust)', color:'var(--rust)', fontSize:13}}>{saveError}</div>
+          )}
+          <div className="row-flex" style={{justifyContent:'space-between'}}>
+            {edit!=='new' && <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={remove}>Delete</button>}
+            <div className="row-flex" style={{gap:8, marginLeft:'auto'}}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setOpenId(null)}>Cancel</button>
+              <button className="btn btn-sm" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+            </div>
           </div>
         </div>}
       >
@@ -4870,6 +4900,9 @@ function AdminProducts({ sessionInfo = {} }) {
         <button className="btn btn-ghost btn-sm" style={{color:'var(--ink-2)'}} onClick={moveAllToDraft}>Move all to draft</button>
         <button className="btn btn-rust btn-sm" onClick={() => setOpenId('new')}>+ New product</button>
       </div>
+      {bulkError && (
+        <div role="alert" style={{marginBottom:12, padding:'10px 14px', border:'1px solid var(--rust)', color:'var(--rust)', fontSize:13}}>{bulkError}</div>
+      )}
       <Table
         columns={[
           { key:'sku', label:'SKU', w:'130px', render:r => <span className="mono" style={{fontSize:11, color:'var(--rust)'}}>{r.sku}</span> },
