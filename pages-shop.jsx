@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useContext, useRef } from 'react';
 import { getCsrf, ensureCsrf } from './src/lib/api.js';
+import { hasBulkPrice, bulkOfferAvailable, availableStock } from './src/lib/pricing.js';
 
 const _fallbackShopCtx = React.createContext({});
 const useShop = () => useContext(window.__ShopContext__ || _fallbackShopCtx);
@@ -1553,6 +1554,15 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
     : hasVariants
       ? (selectedVariant ? (selectedVariant.stock || 0) > 0 : false)
       : product.stock > 0;
+  // Bulk pricing hangs off whichever entry owns the price and the stock.
+  const priced = hasVariants ? selectedVariant : product;
+  const bulkQty = Math.floor(Number(priced?.bulkQty) || 0);
+  // The bulk rate is the same units at a lower price, not a separate pool —
+  // once fewer than bulkQty remain the threshold is unreachable, so the offer
+  // stops being shown rather than becoming a promise we can't honour.
+  const bulkAvailable = bulkOfferAvailable(priced);
+  const bulkSoldDown = hasBulkPrice(priced) && !bulkAvailable;
+  const stockLeft = availableStock(priced);
 
   return (
     <>
@@ -1623,6 +1633,27 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
                     );
                   })}
                 </div>
+              </div>
+            )}
+
+            {(bulkAvailable || bulkSoldDown) && (
+              <div style={{marginBottom:24, padding:'12px 16px', border:'1px solid var(--line)', background:'var(--bg-elev)'}}>
+                {bulkAvailable ? (
+                  <>
+                    <div style={{fontSize:14}}>
+                      Buy <strong>{bulkQty} or more</strong> for <strong>${Number(priced.bulkPrice).toLocaleString()} each</strong>
+                      <span style={{color:'var(--ink-3)'}}> — save ${((Number(priced.price) - Number(priced.bulkPrice)) * bulkQty).toLocaleString()}</span>
+                    </div>
+                    <button className="btn btn-ghost btn-sm" style={{marginTop:10}}
+                      onClick={() => { addToCart(hasVariants ? { ...product, ...selectedVariant, _variantSku: selectedVariant.sku || selectedVariant.name || '' } : product, bulkQty); }}>
+                      Add {bulkQty} to Cart
+                    </button>
+                  </>
+                ) : (
+                  <div className="mono" style={{fontSize:12, color:'var(--ink-3)'}}>
+                    Bulk price unavailable — only {stockLeft} left, {bulkQty} needed.
+                  </div>
+                )}
               </div>
             )}
 

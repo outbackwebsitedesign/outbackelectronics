@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getCsrf, ensureCsrf } from './src/lib/api.js';
+import { bulkUnitPrice, hasBulkPrice, availableStock } from './src/lib/pricing.js';
 
 const PageHead = window.PageHead;
 const ErrorText = window.ErrorText;
@@ -170,7 +171,9 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, p
     }
   };
 
-  const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  // Bulk pricing is per line: crossing the threshold reprices every unit on
+  // that line, so the unit price has to be recomputed from the current qty.
+  const subtotal = cart.reduce((s, i) => s + bulkUnitPrice(i, i.qty) * i.qty, 0);
   const discount = gc ? gc.discount : 0;
   const shippingCost = selectedShipping ? selectedShipping.price : 0;
   const preRewardsTotal = Math.max(0, subtotal + shippingCost - discount);
@@ -291,7 +294,7 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, p
     setCheckingOut(true);
     setError(null);
     try {
-      const items = cart.map(i => ({ name: i.name, priceAud: i.price, quantity: i.qty, productId: i.id || i.sku || '', variantSku: i._variantSku || null }));
+      const items = cart.map(i => ({ name: i.name, priceAud: bulkUnitPrice(i, i.qty), quantity: i.qty, productId: i.id || i.sku || '', variantSku: i._variantSku || null }));
       const body = { items };
       if (checkoutMode === 'full') {
         if (gc) body.giftCardCode = gc.code;
@@ -368,20 +371,34 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, p
             </div>
             {cart.map((item) => {
               const key = item.sku || item.id || item.name;
+              const unitPrice = bulkUnitPrice(item, item.qty);
+              const bulkActive = hasBulkPrice(item) && unitPrice < (Number(item.price) || 0);
+              const stock = availableStock(item);
+              const atStockLimit = stock !== null && item.qty >= stock;
+              // How many more units until the bulk rate kicks in — only worth
+              // showing while there is enough stock left to actually get there.
+              const toBulk = hasBulkPrice(item) && !bulkActive && (stock === null || stock >= Number(item.bulkQty))
+                ? Math.floor(Number(item.bulkQty)) - item.qty : 0;
               return (
                 <div key={key} className="cart-item-row" style={{display:'grid', gridTemplateColumns:'1fr 120px 100px 40px', padding:'18px 0', borderBottom:'1px solid var(--line)', alignItems:'center', gap:8}}>
                   <div>
                     <div style={{fontWeight:600, fontSize:15}}>{item.name}</div>
                     {item.sku && <div className="mono" style={{fontSize:11, color:'var(--ink-3)', marginTop:3}}>SKU: {item.sku}</div>}
                     {item.cond && <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:2}}>{item.cond}</div>}
+                    {toBulk > 0 && (
+                      <div className="mono" style={{fontSize:11, color:'var(--eucalyptus)', marginTop:4}}>
+                        Add {toBulk} more for ${Number(item.bulkPrice).toLocaleString()} each
+                      </div>
+                    )}
                   </div>
                   <div style={{display:'flex', alignItems:'center', justifyContent:'center', gap:6}}>
                     <button onClick={() => updateQty(key, item.qty - 1)} aria-label={`Decrease quantity of ${item.name}`} style={{width:28, height:28, border:'1px solid var(--line)', background:'var(--bg-elev)', cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center'}}>−</button>
                     <span className="mono" aria-label={`Quantity of ${item.name}`} style={{fontSize:14, minWidth:20, textAlign:'center'}}>{item.qty}</span>
-                    <button onClick={() => updateQty(key, item.qty + 1)} aria-label={`Increase quantity of ${item.name}`} style={{width:28, height:28, border:'1px solid var(--line)', background:'var(--bg-elev)', cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center'}}>+</button>
+                    <button onClick={() => updateQty(key, item.qty + 1)} disabled={atStockLimit} title={atStockLimit ? 'No more stock available' : undefined} aria-label={`Increase quantity of ${item.name}`} style={{width:28, height:28, border:'1px solid var(--line)', background:'var(--bg-elev)', cursor: atStockLimit ? 'not-allowed' : 'pointer', opacity: atStockLimit ? 0.4 : 1, fontSize:16, display:'flex', alignItems:'center', justifyContent:'center'}}>+</button>
                   </div>
                   <div style={{textAlign:'right', fontFamily:'Instrument Serif,serif', fontSize:18, color:'var(--rust)'}}>
-                    ${(item.price * item.qty).toLocaleString()}
+                    ${(unitPrice * item.qty).toLocaleString()}
+                    {bulkActive && <div className="mono" style={{fontSize:10, color:'var(--eucalyptus)', marginTop:2}}>BULK ${unitPrice} EA</div>}
                   </div>
                   <div style={{textAlign:'center'}}>
                     <button onClick={() => removeFromCart(key)} title="Remove" aria-label={`Remove ${item.name} from cart`} style={{background:'none', border:'none', cursor:'pointer', color:'var(--ink-3)', fontSize:18, lineHeight:1}}>×</button>
@@ -400,7 +417,7 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, p
                 return (
                   <div key={key} style={{display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:8, color:'var(--ink-2)'}}>
                     <span>{item.name} × {item.qty}</span>
-                    <span>${(item.price * item.qty).toLocaleString()}</span>
+                    <span>${(bulkUnitPrice(item, item.qty) * item.qty).toLocaleString()}</span>
                   </div>
                 );
               })}

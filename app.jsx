@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback, createContext, useContext } from 'react';
 import { getCsrf, ensureCsrf, makePortalHelpers } from './src/lib/api.js';
+import { availableStock } from './src/lib/pricing.js';
 
 const ShopContext = createContext({});
 const useShop = () => useContext(ShopContext);
@@ -1131,18 +1132,25 @@ function App() {
   // Expose go() for components rendered outside App's prop chain (e.g. PageHead breadcrumbs)
   useEffect(() => { window.__OE_GO__ = go; });
 
-  const addToCart = (item) => {
+  // Never let the cart hold more units than exist — checkout rejects an
+  // over-stock line outright, so catching it here avoids a dead end at payment.
+  const capToStock = (item, qty) => {
+    const stock = availableStock(item);
+    if (stock === null) return Math.max(1, qty);
+    return Math.max(1, Math.min(qty, stock));
+  };
+  const addToCart = (item, qty = 1) => {
     const key = item.sku || item.id || item.name;
     setCart(prev => {
       const existing = prev.find(i => (i.sku || i.id || i.name) === key);
-      if (existing) return prev.map(i => (i.sku || i.id || i.name) === key ? { ...i, qty: i.qty + 1 } : i);
-      return [...prev, { ...item, qty: 1 }];
+      if (existing) return prev.map(i => (i.sku || i.id || i.name) === key ? { ...i, qty: capToStock(i, i.qty + qty) } : i);
+      return [...prev, { ...item, qty: capToStock(item, qty) }];
     });
   };
   const removeFromCart = (key) => setCart(prev => prev.filter(i => (i.sku || i.id || i.name) !== key));
   const updateQty = (key, qty) => {
     if (qty < 1) { removeFromCart(key); return; }
-    setCart(prev => prev.map(i => (i.sku || i.id || i.name) === key ? { ...i, qty } : i));
+    setCart(prev => prev.map(i => (i.sku || i.id || i.name) === key ? { ...i, qty: capToStock(i, qty) } : i));
   };
   const clearCart = () => setCart([]);
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);

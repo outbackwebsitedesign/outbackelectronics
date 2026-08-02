@@ -4684,6 +4684,22 @@ function AdminProducts({ sessionInfo = {} }) {
             </label>
           )}
           <div className="grid-2" style={{gap:14}}>
+            <label className="field">
+              <span className="label">Bulk from qty <span style={{fontWeight:400, color:'var(--ink-3)', fontSize:11}}>optional — 0 for none</span></span>
+              <input className="input" type="number" min="0" step="1" placeholder="0" value={form.bulkQty||''} onChange={e=>setForm({...form, bulkQty:e.target.value ? Number(e.target.value) : ''})} />
+            </label>
+            <label className="field">
+              <span className="label">Bulk price each (AUD)</span>
+              <input className="input" type="number" min="0" step="0.01" placeholder="0.00" value={form.bulkPrice||''} onChange={e=>setForm({...form, bulkPrice:e.target.value ? Number(e.target.value) : ''})} />
+            </label>
+          </div>
+          {!!(form.bulkQty && form.bulkPrice) && (
+            <div style={{fontSize:12, color:'var(--ink-2)', marginTop:-6, marginBottom:4}}>
+              Buying {form.bulkQty}+ charges ${Number(form.bulkPrice).toLocaleString()} each instead of ${Number(form.price||0).toLocaleString()}.
+              {' '}The offer hides itself once stock drops below {form.bulkQty}.
+            </div>
+          )}
+          <div className="grid-2" style={{gap:14}}>
             <div></div>
             <div className="field">
               <span className="label">Stock on hand</span>
@@ -4751,7 +4767,7 @@ function AdminProducts({ sessionInfo = {} }) {
           <div className="eyebrow" style={{marginTop:18, marginBottom:10}}>VARIANTS</div>
           {(form.variants || []).map((v, i) => (
             <div key={i} style={{marginBottom:14, padding:10, border:'1px solid var(--line)', background:'var(--bg-elev)'}}>
-              <div style={{display:'grid', gridTemplateColumns:'1.5fr 1.2fr 80px 70px 28px', gap:8, alignItems:'end', marginBottom: (form.images||[]).length > 0 ? 8 : 0}}>
+              <div style={{display:'grid', gridTemplateColumns:'1.4fr 1fr 80px 70px 80px 80px 28px', gap:8, alignItems:'end', marginBottom: (form.images||[]).length > 0 ? 8 : 0}}>
                 <div>
                   <div style={variantLabelStyle}>Name</div>
                   <input className="input" placeholder="e.g. With Certificate" value={v.name||''} onChange={e => { const vs = [...(form.variants||[])]; vs[i] = {...vs[i], name: e.target.value}; setForm({...form, variants: vs}); }} />
@@ -4767,6 +4783,14 @@ function AdminProducts({ sessionInfo = {} }) {
                 <div>
                   <div style={variantLabelStyle}>Stock</div>
                   <input className="input" type="number" value={v.stock||0} onChange={e => { const vs = [...(form.variants||[])]; vs[i] = {...vs[i], stock: Number(e.target.value)}; setForm({...form, variants: vs}); }} />
+                </div>
+                <div>
+                  <div style={variantLabelStyle} title="Buy this many or more to get the bulk price. 0 = no bulk price.">Bulk qty</div>
+                  <input className="input" type="number" min="0" step="1" placeholder="0" value={v.bulkQty||''} onChange={e => { const vs = [...(form.variants||[])]; vs[i] = {...vs[i], bulkQty: e.target.value ? Number(e.target.value) : ''}; setForm({...form, variants: vs}); }} />
+                </div>
+                <div>
+                  <div style={variantLabelStyle} title="Unit price once the bulk quantity is reached.">Bulk ea</div>
+                  <input className="input" type="number" min="0" step="0.01" placeholder="0.00" value={v.bulkPrice||''} onChange={e => { const vs = [...(form.variants||[])]; vs[i] = {...vs[i], bulkPrice: e.target.value ? Number(e.target.value) : ''}; setForm({...form, variants: vs}); }} />
                 </div>
                 <button className="icon-btn" title="Remove variant" aria-label="Remove variant" onClick={() => { const vs = (form.variants||[]).filter((_,j) => j!==i); setForm({...form, variants: vs}); }}>×</button>
               </div>
@@ -4795,7 +4819,7 @@ function AdminProducts({ sessionInfo = {} }) {
               )}
             </div>
           ))}
-          <button className="btn btn-ghost btn-sm" style={{marginTop:4}} onClick={() => setForm({...form, variants: [...(form.variants||[]), {sku:'', name:'', price:0, stock:0}]})}>Add variant</button>
+          <button className="btn btn-ghost btn-sm" style={{marginTop:4}} onClick={() => setForm({...form, variants: [...(form.variants||[]), {sku:'', name:'', price:0, stock:0, bulkQty:'', bulkPrice:''}]})}>Add variant</button>
       </OrderPage>
     );
   }

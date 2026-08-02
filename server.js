@@ -377,6 +377,24 @@ function writeServices(services) { atomicWriteFile(SERVICES_DB_PATH, JSON.string
 
 function readCatalog() { return { products: readProducts(), services: readServices() }; }
 
+// Bulk ("buy N or more") unit price. A product — or a variant, when the
+// product has variants — may carry a `bulkQty` threshold and a `bulkPrice`
+// unit rate; reaching the threshold reprices every unit on that line.
+//
+// The base price is passed in rather than read off the entry because products
+// and variants keep it under different keys (priceAud vs price).
+//
+// Mirrors bulkUnitPrice() in src/lib/pricing.js, which the shop and cart use
+// to preview the price. This copy is what the customer is actually charged —
+// keep the two in step.
+function applyBulkPrice(entry, qty, basePrice) {
+  const base = Number(basePrice) || 0;
+  const bulkQty = Math.floor(Number(entry && entry.bulkQty) || 0);
+  const bulkPrice = Number(entry && entry.bulkPrice) || 0;
+  if (bulkQty >= 2 && bulkPrice > 0 && bulkPrice < base && Number(qty) >= bulkQty) return bulkPrice;
+  return base;
+}
+
 function normalisePhone(p) { return (p||'').replace(/[\s\-().+]/g, '').toLowerCase(); }
 
 // Cash-basis: an order counts as income once any payment has been received.
@@ -5026,7 +5044,9 @@ const mainServer = http.createServer(async (req, res) => {
     const catalogProducts = readProducts();
     const catalogServices = readServices();
     const { tiers: membershipTiers } = readMemberships();
-    function lookupCatalogPrice(pid, variantSku) {
+    // `stock` is null for anything without a stock pool (services, membership
+    // tiers, unlimited digital goods) — those skip the availability check.
+    function lookupCatalogPrice(pid, variantSku, qty = 1) {
       if (!pid) return null;
       const prod = catalogProducts.find(p => p.id === pid && p.status === 'published');
       if (prod) {
@@ -5036,16 +5056,17 @@ const mainServer = http.createServer(async (req, res) => {
             ? (prod.variants.find(v => v.sku === variantSku) || prod.variants.find(v => v.name === variantSku))
             : null;
           if (!variant) return null;
-          const price = Number(variant.price);
-          return price > 0 ? { priceAud: price, name: `${prod.name}${variant.name ? ` — ${variant.name}` : ''}` } : null;
+          const price = applyBulkPrice(variant, qty, Number(variant.price));
+          return price > 0 ? { priceAud: price, name: `${prod.name}${variant.name ? ` — ${variant.name}` : ''}`, stock: variant.stock == null ? null : Number(variant.stock) || 0 } : null;
         }
-        const price = Number(prod.priceAud);
-        return price > 0 ? { priceAud: price, name: prod.name } : null;
+        const price = applyBulkPrice(prod, qty, Number(prod.priceAud));
+        const stock = (prod.infiniteStock || prod.stock == null) ? null : Number(prod.stock) || 0;
+        return price > 0 ? { priceAud: price, name: prod.name, stock } : null;
       }
       const svc = catalogServices.find(s => s.id === pid && s.status === 'published');
-      if (svc) { const price = Number(svc.priceAud); return price > 0 ? { priceAud: price, name: svc.name } : null; }
+      if (svc) { const price = Number(svc.priceAud); return price > 0 ? { priceAud: price, name: svc.name, stock: null } : null; }
       const tier = membershipTiers.find(t => t.id === pid && t.status === 'published');
-      if (tier) { const price = Number(tier.priceAud); return price > 0 ? { priceAud: price, name: tier.name } : null; }
+      if (tier) { const price = Number(tier.priceAud); return price > 0 ? { priceAud: price, name: tier.name, stock: null } : null; }
       return null;
     }
     const lineItems = [];
@@ -5062,8 +5083,19 @@ const mainServer = http.createServer(async (req, res) => {
         lineItems.push({ ...li, priceAud: resolvedPrice, name: li.name || (catalogEntry ? catalogEntry.name : `Gift Card`), quantity: qty, productId: pid });
       } else if (pid) {
         const variantSku = li.variantSku ? String(li.variantSku) : null;
-        const catalogEntry = lookupCatalogPrice(pid, variantSku);
+        const catalogEntry = lookupCatalogPrice(pid, variantSku, qty);
         if (!catalogEntry) return json(res, 422, { error: 'invalid_item', message: `Product not found or variant not specified: ${pid}` });
+        // Stock is only decremented after payment, so without this an order
+        // could be placed for more units than exist — which would also let a
+        // customer claim a bulk price the remaining stock can no longer reach.
+        if (catalogEntry.stock != null && qty > catalogEntry.stock) {
+          return json(res, 422, {
+            error: 'insufficient_stock',
+            message: catalogEntry.stock > 0
+              ? `Only ${catalogEntry.stock} of "${catalogEntry.name}" ${catalogEntry.stock === 1 ? 'is' : 'are'} available.`
+              : `"${catalogEntry.name}" is out of stock.`,
+          });
+        }
         const resolvedPrice = Number(catalogEntry.priceAud);
         if (!Number.isFinite(resolvedPrice) || resolvedPrice <= 0) return json(res, 422, { error: 'invalid_item', message: `"${catalogEntry.name}" has no valid price set. Please contact us.` });
         lineItems.push({ ...li, priceAud: resolvedPrice, name: catalogEntry.name, quantity: qty, productId: pid });
@@ -5463,7 +5495,7 @@ const mainServer = http.createServer(async (req, res) => {
     const catalogProducts = readProducts();
     const catalogServices = readServices();
     const { tiers: membershipTiers } = readMemberships();
-    function lookupCatalogPricePlan(pid, variantSku) {
+    function lookupCatalogPricePlan(pid, variantSku, qty = 1) {
       if (!pid) return null;
       const prod = catalogProducts.find(p => p.id === pid && p.status === 'published');
       if (prod) {
@@ -5472,14 +5504,15 @@ const mainServer = http.createServer(async (req, res) => {
             ? (prod.variants.find(v => v.sku === variantSku) || prod.variants.find(v => v.name === variantSku))
             : null;
           if (!variant) return null;
-          const price = Number(variant.price);
-          return price > 0 ? { priceAud: price, name: `${prod.name}${variant.name ? ` — ${variant.name}` : ''}` } : null;
+          const price = applyBulkPrice(variant, qty, Number(variant.price));
+          return price > 0 ? { priceAud: price, name: `${prod.name}${variant.name ? ` — ${variant.name}` : ''}`, stock: variant.stock == null ? null : Number(variant.stock) || 0 } : null;
         }
-        const price = Number(prod.priceAud);
-        return price > 0 ? { priceAud: price, name: prod.name } : null;
+        const price = applyBulkPrice(prod, qty, Number(prod.priceAud));
+        const stock = (prod.infiniteStock || prod.stock == null) ? null : Number(prod.stock) || 0;
+        return price > 0 ? { priceAud: price, name: prod.name, stock } : null;
       }
       const svc = catalogServices.find(s => s.id === pid && s.status === 'published');
-      if (svc) { const price = Number(svc.priceAud); return price > 0 ? { priceAud: price, name: svc.name } : null; }
+      if (svc) { const price = Number(svc.priceAud); return price > 0 ? { priceAud: price, name: svc.name, stock: null } : null; }
       return null;
     }
     const lineItems = [];
@@ -5490,8 +5523,16 @@ const mainServer = http.createServer(async (req, res) => {
       if (!pid || pid.startsWith('gc-') || membershipTiers.some(t => t.id === pid)) {
         return json(res, 422, { error: 'invalid_item', message: 'Gift cards and memberships can\'t be bought on a payment plan — check out those separately.' });
       }
-      const catalogEntry = lookupCatalogPricePlan(pid, li.variantSku ? String(li.variantSku) : null);
+      const catalogEntry = lookupCatalogPricePlan(pid, li.variantSku ? String(li.variantSku) : null, qty);
       if (!catalogEntry) return json(res, 422, { error: 'invalid_item', message: `Product not found or variant not specified: ${pid}` });
+      if (catalogEntry.stock != null && qty > catalogEntry.stock) {
+        return json(res, 422, {
+          error: 'insufficient_stock',
+          message: catalogEntry.stock > 0
+            ? `Only ${catalogEntry.stock} of "${catalogEntry.name}" ${catalogEntry.stock === 1 ? 'is' : 'are'} available.`
+            : `"${catalogEntry.name}" is out of stock.`,
+        });
+      }
       lineItems.push({ ...li, priceAud: catalogEntry.priceAud, name: catalogEntry.name, quantity: qty, productId: pid });
     }
 
