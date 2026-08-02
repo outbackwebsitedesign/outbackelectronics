@@ -55,7 +55,7 @@ function TutorialsPage({ go }) {
   return (
     <>
       <PageHead crumbs={['Outback','Tutorials']} title="Tutorials &amp; Guides"
-        lead="Step-by-step guides, video walkthroughs, and bench notes from the workshop." />
+        lead="Step by step guides, video walkthroughs and notes written at the bench while the work was being done." />
       <section className="container" style={{paddingTop: 32, paddingBottom: 48}}>
 
         {/* Category filters */}
@@ -428,7 +428,7 @@ function GroupsPage({ go }) {
   return (
     <>
       <PageHead crumbs={['Outback','Groups']} title="Community Groups"
-        lead="Online groups for electronics enthusiasts. Topic clubs, tinkerers, and fixers - connect and chat from wherever you are."
+        lead="Online groups for people who build and repair electronics. Join one and talk to other members wherever you are."
         kicker={<button className="btn btn-rust" onClick={() => go('contact')}>+ Start a group</button>} />
 
       <section className="container" style={{paddingTop: 32, paddingBottom: 40}}>

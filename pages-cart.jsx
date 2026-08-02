@@ -411,7 +411,7 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, r
   if (cart.length === 0) {
     return (
       <>
-        <PageHead crumbs={['Outback', 'Cart']} title="Your Cart" lead="Nothing in your cart yet." />
+        <PageHead crumbs={['Outback', 'Cart']} title="Your Cart" lead="There is nothing in your cart yet." />
         <section className="container" style={{paddingTop:40, paddingBottom:56, textAlign:'center'}}>
           <p style={{color:'var(--ink-2)', marginBottom:24}}>Browse the shop and add items to get started.</p>
           <button className="btn btn-rust" onClick={() => go('shop')}>Go to Shop →</button>
@@ -779,7 +779,7 @@ function RegisterPage({ go }) {
   return (
     <>
       <PageHead crumbs={['Outback', 'Create Account']} title="Create an Account"
-        lead="Sign up once and use the same account across the portal, forum, and more."
+        lead="Create one account and use it for the portal, the forum and checkout."
       />
       <section className="container" style={{paddingTop:32, paddingBottom:64}}>
         <div style={{maxWidth:560, margin:'0 auto'}}>

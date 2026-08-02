@@ -658,7 +658,7 @@ function Footer({ go }) {
           <div>
             <h3>Visit</h3>
             <ul style={{color:'var(--ink-on-dark-muted)'}}>
-              <li>{[shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ')}<br/>No public access, arrive by appointment only.</li>
+              <li>{[shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ')}<br/>There is no public access. Please come by appointment.</li>
               {shop.phone && <li>{shop.phone}</li>}
               <li><a href="/contact" onClick={(e) => { e.preventDefault(); go('contact'); }} style={{color:'var(--ochre)'}}>Get directions →</a></li>
             </ul>
