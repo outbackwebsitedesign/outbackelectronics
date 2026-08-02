@@ -1716,7 +1716,9 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
             )}
 
             {product.description && (
-              <p style={{color:'var(--ink-2)', fontSize:15, lineHeight:1.7, marginBottom:24}}>{product.description}</p>
+              // Descriptions are plain text typed into a textarea, so the line
+              // breaks the author put in are the only structure they have.
+              <p style={{color:'var(--ink-2)', fontSize:15, lineHeight:1.7, marginBottom:24, whiteSpace:'pre-wrap'}}>{product.description}</p>
             )}
 
             {inStock && (
