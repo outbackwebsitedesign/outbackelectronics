@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useContext, useRef } from 'react';
 import { getCsrf, ensureCsrf } from './src/lib/api.js';
-import { hasBulkPrice, bulkOfferAvailable, availableStock } from './src/lib/pricing.js';
+import { bulkUnitPrice, hasBulkPrice, bulkOfferAvailable, availableStock } from './src/lib/pricing.js';
 import { CONDITION_COLORS } from './src/lib/conditions.js';
 
 const _fallbackShopCtx = React.createContext({});
@@ -1465,6 +1465,7 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
     pageParams?.variants?.length ? pageParams.variants[0] : null
   );
   const [activeImage, setActiveImage] = useState(null);
+  const [qty, setQty] = useState(1);
   const [notifyEmail, setNotifyEmail] = useState('');
   const [notifySent, setNotifySent] = useState(false);
   const [notifySending, setNotifySending] = useState(false);
@@ -1479,6 +1480,7 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
       setSelectedVariant(firstVariant);
       const firstImg = (firstVariant?.images?.length ? firstVariant.images[0] : null) || (pageParams.images?.[0] ?? null);
       setActiveImage(firstImg);
+      setQty(1);
       setNotifyEmail(''); setNotifySent(false); setNotifyError(null); setLightboxOpen(false);
     }
   }, [pageParams]);
@@ -1498,6 +1500,7 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
 
   const selectVariant = (v) => {
     setSelectedVariant(v);
+    setQty(1);
     if (v.images && v.images.length > 0) setActiveImage(v.images[0]);
   };
 
@@ -1565,6 +1568,16 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
   const bulkAvailable = bulkOfferAvailable(priced);
   const bulkSoldDown = hasBulkPrice(priced) && !bulkAvailable;
   const stockLeft = availableStock(priced);
+  // Bulk pricing applies from the quantity alone — no separate action to take.
+  const maxQty = stockLeft === null ? 999 : Math.max(1, stockLeft);
+  const safeQty = Math.min(Math.max(1, qty), maxQty);
+  const unitPrice = bulkUnitPrice(priced, safeQty);
+  const bulkApplied = hasBulkPrice(priced) && unitPrice < Number(priced.price);
+  const unitsToBulk = bulkAvailable && !bulkApplied ? bulkQty - safeQty : 0;
+  const addSelection = () => addToCart(
+    hasVariants ? { ...product, ...selectedVariant, _variantSku: selectedVariant.sku || selectedVariant.name || '' } : product,
+    safeQty,
+  );
 
   return (
     <>
@@ -1610,10 +1623,17 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
             </div>
             <h2 className="serif" style={{fontSize:40, lineHeight:1.05, marginBottom:8}}>{product.name}</h2>
             <div className="mono" style={{fontSize:12, color:'var(--ink-3)', marginBottom:20}}>SKU: {product.sku || (hasVariants && selectedVariant ? selectedVariant.sku : '—')}</div>
-            <div style={{display:'flex', alignItems:'baseline', gap:12, marginBottom:24}}>
-              <span className="price" style={{fontSize:36}}>${activePrice ? activePrice.toLocaleString() : '—'}</span>
-              {!hasVariants && product.was && <span className="price-strike" style={{fontSize:20}}>${product.was.toLocaleString()}</span>}
+            <div style={{display:'flex', alignItems:'baseline', gap:12, marginBottom: bulkApplied ? 6 : 24, flexWrap:'wrap'}}>
+              <span className="price" style={{fontSize:36}}>${unitPrice ? unitPrice.toLocaleString() : (activePrice ? activePrice.toLocaleString() : '—')}</span>
+              {bulkApplied && <span className="price-strike" style={{fontSize:20}}>${Number(priced.price).toLocaleString()}</span>}
+              {!bulkApplied && !hasVariants && product.was && <span className="price-strike" style={{fontSize:20}}>${product.was.toLocaleString()}</span>}
+              {safeQty > 1 && <span className="mono" style={{fontSize:13, color:'var(--ink-2)'}}>each · ${(unitPrice * safeQty).toLocaleString()} total</span>}
             </div>
+            {bulkApplied && (
+              <div className="mono" style={{fontSize:12, color:'var(--eucalyptus)', marginBottom:24}}>
+                ✓ BULK PRICE APPLIED — {bulkQty}+ AT ${Number(priced.bulkPrice).toLocaleString()} EACH
+              </div>
+            )}
 
             {hasVariants && (
               <div style={{marginBottom:24}}>
@@ -1641,16 +1661,15 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
             {(bulkAvailable || bulkSoldDown) && (
               <div style={{marginBottom:24, padding:'12px 16px', border:'1px solid var(--line)', background:'var(--bg-elev)'}}>
                 {bulkAvailable ? (
-                  <>
-                    <div style={{fontSize:14}}>
-                      Buy <strong>{bulkQty} or more</strong> for <strong>${Number(priced.bulkPrice).toLocaleString()} each</strong>
-                      <span style={{color:'var(--ink-3)'}}> — save ${((Number(priced.price) - Number(priced.bulkPrice)) * bulkQty).toLocaleString()}</span>
-                    </div>
-                    <button className="btn btn-ghost btn-sm" style={{marginTop:10}}
-                      onClick={() => { addToCart(hasVariants ? { ...product, ...selectedVariant, _variantSku: selectedVariant.sku || selectedVariant.name || '' } : product, bulkQty); }}>
-                      Add {bulkQty} to Cart
-                    </button>
-                  </>
+                  <div style={{fontSize:14}}>
+                    Buy <strong>{bulkQty} or more</strong> for <strong>${Number(priced.bulkPrice).toLocaleString()} each</strong>
+                    <span style={{color:'var(--ink-3)'}}> — save ${((Number(priced.price) - Number(priced.bulkPrice)) * bulkQty).toLocaleString()}</span>
+                    {unitsToBulk > 0 && (
+                      <div className="mono" style={{fontSize:12, color:'var(--ink-3)', marginTop:6}}>
+                        ADD {unitsToBulk} MORE TO QUALIFY
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   <div className="mono" style={{fontSize:12, color:'var(--ink-3)'}}>
                     Bulk price unavailable — only {stockLeft} left, {bulkQty} needed.
@@ -1663,11 +1682,29 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
               <p style={{color:'var(--ink-2)', fontSize:15, lineHeight:1.7, marginBottom:24}}>{product.description}</p>
             )}
 
+            {inStock && (
+              <div className="row-flex" style={{gap:12, alignItems:'center', marginBottom:12}}>
+                <span className="eyebrow" id="qty-label">QUANTITY</span>
+                <div style={{display:'flex', alignItems:'center', gap:6}}>
+                  <button type="button" onClick={() => setQty(q => Math.max(1, Math.min(q, maxQty) - 1))} disabled={safeQty <= 1}
+                    aria-label="Decrease quantity"
+                    style={{width:32, height:32, border:'1px solid var(--line)', background:'var(--bg-elev)', cursor: safeQty <= 1 ? 'not-allowed' : 'pointer', opacity: safeQty <= 1 ? 0.4 : 1, fontSize:18}}>−</button>
+                  <input className="input mono" type="number" min="1" max={maxQty} value={safeQty} aria-labelledby="qty-label"
+                    onChange={e => setQty(Math.min(maxQty, Math.max(1, Math.floor(Number(e.target.value) || 1))))}
+                    style={{width:64, textAlign:'center'}} />
+                  <button type="button" onClick={() => setQty(q => Math.min(maxQty, Math.max(1, q) + 1))} disabled={safeQty >= maxQty}
+                    aria-label="Increase quantity"
+                    style={{width:32, height:32, border:'1px solid var(--line)', background:'var(--bg-elev)', cursor: safeQty >= maxQty ? 'not-allowed' : 'pointer', opacity: safeQty >= maxQty ? 0.4 : 1, fontSize:18}}>+</button>
+                </div>
+                {stockLeft !== null && <span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>{stockLeft} AVAILABLE</span>}
+              </div>
+            )}
+
             <div style={{display:'flex', gap:12}}>
               <button className="btn btn-rust" style={{flex:1, justifyContent:'center'}}
                 disabled={!inStock}
-                onClick={() => { addToCart(hasVariants ? { ...product, ...selectedVariant, _variantSku: selectedVariant.sku || selectedVariant.name || '' } : product); }}>
-                {inStock ? 'Add to Cart' : 'Out of Stock'}
+                onClick={addSelection}>
+                {inStock ? (safeQty > 1 ? `Add ${safeQty} to Cart` : 'Add to Cart') : 'Out of Stock'}
               </button>
               <button className="btn btn-ghost" onClick={() => go('quote')}>Request a Quote</button>
             </div>
