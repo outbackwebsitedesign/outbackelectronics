@@ -121,7 +121,7 @@ function HomePage({ go, addToCart, portalUser }) {
                 <span className="italic" style={{color:'var(--rust)'}}>the signal ends.</span>
               </h1>
               <p className="hero-sub" style={{marginTop: 22, fontSize: 18, maxWidth: 520, color:'var(--ink-2)'}}>
-                Arduino &amp; microcontroller gear, PC &amp; phone parts, software tools, and off-grid electronics - an obstinate community of tinkerers serving remote Australia{(shop.suburb || shop.state) ? ` from ${[shop.suburb, shop.state].filter(Boolean).join(', ')}` : ''} by appointment only.
+                We sell and repair electronics for people living a long way from a city. Arduino and microcontroller gear, PC and phone parts, software tools, and off-grid equipment, serving remote Australia{(shop.suburb || shop.state) ? ` from ${[shop.suburb, shop.state].filter(Boolean).join(', ')}` : ''} by appointment only.
               </p>
               <div className="row-flex hero-actions" style={{marginTop: 28}}>
                 <button className="btn btn-rust" onClick={() => go('shop')}>Browse the Shop →</button>
@@ -210,7 +210,7 @@ function HomePage({ go, addToCart, portalUser }) {
         <div className="row-flex" style={{justifyContent:'space-between', marginBottom: 24, alignItems:'baseline'}}>
           <div>
             <span className="eyebrow">SECTIONS</span>
-            <h2 className="serif" style={{fontSize: 42, marginTop:6}}>Shop by terrain.</h2>
+            <h2 className="serif" style={{fontSize: 42, marginTop:6}}>Browse by category.</h2>
           </div>
           <a className="mono" href="/shop" style={{fontSize:12, color:'var(--rust)', cursor:'pointer'}} onClick={(e) => { e.preventDefault(); go('shop'); }}>VIEW ALL CATEGORIES →</a>
         </div>
@@ -312,7 +312,7 @@ function HomePage({ go, addToCart, portalUser }) {
         <div className="row-flex" style={{justifyContent:'space-between', marginBottom: 24, alignItems:'baseline'}}>
           <div>
             <span className="eyebrow">ON THE BENCH THIS WEEK</span>
-            <h2 className="serif" style={{fontSize: 42, marginTop: 6}}>Tested. Tagged. Ready.</h2>
+            <h2 className="serif" style={{fontSize: 42, marginTop: 6}}>Everything here is tested and tagged before it goes on the shelf.</h2>
           </div>
           <a className="mono" href="/shop" style={{fontSize:12, color:'var(--rust)', cursor:'pointer'}} onClick={(e) => { e.preventDefault(); go('shop'); }}>ALL {featuredProducts.length || '-'} LISTINGS →</a>
         </div>
@@ -345,7 +345,7 @@ function HomePage({ go, addToCart, portalUser }) {
                 ))}
               </ul>
             ) : (
-              <p style={{marginTop: 14, color:'var(--ink-2)', fontSize:14}}>Join the discussion - repairs, builds, troubleshooting, and more.</p>
+              <p style={{marginTop: 14, color:'var(--ink-2)', fontSize:14}}>Ask a question, post a build, or help someone else work out a fault.</p>
             )}
             <a href={shop._forumUrl || 'https://forum.outbackelectronics.com.au'} target="_blank" rel="noopener noreferrer" className="btn btn-outline" style={{marginTop: 18, display:'inline-block'}}>Visit the Forum →</a>
           </div>
@@ -817,14 +817,14 @@ function ServicesPage({ go }) {
       <section className="container" style={{paddingBottom: 60}}>
         <div className="grid-2">
           <div style={{padding: 32, background:'var(--dark)', color:'var(--paper)'}}>
-            <h3 className="serif" style={{fontSize: 36, lineHeight:1.05}}>How a repair moves through the shop.</h3>
+            <h3 className="serif" style={{fontSize: 36, lineHeight:1.05}}>What happens to your gear after you drop it off.</h3>
             <div style={{marginTop: 22, display:'grid', gap: 16}}>
               {[
-                {n:'01',t:'Intake',d:'Walked in, posted, or radioed in. Triage in ≤15 min.'},
-                {n:'02',t:'Bench Diagnosis',d:'Multimeter, scope, thermal cam, and a slow cup of tea.'},
-                {n:'03',t:'Quote',d:'Fixed-price for known faults, hourly otherwise. You decide.'},
-                {n:'04',t:'Repair',d:'Logged photo-by-photo. You get the dead parts back if you want them.'},
-                {n:'05',t:'48h Burn-in',d:'We run it harder than you will. Then sign-off.'},
+                {n:'01',t:'Intake',d:'However it reaches us, we look at it within 15 minutes of it arriving.'},
+                {n:'02',t:'Bench Diagnosis',d:'We test with a multimeter, an oscilloscope and a thermal camera.'},
+                {n:'03',t:'Quote',d:'Known faults are a fixed price. Anything else is hourly, and you approve it before we start.'},
+                {n:'04',t:'Repair',d:'We photograph each step, and you can have the replaced parts back if you want them.'},
+                {n:'05',t:'48h Burn-in',d:'We run it under load for 48 hours before we sign it off.'},
               ].map((step,i) => (
                 <div key={i} style={{display:'grid', gridTemplateColumns:'48px 1fr', gap:14, borderTop:'1px solid #3a3127', paddingTop: 14}}>
                   <div className="serif" style={{fontSize: 28, color:'var(--ochre)'}}>{step.n}</div>
@@ -923,12 +923,12 @@ function SoftwarePage({ go, pageParams }) {
   return (
     <>
       <PageHead crumbs={['Outback','Software']} title="Software"
-        lead="Tools we wrote for ourselves, then cleaned up enough to share. Mostly open source, mostly Linux, all paid-back in pull requests." />
+        lead="These are tools we wrote for our own use and then tidied up enough to release. Most of them are open source and built for Linux." />
       <section className="container" style={{paddingTop: 40, paddingBottom: 48}}>
         {loading && <div className="mono" style={{fontSize:12,color:'var(--ink-2)'}}>Loading…</div>}
         {!loading && products.length === 0 && (
           <div style={{padding:'48px 0'}}>
-            <p className="serif" style={{fontSize:28, marginBottom:12}}>Still in the workshop.</p>
+            <p className="serif" style={{fontSize:28, marginBottom:12}}>We are still building this.</p>
             <p style={{color:'var(--ink-2)', fontSize:15, maxWidth:520, lineHeight:1.7}}>
               We're working on our first software release, internal tools we use every day that we think are worth sharing. Check back soon.
             </p>
@@ -1002,7 +1002,7 @@ function SoftwareOSPickerPage({ product, go }) {
                 </button>
               );
             })}
-            {platforms.length === 0 && <p style={{color:'var(--ink-2)', fontSize:14}}>No downloads available yet. Check back soon.</p>}
+            {platforms.length === 0 && <p style={{color:'var(--ink-2)', fontSize:14}}>There is nothing here to download yet.</p>}
           </div>
           {product.repo && isOss && (
             <div style={{marginTop:32}}>
@@ -1159,9 +1159,9 @@ function EwastePage({ go }) {
     fetch('/api/metrics').then(r => r.ok ? r.json() : Promise.reject()).then(d => setMetrics(d)).catch(() => {});
   }, []);
   const stats = [
-    {n: metrics.ewasteTonnes !== null ? metrics.ewasteTonnes.toFixed(1) + 't' : '-', l:'DIVERTED · TOTAL', s:'From landfill into refurb, parts, or audited recyclers.'},
-    {n: metrics.resalePercent !== null ? metrics.resalePercent + '%' : '-', l:'GEAR RESOLD OR DONATED', s:'Most of what comes in still has a working second life.'},
-    {n:'$0', l:'TO DROP OFF', s:'Counter drop-off is always free, regardless of brand.'},
+    {n: metrics.ewasteTonnes !== null ? metrics.ewasteTonnes.toFixed(1) + 't' : '-', l:'DIVERTED · TOTAL', s:'Kept out of landfill and sent to refurbishment, parts or an audited recycler.'},
+    {n: metrics.resalePercent !== null ? metrics.resalePercent + '%' : '-', l:'GEAR RESOLD OR DONATED', s:'Most of what we take in still works well enough to be used again.'},
+    {n:'$0', l:'TO DROP OFF', s:'Dropping gear at the counter is free, whatever brand it is.'},
   ];
   return (
     <>
@@ -1183,7 +1183,7 @@ function EwastePage({ go }) {
         <div className="grid-2" style={{gap: 36}}>
           <div>
             <span className="eyebrow">WHAT WE TAKE</span>
-            <h2 className="serif" style={{fontSize: 44, marginTop: 8, lineHeight:1}}>If it has a battery, a board or a buzzing transformer - bring it.</h2>
+            <h2 className="serif" style={{fontSize: 44, marginTop: 8, lineHeight:1}}>If it has a battery, a circuit board or a transformer in it, we will take it.</h2>
             <div className="grid-2" style={{marginTop: 24, gap:12}}>
               {['Laptops','Desktops','Phones','Tablets','Solar inverters','Power tools','Lead-acid batteries','LiFePO4 packs','UPS units','PV modules','Network gear','Server racks','Cables (sorted)','CRT & LCD displays','Printers','Cameras & scopes'].map((it,i) => (
                 <div key={i} className="checks"><li style={{display:'flex', gap:10, alignItems:'flex-start'}}>{it}</li></div>
@@ -1199,7 +1199,7 @@ function EwastePage({ go }) {
           <div>
             <div className="card-paper" style={{padding: 28}}>
               <span className="tag tag-rust">CASH OR CREDIT</span>
-              <h3 className="serif" style={{fontSize: 32, marginTop: 12}}>Trade-in tiers, plainly.</h3>
+              <h3 className="serif" style={{fontSize: 32, marginTop: 12}}>What we pay for trade-ins.</h3>
               <table style={{width:'100%', marginTop: 16, borderCollapse:'collapse', fontSize:13}}>
                 <thead>
                   <tr style={{textAlign:'left', borderBottom:'2px solid var(--ink)'}}>
@@ -1293,32 +1293,32 @@ const AI_SERVICES = [
   {
     tag: 'INTEGRATION',
     title: 'Custom Integration',
-    desc: 'We wire AI into your existing systems - APIs, databases, workflows. If you have a process, we can find where intelligence fits.',
+    desc: 'We connect AI to the systems you already use, through their APIs and databases. Tell us the job you do over and over, and we will tell you whether it can be automated and what it costs to find out.',
   },
   {
     tag: 'CONVERSATIONAL',
     title: 'Chatbots',
-    desc: 'Purpose-built conversational agents for customer support, internal tooling, or guided workflows. Trained on your content, deployed on your terms.',
+    desc: 'A chatbot trained on your manuals, your parts list and your past jobs, so it answers the way you would. It runs on your own server.',
   },
   {
     tag: 'PROJECT-SPECIFIC',
-    title: 'Project AI',
-    desc: 'AI scoped to a single project, one problem, one solution, built to fit. No bloat, no generic model handed over with a PDF.',
+    title: 'One-Off Builds',
+    desc: 'One problem, one build. You get the model, the weights and the source code, rather than a login and a monthly bill.',
   },
   {
     tag: 'DOMAIN',
-    title: 'Subject-Specific AI',
-    desc: 'Models fine-tuned on a particular field or discipline. If your domain has a body of knowledge, we can build a model that understands it.',
+    title: 'Trained On Your Field',
+    desc: 'If your trade has a body of manuals, standards and write-ups behind it, we can train a model on them so it answers like someone who has read the lot.',
   },
   {
     tag: 'LARGE LANGUAGE MODELS',
     title: 'LLM Work',
-    desc: 'Prompt engineering, fine-tuning, RAG pipelines, and production deployment of large language models for real business problems.',
+    desc: 'We set up the large models, connect them to your own documents, and keep them running once they are in use.',
   },
   {
     tag: 'SMALL LANGUAGE MODELS',
     title: 'SLM Work',
-    desc: 'Compact, efficient models that run fast and cost less to operate. Right-sized intelligence for constrained environments or high-volume inference.',
+    desc: 'Smaller models that run on modest hardware without an internet connection. They are slower than the large ones and cost far less to run.',
   },
 ];
 
@@ -1331,9 +1331,9 @@ function AIPage({ go }) {
 
       <section className="container" style={{paddingTop: 40, paddingBottom: 16}}>
         <span className="eyebrow">WHAT WE BUILD</span>
-        <h2 className="serif" style={{fontSize: 48, marginTop: 8, lineHeight: 1.1, maxWidth: 640}}>AI for real problems.<br/>Built to spec.</h2>
+        <h2 className="serif" style={{fontSize: 48, marginTop: 8, lineHeight: 1.1, maxWidth: 640}}>AI built for one problem at a time.</h2>
         <p style={{marginTop: 16, fontSize: 16, color: 'var(--ink-2)', maxWidth: 560}}>
-          We don't sell a platform or lock you into a product. Every engagement starts with your problem and ends with something that solves it, whether that's a chatbot, a fine-tuned model, or a full integration into your stack.
+          We do not sell a platform or a subscription. Every job starts with a problem you actually have and ends with something that solves it, whether that is a chatbot, a model trained on your own material, or an integration into the systems you already run.
         </p>
       </section>
 
@@ -1356,7 +1356,7 @@ function AIPage({ go }) {
         <div className="grid-2" style={{gap: 32, alignItems: 'start'}}>
           <div style={{padding: 40, background: 'var(--dark)', color: 'var(--paper)', border: '1px solid var(--line)'}}>
             <span className="tag tag-rust" style={{marginBottom: 16, display: 'inline-block'}}>RESEARCH · AGI</span>
-            <h2 className="serif" style={{fontSize: 40, lineHeight: 1.1, marginTop: 12}}>Attempting true AGI.</h2>
+            <h2 className="serif" style={{fontSize: 40, lineHeight: 1.1, marginTop: 12}}>We are working on artificial general intelligence.</h2>
             <p style={{marginTop: 16, fontSize: 15, color: 'var(--bg-deep)', lineHeight: 1.7}}>
               We are actively pursuing artificial general intelligence, not as a marketing claim, but as a research direction. This is hard, unsolved, and we say so plainly. If you want to follow the work or collaborate, get in touch.
             </p>
@@ -1364,7 +1364,7 @@ function AIPage({ go }) {
           </div>
           <div style={{padding: 40, background: 'var(--paper)', border: '1px solid var(--line)'}}>
             <span className="tag tag-euc" style={{marginBottom: 16, display: 'inline-block'}}>RESEARCH · HUMANLY AI</span>
-            <h2 className="serif" style={{fontSize: 40, lineHeight: 1.1, marginTop: 12}}>Growing a mind from scratch.</h2>
+            <h2 className="serif" style={{fontSize: 40, lineHeight: 1.1, marginTop: 12}}>Humanly AI: growing a mind from raw experience.</h2>
             <p style={{marginTop: 16, fontSize: 15, color: 'var(--ink-2)', lineHeight: 1.7}}>
               Humanly AI is an attempt to grow a sandboxed digital cognitive organism from raw sensory experience, using developmental learning principles modeled after the human brain. No pretraining on human knowledge. No shortcuts. The goal is to see whether genuine cognition can emerge from the bottom up.
             </p>
@@ -2183,7 +2183,7 @@ function GiftCardsPage({ go, addToCart }) {
                 </div>
                 <div>
                   <div style={{fontWeight:600, marginBottom:4}}>{denom.name}</div>
-                  <p style={{fontSize:13, color:'var(--ink-2)', lineHeight:1.6}}>{denom.description || 'Redeemable on anything in the Outback Electronics online store. Delivered by email. Never expires.'}</p>
+                  <p style={{fontSize:13, color:'var(--ink-2)', lineHeight:1.6}}>{denom.description || 'Can be spent on anything in our online store. It is emailed to you and does not expire.'}</p>
                 </div>
                 <div style={{marginTop:'auto', display:'grid', gap:8}}>
                   <button className="btn btn-rust" style={{justifyContent:'center'}} onClick={() => addToCart({ id: 'gc-' + denom.id, name: denom.name, price: denom.priceAud, type: 'gift-card' })}>
@@ -2197,9 +2197,9 @@ function GiftCardsPage({ go, addToCart }) {
 
         <div className="card-paper" style={{marginTop:40, padding:32, display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:24}}>
           {[
-            {icon:'✉', t:'Delivered by email', d:'Your gift card code arrives by email within minutes of purchase.'},
-            {icon:'∞', t:'Never expires', d:'No use-by dates. Spend it whenever the right gear comes along.'},
-            {icon:'★', t:'Redeemable on everything', d:'Products, services, repairs - anything we sell online.'},
+            {icon:'✉', t:'Delivered by email', d:'The code is emailed to you within a few minutes of buying it.'},
+            {icon:'∞', t:'Never expires', d:'There is no expiry date, so it can be spent whenever it suits.'},
+            {icon:'★', t:'Redeemable on everything', d:'It can be spent on any product, service or repair we sell online.'},
           ].map((f,i) => (
             <div key={i} style={{textAlign:'center'}}>
               <div style={{fontSize:32, marginBottom:10}}>{f.icon}</div>
@@ -2318,7 +2318,7 @@ function MembershipsPage({ go, portalUser }) {
   return (
     <>
       <PageHead crumbs={['Outback', 'Memberships']} title="Memberships"
-        lead="Get access to member-only groups, exclusive content, and workshop perks. Cancel any time." />
+        lead="Membership gives you access to the member forum groups, technical write-ups from our workshop, and priority on the repair bench. You can cancel at any time." />
       <section className="container" style={{paddingTop:40, paddingBottom:56}}>
         <ErrorText style={{marginBottom:20}}>{checkoutError}</ErrorText>
 
@@ -2392,9 +2392,9 @@ function MembershipsPage({ go, portalUser }) {
           <div className="eyebrow" style={{marginBottom:12}}>MEMBER CONTENT INCLUDES</div>
           <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:24}}>
             {[
-              {t:'Member Groups', d:'Private forum groups where members swap configs, ask dumb questions safely, and organise local meetups.'},
-              {t:'Members Blog', d:'Deep-dive build logs, tear-downs, field reports, and "how we fixed it" write-ups from our techs.'},
-              {t:'Special Content', d:'Early firmware drops, beta tutorials, invite-only webinars, and the occasional ridiculous benchmark.'},
+              {t:'Member Groups', d:'Private forum groups where members share configurations, ask questions without judgement, and organise local meetups.'},
+              {t:'Members Blog', d:'Detailed build logs, teardowns and field reports written by our technicians, including how each fault was traced.'},
+              {t:'Special Content', d:'Early access to firmware releases and tutorials, plus invite-only webinars.'},
             ].map((item,i) => (
               <div key={i}>
                 <div style={{fontWeight:600, marginBottom:6}}>{item.t}</div>
