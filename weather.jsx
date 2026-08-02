@@ -59,7 +59,7 @@ function ReadingCard({ def, value, ts, onClick }) {
       </div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
         <span style={{ fontSize: 36, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", lineHeight: 1 }}>
-          {offline ? '—' : typeof value === 'number' ? value.toFixed(1) : value}
+          {offline ? '-' : typeof value === 'number' ? value.toFixed(1) : value}
         </span>
         <span style={{ fontSize: 14, color: 'var(--ink-2)', fontFamily: "'JetBrains Mono', monospace" }}>{def.unit}</span>
       </div>
@@ -267,7 +267,7 @@ const DERIVED = [
     note: 'Apparent temperature (hot/humid)',
     requires: ['temperature', 'humidity'],
     compute({ temperature: T, humidity: RH }) {
-      // NWS Rothfusz equation — only meaningful above ~27°C and 40% RH
+      // NWS Rothfusz equation, only meaningful above ~27°C and 40% RH
       if (T < 27 || RH < 40) return null;
       const HI = -8.78469 + 1.61139411 * T + 2.338549 * RH
         - 0.14611605 * T * RH - 0.01230809 * T * T
@@ -389,7 +389,7 @@ function ReadingDetail({ def, stationId, onBack, apiBase = '/api/weather', isDer
     if (mode === 'range') loadRange(hours, stationId);
     else if (mode === 'year' && selectedYear) loadYear(selectedYear, stationId);
 
-    // SSE — append new readings instantly when in live range mode
+    // SSE, append new readings instantly when in live range mode
     if (mode !== 'range') return;
     const es = new EventSource(`${apiBase}/stream`);
     es.onmessage = (e) => {
@@ -403,7 +403,7 @@ function ReadingDetail({ def, stationId, onBack, apiBase = '/api/weather', isDer
     return () => es.close();
   }, [mode, hours, selectedYear, stationId]);
 
-  // Derived values are calculated live — no stored history to graph
+  // Derived values are calculated live, no stored history to graph
   if (isDerivedKey) return null;
 
   const points = history
@@ -411,7 +411,7 @@ function ReadingDetail({ def, stationId, onBack, apiBase = '/api/weather', isDer
     .map(r => ({ t: r.ts, v: r.data[def.key] }));
 
   const keyStat = stats && stats[def.key];
-  const fmt = (v) => v === null || v === undefined ? '—' : (typeof v === 'number' ? (Math.abs(v) >= 10 ? v.toFixed(1) : v.toFixed(2)) : v);
+  const fmt = (v) => v === null || v === undefined ? '-' : (typeof v === 'number' ? (Math.abs(v) >= 10 ? v.toFixed(1) : v.toFixed(2)) : v);
 
   const avgPeriod = points.length ? (points.reduce((s, p) => s + p.v, 0) / points.length) : null;
   const minPeriod = points.length ? Math.min(...points.map(p => p.v)) : null;
@@ -438,7 +438,7 @@ function ReadingDetail({ def, stationId, onBack, apiBase = '/api/weather', isDer
 
       <div className="card" style={{ marginTop: 20, padding: '20px 24px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
-          <div style={{ fontSize: 14, fontWeight: 600 }}>History — {def.label}</div>
+          <div style={{ fontSize: 14, fontWeight: 600 }}>History - {def.label}</div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
             {QUICK_RANGES.map(r => (
               <button key={r.hours} className={`btn ${mode === 'range' && hours === r.hours ? 'btn-rust' : 'btn-ghost'}`}
@@ -520,7 +520,7 @@ function StationStatus({ latest, rtcTime, stationId }) {
         boxShadow: online ? '0 0 8px rgba(79,107,62,0.5)' : 'none',
       }} />
       <span style={{ fontWeight: 600, fontSize: 14 }}>
-        {stationId ? stationId : 'Station'} — {online ? 'Online' : 'Offline'}
+        {stationId ? stationId : 'Station'}, {online ? 'Online' : 'Offline'}
       </span>
       {online && sensorCount > 0 && (
         <span className="tag" style={{ marginLeft: 4 }}>{sensorCount} readings</span>
@@ -1070,7 +1070,7 @@ function AddSensorModal({ onClose }) {
       });
       const d = await r.json();
       if (!r.ok) {
-        setError(d.error === 'name_taken' ? 'That station name is already taken — choose another.' : 'Registration failed, please try again.');
+        setError(d.error === 'name_taken' ? 'That station name is already taken, choose another.' : 'Registration failed, please try again.');
         setBusy(false); return;
       }
       setResult(d);
@@ -1128,7 +1128,7 @@ function AddSensorModal({ onClose }) {
               Station "{result.name}" registered successfully.
             </div>
             <p style={{ fontSize: 14, color: 'var(--ink-2)', lineHeight: 1.6, margin: 0 }}>
-              Save your API key — it won't be shown again. Then run the command below on your Raspberry Pi (or any Linux machine with Python 3).
+              Save your API key, it won't be shown again. Then run the command below on your Raspberry Pi (or any Linux machine with Python 3).
             </p>
 
             <div>
@@ -1143,7 +1143,7 @@ function AddSensorModal({ onClose }) {
             </div>
 
             <div>
-              <div className="eyebrow" style={{ marginBottom: 6 }}>Setup — Raspberry Pi / Linux</div>
+              <div className="eyebrow" style={{ marginBottom: 6 }}>Setup - Raspberry Pi / Linux</div>
               <p style={{ fontSize: 13, color: 'var(--ink-2)', marginBottom: 8, lineHeight: 1.5 }}>
                 Download <code style={{ fontFamily: 'monospace', fontSize: 12 }}>weather-station/weather_station.py</code> from the{' '}
                 <a href="https://github.com/outbackwebsitedesign/outbackelectronics" style={{ color: 'var(--rust)' }} target="_blank" rel="noopener noreferrer">GitHub repo</a>,
@@ -1159,7 +1159,7 @@ function AddSensorModal({ onClose }) {
             </div>
 
             <p style={{ fontSize: 13, color: 'var(--ink-3)', margin: 0, lineHeight: 1.5 }}>
-              Once running, your station will appear on the dashboard within 30 seconds. Supported sensors: BME280/680 (temp, humidity, pressure, VOC), MQ series gas sensors, QMC5883L compass, and more — see the script header for the full list.
+              Once running, your station will appear on the dashboard within 30 seconds. Supported sensors: BME280/680 (temp, humidity, pressure, VOC), MQ series gas sensors, QMC5883L compass, and more - see the script header for the full list.
             </p>
 
             <button className="btn btn-rust" onClick={onClose} style={{ alignSelf: 'flex-start' }}>Done</button>
@@ -1208,7 +1208,7 @@ function UpsStatus({ latest, deviceInfo }) {
         boxShadow: online ? '0 0 8px rgba(79,107,62,0.5)' : 'none',
       }} />
       <span style={{ fontWeight: 600, fontSize: 14 }}>
-        {deviceInfo?.['ups.type'] || 'UPS'} — {online ? 'Online' : 'Offline'}
+        {deviceInfo?.['ups.type'] || 'UPS'}, {online ? 'Online' : 'Offline'}
       </span>
       {codes.map(c => (
         <span key={c} className="tag" style={{ marginLeft: codes[0] === c ? 4 : 0 }}>{UPS_STATUS_LABELS[c] || c}</span>
@@ -1231,7 +1231,7 @@ function ServerStatsPage() {
   const [error, setError] = useState(null);
   const [tick, setTick] = useState(0);
 
-  // URL routing under /server/stats — e.g. /server/stats/battery_charge
+  // URL routing under /server/stats, e.g. /server/stats/battery_charge
   const PREFIX = '/server/stats';
   const keyFromPath = () => {
     const seg = window.location.pathname.slice(PREFIX.length).replace(/^\/+/, '').replace(/\/+$/, '');
@@ -1425,7 +1425,7 @@ function WeatherDashboard() {
       .then(d => { if (d.reading) { setLatest(d.reading); setError(null); } })
       .catch(() => setError('Could not reach weather station API'));
 
-    // SSE — receive new readings the instant the RPi pushes them
+    // SSE, receive new readings the instant the RPi pushes them
     const es = new EventSource('/api/weather/stream');
     es.onmessage = (e) => {
       try {
@@ -1503,7 +1503,7 @@ function WeatherDashboard() {
                       ? (Math.abs(derivedData[detailDef.key]) >= 10
                           ? derivedData[detailDef.key].toFixed(1)
                           : derivedData[detailDef.key].toFixed(2))
-                      : '—'}
+                      : '-'}
                   </span>
                   <span style={{ fontSize: 20, color: 'var(--ink-3)', fontFamily: "'JetBrains Mono', monospace" }}>
                     {detailDef.unit}
@@ -1535,7 +1535,7 @@ function WeatherDashboard() {
           </div>
           <h1>Weather Station</h1>
           <p className="lead">
-            Real-time environmental data — temperature, humidity, pressure, air quality, and gas detection.
+            Real-time environmental data, temperature, humidity, pressure, air quality, and gas detection.
           </p>
         </div>
       </div>

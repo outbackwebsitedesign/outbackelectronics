@@ -1,4 +1,4 @@
-// Drive — account-gated file storage on the Outback Electronics server.
+// Drive, account-gated file storage on the Outback Electronics server.
 // Nothing shown until you sign in and upload; files live in drive-files/ and
 // metadata in drive.db, scoped to your account.
 import { useState, useEffect, useRef } from 'react';
@@ -22,7 +22,7 @@ export default function DriveApp() {
     if (!arr.length) return;
     setBusy(true);
     for (const file of arr) {
-      if (file.size > 20 * 1024 * 1024) { setMsg(`${file.name} is over 20 MB — skipped.`); continue; }
+      if (file.size > 20 * 1024 * 1024) { setMsg(`${file.name} is over 20 MB, skipped.`); continue; }
       setMsg(`Uploading ${file.name}…`);
       try {
         const dataBase64 = await new Promise((resolve, reject) => { const fr = new FileReader(); fr.onload = () => resolve(String(fr.result).split(',')[1]); fr.onerror = reject; fr.readAsDataURL(file); });
@@ -46,7 +46,7 @@ export default function DriveApp() {
         <header className="svc-head">
           <p className="eyebrow">Drive</p>
           <h1 className="serif svc-title">Your files</h1>
-          <p className="svc-sub">Store and grab your files anywhere — backed up on the Outback Electronics server, not big tech's cloud. Sign in to get started.</p>
+          <p className="svc-sub">Store and grab your files anywhere, backed up on the Outback Electronics server, not big tech's cloud. Sign in to get started.</p>
         </header>
         {info && info.portalUrl ? <a className="btn btn-rust" href={info.portalUrl}>Sign in / Register</a> : null}
       </main><Footer /></>
@@ -67,7 +67,7 @@ export default function DriveApp() {
           <span>{msg}</span>
         </div>
         {files === null ? <p className="drive-empty">Loading…</p>
-          : files.length === 0 ? <p className="drive-empty">No files yet — upload your first above.</p>
+          : files.length === 0 ? <p className="drive-empty">No files yet, upload your first above.</p>
           : (
             <div className="file-list">
               {files.map(f => (

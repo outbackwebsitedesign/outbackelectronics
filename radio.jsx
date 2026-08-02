@@ -1,4 +1,4 @@
-// Outback Radio — tune in to one shared, continuous broadcast. The server
+// Outback Radio, tune in to one shared, continuous broadcast. The server
 // streams the radio-media/ folder on a single timeline; the client can tune in
 // or out, but there's no pause or skip (reconnecting drops you at the live edge).
 import { useState, useEffect, useRef } from 'react';
@@ -6,7 +6,7 @@ import { TopNav, Footer } from './app-shell.jsx';
 
 export default function RadioApp() {
   const audioRef = useRef(null);
-  const wantOn = useRef(false); // desired state — drives auto-reconnect
+  const wantOn = useRef(false); // desired state, drives auto-reconnect
   const [playing, setPlaying] = useState(false);
   const [np, setNp] = useState(null);
 
@@ -81,7 +81,7 @@ export default function RadioApp() {
         <header className="svc-head">
           <p className="eyebrow">Outback FM · Live</p>
           <h1 className="serif svc-title">Outback Radio</h1>
-          <p className="svc-sub">A continuous community broadcast — tune in or out, but there's no pause or skip. Just like the wireless.</p>
+          <p className="svc-sub">A continuous community broadcast, tune in or out, but there's no pause or skip. Just like the wireless.</p>
         </header>
 
         <div className="radio-deck">
@@ -98,7 +98,7 @@ export default function RadioApp() {
         </div>
 
         <audio ref={audioRef} preload="none" />
-        <p className="radio-note">Plays the station's own uploaded tracks. Audio-only, one shared stream for everyone tuned in — there's no rewind out here.</p>
+        <p className="radio-note">Plays the station's own uploaded tracks. Audio-only, one shared stream for everyone tuned in - there's no rewind out here.</p>
       </main>
       <Footer />
     </>

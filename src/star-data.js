@@ -484,7 +484,7 @@ export const MILKY_WAY_SPINE = [
 ];
 
 export const METEOR_SHOWERS = [
-  { name: 'Eta Aquariids',  peak: [5,6],  rate: 50,  ra: 338, dec: -1,  note: 'Halley debris — best in Southern Hemisphere' },
+  { name: 'Eta Aquariids',  peak: [5,6],  rate: 50,  ra: 338, dec: -1,  note: 'Halley debris - best in Southern Hemisphere' },
   { name: 'Southern Delta Aquariids', peak: [7,30], rate: 25, ra: 339, dec: -16, note: 'Good southern show' },
   { name: 'Geminids',       peak: [12,14], rate: 120, ra: 112, dec: 33,  note: 'Best annual shower' },
   { name: 'Perseids',       peak: [8,12],  rate: 100, ra: 48,  dec: 58,  note: 'Low from Australia' },

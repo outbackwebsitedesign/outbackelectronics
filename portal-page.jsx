@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getCsrf, ensureCsrf } from './src/lib/api.js';
 
-// Cross-site URLs — populated from /api/shop-info at startup, with a sensible
+// Cross-site URLs, populated from /api/shop-info at startup, with a sensible
 // fallback derived from the current host so links are never empty during load.
 let _SITE_URL  = '';
 function getSiteUrl()  {
@@ -46,12 +46,12 @@ function invalidateCache(prefix) {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function fmtDate(iso) {
-  if (!iso) return '—';
+  if (!iso) return '-';
   try { return new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }); }
   catch { return iso; }
 }
 
-// Mirrors server.js's paymentPlanProgress() — progress is always derived from
+// Mirrors server.js's paymentPlanProgress(), progress is always derived from
 // actual payments received, never stored per-installment.
 function paymentPlanProgress(order) {
   const plan = order.paymentPlan;
@@ -188,7 +188,7 @@ function RegisterForm({ onLogin, onBack }) {
     if (!lastName.trim()) errs.lastName = 'Last name is required.';
     if (!email.trim()) errs.email = 'Email address is required.';
     else if (!EMAIL_RE.test(email.trim())) errs.email = 'Enter a valid email address, e.g. you@example.com.';
-    if (!/^[a-zA-Z0-9_]{3,30}$/.test(username.trim())) errs.username = 'Username must be 3–30 characters — letters, numbers and underscores only.';
+    if (!/^[a-zA-Z0-9_]{3,30}$/.test(username.trim())) errs.username = 'Username must be 3–30 characters, letters, numbers and underscores only.';
     if (password.length < 8) errs.password = 'Password must be at least 8 characters.';
     if (!termsAccepted) errs.terms = 'You must accept the Terms & Conditions and Privacy Policy to create an account.';
     return errs;
@@ -212,7 +212,7 @@ function RegisterForm({ onLogin, onBack }) {
     : password.length < 8 ? { label: 'Too short', color: '#c0392b' }
     : (password.length >= 12 && /[0-9]/.test(password) && /[^a-zA-Z0-9]/.test(password)) ? { label: 'Strong', color: 'var(--eucalyptus)' }
     : (password.length >= 10 || (/[0-9]/.test(password) && /[A-Z]/.test(password))) ? { label: 'Good', color: '#7d5a0a' }
-    : { label: 'Okay — longer is stronger', color: '#7d5a0a' };
+    : { label: 'Okay, longer is stronger', color: '#7d5a0a' };
 
   return (
     <>
@@ -528,7 +528,7 @@ function OverviewTab({ user, setTab }) {
       onClick={() => setTab(key)}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setTab(key); } }}>
       <span className="eyebrow">{label}</span>
-      <div className="num">{count == null ? '—' : count}</div>
+      <div className="num">{count == null ? '-' : count}</div>
       <div className="desc">{desc}</div>
     </div>
   );
@@ -545,10 +545,10 @@ function OverviewTab({ user, setTab }) {
         {allZero && (
           <div className="card-paper" style={{padding:28, marginBottom:32, borderLeft:'3px solid var(--ochre)'}}>
             <span className="eyebrow">Welcome aboard</span>
-            <h3 className="serif" style={{fontSize:26, marginTop:8}}>G'day — let's get you started</h3>
+            <h3 className="serif" style={{fontSize:26, marginTop:8}}>G'day - let's get you started</h3>
             <p style={{marginTop:8, color:'var(--ink-2)', fontSize:14, maxWidth:560}}>
               You don't have any orders, repairs or quotes yet. Browse the shop for rugged gear,
-              ask us to price up a build or repair, or book a service visit — we'll take it from there.
+              ask us to price up a build or repair, or book a service visit - we'll take it from there.
             </p>
             <div style={{display:'flex', gap:10, flexWrap:'wrap', marginTop:18}}>
               <a href={getSiteUrl() + '/shop'} className="btn btn-rust">Browse the shop →</a>
@@ -568,7 +568,7 @@ function OverviewTab({ user, setTab }) {
           <div className="card-paper" style={{padding:24}}>
             <span className="eyebrow">Shop</span>
             <h3 className="serif" style={{fontSize:26, marginTop:8}}>Browse our catalogue</h3>
-            <p style={{marginTop:8, color:'var(--ink-2)', fontSize:14}}>Rugged laptops, radios, solar gear and more — built for where the signal ends.</p>
+            <p style={{marginTop:8, color:'var(--ink-2)', fontSize:14}}>Rugged laptops, radios, solar gear and more - built for where the signal ends.</p>
             <a href={getSiteUrl() + '/shop'} className="btn btn-rust" style={{marginTop:16, display:'inline-flex'}}>Go to Shop →</a>
           </div>
           <div className="card-paper" style={{padding:24}}>
@@ -736,14 +736,14 @@ function OrderDetail({ o, onPay, onPayInstallment, paying, onCollapse }) {
                   </div>
                   {o.paymentPlan.collectionMethod === 'customer' && (
                     <button className="btn btn-rust btn-sm" onClick={() => onPayInstallment(o.id)} disabled={paying === o.id}>
-                      {paying === o.id ? 'Redirecting…' : `Pay next instalment — $${progress.nextDue.amount.toLocaleString('en-AU', {minimumFractionDigits:2})} →`}
+                      {paying === o.id ? 'Redirecting…' : `Pay next instalment - $${progress.nextDue.amount.toLocaleString('en-AU', {minimumFractionDigits:2})} →`}
                     </button>
                   )}
                   {o.paymentPlan.collectionMethod === 'auto' && (
                     <span style={{color:'var(--ink-2)'}}>Your saved card will be charged automatically on the due date.</span>
                   )}
                   {o.paymentPlan.collectionMethod === 'manual' && (
-                    <span style={{color:'var(--ink-2)'}}>We'll collect this instalment directly — get in touch if you'd like to pay another way.</span>
+                    <span style={{color:'var(--ink-2)'}}>We'll collect this instalment directly, get in touch if you'd like to pay another way.</span>
                   )}
                 </>
               )}
@@ -764,7 +764,7 @@ function OrderDetail({ o, onPay, onPayInstallment, paying, onCollapse }) {
                 <div>
                   <span style={{fontWeight:600}}>${Number(p.amount).toLocaleString('en-AU',{minimumFractionDigits:2})} AUD</span>
                   <span style={{color:'var(--ink-2)', marginLeft:10}}>{p.method}</span>
-                  {p.note && !/^Session /i.test(p.note) && <span style={{color:'var(--ink-3)', marginLeft:8}}>— {p.note}</span>}
+                  {p.note && !/^Session /i.test(p.note) && <span style={{color:'var(--ink-3)', marginLeft:8}}>{p.note}</span>}
                 </div>
                 <span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>{p.date}</span>
               </div>
@@ -879,7 +879,7 @@ function OrdersTab({ highlightId }) {
     <div className="page-section">
       <div className="container">
         <SectionHead title="Orders" desc="Your order history with Outback Electronics." onRefresh={() => load(true)} />
-        {paidOrderId && <div className="alert alert-success" role="status" style={{marginBottom:20}}>Payment received — thank you! Your order is being processed.</div>}
+        {paidOrderId && <div className="alert alert-success" role="status" style={{marginBottom:20}}>Payment received, thank you! Your order is being processed.</div>}
         {payErr && <div className="alert alert-error" role="alert" style={{marginBottom:20}}>{payErr}</div>}
         {items.length > 0 && (
           <FilterBar
@@ -910,7 +910,7 @@ function OrdersTab({ highlightId }) {
                   role="button"
                   tabIndex={0}
                   aria-expanded={isExpanded}
-                  aria-label={`Order ${o.id} — ${isExpanded ? 'collapse' : 'expand'} details`}
+                  aria-label={`Order ${o.id} - ${isExpanded ? 'collapse' : 'expand'} details`}
                   onClick={() => setExpanded(isExpanded ? null : o.id)}
                   onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(isExpanded ? null : o.id); } }}
                 >
@@ -920,7 +920,7 @@ function OrdersTab({ highlightId }) {
                       {o.quoteRef && <span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>from {o.quoteRef}</span>}
                       {hasUpdates && <span style={{fontSize:11, background:'var(--rust)', color:'#fff', padding:'1px 6px', borderRadius:10}}>{o.updates.length} update{o.updates.length !== 1 ? 's' : ''}</span>}
                     </div>
-                    <div style={{fontWeight:500, marginTop:4}}>{o.items || '—'}</div>
+                    <div style={{fontWeight:500, marginTop:4}}>{o.items || '-'}</div>
                     <div style={{fontSize:13, color:'var(--ink-2)', marginTop:2}}>{fmtDate(o.date || o.createdAt)}{o.total != null ? ` · $${Number(o.total).toLocaleString('en-AU',{minimumFractionDigits:2})} AUD` : ''}</div>
                   </div>
                   <div style={{display:'flex', alignItems:'center', gap:10}}>
@@ -994,8 +994,8 @@ function RepairsTab() {
                     {shown.map(card => (
                       <tr key={card.id}>
                         <td data-label="Job ID"><span className="mono" style={{fontSize:12}}>{card.id}</span></td>
-                        <td data-label="Device / Description">{card.title || card.device || card.description || '—'}</td>
-                        <td data-label="Customer">{card.customer || card.name || '—'}</td>
+                        <td data-label="Device / Description">{card.title || card.device || card.description || '-'}</td>
+                        <td data-label="Customer">{card.customer || card.name || '-'}</td>
                         <td data-label="Stage"><StatusTag status={card.column || card.stage || card.status} /></td>
                         <td data-label="Updated">{fmtDate(card.updatedAt || card.createdAt)}</td>
                       </tr>
@@ -1044,7 +1044,7 @@ function QuotesTab({ user, onOrderCreated, highlightRef }) {
       const list = r.items || [];
       setItems(list);
       // Pre-fill the quote form email from the logged-in user's existing quotes
-      // (the /api/portal/auth/me response doesn't include email — see note).
+      // (the /api/portal/auth/me response doesn't include email, see note).
       const known = list.find(q => q.email);
       if (known) setFormData(f => (f.email ? f : { ...f, email: known.email }));
     }).catch(() => setItems([]));
@@ -1207,7 +1207,7 @@ function QuotesTab({ user, onOrderCreated, highlightRef }) {
               {quoteNotes && <p style={{fontSize:13, color:'var(--ink-2)', marginBottom:16}}>{quoteNotes}</p>}
 
               {accepted ? (
-                <div className="alert alert-success">Order created — <strong>{accepted}</strong>. Check your Orders tab and your email for confirmation.</div>
+                <div className="alert alert-success">Order created, <strong>{accepted}</strong>. Check your Orders tab and your email for confirmation.</div>
               ) : (() => {
                 const choice = planChoice[q.id] || { mode: 'full', frequency: 'fortnightly', installmentAmount: '', collectionMethod: 'manual' };
                 const setChoice = patch => setPlanChoice(pc => ({ ...pc, [q.id]: { ...choice, ...patch } }));
@@ -1276,7 +1276,7 @@ function QuotesTab({ user, onOrderCreated, highlightRef }) {
                           <tr key={q.id}>
                             <td data-label="ID"><span className="mono" style={{fontSize:12}}>{q.quoteRef || q.id}</span></td>
                             <td data-label="Date">{fmtDate(q.date || q.createdAt)}</td>
-                            <td data-label="Description" style={{maxWidth:360}}>{q.summary || q.description || q.notes || '—'}</td>
+                            <td data-label="Description" style={{maxWidth:360}}>{q.summary || q.description || q.notes || '-'}</td>
                             <td data-label="Status"><StatusTag status={q.status} /></td>
                           </tr>
                         ))}
@@ -1323,7 +1323,7 @@ function MembershipsTab() {
     if (r.ok && r.url) {
       window.location.href = r.url;
     } else if (r.ok && !r.url) {
-      // Server acknowledged but returned no checkout URL — free/trial tier
+      // Server acknowledged but returned no checkout URL, free/trial tier
       const r2 = await api('/api/portal/membership/subscribe', { method: 'POST', body: JSON.stringify({ tierId }) });
       if (r2.ok) { invalidateCache('/api/portal/membership'); setData({ subscription: r2.subscription, tier: r2.tier }); setMsg({ ok: true, text: `Subscribed to ${r2.tier?.name || 'membership'}.` }); }
       else { setMsg({ ok: false, text: r2.message || 'Subscription failed.' }); }
@@ -1638,7 +1638,7 @@ function AddressesTab() {
     if (Object.keys(errs).length) return;
     setErr(''); setBusy(true);
     // There's no update endpoint on the server, so editing saves the revised
-    // address first, then removes the old one (never delete-first — no data loss).
+    // address first, then removes the old one (never delete-first, no data loss).
     const r = await api('/api/portal/addresses/save', { method: 'POST', body: JSON.stringify(form) });
     if (r.ok && editingId) {
       await api('/api/portal/addresses/delete', { method: 'POST', body: JSON.stringify({ id: editingId }) });
@@ -1722,7 +1722,7 @@ function AddressesTab() {
         {confirmDelete && (
           <ConfirmDialog
             title="Remove this address?"
-            message={`"${confirmDelete.name}" — ${confirmDelete.line1 || ''} ${confirmDelete.city || ''} ${confirmDelete.postcode || ''} will be permanently removed.`}
+            message={`"${confirmDelete.name}" - ${confirmDelete.line1 || ''} ${confirmDelete.city || ''} ${confirmDelete.postcode || ''} will be permanently removed.`}
             confirmLabel="Remove address"
             danger
             busy={deleting}
@@ -1843,7 +1843,7 @@ function BookingsTab() {
                 <span className="label">Notes <span style={{color:'var(--ink-3)', fontWeight:400}}>(optional)</span></span>
                 <textarea className="input textarea" rows={3} value={form.notes}
                   onChange={e => setForm(f => ({...f, notes: e.target.value}))}
-                  placeholder="Any details we should know — device type, location, special requirements…" />
+                  placeholder="Any details we should know, device type, location, special requirements…" />
               </label>
               <div style={{display:'flex', gap:10, marginTop:4}}>
                 <button className="btn btn-rust" type="submit" disabled={busy}>{busy ? 'Submitting…' : 'Submit Request →'}</button>
@@ -1890,8 +1890,8 @@ function BookingsTab() {
                         {fmtDate(b.date)}
                         {b.time && <span style={{color:'var(--ink-3)', marginLeft:6, fontSize:12}}>{b.time}</span>}
                       </td>
-                      <td data-label="Service">{b.service || b.serviceName || '—'}</td>
-                      <td data-label="Notes" style={{maxWidth:220, color:'var(--ink-2)', fontSize:13}}>{b.notes || '—'}</td>
+                      <td data-label="Service">{b.service || b.serviceName || '-'}</td>
+                      <td data-label="Notes" style={{maxWidth:220, color:'var(--ink-2)', fontSize:13}}>{b.notes || '-'}</td>
                       <td data-label="Status"><BookingStatusBadge status={b.status} /></td>
                     </tr>
                   ))}
@@ -2281,7 +2281,7 @@ function WarrantyPage({ orderId: initialOrderId }) {
             </label>
             <label className="field">
               <span className="label">Notes (optional)</span>
-              <textarea className="input textarea" rows={3} value={form.notes} onChange={e => setForm(f => ({...f, notes: e.target.value}))} placeholder="Anything we should know — e.g. arrived with minor transit damage" />
+              <textarea className="input textarea" rows={3} value={form.notes} onChange={e => setForm(f => ({...f, notes: e.target.value}))} placeholder="Anything we should know, e.g. arrived with minor transit damage" />
             </label>
             {err && <div className="alert alert-error" style={{ marginBottom: 12 }}>{err}</div>}
             <button className="btn btn-rust" type="submit" disabled={busy}>{busy ? 'Registering…' : 'Register Warranty →'}</button>
@@ -2611,7 +2611,7 @@ function QuoteTokenView({ token, onAccepted }) {
       <div style={{maxWidth:640, margin:'0 auto'}}>
         <div style={{marginBottom:24, textAlign:'center'}}>
           <div className="eyebrow" style={{marginBottom:8}}>OUTBACK ELECTRONICS</div>
-          <h1 className="serif" style={{fontSize:28, fontWeight:400}}>Your Quote — {quote.quoteRef}</h1>
+          <h1 className="serif" style={{fontSize:28, fontWeight:400}}>Your Quote - {quote.quoteRef}</h1>
           {validUntil && <p style={{color:'var(--ink-2)', fontSize:13, marginTop:6}}>Valid until {validUntil}</p>}
         </div>
 
@@ -2648,7 +2648,7 @@ function QuoteTokenView({ token, onAccepted }) {
         ) : (
           <div className="card-paper" style={{padding:28}}>
             <h3 style={{marginBottom:4}}>Create your account</h3>
-            <p style={{color:'var(--ink-2)', fontSize:13, marginBottom:20}}>Your account email will be <strong>{quote.email}</strong> — the address we sent this quote to.</p>
+            <p style={{color:'var(--ink-2)', fontSize:13, marginBottom:20}}>Your account email will be <strong>{quote.email}</strong>, the address we sent this quote to.</p>
             <form onSubmit={handleAccept}>
               <label className="field" style={{marginBottom:14}}>
                 <span className="label">Display name <span style={{color:'var(--ink-3)'}}>(optional)</span></span>

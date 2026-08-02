@@ -36,7 +36,7 @@ const GAMES_PORT  = process.env.GAMES_PORT  || 8084;
 const TOOLS_PORT  = process.env.TOOLS_PORT  || 8085;
 const WEATHER_PORT = process.env.WEATHER_PORT || 8089;
 const AI_GATEWAY_PORT = process.env.AI_GATEWAY_PORT || 8091;
-// ── Customer-facing service suite (hub + apps) — see CLAUDE.md ───────────────
+// ── Customer-facing service suite (hub + apps), see CLAUDE.md ───────────────
 const HUB_PORT      = process.env.HUB_PORT      || 8101;
 const DRIVE_PORT    = process.env.DRIVE_PORT    || 8102;
 const PHOTOS_PORT   = process.env.PHOTOS_PORT   || 8103;
@@ -192,7 +192,7 @@ const GAMES_URL  = process.env.GAMES_URL  || _defaultSubUrl(SITE_URL, 8084, 'gam
 const TOOLS_URL  = process.env.TOOLS_URL  || _defaultSubUrl(SITE_URL, 8085, 'tools');
 const WEATHER_URL = process.env.WEATHER_URL || _defaultSubUrl(SITE_URL, 8089, 'weather');
 // New-suite URLs are resolved dynamically in serviceUrls() (settings-aware),
-// so no per-service consts are needed here — only env overrides + ports.
+// so no per-service consts are needed here, only env overrides + ports.
 
 function loadSessionsFromDisk(filePath) {
   try {
@@ -233,7 +233,7 @@ function saveResetTokens() {
   fs.writeFileSync(RESET_TOKENS_DB_PATH, JSON.stringify(obj));
 }
 
-// Reset tokens are stored hashed — a leaked password-reset-tokens.db cannot be
+// Reset tokens are stored hashed, a leaked password-reset-tokens.db cannot be
 // used to take over accounts. The raw token only ever exists in the email link.
 function hashResetToken(token) {
   return crypto.createHash('sha256').update(String(token)).digest('hex');
@@ -292,7 +292,7 @@ function validateVideoUrl(url) {
 }
 
 // Reading-time estimate at 200 words/minute, rounded up, minimum 1 minute.
-// Mirrors estimateReadTime() in markdown.jsx — kept separate since this file
+// Mirrors estimateReadTime() in markdown.jsx, kept separate since this file
 // is plain CommonJS and that one is a JSX/ESM module.
 function estimateReadTime(...markdownParts) {
   const stripped = markdownParts.filter(Boolean).join(' ')
@@ -333,7 +333,7 @@ function atomicWriteFile(filePath, data) {
   _fileReadCache.set(filePath, data);
 }
 
-// Per-key async mutex — serialises concurrent read-modify-write operations on
+// Per-key async mutex, serialises concurrent read-modify-write operations on
 // shared data files so a later write can never clobber an earlier one.
 const _locks = new Map();
 async function withFileLock(key, fn) {
@@ -622,15 +622,15 @@ function assignMissingSkus(body, products) {
   return body;
 }
 
-// Bulk ("buy N or more") unit price. A product — or a variant, when the
-// product has variants — may carry a `bulkQty` threshold and a `bulkPrice`
+// Bulk ("buy N or more") unit price. A product, or a variant, when the
+// product has variants, may carry a `bulkQty` threshold and a `bulkPrice`
 // unit rate; reaching the threshold reprices every unit on that line.
 //
 // The base price is passed in rather than read off the entry because products
 // and variants keep it under different keys (priceAud vs price).
 //
 // Mirrors bulkUnitPrice() in src/lib/pricing.js, which the shop and cart use
-// to preview the price. This copy is what the customer is actually charged —
+// to preview the price. This copy is what the customer is actually charged
 // keep the two in step.
 function applyBulkPrice(entry, qty, basePrice) {
   const base = Number(basePrice) || 0;
@@ -684,7 +684,7 @@ function buildInstallmentSchedule({ total, installmentAmount, frequency, startDa
   if (totalAmt <= 0 || instAmt <= 0) return schedule;
   let remaining = totalAmt;
   let due = startDate ? new Date(startDate + 'T00:00:00') : new Date();
-  const MAX_INSTALLMENTS = 520; // ~10 years weekly — guards against pathological input
+  const MAX_INSTALLMENTS = 520; // ~10 years weekly, guards against pathological input
   while (remaining > 0.005 && schedule.length < MAX_INSTALLMENTS) {
     const amt = Math.min(instAmt, Math.round(remaining * 100) / 100);
     schedule.push({ dueDate: ymd(due), amount: amt });
@@ -694,7 +694,7 @@ function buildInstallmentSchedule({ total, installmentAmount, frequency, startDa
   return schedule;
 }
 
-// Progress is always derived from actual payments, never stored per-installment —
+// Progress is always derived from actual payments, never stored per-installment
 // this reconciles correctly whether money arrived via auto-charge, a customer's
 // own portal payment, a manual counter payment, or paying off early in one go.
 function paymentPlanProgress(order) {
@@ -739,7 +739,7 @@ function nextQuoteRef(quotes) {
   while (used.has(n)) n++;
   return `OEQ-${String(n).padStart(4, '0')}`;
 }
-// Same scheme for expense ids (EXP-0001) — replaces the old exp-<Date.now()>
+// Same scheme for expense ids (EXP-0001), replaces the old exp-<Date.now()>
 // ids, which were never sequential or human-referenceable.
 function nextExpenseId(expenses) {
   const used = new Set(expenses.map(e => { const m = String(e.id || '').match(/^EXP-(\d+)$/); return m ? parseInt(m[1]) : null; }).filter(n => n != null));
@@ -887,7 +887,7 @@ function calculateListingFee(count) {
   if (count <= 10) return Math.round(count * 0.75 * 100) / 100;
   if (count <= 50) return Math.round(count * 0.50 * 100) / 100;
   if (count <= 100) return Math.round(count * 0.30 * 100) / 100;
-  return null; // custom — skip automatic charge
+  return null; // custom, skip automatic charge
 }
 
 function getSellerBalance(sellerId) {
@@ -986,7 +986,7 @@ function pushMaintenanceEvent(enabled) {
 
 function maskIntegrationConfig(name, config) {
   if (!config) return {};
-  // Secrets never leave the server in full — the admin dashboard sees a masked
+  // Secrets never leave the server in full, the admin dashboard sees a masked
   // value (last 4 chars) and settings/save ignores masked values on round-trip.
   const result = {};
   for (const [k, v] of Object.entries(config)) {
@@ -1012,7 +1012,7 @@ function readYearEndChecklist() {
 }
 function writeYearEndChecklist(years) { atomicWriteFile(YEAREND_CHECKLIST_DB_PATH, JSON.stringify({ years }, null, 2)); }
 
-// Analytics — append-only event log. Kept in memory for fast aggregation;
+// Analytics, append-only event log. Kept in memory for fast aggregation;
 // flushed to disk on a 30-second timer and on each new event batch.
 let _analyticsEvents = [];
 let _analyticsDirty = false;
@@ -1080,7 +1080,7 @@ function deductRewardPoints(userId, points, description, refId) {
   return true;
 }
 
-// ── Store credit (dollar balances) — mirrors the rewards system but in AUD ──
+// ── Store credit (dollar balances), mirrors the rewards system but in AUD ──
 function readStoreCredits() {
   try { const d = JSON.parse(cachedReadFile(STORE_CREDIT_DB_PATH)); return { entries: Array.isArray(d.entries) ? d.entries : [] }; } catch { return { entries: [] }; }
 }
@@ -1178,7 +1178,7 @@ function getDayHours(avail, dateStr) {
 // The grid-aligned slots (clipped to operating hours) occupied by a booking that starts
 // at `startTime`, runs `durationMinutes`, and needs `travelMinutesEach` of driving on
 // each side. Travel time outside operating hours isn't represented in the grid and
-// doesn't need blocking — only the portion that overlaps the open/close window does.
+// doesn't need blocking, only the portion that overlaps the open/close window does.
 function getBlockSlots(avail, dateStr, startTime, durationMinutes, travelMinutesEach) {
   const dayHours = getDayHours(avail, dateStr);
   if (!dayHours) return null;
@@ -1193,7 +1193,7 @@ function getBlockSlots(avail, dateStr, startTime, durationMinutes, travelMinutes
   return slots;
 }
 
-// Returns { closed, reason, slots: ['09:00', ...] } — valid booking *start* times for a
+// Returns { closed, reason, slots: ['09:00', ...] } - valid booking *start* times for a
 // given YYYY-MM-DD date, given how long the job itself takes and how much driving time
 // (each way) needs to be blocked around it.
 function computeSlotsForDate(dateStr, { durationMinutes = SLOT_MINUTES, travelMinutesEach = 0 } = {}) {
@@ -1316,7 +1316,7 @@ function buildAdminMetrics() {
   const repeatRate = customers.length ? Math.round((repeatCustomers / customers.length) * 100) : 0;
   const outstandingSellerValue = sellers.reduce((sum, s) => sum + (Number(s.payoutDue) || 0), 0);
 
-  // 7-day overview stats — CLEAR only (fully settled), parsed server-side
+  // 7-day overview stats - CLEAR only (fully settled), parsed server-side
   const sevenDayCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   const recentPaidOrders = orders.filter(o => {
     if (orderRemainingBalance(o) > 0) return false;
@@ -1351,7 +1351,7 @@ function normalizePolicySlug(value) {
 }
 // Must match the audience keys the public site's "viewing as" selector offers
 // (POLICY_AUDIENCE_LABELS/POLICY_AUDIENCE_ORDER in pages-info.jsx and pages-admin.jsx)
-// — these are the only groups a policy can belong to.
+//, these are the only groups a policy can belong to.
 const POLICY_AUDIENCES = ['all', 'private', 'commercial', 'seller'];
 function validatePolicyPayload(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return 'Policy payload must be a JSON object.';
@@ -1375,7 +1375,7 @@ const POLICY_DEFAULTS_MAP = new Map(POLICY_DEFAULTS.map(d => [policyKey(d.audien
 }]));
 // Merges the built-in defaults (shipped in code, since policies.db is gitignored
 // and starts empty on every fresh deploy) with any staff overrides saved to
-// policies.db, keyed by audience+slug — an override replaces its matching default.
+// policies.db, keyed by audience+slug - an override replaces its matching default.
 function getEffectivePolicies() {
   const byKey = new Map(POLICY_DEFAULTS_MAP);
   for (const item of readPolicies()) {
@@ -1528,7 +1528,7 @@ function sessionCookie(name, value, maxAgeSec, req) {
 }
 
 // Customer session cookies need Domain set to the parent domain so they're shared
-// across all subdomains (forum., portal., games., etc.). Localhost is exempt —
+// across all subdomains (forum., portal., games., etc.). Localhost is exempt
 // browsers already share cookies across ports on the same hostname.
 function sharedDomain() {
   try {
@@ -1681,7 +1681,7 @@ const ALLOWED_SERVE_ROOTS = [
 
 // spaRoutes: Set of route names to serve rootFile for (main SPA).
 // Strict CSP for ad-free services (admin, portal): no 'unsafe-inline' for
-// scripts — inline <script> blocks in the built HTML are allowed via SHA-256
+// scripts, inline <script> blocks in the built HTML are allowed via SHA-256
 // hashes computed lazily from dist/ (which only exists after a build).
 const _inlineScriptHashCache = new Map();
 function inlineScriptHashes(rootFile) {
@@ -1694,7 +1694,7 @@ function inlineScriptHashes(rootFile) {
     while ((m = re.exec(html))) {
       if (m[1].trim()) hashes.push(`'sha256-${crypto.createHash('sha256').update(m[1]).digest('base64')}'`);
     }
-  } catch { return []; } // dist not built yet — don't cache, retry next request
+  } catch { return []; } // dist not built yet, don't cache, retry next request
   _inlineScriptHashCache.set(rootFile, hashes);
   return hashes;
 }
@@ -1764,7 +1764,7 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null, cspOverride 
       ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toUTCString()
       : new Date(0).toUTCString();
 
-    // Stream large binary downloads directly — no buffering in memory.
+    // Stream large binary downloads directly, no buffering in memory.
     if (isSoftwareDownload || isPdf) {
       fs.stat(filePath, (statErr, stat) => {
         if (statErr) return tryRead(paths, idx + 1);
@@ -1841,23 +1841,23 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null, cspOverride 
 const OG_BASE_URL = 'https://outbackelectronics.com.au';
 
 const STATIC_OG = {
-  '/':          { title: 'Outback Electronics — Built for where the signal ends', description: 'Arduino & microcontroller builds, PC & phone repairs, software and AI solutions, and off-grid electronics — serving remote Australia by appointment.', image: '/assets/og-image.webp' },
-  '/home':      { title: 'Outback Electronics — Built for where the signal ends', description: 'Arduino & microcontroller builds, PC & phone repairs, software and AI solutions, and off-grid electronics — serving remote Australia by appointment.', image: '/assets/og-image.webp' },
-  '/shop':        { title: 'Shop — Outback Electronics',           description: 'Browse rugged laptops, solar gear, satellite comms, UHF radios and off-grid tools built for remote Australia.',           image: '/assets/og-image.webp' },
-  '/services':    { title: 'Services — Outback Electronics',       description: 'Expert repairs, field service and bench diagnostics for rugged devices. Book a repair or drop in.',                       image: '/assets/og-image.webp' },
-  '/groups':      { title: 'Community Groups — Outback Electronics', description: 'Connect with community chapters across remote Australia. Find your local Outback Electronics group.',                  image: '/assets/og-image.webp' },
-  '/memberships': { title: 'Memberships — Outback Electronics',    description: 'Join the Outback Electronics community. Member discounts, priority repairs and exclusive access.',                       image: '/assets/og-image.webp' },
-  '/tutorials':   { title: 'Tutorials — Outback Electronics',      description: 'Field guides, how-to videos and repair tutorials for off-grid gear and rugged electronics.',                            image: '/assets/og-image.webp' },
-  '/software':    { title: 'Software Library — Outback Electronics', description: 'Download firmware, drivers and utilities for rugged devices and off-grid hardware.',                                  image: '/assets/og-image.webp' },
-  '/ai':          { title: 'Edge AI — Outback Electronics',        description: 'Offline-capable AI models and inference hardware for remote deployments. No cloud required.',                           image: '/assets/og-image.webp' },
-  '/ewaste':      { title: 'eWaste Take-Back — Outback Electronics', description: 'Responsible eWaste recycling and take-back for old electronics. Drop in or arrange a pickup.',                        image: '/assets/og-image.webp' },
-  '/contact':     { title: 'Contact — Outback Electronics',        description: null, image: '/assets/og-image.webp' },
-  '/quote':       { title: 'Request a Quote — Outback Electronics', description: 'Need a custom kit or bulk order? Request a quote from Outback Electronics.',                                          image: '/assets/og-image.webp' },
-  '/about':       { title: 'About — Outback Electronics',           description: 'Learn about Outback Electronics — our mission, team, and commitment to remote Australia.',                           image: '/assets/og-image.webp' },
-  '/repairs':     { title: 'Repairs — Outback Electronics',         description: 'Expert device repairs for rugged electronics, laptops, phones and off-grid gear. Drop in or book online.',          image: '/assets/og-image.webp' },
-  '/policies':    { title: 'Policies — Outback Electronics',        description: 'Shipping, returns, warranty and privacy policies for Outback Electronics.',                                          image: '/assets/og-image.webp' },
-  '/sellers':     { title: 'Info for Sellers — Outback Electronics', description: 'Sell your surplus electronics through Outback Electronics. Consignment and trade-in options available.',           image: '/assets/og-image.webp' },
-  '/gift-cards':  { title: 'Gift Cards — Outback Electronics',      description: 'Give the gift of rugged gear. Outback Electronics gift cards — perfect for the remote tech enthusiast.',            image: '/assets/og-image.webp' },
+  '/':          { title: 'Outback Electronics - Built for where the signal ends', description: 'Arduino & microcontroller builds, PC & phone repairs, software and AI solutions, and off-grid electronics - serving remote Australia by appointment.', image: '/assets/og-image.webp' },
+  '/home':      { title: 'Outback Electronics - Built for where the signal ends', description: 'Arduino & microcontroller builds, PC & phone repairs, software and AI solutions, and off-grid electronics - serving remote Australia by appointment.', image: '/assets/og-image.webp' },
+  '/shop':        { title: 'Shop - Outback Electronics',           description: 'Browse rugged laptops, solar gear, satellite comms, UHF radios and off-grid tools built for remote Australia.',           image: '/assets/og-image.webp' },
+  '/services':    { title: 'Services - Outback Electronics',       description: 'Expert repairs, field service and bench diagnostics for rugged devices. Book a repair or drop in.',                       image: '/assets/og-image.webp' },
+  '/groups':      { title: 'Community Groups - Outback Electronics', description: 'Connect with community chapters across remote Australia. Find your local Outback Electronics group.',                  image: '/assets/og-image.webp' },
+  '/memberships': { title: 'Memberships - Outback Electronics',    description: 'Join the Outback Electronics community. Member discounts, priority repairs and exclusive access.',                       image: '/assets/og-image.webp' },
+  '/tutorials':   { title: 'Tutorials - Outback Electronics',      description: 'Field guides, how-to videos and repair tutorials for off-grid gear and rugged electronics.',                            image: '/assets/og-image.webp' },
+  '/software':    { title: 'Software Library - Outback Electronics', description: 'Download firmware, drivers and utilities for rugged devices and off-grid hardware.',                                  image: '/assets/og-image.webp' },
+  '/ai':          { title: 'Edge AI - Outback Electronics',        description: 'Offline-capable AI models and inference hardware for remote deployments. No cloud required.',                           image: '/assets/og-image.webp' },
+  '/ewaste':      { title: 'eWaste Take-Back - Outback Electronics', description: 'Responsible eWaste recycling and take-back for old electronics. Drop in or arrange a pickup.',                        image: '/assets/og-image.webp' },
+  '/contact':     { title: 'Contact - Outback Electronics',        description: null, image: '/assets/og-image.webp' },
+  '/quote':       { title: 'Request a Quote - Outback Electronics', description: 'Need a custom kit or bulk order? Request a quote from Outback Electronics.',                                          image: '/assets/og-image.webp' },
+  '/about':       { title: 'About - Outback Electronics',           description: 'Learn about Outback Electronics, our mission, team, and commitment to remote Australia.',                           image: '/assets/og-image.webp' },
+  '/repairs':     { title: 'Repairs - Outback Electronics',         description: 'Expert device repairs for rugged electronics, laptops, phones and off-grid gear. Drop in or book online.',          image: '/assets/og-image.webp' },
+  '/policies':    { title: 'Policies - Outback Electronics',        description: 'Shipping, returns, warranty and privacy policies for Outback Electronics.',                                          image: '/assets/og-image.webp' },
+  '/sellers':     { title: 'Info for Sellers - Outback Electronics', description: 'Sell your surplus electronics through Outback Electronics. Consignment and trade-in options available.',           image: '/assets/og-image.webp' },
+  '/gift-cards':  { title: 'Gift Cards - Outback Electronics',      description: 'Give the gift of rugged gear. Outback Electronics gift cards, perfect for the remote tech enthusiast.',            image: '/assets/og-image.webp' },
 };
 
 function stripHtml(s) { return String(s || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim(); }
@@ -1884,11 +1884,11 @@ function resolveOgTags(pathname) {
       const products = readProducts().filter(p => p.status === 'published');
       const p = products.find(x => x.sku === id || String(x.id) === id || (x.slug && x.slug === id));
       if (p) {
-        const price = p.price != null ? ` — $${Number(p.price).toLocaleString('en-AU', { minimumFractionDigits: 2 })}` : '';
+        const price = p.price != null ? ` - $${Number(p.price).toLocaleString('en-AU', { minimumFractionDigits: 2 })}` : '';
         const body = p.description || p.desc;
-        const desc = body ? stripHtml(body).slice(0, 160) : `${p.name}. Available at Outback Electronics — rugged gear for remote Australia.`;
+        const desc = body ? stripHtml(body).slice(0, 160) : `${p.name}. Available at Outback Electronics, rugged gear for remote Australia.`;
         return {
-          title: `${p.name}${price} — Outback Electronics`,
+          title: `${p.name}${price} - Outback Electronics`,
           description: desc,
           image: (p.images && p.images[0]) || '/assets/og-image.webp',
           url: `${OG_BASE_URL}/product/${encodeURIComponent(id)}`,
@@ -1896,7 +1896,7 @@ function resolveOgTags(pathname) {
         };
       }
     }
-    // Unknown product SKU — still serve index.html so React can handle it
+    // Unknown product SKU, still serve index.html so React can handle it
     return { title: 'Outback Electronics', description: 'Rugged gear, solar kits, comms and tools built for remote Australia.', image: '/assets/og-image.webp', url: OG_BASE_URL + pathname };
   }
   // Service deep link: /service/<id>
@@ -1908,14 +1908,14 @@ function resolveOgTags(pathname) {
       if (s) {
         const desc = s.description ? stripHtml(s.description).slice(0, 160) : `${s.name}. Expert service from Outback Electronics.`;
         return {
-          title: `${s.name} — Outback Electronics Services`,
+          title: `${s.name} - Outback Electronics Services`,
           description: desc,
           image: (s.images && s.images[0]) || '/assets/og-image.webp',
           url: `${OG_BASE_URL}/service/${encodeURIComponent(id)}`,
         };
       }
     }
-    return { title: 'Services — Outback Electronics', description: 'Expert repairs and field service for rugged electronics.', image: '/assets/og-image.webp', url: OG_BASE_URL + pathname };
+    return { title: 'Services - Outback Electronics', description: 'Expert repairs and field service for rugged electronics.', image: '/assets/og-image.webp', url: OG_BASE_URL + pathname };
   }
   // Tutorial series landing page: /tutorials/series/<slug>
   if (pathname.startsWith('/tutorials/series/')) {
@@ -1925,14 +1925,14 @@ function resolveOgTags(pathname) {
       if (parts.length) {
         const first = parts.slice().sort((a,b) => (Number(a.seriesOrder)||0) - (Number(b.seriesOrder)||0))[0];
         return {
-          title: `${first.series} — Outback Electronics`,
+          title: `${first.series} - Outback Electronics`,
           description: `A ${parts.length}-part tutorial series from Outback Electronics.`,
           image: first.coverImage || '/assets/og-image.webp',
           url: `${OG_BASE_URL}${pathname}`,
         };
       }
     }
-    return { title: 'Tutorials — Outback Electronics', description: 'Field guides, how-to videos and repair tutorials for off-grid gear and rugged electronics.', image: '/assets/og-image.webp', url: OG_BASE_URL + pathname };
+    return { title: 'Tutorials - Outback Electronics', description: 'Field guides, how-to videos and repair tutorials for off-grid gear and rugged electronics.', image: '/assets/og-image.webp', url: OG_BASE_URL + pathname };
   }
   // Tutorial deep link: /tutorial/<slug-or-id>
   if (pathname.startsWith('/tutorial/')) {
@@ -1940,9 +1940,9 @@ function resolveOgTags(pathname) {
     if (id) {
       const t = readTutorials().find(x => x.status === 'Published' && (x.slug === id || String(x.id) === id));
       if (t) {
-        const desc = t.description ? stripHtml(t.description).slice(0, 160) : `${t.title} — a tutorial from Outback Electronics.`;
+        const desc = t.description ? stripHtml(t.description).slice(0, 160) : `${t.title} - a tutorial from Outback Electronics.`;
         return {
-          title: `${t.title} — Outback Electronics`,
+          title: `${t.title} - Outback Electronics`,
           description: desc,
           image: t.coverImage || '/assets/og-image.webp',
           url: `${OG_BASE_URL}/tutorial/${encodeURIComponent(id)}`,
@@ -1950,7 +1950,7 @@ function resolveOgTags(pathname) {
         };
       }
     }
-    return { title: 'Tutorials — Outback Electronics', description: 'Field guides, how-to videos and repair tutorials for off-grid gear and rugged electronics.', image: '/assets/og-image.webp', url: OG_BASE_URL + pathname };
+    return { title: 'Tutorials - Outback Electronics', description: 'Field guides, how-to videos and repair tutorials for off-grid gear and rugged electronics.', image: '/assets/og-image.webp', url: OG_BASE_URL + pathname };
   }
   return null;
 }
@@ -1978,7 +1978,7 @@ function _computeHeroImagePreload() {
         const u = w => `/api/thumb?src=${encodeURIComponent(src)}&w=${w}&q=82`;
         const srcset = [600, 800, 1000, 1200].map(w => `${u(w)} ${w}w`).join(', ');
         // Mirror the hero <img> srcset/sizes so the preload matches the variant
-        // the browser actually picks — no wasted second download.
+        // the browser actually picks, no wasted second download.
         return `<link rel="preload" as="image" href="${u(1000)}" imagesrcset="${srcset}" imagesizes="(max-width: 900px) 100vw, 560px" fetchpriority="high">`;
       }
     }
@@ -2171,7 +2171,7 @@ function sendMaintenance(req, res) {
 }
 
 function checkMaintenance(req, res, url) {
-  // SSE stream — client connects once and gets pushed updates instantly
+  // SSE stream, client connects once and gets pushed updates instantly
   if (req.method === 'GET' && url.pathname === '/api/maintenance-events') {
     const { maintenance } = readSettings();
     res.writeHead(200, {
@@ -2306,7 +2306,7 @@ function emailHtml(title, bodyHtml) {
 function emailOrderConfirmation({ orderId, customerName, amountAud, items }) {
   const name = customerName ? `, ${escHtml(customerName.split(' ')[0])}` : '';
   return {
-    subject: `Order confirmed — ${orderId}`,
+    subject: `Order confirmed - ${orderId}`,
     html: emailHtml('Order confirmed', `
       <p>Thanks${name}! Your payment was received and your order has been logged.</p>
       <div class="detail">
@@ -2323,21 +2323,21 @@ function emailOrderConfirmation({ orderId, customerName, amountAud, items }) {
 function emailHddCertificate({ orderId, customerName, driveModel }) {
   const name = customerName ? `, ${escHtml(customerName.split(' ')[0])}` : '';
   return {
-    subject: `Your hard drive condition certificate — ${orderId}`,
+    subject: `Your hard drive condition certificate - ${orderId}`,
     html: emailHtml('Condition certificate', `
       <p>Thanks${name}! Attached is the S.M.A.R.T. condition certificate for the drive in your order.</p>
       <div class="detail">
         <dt>ORDER</dt><dd>${escHtml(orderId)}</dd>
         ${driveModel ? `<dt>DRIVE</dt><dd>${escHtml(driveModel)}</dd>` : ''}
       </div>
-      <p>Keep this for your records — it covers the drive's condition and S.M.A.R.T. health at the time of sale.</p>
+      <p>Keep this for your records, it covers the drive's condition and S.M.A.R.T. health at the time of sale.</p>
     `),
   };
 }
 
 function emailQuoteReceived({ quoteId, customerName, description }) {
   return {
-    subject: `Quote request received — ${quoteId}`,
+    subject: `Quote request received - ${quoteId}`,
     html: emailHtml('We\'ve got your quote request', `
       <p>Hi${customerName ? ` ${escHtml(customerName.split(' ')[0])}` : ''},</p>
       <p>Thanks for reaching out. We've received your quote request and will get back to you as soon as possible.</p>
@@ -2353,7 +2353,7 @@ function emailQuoteReceived({ quoteId, customerName, description }) {
 function emailQuoteReply({ quoteId, customerName, reply, status }) {
   const statusLabel = { approved:'Approved', declined:'Declined', pending:'Pending review' }[status] || status;
   return {
-    subject: `Your quote is ready — ${quoteId}`,
+    subject: `Your quote is ready - ${quoteId}`,
     html: emailHtml('Your quote is ready', `
       <p>Hi${customerName ? ` ${escHtml(customerName.split(' ')[0])}` : ''},</p>
       <p>We've reviewed your request and have an update for you.</p>
@@ -2387,8 +2387,8 @@ function emailQuoteFormal({ quoteRef, quoteId, quoteToken, customerName, validDa
   ).join('');
 
   return {
-    subject: `Your quote — ${quoteRef}`,
-    html: emailHtml(`Quote — ${quoteRef}`, `
+    subject: `Your quote - ${quoteRef}`,
+    html: emailHtml(`Quote - ${quoteRef}`, `
       <p>Hi${customerName ? ` ${escHtml(customerName.split(' ')[0])}` : ''},</p>
       <p>Thank you for your enquiry. Please find your quote from Outback Electronics below.</p>
       <div class="detail">
@@ -2418,10 +2418,10 @@ function emailQuoteFormal({ quoteRef, quoteId, quoteToken, customerName, validDa
 function emailQuoteAccepted({ orderId, quoteRef, customerName, grandTotal }) {
   const name = customerName ? customerName.split(' ')[0] : '';
   return {
-    subject: `Order confirmed — ${orderId}`,
+    subject: `Order confirmed - ${orderId}`,
     html: emailHtml('Your order is confirmed.', `
       <p>Hi${name ? ` ${escHtml(name)}` : ''},</p>
-      <p>Thanks for accepting your quote — your order is now confirmed and we're getting started.</p>
+      <p>Thanks for accepting your quote, your order is now confirmed and we're getting started.</p>
       <div class="detail">
         <dt>ORDER ID</dt><dd>${escHtml(orderId)}</dd>
         <dt>QUOTE REFERENCE</dt><dd>${escHtml(quoteRef)}</dd>
@@ -2435,8 +2435,8 @@ function emailQuoteAccepted({ orderId, quoteRef, customerName, grandTotal }) {
 
 function emailStaffQuoteAccepted({ orderId, quoteRef, name, email, grandTotal }) {
   return {
-    subject: `[ORDER] Quote accepted — ${quoteRef} → ${orderId}`,
-    html: emailHtml('Quote accepted — new order created', `
+    subject: `[ORDER] Quote accepted - ${quoteRef} → ${orderId}`,
+    html: emailHtml('Quote accepted, new order created', `
       <div class="detail">
         <dt>ORDER ID</dt><dd>${escHtml(orderId)}</dd>
         <dt>QUOTE REFERENCE</dt><dd>${escHtml(quoteRef)}</dd>
@@ -2450,7 +2450,7 @@ function emailStaffQuoteAccepted({ orderId, quoteRef, name, email, grandTotal })
 function emailOrderDelivered({ orderId, customerName, trackingNumber }) {
   const name = customerName ? customerName.split(' ')[0] : '';
   return {
-    subject: `Your order has been delivered — ${orderId}`,
+    subject: `Your order has been delivered - ${orderId}`,
     html: emailHtml("Your order has arrived!", `
       <p>Hi${name ? ` ${escHtml(name)}` : ''},</p>
       <p>Australia Post has confirmed your order has been delivered. We hope everything looks great!</p>
@@ -2468,7 +2468,7 @@ function emailOrderRefunded({ orderId, customerName, amount, method }) {
   const name = customerName ? customerName.split(' ')[0] : '';
   const amtStr = '$' + (Number(amount) || 0).toLocaleString('en-AU', { minimumFractionDigits: 2 });
   return {
-    subject: `Your refund has been processed — ${orderId}`,
+    subject: `Your refund has been processed - ${orderId}`,
     html: emailHtml("Your refund has been processed", `
       <p>Hi${name ? ` ${escHtml(name)}` : ''},</p>
       <p>We've processed a refund of <strong>${escHtml(amtStr)}</strong> for your order to ${escHtml(method)}.</p>
@@ -2487,7 +2487,7 @@ function emailInstallmentReminder({ orderId, customerName, amount, dueDate, over
   const amtStr = '$' + (Number(amount) || 0).toLocaleString('en-AU', { minimumFractionDigits: 2 });
   const dueStr = new Date(dueDate + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
   return {
-    subject: overdue ? `Payment overdue — order ${orderId}` : `Upcoming instalment due — order ${orderId}`,
+    subject: overdue ? `Payment overdue, order ${orderId}` : `Upcoming instalment due, order ${orderId}`,
     html: emailHtml(overdue ? 'Your instalment is overdue' : 'An instalment is coming up', `
       <p>Hi${name ? ` ${escHtml(name)}` : ''},</p>
       <p>${overdue
@@ -2509,8 +2509,8 @@ function emailInstallmentReceived({ orderId, customerName, amount, remaining, ne
   const amtStr = '$' + (Number(amount) || 0).toLocaleString('en-AU', { minimumFractionDigits: 2 });
   const remainingStr = '$' + (Number(remaining) || 0).toLocaleString('en-AU', { minimumFractionDigits: 2 });
   return {
-    subject: `Instalment received — order ${orderId}`,
-    html: emailHtml('Thanks — instalment received', `
+    subject: `Instalment received, order ${orderId}`,
+    html: emailHtml('Thanks, instalment received', `
       <p>Hi${name ? ` ${escHtml(name)}` : ''},</p>
       <p>We've received your instalment of <strong>${escHtml(amtStr)}</strong> for order ${escHtml(orderId)}.</p>
       <div class="detail">
@@ -2528,7 +2528,7 @@ function emailInstallmentFailed({ orderId, customerName, amount, dueDate }) {
   const name = customerName ? customerName.split(' ')[0] : '';
   const amtStr = '$' + (Number(amount) || 0).toLocaleString('en-AU', { minimumFractionDigits: 2 });
   return {
-    subject: `Payment failed — order ${orderId}`,
+    subject: `Payment failed, order ${orderId}`,
     html: emailHtml('We couldn’t process your instalment', `
       <p>Hi${name ? ` ${escHtml(name)}` : ''},</p>
       <p>We tried to charge your saved card <strong>${escHtml(amtStr)}</strong> for order ${escHtml(orderId)} but the payment didn't go through.</p>
@@ -2541,7 +2541,7 @@ function emailInstallmentFailed({ orderId, customerName, amount, dueDate }) {
 function emailStaffInstallmentFailed({ orderId, name, email, amount }) {
   const amtStr = '$' + (Number(amount) || 0).toLocaleString('en-AU', { minimumFractionDigits: 2 });
   return {
-    subject: `[PAYMENT PLAN] Auto-charge failed — ${orderId}`,
+    subject: `[PAYMENT PLAN] Auto-charge failed - ${orderId}`,
     html: emailHtml('Auto-charge failed', `
       <div class="detail">
         <dt>ORDER ID</dt><dd>${escHtml(orderId)}</dd>
@@ -2559,10 +2559,10 @@ function emailOrderShipped({ orderId, warrantyToken, customerName, trackingNumbe
   const registerUrl = `${getPortalUrl()}/?warranty=${encodeURIComponent(warrantyToken || orderId)}`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(registerUrl)}`;
   return {
-    subject: `Your order has shipped — ${orderId}`,
+    subject: `Your order has shipped - ${orderId}`,
     html: emailHtml("Your order is on its way!", `
       <p>Hi${name ? ` ${escHtml(name)}` : ''},</p>
-      <p>Great news — your order has been shipped via Australia Post.</p>
+      <p>Great news, your order has been shipped via Australia Post.</p>
       <div class="detail">
         <dt>ORDER ID</dt><dd>${escHtml(orderId)}</dd>
         <dt>TRACKING NUMBER</dt><dd>${escHtml(trackingNumber)}</dd>
@@ -2583,12 +2583,12 @@ function emailRepairUpdate({ repairId, customerName, status, notes }) {
   const messages = {
     'In Progress': 'Your repair is now being worked on by our technicians.',
     'Waiting Parts': 'We\'re waiting on parts for your repair. We\'ll update you when they arrive.',
-    'Ready': 'Great news — your repair is complete and ready for collection!',
+    'Ready': 'Great news, your repair is complete and ready for collection!',
     'Done': 'Your repair has been completed and marked as done.',
   };
   const msg = messages[status] || `Your repair status has been updated to: ${escHtml(status)}.`;
   return {
-    subject: `Repair update — ${repairId}`,
+    subject: `Repair update - ${repairId}`,
     html: emailHtml('Repair status update', `
       <p>Hi${customerName ? ` ${escHtml(customerName.split(' ')[0])}` : ''},</p>
       <p>${msg}</p>
@@ -2597,14 +2597,14 @@ function emailRepairUpdate({ repairId, customerName, status, notes }) {
         <dt>STATUS</dt><dd>${escHtml(status)}</dd>
         ${notes ? `<dt>NOTES</dt><dd>${escHtml(notes)}</dd>` : ''}
       </div>
-      <p>Our workshop is appointment-only — please call ahead before collecting.</p>
+      <p>Our workshop is appointment-only, please call ahead before collecting.</p>
     `),
   };
 }
 
 function emailEwasteConfirmation({ intakeId, customerName, description }) {
   return {
-    subject: `eWaste intake confirmed — ${intakeId}`,
+    subject: `eWaste intake confirmed - ${intakeId}`,
     html: emailHtml('eWaste intake confirmed', `
       <p>Hi${customerName ? ` ${escHtml(customerName.split(' ')[0])}` : ''},</p>
       <p>Your eWaste intake request has been received. We'll arrange collection or drop-off and handle everything responsibly.</p>
@@ -2669,7 +2669,7 @@ function emailOrderTracking({ customerName, orderId, trackingToken }) {
   const name = customerName ? customerName.split(' ')[0] : '';
   const link = `${getPortalUrl()}/?order_token=${encodeURIComponent(trackingToken)}`;
   return {
-    subject: `Track your order — ${orderId}`,
+    subject: `Track your order - ${orderId}`,
     html: emailHtml('Your order is underway.', `
       <p>Hi${name ? ` ${escHtml(name)}` : ''},</p>
       <p>We've got your order and we're working on it. Click below to set up your account and track progress at any time.</p>
@@ -2680,7 +2680,7 @@ function emailOrderTracking({ customerName, orderId, trackingToken }) {
 
 function emailPasswordReset({ displayName, resetUrl }) {
   return {
-    subject: 'Reset your password — Outback Electronics',
+    subject: 'Reset your password - Outback Electronics',
     html: emailHtml('Reset your password', `
       <p>Hi ${escHtml(displayName)},</p>
       <p>We received a request to reset your Outback Electronics password. Click the button below to choose a new one. This link expires in 1 hour.</p>
@@ -2693,11 +2693,11 @@ function emailPasswordReset({ displayName, resetUrl }) {
 // Staff notification templates
 function emailStaffNewOrder({ orderId, customerName, amountAud, items }) {
   return {
-    subject: `[ORDER] New Stripe order — ${orderId}`,
+    subject: `[ORDER] New Stripe order - ${orderId}`,
     html: emailHtml('New online order received', `
       <div class="detail">
         <dt>ORDER</dt><dd>${escHtml(orderId)}</dd>
-        <dt>CUSTOMER</dt><dd>${escHtml(customerName || '—')}</dd>
+        <dt>CUSTOMER</dt><dd>${escHtml(customerName || '-')}</dd>
         ${items ? `<dt>ITEMS</dt><dd>${escHtml(items)}</dd>` : ''}
         <dt>AMOUNT</dt><dd>$${Number(amountAud).toLocaleString('en-AU', {minimumFractionDigits:2})} AUD</dd>
       </div>
@@ -2708,7 +2708,7 @@ function emailStaffNewOrder({ orderId, customerName, amountAud, items }) {
 
 function emailStaffNewQuote({ quoteId, name, email, description }) {
   return {
-    subject: `[QUOTE] New request — ${quoteId}`,
+    subject: `[QUOTE] New request - ${quoteId}`,
     html: emailHtml('New quote request', `
       <div class="detail">
         <dt>REFERENCE</dt><dd>${escHtml(quoteId)}</dd>
@@ -2722,7 +2722,7 @@ function emailStaffNewQuote({ quoteId, name, email, description }) {
 
 function emailStaffNewReview({ reviewerName, productName, rating }) {
   return {
-    subject: `[REVIEW] New ${rating}★ review${productName ? ` — ${productName}` : ''}`,
+    subject: `[REVIEW] New ${rating}★ review${productName ? ` - ${productName}` : ''}`,
     html: emailHtml('New review awaiting approval', `
       <div class="detail">
         <dt>FROM</dt><dd>${escHtml(reviewerName || 'Anonymous')}</dd>
@@ -2736,11 +2736,11 @@ function emailStaffNewReview({ reviewerName, productName, rating }) {
 
 function emailStaffNewEwaste({ intakeId, name, email, description }) {
   return {
-    subject: `[EWASTE] New intake — ${intakeId}`,
+    subject: `[EWASTE] New intake - ${intakeId}`,
     html: emailHtml('New eWaste intake', `
       <div class="detail">
         <dt>REFERENCE</dt><dd>${escHtml(intakeId)}</dd>
-        <dt>FROM</dt><dd>${escHtml(name || '—')}${email ? ` &lt;${escHtml(email)}&gt;` : ''}</dd>
+        <dt>FROM</dt><dd>${escHtml(name || '-')}${email ? ` &lt;${escHtml(email)}&gt;` : ''}</dd>
         ${description ? `<dt>ITEMS</dt><dd>${escHtml(description)}</dd>` : ''}
       </div>
       <a class="btn" href="${getAdminUrl()}/admin#ewaste">View in admin →</a>
@@ -2775,9 +2775,9 @@ function emailWarrantyConfirmation({ regId, customerName, orderId, receivedDate,
     ? 'All parts in your build are second-hand. These have no manufacturer warranty, however every part was tested by us before leaving the shop.'
     : usedParts.length > 0
     ? 'Your build contains a mix of new and second-hand parts. New parts carry manufacturer warranty; second-hand parts were tested by us before leaving the shop and carry no manufacturer warranty.'
-    : 'Your build uses all new parts — manufacturer warranty applies to each component. Contact the relevant manufacturer directly for warranty claims.';
+    : 'Your build uses all new parts, manufacturer warranty applies to each component. Contact the relevant manufacturer directly for warranty claims.';
   return {
-    subject: `[WARRANTY] Custom PC registration confirmed — ${regId}`,
+    subject: `[WARRANTY] Custom PC registration confirmed - ${regId}`,
     html: emailHtml('Your build is registered.', `
       <p>Hi ${escHtml(firstName)}, thanks for registering your custom PC build with Outback Electronics.</p>
       <div class="detail">
@@ -2803,7 +2803,7 @@ function emailStaffWarrantyRegistration({ regId, name, email, orderId, receivedD
     ${usedParts.map(e => `<dd>2ND HAND: ${escHtml(e.description)}</dd>`).join('')}
   `;
   return {
-    subject: `[WARRANTY] New registration — ${name} (${regId})`,
+    subject: `[WARRANTY] New registration - ${name} (${regId})`,
     html: emailHtml('New warranty registration', `
       <div class="detail">
         <dt>REGISTRATION ID</dt><dd>${escHtml(regId)}</dd>
@@ -2830,7 +2830,7 @@ function emailGiftCard({ code, balance, customerName }) {
         <dt style="margin-top:14px">VALUE</dt>
         <dd>$${Number(balance).toLocaleString('en-AU', { minimumFractionDigits: 2 })} AUD</dd>
       </div>
-      <p>Enter this code at checkout to redeem your balance. It never expires and can be used on anything we sell — products, services, repairs, and more.</p>
+      <p>Enter this code at checkout to redeem your balance. It never expires and can be used on anything we sell, products, services, repairs, and more.</p>
       <a class="btn" href="${getSiteUrl()}/shop">Shop now →</a>
       <p style="margin-top:16px;font-size:12px;color:#8b7e69">To check your balance at any time, visit <a href="${getSiteUrl()}/gift-cards" style="color:#1f88f5">${getSiteUrl()}/gift-cards</a> and enter your code.</p>
     `),
@@ -3009,7 +3009,7 @@ function getShopPostcode() {
 }
 
 // Computes a live AusPost parcel quote for a set of cart line items. Shared by
-// the public /api/shipping/quote endpoint and server-side checkout verification —
+// the public /api/shipping/quote endpoint and server-side checkout verification
 // checkout must never trust a client-supplied shipping price.
 async function fetchAuspostServices(toPostcode, items, catalogProducts) {
   let totalWeightKg = 0;
@@ -3119,7 +3119,7 @@ function getAdminUrl() {
 }
 // Legacy-only: pre-rebuild quotes stored their hardware/build/other items under
 // draftQuote instead of lineItems. Orders sourced from one of those old quotes
-// never got a real `parts` array of their own — this derives one on read so
+// never got a real `parts` array of their own, this derives one on read so
 // they still display correctly. New quotes/orders never hit this path.
 function buildPartsFromDraftQuote(dq) {
   if (!dq) return [];
@@ -3144,7 +3144,7 @@ function hydrateOrder(o, quotes) {
   return { ...o, draftQuote: dq, parts };
 }
 
-// Builds an order from an accepted quote — same lineItems/discount/total shape
+// Builds an order from an accepted quote, same lineItems/discount/total shape
 // a staff-created order uses, so an accepted quote is indistinguishable from
 // one entered by hand.
 function orderFromQuote(quote, { paymentPlan } = {}) {
@@ -3283,7 +3283,7 @@ function buildInvoicePdf(order, shop) {
     }
 
     doc.font('Helvetica-Oblique').fontSize(12).fillColor(RUST)
-      .text('Thanks for your order — we appreciate your business!', 50, y, { width: 495, align: 'center' });
+      .text('Thanks for your order, we appreciate your business!', 50, y, { width: 495, align: 'center' });
 
     doc.end();
   });
@@ -3449,7 +3449,7 @@ function estimateSoleTradeTax(netProfit) {
 // ── Tax / P&L report helpers ─────────────────────────────────────────────────
 function parseAuDateStr(s) {
   if (!s) return null;
-  // ISO or RFC2822 — let V8 handle it
+  // ISO or RFC2822, let V8 handle it
   let d = new Date(s);
   if (!isNaN(d)) return d;
   // "DD Mon YYYY" (en-AU locale with month:'short') → "Mon DD YYYY"
@@ -3471,7 +3471,7 @@ function parsePaymentDateForReport(p) {
 }
 // Cash-basis: walks an order's payments (in the order they were recorded), running the
 // same cumulative cap against o.total that orderCashReceived applies to the lifetime sum,
-// but reports each payment's own incremental contribution against ITS OWN date — not the
+// but reports each payment's own incremental contribution against ITS OWN date, not the
 // order's creation date. This matters for orders paid off via instalments (e.g. a custom
 // build paid fortnightly): each instalment lands in the tax period it was actually paid in,
 // instead of every instalment being lumped into whichever period the order was first created.
@@ -3554,7 +3554,7 @@ function buildTaxReportData(fromStr, toStr) {
 
   const totalRevenue = netOrderRevenue + repairRevenue;
 
-  // Expenses — skip anything linked to a cancelled order. The parts/costs were
+  // Expenses, skip anything linked to a cancelled order. The parts/costs were
   // never actually realised as part of a sale, so they shouldn't count as a
   // real business deduction just because a job card or expense was logged
   // before the order fell through.
@@ -3639,7 +3639,7 @@ function buildBASData(fromStr, toStr) {
   // 1A – GST on sales = G5 / 11
   const box1A = G5 / 11;
 
-  // G10 – Capital purchases (tools, equipment — typically assets ≥ $1k in value)
+  // G10 – Capital purchases (tools, equipment - typically assets ≥ $1k in value)
   // G11 – Non-capital purchases (parts, software, other running costs)
   let G10 = 0, G11 = 0;
   let expenseCount = 0;
@@ -3735,7 +3735,7 @@ function parseSmartctlJson(raw) {
     if (n.power_on_hours != null && out.powerOnHours == null) out.powerOnHours = n.power_on_hours;
     if (n.power_cycles != null && out.powerCycles == null) out.powerCycles = n.power_cycles;
     if (n.critical_warning != null) noteLines.push(`Critical warning flags: ${n.critical_warning}`);
-    if (n.available_spare != null) noteLines.push(`Available spare: ${n.available_spare}% (threshold ${n.available_spare_threshold ?? '—'}%)`);
+    if (n.available_spare != null) noteLines.push(`Available spare: ${n.available_spare}% (threshold ${n.available_spare_threshold ?? '-'}%)`);
     if (n.percentage_used != null) { noteLines.push(`Percentage used (wear): ${n.percentage_used}%`); out.wearPercent = n.percentage_used; }
     if (n.unsafe_shutdowns != null) noteLines.push(`Unsafe shutdowns: ${n.unsafe_shutdowns}`);
     if (n.data_units_written != null) out.totalBytesWritten = humanBytes(n.data_units_written * 512000);
@@ -3745,19 +3745,19 @@ function parseSmartctlJson(raw) {
     const failing = table.filter(a => a.when_failed);
     if (failing.length) noteLines.push(`Attributes at/below threshold: ${failing.map(a => a.name).join(', ')}`);
   }
-  if (out.udmaCrcErrors > 0) noteLines.push('UDMA CRC errors present — usually a cable/connection issue, not the drive itself. Worth reseating or swapping the SATA cable before condemning the drive.');
+  if (out.udmaCrcErrors > 0) noteLines.push('UDMA CRC errors present, usually a cable/connection issue, not the drive itself. Worth reseating or swapping the SATA cable before condemning the drive.');
   const selfTest = j.ata_smart_self_test_log && j.ata_smart_self_test_log.standard;
   if (selfTest && Array.isArray(selfTest.table) && selfTest.table.length) {
     const last = selfTest.table[0];
-    noteLines.push(`Last self-test: ${(last.type && last.type.string) || 'test'} — ${(last.status && last.status.string) || 'unknown'}`);
+    noteLines.push(`Last self-test: ${(last.type && last.type.string) || 'test'} - ${(last.status && last.status.string) || 'unknown'}`);
   }
   if (noteLines.length) out.smartNotes = noteLines.join('\n');
 
   // Suggest an overall verdict from what we found. It's a starting point, not a
-  // certification — a drive can pass SMART and still fail on physical inspection,
+  // certification, a drive can pass SMART and still fail on physical inspection,
   // so the tech can still override it before saving.
   const nvmeLog = j.nvme_smart_health_information_log;
-  // UDMA CRC errors are deliberately excluded here — they usually indicate a bad cable/
+  // UDMA CRC errors are deliberately excluded here, they usually indicate a bad cable/
   // connection, not a failing drive, so they shouldn't push the verdict down on their own.
   const hasBadSectors = out.reallocatedSectors > 0 || out.pendingSectors > 0 || out.uncorrectableSectors > 0
     || out.reportedUncorrect > 0 || out.spinRetryCount > 0 || out.gSenseErrorRate > 0;
@@ -3766,7 +3766,7 @@ function parseSmartctlJson(raw) {
   else if (out.smartStatus === 'PASS' && (hasBadSectors || nvmeWarning)) out.verdict = 'degraded';
   else if (out.smartStatus === 'PASS') out.verdict = 'healthy';
 
-  // The JSON can be well-formed but still carry no real SMART data — e.g. a USB bridge
+  // The JSON can be well-formed but still carry no real SMART data, e.g. a USB bridge
   // chip that smartctl detects but can't actually pass NVMe/ATA commands through. Surface
   // that as a specific failure rather than reporting a hollow "success" with 0-1 fields.
   const gotRealData = out.driveModel || out.driveSerial || out.smartStatus || out.reallocatedSectors != null
@@ -3774,7 +3774,7 @@ function parseSmartctlJson(raw) {
   if (!gotRealData) {
     const errMsgs = ((j.smartctl && j.smartctl.messages) || []).filter(m => m.severity === 'error').map(m => m.string);
     const err = new Error(errMsgs.length
-      ? `smartctl could not read this drive: ${errMsgs[0]}. This is common with USB enclosure bridge chips that don't pass SMART commands through — try a different -d type from smartctl --scan, a different adapter, or connect the drive directly.`
+      ? `smartctl could not read this drive: ${errMsgs[0]}. This is common with USB enclosure bridge chips that don't pass SMART commands through, try a different -d type from smartctl --scan, a different adapter, or connect the drive directly.`
       : 'smartctl returned no readable SMART data for this drive.');
     err.userMessage = err.message;
     throw err;
@@ -3845,12 +3845,12 @@ function buildHddReportPdf(report, shop) {
     let y = doc.y + 4;
     y = sectionTitle('Drive Identification', y);
     const driveRows = [
-      ['Model', report.driveModel || '—'],
-      ['Serial number', report.driveSerial || '—'],
-      ['Capacity', report.driveCapacity || '—'],
-      ['Interface', report.driveInterface || '—'],
-      ['Form factor', report.driveFormFactor || '—'],
-      ['Manufacture date', report.driveManufactureDate || '—'],
+      ['Model', report.driveModel || '-'],
+      ['Serial number', report.driveSerial || '-'],
+      ['Capacity', report.driveCapacity || '-'],
+      ['Interface', report.driveInterface || '-'],
+      ['Form factor', report.driveFormFactor || '-'],
+      ['Manufacture date', report.driveManufactureDate || '-'],
     ];
     doc.font('Helvetica').fontSize(10);
     driveRows.forEach(([label, val], i) => {
@@ -3864,17 +3864,17 @@ function buildHddReportPdf(report, shop) {
     // SMART summary
     y = sectionTitle('S.M.A.R.T. Summary', y);
     const smartRows = [
-      ['Overall status', report.smartStatus || '—'],
-      ['Reallocated sectors', report.reallocatedSectors ?? '—'],
-      ['Pending sectors', report.pendingSectors ?? '—'],
-      ['Uncorrectable sectors', report.uncorrectableSectors ?? '—'],
-      ['UDMA CRC errors', report.udmaCrcErrors ?? '—'],
-      ['Reported uncorrectable', report.reportedUncorrect ?? '—'],
-      ['Spin retry count', report.spinRetryCount ?? '—'],
-      ['G-sense error rate', report.gSenseErrorRate ?? '—'],
-      ['Power-on hours', report.powerOnHours ?? '—'],
-      ['Power cycles', report.powerCycles ?? '—'],
-      ['Temperature', report.temperature ? `${report.temperature}°C` : '—'],
+      ['Overall status', report.smartStatus || '-'],
+      ['Reallocated sectors', report.reallocatedSectors ?? '-'],
+      ['Pending sectors', report.pendingSectors ?? '-'],
+      ['Uncorrectable sectors', report.uncorrectableSectors ?? '-'],
+      ['UDMA CRC errors', report.udmaCrcErrors ?? '-'],
+      ['Reported uncorrectable', report.reportedUncorrect ?? '-'],
+      ['Spin retry count', report.spinRetryCount ?? '-'],
+      ['G-sense error rate', report.gSenseErrorRate ?? '-'],
+      ['Power-on hours', report.powerOnHours ?? '-'],
+      ['Power cycles', report.powerCycles ?? '-'],
+      ['Temperature', report.temperature ? `${report.temperature}°C` : '-'],
     ];
     if (report.loadCycleCount) smartRows.push(['Load cycle count', report.loadCycleCount]);
     if (report.startStopCount) smartRows.push(['Start/stop count', report.startStopCount]);
@@ -3911,7 +3911,7 @@ function buildHddReportPdf(report, shop) {
     y += 30;
 
     if (isRepair && report.recommendation) {
-      // Guard before the heading, not just the block after — otherwise PDFKit's own
+      // Guard before the heading, not just the block after - otherwise PDFKit's own
       // overflow handling can orphan the title alone at the bottom of a page.
       if (y > pageBottom - 60) { doc.addPage(); y = 50; }
       y = sectionTitle('Recommendation', y);
@@ -4013,7 +4013,7 @@ function buildBASPdf(data, shop) {
     // ── Notice banner ──
     doc.rect(50, y, 495, 28).fill('#fff8e1');
     doc.font('Helvetica-Bold').fontSize(9).fillColor('#7a5d10')
-      .text('WORKSHEET ONLY — NOT AN OFFICIAL ATO FORM', 56, y+5);
+      .text('WORKSHEET ONLY - NOT AN OFFICIAL ATO FORM', 56, y+5);
     doc.font('Helvetica').fontSize(8).fillColor('#9a7a30')
       .text('Use these figures to complete your BAS via myGov Business Portal or your registered BAS/tax agent.', 56, y+16);
     y += 38;
@@ -4044,12 +4044,12 @@ function buildBASPdf(data, shop) {
     };
 
     // ── Section 1: GST on Sales ──
-    sectionBand('SECTION 1  —  GST ON SALES');
+    sectionBand('SECTION 1  -  GST ON SALES');
     row('G1',  'Total sales (all revenue, including GST where applicable)', data.G1);
     row('G2',  'Export sales (GST-free)',                                   data.G2, { dim: data.G2===0 });
     row('G3',  'Other GST-free sales',                                      data.G3, { dim: data.G3===0 });
     row('G4',  'Input-taxed sales',                                         data.G4, { dim: data.G4===0 });
-    row('G5',  'G1 minus (G2 + G3 + G4)  —  Taxable sales',               data.G5, { shade:'#f5f5f5', bold:true });
+    row('G5',  'G1 minus (G2 + G3 + G4)  -  Taxable sales',               data.G5, { shade:'#f5f5f5', bold:true });
     y += 4;
     doc.rect(labelX, y, W, 22).fill(ATO_BLUE);
     doc.font('Helvetica-Bold').fontSize(10).fillColor('#fff')
@@ -4061,7 +4061,7 @@ function buildBASPdf(data, shop) {
     y += 10;
 
     // ── Section 2: GST on Purchases ──
-    sectionBand('SECTION 2  —  GST CREDITS ON PURCHASES');
+    sectionBand('SECTION 2  -  GST CREDITS ON PURCHASES');
     row('G10', 'Capital purchases (tools & equipment)', data.G10, { dim: data.G10===0 });
     row('G11', 'Non-capital purchases (parts, software, other)', data.G11, { dim: data.G11===0 });
     row('G6',  'Total purchases  (G10 + G11)',           data.G6,  { shade:'#f5f5f5', bold:true });
@@ -4086,10 +4086,10 @@ function buildBASPdf(data, shop) {
 
     // ── PAYG Withholding ──
     y += 4;
-    sectionBand('SECTION 3  —  PAYG WITHHOLDING  (employees)');
+    sectionBand('SECTION 3  -  PAYG WITHHOLDING  (employees)');
     doc.font('Helvetica').fontSize(9).fillColor('#888')
-      .text('W1  Total salary, wages and other payments               N/A — no employees', labelX+6, y+4);
-    doc.text('W2  Amount withheld from payments                         N/A — no employees', labelX+6, y+16);
+      .text('W1  Total salary, wages and other payments               N/A - no employees', labelX+6, y+4);
+    doc.text('W2  Amount withheld from payments                         N/A, no employees', labelX+6, y+16);
     y += 30;
 
     // ── Assumptions ──
@@ -4113,7 +4113,7 @@ function buildBASPdf(data, shop) {
     // ── Footer ──
     const genDate = new Date().toLocaleDateString('en-AU',{day:'2-digit',month:'long',year:'numeric'});
     doc.font('Helvetica').fontSize(8).fillColor('#aaa')
-      .text(`Generated ${genDate} · ${shopName} · BAS Worksheet — internal reference only`, 50, y+8, { width: 495, align: 'center' });
+      .text(`Generated ${genDate} · ${shopName} · BAS Worksheet, internal reference only`, 50, y+8, { width: 495, align: 'center' });
 
     doc.end();
   });
@@ -4227,7 +4227,7 @@ function buildTaxReportPdf(data, shop) {
     const tx = data.taxEstimate || {};
     y += 6;
     if (y > 580) { doc.addPage(); y = 50; }
-    sectionHeader('INCOME TAX ESTIMATE (SOLE TRADER — 2025-26 RATES)');
+    sectionHeader('INCOME TAX ESTIMATE (SOLE TRADER - 2025-26 RATES)');
     y += 4;
     dataRow('Taxable income (net profit)', fmtMoney(data.grossProfit));
     dataRow('Base income tax (brackets)', `(${fmtMoney(tx.baseTax || 0)})`);
@@ -4256,11 +4256,11 @@ function buildTaxReportPdf(data, shop) {
       .text('Tax estimate based on 2025-26 Australian individual rates. Assumes this profit is your only income. Consult a registered tax agent for your actual liability.', 50, y, { width: 495 });
     y += 20;
 
-    // GST — not registered
+    // GST, not registered
     y += 4;
     doc.rect(50, y, 495, 20).fill('#e0e0e0');
     doc.font('Helvetica-Bold').fontSize(10).fillColor('#888').text('GST', 56, y + 5);
-    doc.text('Not registered — N/A', 0, y + 5, { width: 540, align: 'right' });
+    doc.text('Not registered - N/A', 0, y + 5, { width: 540, align: 'right' });
     y += 26;
 
     // Monthly breakdown
@@ -4309,15 +4309,15 @@ function buildReceivablesData() {
 
   // Orders with an outstanding balance
   for (const o of readOrders()) {
-    if (o.gratis || o.cancelled) continue; // complimentary or cancelled — not a receivable
+    if (o.gratis || o.cancelled) continue; // complimentary or cancelled, not a receivable
     const balance = orderRemainingBalance(o);
     if (balance <= 0) continue; // fully cleared
     const received = orderCashReceived(o);
     const d = parseOrderDateForReport(o);
     items.push({
       type: 'order',
-      ref: o.id || '—',
-      customer: (o.customer && o.customer.name) || o.customerName || o.email || '—',
+      ref: o.id || '-',
+      customer: (o.customer && o.customer.name) || o.customerName || o.email || '-',
       description: `Shop order ${o.id || ''}`.trim(),
       amount: balance,
       date: d ? d.toISOString().slice(0,10) : null,
@@ -4334,8 +4334,8 @@ function buildReceivablesData() {
     const d = parseRepairDateForReport(r);
     items.push({
       type: 'repair',
-      ref: r.id || '—',
-      customer: r.customer || r.customerName || '—',
+      ref: r.id || '-',
+      customer: r.customer || r.customerName || '-',
       description: r.title || r.device || `Repair job ${r.id || ''}`.trim(),
       amount: amt,
       date: d ? d.toISOString().slice(0,10) : null,
@@ -4397,7 +4397,7 @@ function buildReceivablesPdf(data, shop) {
     }
     y = 148;
 
-    const fmtDateStr = s => s ? new Date(s+'T00:00:00').toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+    const fmtDateStr = s => s ? new Date(s+'T00:00:00').toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'}) : '-';
 
     // Ageing summary
     doc.rect(50, y, 495, 20).fill(OCHRE);
@@ -4445,7 +4445,7 @@ function buildReceivablesPdf(data, shop) {
           .text(it.customer,      116, y, { width:130 })
           .text(it.description,   246, y, { width:130 })
           .text(fmtDateStr(it.date), 376, y, { width:60 });
-        doc.fillColor('#555').text(it.status || '—', 436, y, { width:50 });
+        doc.fillColor('#555').text(it.status || '-', 436, y, { width:50 });
         doc.fillColor('#111').font('Helvetica-Bold').text(fmtMoney(it.amount), 0, y, { width:540, align:'right' });
         if (ageLbl) doc.fillColor(ageColor).font('Helvetica').text(ageLbl, 486, y, { width:54, align:'right' });
         y += 16;
@@ -4476,7 +4476,7 @@ function buildTradingStockData() {
   let totalSellValue = 0, totalCostValue = 0;
 
   for (const p of products) {
-    if (p.createdBy) continue; // belongs to an external seller — not your stock
+    if (p.createdBy) continue; // belongs to an external seller, not your stock
     if (p.variants && p.variants.length > 0) {
       for (const v of p.variants) {
         const qty = Number(v.stock) || 0;
@@ -4485,7 +4485,7 @@ function buildTradingStockData() {
         const costPrice = Number(v.costPrice || p.costPrice) || 0;
         const sellValue = sellPrice * qty;
         const costValue = costPrice ? costPrice * qty : sellValue;
-        lines.push({ sku: v.sku || p.sku || '—', name: `${p.name || p.title || '—'} — ${v.name || ''}`, qty, sellPrice, costPrice: costPrice || null, sellValue, costValue, hasCost: !!costPrice });
+        lines.push({ sku: v.sku || p.sku || '-', name: `${p.name || p.title || '-'} - ${v.name || ''}`, qty, sellPrice, costPrice: costPrice || null, sellValue, costValue, hasCost: !!costPrice });
         totalSellValue += sellValue;
         totalCostValue += costValue;
       }
@@ -4497,7 +4497,7 @@ function buildTradingStockData() {
       const costPrice = Number(p.costPrice) || 0;
       const sellValue = sellPrice * qty;
       const costValue = costPrice ? costPrice * qty : sellValue;
-      lines.push({ sku: p.sku || '—', name: p.name || p.title || '—', qty, sellPrice, costPrice: costPrice || null, sellValue, costValue, hasCost: !!costPrice });
+      lines.push({ sku: p.sku || '-', name: p.name || p.title || '-', qty, sellPrice, costPrice: costPrice || null, sellValue, costValue, hasCost: !!costPrice });
       totalSellValue += sellValue;
       totalCostValue += costValue;
     }
@@ -4585,7 +4585,7 @@ function buildTradingStockPdf(data, shop) {
           .text(ln.name,                     nameX, y, { width:230 })
           .text(String(ln.qty),              qtyX, y, { width:45, align:'right' })
           .text(fmtMoney(ln.sellPrice),      sellX, y, { width:55, align:'right' })
-          .text(ln.costPrice ? fmtMoney(ln.costPrice) : '—', costX, y, { width:55, align:'right' })
+          .text(ln.costPrice ? fmtMoney(ln.costPrice) : '-', costX, y, { width:55, align:'right' })
           .text(fmtMoney(ln.hasCost ? ln.costValue : ln.sellValue), valX, y, { width:540, align:'right' });
         y += 16;
       }
@@ -4601,8 +4601,8 @@ function buildTradingStockPdf(data, shop) {
     // Note
     doc.font('Helvetica-Oblique').fontSize(8).fillColor('#888')
       .text(data.hasCostPrices
-        ? 'Stock valued at cost price. ATO accepts cost, market value, or replacement value — use the same method consistently year to year.'
-        : 'No cost prices set — stock valued at selling price (market value method, acceptable to ATO). Add cost prices in Admin → Products for more accurate COGS reporting.',
+        ? 'Stock valued at cost price. ATO accepts cost, market value, or replacement value - use the same method consistently year to year.'
+        : 'No cost prices set, stock valued at selling price (market value method, acceptable to ATO). Add cost prices in Admin → Products for more accurate COGS reporting.',
         50, y, { width: 495 });
     y += 20;
 
@@ -4727,7 +4727,7 @@ function buildVehicleLogPdf(entries, fyYear, shop) {
     if (totalKm > 5000) {
       doc.rect(50, y-2, 495, 18).fill('#fff8e1');
       doc.font('Helvetica').fontSize(9).fillColor('#7a5d10')
-        .text('⚠  Exceeds 5,000 km — capped for cents-per-km method. Consider using the full logbook method for a higher deduction.', 56, y+1, { width: 483 });
+        .text('⚠  Exceeds 5,000 km - capped for cents-per-km method. Consider using the full logbook method for a higher deduction.', 56, y+1, { width: 483 });
       y += 22;
     }
     sumRow(`Deductible amount  (${cappedKm.toFixed(1)} km × ${(rate*100).toFixed(0)}c)`, fmtMoney(deduction), true);
@@ -4751,13 +4751,13 @@ function buildVehicleLogPdf(entries, fyYear, shop) {
         const e = fyEntries[i];
         if (y > 750) { doc.addPage(); y = 50; }
         if (i % 2 === 1) doc.rect(50, y-1, 495, 16).fill('#fdf9f5');
-        const dateStr = e.date ? new Date(e.date+'T00:00:00').toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+        const dateStr = e.date ? new Date(e.date+'T00:00:00').toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'}) : '-';
         doc.font('Helvetica').fontSize(8).fillColor('#222')
           .text(dateStr,                 56,  y, { width: 65 })
-          .text(e.from    || '—',       121,  y, { width: 100 })
-          .text(e.to      || '—',       221,  y, { width: 100 })
+          .text(e.from    || '-',       121,  y, { width: 100 })
+          .text(e.to      || '-',       221,  y, { width: 100 })
           .text((Number(e.km)||0).toFixed(1), 321, y, { width: 44, align: 'right' })
-          .text(e.purpose || '—',       370,  y, { width: 175 });
+          .text(e.purpose || '-',       370,  y, { width: 175 });
         y += 16;
       }
       doc.moveTo(50, y+2).lineTo(545, y+2).strokeColor('#ccc').stroke(); y += 8;
@@ -4902,7 +4902,7 @@ function verifyStripeSignature(rawBody, sigHeader, secret, toleranceSeconds = 30
 
 // ── Shared customer auth handlers (used by all five servers) ─────────────────
 // Single source of truth for register / login / logout / me.
-// Any server that needs these just calls the function — no duplicate logic.
+// Any server that needs these just calls the function, no duplicate logic.
 
 async function handleCustomerRegister(req, res) {
   if (publicRateLimited(getIp(req), 'register')) return json(res, 429, { error: 'too_many_requests' });
@@ -4953,7 +4953,7 @@ async function handleCustomerLogin(req, res) {
     return json(res, 429, { error: 'locked_out', retryAfterSec });
   }
   let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
-  // Accept username, email, or usernameOrEmail field — any server's form will work
+  // Accept username, email, or usernameOrEmail field - any server's form will work
   const credential = typeof body?.usernameOrEmail === 'string' ? body.usernameOrEmail.trim()
     : (typeof body?.email === 'string' && body.email.trim() ? body.email.trim()
     : (typeof body?.username === 'string' ? body.username.trim() : ''));
@@ -5102,7 +5102,7 @@ const mainServer = http.createServer(async (req, res) => {
     const referrer = typeof body.referrer === 'string' ? body.referrer.slice(0, 256) : '';
     const ua = (req.headers['user-agent'] || '').slice(0, 256);
     const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
-    // Rough bot detection — don't record bot traffic
+    // Rough bot detection, don't record bot traffic
     if (/bot|crawl|spider|slurp|headless/i.test(ua)) return json(res, 204, {});
     appendAnalyticsEvent({ ts: Date.now(), type, page, referrer, ua, ip });
     return json(res, 204, {});
@@ -5185,7 +5185,7 @@ const mainServer = http.createServer(async (req, res) => {
     const allTutorials = readTutorials().filter(i => i.status === 'Published');
     const tutorialItems = allTutorials.map(t => {
       // Tutorials saved before read-time was auto-calculated may still have
-      // no duration on disk — backfill it on read rather than requiring staff
+      // no duration on disk, backfill it on read rather than requiring staff
       // to re-open and re-save every old tutorial.
       if (!t.duration && t.format !== 'info') {
         t = { ...t, duration: t.format === 'steps'
@@ -5193,7 +5193,7 @@ const mainServer = http.createServer(async (req, res) => {
           : estimateReadTime(t.body) };
       }
       if (memberCanAccess(tutorialUsername, t.requiredTierId)) return t;
-      // User lacks access — strip every prose/content field, not just body,
+      // User lacks access, strip every prose/content field, not just body,
       // so gated step-by-step guides don't leak their steps over the wire.
       const { body: _body, content: _content, intro: _intro, steps: _steps, tools: _tools, ...rest } = t;
       return { ...rest, locked: true };
@@ -5254,7 +5254,7 @@ const mainServer = http.createServer(async (req, res) => {
     for (const col of (repairs.columns || [])) {
       for (const card of (col.cards || [])) {
         if (card.public) {
-          jobs.push({ id: card.id || card.jobId || '—', item: card.title || card.item || '—', status: col.title || card.status || '—' });
+          jobs.push({ id: card.id || card.jobId || '-', item: card.title || card.item || '-', status: col.title || card.status || '-' });
         }
       }
     }
@@ -5324,13 +5324,13 @@ const mainServer = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/checkout') {
     if (publicRateLimited(getIp(req), 'checkout')) return json(res, 429, { error: 'too_many_requests', message: 'Too many requests. Please wait a moment and try again.' });
     if (!getStripeKey()) return json(res, 503, { error: 'stripe_not_configured', message: 'Payment is not configured. Please contact us.' });
-    // Guest checkout is no longer allowed — every order must be tied to a portal account.
+    // Guest checkout is no longer allowed, every order must be tied to a portal account.
     const checkoutPortalSession = getPortalSession(req);
     if (!checkoutPortalSession) return json(res, 401, { error: 'login_required', message: 'Please sign in or create an account to check out.' });
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
 
     const { productId, name, priceAud, quantity = 1, customerEmail: bodyCustomerEmail, items, giftCardCode, shippingAmount, shippingService, redeemPoints: redeemPointsBody, rewardsToken: rewardsTokenBody, redeemStoreCredit: redeemStoreCreditBody } = body;
-    // Every checkout is now tied to a real portal account — the account's own
+    // Every checkout is now tied to a real portal account, the account's own
     // email is authoritative, never the client-supplied one.
     const portalAccount = readUsers().find(u => u.id === checkoutPortalSession.id);
     const customerEmail = (portalAccount && portalAccount.email) || bodyCustomerEmail || '';
@@ -5350,19 +5350,19 @@ const mainServer = http.createServer(async (req, res) => {
     const catalogServices = readServices();
     const { tiers: membershipTiers } = readMemberships();
     // `stock` is null for anything without a stock pool (services, membership
-    // tiers, unlimited digital goods) — those skip the availability check.
+    // tiers, unlimited digital goods) - those skip the availability check.
     function lookupCatalogPrice(pid, variantSku, qty = 1) {
       if (!pid) return null;
       const prod = catalogProducts.find(p => p.id === pid && p.status === 'published');
       if (prod) {
         if (prod.variants && prod.variants.length > 0) {
-          // Price lives on the variant — must identify it server-side; never trust client price.
+          // Price lives on the variant, must identify it server-side; never trust client price.
           const variant = variantSku
             ? (prod.variants.find(v => v.sku === variantSku) || prod.variants.find(v => v.name === variantSku))
             : null;
           if (!variant) return null;
           const price = applyBulkPrice(variant, qty, Number(variant.price));
-          return price > 0 ? { priceAud: price, name: `${prod.name}${variant.name ? ` — ${variant.name}` : ''}`, stock: variant.stock == null ? null : Number(variant.stock) || 0, allowBackorder: !!prod.allowBackorder } : null;
+          return price > 0 ? { priceAud: price, name: `${prod.name}${variant.name ? ` - ${variant.name}` : ''}`, stock: variant.stock == null ? null : Number(variant.stock) || 0, allowBackorder: !!prod.allowBackorder } : null;
         }
         const price = applyBulkPrice(prod, qty, Number(prod.priceAud ?? prod.price));
         const stock = (prod.infiniteStock || prod.stock == null) ? null : Number(prod.stock) || 0;
@@ -5391,7 +5391,7 @@ const mainServer = http.createServer(async (req, res) => {
         const catalogEntry = lookupCatalogPrice(pid, variantSku, qty);
         if (!catalogEntry) return json(res, 422, { error: 'invalid_item', message: `Product not found or variant not specified: ${pid}` });
         // Stock is only decremented after payment, so without this an order
-        // could be placed for more units than exist — which would also let a
+        // could be placed for more units than exist, which would also let a
         // customer claim a bulk price the remaining stock can no longer reach.
         if (catalogEntry.stock != null && !catalogEntry.allowBackorder && qty > catalogEntry.stock) {
           return json(res, 422, {
@@ -5405,7 +5405,7 @@ const mainServer = http.createServer(async (req, res) => {
         if (!Number.isFinite(resolvedPrice) || resolvedPrice <= 0) return json(res, 422, { error: 'invalid_item', message: `"${catalogEntry.name}" has no valid price set. Please contact us.` });
         lineItems.push({ ...li, priceAud: resolvedPrice, name: catalogEntry.name, quantity: qty, productId: pid });
       } else {
-        // No productId — reject; all purchasable items must be in the catalog.
+        // No productId, reject; all purchasable items must be in the catalog.
         return json(res, 422, { error: 'invalid_item', message: 'All cart items must have a valid productId.' });
       }
     }
@@ -5441,7 +5441,7 @@ const mainServer = http.createServer(async (req, res) => {
     }
 
     // Validate and apply gift card if provided
-    // Validate shipping amount — re-quoted live from AusPost server-side, never
+    // Validate shipping amount, re-quoted live from AusPost server-side, never
     // trusted from the client. A digital-only cart always ships free.
     const cartHasPhysical = rawLineItems.some(li => {
       const prod = catalogProducts.find(p => p.id === String(li.productId || ''));
@@ -5461,7 +5461,7 @@ const mainServer = http.createServer(async (req, res) => {
       validatedShipping = matchedService.price;
     }
     if (validatedShipping < 0 || validatedShipping > 200) return json(res, 422, { error: 'invalid_shipping', message: 'Shipping amount is outside the accepted range.' });
-    // Travel/callout fee — calculated server-side from reported one-way distance.
+    // Travel/callout fee, calculated server-side from reported one-way distance.
     // Fuel: $0.60/km round trip ($120/tank ÷ 400km × 2). Free within 10km.
     // Daily allowance (D > 400km): $150/day, 6h driving/day at ~80km/h = 480km/day; ×2 for return.
     const CALLOUT_FREE_KM = 10;
@@ -5673,7 +5673,7 @@ const mainServer = http.createServer(async (req, res) => {
     const shippingServiceName = shippingService ? String(shippingService).slice(0, 80) : '';
 
     // Build line items; if a gift card covers the full amount, add a $0.50 minimum line item
-    // so Stripe doesn't reject a $0 session — instead we add a discount coupon approach via negative line item
+    // so Stripe doesn't reject a $0 session, instead we add a discount coupon approach via negative line item
     const adjustedLineItems = [...lineItems];
     if (validatedShipping > 0) {
       adjustedLineItems.push({
@@ -5789,10 +5789,10 @@ const mainServer = http.createServer(async (req, res) => {
   }
 
   // Checkout with an instalment plan instead of paying in full. Creates the
-  // order directly (no Stripe session — no money is collected upfront; the
+  // order directly (no Stripe session, no money is collected upfront; the
   // first instalment is collected like any other, via its due date), mirroring
   // the gift-card-covers-the-order branch of /api/checkout above. Gift cards,
-  // rewards points, and store credit aren't supported on this path — those
+  // rewards points, and store credit aren't supported on this path, those
   // redemptions are for "pay in full" checkout only.
   if (req.method === 'POST' && url.pathname === '/api/checkout/payment-plan') {
     if (publicRateLimited(getIp(req), 'checkout')) return json(res, 429, { error: 'too_many_requests', message: 'Too many requests. Please wait a moment and try again.' });
@@ -5831,7 +5831,7 @@ const mainServer = http.createServer(async (req, res) => {
             : null;
           if (!variant) return null;
           const price = applyBulkPrice(variant, qty, Number(variant.price));
-          return price > 0 ? { priceAud: price, name: `${prod.name}${variant.name ? ` — ${variant.name}` : ''}`, stock: variant.stock == null ? null : Number(variant.stock) || 0, allowBackorder: !!prod.allowBackorder } : null;
+          return price > 0 ? { priceAud: price, name: `${prod.name}${variant.name ? ` - ${variant.name}` : ''}`, stock: variant.stock == null ? null : Number(variant.stock) || 0, allowBackorder: !!prod.allowBackorder } : null;
         }
         const price = applyBulkPrice(prod, qty, Number(prod.priceAud ?? prod.price));
         const stock = (prod.infiniteStock || prod.stock == null) ? null : Number(prod.stock) || 0;
@@ -5847,7 +5847,7 @@ const mainServer = http.createServer(async (req, res) => {
       const qty = Math.floor(Number(li.quantity) || 0);
       if (qty < 1 || qty > 999) return json(res, 422, { error: 'invalid_quantity', message: `Quantity for item ${pid || '(unknown)'} must be between 1 and 999.` });
       if (!pid || pid.startsWith('gc-') || membershipTiers.some(t => t.id === pid)) {
-        return json(res, 422, { error: 'invalid_item', message: 'Gift cards and memberships can\'t be bought on a payment plan — check out those separately.' });
+        return json(res, 422, { error: 'invalid_item', message: 'Gift cards and memberships can\'t be bought on a payment plan, check out those separately.' });
       }
       const catalogEntry = lookupCatalogPricePlan(pid, li.variantSku ? String(li.variantSku) : null, qty);
       if (!catalogEntry) return json(res, 422, { error: 'invalid_item', message: `Product not found or variant not specified: ${pid}` });
@@ -6201,7 +6201,7 @@ const mainServer = http.createServer(async (req, res) => {
               writeMemberships(mb);
               membershipWelcomeEmail = { to: user.email, tmpl: emailMembershipWelcome({ customerName: user.displayName || user.username, tierName: tier.name }) };
             } else {
-              // No portal account yet — tag the order so admin can activate manually
+              // No portal account yet, tag the order so admin can activate manually
               const updatedOrders = readOrders();
               const idx = updatedOrders.findIndex(o => o.stripeSessionId === session.id);
               if (idx >= 0) {
@@ -6301,7 +6301,7 @@ const mainServer = http.createServer(async (req, res) => {
           if (!variant) return { key, available: false, reason: 'variant_unavailable' };
           return {
             key, available: true,
-            name: `${prod.name}${variant.name ? ` — ${variant.name}` : ''}`,
+            name: `${prod.name}${variant.name ? ` - ${variant.name}` : ''}`,
             price: Number(variant.price) || 0,
             stock: variant.stock == null ? null : Number(variant.stock) || 0,
             allowBackorder: !!prod.allowBackorder, backorderWeeks: prod.backorderWeeks ?? null, backorderEta: prod.backorderEta || '',
@@ -6366,7 +6366,7 @@ const mainServer = http.createServer(async (req, res) => {
             : prod.variants[0];
           if (!variant) continue; // skip unresolvable variant
           price = Number(variant.price);
-          name = `${prod.name}${variant.name ? ` — ${variant.name}` : ''}`;
+          name = `${prod.name}${variant.name ? ` - ${variant.name}` : ''}`;
         } else {
           // Products created through the admin editor store the price under
           // `price`; older records use `priceAud`.
@@ -6450,7 +6450,7 @@ const mainServer = http.createServer(async (req, res) => {
     const order = readOrders().find(o => o.id === orderId && o.warrantyToken && o.warrantyToken === token);
     if (!order) return json(res, 404, { error: 'not_found' });
     try {
-      // SVG excluded — see /api/admin/upload for why. No PDFs here: reviews take photos, not documents.
+      // SVG excluded, see /api/admin/upload for why. No PDFs here: reviews take photos, not documents.
       const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
       const ALLOWED_EXT = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp']);
       const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -6501,11 +6501,11 @@ const mainServer = http.createServer(async (req, res) => {
       if (!product) return json(res, 422, { error: 'invalid_product', message: 'That product could not be found.' });
       productName = product.name;
     } else if (body.productName) {
-      // An order item that isn't a linkable catalog product — keep its name so
+      // An order item that isn't a linkable catalog product, keep its name so
       // staff still know which item the review is about.
       productName = String(body.productName).trim().slice(0, 200) || null;
     }
-    // Only accept URLs this same endpoint's own upload step could have produced —
+    // Only accept URLs this same endpoint's own upload step could have produced
     // stops the review body from being used to smuggle in arbitrary URLs/markup.
     const photos = Array.isArray(body.photos)
       ? body.photos.filter(p => typeof p === 'string' && /^\/assets\/uploads\/review-[a-zA-Z0-9._-]+\.webp$/.test(p)).slice(0, 5)
@@ -6617,16 +6617,16 @@ const mainServer = http.createServer(async (req, res) => {
     const lng = parseFloat(rawLng);
     let travelMinutesEach = 0;
     if (type === 'callout') {
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return json(res, 422, { error: 'missing_coords', message: 'Could not pin down your address on the map — please re-enter it.' });
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return json(res, 422, { error: 'missing_coords', message: 'Could not pin down your address on the map, please re-enter it.' });
       const shop = await getShopCoords();
       travelMinutesEach = await getDrivingMinutes(shop.lat, shop.lng, lat, lng);
     }
     const dateStr = String(preferredDate).trim();
     const slotInfo = computeSlotsForDate(dateStr, { durationMinutes, travelMinutesEach });
-    if (slotInfo.closed) return json(res, 422, { error: 'date_unavailable', message: 'We are not available on that date — please call us to arrange a booking.' });
+    if (slotInfo.closed) return json(res, 422, { error: 'date_unavailable', message: 'We are not available on that date - please call us to arrange a booking.' });
     const preferredTimeTrimmed = String(preferredTime || '').trim();
     if (preferredTimeTrimmed && !slotInfo.slots.includes(preferredTimeTrimmed)) {
-      return json(res, 422, { error: 'time_unavailable', message: 'That time is no longer available — please pick another slot.' });
+      return json(res, 422, { error: 'time_unavailable', message: 'That time is no longer available - please pick another slot.' });
     }
     let blockedSlots = [];
     if (preferredTimeTrimmed) {
@@ -6769,7 +6769,7 @@ const mainServer = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true, points, storeCredit, token, displayName: user.displayName || user.username });
   }
 
-  // GET /api/thumb?src=/assets/uploads/...&w=N — resized image cache
+  // GET /api/thumb?src=/assets/uploads/...&w=N, resized image cache
   if (req.method === 'GET' && url.pathname === '/api/thumb') {
     const src = url.searchParams.get('src') || '';
     const w = Math.min(Math.max(parseInt(url.searchParams.get('w') || '600', 10), 32), 1200);
@@ -7224,7 +7224,7 @@ const adminServer = http.createServer(async (req, res) => {
       if (RASTER_MIME.has(mime)) {
         outExt = '.webp';
         outBuf = await sharp(buf)
-          // Bake in the EXIF orientation before resizing — sharp strips the tag on
+          // Bake in the EXIF orientation before resizing, sharp strips the tag on
           // output, so a portrait phone photo would otherwise be saved sideways.
           .rotate()
           .resize({ width: 1200, height: 1200, fit: 'inside', withoutEnlargement: true })
@@ -7245,7 +7245,7 @@ const adminServer = http.createServer(async (req, res) => {
     let body; try { body = await readJson(req, 15e6); } catch { return json(res, 400, { error: 'invalid_json' }); }
     try {
       const RASTER_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
-      const MAX_BYTES = 5 * 1024 * 1024; // 5 MB — a signature is a small image
+      const MAX_BYTES = 5 * 1024 * 1024; // 5 MB, a signature is a small image
       const dataUri = body.data || '';
       const mimeMatch = dataUri.match(/^data:([^;]+);base64,/);
       if (!mimeMatch) return json(res, 400, { error: 'invalid_data_uri' });
@@ -7255,7 +7255,7 @@ const adminServer = http.createServer(async (req, res) => {
       const buf = Buffer.from(raw, 'base64');
       if (buf.length > MAX_BYTES) return json(res, 400, { error: 'file_too_large' });
 
-      // Kept as PNG (not converted to WebP like the general upload endpoint) — pdfkit
+      // Kept as PNG (not converted to WebP like the general upload endpoint), pdfkit
       // can only embed JPEG/PNG in the certificate PDF, and PNG preserves the
       // transparent background a signature stamp needs to look right on the page.
       const outBuf = await sharp(buf)
@@ -7264,7 +7264,7 @@ const adminServer = http.createServer(async (req, res) => {
         .png()
         .toBuffer();
 
-      // Filename is derived entirely from the authenticated session — a tech can only
+      // Filename is derived entirely from the authenticated session, a tech can only
       // ever overwrite their own signature file, never anyone else's, by construction.
       const signaturesDir = path.join(__dirname, 'assets/signatures');
       fs.mkdirSync(signaturesDir, { recursive: true });
@@ -7315,8 +7315,8 @@ const adminServer = http.createServer(async (req, res) => {
   const validUploadId = id => typeof id === 'string' && /^[a-zA-Z0-9_-]{8,64}$/.test(id);
   const swChunksRoot = path.join(__dirname, 'assets/uploads/software/.chunks');
 
-  // GET /api/admin/software  — list all software items (admin)
-  // GET /api/admin/software/list — same, used by membership access picker
+  // GET /api/admin/software  - list all software items (admin)
+  // GET /api/admin/software/list, same, used by membership access picker
   if (req.method === 'GET' && (url.pathname === '/api/admin/software' || url.pathname === '/api/admin/software/list')) {
     const session = requireRole(req, res, 'manager'); if (!session) return;
     return json(res, 200, { items: readSoftware() });
@@ -7403,7 +7403,7 @@ const adminServer = http.createServer(async (req, res) => {
   }
 
   // POST /api/admin/software/upload/abort
-  // Body: { uploadId } — cleans up temp chunks for a failed/cancelled upload
+  // Body: { uploadId }, cleans up temp chunks for a failed/cancelled upload
   if (req.method === 'POST' && url.pathname === '/api/admin/software/upload/abort') {
     const session = requireRole(req, res, 'manager'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
@@ -7433,7 +7433,7 @@ const adminServer = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/admin/catalog/products/save') {
     const session = requireRole(req, res, 'seller'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
-    // "Was" price (struck-through former price) is a consumer-facing price representation —
+    // "Was" price (struck-through former price) is a consumer-facing price representation
     // the Australian Consumer Law requires it to reflect a price genuinely charged for a
     // reasonable period, so require the admin to confirm that before it can be saved.
     if (body.was !== '' && body.was != null) {
@@ -7472,7 +7472,7 @@ const adminServer = http.createServer(async (req, res) => {
       const sellerPrice = parseFloat(body.priceAud) || 0;
       body.sellerPrice = Math.round(sellerPrice * 100) / 100;
       body.priceAud = Math.round(sellerPrice * (1 + commissionPct / 100) * 100) / 100;
-      // Sellers cannot publish their own listings — every seller save goes back
+      // Sellers cannot publish their own listings, every seller save goes back
       // to draft and a manager must publish it.
       body.status = 'draft';
     }
@@ -7540,17 +7540,17 @@ const adminServer = http.createServer(async (req, res) => {
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     const orders = readOrders();
     const isNew = !!body._isNew;
-    // _originalId lets the client rename an order's ID — find by original, save with new
+    // _originalId lets the client rename an order's ID, find by original, save with new
     const lookupId = isNew ? null : (body._originalId || body.id);
     const idx = lookupId ? orders.findIndex(o => o.id && o.id === lookupId) : -1;
     const existing = idx >= 0 ? orders[idx] : null;
     const { draftQuote: _dq, _originalId: _oid, _isNew: _isNewFlag, ...bodyToStore } = body;
     // Every order needs a stable secret token for customer-facing links (warranty
-    // registration, order lookup, review requests) — orders created via Stripe
+    // registration, order lookup, review requests) - orders created via Stripe
     // checkout already get one, but manually-entered orders never did until now.
     if (!bodyToStore.warrantyToken) bodyToStore.warrantyToken = crypto.randomBytes(16).toString('hex');
     if (isNew) {
-      // Never treat a same-ID match as "this row" for a brand-new order — another
+      // Never treat a same-ID match as "this row" for a brand-new order, another
       // request (e.g. a customer accepting a quote) may have claimed that number
       // between the admin opening the drawer and clicking Save. If so, silently
       // reassign the next free number rather than overwriting the other order.
@@ -7628,18 +7628,18 @@ const adminServer = http.createServer(async (req, res) => {
 
     const nowStr = new Date().toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
     if (method === 'cash') {
-      // Cash is handed back in person — nothing to call externally, we only record it.
+      // Cash is handed back in person, nothing to call externally, we only record it.
     } else if (method === 'store-credit') {
       const ok = grantStoreCredit(order.email, requested, 'refund', `Refund for order ${id}`, `refund-${id}`);
       if (!ok) return json(res, 422, { error: 'no_account', message: 'Store credit requires the customer to have an account with this email. Use a Stripe refund instead, or ask the customer to register.' });
     } else {
-      // Stripe refund — resolve the payment intent (older orders may only have a session id)
+      // Stripe refund, resolve the payment intent (older orders may only have a session id)
       let pi = order.stripePaymentIntent || '';
       if (!pi && order.stripeSessionId) {
         const sResp = await stripeRequest('GET', `/v1/checkout/sessions/${encodeURIComponent(order.stripeSessionId)}`, null).catch(() => null);
         pi = sResp && sResp.status === 200 ? (sResp.body.payment_intent || '') : '';
       }
-      if (!pi) return json(res, 422, { error: 'no_payment_intent', message: 'No Stripe payment found for this order. It may have been paid another way — issue store credit instead.' });
+      if (!pi) return json(res, 422, { error: 'no_payment_intent', message: 'No Stripe payment found for this order. It may have been paid another way, issue store credit instead.' });
       let rResp;
       try { rResp = await stripeRequest('POST', '/v1/refunds', { payment_intent: pi, amount: String(Math.round(requested * 100)) }); }
       catch { return json(res, 502, { error: 'stripe_error', message: 'Payment provider unreachable. Please try again.' }); }
@@ -7678,9 +7678,9 @@ const adminServer = http.createServer(async (req, res) => {
     if (idx < 0) return json(res, 404, { error: 'not_found' });
     const order = orders[idx];
     const remaining = Math.max(0, Math.round(((Number(order.total) || 0) - orderCashReceived(order)) * 100) / 100);
-    if (remaining <= 0) return json(res, 422, { error: 'already_paid', message: 'This order is already fully paid — there is nothing left to schedule.' });
+    if (remaining <= 0) return json(res, 422, { error: 'already_paid', message: 'This order is already fully paid - there is nothing left to schedule.' });
     if (collectionMethod === 'auto') {
-      // Only auto-charging needs a card on file — 'customer' collects via a fresh
+      // Only auto-charging needs a card on file - 'customer' collects via a fresh
       // Stripe Checkout page each time, same as any other portal payment.
       const custUser = readUsers().find(u => (u.email || '').toLowerCase() === (order.email || '').toLowerCase());
       if (!custUser || !custUser.stripePaymentMethodId) {
@@ -7767,7 +7767,7 @@ const adminServer = http.createServer(async (req, res) => {
       if (status === 'failed') needsAttention++;
       items.push({
         orderId: o.id,
-        customer: o.cust || o.email || '—',
+        customer: o.cust || o.email || '-',
         email: o.email || '',
         frequency: plan.frequency,
         collectionMethod: plan.collectionMethod,
@@ -7871,7 +7871,7 @@ const adminServer = http.createServer(async (req, res) => {
     const custName  = (body.name||'').toLowerCase().trim();
     if (custName && custEmail) {
       function needsStamp(j) {
-        if ((j.email||'').trim()) return false; // already has email — don't overwrite
+        if ((j.email||'').trim()) return false; // already has email, don't overwrite
         const jName = (j.cust||j.name||j.customer||j.customerName||'').toLowerCase().trim();
         return jName && jName === custName;
       }
@@ -8030,7 +8030,7 @@ const adminServer = http.createServer(async (req, res) => {
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     const reports = readHddReports();
     const idx = reports.findIndex(r => r.id && r.id === body.id);
-    // Signature is tied to the authenticated session, not the client-supplied body —
+    // Signature is tied to the authenticated session, not the client-supplied body
     // it can't be spoofed by editing the "technician" text field.
     body.signedBy = session.username;
     body.signedByStaffId = session.staffId || null;
@@ -8296,8 +8296,8 @@ const adminServer = http.createServer(async (req, res) => {
     writeSoftware(items); return json(res, 200, { ok: true, item: body });
   }
 
-  // GET /api/admin/tutorials — list all tutorials (admin)
-  // GET /api/admin/tutorials/list — same, used by the Groups access picker
+  // GET /api/admin/tutorials, list all tutorials (admin)
+  // GET /api/admin/tutorials/list, same, used by the Groups access picker
   if (req.method === 'GET' && (url.pathname === '/api/admin/tutorials' || url.pathname === '/api/admin/tutorials/list')) {
     const session = requireRole(req, res, 'manager'); if (!session) return;
     return json(res, 200, { items: readTutorials() });
@@ -8318,7 +8318,7 @@ const adminServer = http.createServer(async (req, res) => {
     if (body.videoUrl) body.videoUrl = validateVideoUrl(body.videoUrl);
     const items = readTutorials(); const idx = items.findIndex(x => x.id && x.id === body.id);
     // Slug always ends up clean (lowercase, punctuation/whitespace stripped to
-    // hyphens) regardless of what the client sent — it flows straight into
+    // hyphens) regardless of what the client sent, it flows straight into
     // the public /tutorial/:slug URL. Also guaranteed unique here: two
     // tutorials sharing a slug would make the public lookup resolve to
     // whichever comes first, silently showing the wrong content for the other.
@@ -8363,7 +8363,7 @@ const adminServer = http.createServer(async (req, res) => {
     const nowIso = new Date().toISOString();
     const normalizedSlug = normalizePolicySlug(body.slug);
     // A real (non-synthetic) id unambiguously identifies an already-persisted row,
-    // even if its slug is being changed in this same save — match on it first so
+    // even if its slug is being changed in this same save, match on it first so
     // renaming a slug updates that row instead of leaving it behind and inserting
     // a duplicate. Only fall back to audience+slug (e.g. first edit of a still-
     // default document, arriving with a synthetic `default:...` id, or a brand
@@ -8401,7 +8401,7 @@ const adminServer = http.createServer(async (req, res) => {
     if (!body || typeof body.id !== 'string' || !body.id.trim()) return json(res, 400, { error: 'invalid_policy_id', message: 'Field "id" is required.' });
     if (!['published', 'draft'].includes(body.status)) return json(res, 400, { error: 'invalid_status', message: 'Field "status" must be "published" or "draft".' });
     // Resolve the true document (audience+slug) behind the id first, rather than
-    // trusting the id as the row to update — the client may hand back a synthetic
+    // trusting the id as the row to update, the client may hand back a synthetic
     // `default:...` id, or a real id from before another session already
     // materialized this same document, and matching on a stale id would clone a
     // second row for the same audience+slug instead of updating the existing one.
@@ -8409,7 +8409,7 @@ const adminServer = http.createServer(async (req, res) => {
     if (!target) {
       // The id may be a synthetic `default:<audience>:<slug>` id that's gone
       // stale because another session already materialized this document since
-      // the client's list was fetched — the effective view no longer has an
+      // the client's list was fetched, the effective view no longer has an
       // entry under that id (it's been replaced by the real override), but the
       // audience+slug it encodes still resolves to the document.
       const synthetic = /^default:([^:]+):(.+)$/.exec(body.id);
@@ -8498,7 +8498,7 @@ const adminServer = http.createServer(async (req, res) => {
   }
 
   // ── Admin: distance from shop to a free-text customer address (for callout
-  // line items — staff should never have to manually work out km themselves) ─
+  // line items, staff should never have to manually work out km themselves) ─
   if (req.method === 'GET' && url.pathname === '/api/admin/geocode-distance') {
     const session = requireRole(req, res, 'staff'); if (!session) return;
     const address = String(url.searchParams.get('address') || '').trim();
@@ -8911,7 +8911,7 @@ const adminServer = http.createServer(async (req, res) => {
         }
       }
     }
-    // Detect cards that changed column since last save — email customer
+    // Detect cards that changed column since last save, email customer
     const prev = readRepairs();
     const prevCardCol = {};
     (prev.columns || []).forEach(col => (col.cards || []).forEach(c => { prevCardCol[c.id] = col.id; }));
@@ -9175,7 +9175,7 @@ const portalServer = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/auth/register') return handleCustomerRegister(req, res);
   if (req.method === 'POST' && url.pathname === '/api/auth/login')    return handleCustomerLogin(req, res);
   if (req.method === 'POST' && url.pathname === '/api/auth/logout')   return handleCustomerLogout(req, res);
-  // Legacy portal-prefixed paths — delegate to shared handlers
+  // Legacy portal-prefixed paths, delegate to shared handlers
   if (req.method === 'POST' && url.pathname === '/api/portal/auth/register') return handleCustomerRegister(req, res);
   if (req.method === 'POST' && url.pathname === '/api/portal/auth/login')    return handleCustomerLogin(req, res);
   if (req.method === 'POST' && url.pathname === '/api/portal/auth/logout')   return handleCustomerLogout(req, res);
@@ -9208,7 +9208,7 @@ const portalServer = http.createServer(async (req, res) => {
       ssoPayload = rawSso;
       sigValue = rawSig;
     } else {
-      // No params — try to resume from a pending-SSO cookie set during a prior visit
+      // No params, try to resume from a pending-SSO cookie set during a prior visit
       const pending = parseCookies(req).oe_discourse_sso;
       if (!pending) { res.writeHead(302, { Location: '/' }); return res.end(); }
       try {
@@ -9223,7 +9223,7 @@ const portalServer = http.createServer(async (req, res) => {
     const session = getPortalSession(req);
 
     if (!session) {
-      // Not logged in — park the SSO params in a short-lived cookie and send to login
+      // Not logged in, park the SSO params in a short-lived cookie and send to login
       const pendingData = Buffer.from(JSON.stringify({ sso: ssoPayload, sig: sigValue })).toString('base64url');
       const cookieParts = [`oe_discourse_sso=${pendingData}`, 'HttpOnly', 'Path=/', 'Max-Age=600', 'SameSite=Lax'];
       if (isSecureRequest(req)) cookieParts.push('Secure');
@@ -9232,7 +9232,7 @@ const portalServer = http.createServer(async (req, res) => {
       return res.end();
     }
 
-    // Logged in — look up the full user record (session doesn't store email)
+    // Logged in, look up the full user record (session doesn't store email)
     const user = readUsers().find(u => u.id === session.id);
     if (!user || !user.email) {
       res.writeHead(302, { Location: '/?sso_error=1' }); return res.end();
@@ -9430,7 +9430,7 @@ const portalServer = http.createServer(async (req, res) => {
       'payment_intent_data[metadata][existingOrderId]': order.id,
       'line_items[0][price_data][currency]': 'aud',
       'line_items[0][price_data][unit_amount]': String(amountCents),
-      'line_items[0][price_data][product_data][name]': `Instalment — order ${order.id}`,
+      'line_items[0][price_data][product_data][name]': `Instalment, order ${order.id}`,
       'line_items[0][quantity]': '1',
     };
     const resp = await stripeRequest('POST', '/v1/checkout/sessions', params).catch(() => null);
@@ -9581,7 +9581,7 @@ const portalServer = http.createServer(async (req, res) => {
       return json(res, 409, { error: 'username_taken', message: 'That username is already taken.' });
     }
     // A brand-new account can't possibly have a saved card yet, so auto-charge
-    // can't be offered here — only manual or customer-initiated collection.
+    // can't be offered here, only manual or customer-initiated collection.
     if (planReq && !['weekly', 'fortnightly', 'monthly'].includes(planReq.frequency)) return json(res, 422, { error: 'invalid_frequency' });
     if (planReq && !['manual', 'customer'].includes(planReq.collectionMethod)) return json(res, 422, { error: 'invalid_collection_method' });
     if (planReq && !(Number(planReq.installmentAmount) > 0)) return json(res, 422, { error: 'invalid_amount', message: 'Instalment amount must be greater than zero.' });
@@ -9692,7 +9692,7 @@ const portalServer = http.createServer(async (req, res) => {
     const mb = readMemberships();
     const tier = mb.tiers.find(t => t.id === (body || {}).tierId && t.status === 'published');
     if (!tier) return json(res, 404, { error: 'tier_not_found' });
-    if (!(Number(tier.priceAud) > 0)) return json(res, 200, { ok: true }); // free tier — no payment needed
+    if (!(Number(tier.priceAud) > 0)) return json(res, 200, { ok: true }); // free tier - no payment needed
     if (!getStripeKey()) return json(res, 503, { error: 'stripe_not_configured', message: 'Online payment is not configured. Please contact us.' });
     const portalUser = readUsers().find(u => u.id === session.id);
     const params = {
@@ -9722,7 +9722,7 @@ const portalServer = http.createServer(async (req, res) => {
     const tier = mb.tiers.find(t => t.id === tierId && t.status === 'published');
     if (!tier) return json(res, 404, { error: 'tier_not_found' });
     // Paid tiers can only be activated by the Stripe webhook after a successful
-    // payment — direct activation here is reserved for free tiers.
+    // payment, direct activation here is reserved for free tiers.
     if (Number(tier.priceAud) > 0) {
       return json(res, 402, { error: 'payment_required', message: 'This membership tier requires payment. Please purchase it through checkout.' });
     }
@@ -10013,7 +10013,7 @@ function readWeatherDb() {
 
 function weatherApiKeyValid(apiKey) {
   if (!apiKey) return null;
-  // Built-in server key (env var) — station_id is set by the device
+  // Built-in server key (env var), station_id is set by the device
   if (WEATHER_API_KEY && apiKey === WEATHER_API_KEY) return { builtin: true };
   // Registered community station keys
   const db = readWeatherDb();
@@ -10034,7 +10034,7 @@ function appendWeatherReading(reading) {
   broadcastWeatherReading(reading);
 }
 
-// SSE broadcast — push new readings to all connected browser clients instantly
+// SSE broadcast, push new readings to all connected browser clients instantly
 const weatherSseClients = new Set();
 
 function broadcastWeatherReading(reading) {
@@ -10121,7 +10121,7 @@ async function pollUps() {
     if (!isNaN(v)) data[ourKey] = v;
   }
   // This UPS's nutdrv_qx (Mustek protocol) driver only sporadically manages to read load off
-  // the wire — most polls come back 0 even though the server is always drawing some load.
+  // the wire, most polls come back 0 even though the server is always drawing some load.
   // A 0 is noise, not a real reading, so drop it and let the last real reading stand.
   if (data.load === 0) delete data.load;
   appendUpsReading({ ts: Date.now(), status: raw['ups.status'] || null, data });
@@ -10168,7 +10168,7 @@ const weatherServer = http.createServer(async (req, res) => {
     return json(res, 200, { active: true, text: announcement.text });
   }
 
-  // Public station registration — anyone can create a station and get an API key
+  // Public station registration, anyone can create a station and get an API key
   if (req.method === 'POST' && url.pathname === '/api/weather/register') {
     if (publicRateLimited(getIp(req), 'weather_register')) return json(res, 429, { error: 'rate_limited' });
     let body;
@@ -10188,7 +10188,7 @@ const weatherServer = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true, apiKey, name, weatherUrl: WEATHER_URL || `http://localhost:${WEATHER_PORT}` });
   }
 
-  // RPi pushes readings — authenticated via API key, not CSRF
+  // RPi pushes readings, authenticated via API key, not CSRF
   if (req.method === 'POST' && url.pathname === '/api/weather/readings') {
     const apiKey = req.headers['x-api-key'] || url.searchParams.get('key') || '';
     const keyRecord = weatherApiKeyValid(apiKey);
@@ -10262,7 +10262,7 @@ const weatherServer = http.createServer(async (req, res) => {
     return json(res, 200, { readings: result, count: filtered.length });
   }
 
-  // Stats — min/avg/max per key, optionally filtered by station/from/to
+  // Stats, min/avg/max per key, optionally filtered by station/from/to
   if (req.method === 'GET' && url.pathname === '/api/weather/stats') {
     const station = url.searchParams.get('station') || null;
     const from = url.searchParams.get('from') ? parseInt(url.searchParams.get('from'), 10) : null;
@@ -10307,7 +10307,7 @@ const weatherServer = http.createServer(async (req, res) => {
     return json(res, 204, {});
   }
 
-  // SSE stream — browser subscribes here and receives readings as they arrive
+  // SSE stream, browser subscribes here and receives readings as they arrive
   if (req.method === 'GET' && url.pathname === '/api/weather/stream') {
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
@@ -10321,7 +10321,7 @@ const weatherServer = http.createServer(async (req, res) => {
     return;
   }
 
-  // UPS / server power stats — raw current snapshot (all upsc fields, incl. static device info)
+  // UPS / server power stats, raw current snapshot (all upsc fields, incl. static device info)
   if (req.method === 'GET' && url.pathname === '/api/server/stats') {
     const { data, error } = await readUpsStats();
     if (error) return json(res, 502, { error });
@@ -10353,7 +10353,7 @@ const weatherServer = http.createServer(async (req, res) => {
     return json(res, 200, { readings: result, count: filtered.length });
   }
 
-  // Stats — min/avg/max per key
+  // Stats, min/avg/max per key
   if (req.method === 'GET' && url.pathname === '/api/ups/stats') {
     const from = url.searchParams.get('from') ? parseInt(url.searchParams.get('from'), 10) : null;
     const to   = url.searchParams.get('to')   ? parseInt(url.searchParams.get('to'),   10) : null;
@@ -10405,14 +10405,14 @@ const weatherServer = http.createServer(async (req, res) => {
   }
 });
 
-// ── Global crash guards — keep the process alive on unexpected throws ─────────
+// ── Global crash guards, keep the process alive on unexpected throws ─────────
 
 process.on('uncaughtException', (err) => {
-  console.error('[process] uncaughtException — continuing:', err);
+  console.error('[process] uncaughtException, continuing:', err);
 });
 
 process.on('unhandledRejection', (reason) => {
-  console.error('[process] unhandledRejection — continuing:', reason);
+  console.error('[process] unhandledRejection, continuing:', reason);
 });
 
 // ── Start all servers ─────────────────────────────────────────────────────────
@@ -10434,7 +10434,7 @@ function migrateEnvToSettings() {
   const s = readSettings();
   let changed = false;
 
-  // Secrets are NOT copied from the environment into settings.db — the getters
+  // Secrets are NOT copied from the environment into settings.db, the getters
   // (getStripeKey, getSmtpConfig, getAuspostKey) fall back to env vars when the
   // stored value is empty, so they only end up on disk if entered via the
   // dashboard (and are then encrypted when SETTINGS_ENCRYPTION_KEY is set).
@@ -10495,13 +10495,13 @@ async function runMonthlyListingFees() {
     const fee = calculateListingFee(count);
 
     if (fee === null) {
-      console.log(`[listing-fees] Seller ${seller.id} (${seller.name}) has ${count} listings — custom tier, skipping`);
+      console.log(`[listing-fees] Seller ${seller.id} (${seller.name}) has ${count} listings, custom tier, skipping`);
       continue;
     }
     if (fee === 0 || count === 0) continue;
 
     if (!seller.stripeCustomerId || !seller.stripePaymentMethodId) {
-      console.warn(`[listing-fees] Seller ${seller.id} (${seller.name}) has no saved card — cannot charge`);
+      console.warn(`[listing-fees] Seller ${seller.id} (${seller.name}) has no saved card, cannot charge`);
       continue;
     }
 
@@ -10515,12 +10515,12 @@ async function runMonthlyListingFees() {
         payment_method: seller.stripePaymentMethodId,
         confirm: 'true',
         off_session: 'true',
-        description: `Outback Electronics listing fee — ${count} listings`,
+        description: `Outback Electronics listing fee - ${count} listings`,
       });
       if (resp.status === 200 && resp.body.id) {
         chargeId = resp.body.id;
         status = 'ok';
-        console.log(`[listing-fees] Charged ${seller.name} $${fee} — ${chargeId}`);
+        console.log(`[listing-fees] Charged ${seller.name} $${fee} - ${chargeId}`);
       } else {
         console.error(`[listing-fees] Stripe error for ${seller.name}:`, resp.body);
       }
@@ -10534,7 +10534,7 @@ async function runMonthlyListingFees() {
       sellerId: seller.id,
       type: 'listing_fee',
       amount: fee,
-      description: `Monthly listing fee — ${count} listing${count !== 1 ? 's' : ''}`,
+      description: `Monthly listing fee - ${count} listing${count !== 1 ? 's' : ''}`,
       date: new Date().toISOString(),
       stripeChargeId: chargeId,
       status,
@@ -10637,7 +10637,7 @@ async function runDuePaymentPlanCharges() {
             payment_method: custUser.stripePaymentMethodId,
             confirm: 'true',
             off_session: 'true',
-            description: `Outback Electronics — instalment for order ${order.id}`,
+            description: `Outback Electronics, instalment for order ${order.id}`,
           }, idempotencyKey);
           if (resp && resp.status === 200 && resp.body && resp.body.id) ok = true;
           else errMsg = (resp && resp.body && resp.body.error && resp.body.error.message) || 'stripe_error';
@@ -10649,7 +10649,7 @@ async function runDuePaymentPlanCharges() {
           const nowStr = new Date().toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
           const updatedOrder = {
             ...order,
-            payments: [...(order.payments || []), { amount: progress.nextDue.amount, method: 'Stripe', note: `Auto-charge — instalment due ${progress.nextDue.dueDate}`, date: nowStr }],
+            payments: [...(order.payments || []), { amount: progress.nextDue.amount, method: 'Stripe', note: `Auto-charge - instalment due ${progress.nextDue.dueDate}`, date: nowStr }],
             paymentPlan: { ...plan, lastAutoAttempt: { dueDate: progress.nextDue.dueDate, date: new Date().toISOString(), status: 'ok', error: '' } },
           };
           orders[i] = updatedOrder;
@@ -10711,7 +10711,7 @@ async function runDuePaymentPlanCharges() {
   }
   function tick() {
     if (isLastDayOfMonth()) {
-      console.log('[cron] Last day of month — running listing fees');
+      console.log('[cron] Last day of month, running listing fees');
       runMonthlyListingFees().catch(err => console.error('[cron] listing fee error:', err));
     }
     console.log('[cron] Checking payment plan reminders/charges');
@@ -10857,7 +10857,7 @@ async function buildRagIndex() {
   _ragDocs = docs;
   _ragReady = true;
   _ragBuilding = false;
-  console.log(`[ai] RAG index ready — ${docs.length} documents`);
+  console.log(`[ai] RAG index ready - ${docs.length} documents`);
 }
 
 async function ragSearch(query, topK = 4) {
@@ -10871,7 +10871,7 @@ async function ragSearch(query, topK = 4) {
   } catch { return []; }
 }
 
-const AI_SYSTEM_PROMPT = `You are the Outback Electronics AI assistant — a helpful, knowledgeable electronics technician and advisor. You help customers with repair questions, troubleshooting, parts selection, soldering tips, circuit theory, and general DIY electronics. Outback Electronics is a small Australian electronics repair and parts shop. Be concise and practical. When relevant products or tutorials from the catalogue are provided below, reference them by name. If a repair is beyond DIY, recommend booking a professional service through Outback Electronics.`;
+const AI_SYSTEM_PROMPT = `You are the Outback Electronics AI assistant, a helpful, knowledgeable electronics technician and advisor. You help customers with repair questions, troubleshooting, parts selection, soldering tips, circuit theory, and general DIY electronics. Outback Electronics is a small Australian electronics repair and parts shop. Be concise and practical. When relevant products or tutorials from the catalogue are provided below, reference them by name. If a repair is beyond DIY, recommend booking a professional service through Outback Electronics.`;
 
 // ── AI Gateway server ─────────────────────────────────────────────────────────
 const aiGatewayServer = http.createServer(async (req, res) => {
@@ -10959,7 +10959,7 @@ const aiGatewayServer = http.createServer(async (req, res) => {
       try {
         await enqueueAI(() => ollamaStream('/api/generate', {
           model: AI_VISION_MODEL,
-          system: 'You are an electronics repair technician. Respond only with plain text — no ASCII art, no diagrams, no decorative lines or symbols. Be concise and practical.',
+          system: 'You are an electronics repair technician. Respond only with plain text, no ASCII art, no diagrams, no decorative lines or symbols. Be concise and practical.',
           prompt: prompt || 'Analyse this electronics image. Identify the component or PCB. Describe any visible damage such as burnt components, failed capacitors, cracked traces, corrosion, or physical damage. Provide a diagnosis and recommended repair steps.',
           images: [b64],
         }, res));
@@ -10984,7 +10984,7 @@ setTimeout(() => buildRagIndex().catch(e => console.error('[ai] RAG build error:
 // preamble: maintenance gate, CSRF, shop-info, announcement, unified-account
 // auth (one login across all subdomains via the shared-domain cookie),
 // analytics, and the static SPA fallback. Each service supplies only its own
-// routes via the `routes(req, res, url)` callback — return true if handled.
+// routes via the `routes(req, res, url)` callback - return true if handled.
 // ════════════════════════════════════════════════════════════════════════════
 function createServiceServer({ htmlEntry, spaRoutes = null, routes = null }) {
   return http.createServer(async (req, res) => {
@@ -11027,7 +11027,7 @@ function createServiceServer({ htmlEntry, spaRoutes = null, routes = null }) {
         return json(res, 200, { active: true, text: announcement.text });
       }
 
-      // Unified account — one login across every subdomain (shared-domain cookie)
+      // Unified account, one login across every subdomain (shared-domain cookie)
       if (req.method === 'GET'  && url.pathname === '/api/auth/me')       return handleCustomerMe(req, res);
       if (req.method === 'POST' && url.pathname === '/api/auth/login')    return handleCustomerLogin(req, res);
       if (req.method === 'POST' && url.pathname === '/api/auth/register') return handleCustomerRegister(req, res);
@@ -11046,7 +11046,7 @@ function createServiceServer({ htmlEntry, spaRoutes = null, routes = null }) {
   });
 }
 
-// ── Hub (8101) — account-aware launcher + live snapshot ─────────────────────
+// ── Hub (8101), account-aware launcher + live snapshot ─────────────────────
 function hubLatestWeather() {
   try { const db = readWeatherDb(); const r = db.readings || []; return r.length ? r[r.length - 1] : null; }
   catch { return null; }
@@ -11095,10 +11095,10 @@ const hubServer = createServiceServer({
   },
 });
 
-// ── Solar (8107) — off-grid power planner (pure client-side calculator) ──────
+// ── Solar (8107), off-grid power planner (pure client-side calculator) ──────
 const solarServer = createServiceServer({ htmlEntry: '/dist/solar.html' });
 
-// ── Sky (8104) — dark-sky window + moon (client) + live aurora Kp (NOAA) ────
+// ── Sky (8104), dark-sky window + moon (client) + live aurora Kp (NOAA) ────
 let _auroraCache = { ts: 0, data: null };
 function fetchAuroraKp() {
   return new Promise((resolve) => {
@@ -11265,26 +11265,26 @@ const skyServer = createServiceServer({
   },
 });
 
-// ── Fire (8109) — shared browser-like UA to pass BOM / state service blocks ──
+// ── Fire (8109), shared browser-like UA to pass BOM / state service blocks ──
 const FEED_UA = 'Mozilla/5.0 (compatible; OutbackElectronics/1.0; +https://outbackelectronics.com.au)';
 
-// ── Fire (8109) — live bushfire incidents by state, cached per state ──────────
+// ── Fire (8109), live bushfire incidents by state, cached per state ──────────
 const FIRE_STATE_FEEDS = {
-  // NSW RFS — confirmed GeoJSON FeatureCollection
+  // NSW RFS, confirmed GeoJSON FeatureCollection
   NSW: 'https://www.rfs.nsw.gov.au/feeds/majorIncidents.json',
-  // QLD Fire Department (formerly QFES, renamed 01/07/2024) — GeoJSON via PSBA GIS portal (S3-backed)
+  // QLD Fire Department (formerly QFES, renamed 01/07/2024) - GeoJSON via PSBA GIS portal (S3-backed)
   QLD: 'https://publiccontent.gis.psba.qld.gov.au/content/Feeds/BushfireCurrentIncidents/bushfireAlert.json',
-  // VIC Emergency Management — public GeoJSON feed
+  // VIC Emergency Management, public GeoJSON feed
   VIC: 'https://emergency.vic.gov.au/public/events-geojson.json',
-  // SA CFS — JSON current incidents from ESO
+  // SA CFS - JSON current incidents from ESO
   SA:  'https://data.eso.sa.gov.au/prod/cfs/criimson/cfs_current_incidents.json',
-  // WA DFES — emergency.wa.gov.au/data/incident_FCAD.json requires SPA session token; no public feed confirmed
+  // WA DFES, emergency.wa.gov.au/data/incident_FCAD.json requires SPA session token; no public feed confirmed
   WA:  null,
-  // TAS TFS — KML current incidents feed
+  // TAS TFS - KML current incidents feed
   TAS: 'http://www.fire.tas.gov.au/Show?pageId=bfKml',
-  // NT Fire & Rescue — public incident JSON feed
+  // NT Fire & Rescue, public incident JSON feed
   NT:  'https://www.pfes.nt.gov.au/incidentmap/json/incidents.json',
-  // ACT ESA — Atom/GeoRSS incident feed
+  // ACT ESA - Atom/GeoRSS incident feed
   ACT: 'https://esa.act.gov.au/act-gov-esa/incidents/feed',
 };
 const _fireCache = {};
@@ -11366,7 +11366,7 @@ function normalizeFireItem(p, geometry) {
   const category = p.WarningLevel || p['Alert Level'] || p.alert_level || p.category || p.Category
     || p.alertLevel || p.responseLevel || p.category1 || p._category || saLvl || p.type || p.eventType || 'Other';
   const pubDate = p.ItemDateTimeLocal_ISO || p.pubDate || p.created || p.updated || p.Updated || p.Date || p.onset || null;
-  // Coordinates: geometry centroid first, then named fields (may be strings — coerce), then SA "lat,lon" Location string
+  // Coordinates: geometry centroid first, then named fields (may be strings - coerce), then SA "lat,lon" Location string
   let lat = coords?.lat ?? p.Latitude ?? Number(p.lat ?? p.latitude ?? NaN);
   let lon = coords?.lon ?? p.Longitude ?? Number(p.lon ?? p.longitude ?? NaN);
   if ((!isFinite(lat) || !isFinite(lon)) && typeof p.Location === 'string' && p.Location.includes(',')) {
@@ -11392,14 +11392,14 @@ function normalizeFireData(raw) {
     const typeVal = [p.type, p.feedType, p.feedtype, p.eventType, p.category1, p.incident_type,
                      p.IncidentType, p.incidentType, p._category, p._eventtype, p['Fire Type'], p.GroupedType]
       .filter(Boolean).map(s => String(s).toLowerCase());
-    if (!typeVal.length) return true; // no type field — assume dedicated fire feed
+    if (!typeVal.length) return true; // no type field, assume dedicated fire feed
     // Standard alert level on item → definitely a fire incident
     const alertCat = String(p.WarningLevel || p['Alert Level'] || p.alert_level || p.category || p.alertLevel || p.responseLevel || '').toLowerCase().trim();
     if (FIRE_CATS.has(alertCat)) return true;
     return typeVal.some(t => /fire|burn|ember|blaze|bush|grass|smoke|vegetation/i.test(t));
   }
 
-  // GeoJSON FeatureCollection — NSW RFS, QLD QFD, VIC, WA, etc.
+  // GeoJSON FeatureCollection - NSW RFS, QLD QFD, VIC, WA, etc.
   const feats = Array.isArray(raw?.features) ? raw.features : null;
   if (feats) {
     const filtered = feats.filter(f => isFireItem(f.properties || {}));
@@ -11435,7 +11435,7 @@ function normalizeFireData(raw) {
     }
     return { available: true, total: filtered.length, counts, items };
   }
-  // NT PFES — { incidents: { type: "FeatureCollection", features: [...] } } — nested GeoJSON
+  // NT PFES, { incidents: { type: "FeatureCollection", features: [...] } } - nested GeoJSON
   const ntFeats = Array.isArray(raw?.incidents?.features) ? raw.incidents.features : null;
   if (ntFeats) {
     const filtered = ntFeats.filter(f => isFireItem(f.properties || {}));
@@ -11522,7 +11522,7 @@ async function handleFireStatus(req, res, url) {
     if (rawText) {
       const trimmed = rawText.trimStart();
       if (trimmed.startsWith('<')) {
-        // KML feed (TAS TFS) — detect by <kml or <Folder or <Placemark at root level
+        // KML feed (TAS TFS), detect by <kml or <Folder or <Placemark at root level
         if (/<kml[\s>]/i.test(trimmed) || /<Folder[\s>]/i.test(trimmed.slice(0, 500))) {
           const entries = parseFireKml(rawText);
           normalized = normalizeAtomEntries(entries);
@@ -11545,7 +11545,7 @@ async function handleFireStatus(req, res, url) {
   return json(res, 200, { ...entry.data, updated: entry.ts });
 }
 
-// ── Fire Danger Ratings + Roads — shared raw fetcher (http or https) ─────────
+// ── Fire Danger Ratings + Roads, shared raw fetcher (http or https) ─────────
 function fetchFeedRaw(url, extraHeaders, _depth) {
   _depth = _depth || 0;
   if (_depth > 4) return Promise.resolve(null);
@@ -11568,7 +11568,7 @@ function fetchFeedJSON(url, extraHeaders) { return fetchFeedRaw(url, extraHeader
 // ── Road closures ─────────────────────────────────────────────────────────────
 const QLDTRAFFIC_API_KEY = process.env.QLDTRAFFIC_API_KEY || '3e83add325cbb69ac4d8e5bf433d770b';
 const VIC_OPENDATA_KEY   = process.env.VIC_OPENDATA_KEY   || '4f4e1541-4f7c-4ab6-b2bd-f4b7e70b7166';
-// Web Mercator (EPSG:3857) → WGS84 — WA and SA ArcGIS services return projected coords
+// Web Mercator (EPSG:3857) → WGS84 - WA and SA ArcGIS services return projected coords
 function mercToLatLon(x, y) {
   const lon = (x / 20037508.342) * 180;
   const lat = (Math.atan(Math.exp(y / 6378137.0)) * 360.0) / Math.PI - 90;
@@ -11582,7 +11582,7 @@ function arcGisMercCentroid(paths) {
   const my = pts.reduce((s, p) => s + p[1], 0) / pts.length;
   return mercToLatLon(mx, my);
 }
-// QLD Traffic API GeoJSON — EPSG:7844 geographic (lat/lon already), MultiLineString
+// QLD Traffic API GeoJSON - EPSG:7844 geographic (lat/lon already), MultiLineString
 // Properties are nested: description at root, road_name inside road_summary{}
 function parseQLDClosures(raw) {
   if (!Array.isArray(raw?.features)) return null;
@@ -11600,7 +11600,7 @@ function parseQLDClosures(raw) {
   }
   return { available: true, total: items.length, items };
 }
-// NSW Live Traffic GeoJSON — incidentKind is only Planned/Unplanned; real filter is
+// NSW Live Traffic GeoJSON, incidentKind is only Planned/Unplanned; real filter is
 // periods[].closureType === 'ROAD_CLOSURE'. Title from roads[].mainStreet + suburb.
 function parseNSWClosures(raw) {
   if (!Array.isArray(raw?.features)) return null;
@@ -11612,13 +11612,13 @@ function parseNSWClosures(raw) {
     const coords = geomCentroid(f.geometry);
     if (!coords) continue;
     const rds = Array.isArray(p.roads) ? p.roads : [];
-    const road = rds[0] ? [rds[0].mainStreet, rds[0].suburb].filter(Boolean).join(' — ') : '';
+    const road = rds[0] ? [rds[0].mainStreet, rds[0].suburb].filter(Boolean).join(' - ') : '';
     const title = (road || p.displayName || p.mainCategory || 'Road Closure').slice(0, 200);
     items.push({ title, type: 'road_closure', lat: coords.lat, lon: coords.lon });
   }
   return { available: true, total: items.length, items };
 }
-// SA ArcGIS MapServer layer 1 — pre-filtered to RD_CLOSURE, Web Mercator paths
+// SA ArcGIS MapServer layer 1, pre-filtered to RD_CLOSURE, Web Mercator paths
 function parseSAClosures(raw) {
   if (!Array.isArray(raw?.features)) return null;
   const items = [];
@@ -11630,12 +11630,12 @@ function parseSAClosures(raw) {
     const from = a.START_SUBURB || '';
     const to = a.END_SUBURB || '';
     const detail = (a.PLOT_DETAILS || '').replace(/\s*Ref#\s*\d+\s*$/i, '').trim();
-    const title = (detail || [road, from && to ? `${from} to ${to}` : from || to].filter(Boolean).join(' — ') || 'Road Closure').slice(0, 200);
+    const title = (detail || [road, from && to ? `${from} to ${to}` : from || to].filter(Boolean).join(' - ') || 'Road Closure').slice(0, 200);
     items.push({ title, type: 'road_closure', lat: coords.lat, lon: coords.lon });
   }
   return { available: true, total: items.length, items };
 }
-// WA WebEOC ArcGIS FeatureServer layer 4 — Web Mercator paths
+// WA WebEOC ArcGIS FeatureServer layer 4 - Web Mercator paths
 function parseWAClosures(raw) {
   if (!Array.isArray(raw?.features)) return null;
   const items = [];
@@ -11643,7 +11643,7 @@ function parseWAClosures(raw) {
     const a = f.attributes || {};
     const coords = arcGisMercCentroid(f.geometry?.paths);
     if (!coords) continue;
-    const desc = [a.Location || a.Road, a.TrafficImp].filter(Boolean).join(' — ');
+    const desc = [a.Location || a.Road, a.TrafficImp].filter(Boolean).join(' - ');
     const title = (desc || 'Road Closure').slice(0, 200);
     const ct = String(a.ClosureTyp || '').toLowerCase();
     const type = ct.includes('clos') ? 'road_closure' : ct || 'caution';
@@ -11651,7 +11651,7 @@ function parseWAClosures(raw) {
   }
   return { available: true, total: items.length, items };
 }
-// NT road report obstructions — response wrapped in { response: [...] }, coords in startPoint:[lat,lon]
+// NT road report obstructions, response wrapped in { response: [...] }, coords in startPoint:[lat,lon]
 function parseNTObstructions(raw) {
   const arr = Array.isArray(raw) ? raw : Array.isArray(raw?.response) ? raw.response : Array.isArray(raw?.data) ? raw.data : [];
   const items = [];
@@ -11662,7 +11662,7 @@ function parseNTObstructions(raw) {
     if (!isFinite(lat) || !isFinite(lon)) continue;
     const road = item.roadName || '';
     const loc  = item.locationComment || item.comment || '';
-    const title = (road && loc ? `${road} — ${loc}` : road || loc || 'Road Obstruction').slice(0, 200);
+    const title = (road && loc ? `${road} - ${loc}` : road || loc || 'Road Obstruction').slice(0, 200);
     const rt = String(item.restrictionType || '').toLowerCase();
     const type = /road closed|impassable|detour/.test(rt) ? 'road_closure'
                : /caution|roadworks/.test(rt)             ? 'caution'
@@ -11672,7 +11672,7 @@ function parseNTObstructions(raw) {
   }
   return { available: true, total: items.length, items };
 }
-// VIC Open Data — planned + unplanned road disruptions (GeoJSON, GeometryCollection geometry)
+// VIC Open Data, planned + unplanned road disruptions (GeoJSON, GeometryCollection geometry)
 // Requires VIC_OPENDATA_KEY env var (Ocp-Apim-Subscription-Key from api.opendata.transport.vic.gov.au)
 function parseVICDisruptions(raw) {
   if (!Array.isArray(raw?.features)) return null;
@@ -11716,7 +11716,7 @@ async function handleRoadsStatus(req, res, url) {
     if (feedCfg.vicAuth) {
       // VIC: fetch planned + unplanned in parallel, merge features, parse once
       if (!VIC_OPENDATA_KEY) {
-        // no key — leave normalized null so we return available:false
+        // no key, leave normalized null so we return available:false
       } else {
         const vicHeaders = { 'Ocp-Apim-Subscription-Key': VIC_OPENDATA_KEY };
         const fetches = (feedCfg.urls || []).map(u => fetchFeedJSON(u, vicHeaders).catch(() => null));
@@ -11778,9 +11778,9 @@ const fireServer = createServiceServer({
   },
 });
 
-// ── Maps (8106) — interactive outback map (Leaflet CDN + OSM tiles) ──────────
+// ── Maps (8106), interactive outback map (Leaflet CDN + OSM tiles) ──────────
 // POIs are proxied from OSM Overpass server-side so the browser only talks to
-// 'self' — no dependency on the (Cloudflare-managed) external CSP. Cached 2 min.
+// 'self', no dependency on the (Cloudflare-managed) external CSP. Cached 2 min.
 function fetchOverpass(bbox) {
   return new Promise((resolve) => {
     const query = `[out:json][timeout:20];(node["amenity"="fuel"](${bbox});node["amenity"="drinking_water"](${bbox});node["tourism"="camp_site"](${bbox});node["tourism"="caravan_site"](${bbox}););out body 150;`;
@@ -11825,7 +11825,7 @@ const mapsServer = createServiceServer({
   },
 });
 
-// ── Coverage (8105) — crowd-sourced mobile/satellite signal map ──────────────
+// ── Coverage (8105), crowd-sourced mobile/satellite signal map ──────────────
 const COVERAGE_DB = path.join(__dirname, 'coverage.db');
 function readCoverage() { try { const d = JSON.parse(fs.readFileSync(COVERAGE_DB, 'utf8')); return Array.isArray(d.reports) ? d.reports : []; } catch { return []; } }
 function writeCoverage(reports) { atomicWriteFile(COVERAGE_DB, JSON.stringify({ reports })); }
@@ -11886,7 +11886,7 @@ const coverageServer = createServiceServer({
   },
 });
 
-// ── Drive (8102) — account-gated file storage (drive.db + drive-files/) ─────
+// ── Drive (8102), account-gated file storage (drive.db + drive-files/) ─────
 const DRIVE_DB = path.join(__dirname, 'drive.db');
 const DRIVE_DIR = path.join(__dirname, 'drive-files');
 fs.mkdirSync(DRIVE_DIR, { recursive: true });
@@ -11938,7 +11938,7 @@ const driveServer = createServiceServer({
   },
 });
 
-// ── Photos (8103) — account-gated photo gallery (photos.db + photos-files/) ──
+// ── Photos (8103), account-gated photo gallery (photos.db + photos-files/) ──
 const PHOTOS_DB = path.join(__dirname, 'photos.db');
 const PHOTOS_DIR = path.join(__dirname, 'photos-files');
 fs.mkdirSync(PHOTOS_DIR, { recursive: true });
@@ -11989,7 +11989,7 @@ const photosServer = createServiceServer({
   },
 });
 
-// ── Swap (8111) — community classifieds (swap.db + swap-files/) ─────────────
+// ── Swap (8111), community classifieds (swap.db + swap-files/) ─────────────
 const SWAP_DB = path.join(__dirname, 'swap.db');
 const SWAP_DIR = path.join(__dirname, 'swap-files');
 fs.mkdirSync(SWAP_DIR, { recursive: true });
@@ -12056,7 +12056,7 @@ const swapServer = createServiceServer({
   },
 });
 
-// ── Beacon (8108) — safety check-ins; emails a contact on a missed check-in ─
+// ── Beacon (8108), safety check-ins; emails a contact on a missed check-in ─
 const BEACON_DB = path.join(__dirname, 'beacon.db');
 function readBeacons() { try { const d = JSON.parse(fs.readFileSync(BEACON_DB, 'utf8')); return (d && d.beacons) || {}; } catch { return {}; } }
 function writeBeacons(beacons) { atomicWriteFile(BEACON_DB, JSON.stringify({ beacons })); }
@@ -12092,7 +12092,7 @@ const beaconServer = createServiceServer({
     return false;
   },
 });
-// Overdue checker — emails the nominated contact once per missed cycle
+// Overdue checker, emails the nominated contact once per missed cycle
 setInterval(() => {
   try {
     const beacons = readBeacons(); let changed = false; const now = Date.now();
@@ -12103,7 +12103,7 @@ setInterval(() => {
       if (now > dueAt && (!b.alertedAt || b.alertedAt < b.lastCheckIn)) {
         if (b.contactEmail) {
           const hoursLate = Math.round((now - dueAt) / 3600000);
-          sendEmail({ to: b.contactEmail, subject: `Missed check-in from ${b.userName || 'a traveller'}`, html: `<p>Hi ${beaconEsc(b.contactName || 'there')},</p><p><b>${beaconEsc(b.userName || 'A traveller')}</b> set up an Outback Electronics safety beacon and has missed a scheduled check-in — it was due ${new Date(dueAt).toLocaleString('en-AU')} (about ${hoursLate}h ago).</p>${b.message ? `<p>Their note: "${beaconEsc(b.message)}"</p>` : ''}<p>This is an automated safety alert. Please try to reach them — and contact emergency services (000) if you're concerned.</p>` }).catch(() => {});
+          sendEmail({ to: b.contactEmail, subject: `Missed check-in from ${b.userName || 'a traveller'}`, html: `<p>Hi ${beaconEsc(b.contactName || 'there')},</p><p><b>${beaconEsc(b.userName || 'A traveller')}</b> set up an Outback Electronics safety beacon and has missed a scheduled check-in, it was due ${new Date(dueAt).toLocaleString('en-AU')} (about ${hoursLate}h ago).</p>${b.message ? `<p>Their note: "${beaconEsc(b.message)}"</p>` : ''}<p>This is an automated safety alert. Please try to reach them, and contact emergency services (000) if you're concerned.</p>` }).catch(() => {});
         }
         b.alertedAt = now; changed = true;
       }
@@ -12112,17 +12112,17 @@ setInterval(() => {
   } catch {}
 }, 5 * 60 * 1000);
 
-// ── Radio (8110) — continuous server-side broadcast from radio-media/ ────────
+// ── Radio (8110), continuous server-side broadcast from radio-media/ ────────
 // One shared timeline streamed to all listeners (audio-only; tune in/out but no
 // pause or skip). Drop .mp3 files into radio-media/. Paced to a CBR estimate.
-// Media folder is configurable — point RADIO_MEDIA_DIR at any library
+// Media folder is configurable, point RADIO_MEDIA_DIR at any library
 // (e.g. /home/daniel/Music). Defaults to radio-media/ in the project root.
 const RADIO_DIR = process.env.RADIO_MEDIA_DIR || path.join(__dirname, 'radio-media');
 try { fs.mkdirSync(RADIO_DIR, { recursive: true }); } catch {}
 const RADIO_BYTES_PER_SEC = Math.max(4000, Math.round((parseInt(process.env.RADIO_BITRATE_KBPS, 10) || 128) * 125));
 let _radioPlaylist = [], _radioIdx = -1, _radioTrack = null, _radioArtist = null, _radioBuf = null, _radioPos = 0;
 // Real byte rate of the track currently on air. We stream the raw file bytes,
-// so the correct pace is fileBytes / trackDurationSeconds — exact for CBR and
+// so the correct pace is fileBytes / trackDurationSeconds, exact for CBR and
 // VBR alike. Falls back to the fixed estimate when a file can't be parsed.
 // Pacing off the fixed estimate (e.g. 128 kbps) underfeeds higher-bitrate files,
 // which drains the browser buffer and causes the once-per-second rebuffer glitch
@@ -12170,7 +12170,7 @@ function mp3Duration(buf) {
   return frames > 2 ? dur : null;
 }
 const _radioListeners = new Set();
-// Rolling preload buffer — last ~15 s of audio sent to new listeners as an
+// Rolling preload buffer, last ~15 s of audio sent to new listeners as an
 // immediate burst so the browser fills its playback buffer before real-time
 // pacing takes over. Held in seconds and sized against the current byte rate.
 const RADIO_PRELOAD_SECONDS = 15;
@@ -12212,7 +12212,7 @@ function id3Artist(buf) {
   }
   return null;
 }
-// Walk radio-media/ recursively — each subfolder is an album. Playlist entries
+// Walk radio-media/ recursively, each subfolder is an album. Playlist entries
 // are relative paths (e.g. "Heimsöknin/01-track.mp3"), sorted so albums group
 // and tracks play in order within each.
 function radioScan() {
@@ -12241,7 +12241,7 @@ function radioLoadNext() {
   _radioTrack = _radioPlaylist[_radioIdx] || null;
   try { _radioBuf = _radioTrack ? fs.readFileSync(path.join(RADIO_DIR, _radioTrack)) : null; _radioPos = 0; } catch { _radioBuf = null; }
   // Extract artist from ID3 tag before stripping it, then strip the tag.
-  // The tag carries metadata and often hundreds of KB of embedded cover art —
+  // The tag carries metadata and often hundreds of KB of embedded cover art
   // non-audio bytes the browser plays as silence, producing a gap at every track change.
   _radioArtist = id3Artist(_radioBuf);
   if (_radioBuf && _radioBuf.length >= 10 && _radioBuf[0] === 0x49 && _radioBuf[1] === 0x44 && _radioBuf[2] === 0x33) {
@@ -12250,7 +12250,7 @@ function radioLoadNext() {
   }
   // Strip a leading Xing/Info/VBRI header frame. It's a silent frame that only
   // declares the track's total length. In a concatenated live stream the browser
-  // honours that length and fires `ended` at the end of the track — stopping
+  // honours that length and fires `ended` at the end of the track, stopping
   // playback so the listener has to manually re-tune. Dropping it makes every
   // track look like part of one endless stream that never "ends".
   if (_radioBuf) {

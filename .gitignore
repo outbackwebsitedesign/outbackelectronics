@@ -1,5 +1,5 @@
 *.db
-# User-uploaded media for the service suite — live data, back up, never commit
+# User-uploaded media for the service suite, live data, back up, never commit
 drive-files/
 photos-files/
 swap-files/

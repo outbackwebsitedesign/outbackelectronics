@@ -8,7 +8,7 @@ const useShop = () => useContext(window.__ShopContext__ || _fallbackShopCtx);
 
 // Service descriptions are authored with {{serviceArea}} placeholders (see
 // services.db) so location text stays correct across shop setting changes
-// without a redeploy — fill it in with the live shop suburb just before render.
+// without a redeploy, fill it in with the live shop suburb just before render.
 function interpolateServiceText(text, shop) {
   const area = [shop.suburb, shop.state].filter(Boolean).join('–') || 'our local area';
   return String(text || '').replace(/\{\{serviceArea\}\}/g, area);
@@ -121,7 +121,7 @@ function HomePage({ go, addToCart, portalUser }) {
                 <span className="italic" style={{color:'var(--rust)'}}>the signal ends.</span>
               </h1>
               <p className="hero-sub" style={{marginTop: 22, fontSize: 18, maxWidth: 520, color:'var(--ink-2)'}}>
-                Arduino &amp; microcontroller gear, PC &amp; phone parts, software tools, and off-grid electronics — an obstinate community of tinkerers serving remote Australia{(shop.suburb || shop.state) ? ` from ${[shop.suburb, shop.state].filter(Boolean).join(', ')}` : ''} by appointment only.
+                Arduino &amp; microcontroller gear, PC &amp; phone parts, software tools, and off-grid electronics - an obstinate community of tinkerers serving remote Australia{(shop.suburb || shop.state) ? ` from ${[shop.suburb, shop.state].filter(Boolean).join(', ')}` : ''} by appointment only.
               </p>
               <div className="row-flex hero-actions" style={{marginTop: 28}}>
                 <button className="btn btn-rust" onClick={() => go('shop')}>Browse the Shop →</button>
@@ -138,8 +138,8 @@ function HomePage({ go, addToCart, portalUser }) {
                 </div>
               )}
               <div className="row-flex hero-stats" style={{marginTop: 36, gap: 32, borderTop:'1px solid var(--line)', paddingTop: 22}}>
-                <div><div className="serif" style={{fontSize:32, color:'var(--rust)'}}>{metrics.repairCount !== null ? metrics.repairCount.toLocaleString() : '—'}</div><div className="eyebrow">REPAIRS LOGGED</div></div>
-                <div><div className="serif" style={{fontSize:32, color:'var(--rust)'}}>{metrics.ewasteTonnes !== null ? metrics.ewasteTonnes.toFixed(1) + 't' : '—'}</div><div className="eyebrow">E-WASTE DIVERTED</div></div>
+                <div><div className="serif" style={{fontSize:32, color:'var(--rust)'}}>{metrics.repairCount !== null ? metrics.repairCount.toLocaleString() : '-'}</div><div className="eyebrow">REPAIRS LOGGED</div></div>
+                <div><div className="serif" style={{fontSize:32, color:'var(--rust)'}}>{metrics.ewasteTonnes !== null ? metrics.ewasteTonnes.toFixed(1) + 't' : '-'}</div><div className="eyebrow">E-WASTE DIVERTED</div></div>
               </div>
             </div>
             <div className="hero-image" style={{position:'relative'}}>
@@ -166,7 +166,7 @@ function HomePage({ go, addToCart, portalUser }) {
                   <p style={{fontFamily:'Instrument Serif, serif', fontSize: 18, lineHeight:1.25, display:'-webkit-box', WebkitLineClamp:6, WebkitBoxOrient:'vertical', overflow:'hidden'}}>
                     "{testimonial.quote}"
                   </p>
-                  <div className="mono" style={{fontSize:10, marginTop:8}}>— {testimonial.name.toUpperCase()}{testimonial.loc ? ` · ${testimonial.loc.toUpperCase()}` : ''}</div>
+                  <div className="mono" style={{fontSize:10, marginTop:8}}>{testimonial.name.toUpperCase()}{testimonial.loc ? ` · ${testimonial.loc.toUpperCase()}` : ''}</div>
                 </div>
               )}
             </div>
@@ -272,14 +272,14 @@ function HomePage({ go, addToCart, portalUser }) {
               <div style={{marginTop: 28, display:'grid', gridTemplateColumns:'1fr 1fr', gap:16}}>
                 <div style={{background:'#0e0c09', padding:'16px 20px'}}>
                   <div className="mono" style={{fontSize:11, color:'var(--ochre)', letterSpacing:'.08em'}}>MODELS</div>
-                  <div className="serif" style={{fontSize:36, marginTop:4}}>{aiData.models?.length ?? '—'}</div>
+                  <div className="serif" style={{fontSize:36, marginTop:4}}>{aiData.models?.length ?? '-'}</div>
                   <div style={{fontSize:12, color:'var(--bg-deep)', marginTop:2}}>
                     {aiData.models?.filter(m => m.status === 'Active').length ?? 0} active
                   </div>
                 </div>
                 <div style={{background:'#0e0c09', padding:'16px 20px'}}>
                   <div className="mono" style={{fontSize:11, color:'var(--ochre)', letterSpacing:'.08em'}}>FIELD BOXES</div>
-                  <div className="serif" style={{fontSize:36, marginTop:4}}>{aiData.boxes?.length ?? '—'}</div>
+                  <div className="serif" style={{fontSize:36, marginTop:4}}>{aiData.boxes?.length ?? '-'}</div>
                   <div style={{fontSize:12, color:'var(--bg-deep)', marginTop:2}}>
                     {aiData.boxes?.filter(b => !(b.status || '').toLowerCase().includes('offline')).length ?? 0} online
                   </div>
@@ -314,7 +314,7 @@ function HomePage({ go, addToCart, portalUser }) {
             <span className="eyebrow">ON THE BENCH THIS WEEK</span>
             <h2 className="serif" style={{fontSize: 42, marginTop: 6}}>Tested. Tagged. Ready.</h2>
           </div>
-          <a className="mono" href="/shop" style={{fontSize:12, color:'var(--rust)', cursor:'pointer'}} onClick={(e) => { e.preventDefault(); go('shop'); }}>ALL {featuredProducts.length || '—'} LISTINGS →</a>
+          <a className="mono" href="/shop" style={{fontSize:12, color:'var(--rust)', cursor:'pointer'}} onClick={(e) => { e.preventDefault(); go('shop'); }}>ALL {featuredProducts.length || '-'} LISTINGS →</a>
         </div>
         <div className="grid-4">
           {featuredProducts.slice(0,4).map((p,i) => <ProductCard key={i} p={p} onClick={() => go('product', p)} />)}
@@ -345,7 +345,7 @@ function HomePage({ go, addToCart, portalUser }) {
                 ))}
               </ul>
             ) : (
-              <p style={{marginTop: 14, color:'var(--ink-2)', fontSize:14}}>Join the discussion — repairs, builds, troubleshooting, and more.</p>
+              <p style={{marginTop: 14, color:'var(--ink-2)', fontSize:14}}>Join the discussion - repairs, builds, troubleshooting, and more.</p>
             )}
             <a href={shop._forumUrl || 'https://forum.outbackelectronics.com.au'} target="_blank" rel="noopener noreferrer" className="btn btn-outline" style={{marginTop: 18, display:'inline-block'}}>Visit the Forum →</a>
           </div>
@@ -435,7 +435,7 @@ function ProductCard({ p, onClick }) {
   );
 }
 
-// #8 — shop filters/sort/search are serialized to the URL (?cat=&cond=&brands=&min=&max=&sort=&q=)
+// #8, shop filters/sort/search are serialized to the URL (?cat=&cond=&brands=&min=&max=&sort=&q=)
 // so filtered views can be shared, bookmarked, and survive back/forward navigation.
 function readShopParamsFromUrl() {
   const sp = new URLSearchParams(location.search);
@@ -490,7 +490,7 @@ function ShopPage({ go, addToCart, pageParams }) {
     if (pageParams.initialQuery != null) setQuery(pageParams.initialQuery);
   }, [pageParams]);
 
-  // Serialize active filters/sort/search into the URL (replaceState — no history spam)
+  // Serialize active filters/sort/search into the URL (replaceState, no history spam)
   const [urlSyncTick, setUrlSyncTick] = useState(0);
   useEffect(() => {
     // Second pass after mount so the initial state lands after App pushes /shop
@@ -562,7 +562,7 @@ function ShopPage({ go, addToCart, pageParams }) {
     };
     if (!isNaN(min)) f = f.filter(p => { const ep = effectivePrice(p); return ep != null && ep >= min; });
     if (!isNaN(max)) f = f.filter(p => { const ep = effectivePrice(p); return ep != null && ep <= max; });
-    // Sort on the same effective price the min/max filter uses — a product
+    // Sort on the same effective price the min/max filter uses, a product
     // whose price lives on its variants has no top-level price, and comparing
     // undefined sorted it arbitrarily.
     const sortPrice = p => { const ep = effectivePrice(p); return ep == null ? Infinity : ep; };
@@ -595,7 +595,7 @@ function ShopPage({ go, addToCart, pageParams }) {
       <PageHead crumbs={['Outback','Shop']} title="Shop"
         lead={`${products.length} listings · new, refurbished & field-tested gear. Every refurb passes our 38-point bench check.`} />
       <div className="container" style={{paddingTop: 32, paddingBottom: 32}}>
-        {/* Mobile filter toggle bar — hidden on desktop via CSS */}
+        {/* Mobile filter toggle bar, hidden on desktop via CSS */}
         <div className="shop-filter-bar">
           <button className="btn btn-sm btn-ghost shop-filter-toggle" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(o => !o)}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
@@ -837,7 +837,7 @@ function ServicesPage({ go }) {
             </div>
           </div>
           <div>
-            <div className="slot" style={{aspectRatio:'4/3'}}>WORKBENCH — DUST, FLUX, COPPER WIRE</div>
+            <div className="slot" style={{aspectRatio:'4/3'}}>WORKBENCH - DUST, FLUX, COPPER WIRE</div>
             <PublicJobLog />
           </div>
         </div>
@@ -847,7 +847,7 @@ function ServicesPage({ go }) {
 }
 
 // ============================================================
-// SOFTWARE — OS icons, listing, OS picker, detail page
+// SOFTWARE - OS icons, listing, OS picker, detail page
 // ============================================================
 // Proper Tux penguin SVG
 const TuxIcon = () => (
@@ -893,7 +893,7 @@ function SoftwarePage({ go, pageParams }) {
     const found = products.find(p => p.slug === pageParams.slug);
     if (found && pageParams.name === undefined) {
       // Enrich pageParams with loaded data so title/meta update
-      // We do this via a no-op state trick — just trigger a re-render via go
+      // We do this via a no-op state trick, just trigger a re-render via go
     }
   }, [products, pageParams]);
 
@@ -930,7 +930,7 @@ function SoftwarePage({ go, pageParams }) {
           <div style={{padding:'48px 0'}}>
             <p className="serif" style={{fontSize:28, marginBottom:12}}>Still in the workshop.</p>
             <p style={{color:'var(--ink-2)', fontSize:15, maxWidth:520, lineHeight:1.7}}>
-              We're working on our first software release — internal tools we use every day that we think are worth sharing. Check back soon.
+              We're working on our first software release, internal tools we use every day that we think are worth sharing. Check back soon.
             </p>
           </div>
         )}
@@ -1126,8 +1126,8 @@ function SoftwareDetailPage({ product, os, go }) {
                       return (
                         <tr key={key} style={{borderTop:'1px solid var(--line)'}}>
                           <td style={{padding:'8px 0', color:'var(--ink-2)', fontWeight:500}}>{label}</td>
-                          <td style={{padding:'8px 8px 8px 0'}}>{minSpecs[key] || '—'}</td>
-                          <td style={{padding:'8px 0'}}>{recSpecs[key] || '—'}</td>
+                          <td style={{padding:'8px 8px 8px 0'}}>{minSpecs[key] || '-'}</td>
+                          <td style={{padding:'8px 0'}}>{recSpecs[key] || '-'}</td>
                         </tr>
                       );
                     })}
@@ -1159,14 +1159,14 @@ function EwastePage({ go }) {
     fetch('/api/metrics').then(r => r.ok ? r.json() : Promise.reject()).then(d => setMetrics(d)).catch(() => {});
   }, []);
   const stats = [
-    {n: metrics.ewasteTonnes !== null ? metrics.ewasteTonnes.toFixed(1) + 't' : '—', l:'DIVERTED · TOTAL', s:'From landfill into refurb, parts, or audited recyclers.'},
-    {n: metrics.resalePercent !== null ? metrics.resalePercent + '%' : '—', l:'GEAR RESOLD OR DONATED', s:'Most of what comes in still has a working second life.'},
+    {n: metrics.ewasteTonnes !== null ? metrics.ewasteTonnes.toFixed(1) + 't' : '-', l:'DIVERTED · TOTAL', s:'From landfill into refurb, parts, or audited recyclers.'},
+    {n: metrics.resalePercent !== null ? metrics.resalePercent + '%' : '-', l:'GEAR RESOLD OR DONATED', s:'Most of what comes in still has a working second life.'},
     {n:'$0', l:'TO DROP OFF', s:'Counter drop-off is always free, regardless of brand.'},
   ];
   return (
     <>
       <PageHead crumbs={['Outback','eWaste']} title="eWaste"
-        lead="A take-back program for the bits no one else will touch. We sort, salvage, refurbish, or properly recycle — and pay you for what's worth saving." />
+        lead="A take-back program for the bits no one else will touch. We sort, salvage, refurbish, or properly recycle - and pay you for what's worth saving." />
       <section className="container" style={{paddingTop: 40, paddingBottom: 24}}>
         <div className="grid-3">
           {stats.map((s,i) => (
@@ -1183,7 +1183,7 @@ function EwastePage({ go }) {
         <div className="grid-2" style={{gap: 36}}>
           <div>
             <span className="eyebrow">WHAT WE TAKE</span>
-            <h2 className="serif" style={{fontSize: 44, marginTop: 8, lineHeight:1}}>If it has a battery, a board or a buzzing transformer — bring it.</h2>
+            <h2 className="serif" style={{fontSize: 44, marginTop: 8, lineHeight:1}}>If it has a battery, a board or a buzzing transformer - bring it.</h2>
             <div className="grid-2" style={{marginTop: 24, gap:12}}>
               {['Laptops','Desktops','Phones','Tablets','Solar inverters','Power tools','Lead-acid batteries','LiFePO4 packs','UPS units','PV modules','Network gear','Server racks','Cables (sorted)','CRT & LCD displays','Printers','Cameras & scopes'].map((it,i) => (
                 <div key={i} className="checks"><li style={{display:'flex', gap:10, alignItems:'flex-start'}}>{it}</li></div>
@@ -1224,7 +1224,7 @@ function EwastePage({ go }) {
 
             <div className="notice" style={{marginTop:16}}>
               <span className="tag tag-euc">PICKUP</span>
-              <div style={{fontSize:13, color:'var(--ink-2)'}}>≥ 50kg pallet of dead gear? We'll come grab it for free by appointment only — or freight pre-paid anywhere in Aus.</div>
+              <div style={{fontSize:13, color:'var(--ink-2)'}}>≥ 50kg pallet of dead gear? We'll come grab it for free by appointment only, or freight pre-paid anywhere in Aus.</div>
               <button className="btn btn-sm" onClick={() => go('quote')}>Book pickup</button>
             </div>
 
@@ -1293,7 +1293,7 @@ const AI_SERVICES = [
   {
     tag: 'INTEGRATION',
     title: 'Custom Integration',
-    desc: 'We wire AI into your existing systems — APIs, databases, workflows. If you have a process, we can find where intelligence fits.',
+    desc: 'We wire AI into your existing systems - APIs, databases, workflows. If you have a process, we can find where intelligence fits.',
   },
   {
     tag: 'CONVERSATIONAL',
@@ -1303,7 +1303,7 @@ const AI_SERVICES = [
   {
     tag: 'PROJECT-SPECIFIC',
     title: 'Project AI',
-    desc: 'AI scoped to a single project — one problem, one solution, built to fit. No bloat, no generic model handed over with a PDF.',
+    desc: 'AI scoped to a single project, one problem, one solution, built to fit. No bloat, no generic model handed over with a PDF.',
   },
   {
     tag: 'DOMAIN',
@@ -1327,13 +1327,13 @@ function AIPage({ go }) {
     <>
       <PageHead crumbs={['Outback','AI']} title="Artificial Intelligence"
         kicker={<span className="tag tag-rust">NEW 2026 · BETA PRICING</span>}
-        lead="Custom AI built to your problem — from production chatbots and integrations to subject-specific models and frontier research into artificial general intelligence." />
+        lead="Custom AI built to your problem, from production chatbots and integrations to subject-specific models and frontier research into artificial general intelligence." />
 
       <section className="container" style={{paddingTop: 40, paddingBottom: 16}}>
         <span className="eyebrow">WHAT WE BUILD</span>
         <h2 className="serif" style={{fontSize: 48, marginTop: 8, lineHeight: 1.1, maxWidth: 640}}>AI for real problems.<br/>Built to spec.</h2>
         <p style={{marginTop: 16, fontSize: 16, color: 'var(--ink-2)', maxWidth: 560}}>
-          We don't sell a platform or lock you into a product. Every engagement starts with your problem and ends with something that solves it — whether that's a chatbot, a fine-tuned model, or a full integration into your stack.
+          We don't sell a platform or lock you into a product. Every engagement starts with your problem and ends with something that solves it, whether that's a chatbot, a fine-tuned model, or a full integration into your stack.
         </p>
       </section>
 
@@ -1358,7 +1358,7 @@ function AIPage({ go }) {
             <span className="tag tag-rust" style={{marginBottom: 16, display: 'inline-block'}}>RESEARCH · AGI</span>
             <h2 className="serif" style={{fontSize: 40, lineHeight: 1.1, marginTop: 12}}>Attempting true AGI.</h2>
             <p style={{marginTop: 16, fontSize: 15, color: 'var(--bg-deep)', lineHeight: 1.7}}>
-              We are actively pursuing artificial general intelligence — not as a marketing claim, but as a research direction. This is hard, unsolved, and we say so plainly. If you want to follow the work or collaborate, get in touch.
+              We are actively pursuing artificial general intelligence, not as a marketing claim, but as a research direction. This is hard, unsolved, and we say so plainly. If you want to follow the work or collaborate, get in touch.
             </p>
             <button className="btn btn-rust" style={{marginTop: 28}} onClick={() => go('contact')}>Get in touch →</button>
           </div>
@@ -1366,7 +1366,7 @@ function AIPage({ go }) {
             <span className="tag tag-euc" style={{marginBottom: 16, display: 'inline-block'}}>RESEARCH · HUMANLY AI</span>
             <h2 className="serif" style={{fontSize: 40, lineHeight: 1.1, marginTop: 12}}>Growing a mind from scratch.</h2>
             <p style={{marginTop: 16, fontSize: 15, color: 'var(--ink-2)', lineHeight: 1.7}}>
-              Humanly AI is an attempt to grow a sandboxed digital cognitive organism from raw sensory experience — using developmental learning principles modeled after the human brain. No pretraining on human knowledge. No shortcuts. The goal is to see whether genuine cognition can emerge from the bottom up.
+              Humanly AI is an attempt to grow a sandboxed digital cognitive organism from raw sensory experience, using developmental learning principles modeled after the human brain. No pretraining on human knowledge. No shortcuts. The goal is to see whether genuine cognition can emerge from the bottom up.
             </p>
             <button className="btn btn-ghost" style={{marginTop: 28}} onClick={() => go('humanly-ai')}>Follow the research →</button>
           </div>
@@ -1378,7 +1378,7 @@ function AIPage({ go }) {
           <div>
             <span className="eyebrow" style={{color:'var(--rust)'}}>TRY IT NOW</span>
             <h2 className="serif" style={{fontSize:32, color:'var(--paper)', marginTop:8, marginBottom:8}}>Chat with our on-prem AI assistant.</h2>
-            <p style={{fontSize:14, color:'var(--bg-deep)', margin:0, maxWidth:480}}>Ask electronics repair questions, get troubleshooting help, or talk components. Runs entirely on our own hardware — nothing sent to the cloud.</p>
+            <p style={{fontSize:14, color:'var(--bg-deep)', margin:0, maxWidth:480}}>Ask electronics repair questions, get troubleshooting help, or talk components. Runs entirely on our own hardware, nothing sent to the cloud.</p>
           </div>
           <a className="btn btn-rust" style={{flexShrink:0, fontSize:16, padding:'14px 28px'}} href="https://ai.outbackelectronics.com.au">Open AI Chat →</a>
         </div>
@@ -1407,7 +1407,7 @@ function AIPage({ go }) {
 // PRODUCT DETAIL
 // ============================================================
 
-// In-app not-found view for invalid /product/:id and /service/:id deep links —
+// In-app not-found view for invalid /product/:id and /service/:id deep links
 // the user gets a clear message and a way back instead of a blank page.
 function CatalogNotFound({ go, kind }) {
   const isService = kind === 'service';
@@ -1415,7 +1415,7 @@ function CatalogNotFound({ go, kind }) {
     <>
       <PageHead crumbs={['Outback', isService ? 'Services' : 'Shop', 'Not Found']}
         title={isService ? 'Service not found' : 'Product not found'}
-        lead={`Sorry — we couldn't find that ${kind}. It may have been removed or the link may be incorrect.`} />
+        lead={`Sorry, we couldn't find that ${kind}. It may have been removed or the link may be incorrect.`} />
       <section className="container" style={{paddingTop:32, paddingBottom:48}}>
         <div style={{display:'flex', gap:12, flexWrap:'wrap'}}>
           <button className="btn btn-rust" onClick={() => go(isService ? 'services' : 'shop')}>
@@ -1444,7 +1444,7 @@ function ImageLightbox({ images, startIndex, alt, onClose }) {
   return (
     <div style={{position:'fixed', inset:0, zIndex:600, background:'rgba(15,13,10,0.9)', display:'flex', alignItems:'center', justifyContent:'center', padding:24}}
       onClick={onClose}>
-      <div ref={panelRef} role="dialog" aria-modal="true" aria-label={`${alt} — image ${idx + 1} of ${images.length}`}
+      <div ref={panelRef} role="dialog" aria-modal="true" aria-label={`${alt}, image ${idx + 1} of ${images.length}`}
         style={{position:'relative', maxWidth:'92vw', maxHeight:'92vh'}} onClick={e => e.stopPropagation()}>
         <img src={images[idx]} alt={alt} style={{maxWidth:'92vw', maxHeight:'86vh', objectFit:'contain', display:'block', background:'var(--bg-deep)'}} />
         <button onClick={onClose} aria-label="Close image viewer"
@@ -1553,7 +1553,7 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
     if (v.images && v.images.length > 0) setActiveImage(v.images[0]);
   };
 
-  // #11 — actually register the back-in-stock request with the server
+  // #11, actually register the back-in-stock request with the server
   const submitNotify = async () => {
     const email = notifyEmail.trim();
     if (!email || notifySending) return;
@@ -1580,7 +1580,7 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
     }
   };
 
-  // Deep link still resolving — show a loading state, not a premature 404
+  // Deep link still resolving, show a loading state, not a premature 404
   if (!product) {
     return (
       <>
@@ -1614,13 +1614,13 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
   // Bulk pricing hangs off whichever entry owns the price and the stock.
   const priced = hasVariants ? selectedVariant : product;
   const bulkQty = Math.floor(Number(priced?.bulkQty) || 0);
-  // The bulk rate is the same units at a lower price, not a separate pool —
+  // The bulk rate is the same units at a lower price, not a separate pool
   // once fewer than bulkQty remain the threshold is unreachable, so the offer
   // stops being shown rather than becoming a promise we can't honour.
   const bulkAvailable = bulkOfferAvailable(priced);
   const bulkSoldDown = hasBulkPrice(priced) && !bulkAvailable;
   const stockLeft = availableStock(priced);
-  // Bulk pricing applies from the quantity alone — no separate action to take.
+  // Bulk pricing applies from the quantity alone, no separate action to take.
   const maxQty = stockLeft === null ? 999 : Math.max(1, stockLeft);
   const safeQty = Math.min(Math.max(1, qty), maxQty);
   const unitPrice = bulkUnitPrice(priced, safeQty);
@@ -1677,9 +1677,9 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
               {!hasVariants && product.tag && <span className={`tag ${product.tagClass || ''}`}>{product.tag.toUpperCase()}</span>}
             </div>
             <h2 className="serif" style={{fontSize:40, lineHeight:1.05, marginBottom:8}}>{product.name}</h2>
-            <div className="mono" style={{fontSize:12, color:'var(--ink-3)', marginBottom:20}}>SKU: {product.sku || (hasVariants && selectedVariant ? selectedVariant.sku : '—')}</div>
+            <div className="mono" style={{fontSize:12, color:'var(--ink-3)', marginBottom:20}}>SKU: {product.sku || (hasVariants && selectedVariant ? selectedVariant.sku : '-')}</div>
             <div style={{display:'flex', alignItems:'baseline', gap:12, marginBottom: bulkApplied ? 6 : 24, flexWrap:'wrap'}}>
-              <span className="price" style={{fontSize:36}}>${unitPrice ? unitPrice.toLocaleString() : (activePrice ? activePrice.toLocaleString() : '—')}</span>
+              <span className="price" style={{fontSize:36}}>${unitPrice ? unitPrice.toLocaleString() : (activePrice ? activePrice.toLocaleString() : '-')}</span>
               {bulkApplied && <span className="price-strike" style={{fontSize:20}}>${pricedBase.toLocaleString()}</span>}
               {!bulkApplied && !hasVariants && product.was && <span className="price-strike" style={{fontSize:20}}>${Number(product.was).toLocaleString()}</span>}
               {safeQty > 1 && <span className="mono" style={{fontSize:13, color:'var(--ink-2)'}}>each · ${(unitPrice * safeQty).toLocaleString()} total</span>}
@@ -1970,7 +1970,7 @@ function ServiceDetailPage({ go, pageParams, portalUser, onPortalUserChange }) {
       if (data.url) {
         window.location.href = data.url;
       } else {
-        setBookError(data.message || 'Could not start checkout — please try again or call us.');
+        setBookError(data.message || 'Could not start checkout, please try again or call us.');
       }
     } catch {
       setBookError('Could not connect to payment provider. Please try again.');
@@ -1979,7 +1979,7 @@ function ServiceDetailPage({ go, pageParams, portalUser, onPortalUserChange }) {
     }
   };
 
-  // Deep link still resolving — show a loading state, not a premature 404
+  // Deep link still resolving, show a loading state, not a premature 404
   if (!service) {
     return (
       <>
@@ -2024,7 +2024,7 @@ function ServiceDetailPage({ go, pageParams, portalUser, onPortalUserChange }) {
 
           {hasFixedPrice ? (
             <form onSubmit={handlePayAndBook} style={{borderTop:'2px solid var(--rust)', paddingTop:24, marginTop:8}}>
-              <span className="eyebrow" style={{marginBottom:12, display:'block'}}>BOOK &amp; PAY — {service.priceLine}</span>
+              <span className="eyebrow" style={{marginBottom:12, display:'block'}}>BOOK &amp; PAY - {service.priceLine}</span>
               <div className="grid-2" style={{gap:14, marginBottom:14}}>
                 <label className="field"><span className="label">Name</span><input required className="input" value={bookForm.name} onChange={e => setBookForm(f => ({...f, name: e.target.value}))} placeholder="Your name" /></label>
                 <label className="field"><span className="label">Email or sat number</span><input required className="input" value={bookForm.email} onChange={e => setBookForm(f => ({...f, email: e.target.value}))} placeholder="your@email.com" /></label>
@@ -2040,11 +2040,11 @@ function ServiceDetailPage({ go, pageParams, portalUser, onPortalUserChange }) {
               {!geocoding && distanceKm !== null && (
                 <div style={{marginBottom:14, padding:'10px 14px', fontSize:13, border:'1px solid var(--line)', background: outOfRange ? '#fff3f3' : 'var(--bg-elev)', borderColor: outOfRange ? 'var(--rust)' : 'var(--line)'}}>
                   {outOfRange ? (
-                    <>That's {distanceKm}km — on-site bookings for this service are capped at {CALLOUT_LOCAL_CAP_KM}km. <span style={{color:'var(--rust)', fontWeight:600}}>Post your device to us</span> or <a href="/quote" style={{color:'var(--rust)', cursor:'pointer', textDecoration:'underline'}} onClick={(e) => { e.preventDefault(); go('quote', service); }}>request a quote</a> for a discussion.</>
+                    <>That's {distanceKm}km, on-site bookings for this service are capped at {CALLOUT_LOCAL_CAP_KM}km. <span style={{color:'var(--rust)', fontWeight:600}}>Post your device to us</span> or <a href="/quote" style={{color:'var(--rust)', cursor:'pointer', textDecoration:'underline'}} onClick={(e) => { e.preventDefault(); go('quote', service); }}>request a quote</a> for a discussion.</>
                   ) : distanceKm <= CALLOUT_FREE_KM ? (
-                    <><span style={{color:'var(--rust)', fontWeight:600}}>✓ Free callout</span> — you're {distanceKm}km away.</>
+                    <><span style={{color:'var(--rust)', fontWeight:600}}>✓ Free callout</span> - you're {distanceKm}km away.</>
                   ) : (
-                    <><span style={{fontWeight:600}}>+${travelFee} travel fee</span> — {calloutFeeBreakdown(distanceKm)}. Added to your total.</>
+                    <><span style={{fontWeight:600}}>+${travelFee} travel fee</span>, {calloutFeeBreakdown(distanceKm)}. Added to your total.</>
                   )}
                 </div>
               )}
@@ -2092,10 +2092,10 @@ function ServiceDetailPage({ go, pageParams, portalUser, onPortalUserChange }) {
               <div style={{display:'flex', gap:12, alignItems:'center'}}>
                 <button type="submit" className="btn btn-rust" style={{flex:1, justifyContent:'center', gap:8}} disabled={booking || outOfRange || !portalUser} aria-busy={booking}>
                   {booking ? <><span className="spinner" aria-hidden="true" /> Redirecting…</> : checkoutMode === 'plan'
-                    ? `Set Up Payment Plan — $${fixedPrice.toLocaleString('en-AU', {minimumFractionDigits:2})} total →`
+                    ? `Set Up Payment Plan - $${fixedPrice.toLocaleString('en-AU', {minimumFractionDigits:2})} total →`
                     : travelFee > 0
-                    ? `Pay now — $${(fixedPrice + travelFee).toLocaleString('en-AU', {minimumFractionDigits:2})} (incl. travel) →`
-                    : `Pay now — $${fixedPrice.toLocaleString('en-AU', {minimumFractionDigits:2})} →`}
+                    ? `Pay now - $${(fixedPrice + travelFee).toLocaleString('en-AU', {minimumFractionDigits:2})} (incl. travel) →`
+                    : `Pay now - $${fixedPrice.toLocaleString('en-AU', {minimumFractionDigits:2})} →`}
                 </button>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => go('quote', service)}>Request a quote instead</button>
               </div>
@@ -2187,7 +2187,7 @@ function GiftCardsPage({ go, addToCart }) {
                 </div>
                 <div style={{marginTop:'auto', display:'grid', gap:8}}>
                   <button className="btn btn-rust" style={{justifyContent:'center'}} onClick={() => addToCart({ id: 'gc-' + denom.id, name: denom.name, price: denom.priceAud, type: 'gift-card' })}>
-                    Add to Cart — ${Number(denom.priceAud).toFixed(2)}
+                    Add to Cart - ${Number(denom.priceAud).toFixed(2)}
                   </button>
                 </div>
               </div>
@@ -2199,7 +2199,7 @@ function GiftCardsPage({ go, addToCart }) {
           {[
             {icon:'✉', t:'Delivered by email', d:'Your gift card code arrives by email within minutes of purchase.'},
             {icon:'∞', t:'Never expires', d:'No use-by dates. Spend it whenever the right gear comes along.'},
-            {icon:'★', t:'Redeemable on everything', d:'Products, services, repairs — anything we sell online.'},
+            {icon:'★', t:'Redeemable on everything', d:'Products, services, repairs - anything we sell online.'},
           ].map((f,i) => (
             <div key={i} style={{textAlign:'center'}}>
               <div style={{fontSize:32, marginBottom:10}}>{f.icon}</div>
@@ -2369,7 +2369,7 @@ function MembershipsPage({ go, portalUser }) {
                   <button className="btn btn-rust" style={{width:'100%', justifyContent:'center', marginTop:8}}
                     disabled={isProcessing}
                     onClick={() => startCheckout(tier)}>
-                    {isProcessing ? 'Redirecting to checkout…' : `Join — $${displayPrice} →`}
+                    {isProcessing ? 'Redirecting to checkout…' : `Join - $${displayPrice} →`}
                   </button>
                 )}
 

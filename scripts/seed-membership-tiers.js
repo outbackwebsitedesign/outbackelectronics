@@ -51,7 +51,7 @@ const DEFAULT_TIERS = [
     priceAud: 39,
     billingCycle: 'one-off',
     status: 'published',
-    description: 'Full access — every group, every post, workshop event invites, and the biggest shop discount we offer.',
+    description: 'Full access, every group, every post, workshop event invites, and the biggest shop discount we offer.',
     features: [
       'Everything in Pro',
       'Elite-only groups & special content',
@@ -79,7 +79,7 @@ if (fs.existsSync(DB_PATH)) {
 }
 
 if (data.tiers.length > 0) {
-  console.log(`memberships.db already has ${data.tiers.length} tier(s) — nothing to seed.`);
+  console.log(`memberships.db already has ${data.tiers.length} tier(s), nothing to seed.`);
   process.exit(0);
 }
 

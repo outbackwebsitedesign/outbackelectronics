@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Outback Electronics Weather Station — Raspberry Pi sensor reader.
+Outback Electronics Weather Station - Raspberry Pi sensor reader.
 
 Reads whatever sensors are available and POSTs to the weather API every 30s.
 Auto-scans the I2C bus to find sensors at any address. Supports both
@@ -49,7 +49,7 @@ logging.basicConfig(
 log = logging.getLogger('weather')
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
-# Script lives in weather-station/ — the repo root is one level up
+# Script lives in weather-station/, the repo root is one level up
 REPO_DIR = os.path.dirname(APP_DIR)
 QUEUE_FILE = os.path.join(APP_DIR, 'readings-queue.db')
 
@@ -77,7 +77,7 @@ if IS_MAIN_SERVER:
     API_KEY = env.get('WEATHER_API_KEY', os.environ.get('WEATHER_API_KEY', ''))
     STATION_ID = 'Server Room'
     if not API_KEY:
-        log.error('WEATHER_API_KEY not found in .env — run deploy.sh to generate it')
+        log.error('WEATHER_API_KEY not found in .env, run deploy.sh to generate it')
         sys.exit(1)
 else:
     API_URL = os.environ.get('WEATHER_URL', 'https://weather.outbackelectronics.com.au')
@@ -103,7 +103,7 @@ try:
     i2c = busio.I2C(board.SCL, board.SDA)
     log.info('I2C bus initialised')
 except Exception as e:
-    log.warning('I2C bus not available: %s — I2C sensors will be skipped', e)
+    log.warning('I2C bus not available: %s - I2C sensors will be skipped', e)
 
 def scan_i2c():
     addrs = set()
@@ -219,7 +219,7 @@ if i2c:
             # Issue a SET pulse to clear any remanence from the I2C bus scan
             _mmc5603_set_pulse(_candidate, i2c, addr)
             _time.sleep(0.05)
-            # Try up to 15 times (≈5 s) — saturation can persist after power-on
+            # Try up to 15 times (≈5 s), saturation can persist after power-on
             for _attempt in range(15):
                 _time.sleep(0.3)
                 x, y, z = _candidate.magnetic
@@ -231,10 +231,10 @@ if i2c:
                     break
                 # Re-issue SET every 5 attempts
                 if _attempt % 5 == 4:
-                    log.debug('MMC5603 still saturated at attempt %d — re-issuing SET pulse', _attempt + 1)
+                    log.debug('MMC5603 still saturated at attempt %d, re-issuing SET pulse', _attempt + 1)
                     _mmc5603_set_pulse(_candidate, i2c, addr)
             else:
-                log.warning('MMC5603 at 0x%02x still saturated after 15 attempts (%.1f, %.1f, %.1f) — will retry at runtime',
+                log.warning('MMC5603 at 0x%02x still saturated after 15 attempts (%.1f, %.1f, %.1f) - will retry at runtime',
                             addr, x, y, z)
                 # Keep the object; runtime reads will attempt SET recovery
                 mag = _candidate
@@ -246,7 +246,7 @@ if i2c:
 if not mag:
     log.warning('MMC5603 not found')
 
-# SEN0322 O2 sensor — uses DFRobot's own library
+# SEN0322 O2 sensor, uses DFRobot's own library
 # Install: git clone https://github.com/DFRobot/DFRobot_OxygenSensor.git ~/DFRobot_OxygenSensor
 #          sudo cp -r ~/DFRobot_OxygenSensor/python/raspberrypi/DFRobot_Oxygen.py /usr/local/lib/python3/dist-packages/
 # Known I2C address constants: ADDRESS_0=0x70, ADDRESS_1=0x71, ADDRESS_2=0x72, ADDRESS_3=0x73
@@ -293,11 +293,11 @@ if _o2_on_bus:
                 o2_sensor = None
                 log.warning('SEN0322 probe failed at 0x%02x: %s', addr, e)
     except ImportError:
-        log.warning('DFRobot_Oxygen not installed — SEN0322 O2 sensor will be skipped')
+        log.warning('DFRobot_Oxygen not installed - SEN0322 O2 sensor will be skipped')
     except Exception as e:
         log.warning('DFRobot_Oxygen init error: %s', e)
 else:
-    log.info('No SEN0322 O2 addresses (0x70-0x73) detected on bus — skipping')
+    log.info('No SEN0322 O2 addresses (0x70-0x73) detected on bus, skipping')
 
 if _o2_on_bus and not sen0322_ok:
     log.warning('SEN0322 O2 detected but could not initialise')
@@ -331,13 +331,13 @@ if 0x36 in detected_addresses:
             max17043 = _smbus_bus
             log.info('MAX17043 fuel gauge ready at 0x36 (%.3fV)', _voltage)
         else:
-            log.warning('MAX17043 voltage out of range (%.3fV) — disabling', _voltage)
+            log.warning('MAX17043 voltage out of range (%.3fV), disabling', _voltage)
     except ImportError:
-        log.warning('smbus not installed — MAX17043 will be skipped (pip3 install smbus2)')
+        log.warning('smbus not installed - MAX17043 will be skipped (pip3 install smbus2)')
     except Exception as e:
         log.warning('MAX17043 init failed: %s', e)
 else:
-    log.info('MAX17043 not detected on bus (0x36 absent) — skipping')
+    log.info('MAX17043 not detected on bus (0x36 absent), skipping')
 
 
 def read_max17043():
@@ -354,7 +354,7 @@ def read_max17043():
         return None, None
 
 
-# ADS1115 — can be at 0x48, 0x49, 0x4A, 0x4B depending on ADDR pin
+# ADS1115, can be at 0x48, 0x49, 0x4A, 0x4B depending on ADDR pin
 ADS = None
 AnalogIn = None
 try:
@@ -363,7 +363,7 @@ try:
     ADS = _ADS
     AnalogIn = _AnalogIn
 except ImportError:
-    log.warning('adafruit_ads1x15 not installed — analog sensors will be skipped')
+    log.warning('adafruit_ads1x15 not installed, analog sensors will be skipped')
 
 ADS1115_ADDRESSES = [0x48, 0x49, 0x4A, 0x4B]
 ads_devices = []
@@ -397,7 +397,7 @@ if ADS and i2c:
     for addr, dev in ads_devices:
         channel_map = ADS_CHANNEL_MAP.get(addr)
         if channel_map is None:
-            log.info('ADS1115 at 0x%02x has no channel map — skipping', addr)
+            log.info('ADS1115 at 0x%02x has no channel map, skipping', addr)
             continue
         for key, ch in channel_map:
             try:
@@ -489,18 +489,18 @@ def read_all():
         try:
             x, y, z = mag.magnetic
             if abs(x) > 3000 or abs(y) > 3000 or abs(z) > 3000:
-                log.warning('MMC5603 saturated (%.1f, %.1f, %.1f) — issuing SET pulse and retrying', x, y, z)
+                log.warning('MMC5603 saturated (%.1f, %.1f, %.1f) - issuing SET pulse and retrying', x, y, z)
                 if _mag_i2c_addr is not None:
                     _mmc5603_set_pulse(mag, i2c, _mag_i2c_addr)
                 import time as _t; _t.sleep(0.05)
                 x, y, z = mag.magnetic
             if abs(x) > 3000 or abs(y) > 3000 or abs(z) > 3000:
-                log.warning('MMC5603 still saturated after SET pulse (%.1f, %.1f, %.1f) — skipping this reading', x, y, z)
+                log.warning('MMC5603 still saturated after SET pulse (%.1f, %.1f, %.1f) - skipping this reading', x, y, z)
             else:
                 raw['mag_x'] = round(x, 2)
                 raw['mag_y'] = round(y, 2)
                 raw['mag_z'] = round(z, 2)
-                # 2-D heading — only accurate when sensor is level (no tilt compensation)
+                # 2-D heading, only accurate when sensor is level (no tilt compensation)
                 heading = math.degrees(math.atan2(y, x))
                 if heading < 0:
                     heading += 360
@@ -517,7 +517,7 @@ def read_all():
         except Exception as e:
             log.warning('%s read error: %s', key, e)
 
-    # Fuse into clean readings — average where multiple sensors measure the same thing
+    # Fuse into clean readings, average where multiple sensors measure the same thing
     data = {}
 
     temps = [v for k, v in raw.items() if k in ('bme680_temp', 'scd41_temp')]
@@ -664,7 +664,7 @@ def post_reading(data, rtc_time, sensors):
 
 
 def main():
-    log.info('Station "%s" starting — posting to %s every %ds', STATION_ID, API_URL, INTERVAL)
+    log.info('Station "%s" starting, posting to %s every %ds', STATION_ID, API_URL, INTERVAL)
 
     if scd4x:
         log.info('Waiting 5s for SCD41 first measurement...')
@@ -682,10 +682,10 @@ def main():
             success = post_reading(data, rtc_time, sensors)
 
             if success:
-                # Online and reading sent — try to flush any queued readings
+                # Online and reading sent, try to flush any queued readings
                 flush_queue()
             else:
-                # Offline — queue this reading for later
+                # Offline, queue this reading for later
                 queue = load_queue()
                 payload = {
                     'station_id': STATION_ID,

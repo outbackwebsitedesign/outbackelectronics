@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { TopNav, Footer } from './app-shell.jsx';
 
-// Australian Government spatial service — per-carrier coverage tile layers
+// Australian Government spatial service, per-carrier coverage tile layers
 // https://spatial.infrastructure.gov.au/server/rest/services/Communications/Mobile_Phone_Coverage_by_provider/MapServer
 const CARRIERS = [
   { id: 'telstra',  label: 'Telstra',  layerId: 2, color: '#0066cc',

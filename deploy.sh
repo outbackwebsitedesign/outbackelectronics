@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# WARNING — DO NOT ADD git reset --hard OR git clean TO THIS SCRIPT
+# WARNING - DO NOT ADD git reset --hard OR git clean TO THIS SCRIPT
 #
 # The .db files (products.db, orders.db, customers.db, services.db,
 # repairs.db, quotes.db, forum.db, staff.db, carts.db, sessions.db,
@@ -11,7 +11,7 @@
 # git reset --hard and git clean WILL DELETE THEM WITH NO RECOVERY.
 # This happened once and wiped everything. Never again.
 #
-# git pull is the only safe way to update — it only touches tracked files.
+# git pull is the only safe way to update, it only touches tracked files.
 # ============================================================
 set -e
 
@@ -74,7 +74,7 @@ sudo chown -R "$SERVICE_USER:$APP_GROUP" "$APP_DIR/assets/signatures"
 sudo chmod -R ug+rwX "$APP_DIR/assets/signatures"
 
 # Make existing .db, .log, and .tmp files in the app root group-writable.
-# (node_modules and dist/ are deliberately excluded — max-depth 1.)
+# (node_modules and dist/ are deliberately excluded, max-depth 1.)
 sudo find "$APP_DIR" -maxdepth 1 \( -name "*.db" -o -name "*.log" -o -name "*.tmp" \) \
     -exec chgrp "$APP_GROUP" {} \; -exec chmod g+rw {} \; 2>/dev/null || true
 
@@ -112,7 +112,7 @@ EOF
     sudo systemctl enable "$SERVICE_NAME"
     echo "==> Service created and enabled on boot."
 else
-    # Service file already exists — update User= if it doesn't match SERVICE_USER.
+    # Service file already exists, update User= if it doesn't match SERVICE_USER.
     CURRENT_SVC_USER=$(grep -E "^User=" "/etc/systemd/system/${SERVICE_NAME}.service" | cut -d= -f2)
     if [ "$CURRENT_SVC_USER" != "$SERVICE_USER" ]; then
         echo "==> Updating service user from '${CURRENT_SVC_USER}' to '${SERVICE_USER}'..."
@@ -122,7 +122,7 @@ else
     fi
 fi
 
-# ── Weather API key — auto-generate if missing from .env ─────────────────────
+# ── Weather API key, auto-generate if missing from .env ─────────────────────
 ENV_FILE="${APP_DIR}/.env"
 if [ -f "$ENV_FILE" ] && grep -q "^WEATHER_API_KEY=" "$ENV_FILE"; then
     echo "==> WEATHER_API_KEY already set in .env"
@@ -214,7 +214,7 @@ STAMP=\$(date +%Y%m%d-%H%M)
 LOG="/home/\$(whoami)/backup.log"
 
 if ! mountpoint -q "\$USB_MOUNT"; then
-  echo "\$(date): USB not mounted — backup skipped" >> "\$LOG"
+  echo "\$(date): USB not mounted, backup skipped" >> "\$LOG"
   exit 1
 fi
 
@@ -222,7 +222,7 @@ mkdir -p "\$DEST"
 
 DB_FILES=("\$SRC"/*.db)
 if [ ! -e "\${DB_FILES[0]}" ]; then
-  echo "\$(date): No .db files found in \$SRC — backup skipped" >> "\$LOG"
+  echo "\$(date): No .db files found in \$SRC, backup skipped" >> "\$LOG"
   exit 1
 fi
 
@@ -244,7 +244,7 @@ echo "==> Backup script written to $BACKUP_SCRIPT"
 # Install hourly cron if not already present
 CRON_LINE="0 * * * * $BACKUP_SCRIPT >> /home/$(whoami)/backup.log 2>&1"
 if crontab -l 2>/dev/null | grep -qF "$BACKUP_SCRIPT"; then
-  echo "==> Hourly backup cron already installed — skipping."
+  echo "==> Hourly backup cron already installed, skipping."
 else
   (crontab -l 2>/dev/null; echo "$CRON_LINE") | crontab -
   echo "==> Hourly backup cron installed."
@@ -255,7 +255,7 @@ echo "==> Running initial backup..."
 if "$BACKUP_SCRIPT"; then
   echo "==> Initial backup complete."
 else
-  echo "==> Initial backup skipped (USB may not be mounted yet — cron will retry hourly)."
+  echo "==> Initial backup skipped (USB may not be mounted yet, cron will retry hourly)."
 fi
 # ── End backup ───────────────────────────────────────────────
 

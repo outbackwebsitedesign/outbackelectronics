@@ -1,4 +1,4 @@
-// Solar power planner — size a stand-alone off-grid solar + battery system.
+// Solar power planner, size a stand-alone off-grid solar + battery system.
 // Pure client-side: appliance loads → daily Wh → array watts + battery Ah,
 // using worst-case winter peak-sun-hours and a derate for real-world losses.
 import { useState, useMemo } from 'react';
@@ -82,9 +82,9 @@ export default function SolarApp() {
 
             <h2 className="svc-h2" style={{ marginTop: 26 }}>2 · Your setup</h2>
             <label className="fld">
-              <span>Location — winter peak sun hours</span>
+              <span>Location, winter peak sun hours</span>
               <select className="input" value={psh} onChange={e => setPsh(num(e.target.value))}>
-                {PSH_PRESETS.map(p => <option key={p.label} value={p.psh}>{p.label} — {p.psh} h</option>)}
+                {PSH_PRESETS.map(p => <option key={p.label} value={p.psh}>{p.label}, {p.psh} h</option>)}
               </select>
             </label>
             <div className="fld-row">

@@ -1,4 +1,4 @@
-// Photos — account-gated photo backup + gallery on the Outback Electronics
+// Photos, account-gated photo backup + gallery on the Outback Electronics
 // server. Empty until you sign in and upload; images live in photos-files/.
 import { useState, useEffect, useRef } from 'react';
 import { TopNav, Footer, useAuth, useShopInfo, apiPost } from './app-shell.jsx';
@@ -20,7 +20,7 @@ export default function PhotosApp() {
     if (!arr.length) return;
     setBusy(true);
     for (const file of arr) {
-      if (file.size > 15 * 1024 * 1024) { setMsg(`${file.name} is over 15 MB — skipped.`); continue; }
+      if (file.size > 15 * 1024 * 1024) { setMsg(`${file.name} is over 15 MB, skipped.`); continue; }
       setMsg(`Uploading ${file.name}…`);
       try {
         const dataBase64 = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(',')[1]); fr.onerror = rej; fr.readAsDataURL(file); });
@@ -41,7 +41,7 @@ export default function PhotosApp() {
         <header className="svc-head">
           <p className="eyebrow">Photos</p>
           <h1 className="serif svc-title">Your photos</h1>
-          <p className="svc-sub">Back up the farm, the trip, the build — on the Outback Electronics server, not someone else's cloud. Sign in to start.</p>
+          <p className="svc-sub">Back up the farm, the trip, the build - on the Outback Electronics server, not someone else's cloud. Sign in to start.</p>
         </header>
         {info && info.portalUrl ? <a className="btn btn-rust" href={info.portalUrl}>Sign in / Register</a> : null}
       </main><Footer /></>
@@ -61,7 +61,7 @@ export default function PhotosApp() {
           <input ref={inputRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => upload(e.target.files)} />
         </div>
         {photos === null ? <p className="ph-empty">Loading…</p>
-          : photos.length === 0 ? <p className="ph-empty">No photos yet — upload your first above.</p>
+          : photos.length === 0 ? <p className="ph-empty">No photos yet, upload your first above.</p>
           : (
             <div className="ph-grid">
               {photos.map(p => (

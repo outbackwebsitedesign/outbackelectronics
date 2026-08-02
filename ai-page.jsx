@@ -82,7 +82,7 @@ function renderMd(text) {
 
 // ── Chat ──────────────────────────────────────────────────────────────────────
 
-const GREETING = "G'day! I'm the Outback Electronics AI assistant — running locally on our own hardware, no cloud involved. Ask me anything about electronics repair, troubleshooting, components, or soldering. You can also upload a photo of a board for diagnosis.";
+const GREETING = "G'day! I'm the Outback Electronics AI assistant, running locally on our own hardware, no cloud involved. Ask me anything about electronics repair, troubleshooting, components, or soldering. You can also upload a photo of a board for diagnosis.";
 
 function ChatView({ session }) {
   const [messages, setMessages] = useState([{ role: 'assistant', content: GREETING }]);
@@ -258,7 +258,7 @@ function ChatView({ session }) {
               className="input textarea"
               rows={2}
               style={{ flex: 1, resize: 'none', fontSize: 14 }}
-              placeholder={streaming ? 'Type your next message… (queues until AI finishes)' : 'Ask about a repair, component, or circuit — or upload a board photo… (Enter to send)'}
+              placeholder={streaming ? 'Type your next message… (queues until AI finishes)' : 'Ask about a repair, component, or circuit - or upload a board photo… (Enter to send)'}
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={onKeyDown}

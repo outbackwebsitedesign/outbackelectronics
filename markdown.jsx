@@ -34,7 +34,7 @@ export function renderMarkdown(md) {
     return parts;
   };
 
-  // A line that starts a block type of its own — paragraph-joining stops here
+  // A line that starts a block type of its own, paragraph-joining stops here
   // rather than folding the next line into the current paragraph.
   const isBlockStart = (ln, nextLn) => {
     if (ln === undefined) return true;
@@ -69,7 +69,7 @@ export function renderMarkdown(md) {
       const items = [];
       // A numbered line that's isolated from its siblings by prose (common in
       // numbered section headers like "1. Intro" ... prose ... "2. Details")
-      // becomes its own single-item <ol> — respect the author's own number
+      // becomes its own single-item <ol>, respect the author's own number
       // instead of letting a fresh list default back to 1 every time.
       const startNum = parseInt(line.match(/^(\d+)\./)[1], 10) || 1;
       while (i < lines.length && /^\d+\. /.test(lines[i])) { items.push(<li key={i}>{inlineRender(lines[i].replace(/^\d+\. /, ''))}</li>); i++; }
@@ -110,7 +110,7 @@ export function renderMarkdown(md) {
       nodes.push(<div key={i} style={{height:10}} />);
     } else {
       // A paragraph is every consecutive non-blank line up to the next blank
-      // line or block boundary — a single line break inside it is a soft wrap,
+      // line or block boundary, a single line break inside it is a soft wrap,
       // not a new paragraph (this is how Markdown treats hard-wrapped prose
       // pasted from Word/Docs/Notion, which puts a real newline every ~80 chars).
       const paraLines = [line];

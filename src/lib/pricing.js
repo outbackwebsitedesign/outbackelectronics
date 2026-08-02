@@ -1,6 +1,6 @@
 // Bulk ("buy N or more") pricing.
 //
-// A product — or an individual variant, when the product has variants — can
+// A product, or an individual variant, when the product has variants - can
 // carry a `bulkQty` threshold and a `bulkPrice` unit price. Order that many
 // units or more and every unit on the line drops to the bulk price; order
 // fewer and they all stay at the normal price.
@@ -10,7 +10,7 @@
 // becomes unreachable and the offer disappears on its own.
 //
 // NOTE: server.js carries a CommonJS copy of `bulkUnitPrice` (it cannot import
-// this ESM module). The server is authoritative for money — if you change the
+// this ESM module). The server is authoritative for money, if you change the
 // rule here, change it there too.
 
 export function bulkUnitPrice(entry, qty) {

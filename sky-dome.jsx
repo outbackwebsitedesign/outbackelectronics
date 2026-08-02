@@ -11,11 +11,11 @@ const NGP_DEC = 27.128336  * RAD;
 const NGP_L0  = 122.932    * RAD;
 
 const SPEC_COLORS = [
-  [0.70, 0.78, 1.00],  // O/B  — blue-white
-  [1.00, 0.99, 0.97],  // A/F  — white
-  [1.00, 0.99, 0.78],  // G    — yellow-white
-  [1.00, 0.68, 0.32],  // K    — orange
-  [1.00, 0.38, 0.20],  // M    — red
+  [0.70, 0.78, 1.00],  // O/B  - blue-white
+  [1.00, 0.99, 0.97],  // A/F  - white
+  [1.00, 0.99, 0.78],  // G    - yellow-white
+  [1.00, 0.68, 0.32],  // K    - orange
+  [1.00, 0.38, 0.20],  // M    - red
 ];
 
 // Stars to always label (name, mag threshold)
@@ -490,7 +490,7 @@ export default function SkyDome({ lat, lon, date, issPos }) {
     if (issPos) {
       const issAltAz = eq2altaz(issPos.lon < 0 ? issPos.lon + 360 : issPos.lon,
         issPos.lat, lst, lat);
-      // issPos is geodetic lat/lon — treat as approximate RA/Dec stand-in
+      // issPos is geodetic lat/lon, treat as approximate RA/Dec stand-in
       // (good enough for a rough indicator; proper ECI→AltAz needs TLE propagation)
       // Actually compute alt/az from ISS geodetic position:
       const dLat = (issPos.lat - lat) * RAD;

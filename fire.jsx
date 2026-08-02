@@ -1,4 +1,4 @@
-// Fire — live bushfire incidents by state with Leaflet map + alert list.
+// Fire, live bushfire incidents by state with Leaflet map + alert list.
 // A safety tool: always defer to official warnings.
 import { useState, useEffect, useRef } from 'react';
 import { TopNav, Footer } from './app-shell.jsx';
@@ -192,7 +192,7 @@ export default function FireApp() {
               </>
             )}
             {data == null && <p className="fire-note">Loading live incidents…</p>}
-            {data && !available && <p className="fire-note">Live feed unavailable for {st.label} right now — check the official sources below.</p>}
+            {data && !available && <p className="fire-note">Live feed unavailable for {st.label} right now, check the official sources below.</p>}
           </>
         )}
 
@@ -200,7 +200,7 @@ export default function FireApp() {
           <>
             {roads?.available && <p className="fire-note">{roads.total} road closure{roads.total === 1 ? '' : 's'} · updated live.</p>}
             {roads == null && <p className="fire-note">Loading road closures…</p>}
-            {roads && !roads.available && <p className="fire-note">Road closure data unavailable for {st.label} — check the traffic link below.</p>}
+            {roads && !roads.available && <p className="fire-note">Road closure data unavailable for {st.label}, check the traffic link below.</p>}
           </>
         )}
 

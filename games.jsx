@@ -1,4 +1,4 @@
-// games.jsx — Outback Electronics Games Hub
+// games.jsx - Outback Electronics Games Hub
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { makePortalHelpers } from './src/lib/api.js';
 
@@ -171,7 +171,7 @@ function getHS(key) {
 function hsKeyToGameId(key) { return key.replace('oe_games_hs_', ''); }
 function saveHS(key, score) {
   try { if (score > getHS(key)) localStorage.setItem(key, String(score)); } catch {}
-  // Silently sync to server — succeeds if logged in, no-ops otherwise
+  // Silently sync to server, succeeds if logged in, no-ops otherwise
   portalApi('/api/portal/game-scores', { method: 'POST', body: JSON.stringify({ gameId: hsKeyToGameId(key), score }) }).catch(() => {});
 }
 async function fetchServerScores() {
@@ -956,7 +956,7 @@ function OrbitBreaker({ onBack }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// GAME 4: NED KELLY — THE LEGEND
+// GAME 4: NED KELLY - THE LEGEND
 // A narrative 2D adventure. Four acts. Multiple endings.
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -1051,7 +1051,7 @@ const NK_NODES = {
   },
   joe_greet: {
     speaker: 'Joe Byrne', portrait: 'gang',
-    text: "Lonigan's with them. You know what he'll do when he sees you — remember what he did in Benalla gaol.",
+    text: "Lonigan's with them. You know what he'll do when he sees you, remember what he did in Benalla gaol.",
     choices: [
       { text: "I remember everything.", next: 'joe_b', notoriety: 5 },
       { text: "I don't want anyone dead, Joe.", next: 'joe_c', loyalty: 5 },
@@ -1064,12 +1064,12 @@ const NK_NODES = {
   },
   joe_c: {
     speaker: 'Joe Byrne', portrait: 'gang',
-    text: "I don't either. But Ned — they won't give us the same courtesy. Be ready for anything.",
+    text: "I don't either. But Ned, they won't give us the same courtesy. Be ready for anything.",
     choices: [{ text: "I hear you.", next: null }],
   },
   mcintyre_greet: {
     speaker: 'Constable McIntyre', portrait: 'police',
-    text: "Kelly! I know you're in there. Come out. Sergeant Kennedy only wants to talk — man to man.",
+    text: "Kelly! I know you're in there. Come out. Sergeant Kennedy only wants to talk, man to man.",
     choices: [
       { text: "Then let him come out alone. Unarmed.", next: 'mcintyre_b', trust: 5 },
       { text: "We've had enough of your conversations.", next: 'mcintyre_c', notoriety: 10 },
@@ -1085,7 +1085,7 @@ const NK_NODES = {
   },
   mcintyre_c: {
     speaker: 'Constable McIntyre', portrait: 'police',
-    text: "Don't make this any worse than it already—",
+    text: "Don't make this any worse than it already-",
     choices: [
       { text: "[Enough talk.]", next: null, standoff: 'stringybark' },
     ],
@@ -1122,7 +1122,7 @@ const NK_NODES = {
   // Act 2
   steve_greet: {
     speaker: 'Steve Hart', portrait: 'gang',
-    text: "Ned, I count at least a dozen people inside. We should move fast — in, take the cash, out before word spreads.",
+    text: "Ned, I count at least a dozen people inside. We should move fast, in, take the cash, out before word spreads.",
     choices: [
       { text: "Fast and clean. Nobody gets hurt.", next: 'steve_b', trust: 5 },
       { text: "We take our time. Do it right.", next: 'steve_c', notoriety: 5 },
@@ -1140,7 +1140,7 @@ const NK_NODES = {
   },
   manager_greet: {
     speaker: 'Bank Manager', portrait: 'civilian',
-    text: "Please — there are women here. Children. Whatever you want — just take it. Don't hurt anyone.",
+    text: "Please, there are women here. Children. Whatever you want, just take it. Don't hurt anyone.",
     choices: [
       { text: "No one gets hurt if everyone stays calm.", next: 'manager_b', trust: 10 },
       { text: "Open the safe. Now.", next: 'manager_c', notoriety: 10 },
@@ -1154,7 +1154,7 @@ const NK_NODES = {
   },
   manager_c: {
     speaker: 'Bank Manager', portrait: 'civilian',
-    text: "I — yes. Yes, of course—",
+    text: "I, yes. Yes, of course-",
     choices: [{ text: "[Follow him]", next: null }],
   },
   manager_d: {
@@ -1197,7 +1197,7 @@ const NK_NODES = {
   // Act 3
   joe2_greet: {
     speaker: 'Joe Byrne', portrait: 'gang',
-    text: "I finished the letter, Ned. Every word. But you should read it — it says everything. Your mother. The police. What they've done. It's the truth and the whole colony needs to hear it.",
+    text: "I finished the letter, Ned. Every word. But you should read it - it says everything. Your mother. The police. What they've done. It's the truth and the whole colony needs to hear it.",
     choices: [
       { text: "Read me the part about the Fitzpatrick business.", next: 'joe2_b' },
       { text: "Does it sound like me?", next: 'joe2_c', loyalty: 5 },
@@ -1220,7 +1220,7 @@ const NK_NODES = {
   },
   joe2_mercy: {
     speaker: 'Joe Byrne', portrait: 'gang',
-    text: "I'll add it. For what it's worth — I think that's right. We're not them.",
+    text: "I'll add it. For what it's worth - I think that's right. We're not them.",
     choices: [{ text: "No. We're not.", next: null }],
   },
   joe2_fire: {
@@ -1235,7 +1235,7 @@ const NK_NODES = {
   },
   constable_greet: {
     speaker: 'Constable Devine', portrait: 'police',
-    text: "This can't — you're in the police station. You're standing in the police station—",
+    text: "This can't, you're in the police station. You're standing in the police station-",
     choices: [
       { text: "Your station is ours tonight. Sit down. No one's hurt.", next: 'constable_b', trust: 5 },
       { text: "Lock him in the cell, Joe.", next: 'constable_c', notoriety: 5 },
@@ -1273,7 +1273,7 @@ const NK_NODES = {
   // Act 4
   ann_greet: {
     speaker: 'Ann Jones', portrait: 'civilian',
-    text: "Ned — Curnow got out. He flagged down the police train with a candle and a red scarf. They know we're here. I can hear them in the trees right now.",
+    text: "Ned - Curnow got out. He flagged down the police train with a candle and a red scarf. They know we're here. I can hear them in the trees right now.",
     choices: [
       { text: "How many?", next: 'ann_b' },
       { text: "Get every civilian out through the back. Now.", next: 'ann_c', trust: 15 },
@@ -1281,7 +1281,7 @@ const NK_NODES = {
   },
   ann_b: {
     speaker: 'Ann Jones', portrait: 'civilian',
-    text: "Fifty. Maybe more. The boys are asking what to do. The armor's ready but—",
+    text: "Fifty. Maybe more. The boys are asking what to do. The armor's ready but-",
     choices: [
       { text: "We fight. Put it on.", next: 'ann_fight', notoriety: 15, flag: 'donned_armor' },
       { text: "Get the people out first. Then we decide.", next: 'ann_c', trust: 10 },
@@ -1318,7 +1318,7 @@ const NK_NODES = {
   },
   hare_surrender: {
     speaker: 'Supt. Hare', portrait: 'police',
-    text: "Hold your fire! Kelly's surrendering — hold your fire, all units!",
+    text: "Hold your fire! Kelly's surrendering, hold your fire, all units!",
     choices: [{ text: "[Walk forward]", next: null, advanceAct: true }],
   },
 };
@@ -1327,31 +1327,31 @@ const NK_NODES = {
 const NK_STANDOFFS = {
   stringybark: {
     title: 'Stringybark Creek',
-    subtitle: '1878  —  Three armed men. One way out.',
+    subtitle: '1878  -  Three armed men. One way out.',
     bgColor: '#0e0c06',
     rounds: [
-      { label: 'Constable Lonigan', hint: 'He reaches for his pistol—', sweetStart: 0.18, sweetEnd: 0.38, speed: 1.0, color: '#c84820' },
-      { label: 'Constable Scanlan', hint: 'He swings his rifle up—',    sweetStart: 0.52, sweetEnd: 0.70, speed: 1.5, color: '#c84820' },
+      { label: 'Constable Lonigan', hint: 'He reaches for his pistol-', sweetStart: 0.18, sweetEnd: 0.38, speed: 1.0, color: '#c84820' },
+      { label: 'Constable Scanlan', hint: 'He swings his rifle up-',    sweetStart: 0.52, sweetEnd: 0.70, speed: 1.5, color: '#c84820' },
     ],
     winFlag: 'won_stringybark', loseFlag: 'lost_stringybark',
   },
   kennedy: {
     title: 'Stringybark Creek',
-    subtitle: 'Sergeant Kennedy  —  a fair man in an unfair situation.',
+    subtitle: 'Sergeant Kennedy  -  a fair man in an unfair situation.',
     bgColor: '#0e0c06',
     rounds: [
-      { label: 'Sergeant Kennedy', hint: 'A long silence. Then his hand moves—', sweetStart: 0.28, sweetEnd: 0.54, speed: 0.9, color: '#a03010' },
+      { label: 'Sergeant Kennedy', hint: 'A long silence. Then his hand moves-', sweetStart: 0.28, sweetEnd: 0.54, speed: 0.9, color: '#a03010' },
     ],
     winFlag: 'won_kennedy', loseFlag: 'lost_kennedy',
   },
   glenrowan: {
     title: 'Glenrowan',
-    subtitle: 'June 1880  —  The last stand.',
+    subtitle: 'June 1880  -  The last stand.',
     bgColor: '#05070e',
     rounds: [
-      { label: 'First volley',       hint: 'The police line opens fire—',   sweetStart: 0.12, sweetEnd: 0.32, speed: 1.6, color: '#e04010' },
-      { label: 'Second volley',      hint: 'They reload fast—',             sweetStart: 0.60, sweetEnd: 0.78, speed: 2.0, color: '#e04010' },
-      { label: 'Superintendent Hare', hint: 'One shot left—',              sweetStart: 0.35, sweetEnd: 0.52, speed: 2.4, color: '#ff6020' },
+      { label: 'First volley',       hint: 'The police line opens fire-',   sweetStart: 0.12, sweetEnd: 0.32, speed: 1.6, color: '#e04010' },
+      { label: 'Second volley',      hint: 'They reload fast-',             sweetStart: 0.60, sweetEnd: 0.78, speed: 2.0, color: '#e04010' },
+      { label: 'Superintendent Hare', hint: 'One shot left-',              sweetStart: 0.35, sweetEnd: 0.52, speed: 2.4, color: '#ff6020' },
     ],
     winFlag: 'won_glenrowan', loseFlag: 'lost_glenrowan',
   },
@@ -1378,7 +1378,7 @@ const NK_ENDINGS = {
       'For years afterwards, sightings were reported across Victoria and New South Wales.',
       'A figure in a long coat. An iron helmet glimpsed at dusk.',
       'Some said he lived in the high country for decades.',
-      'Some said he was never real to begin with — just something the poor needed to believe in.',
+      'Some said he was never real to begin with, just something the poor needed to believe in.',
       '',
       "Maybe that's enough.",
     ],
@@ -1463,7 +1463,7 @@ function nkDrawScene(ctx, W, H, actId, camX, t) {
   ctx.lineTo(W + 200, H); ctx.lineTo(-200, H); ctx.closePath(); ctx.fill();
   ctx.globalAlpha = 1;
 
-  // Trees — Stringybark Creek
+  // Trees - Stringybark Creek
   if (actId === 'stringybark') {
     for (let i = 0; i < 22; i++) {
       const tx = ((i * 163) % act.sceneWidth) - camX * 0.55;
@@ -1484,7 +1484,7 @@ function nkDrawScene(ctx, W, H, actId, camX, t) {
     }
   }
 
-  // Buildings — Euroa & Jerilderie
+  // Buildings - Euroa & Jerilderie
   if (actId === 'euroa' || actId === 'jerilderie') {
     const blds = actId === 'euroa'
       ? [{ x:580,  w:180, h:120, c:'#8a6040' },{ x:900,  w:240, h:100, c:'#7a5030' },{ x:1420, w:200, h:130, c:'#6a4828' }]
@@ -1504,7 +1504,7 @@ function nkDrawScene(ctx, W, H, actId, camX, t) {
     });
   }
 
-  // Inn + fire + rain — Glenrowan
+  // Inn + fire + rain - Glenrowan
   if (actId === 'glenrowan') {
     const gY = H * act.groundFrac;
     const ix = 760 - camX;
@@ -1946,7 +1946,7 @@ function NKEndingScreen({ endingId, onRestart, onBack }) {
         <div style={{ fontFamily: "'Archivo', sans-serif", fontSize: 12, color: '#806040', marginBottom: 44, letterSpacing: 2 }}>{e.subtitle}</div>
         <div style={{ minHeight: 220 }}>
           {lines.map((l, i) => (
-            <div key={i} style={{ fontFamily: "'Instrument Serif', serif", fontSize: 17, color: l ? '#d0c0a0' : 'transparent', lineHeight: 2.1 }}>{l || '—'}</div>
+            <div key={i} style={{ fontFamily: "'Instrument Serif', serif", fontSize: 17, color: l ? '#d0c0a0' : 'transparent', lineHeight: 2.1 }}>{l || '-'}</div>
           ))}
         </div>
         {lines.length >= e.lines.length && (
@@ -1966,7 +1966,7 @@ function NKHUD({ actIndex, metrics, onBack }) {
   return (
     <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, display: 'flex', alignItems: 'center', padding: '10px 20px', gap: 16, background: 'linear-gradient(to bottom, rgba(0,0,0,0.52) 0%, transparent 100%)', pointerEvents: 'none' }}>
       <button onClick={onBack} style={{ pointerEvents: 'auto', background: 'rgba(0,0,0,0.38)', border: '1px solid rgba(200,160,60,0.28)', color: '#c8a840', padding: '5px 14px', borderRadius: 4, cursor: 'pointer', fontFamily: "'Archivo', sans-serif", fontSize: 12 }}>← Back</button>
-      <span style={{ fontFamily: "'Instrument Serif', serif", fontSize: 15, color: '#e0d0a0' }}>{act?.title} — {act?.subtitle}</span>
+      <span style={{ fontFamily: "'Instrument Serif', serif", fontSize: 15, color: '#e0d0a0' }}>{act?.title} - {act?.subtitle}</span>
       <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#a09060' }}>{act?.year}</span>
       <div style={{ marginLeft: 'auto', display: 'flex', gap: 20 }}>
         <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#c06040' }}>Notoriety {metrics.notoriety}</span>

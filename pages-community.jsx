@@ -25,7 +25,7 @@ const seriesPartsOf = (seriesName, allTutorials) =>
 const seriesHref = (seriesName) => `/tutorials/series/${encodeURIComponent(slugify(seriesName))}`;
 // Navigate to the series page with a fully-resolved parts list already in
 // hand (from a page that already fetched all tutorials), so there's no
-// loading flicker — matches how product/service cards pass go() full data.
+// loading flicker, matches how product/service cards pass go() full data.
 const seriesLinkProps = (seriesName, allTutorials, go) => ({
   href: seriesHref(seriesName),
   onClick: (e) => { e.preventDefault(); go('tutorial-series', { seriesName, slug: slugify(seriesName), parts: seriesPartsOf(seriesName, allTutorials) }); },
@@ -38,7 +38,7 @@ function TutorialsPage({ go }) {
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     // The server already returns only Published tutorials (and strips the
-    // body of locked ones) — no client-side status filtering needed here.
+    // body of locked ones), no client-side status filtering needed here.
     fetch('/api/tutorials').then(r => r.ok ? r.json() : Promise.reject()).then(d => {
       setTutorials(d.items || []);
     }).catch(() => {}).finally(() => setLoading(false));
@@ -67,7 +67,7 @@ function TutorialsPage({ go }) {
           ))}
         </div>
 
-        {/* Series filters — only shown once at least one tutorial belongs to a series */}
+        {/* Series filters, only shown once at least one tutorial belongs to a series */}
         {seriesNames.length > 0 && (
           <div className="tabs" style={{marginBottom: 24}} role="group" aria-label="Filter tutorials by series">
             {['All', ...seriesNames].map(s => (
@@ -92,7 +92,7 @@ function TutorialsPage({ go }) {
           <div style={{padding:'48px 0'}}>
             <p className="serif" style={{fontSize:28, marginBottom:12}}>Writing up the first ones now.</p>
             <p style={{color:'var(--ink-2)', fontSize:15, maxWidth:520, lineHeight:1.7}}>
-              We have plenty of hard-won knowledge from years of field repairs — we're just getting it out of our heads and onto the page. Check back soon.
+              We have plenty of hard-won knowledge from years of field repairs, we're just getting it out of our heads and onto the page. Check back soon.
             </p>
           </div>
         )}
@@ -211,13 +211,13 @@ function TutorialContent({ tutorial }) {
 }
 
 // Single tutorial at its own URL (/tutorial/:slug), resolved via pageParams
-// by app.jsx's deep-link handling — see resolveDeepLink().
+// by app.jsx's deep-link handling, see resolveDeepLink().
 function TutorialPage({ go, pageParams }) {
   const tutorial = pageParams;
   const countedRef = React.useRef(null);
   const [seriesParts, setSeriesParts] = useState([]);
 
-  // Count one view per tutorial visit — fire-and-forget, and guarded so it
+  // Count one view per tutorial visit, fire-and-forget, and guarded so it
   // doesn't double-count on re-renders once the deep link has resolved.
   useEffect(() => {
     if (!tutorial || tutorial._notFound || countedRef.current === tutorial.id) return;
@@ -257,7 +257,7 @@ function TutorialPage({ go, pageParams }) {
     return (
       <>
         <PageHead crumbs={['Outback','Tutorials','Not Found']} title="Tutorial not found"
-          lead="Sorry — we couldn't find that tutorial. It may have been removed or the link may be incorrect." />
+          lead="Sorry, we couldn't find that tutorial. It may have been removed or the link may be incorrect." />
         <section className="container" style={{paddingTop:32, paddingBottom:48}}>
           <div style={{display:'flex', gap:12, flexWrap:'wrap'}}>
             <button className="btn btn-rust" onClick={() => go('tutorials')}>Browse all Tutorials →</button>
@@ -310,7 +310,7 @@ function TutorialPage({ go, pageParams }) {
             return (
               <div style={{marginTop:40, padding:24, background:'var(--bg-elev)', border:'1px solid var(--line)'}}>
                 <div className="eyebrow" style={{marginBottom:12}}>
-                  <a {...seriesLinkProps(tutorial.series, seriesParts, go)} style={{color:'inherit'}}>{tutorial.series}</a> — {seriesParts.length} PART{seriesParts.length===1?'':'S'}
+                  <a {...seriesLinkProps(tutorial.series, seriesParts, go)} style={{color:'inherit'}}>{tutorial.series}</a>, {seriesParts.length} PART{seriesParts.length===1?'':'S'}
                 </div>
                 <ol style={{listStyle:'none', margin:0, padding:0, display:'grid', gap:6}}>
                   {seriesParts.map(p => (
@@ -342,7 +342,7 @@ function TutorialPage({ go, pageParams }) {
   );
 }
 
-// Series landing page at /tutorials/series/:slug — pageParams is either
+// Series landing page at /tutorials/series/:slug, pageParams is either
 // { seriesName, slug, parts } (resolved by app.jsx's deep-link handling, or
 // passed pre-resolved by a card/series-box link) or { _notFound: true }.
 function SeriesPage({ go, pageParams }) {
@@ -366,7 +366,7 @@ function SeriesPage({ go, pageParams }) {
     return (
       <>
         <PageHead crumbs={['Outback','Tutorials','Not Found']} title="Series not found"
-          lead="Sorry — we couldn't find that series. It may have been renamed or removed." />
+          lead="Sorry, we couldn't find that series. It may have been renamed or removed." />
         <section className="container" style={{paddingTop:32, paddingBottom:48}}>
           <button className="btn btn-rust" onClick={() => go('tutorials')}>Browse all Tutorials →</button>
         </section>
@@ -428,7 +428,7 @@ function GroupsPage({ go }) {
   return (
     <>
       <PageHead crumbs={['Outback','Groups']} title="Community Groups"
-        lead="Online groups for electronics enthusiasts. Topic clubs, tinkerers, and fixers — connect and chat from wherever you are."
+        lead="Online groups for electronics enthusiasts. Topic clubs, tinkerers, and fixers - connect and chat from wherever you are."
         kicker={<button className="btn btn-rust" onClick={() => go('contact')}>+ Start a group</button>} />
 
       <section className="container" style={{paddingTop: 32, paddingBottom: 40}}>

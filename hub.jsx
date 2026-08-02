@@ -1,4 +1,4 @@
-// Outback Hub — the account-aware launcher and home base for the whole
+// Outback Hub, the account-aware launcher and home base for the whole
 // service suite. Big-tile launcher (always works) plus a live snapshot of the
 // signed-in customer's orders / repairs / quotes and the latest weather.
 import { useState, useEffect } from 'react';
@@ -50,7 +50,7 @@ export default function HubApp() {
           <div>
             <p className="eyebrow">Field Network</p>
             <h1 className="serif hub-title">{greeting}</h1>
-            <p className="hub-sub">Everything Outback Electronics runs — your files, the airwaves, the sky, the weather and the bush — in one place.</p>
+            <p className="hub-sub">Everything Outback Electronics runs, your files, the airwaves, the sky, the weather and the bush - in one place.</p>
           </div>
           <div className="hub-hero-side">
             {wx ? (
@@ -83,13 +83,13 @@ export default function HubApp() {
             <h2 className="svc-h2">Your snapshot</h2>
             <div className="hub-stats">
               <a className="hub-stat" href={(urls.portalUrl || '') + '/orders'}>
-                <b>{stats ? stats.openOrders : '—'}</b><span>Open orders</span>
+                <b>{stats ? stats.openOrders : '-'}</b><span>Open orders</span>
               </a>
               <a className="hub-stat" href={(urls.portalUrl || '') + '/repairs'}>
-                <b>{stats ? stats.activeRepairs : '—'}</b><span>Active repairs</span>
+                <b>{stats ? stats.activeRepairs : '-'}</b><span>Active repairs</span>
               </a>
               <a className="hub-stat" href={(urls.portalUrl || '') + '/quotes'}>
-                <b>{stats ? stats.openQuotes : '—'}</b><span>Open quotes</span>
+                <b>{stats ? stats.openQuotes : '-'}</b><span>Open quotes</span>
               </a>
             </div>
           </section>

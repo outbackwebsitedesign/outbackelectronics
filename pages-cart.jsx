@@ -44,7 +44,7 @@ function OrderSuccessPage({ go, clearCart }) {
                 <div className="mono" style={{fontSize:20, fontWeight:600}}>{session.orderId}</div>
               </div>
             )}
-            {/* amountAud can legitimately be 0 (gift-card-only orders) — only hide when unknown */}
+            {/* amountAud can legitimately be 0 (gift-card-only orders), only hide when unknown */}
             {session?.amountAud != null && (
               <div>
                 <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginBottom:4}}>AMOUNT PAID</div>
@@ -88,7 +88,7 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, r
   // The cart is restored from localStorage and can be weeks old, so its
   // prices, stock and availability are all potentially stale. Re-resolve it
   // against the live catalog once on load: reprice lines, re-cap quantities to
-  // current stock, and drop anything that is no longer purchasable — telling
+  // current stock, and drop anything that is no longer purchasable, telling
   // the customer here rather than letting checkout fail on an item they can't
   // identify.
   const [staleNotices, setStaleNotices] = useState([]);
@@ -211,7 +211,7 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, r
       if (data.id) {
         const link = `${location.origin}/cart?share=${data.id}`;
         setShareLink(link);
-        // Unresolvable lines are left out of the shared cart — say which,
+        // Unresolvable lines are left out of the shared cart, say which,
         // rather than handing over a link that is quietly short of items.
         if (Array.isArray(data.dropped) && data.dropped.length > 0) {
           setShareError(`Not included in the link (no longer available): ${data.dropped.join(', ')}.`);
@@ -241,7 +241,7 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, r
     ? Math.round(Math.min(storeCreditAvail, afterRewardsTotal) * 100) / 100
     : 0;
   const total = Math.max(0, Math.round((afterRewardsTotal - storeCreditToRedeem) * 100) / 100);
-  // Payment plans can't combine with gift cards / rewards / store credit — those
+  // Payment plans can't combine with gift cards / rewards / store credit, those
   // redemptions are for paying in full only.
   const planEligible = total >= planMinTotal && !gc && !(rewardsData && (rewardsApply || storeCreditApply));
 
@@ -445,7 +445,7 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, r
               const bulkActive = hasBulkPrice(item) && unitPrice < productPrice(item);
               const stock = availableStock(item);
               const atStockLimit = stock !== null && item.qty >= stock;
-              // How many more units until the bulk rate kicks in — only worth
+              // How many more units until the bulk rate kicks in, only worth
               // showing while there is enough stock left to actually get there.
               const toBulk = hasBulkPrice(item) && !bulkActive && (stock === null || stock >= Number(item.bulkQty))
                 ? Math.floor(Number(item.bulkQty)) - item.qty : 0;
@@ -520,7 +520,7 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, r
                       <ErrorText inline>{shippingError}</ErrorText>
                     </>
                   ) : shippingQuote.digital ? (
-                    <div style={{fontSize:12, color:'#16a34a'}}>All items are digital — no shipping required.</div>
+                    <div style={{fontSize:12, color:'#16a34a'}}>All items are digital - no shipping required.</div>
                   ) : (
                     <div>
                       <div style={{fontSize:11, color:'var(--ink-3)', marginBottom:6}}>
@@ -587,7 +587,7 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, r
 
               {gc ? (
                 <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', background:'#f0fdf4', border:'1px solid #86efac', padding:'8px 12px', marginBottom:14, fontSize:13}}>
-                  <span style={{color:'#15803d', fontFamily:'monospace'}}>{gc.code} — ${gc.balance.toLocaleString('en-AU', {minimumFractionDigits:2})} balance</span>
+                  <span style={{color:'#15803d', fontFamily:'monospace'}}>{gc.code} - ${gc.balance.toLocaleString('en-AU', {minimumFractionDigits:2})} balance</span>
                   <button onClick={removeGiftCard} style={{background:'none', border:'none', cursor:'pointer', color:'var(--ink-3)', fontSize:16, padding:0, lineHeight:1}}>×</button>
                 </div>
               ) : (
@@ -612,7 +612,7 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, r
               {rewardsData ? (
                 <div style={{marginBottom:14, padding:'10px 14px', background:'#fffbeb', border:'1px solid #fde68a', fontSize:13}}>
                   <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:rewardsData.points > 0 ? 8 : 0}}>
-                    <span style={{color:'#92400e', fontWeight:600}}>{rewardsData.displayName} — {rewardsData.points.toLocaleString('en-AU')} pts</span>
+                    <span style={{color:'#92400e', fontWeight:600}}>{rewardsData.displayName} - {rewardsData.points.toLocaleString('en-AU')} pts</span>
                     <button onClick={removeRewards} style={{background:'none', border:'none', cursor:'pointer', color:'var(--ink-3)', fontSize:16, padding:0, lineHeight:1}}>×</button>
                   </div>
                   {rewardsData.points > 0 && (
@@ -700,8 +700,8 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, r
               <ErrorText style={{marginBottom:12}}>{error}</ErrorText>
               <button className="btn btn-rust" style={{width:'100%', justifyContent:'center', gap:8}} onClick={checkout} disabled={checkingOut || !portalUser} aria-busy={checkingOut}>
                 {checkingOut ? <><span className="spinner" aria-hidden="true" /> Redirecting…</> : checkoutMode === 'plan'
-                  ? `Set Up Payment Plan — $${total.toLocaleString('en-AU', {minimumFractionDigits:2})} total`
-                  : `Checkout — $${total.toLocaleString('en-AU', {minimumFractionDigits:2})}${selectedShipping ? '' : cart.some(i=>!i.digital) ? ' + shipping' : ''}`}
+                  ? `Set Up Payment Plan - $${total.toLocaleString('en-AU', {minimumFractionDigits:2})} total`
+                  : `Checkout - $${total.toLocaleString('en-AU', {minimumFractionDigits:2})}${selectedShipping ? '' : cart.some(i=>!i.digital) ? ' + shipping' : ''}`}
               </button>
               <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginTop:10, textAlign:'center'}}>SECURE CHECKOUT VIA STRIPE</div>
 
@@ -728,7 +728,7 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, r
           </div>
         </div>
       </section>
-      {/* Floating checkout bar — mobile only (hidden on desktop via index.html, shown in mobile.css) */}
+      {/* Floating checkout bar, mobile only (hidden on desktop via index.html, shown in mobile.css) */}
       <div className="cart-mobile-bar">
         <div>
           <div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>TOTAL{selectedShipping ? '' : cart.some(i => !i.digital) ? ' + SHIPPING' : ''}</div>

@@ -167,8 +167,8 @@ function useDirtyTracker(value, resetKey) {
 }
 
 // ── Deep-link URL state ──────────────────────────────────────────────────────
-// The admin section lives in the path (`/orders`, `/quotes`, …). Finer state —
-// which tab is active, which record is open — rides in the query string so a
+// The admin section lives in the path (`/orders`, `/quotes`, …). Finer state
+// which tab is active, which record is open - rides in the query string so a
 // reload lands on the exact same spot. Helpers below read/write that query
 // string without disturbing the path (which AdminPage owns).
 const readAdminQuery = () => new URLSearchParams(window.location.search);
@@ -181,8 +181,8 @@ function writeAdminUrl(mutate, { push = false } = {}) {
   else window.history.replaceState({}, '', url);
 }
 // Two-way binding between a piece of component state and a single query param.
-// `push:false` (default) rewrites history in place — right for tab switches.
-// `push:true` adds a history entry — right for opening a record, so Back closes
+// `push:false` (default) rewrites history in place, right for tab switches.
+// `push:true` adds a history entry, right for opening a record, so Back closes
 // it. Popstate (Back/Forward) flows the URL value back into state.
 function useUrlState(key, defaultVal = null, { push = false } = {}) {
   const [val, setVal] = useState(() => readAdminQuery().get(key) ?? defaultVal);
@@ -221,7 +221,7 @@ function useUnsavedGuard(dirty) {
   }, [dirty]);
 }
 
-// ── ConfirmModal — styled replacement for window.confirm() ───────────────────
+// ── ConfirmModal, styled replacement for window.confirm() ───────────────────
 function ConfirmModal({ title = 'Please confirm', message, confirmLabel = 'Confirm', cancelLabel = 'Cancel', danger = false, onConfirm, onCancel }) {
   const dialogRef = React.useRef(null);
   const confirmRef = React.useRef(null);
@@ -297,7 +297,7 @@ async function uploadImage(file) {
   });
 }
 
-// Kept as PNG server-side (not converted to WebP like uploadImage) — pdfkit can only
+// Kept as PNG server-side (not converted to WebP like uploadImage), pdfkit can only
 // embed JPEG/PNG on the certificate PDF, and PNG preserves the transparent background
 // a canvas signature pad produces. The file is always saved under the caller's own
 // staffId server-side, so there's nothing client-supplied to restrict here.
@@ -315,7 +315,7 @@ async function deleteSignature() {
   return r.ok;
 }
 
-// Signature capture pad — works with mouse, touch, and stylus (e.g. S Pen) via the
+// Signature capture pad, works with mouse, touch, and stylus (e.g. S Pen) via the
 // Pointer Events API, which unifies all three input types with no special-casing.
 function SignaturePad({ onSave, saving }) {
   const canvasRef = React.useRef(null);
@@ -462,7 +462,7 @@ function AdminLogin({ onAuth, siteUrl }) {
 // ============================================================
 const ROLE_LEVELS = { owner: 4, manager: 3, technician: 2, staff: 1, seller: 1, pending: 0 };
 
-/* Compact SVG icons for the sidebar — 16×16 viewBox, stroke-based */
+/* Compact SVG icons for the sidebar - 16×16 viewBox, stroke-based */
 const NAV_ICONS = {
   overview:     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
   orders:       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>,
@@ -869,7 +869,7 @@ function Drawer({ open, onClose, title, children, footer, dirty = false }) {
   const dirtyRef = React.useRef(dirty);
   dirtyRef.current = dirty;
 
-  // Close request — warns first when there are unsaved changes (P0: data safety).
+  // Close request, warns first when there are unsaved changes (P0: data safety).
   const requestClose = React.useCallback(async () => {
     if (confirmingRef.current) return;
     if (dirtyRef.current) {
@@ -983,11 +983,11 @@ function AdminOverview({ go }) {
   }, []);
 
   const fmtAUD = n => '$' + Number(n).toLocaleString('en-AU', {minimumFractionDigits:2, maximumFractionDigits:2});
-  const orderCount = overview ? overview.orders7d : '—';
-  const revenue    = overview ? fmtAUD(overview.revenue7d) : '—';
-  const openRepairs = repairs === null ? '—' : repairs.filter(c => c.id !== 'done').reduce((s, c) => s + (c.cards ? c.cards.length : 0), 0);
+  const orderCount = overview ? overview.orders7d : '-';
+  const revenue    = overview ? fmtAUD(overview.revenue7d) : '-';
+  const openRepairs = repairs === null ? '-' : repairs.filter(c => c.id !== 'done').reduce((s, c) => s + (c.cards ? c.cards.length : 0), 0);
   const ACTIVE_QUOTE_STATUSES = new Set(['new', 'in-review', 'quoted']);
-  const quotesAwaiting = quotes === null ? '—' : quotes.filter(q => ACTIVE_QUOTE_STATUSES.has(q.status || 'new')).length;
+  const quotesAwaiting = quotes === null ? '-' : quotes.filter(q => ACTIVE_QUOTE_STATUSES.has(q.status || 'new')).length;
   const lowStock = catalog === null ? [] : catalog
     .filter(p => !p.infiniteStock)
     .map(p => ({ ...p, _stock: p.variants && p.variants.length > 0 ? p.variants.reduce((a, v) => a + (Number(v.stock) || 0), 0) : p.stock }))
@@ -1015,7 +1015,7 @@ function AdminOverview({ go }) {
               ].slice(-10).reverse();
               if (events.length === 0) return (
                 <div style={{padding:'24px 20px'}}>
-                  <div style={{fontSize:13, fontWeight:600, marginBottom:14, color:'var(--ink-1)'}}>Get started — set up your store</div>
+                  <div style={{fontSize:13, fontWeight:600, marginBottom:14, color:'var(--ink-1)'}}>Get started - set up your store</div>
                   <div style={{display:'grid', gap:10}}>
                     {[
                       { step:'1', label:'Shop details', desc:'Name, email, address, acknowledgement of country', nav:'Settings → Shop' },
@@ -1097,7 +1097,7 @@ function AdminOverview({ go }) {
   );
 }
 
-// Full-page chrome for the order editor — a standalone, URL-addressable page
+// Full-page chrome for the order editor, a standalone, URL-addressable page
 // (/orders?open=OE-0001) rather than a slide-over Drawer, so an order can be
 // bookmarked, shared, or reopened straight from a refresh. Mirrors Drawer's
 // unsaved-changes guard and beforeunload warning without the overlay/panel
@@ -1148,7 +1148,7 @@ function OrderPage({ title, dirty, onClose, footer, children, backLabel = 'Back'
 }
 
 // ============================================================
-// ORDER helpers — shared by AdminOrders and OrderDrawer
+// ORDER helpers, shared by AdminOrders and OrderDrawer
 // ============================================================
 const ORDER_PAYMENT_MAP = {
   paid:       { bg:'#d8e7d0', fg:'#345526' },
@@ -1173,7 +1173,7 @@ function priceLineToAmount(priceLine) {
   return m ? Number(m[0].replace(/,/g, '')) : '';
 }
 // Builds one or more sensible line items from a service's pricing model instead of
-// blindly grabbing the first number in priceLine — an hourly rate, a range, a quote,
+// blindly grabbing the first number in priceLine, an hourly rate, a range, a quote,
 // a per-km callout fee, or an "hourly + parts" job should never collapse into a
 // single flat one-off price times a single "quantity." Per-km travel is worked out
 // automatically from the order's Location field (shop → customer distance) rather
@@ -1181,7 +1181,7 @@ function priceLineToAmount(priceLine) {
 async function buildServiceLineItems(svc, customerLoc) {
   const price = String(svc.price ?? svc.priceLine ?? '').trim();
   // `kind` and `needsDistanceRecalc` are explicit flags carried on the line item
-  // itself — not re-derived later by pattern-matching the description text,
+  // itself, not re-derived later by pattern-matching the description text,
   // which breaks the instant a staff member rewords it.
   const mk = (description, amount, extra = {}) => ({ id: 'li-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6), description, amount, qty: 1, ...extra });
   const isFree = /no charge/i.test(price);
@@ -1199,35 +1199,35 @@ async function buildServiceLineItems(svc, customerLoc) {
       const rate = Number(perKmMatch[1]);
       const loc = (customerLoc || '').trim();
       if (!loc) {
-        items.push(mk(`${svc.name} — travel (set the order's Location or Shipping Address so km is worked out automatically)`, '', { needsDistanceRecalc: true, serviceName: svc.name, kmRate: rate }));
+        items.push(mk(`${svc.name}, travel (set the order's Location or Shipping Address so km is worked out automatically)`, '', { needsDistanceRecalc: true, serviceName: svc.name, kmRate: rate }));
       } else {
         try {
           const r = await fetch(`/api/admin/geocode-distance?address=${encodeURIComponent(loc)}`, { credentials: 'include' });
           if (r.ok) {
             const d = await r.json();
-            items.push(mk(`${svc.name} — travel (${d.distKm}km from shop to "${loc}" @ $${rate}/km)`, Math.round(rate * d.distKm * 100) / 100, { needsDistanceRecalc: true, serviceName: svc.name, kmRate: rate }));
+            items.push(mk(`${svc.name}, travel (${d.distKm}km from shop to "${loc}" @ $${rate}/km)`, Math.round(rate * d.distKm * 100) / 100, { needsDistanceRecalc: true, serviceName: svc.name, kmRate: rate }));
           } else {
-            items.push(mk(`${svc.name} — travel (couldn't locate "${loc}" — confirm km manually)`, '', { needsDistanceRecalc: true, serviceName: svc.name, kmRate: rate }));
+            items.push(mk(`${svc.name}, travel (couldn't locate "${loc}", confirm km manually)`, '', { needsDistanceRecalc: true, serviceName: svc.name, kmRate: rate }));
           }
         } catch {
-          items.push(mk(`${svc.name} — travel (distance lookup failed — confirm km manually)`, '', { needsDistanceRecalc: true, serviceName: svc.name, kmRate: rate }));
+          items.push(mk(`${svc.name}, travel (distance lookup failed, confirm km manually)`, '', { needsDistanceRecalc: true, serviceName: svc.name, kmRate: rate }));
         }
       }
     }
-    if (flatCalloutMatch) items.push(mk(`${svc.name} — call-out fee`, Number(flatCalloutMatch[1])));
-    if (hourlyMatch) items.push(mk(`${svc.name} — labour (set qty to hours worked)`, Number(hourlyMatch[1]), { kind: 'hourly' }));
+    if (flatCalloutMatch) items.push(mk(`${svc.name}, call-out fee`, Number(flatCalloutMatch[1])));
+    if (hourlyMatch) items.push(mk(`${svc.name}, labour (set qty to hours worked)`, Number(hourlyMatch[1]), { kind: 'hourly' }));
     return items;
   }
 
   if (hourlyMatch) {
     // Labour is billed per hour (qty = hours worked). Parts are a real cost, not
-    // a line item pulled from thin air — they go through the expense tracker so
+    // a line item pulled from thin air, they go through the expense tracker so
     // the parts-auto line item (cost + margin) is what actually gets billed,
     // instead of a naked customer-facing number nothing backs.
-    return [mk(`${svc.name} — labour (set qty to hours worked)`, Number(hourlyMatch[1]), { kind: 'hourly' })];
+    return [mk(`${svc.name}, labour (set qty to hours worked)`, Number(hourlyMatch[1]), { kind: 'hourly' })];
   }
 
-  if (isRange || isQuoted) return [mk(`${svc.name} (${price} — confirm price before saving)`, '')];
+  if (isRange || isQuoted) return [mk(`${svc.name} (${price}, confirm price before saving)`, '')];
 
   return [mk(svc.name || '', priceLineToAmount(price))];
 }
@@ -1254,7 +1254,7 @@ function orderBalance(f) {
   if (f.gratis) return 0;
   return Math.round((orderEffectiveTotal(f) - orderAmountPaid(f)) * 100) / 100;
 }
-// Mirrors server.js's paymentPlanProgress() — progress is always derived from
+// Mirrors server.js's paymentPlanProgress(), progress is always derived from
 // actual payments, never stored per-installment, so it reconciles correctly
 // regardless of how each instalment was actually collected.
 function paymentPlanProgress(order) {
@@ -1324,7 +1324,7 @@ function ExpenseRow({ e, isEditing, expenseForm, setExpenseForm, setExpenseEdit,
       <div className="grid-2" style={{gap:10, marginBottom:10}}>
         <label className="field" style={{margin:0}}><span className="label">Part status</span>
           <select className="select" value={ef.partStatus||''} onChange={ev=>setExpenseForm(f=>({...f,partStatus:ev.target.value}))}>
-            <option value="">— N/A —</option>
+            <option value="">N/A</option>
             {['ordered','arrived','installed','returned'].map(s=><option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
           </select>
         </label>
@@ -1371,7 +1371,7 @@ function ExpenseRow({ e, isEditing, expenseForm, setExpenseForm, setExpenseEdit,
 }
 
 // ============================================================
-// OrderDrawer — edit panel for a single order
+// OrderDrawer, edit panel for a single order
 // ============================================================
 function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowUpdate, onSave, onExpensesChange, onCustomerCreated, onDelete, sessionInfo = {}, siteUrl }) {
   const [form, setForm] = useState({ ...edit, id: edit.id || edit.suggestedId || '' });
@@ -1412,7 +1412,7 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
   const [payEntry, setPayEntry] = useState({ amount:'', method: localStorage.getItem('oe_lastPaymentMethod') || 'Cash', note:'', date: todayISODate() });
   const [deleteBusy, setDeleteBusy] = useState(false);
   const canDeleteOrder = (ROLE_LEVELS[sessionInfo.role] ?? 0) >= ROLE_LEVELS.manager;
-  // Money taken but not yet refunded blocks cancel/delete/revert — those actions
+  // Money taken but not yet refunded blocks cancel/delete/revert, those actions
   // make the order stop being a real sale, so the customer needs their money
   // back (or store credit) first rather than the order just vanishing with
   // cash unaccounted for.
@@ -1426,7 +1426,7 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
 
   // Asks whether linked expenses (parts bought for this job) should be deleted
   // too. Once the order record is gone there's no other way to keep them out
-  // of the tax report — unlike Cancel, which the server already excludes by
+  // of the tax report, unlike Cancel, which the server already excludes by
   // jobId, deleting/reverting removes the order those expenses are anchored to.
   const resolveLinkedExpenseDeletion = async (actionLabel) => {
     if (linkedExpenses.length === 0) return true;
@@ -1469,7 +1469,7 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
   const revertToQuote = async () => {
     if (blockIfUnrefunded()) return;
     const expNote = linkedExpenses.length > 0
-      ? ` Its ${linkedExpenses.length} linked expense(s) (totalling $${linkedExpenses.reduce((s,e)=>s+expTotal(e),0).toFixed(2)}) will be copied into the quote for reference, then removed from expense tracking so they stop counting as real business expenses in tax reports — nothing's actually been bought yet.`
+      ? ` Its ${linkedExpenses.length} linked expense(s) (totalling $${linkedExpenses.reduce((s,e)=>s+expTotal(e),0).toFixed(2)}) will be copied into the quote for reference, then removed from expense tracking so they stop counting as real business expenses in tax reports, nothing's actually been bought yet.`
       : '';
     const ok = await adminConfirm(
       `This will create a new quote from this order's details and permanently delete order ${form.id}. Use this when the work hasn't actually gone ahead yet.${expNote}`,
@@ -1483,7 +1483,7 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
       const used = new Set(quotesList.map(q => { const m = String(q.quoteRef || '').match(/^OEQ-(\d+)$/); return m ? parseInt(m[1]) : null; }).filter(n => n != null));
       let n = 1; while (used.has(n)) n++;
       const quoteRef = `OEQ-${String(n).padStart(4, '0')}`;
-      // Plain data snapshot only — no jobId/id carried over, so these can't be
+      // Plain data snapshot only, no jobId/id carried over, so these can't be
       // mistaken for live expense records if the quote object is inspected later.
       const plannedExpenses = linkedExpenses.map(e => ({ description: e.description, amount: e.amount, quantity: e.quantity, category: e.category, date: e.date, notes: e.notes }));
       const quotePayload = {
@@ -1506,13 +1506,13 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
         revertedFromOrderId: form.id,
       };
       const qs = await fetch('/api/admin/quotes/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(quotePayload) }).catch(()=>null);
-      if (!qs || !qs.ok) { adminToast('Failed to create the quote — order was not touched.'); setRevertBusy(false); return; }
+      if (!qs || !qs.ok) { adminToast('Failed to create the quote, order was not touched.'); setRevertBusy(false); return; }
       if (linkedExpenses.length > 0) {
         await Promise.all(linkedExpenses.map(e => fetch('/api/admin/expenses/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: e.id }) }).catch(()=>null)));
         onExpensesChange(expenses.filter(e => !linkedExpenses.some(le => le.id === e.id)));
       }
       const dr = await fetch('/api/admin/orders/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: form.id }) }).catch(()=>null);
-      if (!dr || !dr.ok) { adminToast(`Quote ${quoteRef} was created, but the order could not be deleted — please delete it manually.`); setRevertBusy(false); return; }
+      if (!dr || !dr.ok) { adminToast(`Quote ${quoteRef} was created, but the order could not be deleted - please delete it manually.`); setRevertBusy(false); return; }
       adminToast(`Reverted to quote ${quoteRef}.`, 'success');
       onDelete?.(form.id);
       onClose();
@@ -1572,12 +1572,12 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
     onRowUpdate({ ...form, paymentPlan: { ...form.paymentPlan, status:'cancelled' } });
   };
 
-  // Dirty tracking against the last persisted snapshot — drives the
+  // Dirty tracking against the last persisted snapshot, drives the
   // unsaved-changes warning in the Drawer (overlay click / Escape / nav).
   const savedSnapRef = React.useRef(JSON.stringify({ ...edit }));
   const dirty = JSON.stringify(form) !== savedSnapRef.current;
 
-  // When line items are present they're the source of truth — keep total/items summary in sync.
+  // When line items are present they're the source of truth, keep total/items summary in sync.
   React.useEffect(() => {
     if (!form.lineItems || form.lineItems.length === 0) return;
     const lineItemsTotal = Math.round(form.lineItems.reduce((s,i)=>s+liTotal(i),0) * 100) / 100;
@@ -1601,7 +1601,7 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
       setForm(prevForm);
       onRowUpdate(prevForm);
       savedSnapRef.current = JSON.stringify(prevForm);
-      adminToast('Save failed — change not persisted. Please try again.');
+      adminToast('Save failed, change not persisted. Please try again.');
     }
   };
 
@@ -1612,7 +1612,7 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
     const paid = orderAmountPaid(form);
     const maxRefund = Math.max(0, Math.round((paid - (form.refund ? Number(form.refund.amount) || 0 : 0)) * 100) / 100);
     if (amt > maxRefund + 0.005) {
-      setRefundError(`Refund exceeds the amount paid on this order — maximum refundable is $${Math.max(0, maxRefund).toFixed(2)}.`);
+      setRefundError(`Refund exceeds the amount paid on this order, maximum refundable is $${Math.max(0, maxRefund).toFixed(2)}.`);
       return;
     }
     const methodLabel = refundEntry.method === 'stripe' ? 'refund to the original card via Stripe' : refundEntry.method === 'cash' ? 'record a cash refund' : 'issue store credit';
@@ -1743,10 +1743,10 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
                 Print invoice
               </button>
               <button className="btn btn-ghost btn-sm"
-                title="Copy a link the customer can use to leave a review — general feedback, or for a specific product from this order"
+                title="Copy a link the customer can use to leave a review, general feedback, or for a specific product from this order"
                 onClick={() => {
-                  if (!form.warrantyToken) { adminToast('This order has no review token yet — save it first.'); return; }
-                  if (!siteUrl) { adminToast('Site URL not configured — set it in Settings first.'); return; }
+                  if (!form.warrantyToken) { adminToast('This order has no review token yet, save it first.'); return; }
+                  if (!siteUrl) { adminToast('Site URL not configured, set it in Settings first.'); return; }
                   const url = `${siteUrl}/review?order=${encodeURIComponent(form.id)}&token=${encodeURIComponent(form.warrantyToken)}`;
                   navigator.clipboard?.writeText(url).then(() => adminToast('Review link copied.', 'success')).catch(() => adminToast('Could not copy link.'));
                 }}>
@@ -1768,7 +1768,7 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
                 {trackingEmailStatus === 'sending' ? 'Sending…' : trackingEmailStatus === 'sent' ? 'Email sent' : trackingEmailStatus === 'error' ? 'Failed' : 'Send tracking email'}
               </button>
               {canDeleteOrder && (
-                <button className="btn btn-ghost btn-sm" disabled={revertBusy} onClick={revertToQuote} title="The work hasn't happened yet — move this back to a quote instead of it being a real order.">
+                <button className="btn btn-ghost btn-sm" disabled={revertBusy} onClick={revertToQuote} title="The work hasn't happened yet, move this back to a quote instead of it being a real order.">
                   <Icon name="refresh" size={14}/>
                   {revertBusy ? 'Reverting…' : 'Revert to quote'}
                 </button>
@@ -1785,11 +1785,11 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
         <div className="row-flex" style={{gap:8}}>
           <button className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
           <button className="btn btn-sm" onClick={async () => {
-            if (form.email && !isValidEmail(form.email)) { adminToast('Customer email looks invalid — please check it.'); return; }
-            if (form.phone && !isValidPhone(form.phone)) { adminToast('Phone number looks invalid — please check it.'); return; }
+            if (form.email && !isValidEmail(form.email)) { adminToast('Customer email looks invalid, please check it.'); return; }
+            if (form.phone && !isValidPhone(form.phone)) { adminToast('Phone number looks invalid, please check it.'); return; }
             if (Number(form.total) < 0) { adminToast('Order total cannot be negative.'); return; }
             const blankLineItem = (form.lineItems || []).find(li => li.id !== 'parts-auto' && li.description && (li.amount === '' || li.amount === null || li.amount === undefined || Number.isNaN(Number(li.amount))));
-            if (blankLineItem) { adminToast(`"${blankLineItem.description}" has no price set — confirm it before saving, or it'll bill as $0.`); return; }
+            if (blankLineItem) { adminToast(`"${blankLineItem.description}" has no price set, confirm it before saving, or it'll bill as $0.`); return; }
             const payload = { ...form, _originalId: edit.id || form.id, _isNew: !edit.id };
             const r = await fetch('/api/admin/orders/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(payload) }).catch(()=>null);
             if (r && r.ok) {
@@ -1797,7 +1797,7 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
               if (d.error) { adminToast(d.message || 'Save failed'); return; }
               const savedItem = d.item || form;
               if (!edit.id && savedItem.id && savedItem.id !== payload.id) {
-                adminToast(`Order number ${payload.id} was just taken — assigned ${savedItem.id} instead.`);
+                adminToast(`Order number ${payload.id} was just taken, assigned ${savedItem.id} instead.`);
               }
               savedSnapRef.current = JSON.stringify(savedItem);
               // If this order was placed against a brand-new customer (no existing
@@ -1812,7 +1812,7 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
                 }
               } else if (selectedCustomerId) {
                 // Keep the existing customer record in sync so their next order
-                // doesn't need this retyped — e.g. a shipping address added or
+                // doesn't need this retyped, e.g. a shipping address added or
                 // corrected on this order should stick to the customer, not just
                 // this one order.
                 const existing = (customers || []).find(c => c.id === selectedCustomerId);
@@ -1830,7 +1830,7 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
               }
               onSave(savedItem, !edit.id);
             } else {
-              adminToast('Save failed — changes not persisted. Please try again.');
+              adminToast('Save failed, changes not persisted. Please try again.');
             }
           }}>{edit.id ? 'Save' : 'Create order'}</button>
         </div>
@@ -1854,7 +1854,7 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
               <div key={c.id} role="button" tabIndex={0} onMouseDown={e => { e.preventDefault(); applyCustomer(c); }}
                 style={{padding:'8px 12px', fontSize:13, cursor:'pointer'}}>
                 <div style={{fontWeight:600}}>{c.name}</div>
-                <div style={{fontSize:11, color:'var(--ink-3)'}}>{[c.email, c.phone].filter(Boolean).join(' · ') || '—'}</div>
+                <div style={{fontSize:11, color:'var(--ink-3)'}}>{[c.email, c.phone].filter(Boolean).join(' · ') || '-'}</div>
               </div>
             ))}
           </div>
@@ -1893,14 +1893,14 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
                   if (!loc) { adminToast("Add the order's Location or Shipping Address first, then retry."); return; }
                   try {
                     const r = await fetch(`/api/admin/geocode-distance?address=${encodeURIComponent(loc)}`, { credentials:'include' });
-                    if (!r.ok) { adminToast(`Couldn't locate "${loc}" — check the address.`); return; }
+                    if (!r.ok) { adminToast(`Couldn't locate "${loc}", check the address.`); return; }
                     const d = await r.json();
                     const amount = Number.isFinite(rate) ? Math.round(rate * d.distKm * 100) / 100 : li.amount;
                     const description = Number.isFinite(rate)
-                      ? `${svcName} — travel (${d.distKm}km from shop to "${loc}" @ $${rate}/km)`
-                      : `${svcName} — travel (${d.distKm}km from shop to "${loc}")`;
+                      ? `${svcName}, travel (${d.distKm}km from shop to "${loc}" @ $${rate}/km)`
+                      : `${svcName}, travel (${d.distKm}km from shop to "${loc}")`;
                     setForm(f => ({...f, lineItems: f.lineItems.map(x => x.id === li.id ? {...x, description, amount} : x)}));
-                  } catch { adminToast('Distance lookup failed — try again.'); }
+                  } catch { adminToast('Distance lookup failed, try again.'); }
                 }}><Icon name="refresh" size={12}/></button>
             )}
             <button className="btn btn-ghost btn-sm" style={{padding:0, color:'var(--rust)'}}
@@ -1920,7 +1920,7 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
           if (!svc) return;
           const items = await buildServiceLineItems(svc, form.loc || form.shippingAddress);
           setForm(f => ({...f, lineItems: [...(f.lineItems||[]), ...items]}));
-          if (serviceNeedsPartsExpense(svc)) { setExpenseEdit('new'); setExpenseForm({ ...blankExpense(form.id), description: `${svc.name} — parts` }); }
+          if (serviceNeedsPartsExpense(svc)) { setExpenseEdit('new'); setExpenseForm({ ...blankExpense(form.id), description: `${svc.name} - parts` }); }
         }}>
           <option value="">+ Add line item…</option>
           <option value="__custom__">Custom line item</option>
@@ -1932,12 +1932,12 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
             }, {})
           ).sort(([a], [b]) => a.localeCompare(b)).map(([cat, svcs]) => (
             <optgroup key={cat} label={cat}>
-              {svcs.map(s => <option key={s.id} value={s.id}>{s.name}{(s.price ?? s.priceLine) ? ` — ${s.price ?? s.priceLine}` : ''}</option>)}
+              {svcs.map(s => <option key={s.id} value={s.id}>{s.name}{(s.price ?? s.priceLine) ? ` - ${s.price ?? s.priceLine}` : ''}</option>)}
             </optgroup>
           ))}
         </select>
         {(form.lineItems||[]).length > 0 && (
-          <div style={{marginTop:8, fontSize:12, color:'var(--ink-3)'}}>Line items total: <strong>${(form.lineItems||[]).reduce((s,i)=>s+liTotal(i),0).toLocaleString('en-AU',{minimumFractionDigits:2})}</strong> — order total below is kept in sync.</div>
+          <div style={{marginTop:8, fontSize:12, color:'var(--ink-3)'}}>Line items total: <strong>${(form.lineItems||[]).reduce((s,i)=>s+liTotal(i),0).toLocaleString('en-AU',{minimumFractionDigits:2})}</strong> - order total below is kept in sync.</div>
         )}
       </div>
 
@@ -1952,7 +1952,7 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
             value={form.discountValue || ''} onChange={e=>setForm({...form, discountValue:nonNegInput(e.target.value)})}/>
         </div>
         <input className="input" list="discount-reason-presets" value={form.discountLabel || ''} onChange={e=>setForm({...form, discountLabel:e.target.value})}
-          placeholder="Reason (optional) — e.g. Multi-service discount, Loyalty discount"/>
+          placeholder="Reason (optional), e.g. Multi-service discount, Loyalty discount"/>
         <datalist id="discount-reason-presets">
           {['Multi-service discount','Loyalty discount','Returning customer','Goodwill / service recovery','Staff discount','Bundle discount','Referral discount'].map(l => <option key={l} value={l}/>)}
         </datalist>
@@ -2005,7 +2005,7 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
                 {(trackingResult.events || []).slice(0,3).map((e,i) => (
                   <div key={i} style={{fontSize:11, color:'var(--ink-2)', padding:'3px 0', borderTop: i > 0 ? '1px solid var(--line)' : 'none'}}>
                     {e.date && <span className="mono" style={{color:'var(--ink-3)', marginRight:8}}>{e.date}</span>}
-                    {e.description}{e.location ? ` — ${e.location}` : ''}
+                    {e.description}{e.location ? ` - ${e.location}` : ''}
                   </div>
                 ))}
               </div>
@@ -2069,7 +2069,7 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
       </>}
 
       <div style={{borderTop:'1px solid var(--line)', margin:'12px 0 16px'}}/>
-      <label className="field"><span className="label">Order Total (AUD){(form.lineItems||[]).length > 0 && <span style={{color:'var(--ink-3)', fontWeight:400}}> — set by line items{Number(form.discountAmount) > 0 ? ' less discount' : ''}</span>}</span>
+      <label className="field"><span className="label">Order Total (AUD){(form.lineItems||[]).length > 0 && <span style={{color:'var(--ink-3)', fontWeight:400}}> - set by line items{Number(form.discountAmount) > 0 ? ' less discount' : ''}</span>}</span>
         <input className="input" type="number" min="0" step="0.01" disabled={(form.lineItems||[]).length > 0} value={form.total||''} onChange={e=>setForm({...form,total:Number(e.target.value)})}/>
       </label>
 
@@ -2100,7 +2100,7 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
               </label>
               <label className="field" style={{margin:0}}><span className="label">Part status</span>
                 <select className="select" value={expenseForm.partStatus||''} onChange={e=>setExpenseForm(f=>({...f,partStatus:e.target.value}))}>
-                  <option value="">— N/A —</option>
+                  <option value="">N/A</option>
                   {['ordered','arrived','installed','returned'].map(s=><option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
                 </select>
               </label>
@@ -2146,8 +2146,8 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
               ? {background:'#ede7f6', color:'#4527a0', border:'1px solid #b39ddb', fontSize:11}
               : {background:'transparent', color:'var(--ink-3)', border:'1px solid var(--border)', fontSize:11}}
             onClick={() => saveNow({ gratis: !form.gratis })}
-            title={form.gratis ? 'Remove gratis flag — order will appear in reports again' : 'Mark as complimentary — hides from receivables and revenue reports'}>
-            {form.gratis ? <><Icon name="check" size={11}/> Gratis — click to unmark</> : 'Mark as Gratis'}
+            title={form.gratis ? 'Remove gratis flag, order will appear in reports again' : 'Mark as complimentary, hides from receivables and revenue reports'}>
+            {form.gratis ? <><Icon name="check" size={11}/> Gratis, click to unmark</> : 'Mark as Gratis'}
           </button>
           {form.id && (
             <button
@@ -2157,20 +2157,20 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
                 ? {background:'#f3d5c5', color:'#7a3a18', border:'1px solid #e3b9a3', fontSize:11}
                 : {background:'transparent', color:'var(--ink-3)', border:'1px solid var(--border)', fontSize:11}}
               onClick={toggleCancelled}
-              title={form.cancelled ? 'Un-cancel — order will count in reports again' : "Mark cancelled — the work didn't go ahead. Excludes this order and its linked expenses from revenue/tax reports, but keeps the record."}>
-              {cancelBusy ? 'Saving…' : form.cancelled ? <><Icon name="check" size={11}/> Cancelled — click to unmark</> : 'Mark as Cancelled'}
+              title={form.cancelled ? 'Un-cancel, order will count in reports again' : "Mark cancelled, the work didn't go ahead. Excludes this order and its linked expenses from revenue/tax reports, but keeps the record."}>
+              {cancelBusy ? 'Saving…' : form.cancelled ? <><Icon name="check" size={11}/> Cancelled, click to unmark</> : 'Mark as Cancelled'}
             </button>
           )}
         </div>
       </div>
       {form.gratis && (
         <div style={{background:'#ede7f6', border:'1px solid #b39ddb', borderRadius:5, padding:'8px 12px', marginBottom:12, fontSize:12, color:'#4527a0'}}>
-          This order is marked <strong>gratis</strong> — it is excluded from revenue, receivables, and GST reports. The price on record is kept for reference only.
+          This order is marked <strong>gratis</strong>, it is excluded from revenue, receivables, and GST reports. The price on record is kept for reference only.
         </div>
       )}
       {form.cancelled && (
         <div style={{background:'#f3d5c5', border:'1px solid #e3b9a3', borderRadius:5, padding:'8px 12px', marginBottom:12, fontSize:12, color:'#7a3a18'}}>
-          This order is marked <strong>cancelled</strong> — the work never went ahead. It's excluded from revenue, receivables, and tax reports, and so are any expenses linked to it. The record is kept for reference only.
+          This order is marked <strong>cancelled</strong>, the work never went ahead. It's excluded from revenue, receivables, and tax reports, and so are any expenses linked to it. The record is kept for reference only.
         </div>
       )}
       {!form.gratis && (form.payments || []).length === 0 && <div className="mono" style={{fontSize:11, color:'var(--ink-3)', marginBottom:12}}>No payments recorded.</div>}
@@ -2179,7 +2179,7 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
           <div style={{flex:1}}>
             <span className="mono" style={{fontWeight:600}}>${Number(p.amount).toLocaleString()}</span>
             <span className="mono" style={{fontSize:11, color:'var(--ink-2)', marginLeft:10}}>{p.method}</span>
-            {p.note && <span style={{fontSize:12, color:'var(--ink-2)', marginLeft:10}}>— {p.note}</span>}
+            {p.note && <span style={{fontSize:12, color:'var(--ink-2)', marginLeft:10}}>{p.note}</span>}
           </div>
           <span className="mono" style={{fontSize:10, color:'var(--ink-3)'}}>{p.date}</span>
           <button className="icon-btn" style={{width:22, height:22, fontSize:14, color:'var(--ink-3)'}} onClick={() => removePayment(i)}>×</button>
@@ -2256,10 +2256,10 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
                 <button className="btn btn-sm" style={{marginBottom:1}} disabled={planBusy} onClick={savePlan}>{planBusy ? 'Saving…' : 'Create plan'}</button>
               </div>
               {!cardLookup?.exists && form.email && (
-                <div style={{fontSize:11, color:'var(--ink-3)', marginBottom:8}}>No portal account found for this email yet — only staff-collected is available.</div>
+                <div style={{fontSize:11, color:'var(--ink-3)', marginBottom:8}}>No portal account found for this email yet, only staff-collected is available.</div>
               )}
               {cardLookup?.exists && !cardLookup?.hasCard && (
-                <div style={{fontSize:11, color:'var(--ink-3)', marginBottom:8}}>This customer has no saved card yet — auto-charge isn't available until they add one in the portal.</div>
+                <div style={{fontSize:11, color:'var(--ink-3)', marginBottom:8}}>This customer has no saved card yet, auto-charge isn't available until they add one in the portal.</div>
               )}
               {planError && <div style={{fontSize:12, color:'#b91c1c'}}>{planError}</div>}
             </>
@@ -2491,7 +2491,7 @@ function AdminOrders({ search, sessionInfo, siteUrl }) {
 
 
 // ============================================================
-// REPAIRS — Kanban
+// REPAIRS - Kanban
 // ============================================================
 const DEFAULT_REPAIR_COLS = [
   { id:'intake',     label:'Intake',     cards:[] },
@@ -2664,7 +2664,7 @@ function RepairJobDrawer({ card, expenses, customers, staff, onSave, onDelete, o
             {customerMatches.map(c => (
               <div key={c.id} role="button" tabIndex={0} onMouseDown={e => { e.preventDefault(); applyCustomer(c); }} style={{padding:'8px 12px', fontSize:13, cursor:'pointer'}}>
                 <div style={{fontWeight:600}}>{c.name}</div>
-                <div style={{fontSize:11, color:'var(--ink-3)'}}>{[c.email, c.phone].filter(Boolean).join(' · ') || '—'}</div>
+                <div style={{fontSize:11, color:'var(--ink-3)'}}>{[c.email, c.phone].filter(Boolean).join(' · ') || '-'}</div>
               </div>
             ))}
           </div>
@@ -2676,13 +2676,13 @@ function RepairJobDrawer({ card, expenses, customers, staff, onSave, onDelete, o
         <label className="field"><span className="label">Phone</span>
           <input className="input" type="tel" value={form.phone} onChange={e=>set('phone',e.target.value)} placeholder="0400 000 000" /></label>
       </div>
-      <label className="field" style={S.mb12}><span className="label">Email — status notifications &amp; portal access</span>
+      <label className="field" style={S.mb12}><span className="label">Email, status notifications &amp; portal access</span>
         <input className="input" type="email" value={form.email} onChange={e=>set('email',e.target.value)} placeholder="customer@example.com" /></label>
 
       {/* ── Job ── */}
       <div className="eyebrow" style={S.mt20}>Job</div>
       <label className="field" style={S.mb12}><span className="label">Description / fault reported<ReqMark/></span>
-        <input className="input" value={form.t} onChange={e=>set('t',e.target.value)} placeholder="e.g. Toughbook 55 — keyboard ribbon fault" /></label>
+        <input className="input" value={form.t} onChange={e=>set('t',e.target.value)} placeholder="e.g. Toughbook 55, keyboard ribbon fault" /></label>
       <div className="grid-2" style={S.mb12}>
         <label className="field"><span className="label">Device / model</span>
           <input className="input" value={form.device} onChange={e=>set('device',e.target.value)} placeholder="e.g. Panasonic Toughbook 55" /></label>
@@ -2702,14 +2702,14 @@ function RepairJobDrawer({ card, expenses, customers, staff, onSave, onDelete, o
         <label className="field"><span className="label">Tag</span>
           <input className="input" value={form.tag} onChange={e=>set('tag',e.target.value)} placeholder="e.g. URGENT, WARRANTY" /></label>
         <label className="field"><span className="label">Condition on receipt</span>
-          <input className="input" value={form.condition} onChange={e=>set('condition',e.target.value)} placeholder="e.g. Fair — cracked screen" /></label>
+          <input className="input" value={form.condition} onChange={e=>set('condition',e.target.value)} placeholder="e.g. Fair - cracked screen" /></label>
       </div>
 
       {/* ── Diagnostics ── */}
       <div className="eyebrow" style={S.mt20}>Diagnostics</div>
       <label className="field" style={S.mb12}><span className="label">Findings</span>
-        <textarea className="textarea" rows={3} value={form.findings} onChange={e=>set('findings',e.target.value)} placeholder="What was found — e.g. Keyboard ribbon disconnected at left connector" /></label>
-      <label className="field" style={S.mb12}><span className="label">Diagnostic notes — tests run &amp; results</span>
+        <textarea className="textarea" rows={3} value={form.findings} onChange={e=>set('findings',e.target.value)} placeholder="What was found - e.g. Keyboard ribbon disconnected at left connector" /></label>
+      <label className="field" style={S.mb12}><span className="label">Diagnostic notes, tests run &amp; results</span>
         <textarea className="textarea" rows={3} value={form.diagnostics} onChange={e=>set('diagnostics',e.target.value)} placeholder="e.g. POST passes, keyboard not detected in BIOS, HDD SMART OK" /></label>
       <label className="field" style={S.mb12}><span className="label">Technician notes</span>
         <textarea className="textarea" rows={3} value={form.techNotes} onChange={e=>set('techNotes',e.target.value)} placeholder="Work performed, observations, follow-up actions..." /></label>
@@ -2736,7 +2736,7 @@ function RepairJobDrawer({ card, expenses, customers, staff, onSave, onDelete, o
       <div className="eyebrow" style={S.mt20}>Line Items (Labour &amp; Services)</div>
       {(form.lineItems||[]).map(li => (
         <div key={li.id} style={{display:'grid',gridTemplateColumns:'1fr 56px 90px 28px',gap:8,marginBottom:8,alignItems:'center'}}>
-          <input className="input" placeholder="e.g. Labour — 2hr diagnostic" value={li.description}
+          <input className="input" placeholder="e.g. Labour - 2hr diagnostic" value={li.description}
             onChange={e=>setForm(f=>({...f,lineItems:f.lineItems.map(x=>x.id===li.id?{...x,description:e.target.value}:x)}))}
             style={{fontSize:12}} disabled={li.id==='parts-auto'} />
           <input className="input" type="number" min="1" step="1" placeholder="Qty" value={li.qty||1}
@@ -2788,7 +2788,7 @@ function RepairJobDrawer({ card, expenses, customers, staff, onSave, onDelete, o
         <div style={{padding:'10px 14px',background:balance<=0.005?'#d8e7d0':'var(--bg-deep)',marginBottom:4}}>
           <span className="mono" style={{fontSize:13,fontWeight:600,color:balance<=0.005?'#345526':'var(--ink)'}}>
             {balance<=0.005
-              ? `PAID IN FULL — $${lineTotal.toLocaleString('en-AU',{minimumFractionDigits:2})}`
+              ? `PAID IN FULL - $${lineTotal.toLocaleString('en-AU',{minimumFractionDigits:2})}`
               : `BALANCE: $${balance.toLocaleString('en-AU',{minimumFractionDigits:2})} of $${lineTotal.toLocaleString('en-AU',{minimumFractionDigits:2})}`}
           </span>
         </div>
@@ -2865,7 +2865,7 @@ function AdminRepairs() {
     setCols(updated);
     setOpenId(null);
     const ok = await persist(updated);
-    if (!ok) adminToast('Save failed — check your connection.'); else adminToast('Job saved.','success');
+    if (!ok) adminToast('Save failed, check your connection.'); else adminToast('Job saved.','success');
   };
 
   const deleteCard = async (cardId) => {
@@ -2960,7 +2960,7 @@ function AdminRepairs() {
 
 
 // ============================================================
-// QUOTES — identical model/UI to Orders (customer combobox, service-driven
+// QUOTES, identical model/UI to Orders (customer combobox, service-driven
 // lineItems, discount, standalone full page), with OEQ-xxxx refs instead of
 // OE-xxxx and no payments/fulfilment section since nothing's been sold yet.
 // ============================================================
@@ -3011,7 +3011,7 @@ function QuotePage({ edit, quotes, customers, services = [], onClose, onSave, on
     }
   }, [form.lineItems, form.discountType, form.discountValue]);
 
-  // Planned expenses (parts staff intend to buy but haven't yet — nothing's
+  // Planned expenses (parts staff intend to buy but haven't yet, nothing's
   // purchased, so there's no real expenses.db entry) get the same cost+20%
   // margin treatment as Orders' linked-expenses auto line item, kept in sync
   // under the same 'parts-auto' id so it becomes a real expense cleanly once
@@ -3033,7 +3033,7 @@ function QuotePage({ edit, quotes, customers, services = [], onClose, onSave, on
 
   const validateLineItems = () => {
     const blank = (form.lineItems || []).find(li => li.description && (li.amount === '' || li.amount == null || Number.isNaN(Number(li.amount))));
-    if (blank) { adminToast(`"${blank.description}" has no price set — confirm it before saving.`); return false; }
+    if (blank) { adminToast(`"${blank.description}" has no price set, confirm it before saving.`); return false; }
     return true;
   };
 
@@ -3050,7 +3050,7 @@ function QuotePage({ edit, quotes, customers, services = [], onClose, onSave, on
     await persistNewCustomerIfNeeded();
     const r = await fetch('/api/admin/quotes/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(form) }).catch(()=>null);
     setBusy(null);
-    if (!r || !r.ok) { setErr('Failed to save — please try again.'); return; }
+    if (!r || !r.ok) { setErr('Failed to save, please try again.'); return; }
     const d = await r.json();
     savedSnapRef.current = JSON.stringify(d.item || form);
     onSave(d.item || form, !edit.id);
@@ -3058,13 +3058,13 @@ function QuotePage({ edit, quotes, customers, services = [], onClose, onSave, on
 
   const doSend = async () => {
     if (!form.email) { setErr('Customer email is required to send a quote.'); return; }
-    if (!isValidEmail(form.email)) { setErr('Customer email looks invalid — please check it.'); return; }
+    if (!isValidEmail(form.email)) { setErr('Customer email looks invalid, please check it.'); return; }
     if (!validateLineItems()) return;
     setBusy('send'); setErr(null);
     await persistNewCustomerIfNeeded();
     const r = await fetch('/api/admin/quotes/send', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(form) }).catch(()=>null);
     setBusy(null);
-    if (!r || !r.ok) { setErr('Failed to send — check SMTP settings in Settings → Integrations.'); return; }
+    if (!r || !r.ok) { setErr('Failed to send, check SMTP settings in Settings → Integrations.'); return; }
     const d = await r.json();
     savedSnapRef.current = JSON.stringify(d.item || form);
     adminToast(`Quote sent to ${form.email}.`, 'success');
@@ -3086,9 +3086,9 @@ function QuotePage({ edit, quotes, customers, services = [], onClose, onSave, on
       sourceQuoteId: form.id, quoteRef: form.quoteRef || '',
     };
     const or = await fetch('/api/admin/orders/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(orderPayload) }).catch(()=>null);
-    if (!or || !or.ok) { setBusy(null); setErr('Failed to create the order — quote was not touched.'); return; }
+    if (!or || !or.ok) { setBusy(null); setErr('Failed to create the order, quote was not touched.'); return; }
     const od = await or.json();
-    // Planned expenses were never real — this is the moment they become actual
+    // Planned expenses were never real, this is the moment they become actual
     // costs, now that there's a real order to link them to for tax reporting.
     if (od.item?.id && (form.plannedExpenses || []).length > 0) {
       await Promise.all(form.plannedExpenses.map(pe => fetch('/api/admin/expenses/save', { method:'POST', headers:postHeaders(), credentials:'include',
@@ -3152,7 +3152,7 @@ function QuotePage({ edit, quotes, customers, services = [], onClose, onSave, on
             {customerMatches.map(c => (
               <div key={c.id} role="button" tabIndex={0} onMouseDown={e => { e.preventDefault(); applyCustomer(c); }} style={{padding:'8px 12px', fontSize:13, cursor:'pointer'}}>
                 <div style={{fontWeight:600}}>{c.name}</div>
-                <div style={{fontSize:11, color:'var(--ink-3)'}}>{[c.email, c.phone].filter(Boolean).join(' · ') || '—'}</div>
+                <div style={{fontSize:11, color:'var(--ink-3)'}}>{[c.email, c.phone].filter(Boolean).join(' · ') || '-'}</div>
               </div>
             ))}
           </div>
@@ -3191,14 +3191,14 @@ function QuotePage({ edit, quotes, customers, services = [], onClose, onSave, on
                   if (!loc) { adminToast("Add the quote's Location or Shipping Address first, then retry."); return; }
                   try {
                     const r = await fetch(`/api/admin/geocode-distance?address=${encodeURIComponent(loc)}`, { credentials:'include' });
-                    if (!r.ok) { adminToast(`Couldn't locate "${loc}" — check the address.`); return; }
+                    if (!r.ok) { adminToast(`Couldn't locate "${loc}", check the address.`); return; }
                     const d = await r.json();
                     const amount = Number.isFinite(rate) ? Math.round(rate * d.distKm * 100) / 100 : li.amount;
                     const description = Number.isFinite(rate)
-                      ? `${svcName} — travel (${d.distKm}km from shop to "${loc}" @ $${rate}/km)`
-                      : `${svcName} — travel (${d.distKm}km from shop to "${loc}")`;
+                      ? `${svcName}, travel (${d.distKm}km from shop to "${loc}" @ $${rate}/km)`
+                      : `${svcName}, travel (${d.distKm}km from shop to "${loc}")`;
                     setForm(f => ({...f, lineItems: f.lineItems.map(x => x.id === li.id ? {...x, description, amount} : x)}));
-                  } catch { adminToast('Distance lookup failed — try again.'); }
+                  } catch { adminToast('Distance lookup failed, try again.'); }
                 }}><Icon name="refresh" size={12}/></button>
             )}
             <button className="btn btn-ghost btn-sm" style={{padding:0, color:'var(--rust)'}}
@@ -3225,12 +3225,12 @@ function QuotePage({ edit, quotes, customers, services = [], onClose, onSave, on
             services.reduce((groups, s) => { const cat = s.category || 'Other'; (groups[cat] = groups[cat] || []).push(s); return groups; }, {})
           ).sort(([a], [b]) => a.localeCompare(b)).map(([cat, svcs]) => (
             <optgroup key={cat} label={cat}>
-              {svcs.map(s => <option key={s.id} value={s.id}>{s.name}{(s.price ?? s.priceLine) ? ` — ${s.price ?? s.priceLine}` : ''}</option>)}
+              {svcs.map(s => <option key={s.id} value={s.id}>{s.name}{(s.price ?? s.priceLine) ? ` - ${s.price ?? s.priceLine}` : ''}</option>)}
             </optgroup>
           ))}
         </select>
         {(form.lineItems||[]).length > 0 && (
-          <div style={{marginTop:8, fontSize:12, color:'var(--ink-3)'}}>Line items total: <strong>${(form.lineItems||[]).reduce((s,i)=>s+liTotal(i),0).toLocaleString('en-AU',{minimumFractionDigits:2})}</strong> — quote total below is kept in sync.</div>
+          <div style={{marginTop:8, fontSize:12, color:'var(--ink-3)'}}>Line items total: <strong>${(form.lineItems||[]).reduce((s,i)=>s+liTotal(i),0).toLocaleString('en-AU',{minimumFractionDigits:2})}</strong> - quote total below is kept in sync.</div>
         )}
       </div>
 
@@ -3245,7 +3245,7 @@ function QuotePage({ edit, quotes, customers, services = [], onClose, onSave, on
             value={form.discountValue || ''} onChange={e=>setForm({...form, discountValue:nonNegInput(e.target.value)})}/>
         </div>
         <input className="input" list="discount-reason-presets" value={form.discountLabel || ''} onChange={e=>setForm({...form, discountLabel:e.target.value})}
-          placeholder="Reason (optional) — e.g. Multi-service discount, Loyalty discount"/>
+          placeholder="Reason (optional), e.g. Multi-service discount, Loyalty discount"/>
         <datalist id="discount-reason-presets">
           {['Multi-service discount','Loyalty discount','Returning customer','Goodwill / service recovery','Staff discount','Bundle discount','Referral discount'].map(l => <option key={l} value={l}/>)}
         </datalist>
@@ -3254,12 +3254,12 @@ function QuotePage({ edit, quotes, customers, services = [], onClose, onSave, on
         )}
       </div>
 
-      <label className="field"><span className="label">Total (AUD){(form.lineItems||[]).length > 0 && <span style={{color:'var(--ink-3)', fontWeight:400}}> — set by line items{Number(form.discountAmount) > 0 ? ' less discount' : ''}</span>}</span>
+      <label className="field"><span className="label">Total (AUD){(form.lineItems||[]).length > 0 && <span style={{color:'var(--ink-3)', fontWeight:400}}> - set by line items{Number(form.discountAmount) > 0 ? ' less discount' : ''}</span>}</span>
         <input className="input" type="number" min="0" step="0.01" disabled={(form.lineItems||[]).length > 0} value={form.total||''} onChange={e=>setForm({...form,total:Number(e.target.value)})}/>
       </label>
 
       <div className="field">
-        <span className="label">Parts (your cost — {PARTS_MARGIN*100}% margin auto-added to the "Parts" line item above)</span>
+        <span className="label">Parts (your cost, {PARTS_MARGIN*100}% margin auto-added to the "Parts" line item above)</span>
         {(form.plannedExpenses||[]).map((pe, i) => (
           <div key={i} style={{display:'grid', gridTemplateColumns:'2fr 60px 130px 28px', gap:8, marginBottom:8, alignItems:'center'}}>
             <input className="input" placeholder="e.g. Ryzen 7 5800X CPU" value={pe.description||''}
@@ -3278,7 +3278,7 @@ function QuotePage({ edit, quotes, customers, services = [], onClose, onSave, on
         <button className="btn btn-ghost btn-sm" onClick={() => setForm(f => ({...f, plannedExpenses: [...(f.plannedExpenses||[]), { description:'', quantity:1, amount:'', category:'parts' }]}))}>+ Add part</button>
         {(form.plannedExpenses||[]).length > 0 && (
           <div style={{marginTop:8, fontSize:12, color:'var(--ink-3)'}}>
-            Cost: <strong>${(form.plannedExpenses||[]).reduce((s,e)=>s+(Number(e.amount)||0)*(Number(e.quantity)||1),0).toFixed(2)}</strong> → charged at cost+{PARTS_MARGIN*100}%: <strong>${Math.round((form.plannedExpenses||[]).reduce((s,e)=>s+(Number(e.amount)||0)*(Number(e.quantity)||1),0)*(1+PARTS_MARGIN)*100)/100}</strong>. Not a real expense yet — becomes one automatically if this quote converts to an order.
+            Cost: <strong>${(form.plannedExpenses||[]).reduce((s,e)=>s+(Number(e.amount)||0)*(Number(e.quantity)||1),0).toFixed(2)}</strong> → charged at cost+{PARTS_MARGIN*100}%: <strong>${Math.round((form.plannedExpenses||[]).reduce((s,e)=>s+(Number(e.amount)||0)*(Number(e.quantity)||1),0)*(1+PARTS_MARGIN)*100)/100}</strong>. Not a real expense yet, becomes one automatically if this quote converts to an order.
           </div>
         )}
       </div>
@@ -3399,11 +3399,11 @@ function AdminQuotes({ search, sessionInfo, siteUrl }) {
         loading={loading}
         columns={[
           { key:'quoteRef', label:'Quote #', w:'120px', sort:true, render:r => <span className="mono" style={{fontSize:12, color:'var(--rust)'}}>{r.quoteRef || r.id}</span> },
-          { key:'cust', label:'Customer', w:'1.5fr', sort:r => r.cust || r.name, render:r => r.cust || r.name || '—' },
-          { key:'items', label:'Items', w:'2fr', render:r => <span style={{fontSize:13}}>{(r.lineItems||[]).map(i=>i.description).filter(Boolean).join(', ') || r.description || r.summary || '—'}</span> },
+          { key:'cust', label:'Customer', w:'1.5fr', sort:r => r.cust || r.name, render:r => r.cust || r.name || '-' },
+          { key:'items', label:'Items', w:'2fr', render:r => <span style={{fontSize:13}}>{(r.lineItems||[]).map(i=>i.description).filter(Boolean).join(', ') || r.description || r.summary || '-'}</span> },
           { key:'total', label:'Total', w:'90px', sort:r => Number(r.total ?? r.grandTotal) || 0, render:r => <span className="mono" style={{fontWeight:600}}>${(Number(r.total ?? r.grandTotal)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}</span> },
           { key:'status', label:'Status', w:'110px', sort:r => r.status || 'new', render:r => <StatusPill value={r.status || 'new'} map={statusMap} /> },
-          { key:'date', label:'When', w:'110px', sort:r => { const d = r.createdAt ? new Date(r.createdAt) : null; return d ? d.getTime() : 0; }, render:r => <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{r.date || (r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'}) : '—')}</span> },
+          { key:'date', label:'When', w:'110px', sort:r => { const d = r.createdAt ? new Date(r.createdAt) : null; return d ? d.getTime() : 0; }, render:r => <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{r.date || (r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'}) : '-')}</span> },
         ]}
         rows={visibleRows}
         onRowClick={openRow}
@@ -3430,7 +3430,7 @@ function blankHddReport() {
 
 const SMARTCTL_SCAN_CMD = 'sudo smartctl --scan';
 // Tries auto-detect, then forces SATA/NVMe/SCSI passthrough in turn and keeps the first
-// attempt that actually returns SMART data — works across USB bridge chips without the
+// attempt that actually returns SMART data, works across USB bridge chips without the
 // tech needing to know or guess which -d type the enclosure needs.
 const SMARTCTL_READ_CMD = [
   'D=/dev/sdX',
@@ -3472,7 +3472,7 @@ function AdminHddReports({ sessionInfo = {} }) {
   const [jobQuery, setJobQuery] = useState('');
   const [jobDropdownOpen, setJobDropdownOpen] = useState(false);
   const applyJob = (j) => {
-    setJobQuery(j ? `${j.id}${j.customer ? ` — ${j.customer}` : ''}` : '');
+    setJobQuery(j ? `${j.id}${j.customer ? ` - ${j.customer}` : ''}` : '');
     setJobDropdownOpen(false);
     if (j) setForm(f => ({ ...f, repairJobId: j.id, customerName: j.customer || f.customerName, customerEmail: j.email || f.customerEmail, customerPhone: j.phone || f.customerPhone }));
   };
@@ -3503,9 +3503,9 @@ function AdminHddReports({ sessionInfo = {} }) {
     setSmartParsing(true);
     const r = await fetch('/api/admin/hdd-reports/parse-smart', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ output: smartPaste }) }).catch(()=>null);
     setSmartParsing(false);
-    if (!r) { adminToast('Could not reach the server — please try again.'); return; }
+    if (!r) { adminToast('Could not reach the server, please try again.'); return; }
     const d = await r.json().catch(() => ({}));
-    if (!r.ok) { adminToast(d.message || 'Could not parse that output — make sure you ran smartctl with the -j flag.'); return; }
+    if (!r.ok) { adminToast(d.message || 'Could not parse that output, make sure you ran smartctl with the -j flag.'); return; }
     const n = Object.keys(d.fields || {}).length;
     if (!n) { adminToast('No recognisable fields found in that output.'); return; }
     setForm(f => ({ ...f, ...d.fields }));
@@ -3563,7 +3563,7 @@ function AdminHddReports({ sessionInfo = {} }) {
       if (!edit.id) setReports(rs => [...rs, d.item]); else setReports(rs => rs.map(x => x.id === edit.id ? d.item : x));
       setOpenId(null);
     } else {
-      adminToast('Failed to save report — changes not persisted.');
+      adminToast('Failed to save report, changes not persisted.');
     }
   };
 
@@ -3620,11 +3620,11 @@ function AdminHddReports({ sessionInfo = {} }) {
       <Table
         columns={[
           { key:'id', label:'#', w:'110px', sort:true, render:r => <span className="mono" style={{fontSize:11, color:'var(--rust)'}}>{r.id}</span> },
-          { key:'createdAt', label:'Date', w:'120px', sort:true, render:r => <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-AU') : '—'}</span> },
+          { key:'createdAt', label:'Date', w:'120px', sort:true, render:r => <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-AU') : '-'}</span> },
           { key:'type', label:'Type', w:'100px', sort:true, render:r => <span className="tag tag-outline">{(r.type||'repair').toUpperCase()}</span> },
-          { key:'drive', label:'Drive', w:'1.5fr', render:r => <span>{r.driveModel || '—'}{r.driveSerial ? <span className="mono" style={{color:'var(--ink-2)', fontSize:11}}> · {r.driveSerial}</span> : null}</span> },
+          { key:'drive', label:'Drive', w:'1.5fr', render:r => <span>{r.driveModel || '-'}{r.driveSerial ? <span className="mono" style={{color:'var(--ink-2)', fontSize:11}}> · {r.driveSerial}</span> : null}</span> },
           { key:'who', label:'Customer / job', w:'1.5fr', render:r => {
-            if (r.type === 'repair') return <span style={{fontSize:13, color:'var(--ink-2)'}}>{r.customerName || r.repairJobId || '—'}</span>;
+            if (r.type === 'repair') return <span style={{fontSize:13, color:'var(--ink-2)'}}>{r.customerName || r.repairJobId || '-'}</span>;
             const linkedProduct = products.find(p => p.id === r.linkedProductId);
             return linkedProduct
               ? <span style={{fontSize:13, color:'var(--ink-2)'}}>For sale · {linkedProduct.name}</span>
@@ -3671,7 +3671,7 @@ function HddReportPage({ edit, form, set, setForm, sessionInfo, products, dirty,
                 </div>
               </div>
               <div style={{minWidth:0}}>
-                <div style={{fontSize:11, color:'var(--ink-3)', marginBottom:2}}>2. Read it — set D to the device found above, then paste the whole block into the terminal. It tries auto-detect, SATA, NVMe and SCSI passthrough in turn and keeps whichever one actually returns data, so it works through USB bridge chips without you needing to know the right -d type.</div>
+                <div style={{fontSize:11, color:'var(--ink-3)', marginBottom:2}}>2. Read it - set D to the device found above, then paste the whole block into the terminal. It tries auto-detect, SATA, NVMe and SCSI passthrough in turn and keeps whichever one actually returns data, so it works through USB bridge chips without you needing to know the right -d type.</div>
                 <pre className="mono" style={{margin:0, minWidth:0, padding:'8px', background:'var(--paper)', border:'1px solid var(--line)', fontSize:12, overflowX:'auto', whiteSpace:'pre'}}>{SMARTCTL_READ_CMD}</pre>
                 <button type="button" className="btn btn-ghost btn-sm" style={{marginTop:4}} onClick={() => copyCmd(SMARTCTL_READ_CMD)}>Copy</button>
               </div>
@@ -3681,7 +3681,7 @@ function HddReportPage({ edit, form, set, setForm, sessionInfo, products, dirty,
               {smartParsing ? 'Parsing…' : 'Autofill from output'}
             </button>
             <p style={{fontSize:11, color:'var(--ink-3)', margin:'8px 0 0'}}>
-              Requires smartmontools (<code className="mono">sudo apt install smartmontools</code> if not already installed). Fills model, serial, capacity, interface, SMART status, counters, and suggests an overall verdict from the SMART data — form factor, manufacture date and physical condition still need your eyes on the drive, and the suggested verdict is a starting point, not a certification, so check it against what you actually see before saving. If all four attempts fail, paste whatever it printed anyway — the error message tells you what to try next.
+              Requires smartmontools (<code className="mono">sudo apt install smartmontools</code> if not already installed). Fills model, serial, capacity, interface, SMART status, counters, and suggests an overall verdict from the SMART data, form factor, manufacture date and physical condition still need your eyes on the drive, and the suggested verdict is a starting point, not a certification, so check it against what you actually see before saving. If all four attempts fail, paste whatever it printed anyway - the error message tells you what to try next.
             </p>
           </div>
 
@@ -3703,12 +3703,12 @@ function HddReportPage({ edit, form, set, setForm, sessionInfo, products, dirty,
                 {jobDropdownOpen && (
                   <div style={{position:'absolute', top:'100%', left:0, right:0, zIndex:20, background:'var(--bg)', border:'1px solid var(--line)', boxShadow:'0 4px 12px rgba(0,0,0,.12)', maxHeight:240, overflowY:'auto'}}>
                     <div role="button" tabIndex={0} onMouseDown={e => { e.preventDefault(); applyJob(null); }}
-                      style={{padding:'8px 12px', fontSize:13, cursor:'pointer', color:'var(--rust)', borderBottom:'1px solid var(--line)'}}>No job link{jobQuery.trim() ? ` — keep "${jobQuery.trim()}" as typed` : ''}</div>
+                      style={{padding:'8px 12px', fontSize:13, cursor:'pointer', color:'var(--rust)', borderBottom:'1px solid var(--line)'}}>No job link{jobQuery.trim() ? `, keep "${jobQuery.trim()}" as typed` : ''}</div>
                     {jobMatches.length === 0 && <div style={{padding:'8px 12px', fontSize:12, color:'var(--ink-3)'}}>No matching jobs.</div>}
                     {jobMatches.map(j => (
                       <div key={j.id} role="button" tabIndex={0} onMouseDown={e => { e.preventDefault(); applyJob(j); }} style={{padding:'8px 12px', fontSize:13, cursor:'pointer'}}>
                         <div style={{fontWeight:600, fontFamily:'monospace', fontSize:12}}>{j.id}</div>
-                        <div style={{fontSize:11, color:'var(--ink-3)'}}>{j.customer || '—'}</div>
+                        <div style={{fontSize:11, color:'var(--ink-3)'}}>{j.customer || '-'}</div>
                       </div>
                     ))}
                   </div>
@@ -3723,12 +3723,12 @@ function HddReportPage({ edit, form, set, setForm, sessionInfo, products, dirty,
                 {customerDropdownOpen && (
                   <div style={{position:'absolute', top:'100%', left:0, right:0, zIndex:20, background:'var(--bg)', border:'1px solid var(--line)', boxShadow:'0 4px 12px rgba(0,0,0,.12)', maxHeight:240, overflowY:'auto'}}>
                     <div role="button" tabIndex={0} onMouseDown={e => { e.preventDefault(); applyCustomer(null); }}
-                      style={{padding:'8px 12px', fontSize:13, cursor:'pointer', color:'var(--rust)', borderBottom:'1px solid var(--line)'}}>Not on file{customerQuery.trim() ? ` — keep "${customerQuery.trim()}" as typed` : ''}</div>
+                      style={{padding:'8px 12px', fontSize:13, cursor:'pointer', color:'var(--rust)', borderBottom:'1px solid var(--line)'}}>Not on file{customerQuery.trim() ? `, keep "${customerQuery.trim()}" as typed` : ''}</div>
                     {customerMatches.length === 0 && <div style={{padding:'8px 12px', fontSize:12, color:'var(--ink-3)'}}>No matching customers.</div>}
                     {customerMatches.map(c => (
                       <div key={c.id} role="button" tabIndex={0} onMouseDown={e => { e.preventDefault(); applyCustomer(c); }} style={{padding:'8px 12px', fontSize:13, cursor:'pointer'}}>
                         <div style={{fontWeight:600}}>{c.name}</div>
-                        <div style={{fontSize:11, color:'var(--ink-3)'}}>{[c.email, c.phone].filter(Boolean).join(' · ') || '—'}</div>
+                        <div style={{fontSize:11, color:'var(--ink-3)'}}>{[c.email, c.phone].filter(Boolean).join(' · ') || '-'}</div>
                       </div>
                     ))}
                   </div>
@@ -3749,7 +3749,7 @@ function HddReportPage({ edit, form, set, setForm, sessionInfo, products, dirty,
               <>
                 <label className="field"><span className="label">Linked product</span>
                   <select className="select" value={form.linkedProductId||''} onChange={e=>setForm(f=>({...f, linkedProductId:e.target.value, linkedVariantSku:''}))}>
-                    <option value="">— not linked —</option>
+                    <option value="">not linked</option>
                     {products.map(p => <option key={p.id} value={p.id}>{p.name} {p.sku ? `(${p.sku})` : ''}</option>)}
                   </select>
                 </label>
@@ -3842,7 +3842,7 @@ function HddReportPage({ edit, form, set, setForm, sessionInfo, products, dirty,
 
           {form.type === 'repair' && (
             <label className="field"><span className="label">Recommendation to customer</span>
-              <textarea className="textarea" rows={3} value={form.recommendation||''} onChange={e=>set('recommendation', e.target.value)} placeholder="e.g. Drive is degrading — recommend backing up immediately and replacing within 2-4 weeks."/>
+              <textarea className="textarea" rows={3} value={form.recommendation||''} onChange={e=>set('recommendation', e.target.value)} placeholder="e.g. Drive is degrading, recommend backing up immediately and replacing within 2-4 weeks."/>
             </label>
           )}
 
@@ -3854,7 +3854,7 @@ function HddReportPage({ edit, form, set, setForm, sessionInfo, products, dirty,
 
           <div style={{padding:'10px 12px', background:'var(--bg-elev)', border:'1px solid var(--line)', fontSize:11, color:'var(--ink-2)'}}>
             {form.signedBy
-              ? <>Signed by <strong>{form.signedBy}</strong>{form.signedAt ? ` · ${new Date(form.signedAt).toLocaleString('en-AU')}` : ''} — will be re-signed as {sessionInfo.username || 'you'} on next save.</>
+              ? <>Signed by <strong>{form.signedBy}</strong>{form.signedAt ? ` · ${new Date(form.signedAt).toLocaleString('en-AU')}` : ''}, will be re-signed as {sessionInfo.username || 'you'} on next save.</>
               : <>Will be signed electronically as <strong>{sessionInfo.username || 'you'}</strong> when saved.</>}
           </div>
     </OrderPage>
@@ -3924,10 +3924,10 @@ function AdminBookings() {
       <Table
         columns={[
           { key:'id', label:'#', w:'120px', render:r => <span className="mono" style={{fontSize:11, color:'var(--rust)'}}>{r.id}</span> },
-          { key:'type', label:'Type', w:'120px', render:r => <span className="tag tag-outline">{(typeLabel[r.type] || (r.serviceName ? 'Portal' : r.type) || '—').toUpperCase()}</span> },
-          { key:'name', label:'Name', w:'1.5fr', render:r => r.name || r.username || '—' },
-          { key:'when', label:'When', w:'160px', render:r => <span className="mono" style={{fontSize:11}}>{r.preferredDate || r.date || '—'}{(r.preferredTime || r.time) ? ` · ${r.preferredTime || r.time}` : ''}</span> },
-          { key:'device', label:'Device / Service', w:'1.5fr', render:r => <span style={{fontSize:13, color:'var(--ink-2)'}}>{r.device || r.serviceName || '—'}</span> },
+          { key:'type', label:'Type', w:'120px', render:r => <span className="tag tag-outline">{(typeLabel[r.type] || (r.serviceName ? 'Portal' : r.type) || '-').toUpperCase()}</span> },
+          { key:'name', label:'Name', w:'1.5fr', render:r => r.name || r.username || '-' },
+          { key:'when', label:'When', w:'160px', render:r => <span className="mono" style={{fontSize:11}}>{r.preferredDate || r.date || '-'}{(r.preferredTime || r.time) ? ` · ${r.preferredTime || r.time}` : ''}</span> },
+          { key:'device', label:'Device / Service', w:'1.5fr', render:r => <span style={{fontSize:13, color:'var(--ink-2)'}}>{r.device || r.serviceName || '-'}</span> },
           { key:'status', label:'Status', w:'120px', render:r => <StatusPill value={r.status || 'new'} map={statusMap} /> },
         ]}
         rows={visibleBookings}
@@ -3954,18 +3954,18 @@ function AdminBookings() {
                   setBookings(bs => bs.map(b => b.id === edit.id ? d.booking : b));
                   setEdit(null);
                 } else {
-                  adminToast('Failed to save booking — changes not persisted.');
+                  adminToast('Failed to save booking, changes not persisted.');
                 }
               }}>Save</button>
             </div>
           </div>}
         >
           <div className="term" style={{marginBottom:16}}>
-            <div>name     : {edit.name || edit.username || '—'}</div>
-            <div>email    : {edit.email || '—'}</div>
-            <div>phone    : {edit.phone || '—'}</div>
-            <div>when     : {edit.preferredDate || edit.date || '—'}{(edit.preferredTime || edit.time) ? ` · ${edit.preferredTime || edit.time}` : ''}</div>
-            <div>device   : {edit.device || edit.serviceName || '—'}</div>
+            <div>name     : {edit.name || edit.username || '-'}</div>
+            <div>email    : {edit.email || '-'}</div>
+            <div>phone    : {edit.phone || '-'}</div>
+            <div>when     : {edit.preferredDate || edit.date || '-'}{(edit.preferredTime || edit.time) ? ` · ${edit.preferredTime || edit.time}` : ''}</div>
+            <div>device   : {edit.device || edit.serviceName || '-'}</div>
             {edit.address && <div>address  : {edit.address}</div>}
             {edit.notes && <div>notes    : {edit.notes}</div>}
           </div>
@@ -4081,7 +4081,7 @@ function AdminAvailability() {
 
       <div className="card-paper" style={{padding:24}}>
         <div className="row-flex" style={{justifyContent:'space-between', marginBottom:12}}>
-          <span className="eyebrow">CALENDAR — CLICK A DAY TO BLOCK IT ENTIRELY</span>
+          <span className="eyebrow">CALENDAR - CLICK A DAY TO BLOCK IT ENTIRELY</span>
           <div className="row-flex" style={{gap:8}}>
             <button className="btn btn-ghost btn-sm" onClick={() => setMonthCursor(c => new Date(c.getFullYear(), c.getMonth()-1, 1))}><Icon name="chevronLeft" size={12}/></button>
             <span className="mono" style={{fontSize:12, minWidth:120, textAlign:'center'}}>{monthCursor.toLocaleString('en-AU',{month:'long', year:'numeric'})}</span>
@@ -4131,7 +4131,7 @@ function AdminAvailability() {
       </div>
 
       {slotDay && (
-        <Drawer open={true} onClose={() => setSlotDay(null)} title={`Block hours — ${slotDay}`}>
+        <Drawer open={true} onClose={() => setSlotDay(null)} title={`Block hours - ${slotDay}`}>
           {slotsForSlotDay.length === 0 ? (
             <div style={{fontSize:13, color:'var(--ink-2)'}}>No operating hours configured for this day of the week.</div>
           ) : (
@@ -4256,10 +4256,10 @@ function AdminReviews() {
           )}
           <hr className="thin" />
           <div className="mono" style={{ fontSize: 11, color: 'var(--ink-2)', display: 'grid', gap: 6 }}>
-            <div>CUSTOMER · {edit.customerName || '—'} {edit.customerEmail ? `<${edit.customerEmail}>` : ''}</div>
-            <div>ORDER · {edit.orderId || '—'}</div>
+            <div>CUSTOMER · {edit.customerName || '-'} {edit.customerEmail ? `<${edit.customerEmail}>` : ''}</div>
+            <div>ORDER · {edit.orderId || '-'}</div>
             <div>ABOUT · {edit.productName || 'General feedback'}</div>
-            <div>SUBMITTED · {edit.createdAt ? new Date(edit.createdAt).toLocaleString('en-AU') : '—'}</div>
+            <div>SUBMITTED · {edit.createdAt ? new Date(edit.createdAt).toLocaleString('en-AU') : '-'}</div>
           </div>
         </Drawer>
       )}
@@ -4303,13 +4303,13 @@ function AdminEwaste() {
               { key:'id', label:'#', w:'120px', render:r => <span className="mono" style={{fontSize:11, color:'var(--rust)'}}>{r.id}</span>},
               { key:'from', label:'From', w:'1.5fr' },
               { key:'items', label:'Items', w:'2fr', render:r => <span style={{fontSize:13, color:'var(--ink-2)'}}>{r.items}</span> },
-              { key:'serialNumber', label:'Serial', w:'140px', render:r => <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{r.serialNumber||'—'}</span> },
+              { key:'serialNumber', label:'Serial', w:'140px', render:r => <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{r.serialNumber||'-'}</span> },
               { key:'kg', label:'Weight', w:'80px', render:r => <span className="mono">{r.kg}kg</span> },
-              { key:'tier', label:'Condition', w:'110px', render:r => <span className="tag tag-outline" style={{textTransform:'capitalize'}}>{r.tier||'—'}</span> },
-              { key:'disposition', label:'Disposition', w:'130px', render:r => <span className="tag tag-outline" style={{textTransform:'capitalize'}}>{r.disposition||'—'}</span> },
+              { key:'tier', label:'Condition', w:'110px', render:r => <span className="tag tag-outline" style={{textTransform:'capitalize'}}>{r.tier||'-'}</span> },
+              { key:'disposition', label:'Disposition', w:'130px', render:r => <span className="tag tag-outline" style={{textTransform:'capitalize'}}>{r.disposition||'-'}</span> },
               { key:'payout', label:'Payout', w:'140px', render:r => <span style={{fontWeight:600}}>{r.payout}</span> },
               { key:'date', label:'When', w:'90px', render:r => <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{r.date.toUpperCase()}</span>},
-              { key:'orderId', label:'Order', w:'120px', render:r => r.orderId ? <span className="mono" style={{fontSize:11, color:'var(--rust)', cursor:'pointer'}} onClick={e=>{e.stopPropagation(); window.location.hash='orders';}}>{r.orderId}</span> : <span style={{color:'var(--ink-3)'}}>—</span> },
+              { key:'orderId', label:'Order', w:'120px', render:r => r.orderId ? <span className="mono" style={{fontSize:11, color:'var(--rust)', cursor:'pointer'}} onClick={e=>{e.stopPropagation(); window.location.hash='orders';}}>{r.orderId}</span> : <span style={{color:'var(--ink-3)'}}>-</span> },
             ]}
             rows={intakes}
             onRowClick={(r) => openIntake(r)}
@@ -4322,7 +4322,7 @@ function AdminEwaste() {
           </div>
           <div style={{padding:20, background:'var(--dark)', color:'var(--paper)', marginTop:16}}>
             <span className="eyebrow" style={{color:'var(--ochre)'}}>DATA WIPE QUEUE</span>
-            <div className="serif" style={{fontSize:40, marginTop:6, color:'var(--ochre)'}}>—</div>
+            <div className="serif" style={{fontSize:40, marginTop:6, color:'var(--ochre)'}}>-</div>
             <div className="mono" style={{fontSize:11, color:'var(--bg-deep)'}}>NIST 800-88 · 9 PURGE / 5 SHRED</div>
           </div>
         </div>
@@ -4360,7 +4360,7 @@ function AdminEwaste() {
           <label className="field"><span className="label">Weight (kg)</span><input className="input" type="number" value={form.kg||0} onChange={e=>setForm({...form,kg:Number(e.target.value)})}/></label>
           <label className="field"><span className="label">Condition</span>
             <select className="input" value={form.tier||''} onChange={e=>setForm({...form,tier:e.target.value})}>
-              <option value="">— select —</option>
+              <option value="">select</option>
               <option value="working">Working</option>
               <option value="repairable">Repairable</option>
               <option value="parts">Parts only</option>
@@ -4370,7 +4370,7 @@ function AdminEwaste() {
           <label className="field"><span className="label">Payout</span><input className="input" value={form.payout||''} onChange={e=>setForm({...form,payout:e.target.value})}/></label>
           <label className="field"><span className="label">Disposition</span>
             <select className="input" value={form.disposition||''} onChange={e=>setForm({...form,disposition:e.target.value})}>
-              <option value="">— select —</option>
+              <option value="">select</option>
               <option value="resale">For resale</option>
               <option value="parts-donor">Parts donor / teardown</option>
               <option value="learning">Learning device (training)</option>
@@ -4381,7 +4381,7 @@ function AdminEwaste() {
           </label>
           <label className="field"><span className="label">Date</span><input className="input" type="date" value={form.date||''} onChange={e=>setForm({...form,date:e.target.value})}/></label>
           <div className="field">
-            <span className="label">Linked order <span style={{fontWeight:400,color:'var(--ink-2)'}}>(optional — e.g. replaced component)</span></span>
+            <span className="label">Linked order <span style={{fontWeight:400,color:'var(--ink-2)'}}>(optional - e.g. replaced component)</span></span>
             {(() => {
               const q = orderSearch.toLowerCase();
               const filtered = orders.filter(o =>
@@ -4406,7 +4406,7 @@ function AdminEwaste() {
                     }
                     setForm(f => ({...f, ...updates}));
                   }} style={{fontFamily:'var(--font-mono)', fontSize:12}}>
-                    <option value="">— none —</option>
+                    <option value="">none</option>
                     {filtered.map(o => (
                       <option key={o.id} value={o.id}>{o.id}{o.cust ? ` · ${o.cust}` : ''}</option>
                     ))}
@@ -4540,7 +4540,7 @@ function AdminProducts({ sessionInfo = {} }) {
     if (canAssignOwner) {
       fetch('/api/admin/staff', { credentials:'include' })
         .then(r => r.ok ? r.json() : Promise.reject())
-        // Any active staff member can own a listing — the shop owner and
+        // Any active staff member can own a listing, the shop owner and
         // staff sell their own stock too, not just consignment sellers.
         // Assigning a non-seller is safe: seller commission and the
         // force-to-draft rule key off the role of whoever saves the product,
@@ -4552,7 +4552,7 @@ function AdminProducts({ sessionInfo = {} }) {
   const [edit, setEdit] = useState(null);
   const [form, setForm] = useState({});
   // Explicit "typing a brand-new category" flag. Deriving this from whether
-  // form.cat is in catOptions breaks while typing — the free-text box would
+  // form.cat is in catOptions breaks while typing, the free-text box would
   // vanish the moment the partial name matched an existing category.
   const [newCat, setNewCat] = useState(false);
   const [openId, setOpenId] = useUrlState('open', null, { push: true });
@@ -4906,7 +4906,7 @@ function AdminProducts({ sessionInfo = {} }) {
           )}
           <label className="field">
             <span className="label">Description <span style={{fontWeight:400, color:'var(--ink-3)', fontSize:11}}>shown on the public product page</span></span>
-            {/* Stored as `description` — the shop reads that key. Older products
+            {/* Stored as `description`, the shop reads that key. Older products
                 saved the text under `desc`, which nothing ever read; fall back to
                 it here and drop it on the next save. */}
             <textarea className="textarea" placeholder="Bench-tested, 38-point check, ships with charger…" value={form.description ?? form.desc ?? ''} onChange={e=>setForm({...form, description:e.target.value, desc:undefined})} />
@@ -5130,7 +5130,7 @@ function AdminServices() {
       setEdit(null);
     } else {
       const err = r ? await r.json().catch(() => ({})) : {};
-      adminToast(err.message || 'Failed to save service — check server logs', 'error');
+      adminToast(err.message || 'Failed to save service, check server logs', 'error');
     }
   };
   const remove = async () => {
@@ -5231,7 +5231,7 @@ function AdminClients() {
       setEdit(null);
     } else {
       const err = r ? await r.json().catch(() => ({})) : {};
-      adminToast(err.error === 'name_required' ? 'Client name is required' : 'Failed to save client — check server logs', 'error');
+      adminToast(err.error === 'name_required' ? 'Client name is required' : 'Failed to save client, check server logs', 'error');
     }
   };
   const remove = async () => {
@@ -5250,7 +5250,7 @@ function AdminClients() {
         <button className="btn btn-rust btn-sm" onClick={() => open('new')}>+ New client</button>
       </div>
       <p style={{fontSize:13, color:'var(--ink-2)', maxWidth:640, marginBottom:18}}>
-        Clients listed here appear on the public site as a "who we work with" trust strip. Only add a client after they've agreed you can name them — most engagements are confidential by default.
+        Clients listed here appear on the public site as a "who we work with" trust strip. Only add a client after they've agreed you can name them, most engagements are confidential by default.
       </p>
       <Table
         columns={[
@@ -5339,7 +5339,7 @@ function PlatformIcon({ platform, size = 14 }) {
       </svg>
     );
     case 'cross': return (
-      // Globe — cross-platform
+      // Globe, cross-platform
       <svg style={s} viewBox={vb}>
         <circle cx="12" cy="12" r="10"/>
         <line x1="2" y1="12" x2="22" y2="12"/>
@@ -5347,7 +5347,7 @@ function PlatformIcon({ platform, size = 14 }) {
       </svg>
     );
     default: return (
-      // Package box — other / all
+      // Package box, other / all
       <svg style={s} viewBox={vb}>
         <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
         <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
@@ -5416,7 +5416,7 @@ function SoftwareFileRow({ file, onDelete, onUpdate }) {
   );
 }
 
-// Chunked upload helper — splits file into 20 MB slices, uploads one at a time.
+// Chunked upload helper, splits file into 20 MB slices, uploads one at a time.
 // Calls onProgress(0..1) after each chunk. Returns the finalize response.
 async function uploadSoftwareFile(file, onProgress) {
   const CHUNK_SIZE = 20 * 1024 * 1024; // 20 MB raw per chunk
@@ -5505,7 +5505,7 @@ function AdminSoftware() {
     try {
       const MAX_GB = 10;
       if (file.size > MAX_GB * 1024 * 1024 * 1024) {
-        setUploadErr(`File too large — maximum ${MAX_GB} GB.`);
+        setUploadErr(`File too large, maximum ${MAX_GB} GB.`);
         setUploadProgress(null);
         return;
       }
@@ -5522,7 +5522,7 @@ function AdminSoftware() {
       setUploadErr(
         ae === 'file_too_large' ? `File too large (max ${err.apiData?.maxGB||10} GB).` :
         ae === 'unsupported_file_type' ? 'Unsupported file type.' :
-        ae === 'missing_chunk' ? 'Upload incomplete — please try again.' :
+        ae === 'missing_chunk' ? 'Upload incomplete, please try again.' :
         ae ? `Upload failed (${ae}${err.apiDetail ? ': ' + err.apiDetail : ''}). Please try again.` :
         'Upload failed. Please try again.'
       );
@@ -5558,9 +5558,9 @@ function AdminSoftware() {
           { key:'price', label:'Pricing', w:'1fr' },
           { key:'files', label:'Files', w:'80px', render:r => {
             const n = (r.files||[]).length;
-            return <span className="mono" style={{fontSize:12, color: n>0?'var(--ink)':'var(--ink-2)'}}>{n > 0 ? `${n} file${n!==1?'s':''}` : r.stars||'—'}</span>;
+            return <span className="mono" style={{fontSize:12, color: n>0?'var(--ink)':'var(--ink-2)'}}>{n > 0 ? `${n} file${n!==1?'s':''}` : r.stars||'-'}</span>;
           }},
-          { key:'repo', label:'Repo / GitHub', w:'2fr', render:r => r.repo ? <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{r.repo}</span> : <span style={{color:'var(--ink-2)', fontSize:11}}>—</span> },
+          { key:'repo', label:'Repo / GitHub', w:'2fr', render:r => r.repo ? <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{r.repo}</span> : <span style={{color:'var(--ink-2)', fontSize:11}}>-</span> },
           { key:'live', label:'Live', w:'70px', render:r => <span className={`tag ${r.live?'tag-euc':'tag-outline'}`}>{r.live?'YES':'NO'}</span> },
         ]}
         rows={rows}
@@ -5594,10 +5594,10 @@ function AdminSoftware() {
           </div>
 
           {/* ── Description ── */}
-          <label className="field"><span className="label">Tagline <span style={{fontWeight:400, color:'var(--ink-2)'}}>— shown on listing card</span></span>
+          <label className="field"><span className="label">Tagline <span style={{fontWeight:400, color:'var(--ink-2)'}}>shown on listing card</span></span>
             <input className="input" placeholder="One-liner shown on the card" value={form.tagline||''} onChange={e=>setForm({...form, tagline:e.target.value})}/>
           </label>
-          <label className="field"><span className="label">Full description <span style={{fontWeight:400, color:'var(--ink-2)'}}>— shown on detail page</span></span>
+          <label className="field"><span className="label">Full description <span style={{fontWeight:400, color:'var(--ink-2)'}}>shown on detail page</span></span>
             <textarea className="textarea" rows={5} placeholder="Detailed description of what the software does, who it's for, and what problems it solves." value={form.description||''} onChange={e=>setForm({...form, description:e.target.value})}/>
           </label>
           <label className="field"><span className="label">Repository / GitHub URL</span><input className="input" placeholder="https://github.com/outback/…" value={form.repo||''} onChange={e=>setForm({...form, repo:e.target.value})}/></label>
@@ -5610,7 +5610,7 @@ function AdminSoftware() {
 
           {/* ── Supported platforms ── */}
           <div>
-            <span className="label">Supported platforms <span style={{fontWeight:400, color:'var(--ink-2)'}}>— controls which OS buttons show on the card</span></span>
+            <span className="label">Supported platforms <span style={{fontWeight:400, color:'var(--ink-2)'}}>controls which OS buttons show on the card</span></span>
             <div className="row-flex" style={{gap:8, flexWrap:'wrap', marginTop:6}}>
               {['linux','windows','macos','ios','android','cross'].map(os => {
                 const checked = (form.platforms||[]).includes(os);
@@ -5677,14 +5677,14 @@ function AdminSoftware() {
             {uploadErr && <div style={{fontSize:12, color:'var(--rust)', marginBottom:8}}>{uploadErr}</div>}
             {(form.files||[]).length === 0 && uploadProgress === null && (
               <div style={{fontSize:12, color:'var(--ink-2)', padding:'12px 0', textAlign:'center', border:'1px dashed var(--border)', borderRadius:6}}>
-                No files yet — upload an installer, binary, or archive above.
+                No files yet, upload an installer, binary, or archive above.
               </div>
             )}
             {(form.files||[]).map(f => (
               <SoftwareFileRow key={f.id} file={f} onDelete={deleteFile} onUpdate={updateFile} />
             ))}
             <div style={{fontSize:11, color:'var(--ink-2)', marginTop:6}}>
-              Supported: .zip .tar.gz .iso .apk .exe .msi .deb .rpm .dmg .appimage — max 10 GB per file
+              Supported: .zip .tar.gz .iso .apk .exe .msi .deb .rpm .dmg .appimage, max 10 GB per file
             </div>
           </div>
 
@@ -5699,12 +5699,12 @@ function AdminSoftware() {
 }
 
 // ============================================================
-// TUTORIALS — list + editor
+// TUTORIALS, list + editor
 // ============================================================
 const TUTORIAL_FORMATS = [
   { id:'article', label:'Article', hint:'Long-form write-up, like a blog post.' },
   { id:'steps', label:'Step-by-step', hint:'Numbered steps, each with its own text and photo.' },
-  { id:'info', label:'Info page', hint:'Short reference page — no difficulty or read-time shown.' },
+  { id:'info', label:'Info page', hint:'Short reference page - no difficulty or read-time shown.' },
 ];
 
 function newTutorial() {
@@ -5712,7 +5712,7 @@ function newTutorial() {
 }
 function emptyStep() { return { id:'step-'+Date.now()+'-'+Math.random().toString(36).slice(2,7), title:'', body:'', image:'', imageAlt:'' }; }
 
-// Mirrors TRUSTED_VIDEO_DOMAINS in server.js — the server silently blanks
+// Mirrors TRUSTED_VIDEO_DOMAINS in server.js, the server silently blanks
 // anything that doesn't match, so warn before that happens rather than
 // after a save quietly drops the URL with no explanation.
 const TRUSTED_VIDEO_DOMAINS = ['youtube.com', 'www.youtube.com', 'youtu.be', 'www.youtu.be', 'youtube-nocookie.com', 'www.youtube-nocookie.com', 'vimeo.com', 'www.vimeo.com'];
@@ -5738,7 +5738,7 @@ function applyMarkdownFormat(ta, val, fmt) {
     if (sel.includes('\n')) { newVal = val.slice(0, ss) + '```\n' + sel + '\n```' + val.slice(se); cur = [ss + 4, ss + 4 + sel.length]; }
     else { const w = sel || 'code'; newVal = val.slice(0, ss) + '`' + w + '`' + val.slice(se); cur = sel ? [ss + 1, ss + 1 + sel.length] : [ss + 1, ss + 1 + w.length]; }
   }
-  else if (fmt === '—') { newVal = val.slice(0, ss) + '—' + val.slice(se); cur = [ss + 1, ss + 1]; }
+  else if (fmt === '-') { newVal = val.slice(0, ss) + '-' + val.slice(se); cur = [ss + 1, ss + 1]; }
   else if (fmt === '· list') { newVal = val.slice(0, lineStart) + '- ' + val.slice(lineStart); cur = [ss + 2, se + 2]; }
   else if (fmt === '1. list') { newVal = val.slice(0, lineStart) + '1. ' + val.slice(lineStart); cur = [ss + 3, se + 3]; }
   else if (fmt === 'Link') { const snippet = sel ? `[${sel}](url)` : '[link text](url)'; newVal = val.slice(0, ss) + snippet + val.slice(se); cur = sel ? [ss + sel.length + 3, ss + sel.length + 6] : [ss + 1, ss + 10]; }
@@ -5782,7 +5782,7 @@ function MarkdownField({ value, onChange, placeholder, minHeight = 260 }) {
   return (
     <div>
       <div className="row-flex" style={{gap:4, paddingBottom:10, borderBottom:'1px solid var(--line)', flexWrap:'wrap'}}>
-        {['H2','H3','B','I','</>','—','· list','1. list','Link','Table'].map((b,i) => (
+        {['H2','H3','B','I','</>','-','· list','1. list','Link','Table'].map((b,i) => (
           <button key={i} type="button" className="btn btn-ghost btn-sm" style={{minWidth:32, justifyContent:'center', padding:'4px 8px'}}
             onMouseDown={e => { e.preventDefault(); apply(b); }}>{b}</button>
         ))}
@@ -5799,7 +5799,7 @@ function MarkdownField({ value, onChange, placeholder, minHeight = 260 }) {
   );
 }
 
-// Cover/step image slot — click or drag-drop to upload, with replace/remove.
+// Cover/step image slot, click or drag-drop to upload, with replace/remove.
 function ImageUploadSlot({ value, onChange, aspect = '16/10', label, alt, onAltChange }) {
   const fileRef = React.useRef(null);
   const [uploading, setUploading] = useState(false);
@@ -5838,7 +5838,7 @@ function ImageUploadSlot({ value, onChange, aspect = '16/10', label, alt, onAltC
   );
 }
 
-// Chip/tag list input — Enter or comma to add, × to remove.
+// Chip/tag list input - Enter or comma to add, × to remove.
 function ChipInput({ value, onChange, placeholder, suggestions }) {
   const [draft, setDraft] = useState('');
   const items = value || [];
@@ -5914,7 +5914,7 @@ function ComboSelect({ value, options, onChange, placeholder }) {
             onKeyDown={e => { if (e.key === 'Enter' && canCreate) { e.preventDefault(); choose(q); } }} />
           <div style={{overflowY:'auto'}}>
             {filtered.length === 0 && !canCreate && (
-              <div style={{padding:'10px 12px', fontSize:13, color:'var(--ink-3)'}}>No options yet — type to create one.</div>
+              <div style={{padding:'10px 12px', fontSize:13, color:'var(--ink-3)'}}>No options yet - type to create one.</div>
             )}
             {filtered.map(o => (
               <div key={o} role="option" aria-selected={o===value} tabIndex={0} onClick={() => choose(o)}
@@ -6054,7 +6054,7 @@ function AdminTutorials({ sessionInfo, siteUrl }) {
   };
 
   const duplicate = (row) => {
-    // A duplicate must never keep the original's slug (they'd collide — the
+    // A duplicate must never keep the original's slug (they'd collide, the
     // public /tutorial/:slug lookup would resolve to whichever comes first).
     // If it's part of a series, bump to the next free part number too,
     // rather than creating a second "Part N" collision in the series box.
@@ -6131,7 +6131,7 @@ function AdminTutorials({ sessionInfo, siteUrl }) {
             </div>
 
             <label className="field" style={{marginTop:18}}><span className="label">Short description</span>
-              <textarea className="textarea" style={{minHeight:60}} placeholder="One or two sentences — shown on the tutorial card and used as the meta description fallback."
+              <textarea className="textarea" style={{minHeight:60}} placeholder="One or two sentences, shown on the tutorial card and used as the meta description fallback."
                 value={form.description||''} onChange={e=>setForm({...form, description:e.target.value})} />
             </label>
 
@@ -6155,7 +6155,7 @@ function AdminTutorials({ sessionInfo, siteUrl }) {
                     <button type="button" className="btn btn-ghost btn-sm" onClick={addStep}>+ Add step</button>
                   </div>
                   {(form.steps||[]).length === 0 && (
-                    <div style={{fontSize:12, color:'var(--ink-2)', padding:'16px 0', textAlign:'center', border:'1px dashed var(--line-strong)'}}>No steps yet — add the first one.</div>
+                    <div style={{fontSize:12, color:'var(--ink-2)', padding:'16px 0', textAlign:'center', border:'1px dashed var(--line-strong)'}}>No steps yet, add the first one.</div>
                   )}
                   {(form.steps||[]).map((s,i) => (
                     <StepRow key={s.id||i} step={s} index={i} total={form.steps.length}
@@ -6213,7 +6213,7 @@ function AdminTutorials({ sessionInfo, siteUrl }) {
             <div style={{padding:18, background:'var(--paper)', border:'1px solid var(--line)'}}>
               <span className="eyebrow">SERIES</span>
               <label className="field" style={{marginTop:10}}><span className="label">Series name</span>
-                <ComboSelect value={form.series} options={existingSeries} placeholder="None — standalone tutorial"
+                <ComboSelect value={form.series} options={existingSeries} placeholder="None, standalone tutorial"
                   onChange={chooseSeries} />
               </label>
               {form.series && (
@@ -6238,7 +6238,7 @@ function AdminTutorials({ sessionInfo, siteUrl }) {
               </label>
               {form.videoUrl && !isTrustedVideoUrl(form.videoUrl) && (
                 <div style={{fontSize:12, color:'var(--rust)', marginTop:6}}>
-                  Only YouTube and Vimeo links are supported — this URL will be removed when you save.
+                  Only YouTube and Vimeo links are supported, this URL will be removed when you save.
                 </div>
               )}
             </div>
@@ -6309,7 +6309,7 @@ function AdminTutorials({ sessionInfo, siteUrl }) {
                 const allParts = [...peers, { ...form, id: previewId }].sort((a,b) => (Number(a.seriesOrder)||0) - (Number(b.seriesOrder)||0));
                 return (
                   <div style={{marginTop:24, padding:20, background:'var(--bg-elev)', border:'1px solid var(--line)'}}>
-                    <div className="eyebrow" style={{marginBottom:10}}>{form.series} — {allParts.length} PART{allParts.length===1?'':'S'}</div>
+                    <div className="eyebrow" style={{marginBottom:10}}>{form.series}, {allParts.length} PART{allParts.length===1?'':'S'}</div>
                     <ol style={{listStyle:'none', margin:0, padding:0, display:'grid', gap:4, fontSize:13}}>
                       {allParts.map(p => (
                         <li key={p.id}>
@@ -6367,7 +6367,7 @@ function AdminTutorials({ sessionInfo, siteUrl }) {
           { key:'title', label:'Title', w:'2.2fr', render:r => <span style={{fontWeight:600}}>{r.title}</span>, sort:true },
           { key:'format', label:'Format', w:'110px', render:r => <span className="tag tag-outline">{(TUTORIAL_FORMATS.find(f=>f.id===(r.format||'article'))||TUTORIAL_FORMATS[0]).label.toUpperCase()}</span> },
           { key:'cat', label:'Category', w:'1fr', render:r => <span className="tag tag-outline">{(r.cat||'').toUpperCase()}</span>, sort:true },
-          { key:'series', label:'Series', w:'1.2fr', render:r => r.series ? <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{r.series} · #{r.seriesOrder||1}</span> : <span style={{color:'var(--ink-3)'}}>—</span>, sort:true },
+          { key:'series', label:'Series', w:'1.2fr', render:r => r.series ? <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{r.series} · #{r.seriesOrder||1}</span> : <span style={{color:'var(--ink-3)'}}>-</span>, sort:true },
           { key:'author', label:'Author', w:'1fr', sort:true },
           { key:'date', label:'Date', w:'90px', render:r => <span className="mono" style={{fontSize:12, color:'var(--ink-2)'}}>{r.date}</span>, sort:true },
           { key:'views', label:'Views', w:'80px', render:r => <span className="mono">{(r.views||0).toLocaleString()}</span>, sort:true },
@@ -6434,7 +6434,7 @@ function BoxDrawer({ box, onChange, modelOptions }) {
       <label className="field">
         <span className="label">Running model</span>
         <select style={inp} value={box?.model||''} onChange={e=>onChange({...box,model:e.target.value})}>
-          <option value="">— none —</option>
+          <option value="">none</option>
           {modelOptions.map(m=><option key={m}>{m}</option>)}
         </select>
       </label>
@@ -6499,7 +6499,7 @@ function AdminPolicies({ siteUrl }) {
     payload.body = (payload.body || '').trim();
     // isDefault/_slugTouched are client-only scratch fields (isDefault is computed
     // by the server on every read; _slugTouched just tracks whether the user
-    // hand-edited the slug field) — never part of the persisted document.
+    // hand-edited the slug field), never part of the persisted document.
     delete payload.isDefault;
     delete payload._slugTouched;
     if (!payload.title) { setNotice({ type:'error', msg:'Title is required.' }); return; }
@@ -6555,7 +6555,7 @@ function AdminPolicies({ siteUrl }) {
         {notice.msg && <div style={{marginBottom:12, fontSize:13, color:notice.type==='error'?'var(--rust)':'var(--eucalyptus)'}}>{notice.msg}</div>}
         {editId === 'new' && (
           <div className="notice" style={{marginBottom:18, fontSize:13}}>
-            New policies are created from a blank document — they won't inherit any built-in default text.
+            New policies are created from a blank document, they won't inherit any built-in default text.
           </div>
         )}
 
@@ -6571,7 +6571,7 @@ function AdminPolicies({ siteUrl }) {
             <div style={{marginTop:22}}>
               <span className="eyebrow">BODY (MARKDOWN)</span>
               <p style={{fontSize:12, color:'var(--ink-2)', marginTop:4, marginBottom:8}}>
-                Use <code>{'{{email}}'}</code>, <code>{'{{phone}}'}</code>, <code>{'{{phoneHref}}'}</code>, <code>{'{{address}}'}</code>, and <code>{'{{abn}}'}</code> as placeholders — they're filled in with live shop settings when the page renders.
+                Use <code>{'{{email}}'}</code>, <code>{'{{phone}}'}</code>, <code>{'{{phoneHref}}'}</code>, <code>{'{{address}}'}</code>, and <code>{'{{abn}}'}</code> as placeholders, they're filled in with live shop settings when the page renders.
               </p>
               <MarkdownField value={form.body} onChange={v=>setForm({...form, body:v})} placeholder="Start writing… Markdown supported." minHeight={420} />
             </div>
@@ -6612,7 +6612,7 @@ function AdminPolicies({ siteUrl }) {
     <div style={{padding:32}}>
       <div className="row-flex" style={{justifyContent:'space-between', marginBottom:18}}>
         <p style={{fontSize:13, color:'var(--ink-2)', maxWidth:640}}>
-          Legal and policy documents shown on the public site. Documents marked <strong>Built-in</strong> are still using their shipped default text — edit and save one to take it over.
+          Legal and policy documents shown on the public site. Documents marked <strong>Built-in</strong> are still using their shipped default text, edit and save one to take it over.
         </p>
         <button className="btn btn-rust btn-sm" onClick={() => open('new')} style={{whiteSpace:'nowrap'}}>+ New policy</button>
       </div>
@@ -6904,7 +6904,7 @@ function AdminGroups() {
           { key:'name', label:'Group', w:'1.8fr', render:r => <span style={{fontWeight:600}}>{r.name}</span> },
           { key:'description', label:'Description', w:'2.5fr', render:r => <span style={{fontSize:13, color:'var(--ink-2)'}}>{r.description}</span> },
           { key:'joinType', label:'Join', w:'130px', render:r => <span className={`tag ${joinTypeTag(r.joinType)}`}>{(r.joinType||'invite').toUpperCase()}</span> },
-          { key:'price', label:'Price', w:'90px', render:r => <span className="mono" style={{fontSize:12}}>{r.price||'—'}</span> },
+          { key:'price', label:'Price', w:'90px', render:r => <span className="mono" style={{fontSize:12}}>{r.price||'-'}</span> },
           { key:'members', label:'Members', w:'90px', render:r => <span className="mono" style={{fontWeight:600}}>{(r.members||[]).length}</span> },
         ]}
         rows={rows}
@@ -6981,11 +6981,11 @@ function AdminGroups() {
               </div>
               {memberDropdownOpen && (
                 <div style={{position:'absolute', top:'100%', left:0, right:0, zIndex:20, background:'var(--bg)', border:'1px solid var(--line)', boxShadow:'0 4px 12px rgba(0,0,0,.12)', maxHeight:240, overflowY:'auto'}}>
-                  {memberMatches.length === 0 && <div style={{padding:'8px 12px', fontSize:12, color:'var(--ink-3)'}}>{newMember.trim() ? 'No matching portal users — press Add to use this exact username.' : 'No portal users found.'}</div>}
+                  {memberMatches.length === 0 && <div style={{padding:'8px 12px', fontSize:12, color:'var(--ink-3)'}}>{newMember.trim() ? 'No matching portal users, press Add to use this exact username.' : 'No portal users found.'}</div>}
                   {memberMatches.map(u => (
                     <div key={u.username} role="button" tabIndex={0} onMouseDown={e => { e.preventDefault(); addMember(u.username); }} style={{padding:'8px 12px', fontSize:13, cursor:'pointer'}}>
                       <div style={{fontWeight:600}}>{u.displayName}{u.displayName !== u.username ? <span style={{fontWeight:400, color:'var(--ink-3)'}}> ({u.username})</span> : ''}</div>
-                      <div style={{fontSize:11, color:'var(--ink-3)'}}>{u.email || '—'}</div>
+                      <div style={{fontSize:11, color:'var(--ink-3)'}}>{u.email || '-'}</div>
                     </div>
                   ))}
                 </div>
@@ -7067,14 +7067,14 @@ function MergeCustomerModal({ customers, onClose, onMerged }) {
           <label className="field">
             <span className="label">Customer A (keep)</span>
             <select className="input" value={aId} onChange={e=>setAId(e.target.value)}>
-              <option value="">— select —</option>
+              <option value="">select</option>
               {customers.map(c=><option key={c.id} value={c.id}>{c.name} {c.email ? `(${c.email})` : ''}</option>)}
             </select>
           </label>
           <label className="field">
             <span className="label">Customer B (merge into A)</span>
             <select className="input" value={bId} onChange={e=>setBId(e.target.value)}>
-              <option value="">— select —</option>
+              <option value="">select</option>
               {customers.filter(c=>c.id!==aId).map(c=><option key={c.id} value={c.id}>{c.name} {c.email ? `(${c.email})` : ''}</option>)}
             </select>
           </label>
@@ -7084,8 +7084,8 @@ function MergeCustomerModal({ customers, onClose, onMerged }) {
             <thead>
               <tr>
                 <th style={{textAlign:'left',padding:'6px 8px',color:'var(--ink-2)',fontWeight:600,fontSize:11}}>FIELD</th>
-                <th style={{textAlign:'left',padding:'6px 8px',color:'var(--ink-2)',fontWeight:600,fontSize:11}}>A — {a.name}</th>
-                <th style={{textAlign:'left',padding:'6px 8px',color:'var(--ink-2)',fontWeight:600,fontSize:11}}>B — {b.name}</th>
+                <th style={{textAlign:'left',padding:'6px 8px',color:'var(--ink-2)',fontWeight:600,fontSize:11}}>A - {a.name}</th>
+                <th style={{textAlign:'left',padding:'6px 8px',color:'var(--ink-2)',fontWeight:600,fontSize:11}}>B - {b.name}</th>
               </tr>
             </thead>
             <tbody>
@@ -7144,7 +7144,7 @@ function CustomerLinkedJobs({ customerId, email, manualLinks, onLinksChange }) {
     ]).then(([od, rd, qd, cd]) => {
       function np(p) { return (p||'').replace(/[\s\-().+]/g, '').toLowerCase(); }
       const orders = (od.items || od.orders || []).map(o => ({ id: o.id, ref: o.ref || o.id, label: o.title || o.description || o.ref || o.id, _type: 'order', email: (o.email||'').toLowerCase().trim(), phone: np(o.phone||o.mobile||''), jobName: (o.name||o.customer||o.customerName||'').toLowerCase().trim() }));
-      // Repairs are a Kanban board — flatten all cards from all columns
+      // Repairs are a Kanban board, flatten all cards from all columns
       const repairCards = (rd.columns || []).flatMap(col => (col.cards || []).map(c => ({ ...c, _colLabel: col.label || col.id })));
       const repairs = repairCards.map(r => ({ id: r.id, ref: r.id, label: r.service || r.customer || r.description || r.id, _type: 'repair', email: (r.email||'').toLowerCase().trim(), phone: np(r.phone||r.mobile||''), jobName: (r.cust||r.name||r.customer||r.customerName||'').toLowerCase().trim() }));
       const quotes = (qd.items || qd.quotes || []).map(q => ({ id: q.id, ref: q.ref || q.id, label: q.service || q.description || q.ref || q.id, _type: 'quote', email: (q.email||'').toLowerCase().trim(), phone: np(q.phone||q.mobile||''), jobName: (q.name||q.customer||q.customerName||'').toLowerCase().trim() }));
@@ -7350,10 +7350,10 @@ function AdminCustomers() {
   return (
     <div style={{padding:32, display:'grid', gap:24}}>
       <div className="grid-4">
-        <StatTile label="ACTIVE CUSTOMERS · 90D" value={rows.length ? active90 : '—'} />
-        <StatTile label="NEW THIS MONTH" value={rows.length ? newThisMonth : '—'} />
-        <StatTile label="REPEAT RATE" value={rows.length ? `${repeatRate}%` : '—'} />
-        <StatTile label="AVG ORDER VALUE" value={rows.length ? fmtAUD(avgOrder) : '—'} />
+        <StatTile label="ACTIVE CUSTOMERS · 90D" value={rows.length ? active90 : '-'} />
+        <StatTile label="NEW THIS MONTH" value={rows.length ? newThisMonth : '-'} />
+        <StatTile label="REPEAT RATE" value={rows.length ? `${repeatRate}%` : '-'} />
+        <StatTile label="AVG ORDER VALUE" value={rows.length ? fmtAUD(avgOrder) : '-'} />
       </div>
       <div className="row-flex" style={{justifyContent:'flex-end', gap:8, marginBottom:-8}}>
         <button className="btn btn-ghost btn-sm" onClick={async () => {
@@ -7407,7 +7407,7 @@ function AdminSellers() {
   const map = { Live:{bg:'#d8e7d0', fg:'#345526'}, Sold:{bg:'var(--ink)', fg:'var(--paper)'}, Bench:{bg:'#fff4d6', fg:'#7a5d10'}, Recycle:{bg:'var(--bg-deep)', fg:'var(--ink-2)'} };
   const openSeller = (r) => { setEdit(r); setForm({...r}); };
   // Sellers repeat constantly across listings but have no separate record of
-  // their own — a free-text field silently fragments payout totals on typos,
+  // their own, a free-text field silently fragments payout totals on typos,
   // so suggest every seller name already on file instead of typing blind.
   const sellerOptions = useMemo(() => [...new Set(rows.map(r => r.seller).filter(Boolean))].sort(), [rows]);
   const soldRows = rows.filter(r => r.status === 'Sold');
@@ -7419,7 +7419,7 @@ function AdminSellers() {
     setPayoutsBusy(true);
     const r = await fetch('/api/admin/sellers/process-payouts', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ ids: soldRows.map(r => r.id) }) }).catch(()=>null);
     setPayoutsBusy(false);
-    if (!r || !r.ok) { adminToast('Payout processing failed — please try again.'); return; }
+    if (!r || !r.ok) { adminToast('Payout processing failed, please try again.'); return; }
     setPayoutsDone(true);
   };
   return (
@@ -7628,9 +7628,9 @@ function AdminGiftCards() {
                     {r.isVoid ? 'VOIDED' : r.balance === 0 ? 'USED' : 'ACTIVE'}
                   </span>
                 )},
-                { key:'recipientEmail', label:'Recipient', w:'1fr', render: r => <span style={{fontSize:12, color:'var(--ink-2)'}}>{r.recipientEmail || '—'}</span> },
-                { key:'orderId', label:'Order', w:'160px', render: r => <span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>{r.orderId || '—'}</span> },
-                { key:'issuedAt', label:'Issued', w:'110px', render: r => <span style={{fontSize:12}}>{r.issuedAt ? new Date(r.issuedAt).toLocaleDateString('en-AU') : '—'}</span> },
+                { key:'recipientEmail', label:'Recipient', w:'1fr', render: r => <span style={{fontSize:12, color:'var(--ink-2)'}}>{r.recipientEmail || '-'}</span> },
+                { key:'orderId', label:'Order', w:'160px', render: r => <span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>{r.orderId || '-'}</span> },
+                { key:'issuedAt', label:'Issued', w:'110px', render: r => <span style={{fontSize:12}}>{r.issuedAt ? new Date(r.issuedAt).toLocaleDateString('en-AU') : '-'}</span> },
                 { key:'actions', label:'', w:'80px', render: r => !r.isVoid && (
                   <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)', fontSize:11}} onClick={() => voidCard(r.code)}>Void</button>
                 )},
@@ -7673,7 +7673,7 @@ function AdminGiftCards() {
               columns={[
                 { key:'name', label:'Name', w:'2fr', render: r => <span style={{fontWeight:600}}>{r.name}</span> },
                 { key:'priceAud', label:'Price (AUD)', w:'120px', render: r => <span className="mono" style={{fontWeight:600}}>${Number(r.priceAud).toFixed(2)}</span> },
-                { key:'description', label:'Description', w:'2fr', render: r => <span style={{fontSize:12, color:'var(--ink-2)'}}>{r.description || '—'}</span> },
+                { key:'description', label:'Description', w:'2fr', render: r => <span style={{fontSize:12, color:'var(--ink-2)'}}>{r.description || '-'}</span> },
                 { key:'status', label:'Status', w:'110px', render: r => (
                   <span className={`tag ${r.status === 'published' ? 'tag-euc' : 'tag-outline'}`}>
                     {r.status === 'published' ? 'PUBLISHED' : 'DRAFT'}
@@ -8096,7 +8096,7 @@ function AdminExpenses() {
   const openNew = () => setOpenId('new');
   const closeDrawer = () => setOpenId(null);
 
-  // Reconcile the open drawer with the URL's `open` param — drives both the
+  // Reconcile the open drawer with the URL's `open` param, drives both the
   // initial restore on reload and Back/Forward navigation.
   useEffect(() => {
     const cur = edit === null ? null : (edit.id || 'new');
@@ -8115,7 +8115,7 @@ function AdminExpenses() {
       else setRows(rs => rs.map(x => x.id === edit.id ? d.item : x));
       closeDrawer();
     } else {
-      adminToast('Failed to save expense — changes not persisted.');
+      adminToast('Failed to save expense, changes not persisted.');
     }
   };
 
@@ -8149,7 +8149,7 @@ function AdminExpenses() {
 
   if (edit !== null) {
     return (
-      <OrderPage onClose={closeDrawer} dirty={dirty} backLabel="Back to Expenses" title={edit.id ? `Expense — ${form.description || edit.id}` : 'Log expense'}
+      <OrderPage onClose={closeDrawer} dirty={dirty} backLabel="Back to Expenses" title={edit.id ? `Expense - ${form.description || edit.id}` : 'Log expense'}
         footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
           {edit.id ? <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={del}>Delete</button> : <span/>}
           <div className="row-flex" style={{gap:8}}>
@@ -8176,14 +8176,14 @@ function AdminExpenses() {
         <label className="field"><span className="label">Date</span><input className="input" type="date" value={auDateToISO(form.date)} onChange={e=>setForm({...form,date:isoToAuDate(e.target.value)})}/></label>
         <label className="field"><span className="label">Link to job</span>
           <select className="select" value={form.jobId||''} onChange={e=>setForm({...form,jobId:e.target.value})}>
-            <option value="">— No job link —</option>
+            <option value="">No job link</option>
             {jobOptions.map(j => <option key={j.id} value={j.id}>{j.id} · {j.cust} · {j.items}</option>)}
           </select>
         </label>
         <label className="field"><span className="label">Notes</span><input className="input" value={form.notes||''} onChange={e=>setForm({...form,notes:e.target.value})}/></label>
         <label className="field"><span className="label">Part status</span>
           <select className="select" value={form.partStatus||''} onChange={e=>setForm({...form,partStatus:e.target.value})}>
-            <option value="">— Not applicable —</option>
+            <option value="">Not applicable</option>
             <option value="ordered">Ordered</option>
             <option value="arrived">Arrived</option>
             <option value="installed">Installed</option>
@@ -8232,16 +8232,16 @@ function AdminExpenses() {
           { key:'category', label:'Category', w:'110px', sort:true, render:r => { const c = catMap[r.category]||catMap.other; return <span className="tag" style={{background:c.bg,color:c.fg,borderColor:c.bg}}>{(r.category||'other').toUpperCase()}</span>; } },
           { key:'isSecondHand', label:'Condition', w:'100px', sort:r => r.isSecondHand ? 1 : 0, render:r => r.isSecondHand ? <span className="tag tag-ochre">2ND HAND</span> : <span className="tag tag-euc">NEW</span> },
           { key:'partStatus', label:'Part status', w:'110px', sort:true, render:r => {
-            if (!r.partStatus) return <span style={{color:'var(--ink-3)'}}>—</span>;
+            if (!r.partStatus) return <span style={{color:'var(--ink-3)'}}>-</span>;
             const sc = { ordered:{bg:'#dceaf5',fg:'#1668c8'}, arrived:{bg:'#fff4d6',fg:'#7a5d10'}, installed:{bg:'#d8e7d0',fg:'#345526'}, returned:{bg:'#f3d5c5',fg:'#7a3a18'} };
             const s = sc[r.partStatus] || {bg:'var(--bg-deep)',fg:'var(--ink-2)'};
             return <span className="tag" style={{background:s.bg,color:s.fg,borderColor:s.bg}}>{r.partStatus.toUpperCase()}</span>;
           }},
           { key:'quantity', label:'Qty', w:'60px', sort:r => Number(r.quantity) || 1, render:r => <span className="mono" style={{fontSize:12,color:'var(--ink-2)'}}>×{Number(r.quantity)||1}</span> },
           { key:'amount', label:'Amount', w:'110px', sort:r => expTotal(r), render:r => <span className="mono" style={{fontWeight:600,color:'var(--rust)'}}>-${expTotal(r).toLocaleString('en-AU',{minimumFractionDigits:2})}</span> },
-          { key:'date', label:'Date', w:'120px', sort:r => parseDate(r.date).getTime(), render:r => <span className="mono" style={{fontSize:11,color:'var(--ink-2)'}}>{r.date||'—'}</span> },
-          { key:'jobId', label:'Linked job', w:'140px', sort:true, render:r => r.jobId ? <span className="mono" style={{fontSize:11,color:'var(--rust)'}}>{r.jobId}</span> : <span style={{color:'var(--ink-3)'}}>—</span> },
-          { key:'receipt', label:'Receipt', w:'90px', render:r => r.receipt ? <a href={r.receipt} target="_blank" rel="noopener noreferrer" style={{display:'inline-flex', alignItems:'center', gap:4, color:'var(--rust)',fontSize:12}}>View <Icon name="externalLink" size={10}/></a> : <span style={{color:'var(--ink-3)'}}>—</span> },
+          { key:'date', label:'Date', w:'120px', sort:r => parseDate(r.date).getTime(), render:r => <span className="mono" style={{fontSize:11,color:'var(--ink-2)'}}>{r.date||'-'}</span> },
+          { key:'jobId', label:'Linked job', w:'140px', sort:true, render:r => r.jobId ? <span className="mono" style={{fontSize:11,color:'var(--rust)'}}>{r.jobId}</span> : <span style={{color:'var(--ink-3)'}}>-</span> },
+          { key:'receipt', label:'Receipt', w:'90px', render:r => r.receipt ? <a href={r.receipt} target="_blank" rel="noopener noreferrer" style={{display:'inline-flex', alignItems:'center', gap:4, color:'var(--rust)',fontSize:12}}>View <Icon name="externalLink" size={10}/></a> : <span style={{color:'var(--ink-3)'}}>-</span> },
           { key:'notes', label:'Notes', w:'1fr', render:r => <span style={{fontSize:12,color:'var(--ink-2)'}}>{r.notes||''}</span> },
         ]}
         rows={visible}
@@ -8253,7 +8253,7 @@ function AdminExpenses() {
 }
 
 // ============================================================
-// TAX REPORTS — P&L + BAS WORKSHEET
+// TAX REPORTS - P&L + BAS WORKSHEET
 // ============================================================
 function AdminTaxReports() {
   const [view, setView] = useState('pl');
@@ -8420,7 +8420,7 @@ function PLView() {
               )}
               {data.repairRevenue > 0 && (
                 <tr>
-                  <td style={{padding:'5px 0', color:'var(--ink-2)'}}>Repair Jobs — completed ({data.repairCount})</td>
+                  <td style={{padding:'5px 0', color:'var(--ink-2)'}}>Repair Jobs - completed ({data.repairCount})</td>
                   <td style={{textAlign:'right', fontFamily:'monospace'}}>{fmtAUD(data.repairRevenue)}</td>
                 </tr>
               )}
@@ -8454,7 +8454,7 @@ function PLView() {
                     <td style={{padding:'3px 0 3px 22px', color:'var(--ink-3)', fontSize:12}}>
                       <span className="mono" style={{fontSize:10, marginRight:8}}>{ln.date}</span>
                       {ln.description || '(no description)'}
-                      {ln.notes && <span style={{marginLeft:8, fontSize:11, color:'var(--ink-3)'}}>— {ln.notes}</span>}
+                      {ln.notes && <span style={{marginLeft:8, fontSize:11, color:'var(--ink-3)'}}>{ln.notes}</span>}
                     </td>
                     <td style={{textAlign:'right', fontFamily:'monospace', fontSize:12, color:'var(--ink-2)'}}>({fmtAUD(ln.amount)})</td>
                   </tr>
@@ -8476,7 +8476,7 @@ function PLView() {
           const tx = data.taxEstimate || {};
           return (<>
             <div className="card" style={{padding:'18px 22px', marginBottom:16}}>
-              <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--rust)', marginBottom:12, letterSpacing:1}}>INCOME TAX ESTIMATE — SOLE TRADER (2025-26 RATES)</div>
+              <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--rust)', marginBottom:12, letterSpacing:1}}>INCOME TAX ESTIMATE - SOLE TRADER (2025-26 RATES)</div>
               <table style={{width:'100%', borderCollapse:'collapse', fontSize:13}}>
                 <tbody>
                   <tr>
@@ -8520,7 +8520,7 @@ function PLView() {
               </table>
               {tx.paygRequired && (
                 <div style={{background:'#fff8e1', border:'1px solid #f0d97c', borderRadius:5, padding:'8px 12px', marginTop:10, fontSize:12, color:'#7a5d10'}}>
-                  <strong>PAYG Instalments likely required.</strong> Your estimated tax exceeds $4,000. The ATO will issue a PAYG instalment notice — lodge quarterly via myGov Business Portal.
+                  <strong>PAYG Instalments likely required.</strong> Your estimated tax exceeds $4,000. The ATO will issue a PAYG instalment notice, lodge quarterly via myGov Business Portal.
                 </div>
               )}
               <div style={{fontSize:11, color:'var(--ink-3)', marginTop:10}}>
@@ -8560,11 +8560,11 @@ function PLView() {
           </>);
         })()}
 
-        {/* GST — not registered */}
+        {/* GST, not registered */}
         <div className="card" style={{padding:'14px 22px', marginBottom:16, background:'var(--bg-deep)', border:'1px solid var(--border)', opacity:0.6}}>
           <div style={{display:'flex', alignItems:'center', gap:12}}>
             <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--ink-3)', letterSpacing:1}}>GST</div>
-            <div style={{fontSize:13, color:'var(--ink-3)'}}>Not registered — N/A</div>
+            <div style={{fontSize:13, color:'var(--ink-3)'}}>Not registered - N/A</div>
             <div style={{fontSize:11, color:'var(--ink-3)', marginLeft:'auto'}}>Register at the ATO once turnover exceeds $75,000/yr</div>
           </div>
         </div>
@@ -8660,7 +8660,7 @@ function BASView() {
       <td style={{padding:'5px 0', fontWeight: bold||highlight ? 600 : 400, color: highlight ? '#fff' : dim ? 'var(--ink-3)' : 'var(--ink-1)', fontSize:13}}>{label}</td>
       <td style={{textAlign:'right', fontFamily:'monospace', fontWeight: bold||highlight ? 700 : 400, fontSize: highlight ? 14 : 13, padding:'5px 4px',
         color: highlight ? '#fff' : dim ? 'var(--ink-3)' : 'var(--ink-1)'}}>
-        {value != null ? fmtAUD(value) : '—'}
+        {value != null ? fmtAUD(value) : '-'}
       </td>
     </tr>
   );
@@ -8669,7 +8669,7 @@ function BASView() {
     <>
       {/* Notice */}
       <div style={{background:'#fff8e1', border:'1px solid #f0d97c', borderRadius:6, padding:'10px 16px', marginBottom:20, fontSize:12, color:'#7a5d10'}}>
-        <strong>Worksheet only — not an official ATO form.</strong> Use these figures as a reference when lodging your BAS via myGov Business Portal or with your registered BAS agent.
+        <strong>Worksheet only, not an official ATO form.</strong> Use these figures as a reference when lodging your BAS via myGov Business Portal or with your registered BAS agent.
         Once you register for GST, you'll be assigned a BAS lodgement schedule (usually quarterly for small businesses).
       </div>
 
@@ -8742,7 +8742,7 @@ function BASView() {
               <GRow code="G2" label="Export sales (GST-free)" value={data.G2} dim={data.G2===0} />
               <GRow code="G3" label="Other GST-free sales" value={data.G3} dim={data.G3===0} />
               <GRow code="G4" label="Input-taxed sales" value={data.G4} dim={data.G4===0} />
-              <GRow code="G5" label="G1 minus (G2 + G3 + G4)  —  Taxable sales" value={data.G5} bold shade />
+              <GRow code="G5" label="G1 minus (G2 + G3 + G4)  -  Taxable sales" value={data.G5} bold shade />
               <tr><td colSpan={3} style={{padding:4}}></td></tr>
               <GRow code="1A" label="GST on sales  =  G5 ÷ 11" value={data.box1A} highlight bold />
             </tbody>
@@ -8780,16 +8780,16 @@ function BASView() {
         {/* PAYG */}
         <div className="card" style={{padding:'14px 22px', marginBottom:16, background:'var(--bg-deep)'}}>
           <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--ink-3)', marginBottom:6, letterSpacing:1}}>PAYG WITHHOLDING</div>
-          <div style={{fontSize:13, color:'var(--ink-3)'}}>W1 / W2 — No employees · not applicable</div>
+          <div style={{fontSize:13, color:'var(--ink-3)'}}>W1 / W2 - No employees · not applicable</div>
         </div>
 
         {/* Assumptions */}
         <div style={{fontSize:11, color:'var(--ink-3)', lineHeight:1.6, padding:'4px 2px'}}>
           <strong style={{color:'var(--ink-2)'}}>Assumptions: </strong>
           G1 includes all shop orders and completed repair jobs, net of refunds.
-          All sales treated as fully taxable (G5 = G1) — adjust G2/G3/G4 if you have export or GST-free sales.
+          All sales treated as fully taxable (G5 = G1), adjust G2/G3/G4 if you have export or GST-free sales.
           Tools & equipment expenses mapped to G10 (capital); all other categories to G11 (non-capital).
-          All purchases assumed GST-inclusive — exclude purchases from unregistered sellers.
+          All purchases assumed GST-inclusive, exclude purchases from unregistered sellers.
         </div>
       </>}
     </>
@@ -8854,7 +8854,7 @@ function GSTTrackerView() {
 
       {/* Bar chart */}
       <div className="card" style={{padding:'18px 22px', marginBottom:16}}>
-        <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--rust)', marginBottom:16, letterSpacing:1}}>MONTHLY REVENUE — LAST 12 MONTHS</div>
+        <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--rust)', marginBottom:16, letterSpacing:1}}>MONTHLY REVENUE - LAST 12 MONTHS</div>
         <div style={{display:'flex', alignItems:'flex-end', gap:6, height:120, padding:'0 4px'}}>
           {data.months.map(m => {
             const h = Math.round((m.revenue / maxMonthRev) * 100);
@@ -8871,7 +8871,7 @@ function GSTTrackerView() {
 
       <div style={{fontSize:11, color:'var(--ink-3)'}}>
         GST turnover = gross business income, excluding GST (which doesn't apply while unregistered).
-        The ATO checks any consecutive 12-month period — past or projected. Voluntarily register earlier if clients need tax invoices.
+        The ATO checks any consecutive 12-month period, past or projected. Voluntarily register earlier if clients need tax invoices.
       </div>
     </>
   );
@@ -8945,7 +8945,7 @@ function YoYView() {
                       <td style={{padding:'7px 0', color: r.bold?'var(--ink-1)':'var(--ink-2)'}}>{r.label}</td>
                       <td style={{textAlign:'right', fontFamily:'monospace', color: r.bold?(r.curr>=0?'#345526':'var(--rust)'):'var(--ink-1)'}}>{money ? fmtAUD(r.curr) : (r.curr||0)}</td>
                       <td style={{textAlign:'right', fontFamily:'monospace', color:'var(--ink-3)'}}>{money ? fmtAUD(r.prev) : (r.prev||0)}</td>
-                      <td style={{textAlign:'right', fontFamily:'monospace', fontSize:12, color:chColor}}>{ch ? ch.label : '—'}</td>
+                      <td style={{textAlign:'right', fontFamily:'monospace', fontSize:12, color:chColor}}>{ch ? ch.label : '-'}</td>
                     </tr>
                   );
                 })}
@@ -9150,7 +9150,7 @@ function VehicleLogView() {
   const exportPdf = () => window.open(`/api/admin/vehicle-log/pdf?fy=${fy}`, '_blank');
 
   const FY_OPTIONS = [defaultFy, defaultFy-1, defaultFy-2];
-  const fmtDate = s => s ? new Date(s+'T00:00:00').toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'}) : '—';
+  const fmtDate = s => s ? new Date(s+'T00:00:00').toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'}) : '-';
 
   return (
     <>
@@ -9183,7 +9183,7 @@ function VehicleLogView() {
         </div>
         {totalKm > 5000 && (
           <div style={{background:'#fff8e1', border:'1px solid #f0d97c', borderRadius:5, padding:'8px 12px', marginTop:12, fontSize:12, color:'#7a5d10'}}>
-            <strong>Over 5,000 km:</strong> The cents-per-km method is capped at 5,000 km. A logbook kept for 12 continuous weeks may allow you to claim more — talk to your tax agent.
+            <strong>Over 5,000 km:</strong> The cents-per-km method is capped at 5,000 km. A logbook kept for 12 continuous weeks may allow you to claim more, talk to your tax agent.
           </div>
         )}
       </div>
@@ -9212,7 +9212,7 @@ function VehicleLogView() {
         <div className="card" style={{padding:'32px 22px', textAlign:'center', color:'var(--ink-3)'}}>No trips logged for FY {fy}–{String(fy+1).slice(2)}.</div>
       ) : (
         <div className="card" style={{padding:'18px 22px'}}>
-          <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--rust)', marginBottom:12, letterSpacing:1}}>TRIPS — FY {fy}–{String(fy+1).slice(2)}</div>
+          <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--rust)', marginBottom:12, letterSpacing:1}}>TRIPS - FY {fy}–{String(fy+1).slice(2)}</div>
           <table style={{width:'100%', borderCollapse:'collapse', fontSize:13}}>
             <thead>
               <tr style={{borderBottom:'2px solid var(--border)'}}>
@@ -9225,10 +9225,10 @@ function VehicleLogView() {
               {fyEntries.map((e,i) => (
                 <tr key={e.id} style={{background:i%2===1?'var(--bg-deep)':'transparent'}}>
                   <td style={{padding:'6px 0', fontFamily:'monospace', fontSize:11}}>{fmtDate(e.date)}</td>
-                  <td style={{padding:'6px 0'}}>{e.from||'—'}</td>
-                  <td style={{padding:'6px 0'}}>{e.to||'—'}</td>
+                  <td style={{padding:'6px 0'}}>{e.from||'-'}</td>
+                  <td style={{padding:'6px 0'}}>{e.to||'-'}</td>
                   <td style={{textAlign:'right', fontFamily:'monospace'}}>{(Number(e.km)||0).toFixed(1)}</td>
-                  <td style={{padding:'6px 0', color:'var(--ink-2)'}}>{e.purpose||'—'}</td>
+                  <td style={{padding:'6px 0', color:'var(--ink-2)'}}>{e.purpose||'-'}</td>
                   <td style={{textAlign:'right'}}>
                     <button className="btn" style={{padding:'2px 8px', fontSize:11, color:'var(--rust)', background:'transparent', border:'none', cursor:'pointer'}} onClick={() => deleteEntry(e.id)}><Icon name="x" size={12}/></button>
                   </td>
@@ -9314,7 +9314,7 @@ function HomeOfficeView() {
           <label className="field"><span className="label">Dedicated office area (m²)</span>
             <input className="input" type="number" min="0" step="0.5" placeholder="12"
               value={officeArea} onChange={e=>setOfficeArea(e.target.value)} /></label>
-          <label className="field"><span className="label">Annual running costs ($) — electricity, internet, etc.</span>
+          <label className="field"><span className="label">Annual running costs ($), electricity, internet, etc.</span>
             <input className="input" type="number" min="0" step="1" placeholder="4000"
               value={annualCosts} onChange={e=>setAnnualCosts(e.target.value)} /></label>
           {floorAreaPct > 0 && annualCosts && (
@@ -9358,10 +9358,10 @@ function ATODatesView() {
     { due:`${fy+1}-04-28`, label:'Q3 BAS Lodge & Pay (Jan–Mar)',    cat:'GST',  gst:true },
     { due:`${fy+1}-04-28`, label:'Q3 PAYG Instalment (Jan–Mar)',    cat:'PAYG', payg:true },
     // Super personal contribution deadline
-    { due:`${fy+1}-06-30`, label:'Personal super contributions — last day to contribute for FY deduction', cat:'Super' },
+    { due:`${fy+1}-06-30`, label:'Personal super contributions - last day to contribute for FY deduction', cat:'Super' },
     // Tax return
     { due:`${fy+1}-10-31`, label:`Lodge income tax return FY${fy}–${String(fy+1).slice(2)} (self-lodging)`, cat:'Income Tax' },
-    { due:`${fy+1}-05-15`, label:`Lodge via registered tax agent — extended deadline`, cat:'Income Tax' },
+    { due:`${fy+1}-05-15`, label:`Lodge via registered tax agent - extended deadline`, cat:'Income Tax' },
     // Q4 BAS + PAYG (next FY)
     { due:`${fy+1}-07-28`, label:'Q4 BAS Lodge & Pay (Apr–Jun)',    cat:'GST',  gst:true },
     { due:`${fy+1}-07-28`, label:'Q4 PAYG Instalment (Apr–Jun)',    cat:'PAYG', payg:true },
@@ -9375,7 +9375,7 @@ function ATODatesView() {
   return (
     <>
       <div style={{background:'#fff8e1', border:'1px solid #f0d97c', borderRadius:6, padding:'10px 16px', marginBottom:20, fontSize:12, color:'#7a5d10'}}>
-        <strong>FY {fy}–{String(fy+1).slice(2)} key dates.</strong> BAS and PAYG dates apply only if you are registered. GST/PAYG dates are shown for planning — they are greyed when not yet applicable.
+        <strong>FY {fy}–{String(fy+1).slice(2)} key dates.</strong> BAS and PAYG dates apply only if you are registered. GST/PAYG dates are shown for planning, they are greyed when not yet applicable.
         Always confirm exact due dates at <strong>ato.gov.au</strong> as dates may vary for weekends and public holidays.
       </div>
 
@@ -9415,7 +9415,7 @@ function ATODatesView() {
 }
 
 // ============================================================
-// PAYMENT PLANS — cross-order dashboard
+// PAYMENT PLANS, cross-order dashboard
 // ============================================================
 function PaymentPlansView() {
   const [data, setData] = useState(null);
@@ -9444,7 +9444,7 @@ function PaymentPlansView() {
   useEffect(() => { load(); }, []);
 
   const fmtAUD = n => `$${(Number(n)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
-  const fmtDate = s => s ? new Date(s+'T00:00:00').toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'}) : '—';
+  const fmtDate = s => s ? new Date(s+'T00:00:00').toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'}) : '-';
   const STATUS_MAP = {
     'on-track': { label:'On track', cls:'tag-outline' },
     'due-soon': { label:'Due soon', cls:'tag-ochre' },
@@ -9505,8 +9505,8 @@ function PaymentPlansView() {
                       <td style={{padding:'7px 6px'}}>{item.customer}</td>
                       <td style={{padding:'7px 6px', textTransform:'capitalize'}}>{item.frequency}</td>
                       <td style={{padding:'7px 6px', textTransform:'capitalize'}}>{item.collectionMethod === 'auto' ? 'Auto-charge' : item.collectionMethod === 'customer' ? 'Customer pays' : 'Staff collects'}</td>
-                      <td style={{padding:'7px 6px', whiteSpace:'nowrap'}}>{item.nextDue ? fmtDate(item.nextDue.dueDate) : '—'}</td>
-                      <td style={{padding:'7px 6px', textAlign:'right', fontFamily:'monospace'}}>{item.nextDue ? fmtAUD(item.nextDue.amount) : '—'}</td>
+                      <td style={{padding:'7px 6px', whiteSpace:'nowrap'}}>{item.nextDue ? fmtDate(item.nextDue.dueDate) : '-'}</td>
+                      <td style={{padding:'7px 6px', textAlign:'right', fontFamily:'monospace'}}>{item.nextDue ? fmtAUD(item.nextDue.amount) : '-'}</td>
                       <td style={{padding:'7px 6px', textAlign:'right', fontFamily:'monospace'}}>{fmtAUD(item.remaining)}</td>
                       <td style={{padding:'7px 6px'}}><span className={`tag ${STATUS_MAP[item.status]?.cls || 'tag-outline'}`} style={{fontSize:10}}>{STATUS_MAP[item.status]?.label || item.status}</span></td>
                     </tr>
@@ -9537,7 +9537,7 @@ function ReceivablesView() {
   useEffect(() => { load(); }, []);
 
   const fmtAUD = n => `$${(Number(n)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
-  const fmtDate = s => s ? new Date(s+'T00:00:00').toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'}) : '—';
+  const fmtDate = s => s ? new Date(s+'T00:00:00').toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'}) : '-';
   const exportPdf = () => window.open('/api/admin/receivables-report/pdf', '_blank');
 
   return (
@@ -9568,7 +9568,7 @@ function ReceivablesView() {
         </div>
 
         {data.items.length === 0 ? (
-          <div className="card" style={{padding:'32px 22px', textAlign:'center', color:'var(--ink-3)'}}>No outstanding receivables — great!</div>
+          <div className="card" style={{padding:'32px 22px', textAlign:'center', color:'var(--ink-3)'}}>No outstanding receivables, great!</div>
         ) : (
           <div className="card" style={{padding:'18px 22px'}}>
             <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--rust)', marginBottom:12, letterSpacing:1}}>OUTSTANDING ITEMS</div>
@@ -9589,7 +9589,7 @@ function ReceivablesView() {
                       <td style={{padding:'6px 6px 6px 0', color:'var(--ink-1)'}}>{it.customer}</td>
                       <td style={{padding:'6px 6px 6px 0', color:'var(--ink-2)'}}>{it.description}</td>
                       <td style={{padding:'6px 6px 6px 0', fontFamily:'monospace', fontSize:11}}>{fmtDate(it.date)}</td>
-                      <td style={{padding:'6px 6px 6px 0', fontFamily:'monospace', fontSize:11, color:ageColor}}>{it.ageDays != null ? `${it.ageDays}d` : '—'}</td>
+                      <td style={{padding:'6px 6px 6px 0', fontFamily:'monospace', fontSize:11, color:ageColor}}>{it.ageDays != null ? `${it.ageDays}d` : '-'}</td>
                       <td style={{padding:'6px 6px 6px 0', color:'var(--ink-3)', fontSize:11}}>{it.status}</td>
                       <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:600, color:'var(--rust)'}}>{fmtAUD(it.amount)}</td>
                     </tr>
@@ -9626,7 +9626,7 @@ function StockView() {
   useEffect(() => { load(); }, []);
 
   const fmtAUD = n => `$${(Number(n)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
-  const fmtDate = s => s ? new Date(s+'T00:00:00').toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'}) : '—';
+  const fmtDate = s => s ? new Date(s+'T00:00:00').toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'}) : '-';
   const exportPdf = () => window.open('/api/admin/trading-stock-report/pdf', '_blank');
 
   return (
@@ -9660,7 +9660,7 @@ function StockView() {
 
         {!data.hasCostPrices && (
           <div style={{background:'#fff8e1', border:'1px solid #f0d97c', borderRadius:6, padding:'10px 16px', marginBottom:16, fontSize:12, color:'#7a5d10'}}>
-            No cost prices set — stock valued at selling price (market value method, acceptable to ATO).
+            No cost prices set, stock valued at selling price (market value method, acceptable to ATO).
             Add a <strong>Cost Price (AUD)</strong> field to each product for more accurate COGS reporting.
           </div>
         )}
@@ -9688,7 +9688,7 @@ function StockView() {
                     <td style={{padding:'5px 0'}}>{ln.name}</td>
                     <td style={{textAlign:'right', fontFamily:'monospace'}}>{ln.qty}</td>
                     <td style={{textAlign:'right', fontFamily:'monospace'}}>{fmtAUD(ln.sellPrice)}</td>
-                    {data.hasCostPrices && <td style={{textAlign:'right', fontFamily:'monospace'}}>{ln.costPrice ? fmtAUD(ln.costPrice) : <span style={{color:'var(--ink-3)'}}>—</span>}</td>}
+                    {data.hasCostPrices && <td style={{textAlign:'right', fontFamily:'monospace'}}>{ln.costPrice ? fmtAUD(ln.costPrice) : <span style={{color:'var(--ink-3)'}}>-</span>}</td>}
                     <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:600}}>{fmtAUD(ln.hasCost ? ln.costValue : ln.sellValue)}</td>
                   </tr>
                 ))}
@@ -9719,15 +9719,15 @@ function YearEndView() {
   const CHECKLIST = [
     { id:'bank',    section:'Records', label:'Reconcile all business bank accounts and credit cards for the financial year' },
     { id:'invoices',section:'Records', label:'Ensure all invoices issued are recorded (check repairs + shop orders)' },
-    { id:'receipts',section:'Records', label:'Gather receipts for all business expenses — store for 5 years' },
+    { id:'receipts',section:'Records', label:'Gather receipts for all business expenses, store for 5 years' },
     { id:'stock',   section:'Records', label:'Complete a physical stocktake and reconcile with system stock levels' },
-    { id:'assets',  section:'Tax deductions', label:'List all tools and equipment purchased — claim instant asset write-off if under the threshold' },
+    { id:'assets',  section:'Tax deductions', label:'List all tools and equipment purchased, claim instant asset write-off if under the threshold' },
     { id:'super',   section:'Tax deductions', label:'Make personal super contributions before 30 June and lodge a "Notice of intent to claim a deduction" with your fund' },
     { id:'prepay',  section:'Tax deductions', label:'Prepay deductible expenses for next year (e.g. insurance, subscriptions) if cash allows' },
     { id:'baddebt', section:'Tax deductions', label:'Write off any genuinely unrecoverable debts before 30 June' },
     { id:'travel',  section:'Tax deductions', label:'Log all business travel / vehicle kilometres used for the year' },
     { id:'wfh',     section:'Tax deductions', label:'Calculate work-from-home expenses (fixed rate or actual cost method)' },
-    { id:'bas',     section:'Lodgements', label:'Lodge Q4 BAS (if registered for GST) — due 28 July' },
+    { id:'bas',     section:'Lodgements', label:'Lodge Q4 BAS (if registered for GST) - due 28 July' },
     { id:'payg',    section:'Lodgements', label:'Check for any PAYG instalment notices from the ATO and pay by the due date' },
     { id:'agent',   section:'Lodgements', label:'Engage a registered tax agent or lodge your own tax return by 31 October' },
     { id:'abn',     section:'Lodgements', label:'Confirm your ABN and business details are up to date with the ATO' },
@@ -9800,7 +9800,7 @@ function YearEndView() {
 }
 
 // ============================================================
-// POLICIES — edit
+// POLICIES, edit
 // ============================================================
 // ============================================================
 // SETTINGS
@@ -10162,8 +10162,8 @@ function SettingsGeneralTab({ shop, setShop, savedShop, announcement, setAnnounc
         <label className="field"><span className="label">Tagline</span><input className="input" value={shop.tagline} onChange={(e) => setShop({ ...shop, tagline: e.target.value })}/></label>
         <label className="field"><span className="label">Description (footer)</span><textarea className="textarea" value={shop.description||''} onChange={(e) => setShop({ ...shop, description: e.target.value })} style={{minHeight:80}} placeholder="e.g. An independent electronics outpost..."/></label>
         <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:8}}>
-          <label className="field"><span className="label">Acknowledgment — People</span><input className="input" value={shop.acknowledgmentPeople||''} onChange={(e) => setShop({ ...shop, acknowledgmentPeople: e.target.value })} placeholder="e.g. Bidjara People"/></label>
-          <label className="field"><span className="label">Acknowledgment — Country</span><input className="input" value={shop.acknowledgmentCountry||''} onChange={(e) => setShop({ ...shop, acknowledgmentCountry: e.target.value })} placeholder="e.g. Bidjara Country"/></label>
+          <label className="field"><span className="label">Acknowledgment - People</span><input className="input" value={shop.acknowledgmentPeople||''} onChange={(e) => setShop({ ...shop, acknowledgmentPeople: e.target.value })} placeholder="e.g. Bidjara People"/></label>
+          <label className="field"><span className="label">Acknowledgment - Country</span><input className="input" value={shop.acknowledgmentCountry||''} onChange={(e) => setShop({ ...shop, acknowledgmentCountry: e.target.value })} placeholder="e.g. Bidjara Country"/></label>
         </div>
         <label className="field">
           <span className="label">Site URL</span>
@@ -10171,7 +10171,7 @@ function SettingsGeneralTab({ shop, setShop, savedShop, announcement, setAnnounc
           {(shop.siteUrl||'').startsWith('http://localhost') && (
             <div style={{fontSize:11, color:'var(--ochre)', marginTop:4, display:'flex', alignItems:'center', gap:6}}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-              This is a local development URL — update it to your live domain before publishing.
+              This is a local development URL, update it to your live domain before publishing.
             </div>
           )}
         </label>
@@ -10195,7 +10195,7 @@ function SettingsGeneralTab({ shop, setShop, savedShop, announcement, setAnnounc
       </form>
       <form onSubmit={onAnnouncementSubmit} style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24}}>
         <span className="eyebrow">Announcement Bar</span>
-        <label className="field" style={{marginTop:12}}><span className="label">Message</span><input className="input" value={announcement.text} onChange={e => setAnnouncement({...announcement, text: e.target.value})} placeholder="e.g. SUMMER SALE — 15% OFF · ENDS 30 JUN"/></label>
+        <label className="field" style={{marginTop:12}}><span className="label">Message</span><input className="input" value={announcement.text} onChange={e => setAnnouncement({...announcement, text: e.target.value})} placeholder="e.g. SUMMER SALE - 15% OFF · ENDS 30 JUN"/></label>
         <label className="field" style={{flexDirection:'row', alignItems:'center', gap:8}}><input type="checkbox" checked={!!announcement.enabled} onChange={e => setAnnouncement({...announcement, enabled: e.target.checked})}/><span className="label" style={{margin:0}}>Show announcement bar</span></label>
         <label className="field"><span className="label">Expires on (optional)</span><input className="input" type="date" value={announcement.expiresAt || ''} onChange={e => setAnnouncement({...announcement, expiresAt: e.target.value})}/></label>
         <div className="row-flex" style={{gap:8, marginTop:12}}>
@@ -10348,7 +10348,7 @@ function SettingsIntegrationsTab({ integrations, setIntegrations, savedIntegrati
             <div key={i} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 0', borderBottom: i < integrations.length - 1 ? '1px solid var(--line)' : 'none'}}>
               <div>
                 <div style={{fontWeight:600}}>{r[0]}</div>
-                <div className="mono" style={{fontSize:11, color:r[2]?'var(--eucalyptus)':'var(--ink-3)', marginTop:2}}>{r[1] ? r[1].toUpperCase() : '—'} · {r[2] ? 'CONNECTED' : 'DISCONNECTED'}</div>
+                <div className="mono" style={{fontSize:11, color:r[2]?'var(--eucalyptus)':'var(--ink-3)', marginTop:2}}>{r[1] ? r[1].toUpperCase() : '-'} · {r[2] ? 'CONNECTED' : 'DISCONNECTED'}</div>
               </div>
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => onOpenModal(i)}>{r[2]?'Configure':'Connect'}</button>
             </div>
@@ -10479,7 +10479,7 @@ function SettingsAdvancedTab({ maintenanceEnabled, setMaintenanceEnabled, maintC
           </div>
           <div style={{padding:'14px', background:'var(--bg-elev)', border:'1px solid var(--line)'}}>
             <div style={{fontWeight:600}}>Export all data</div>
-            <p style={{fontSize:13, color:'var(--ink-2)', margin:'4px 0 8px'}}>JSON dump of everything — products, orders, customers, content.</p>
+            <p style={{fontSize:13, color:'var(--ink-2)', margin:'4px 0 8px'}}>JSON dump of everything, products, orders, customers, content.</p>
             <DangerMsgLine msg={dangerMsg.export}/>
             <button className="btn btn-ghost btn-sm" disabled={sectionBusy==='export'} onClick={async () => {
               setSectionBusy('export');
@@ -10494,7 +10494,7 @@ function SettingsAdvancedTab({ maintenanceEnabled, setMaintenanceEnabled, maintC
                 a.click();
                 setDangerMsg(m => ({...m, export:'✓ Export downloaded.'}));
               } else {
-                setDangerMsg(m => ({...m, export:'Export failed — check server logs.'}));
+                setDangerMsg(m => ({...m, export:'Export failed - check server logs.'}));
               }
               setTimeout(() => setDangerMsg(m => ({...m, export:''})), 5000);
             }}>{sectionBusy==='export' ? 'Generating…' : 'Generate export'}</button>
@@ -10954,7 +10954,7 @@ function AdminMemberships() {
                       borderColor: 'transparent',
                     }}>{(r.status || 'draft').toUpperCase()}</span>
                   )},
-                  { key: 'highlight', label: 'Featured', w: '90px', render: r => r.highlight ? <span className="tag tag-rust" style={{ fontSize: 10 }}>YES</span> : <span style={{ color: 'var(--ink-3)', fontSize: 12 }}>—</span> },
+                  { key: 'highlight', label: 'Featured', w: '90px', render: r => r.highlight ? <span className="tag tag-rust" style={{ fontSize: 10 }}>YES</span> : <span style={{ color: 'var(--ink-3)', fontSize: 12 }}>-</span> },
                 ]}
                 rows={tiers}
                 onRowClick={(_, i) => openTier(i)}
@@ -10975,7 +10975,7 @@ function AdminMemberships() {
                     return <span>{tier ? tier.name : r.tierId}</span>;
                   }},
                   { key: 'startDate', label: 'Since', w: '130px', render: r => <span className="mono" style={{ fontSize: 11, color: 'var(--ink-2)' }}>{(r.startDate || '').slice(0, 10)}</span> },
-                  { key: 'orderId', label: 'Order', w: '130px', render: r => <span className="mono" style={{ fontSize: 11, color: 'var(--rust)' }}>{r.orderId || '—'}</span> },
+                  { key: 'orderId', label: 'Order', w: '130px', render: r => <span className="mono" style={{ fontSize: 11, color: 'var(--rust)' }}>{r.orderId || '-'}</span> },
                   { key: 'status', label: 'Status', w: '110px', render: r => <StatusPill value={r.status || 'active'} map={subStatusMap} /> },
                   { key: 'actions', label: '', w: '100px', render: r => r.status === 'active'
                     ? <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, color: 'var(--rust)' }} onClick={e => { e.stopPropagation(); cancelSub(r.id); }}>Cancel</button>
@@ -11064,7 +11064,7 @@ function AdminMemberships() {
 }
 
 // ============================================================
-// ADMIN PAGE — top-level
+// ADMIN PAGE, top-level
 // ============================================================
 const METRIC_SUBTITLE_FALLBACK = {
   loading: 'Loading metrics…',
@@ -11124,12 +11124,12 @@ function AdminAuditLog() {
             <tbody>
               {entries.map((e, i) => (
                 <tr key={i} style={{borderBottom:'1px solid var(--line)', background: i % 2 === 0 ? 'transparent' : 'var(--bg-elev)'}}>
-                  <td className="mono" style={{padding:'5px 10px', whiteSpace:'nowrap', color:'var(--ink-2)', fontSize:11}}>{e.timestamp ? new Date(e.timestamp).toLocaleString('en-AU') : '—'}</td>
-                  <td style={{padding:'5px 10px', whiteSpace:'nowrap'}}>{e.actor || '—'}</td>
-                  <td className="mono" style={{padding:'5px 10px', whiteSpace:'nowrap', color:'var(--ink-2)'}}>{e.ip || '—'}</td>
-                  <td style={{padding:'5px 10px', whiteSpace:'nowrap', color: actionColor(e.action || '')}}>{e.action || '—'}</td>
+                  <td className="mono" style={{padding:'5px 10px', whiteSpace:'nowrap', color:'var(--ink-2)', fontSize:11}}>{e.timestamp ? new Date(e.timestamp).toLocaleString('en-AU') : '-'}</td>
+                  <td style={{padding:'5px 10px', whiteSpace:'nowrap'}}>{e.actor || '-'}</td>
+                  <td className="mono" style={{padding:'5px 10px', whiteSpace:'nowrap', color:'var(--ink-2)'}}>{e.ip || '-'}</td>
+                  <td style={{padding:'5px 10px', whiteSpace:'nowrap', color: actionColor(e.action || '')}}>{e.action || '-'}</td>
                   <td style={{padding:'5px 10px', whiteSpace:'nowrap'}}>
-                    <span style={{fontSize:10, padding:'2px 6px', borderRadius:2, background: e.status === 'ok' ? '#d4edda' : '#f8d7da', color: e.status === 'ok' ? '#155724' : '#721c24'}}>{e.status || '—'}</span>
+                    <span style={{fontSize:10, padding:'2px 6px', borderRadius:2, background: e.status === 'ok' ? '#d4edda' : '#f8d7da', color: e.status === 'ok' ? '#155724' : '#721c24'}}>{e.status || '-'}</span>
                   </td>
                   <td className="mono" style={{padding:'5px 10px', color:'var(--ink-2)', maxWidth:320, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontSize:11}} title={JSON.stringify(e.changed || {})}>{e.reason || JSON.stringify(e.changed || {})}</td>
                 </tr>

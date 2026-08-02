@@ -132,14 +132,14 @@ function VoltageDropCalc() {
       <Field label="Current (Load)" unit="A" value={current} onChange={setCurrent} min="0" step="0.5" />
       <Field label="Cable Run (one way)" unit="m" value={length} onChange={setLength} min="0" step="0.5" />
       <Field label="Wire Size" value={wire} onChange={setWire} options={
-        WIRE_TABLE.map((w, i) => ({ value: String(i), label: `AWG ${w.awg} (${w.mm2} mm²) — rated ${w.rating}A` }))
+        WIRE_TABLE.map((w, i) => ({ value: String(i), label: `AWG ${w.awg} (${w.mm2} mm²) - rated ${w.rating}A` }))
       } />
       <CalcBtn onClick={calc} />
       {result && (
         <>
           <Divider />
           <Result label="Voltage Drop" value={`${result.drop.toFixed(3)} V  (${result.pct.toFixed(1)}%)`} color={result.color}
-            note={result.pct > 5 ? 'Exceeds 5% — significant power loss, upgrade wire' : result.pct > 3 ? 'Between 3–5% — acceptable for lighting, marginal for motors' : 'Under 3% — good'} />
+            note={result.pct > 5 ? 'Exceeds 5%, significant power loss, upgrade wire' : result.pct > 3 ? 'Between 3–5%, acceptable for lighting, marginal for motors' : 'Under 3% - good'} />
           {result.rec && result.rec.awg !== result.selectedWire.awg && (
             <Result label="Recommended Wire" color={C.green}
               value={`AWG ${result.rec.awg} (${result.rec.mm2} mm²)`}
@@ -183,9 +183,9 @@ function FuseCalc() {
         { value: '12', label: '12V' }, { value: '24', label: '24V' }, { value: '48', label: '48V' }, { value: '240', label: '240V AC' },
       ]} />
       <Field label="Safety Margin" value={margin} onChange={setMargin} options={[
-        { value: '110', label: '110% — very tight' },
-        { value: '125', label: '125% — standard (recommended)' },
-        { value: '150', label: '150% — conservative' },
+        { value: '110', label: '110% - very tight' },
+        { value: '125', label: '125% - standard (recommended)' },
+        { value: '150', label: '150% - conservative' },
       ]} />
       <CalcBtn onClick={calc} />
       {result && (
@@ -234,9 +234,9 @@ function BatteryCalc() {
       ]} />
       <Field label="Total Load" unit="W" value={load} onChange={setLoad} min="0" step="1" />
       <Field label="Depth of Discharge" value={dod} onChange={setDod} options={[
-        { value: '50', label: '50% — AGM / Flooded Lead Acid' },
-        { value: '80', label: '80% — Lithium (LiFePO₄)' },
-        { value: '100', label: '100% — theoretical max' },
+        { value: '50', label: '50% - AGM / Flooded Lead Acid' },
+        { value: '80', label: '80% - Lithium (LiFePO₄)' },
+        { value: '100', label: '100% - theoretical max' },
       ]} />
       <CalcBtn onClick={calc} />
       {result && (
@@ -282,18 +282,18 @@ function SolarCalc() {
     <Card title="Solar Panel Sizing Tool" icon="☀️">
       <Field label="Daily Energy Use" unit="Wh/day" value={dailyWh} onChange={setDailyWh} min="0" step="10" />
       <Field label="Peak Sun Hours" value={sunHours} onChange={setSunHours} options={[
-        { value: '3', label: '3h — overcast / winter / south-facing' },
-        { value: '4', label: '4h — coastal / partly cloudy' },
-        { value: '5', label: '5h — inland Australia (average)' },
-        { value: '6', label: '6h — outback / optimal tilt' },
-        { value: '7', label: '7h — peak summer / north-facing' },
+        { value: '3', label: '3h - overcast / winter / south-facing' },
+        { value: '4', label: '4h - coastal / partly cloudy' },
+        { value: '5', label: '5h - inland Australia (average)' },
+        { value: '6', label: '6h - outback / optimal tilt' },
+        { value: '7', label: '7h - peak summer / north-facing' },
       ]} />
       <Field label="System Voltage" value={voltage} onChange={setVoltage} options={[
         { value: '12', label: '12V' }, { value: '24', label: '24V' }, { value: '48', label: '48V' },
       ]} />
       <Field label="Battery Type (DoD)" value={dod} onChange={setDod} options={[
-        { value: '50', label: '50% — AGM / Flooded' },
-        { value: '80', label: '80% — Lithium LiFePO₄' },
+        { value: '50', label: '50% - AGM / Flooded' },
+        { value: '80', label: '80% - Lithium LiFePO₄' },
       ]} />
       <Field label="Days Autonomy (no sun)" unit="days" value={days} onChange={setDays} min="1" step="1" />
       <CalcBtn onClick={calc} />
@@ -347,9 +347,9 @@ function WireGaugeCalc() {
         { value: '12', label: '12V' }, { value: '24', label: '24V' }, { value: '48', label: '48V' },
       ]} />
       <Field label="Max Acceptable Drop" value={maxDrop} onChange={setMaxDrop} options={[
-        { value: '2', label: '2% — sensitive electronics' },
-        { value: '3', label: '3% — general 12V / motors' },
-        { value: '5', label: '5% — lighting OK' },
+        { value: '2', label: '2% - sensitive electronics' },
+        { value: '3', label: '3% - general 12V / motors' },
+        { value: '5', label: '5% - lighting OK' },
       ]} />
       <CalcBtn onClick={calc} />
       {result && (
@@ -357,7 +357,7 @@ function WireGaugeCalc() {
           <Divider />
           {result.best ? (
             <Result label="Recommended Wire" value={`AWG ${result.best.awg}  (${result.best.mm2} mm²)`} color={C.green}
-              note={`Rated ${result.best.rating}A — keeps drop ≤${maxDrop}% (≤${result.maxDropV.toFixed(2)}V)`} />
+              note={`Rated ${result.best.rating}A, keeps drop ≤${maxDrop}% (≤${result.maxDropV.toFixed(2)}V)`} />
           ) : (
             <Result label="No Single Wire Sufficient" color={C.red}
               value="Use parallel runs"
@@ -389,7 +389,7 @@ function LEDCalc() {
     if (!Vs || !Vf || !If || !n) return;
     const totalVf = Vf * n;
     if (totalVf >= Vs) {
-      setResult({ error: `Total LED forward voltage (${totalVf.toFixed(1)}V) ≥ supply voltage — reduce LEDs in series or increase supply` });
+      setResult({ error: `Total LED forward voltage (${totalVf.toFixed(1)}V) ≥ supply voltage, reduce LEDs in series or increase supply` });
       return;
     }
     const R = (Vs - totalVf) / If;
@@ -411,12 +411,12 @@ function LEDCalc() {
       <Field label="Supply Voltage" unit="V" value={supply} onChange={setSupply} min="0" step="0.1" />
       <Field label="LEDs in Series" unit="LEDs" value={leds} onChange={setLeds} min="1" step="1" />
       <Field label="LED Forward Voltage (Vf)" value={vf} onChange={setVf} options={[
-        { value: '1.8', label: '1.8V — Red / Infrared' },
-        { value: '2.0', label: '2.0V — Yellow / Orange' },
-        { value: '2.1', label: '2.1V — Red (standard)' },
-        { value: '2.5', label: '2.5V — Green' },
-        { value: '3.0', label: '3.0V — Blue / White' },
-        { value: '3.2', label: '3.2V — White / UV' },
+        { value: '1.8', label: '1.8V - Red / Infrared' },
+        { value: '2.0', label: '2.0V - Yellow / Orange' },
+        { value: '2.1', label: '2.1V - Red (standard)' },
+        { value: '2.5', label: '2.5V - Green' },
+        { value: '3.0', label: '3.0V - Blue / White' },
+        { value: '3.2', label: '3.2V - White / UV' },
       ]} />
       <Field label="LED Current" unit="mA" value={mA} onChange={setMa} min="0" step="1" />
       <CalcBtn onClick={calc} />
@@ -430,7 +430,7 @@ function LEDCalc() {
               <Result label="Exact Resistor" value={fmtR(result.R)} color={C.ink}
                 note={`Power: ${(result.P * 1000).toFixed(0)} mW`} />
               <Result label="Nearest E12 Standard Value" value={fmtR(result.stdR)} color={C.blue}
-                note={`Power dissipated: ${(result.stdP * 1000).toFixed(0)} mW — use ≥${result.stdP < 0.125 ? '1/8W' : result.stdP < 0.25 ? '1/4W' : result.stdP < 0.5 ? '1/2W' : '1W'} resistor`} />
+                note={`Power dissipated: ${(result.stdP * 1000).toFixed(0)} mW, use ≥${result.stdP < 0.125 ? '1/8W' : result.stdP < 0.25 ? '1/4W' : result.stdP < 0.5 ? '1/2W' : '1W'} resistor`} />
             </>
           )}
         </>
@@ -468,7 +468,7 @@ function OhmsLawCalc() {
   }, [v, i, r, p]);
 
   const fmtVal = (val, unit) => {
-    if (val === null || isNaN(val)) return '—';
+    if (val === null || isNaN(val)) return '-';
     if (Math.abs(val) >= 1000) return `${(val / 1000).toFixed(3)} k${unit}`;
     if (Math.abs(val) < 0.01) return `${(val * 1000).toFixed(3)} m${unit}`;
     return `${val.toFixed(4).replace(/\.?0+$/, '')} ${unit}`;
@@ -476,7 +476,7 @@ function OhmsLawCalc() {
 
   return (
     <Card title="Ohm's Law Calculator" icon="🧮">
-      <p style={{ fontSize: 13, color: C.ink2 }}>Enter any 2 values — the other 2 are calculated.</p>
+      <p style={{ fontSize: 13, color: C.ink2 }}>Enter any 2 values - the other 2 are calculated.</p>
       <Field label="Voltage (V)" unit="V" value={v} onChange={setV} min="0" step="any" />
       <Field label="Current (I)" unit="A" value={i} onChange={setI} min="0" step="any" />
       <Field label="Resistance (R)" unit="Ω" value={r} onChange={setR} min="0" step="any" />
@@ -542,9 +542,9 @@ function CapacitorCalc() {
       <Field label="Supply Voltage" unit="V" value={vSupply} onChange={setVSupply} min="0" step="any" />
       <Field label="Target Voltage (charge to)" unit="V" value={vTarget} onChange={setVTarget} min="0" step="any" />
       <Field label="Time Constants for 'Full Charge'" value={tauCount} onChange={setTauCount} options={[
-        { value: '3', label: '3τ — 95%' },
-        { value: '4', label: '4τ — 98%' },
-        { value: '5', label: '5τ — 99.3% (standard)' },
+        { value: '3', label: '3τ - 95%' },
+        { value: '4', label: '4τ - 98%' },
+        { value: '5', label: '5τ - 99.3% (standard)' },
       ]} />
       <CalcBtn onClick={calc} />
       {result && (
@@ -571,12 +571,12 @@ function RelayGuide() {
     { pin: '85', color: '#e74c3c', label: 'Coil −', desc: 'Connect to ground (chassis earth)' },
     { pin: '86', color: '#f39c12', label: 'Coil +', desc: 'Connect to 12V trigger signal (switch, ECU output, etc.)' },
     { pin: '30', color: '#3498db', label: 'Common', desc: 'Connect to your 12V power source (fused)' },
-    { pin: '87', color: '#2ecc71', label: 'NO — Normally Open', desc: 'Connect to load +ve. Circuit closed when relay energised.' },
+    { pin: '87', color: '#2ecc71', label: 'NO - Normally Open', desc: 'Connect to load +ve. Circuit closed when relay energised.' },
   ];
 
   const pin5 = [
     ...pin4,
-    { pin: '87a', color: '#9b59b6', label: 'NC — Normally Closed', desc: 'Connected to pin 30 when relay is OFF. Use for fail-safe / bypass circuits.' },
+    { pin: '87a', color: '#9b59b6', label: 'NC - Normally Closed', desc: 'Connected to pin 30 when relay is OFF. Use for fail-safe / bypass circuits.' },
   ];
 
   const pins = type === '5pin' ? pin5 : pin4;
@@ -584,8 +584,8 @@ function RelayGuide() {
   return (
     <Card title="Relay Wiring Guide" icon="🔄">
       <Field label="Relay Type" value={type} onChange={setType} options={[
-        { value: '5pin', label: '5-pin relay (SPDT — has NC contact)' },
-        { value: '4pin', label: '4-pin relay (SPST — NO only)' },
+        { value: '5pin', label: '5-pin relay (SPDT - has NC contact)' },
+        { value: '4pin', label: '4-pin relay (SPST - NO only)' },
       ]} />
 
       {/* ASCII diagram */}
@@ -634,7 +634,7 @@ function RelayGuide() {
       </div>
 
       <div style={{ padding: '12px 14px', borderRadius: 8, background: '#fff8e6', border: `1px solid ${C.ochre}`, fontSize: 12, color: C.ink2 }}>
-        <strong>Tip:</strong> Always fuse the wire going to pin 30. Coil draws ~150–200 mA — any small signal wire can trigger it. Keep coil wiring away from sensitive audio/sensor cables to avoid interference.
+        <strong>Tip:</strong> Always fuse the wire going to pin 30. Coil draws ~150–200 mA, any small signal wire can trigger it. Keep coil wiring away from sensitive audio/sensor cables to avoid interference.
       </div>
     </Card>
   );
@@ -690,13 +690,13 @@ function TraceWidthCalc() {
       <p style={{fontSize:13,color:C.ink2}}>IPC-2221 formula. Always verify with your PCB fab's design rules.</p>
       <Field label="Current" unit="A" value={current} onChange={setCurrent} min="0" step="0.1" />
       <Field label="Temp Rise" unit="°C" value={dT} onChange={setDT} options={[
-        {value:'5',label:'5°C — sensitive board'},{value:'10',label:'10°C — standard'},{value:'20',label:'20°C — relaxed'},{value:'30',label:'30°C — power electronics'},
+        {value:'5',label:'5°C - sensitive board'},{value:'10',label:'10°C - standard'},{value:'20',label:'20°C - relaxed'},{value:'30',label:'30°C - power electronics'},
       ]} />
       <Field label="Layer" value={layer} onChange={setLayer} options={[
-        {value:'external',label:'External (outer) — k=0.048'},{value:'internal',label:'Internal (inner) — k=0.024'},
+        {value:'external',label:'External (outer) - k=0.048'},{value:'internal',label:'Internal (inner) - k=0.024'},
       ]} />
       <Field label="Copper Weight" value={oz} onChange={setOz} options={[
-        {value:'0.5',label:'0.5 oz (17.5 µm)'},{value:'1',label:'1 oz (35 µm) — standard'},{value:'2',label:'2 oz (70 µm)'},{value:'3',label:'3 oz (105 µm)'},
+        {value:'0.5',label:'0.5 oz (17.5 µm)'},{value:'1',label:'1 oz (35 µm) - standard'},{value:'2',label:'2 oz (70 µm)'},{value:'3',label:'3 oz (105 µm)'},
       ]} />
       <CalcBtn onClick={calc} />
       {result && (<><Divider />
@@ -722,10 +722,10 @@ function ViaCurrentCalc() {
   }, [drill, plating, dT]);
   return (
     <Card title="Via Current Calculator" icon="🔩">
-      <p style={{fontSize:13,color:C.ink2}}>IPC-2221 — annular copper wall model. For high-current use filled/stacked vias.</p>
+      <p style={{fontSize:13,color:C.ink2}}>IPC-2221 - annular copper wall model. For high-current use filled/stacked vias.</p>
       <Field label="Drill Diameter" unit="mm" value={drill} onChange={setDrill} min="0.1" step="0.05" />
       <Field label="Copper Plating" unit="µm" value={plating} onChange={setPlating} options={[
-        {value:'18',label:'18 µm — min standard'},{value:'25',label:'25 µm — IPC class 2'},{value:'35',label:'35 µm — class 3'},
+        {value:'18',label:'18 µm - min standard'},{value:'25',label:'25 µm - IPC class 2'},{value:'35',label:'35 µm - class 3'},
       ]} />
       <Field label="Temp Rise" unit="°C" value={dT} onChange={setDT} options={[
         {value:'5',label:'5°C'},{value:'10',label:'10°C'},{value:'20',label:'20°C'},
@@ -760,7 +760,7 @@ function MicrostripCalc() {
       <Field label="Trace Width (W)" unit="mm" value={w} onChange={setW} min="0.01" step="0.05" />
       <Field label="Substrate Height (H)" unit="mm" value={h} onChange={setH} min="0.01" step="0.1" />
       <Field label="Dielectric Constant (Er)" value={er} onChange={setEr} options={[
-        {value:'4.5',label:'4.5 — FR4 (typical)'},{value:'4.2',label:'4.2 — FR4 (low-loss)'},{value:'3.55',label:'3.55 — Rogers 4003C'},{value:'3.0',label:'3.0 — Rogers 3003'},{value:'2.2',label:'2.2 — PTFE / Rogers 5880'},
+        {value:'4.5',label:'4.5 - FR4 (typical)'},{value:'4.2',label:'4.2 - FR4 (low-loss)'},{value:'3.55',label:'3.55 - Rogers 4003C'},{value:'3.0',label:'3.0 - Rogers 3003'},{value:'2.2',label:'2.2 - PTFE / Rogers 5880'},
       ]} />
       <CalcBtn onClick={calc} />
       {result && (<><Divider />
@@ -871,10 +871,10 @@ function I2CPullupCalc() {
     <Card title="I²C Pull-up Resistor" icon="📡">
       <Field label="VCC" value={vcc} onChange={setVcc} options={[{value:'3.3',label:'3.3V'},{value:'5',label:'5V'}]} />
       <Field label="Bus Capacitance" unit="pF" value={cap} onChange={setCap} options={[
-        {value:'50',label:'50 pF — short traces'},{value:'100',label:'100 pF — typical'},{value:'200',label:'200 pF — long bus'},{value:'400',label:'400 pF — spec max (SM/FM)'},
+        {value:'50',label:'50 pF - short traces'},{value:'100',label:'100 pF - typical'},{value:'200',label:'200 pF - long bus'},{value:'400',label:'400 pF - spec max (SM/FM)'},
       ]} />
       <Field label="Bus Speed" value={speed} onChange={setSpeed} options={[
-        {value:'100',label:'100 kHz — Standard Mode'},{value:'400',label:'400 kHz — Fast Mode'},{value:'1000',label:'1 MHz — Fast Mode Plus'},
+        {value:'100',label:'100 kHz - Standard Mode'},{value:'400',label:'400 kHz - Fast Mode'},{value:'1000',label:'1 MHz - Fast Mode Plus'},
       ]} />
       <CalcBtn onClick={calc} />
       {result && (<><Divider />
@@ -904,7 +904,7 @@ function GPIOResistorCalc() {
         {value:'1.8',label:'1.8V'},{value:'3.3',label:'3.3V'},{value:'5',label:'5V'},
       ]} />
       <Field label="Load Forward Voltage (Vf)" value={vf} onChange={setVf} options={[
-        {value:'0',label:'0V — resistive load'},{value:'1.8',label:'1.8V — Red LED'},{value:'2.1',label:'2.1V — Red LED (std)'},{value:'2.5',label:'2.5V — Green LED'},{value:'3.0',label:'3.0V — Blue/White LED'},{value:'0.7',label:'0.7V — NPN base'},
+        {value:'0',label:'0V - resistive load'},{value:'1.8',label:'1.8V - Red LED'},{value:'2.1',label:'2.1V - Red LED (std)'},{value:'2.5',label:'2.5V - Green LED'},{value:'3.0',label:'3.0V - Blue/White LED'},{value:'0.7',label:'0.7V - NPN base'},
       ]} />
       <Field label="Desired Current" unit="mA" value={mA} onChange={setMa} min="0" step="1" />
       <CalcBtn onClick={calc} />
@@ -943,7 +943,7 @@ function PWMCalc() {
       <Field label="Desired Frequency" unit="Hz" value={freq} onChange={setFreq} min="1" step="any" />
       <Field label="Duty Cycle" unit="%" value={duty} onChange={setDuty} min="0" max="100" step="0.1" />
       <Field label="Timer Clock" value={clk} onChange={setClk} options={[
-        {value:'16',label:'16 MHz — Arduino Uno/Mega'},{value:'8',label:'8 MHz — Pro Mini 3.3V'},{value:'84',label:'84 MHz — Arduino Due'},{value:'72',label:'72 MHz — STM32F103'},{value:'168',label:'168 MHz — STM32F4'},{value:'240',label:'240 MHz — ESP32'},
+        {value:'16',label:'16 MHz - Arduino Uno/Mega'},{value:'8',label:'8 MHz - Pro Mini 3.3V'},{value:'84',label:'84 MHz - Arduino Due'},{value:'72',label:'72 MHz - STM32F103'},{value:'168',label:'168 MHz - STM32F4'},{value:'240',label:'240 MHz - ESP32'},
       ]} />
       <CalcBtn onClick={calc} />
       {result && (<><Divider />
@@ -975,11 +975,11 @@ function NTCThermistorCalc() {
       <p style={{fontSize:13,color:C.ink2}}>NTC on bottom of voltage divider (GND side), series R on top (Vcc side).</p>
       <Field label="NTC R₀ at 25°C" unit="Ω" value={r0} onChange={setR0} min="0" step="any" />
       <Field label="B Coefficient" unit="K" value={B} onChange={setB} options={[
-        {value:'3435',label:'3435 K — MF52 10kΩ'},{value:'3950',label:'3950 K — common 10kΩ'},{value:'3977',label:'3977 K — Vishay NTCLE'},{value:'4050',label:'4050 K — high-temp'},
+        {value:'3435',label:'3435 K - MF52 10kΩ'},{value:'3950',label:'3950 K - common 10kΩ'},{value:'3977',label:'3977 K - Vishay NTCLE'},{value:'4050',label:'4050 K - high-temp'},
       ]} />
       <Field label="Series Resistor" unit="Ω" value={rSeries} onChange={setRSeries} min="0" step="any" />
       <Field label="ADC Resolution" value={adcMax} onChange={setAdcMax} options={[
-        {value:'1023',label:'10-bit (0–1023) — Arduino'},{value:'4095',label:'12-bit (0–4095) — STM32/ESP32'},
+        {value:'1023',label:'10-bit (0–1023) - Arduino'},{value:'4095',label:'12-bit (0–4095) - STM32/ESP32'},
       ]} />
       <Field label="ADC Reading" value={adc} onChange={setAdc} min="0" step="1" />
       <CalcBtn onClick={calc} />
@@ -1084,7 +1084,7 @@ function RCFilterCalc() {
   return (
     <Card title="RC Filter" icon="🔊">
       <Field label="Filter Type" value={type} onChange={setType} options={[
-        {value:'lp',label:'Low-pass — passes below fc'},{value:'hp',label:'High-pass — passes above fc'},
+        {value:'lp',label:'Low-pass - passes below fc'},{value:'hp',label:'High-pass - passes above fc'},
       ]} />
       <Field label="Resistance (R)" unit="Ω" value={r} onChange={setR} min="0" step="any" />
       <div style={{display:'flex',gap:10}}>
@@ -1116,7 +1116,7 @@ function SeriesParallelCalc() {
     else total = mode==='series' ? 1/inBase.reduce((a,b)=>a+1/b,0) : inBase.reduce((a,b)=>a+b,0);
   }
   const fmtTotal = v => {
-    if (!v) return '—';
+    if (!v) return '-';
     if (compType==='R') return fmtR(v);
     if (compType==='C') { if(v>=1e-3) return `${(v/1e-3).toPrecision(4)} mF`; if(v>=1e-6) return `${(v/1e-6).toPrecision(4)} µF`; if(v>=1e-9) return `${(v/1e-9).toPrecision(4)} nF`; return `${(v/1e-12).toPrecision(4)} pF`; }
     if(v>=1) return `${v.toPrecision(4)} H`; if(v>=1e-3) return `${(v/1e-3).toPrecision(4)} mH`; if(v>=1e-6) return `${(v/1e-6).toPrecision(4)} µH`; return `${(v/1e-9).toPrecision(4)} nH`;
@@ -1168,7 +1168,7 @@ function ZenerCalc() {
       ]} />
       <Field label="Load Current (Il)" unit="mA" value={il} onChange={setIl} min="0" step="1" />
       <Field label="Min Zener Current (Iz)" unit="mA" value={iz} onChange={setIz} options={[
-        {value:'5',label:'5 mA — minimum'},{value:'10',label:'10 mA — standard'},{value:'20',label:'20 mA — stable'},
+        {value:'5',label:'5 mA - minimum'},{value:'10',label:'10 mA - standard'},{value:'20',label:'20 mA - stable'},
       ]} />
       <CalcBtn onClick={calc} />
       {result && (<><Divider />
@@ -1261,7 +1261,7 @@ function InductorReactanceCalc() {
       {result && (<><Divider />
         <Result label="Inductive Reactance (XL)" value={fmtR(result.XL)} color={C.blue} note="XL = 2πfL" />
         {result.XC!==null && <Result label="Capacitive Reactance (XC)" value={fmtR(result.XC)} color={C.ochre} note="XC = 1/(2πfC)" />}
-        {result.fRes!==null && <Result label="LC Resonant Frequency" value={fmtHz(result.fRes)} color={C.green} note="f = 1/(2π√LC) — XL equals XC at this point" />}
+        {result.fRes!==null && <Result label="LC Resonant Frequency" value={fmtHz(result.fRes)} color={C.green} note="f = 1/(2π√LC) - XL equals XC at this point" />}
         {result.Zseries!==null && <Result label="|Z| Series LC at given freq" value={fmtR(result.Zseries)} color={C.ink2} />}
       </>)}
     </Card>
@@ -1303,7 +1303,7 @@ function ResistorColorCalc() {
   tol=c5?.tol; if(bands===6) tc=c6?.tc;
 
   const fmtVal = v => {
-    if(v==null) return '—';
+    if(v==null) return '-';
     if(v>=1e9) return `${(v/1e9).toPrecision(4)} GΩ`;
     if(v>=1e6) return `${(v/1e6).toPrecision(4)} MΩ`;
     if(v>=1e3) return `${(v/1e3).toPrecision(4)} kΩ`;
@@ -1358,7 +1358,7 @@ function UnitConverterCalc() {
   };
   const c=cats[cat];
   const baseVal=parseFloat(val)*(c.base[fromU]||1);
-  const fmtN=v=>{ if(isNaN(v))return'—'; if(Math.abs(v)===0)return'0'; if(Math.abs(v)>=1e10||(Math.abs(v)<1e-6&&v!==0))return v.toExponential(4); return parseFloat(v.toPrecision(6)).toString(); };
+  const fmtN=v=>{ if(isNaN(v))return'-'; if(Math.abs(v)===0)return'0'; if(Math.abs(v)>=1e10||(Math.abs(v)<1e-6&&v!==0))return v.toExponential(4); return parseFloat(v.toPrecision(6)).toString(); };
   return (
     <Card title="Unit Converter" icon="📏">
       <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
@@ -1461,7 +1461,7 @@ function PowerRatingCalc() {
           <Result label="Voltage" value={`${result.V.toFixed(3)} V`} />
           <Result label="Current" value={result.I<0.01?`${(result.I*1000).toFixed(2)} mA`:`${result.I.toFixed(4)} A`} />
         </div>
-        {result.pct>90 && <div style={{padding:'12px 14px',borderRadius:8,background:'#fef2f2',border:`1px solid ${C.red}`,fontSize:12,color:C.red}}><strong>Over-rated!</strong> {result.pct.toFixed(0)}% of thermal limit — use a higher-wattage component.</div>}
+        {result.pct>90 && <div style={{padding:'12px 14px',borderRadius:8,background:'#fef2f2',border:`1px solid ${C.red}`,fontSize:12,color:C.red}}><strong>Over-rated!</strong> {result.pct.toFixed(0)}% of thermal limit, use a higher-wattage component.</div>}
         {result.pct>66&&result.pct<=90 && <div style={{padding:'12px 14px',borderRadius:8,background:'#fff8e6',border:`1px solid ${C.ochre}`,fontSize:12,color:C.ink2}}><strong>Marginal.</strong> Standard practice is to derate to 50% of rated power for long-term reliability.</div>}
       </>)}
     </Card>
@@ -1521,7 +1521,7 @@ const SECTIONS = [
 const ShopContext = createContext({});
 const useShop = () => useContext(ShopContext);
 
-// Cross-site URLs — populated from /api/shop-info at runtime (mirrors app.jsx).
+// Cross-site URLs, populated from /api/shop-info at runtime (mirrors app.jsx).
 let _PORTAL_URL = 'https://portal.outbackelectronics.com.au';
 let _GAMES_URL  = 'https://games.outbackelectronics.com.au';
 let _TOOLS_URL  = 'https://tools.outbackelectronics.com.au';
@@ -1543,7 +1543,7 @@ const PRIMARY_PAGES = [
   { id: 'games-link', label: 'Games' },
   { id: 'groups', label: 'Groups' },
 ];
-// Pages served from their own subdomain (tools./forum./games.) — mirrors app.jsx.
+// Pages served from their own subdomain (tools./forum./games.), mirrors app.jsx.
 const EXTERNAL_LINKS = {
   'games-link': getGamesUrl,
   'tools-link': getToolsUrl,
@@ -1888,7 +1888,7 @@ function TopNav({ page, onSearchOpen, accountOpen, setAccountOpen, portalUser, c
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M3 4h2l2.5 12h11l2-9H6"/><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/></svg>
               {cart > 0 && <span className="cart-count" aria-hidden="true">{cart}</span>}
             </button>
-            {/* Hamburger — hidden on desktop via CSS, shown on mobile */}
+            {/* Hamburger, hidden on desktop via CSS, shown on mobile */}
             <button className="icon-btn hamburger" style={{display:'none'}} title="Menu" aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'} aria-expanded={mobileMenuOpen} aria-controls="mobile-nav" onClick={() => setMobileMenuOpen(o => !o)}>
               {mobileMenuOpen
                 ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
@@ -1898,7 +1898,7 @@ function TopNav({ page, onSearchOpen, accountOpen, setAccountOpen, portalUser, c
           </div>
         </div>
       </div>
-      {/* Mobile nav drawer — hidden on desktop via CSS */}
+      {/* Mobile nav drawer, hidden on desktop via CSS */}
       {mobileMenuOpen && (
         <div id="mobile-nav" className="mobile-nav" role="dialog" aria-modal="true" aria-label="Navigation menu">
           <div className="mobile-nav-header">
@@ -2105,7 +2105,7 @@ export default function App() {
             <span>Tools &amp; Calculators</span>
           </div>
           <h1>Tools &amp; Calculators</h1>
-          <p className="lead">Free electronics calculators covering automotive 12V builds, PCB design, Arduino/embedded systems, discrete circuits, and general electronics. Estimates for guidance — always verify critical work with a qualified engineer.</p>
+          <p className="lead">Free electronics calculators covering automotive 12V builds, PCB design, Arduino/embedded systems, discrete circuits, and general electronics. Estimates for guidance, always verify critical work with a qualified engineer.</p>
         </div>
       </div>
 

@@ -1,4 +1,4 @@
-// Maps — an interactive outback map (Leaflet via CDN + OSM tiles). Nothing is
+// Maps, an interactive outback map (Leaflet via CDN + OSM tiles). Nothing is
 // hardcoded: the workshop marker is geocoded from the shop address in settings
 // (/api/shop-info), and fuel/water/camp POIs are pulled live from OpenStreetMap
 // (Overpass) for whatever's in view. Your own pins are saved on-device.
@@ -57,7 +57,7 @@ export default function MapsApp() {
     schedule();
   }, [schedule]);
 
-  // Workshop marker — geocoded from the shop address in settings (never hardcoded)
+  // Workshop marker, geocoded from the shop address in settings (never hardcoded)
   useEffect(() => {
     if (!info || shop) return;
     const s = info.shop || {};

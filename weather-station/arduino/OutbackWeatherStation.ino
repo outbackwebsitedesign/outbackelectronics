@@ -1,5 +1,5 @@
 /*
- * Outback Electronics Weather Station — Arduino / ESP8266 / ESP32
+ * Outback Electronics Weather Station - Arduino / ESP8266 / ESP32
  *
  * Works with any WiFi-capable board: ESP8266 (NodeMCU, Wemos D1),
  * ESP32, Arduino Uno WiFi Rev2, Arduino MKR WiFi 1010, Nano 33 IoT, etc.
@@ -7,7 +7,7 @@
  * Fill in your credentials below, add your sensor reads in readSensors(),
  * and the board will POST to the weather dashboard every 30 seconds.
  *
- * The server accepts ANY numeric key — you are not limited to the examples
+ * The server accepts ANY numeric key, you are not limited to the examples
  * shown. Add as many keys as your sensors produce.
  *
  * ── Dependencies (install via Arduino Library Manager) ───────────────────────
@@ -22,7 +22,7 @@
  *     BMP280:      "Adafruit BMP280 Library"
  *     BME280:      "Adafruit BME280 Library"
  *     SHT31:       "Adafruit SHT31 Library"
- *     MQ sensors:  no library needed — raw analogRead()
+ *     MQ sensors:  no library needed, raw analogRead()
  *
  * ── Quick start ───────────────────────────────────────────────────────────────
  *   1. Register a station at https://weather.outbackelectronics.com.au
@@ -32,7 +32,7 @@
  *   4. Flash and open Serial Monitor at 115200 baud to verify.
  */
 
-// ── Configuration — edit these ────────────────────────────────────────────────
+// ── Configuration, edit these ────────────────────────────────────────────────
 
 #define WIFI_SSID      "your-wifi-ssid"
 #define WIFI_PASSWORD  "your-wifi-password"
@@ -78,7 +78,7 @@
 // #include <Adafruit_SHT31.h>
 // Adafruit_SHT31 sht31;
 
-// ── JSON builder — no library needed ─────────────────────────────────────────
+// ── JSON builder, no library needed ─────────────────────────────────────────
 
 class JsonDoc {
   String buf;
@@ -105,14 +105,14 @@ public:
   String finish() { return buf + "}"; }
 };
 
-// ── Sensor reads — add your sensors here ─────────────────────────────────────
+// ── Sensor reads, add your sensors here ─────────────────────────────────────
 
 String buildPayload() {
   // Outer document
   JsonDoc outer;
   outer.addStr("station_id", STATION_NAME);
 
-  // Data object — add any numeric keys you like
+  // Data object, add any numeric keys you like
   String dataJson = "{";
   bool firstData = true;
 
@@ -123,7 +123,7 @@ String buildPayload() {
     firstData = false;
   };
 
-  // Sensors metadata array — list what you have
+  // Sensors metadata array, list what you have
   String sensorsJson = "[";
   bool firstSensor = true;
   auto addSensor = [&](const char* name) {
@@ -204,7 +204,7 @@ void connectWifi() {
   if (WiFi.status() == WL_CONNECTED) {
     Serial.println(" connected. IP: " + WiFi.localIP().toString());
   } else {
-    Serial.println(" FAILED — will retry");
+    Serial.println(" FAILED, will retry");
   }
 }
 
@@ -225,7 +225,7 @@ void postReading() {
 
 #if defined(USE_ESP8266)
   BearSSL::WiFiClientSecure client;
-  client.setInsecure();            // skip cert check — fine for sensor data
+  client.setInsecure();            // skip cert check, fine for sensor data
   HTTPClient http;
   if (http.begin(client, url)) {
     http.addHeader("Content-Type", "application/json");

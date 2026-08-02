@@ -1,4 +1,4 @@
-// Swap & Sell — community classifieds. Public to browse; members post (with an
+// Swap & Sell, community classifieds. Public to browse; members post (with an
 // optional photo). Listings live in swap.db; nothing seeded.
 import { useState, useEffect, useRef } from 'react';
 import { TopNav, Footer, useAuth, useShopInfo, apiPost } from './app-shell.jsx';
@@ -34,8 +34,8 @@ export default function SwapApp() {
       const r = await apiPost('/api/swap/post', body);
       if (r.ok) { setMsg('Posted!'); setForm({ title: '', category: 'For Sale', desc: '', price: '', location: '', contact: '' }); setImg(null); if (fileRef.current) fileRef.current.value = ''; setShowForm(false); load(cat); setTimeout(() => setMsg(''), 2000); }
       else if (r.status === 401) setMsg('Please sign in to post.');
-      else setMsg('Could not post — try again.');
-    } catch { setMsg('Could not post — try again.'); }
+      else setMsg('Could not post, try again.');
+    } catch { setMsg('Could not post, try again.'); }
   }
 
   async function del(id) { if (!window.confirm('Delete this listing?')) return; await apiPost('/api/swap/delete', { id }); load(cat); }
@@ -49,7 +49,7 @@ export default function SwapApp() {
         <header className="svc-head">
           <p className="eyebrow">Community · Classifieds</p>
           <h1 className="serif svc-title">Swap &amp; sell</h1>
-          <p className="svc-sub">The local noticeboard for remote Australia — gear, parts, vehicles, wanted ads and free stuff. Free to post for members.</p>
+          <p className="svc-sub">The local noticeboard for remote Australia, gear, parts, vehicles, wanted ads and free stuff. Free to post for members.</p>
         </header>
 
         <div className="swap-bar">
@@ -76,7 +76,7 @@ export default function SwapApp() {
           </form>
         ) : null}
 
-        {(data.listings || []).length === 0 ? <p className="swap-empty">No listings yet{cat !== 'All' ? ' in ' + cat : ''} — be the first to post.</p> : (
+        {(data.listings || []).length === 0 ? <p className="swap-empty">No listings yet{cat !== 'All' ? ' in ' + cat : ''}, be the first to post.</p> : (
           <div className="swap-grid">
             {data.listings.map(l => (
               <article className="swap-card" key={l.id}>

@@ -5,7 +5,7 @@
 // name contains 'gift card', converts them to gift-card-denominations, and
 // removes them from products.db.
 //
-// Safe to run multiple times — skips denominations that already exist by id.
+// Safe to run multiple times, skips denominations that already exist by id.
 //
 // --dry-run  Preview what would be migrated without writing anything.
 // --yes      Skip the confirmation prompt (for non-interactive use).
@@ -48,7 +48,7 @@ function readDenominations() {
 }
 
 // Match products that are genuinely gift cards.
-// Category match is preferred (exact, trimmed).  Name match is a fallback —
+// Category match is preferred (exact, trimmed).  Name match is a fallback
 // flag those separately so the confirmation step can highlight them.
 function classifyGiftCard(p) {
   const cat  = (p.category || '').trim().toLowerCase();
@@ -81,14 +81,14 @@ function prompt(question) {
   }
 
   if (toMigrate.length === 0) {
-    console.log('No gift card products found in products.db — nothing to do.');
+    console.log('No gift card products found in products.db, nothing to do.');
     process.exit(0);
   }
 
   console.log(`Found ${toMigrate.length} gift card product(s) to migrate:`);
   for (const p of toMigrate) {
-    const tag = nameOnly.includes(p) ? ' [matched by name — verify this is correct]' : '';
-    console.log(`  • [${p.id}] ${p.name} — $${p.price || p.priceAud || '?'}${tag}`);
+    const tag = nameOnly.includes(p) ? ' [matched by name, verify this is correct]' : '';
+    console.log(`  • [${p.id}] ${p.name} - $${p.price || p.priceAud || '?'}${tag}`);
   }
 
   if (nameOnly.length > 0) {
@@ -121,7 +121,7 @@ function prompt(question) {
   for (const p of toMigrate) {
     const denomId = 'gc-denom-' + p.id;
     if (existingIds.has(denomId)) {
-      console.log(`  Skipping ${p.name} — denomination ${denomId} already exists.`);
+      console.log(`  Skipping ${p.name}, denomination ${denomId} already exists.`);
       continue;
     }
     const denom = {
@@ -145,5 +145,5 @@ function prompt(question) {
   atomicWrite(PRODUCTS_PATH, JSON.stringify({ products: remaining }, null, 2));
 
   console.log(`\nDone. ${added} denomination(s) added, ${toMigrate.length} product(s) removed from products.db.`);
-  console.log('Image files are unchanged on disk — their paths are now stored in each denomination\'s imageUrl field.');
+  console.log('Image files are unchanged on disk, their paths are now stored in each denomination\'s imageUrl field.');
 })().catch(err => { console.error(err); process.exit(1); });

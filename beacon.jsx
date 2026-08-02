@@ -1,10 +1,10 @@
-// Beacon — a simple "I'm OK" safety check-in. Set a schedule + a contact; one
+// Beacon, a simple "I'm OK" safety check-in. Set a schedule + a contact; one
 // tap marks you safe. Miss a window and the server emails your contact. Per-user
 // config in beacon.db; no data shown until you sign in.
 import { useState, useEffect } from 'react';
 import { TopNav, Footer, useAuth, useShopInfo, apiPost } from './app-shell.jsx';
 
-const fmt = (t) => t ? new Date(t).toLocaleString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '—';
+const fmt = (t) => t ? new Date(t).toLocaleString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '-';
 
 export default function BeaconApp() {
   const { user } = useAuth();
@@ -24,7 +24,7 @@ export default function BeaconApp() {
     if (r.ok) { setEditing(false); setMsg(''); load(); }
     else { const d = await r.json().catch(() => ({})); setMsg(d.message || 'Could not save.'); }
   }
-  async function checkin() { setMsg('…'); const r = await apiPost('/api/beacon/checkin', {}); if (r.ok) { setMsg("Checked in — you're marked safe."); load(); setTimeout(() => setMsg(''), 2500); } }
+  async function checkin() { setMsg('…'); const r = await apiPost('/api/beacon/checkin', {}); if (r.ok) { setMsg("Checked in - you're marked safe."); load(); setTimeout(() => setMsg(''), 2500); } }
   async function stop() { if (!window.confirm('Turn off your beacon?')) return; await apiPost('/api/beacon/stop', {}); load(); }
 
   if (user === undefined) return (<><TopNav current="beacon" /><main className="container svc-main"><p>Loading…</p></main><Footer /></>);
@@ -35,7 +35,7 @@ export default function BeaconApp() {
         <header className="svc-head">
           <p className="eyebrow">Safety · Beacon</p>
           <h1 className="serif svc-title">Check-in beacon</h1>
-          <p className="svc-sub">Heading somewhere remote? Set a check-in schedule — if you miss it, we email your contact automatically. Sign in to set one up.</p>
+          <p className="svc-sub">Heading somewhere remote? Set a check-in schedule, if you miss it, we email your contact automatically. Sign in to set one up.</p>
         </header>
         {info && info.portalUrl ? <a className="btn btn-rust" href={info.portalUrl}>Sign in / Register</a> : null}
       </main><Footer /></>
@@ -71,7 +71,7 @@ export default function BeaconApp() {
           </form>
         ) : (
           <div className={'beacon-card' + (st.overdue ? ' overdue' : '')}>
-            <div className="beacon-status">{st.overdue ? '⚠ Overdue — your contact has been alerted' : "✓ Active — you're marked safe"}</div>
+            <div className="beacon-status">{st.overdue ? '⚠ Overdue, your contact has been alerted' : "✓ Active, you're marked safe"}</div>
             <button className="beacon-ok" onClick={checkin}>I'm OK</button>
             <p className="beacon-msg">{msg}</p>
             <ul className="beacon-info">
@@ -85,7 +85,7 @@ export default function BeaconApp() {
             </div>
           </div>
         )}
-        <p className="beacon-note">Not a substitute for a registered PLB/EPIRB. Alerts depend on the shop's email being configured and the server being online — for life-threatening emergencies, call 000.</p>
+        <p className="beacon-note">Not a substitute for a registered PLB/EPIRB. Alerts depend on the shop's email being configured and the server being online, for life-threatening emergencies, call 000.</p>
       </main><Footer /></>
   );
 }

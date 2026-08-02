@@ -1,9 +1,9 @@
 // Shared app-shell for the Outback Electronics service suite.
 // Imported by every subdomain app (hub, solar, sky, …) so they share one
-// launcher, one nav, one account state, and one visual language — matching
+// launcher, one nav, one account state, and one visual language - matching
 // the main site via app-shell.css.
 //
-// URLs are NEVER hard-coded — they're read at runtime from /api/shop-info
+// URLs are NEVER hard-coded, they're read at runtime from /api/shop-info
 // (which every service returns via serviceUrls() in server.js), so localhost
 // (ports) and production (subdomains) both work from the same code.
 import { useState, useEffect, useRef } from 'react';

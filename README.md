@@ -2,7 +2,7 @@
 
 **Built for where the signal ends.**
 
-An independent electronics outpost serving remote Australia — rugged laptops, satellite uplinks, off-grid power systems, custom PC builds, field repairs, and edge AI. Based at 183 Peericoota Forest Rd, Moama NSW 2731. By appointment only.
+An independent electronics outpost serving remote Australia, rugged laptops, satellite uplinks, off-grid power systems, custom PC builds, field repairs, and edge AI. Based at 183 Peericoota Forest Rd, Moama NSW 2731. By appointment only.
 
 ---
 
@@ -12,10 +12,10 @@ A single Node.js server (`server.js`) runs five HTTP servers on separate ports f
 
 | Port | Service | Description |
 |------|---------|-------------|
-| 8080 | Main site | Public-facing SPA — shop, services, contact, quote request |
-| 8081 | Forum | Community forum — threads, replies, user auth |
-| 8082 | Admin | Staff dashboard — orders, repairs, quotes, inventory, settings |
-| 8083 | Portal | Customer portal — order tracking, quote acceptance, warranty |
+| 8080 | Main site | Public-facing SPA, shop, services, contact, quote request |
+| 8081 | Forum | Community forum, threads, replies, user auth |
+| 8082 | Admin | Staff dashboard, orders, repairs, quotes, inventory, settings |
+| 8083 | Portal | Customer portal, order tracking, quote acceptance, warranty |
 | 8084 | Games | Outback-themed browser games |
 
 All five share a single data directory (flat JSON files, no database server required).
@@ -54,7 +54,7 @@ All data is stored as JSON files in the project root. No external database.
 
 Writes use atomic file replacement (write to `.tmp`, then rename) to prevent corruption.
 
-`settings.db` is the single source of truth for all settings. Every `readSettings()` call reads from `settings.db` and fills in any missing keys using inline code fallbacks defined directly in `server.js`. There is no `settings.defaults.json` file — it does not exist and must never be created.
+`settings.db` is the single source of truth for all settings. Every `readSettings()` call reads from `settings.db` and fills in any missing keys using inline code fallbacks defined directly in `server.js`. There is no `settings.defaults.json` file, it does not exist and must never be created.
 
 ---
 
@@ -134,7 +134,7 @@ Without SMTP vars, all emails are silently dropped. Without Stripe, checkout and
 7. **Admin** moves job through columns: Intake → Diagnosis → Build/Repair → Quality Check → Done
 8. **Admin** marks order as shipped, adds tracking number
 9. **Customer** receives shipped email with warranty registration link (`portal/?warranty=orderId`)
-10. **Customer** registers warranty via portal — no login required for the warranty form
+10. **Customer** registers warranty via portal, no login required for the warranty form
 
 ### Repair job (no order)
 Admin can create repair jobs directly in admin → Repair Jobs without a linked order or quote.
@@ -146,16 +146,16 @@ Admin can create repair jobs directly in admin → Repair Jobs without a linked 
 | Section | Description |
 |---------|-------------|
 | Overview | Live stats: open repairs, unpaid orders, pending quotes, recent activity |
-| Orders | Full order management — payment, fulfilment, part tracking |
-| Repair Jobs | Kanban board — drag cards between stage columns |
-| Quotes Inbox | Incoming quote requests — review, reply, set price, send |
+| Orders | Full order management, payment, fulfilment, part tracking |
+| Repair Jobs | Kanban board, drag cards between stage columns |
+| Quotes Inbox | Incoming quote requests, review, reply, set price, send |
 | eWaste Intake | Log incoming e-waste, assign tier, record payout |
 | Products | Shop product listings |
 | Services | Service listings shown on public services page |
 | Software | Software listings |
 | Tutorials | Tutorial articles |
 | AI Models & Boxes | Edge AI product catalogue |
-| Forum | Forum moderation — categories, pinned posts |
+| Forum | Forum moderation, categories, pinned posts |
 | Groups | Community group management |
 | Customers | Customer records, linked orders/jobs, merge duplicates |
 | Sellers | Second-hand seller management |
@@ -173,11 +173,11 @@ Admin can create repair jobs directly in admin → Repair Jobs without a linked 
 |-----|-------------|
 | Overview | Summary: active orders, open quotes, recent repairs |
 | Orders | Order history with detail view and pay-now for pending invoices |
-| Repairs | Repair job status — updated as job moves through Kanban |
+| Repairs | Repair job status, updated as job moves through Kanban |
 | Quotes | Submit quote requests, view responses, accept quotes |
 | Memberships | Active subscription management |
-| Rewards | Loyalty points (not yet active — see todo.md) |
-| Wallet | Store credit and gift card balances (not yet active — see todo.md) |
+| Rewards | Loyalty points (not yet active, see todo.md) |
+| Wallet | Store credit and gift card balances (not yet active, see todo.md) |
 | Addresses | Saved delivery addresses |
 | Bookings | Appointment history |
 | Account | Display name, password change |
@@ -188,12 +188,12 @@ Admin can create repair jobs directly in admin → Repair Jobs without a linked 
 
 See `todo.md` for a full list. Key gaps:
 
-- **Gift cards** — page exists, purchase flow not yet implemented
-- **Memberships** — tiers shown, Stripe subscription flow not yet wired
-- **Rewards** — UI exists, no points engine
-- **Wallet** — UI exists, no credit/balance tracking
-- **SMTP / Stripe / AusPost** — must be configured via env vars before emails, payments or shipping quotes work
-- **shop.email** — must be set in admin Settings before contact forms notify staff
+- **Gift cards**, page exists, purchase flow not yet implemented
+- **Memberships**, tiers shown, Stripe subscription flow not yet wired
+- **Rewards** - UI exists, no points engine
+- **Wallet** - UI exists, no credit/balance tracking
+- **SMTP / Stripe / AusPost**, must be configured via env vars before emails, payments or shipping quotes work
+- **shop.email**, must be set in admin Settings before contact forms notify staff
 
 ---
 
@@ -202,4 +202,4 @@ See `todo.md` for a full list. Key gaps:
 Active development branch: `claude/inspiring-bell-ddFxr`  
 Production: `main`
 
-PRs are created from feature branches into `main`. The `dist/` folder is committed — no separate build step in deployment.
+PRs are created from feature branches into `main`. The `dist/` folder is committed, no separate build step in deployment.

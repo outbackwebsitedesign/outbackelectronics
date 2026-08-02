@@ -292,12 +292,12 @@ function rating(illum) {
   if (illum < 25) return ['Excellent', 'rate-excellent'];
   if (illum < 50) return ['Good',      'rate-good'];
   if (illum < 75) return ['Fair',      'rate-fair'];
-  return ['Poor — bright moon', 'rate-poor'];
+  return ['Poor, bright moon', 'rate-poor'];
 }
 
 // ── Format helpers ─────────────────────────────────────────────────────────
-const fmtTime = d => d ? d.toLocaleTimeString('en-AU', { timeZone: 'Australia/Sydney', hour: 'numeric', minute: '2-digit' }) : '—';
-const fmtDate = d => d ? d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }) : '—';
+const fmtTime = d => d ? d.toLocaleTimeString('en-AU', { timeZone: 'Australia/Sydney', hour: 'numeric', minute: '2-digit' }) : '-';
+const fmtDate = d => d ? d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }) : '-';
 const fmtDuration = mins => `${Math.floor(mins / 60)}h ${mins % 60}m`;
 
 // ── Component ──────────────────────────────────────────────────────────────
@@ -478,7 +478,7 @@ export default function SkyApp() {
               </div>
               <div className="sky-line"><span>Nautical dusk</span><b>{fmtTime(sunEvents.naut.set)}</b></div>
               <div className="sky-line"><span>Astronomical dusk</span><b>{fmtTime(sunEvents.astro.set)}</b></div>
-              <p className="sky-sub" style={{ marginTop: 10 }}>True darkness begins at astronomical dusk — 18° below horizon.</p>
+              <p className="sky-sub" style={{ marginTop: 10 }}>True darkness begins at astronomical dusk - 18° below horizon.</p>
             </div>
           </div>
         </section>
@@ -522,7 +522,7 @@ export default function SkyApp() {
                 <span><b>{p.name}</b></span>
                 <span>{fmtTime(p.rise)}</span>
                 <span>{fmtTime(p.set)}</span>
-                <span>{p.altNow > 0 ? `${p.altNow.toFixed(0)}°` : '—'}</span>
+                <span>{p.altNow > 0 ? `${p.altNow.toFixed(0)}°` : '-'}</span>
                 <span>{p.elong > 0 ? `E ${p.elong}°` : `W ${Math.abs(p.elong)}°`}</span>
                 <span>
                   {p.conjunction ? <span className="sky-rate rate-poor">Near sun</span>
@@ -534,7 +534,7 @@ export default function SkyApp() {
               </div>
             ))}
           </div>
-          <p className="sky-sub" style={{ marginTop: 8 }}>Planet positions are approximate (±5°). Elongation measured from Sun — eastern = visible after sunset, western = before sunrise.</p>
+          <p className="sky-sub" style={{ marginTop: 8 }}>Planet positions are approximate (±5°). Elongation measured from Sun, eastern = visible after sunset, western = before sunrise.</p>
         </section>
 
         {/* Aurora + Milky Way */}
@@ -562,8 +562,8 @@ export default function SkyApp() {
                 {gcAlt > 0 ? `${gcAlt.toFixed(0)}° alt` : 'Below horizon'}
               </div>
               <p className="sky-sub" style={{ marginTop: 8 }}>
-                {gcAlt > 20 ? 'Galactic centre is well placed — ideal Milky Way conditions.'
-                 : gcAlt > 5 ? 'Galactic centre is low — rising towards better viewing.'
+                {gcAlt > 20 ? 'Galactic centre is well placed, ideal Milky Way conditions.'
+                 : gcAlt > 5 ? 'Galactic centre is low, rising towards better viewing.'
                  : 'Galactic centre is not visible tonight from this location.'}
               </p>
               <p className="sky-sub">Best months from Australia: May – October</p>
@@ -601,7 +601,7 @@ export default function SkyApp() {
 
         {/* ISS */}
         <section className="sky-section">
-          <h2 className="sky-section-title">ISS — International Space Station</h2>
+          <h2 className="sky-section-title">ISS - International Space Station</h2>
           <div className="sky-grid">
             <div className="sky-card">
               <h3>Live position</h3>
@@ -615,7 +615,7 @@ export default function SkyApp() {
             </div>
 
             <div className="sky-card">
-              <h3>Upcoming passes — {activeLoc.label || (activeLoc.lat != null ? `${activeLoc.lat.toFixed(1)}°, ${activeLoc.lon.toFixed(1)}°` : '…')}</h3>
+              <h3>Upcoming passes, {activeLoc.label || (activeLoc.lat != null ? `${activeLoc.lat.toFixed(1)}°, ${activeLoc.lon.toFixed(1)}°` : '…')}</h3>
               {issPasses === null && <p className="sky-sub">Loading…</p>}
               {issPasses && issPasses.length === 0 && <p className="sky-sub">No visible passes in the next 5 days.</p>}
               {issPasses && issPasses.map((p, i) => {

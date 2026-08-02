@@ -1,6 +1,6 @@
 // Built-in policy text. Ships in code (unlike policies.db, which is gitignored
 // and starts empty on every fresh deploy) and is used as a fallback whenever no
-// staff override exists in policies.db for a given audience+slug — see
+// staff override exists in policies.db for a given audience+slug, see
 // getEffectivePolicies() in server.js. Editing and publishing a policy through
 // the admin UI writes an override row to policies.db; it does not touch this file.
 //
@@ -17,10 +17,10 @@ This Agreement is between Outback Electronics ('OE', 'we', 'us', or 'our'), loca
 
 This Agreement incorporates the following documents by reference, together forming the entire seller agreement:
 
-- **OHD001** — Terms and Conditions for Sellers (this document)
-- **OHD002** — Design Quality Standards
-- **OHD003** — Fees Schedule
-- **OHD004** — Listing Requirements
+- **OHD001** - Terms and Conditions for Sellers (this document)
+- **OHD002** - Design Quality Standards
+- **OHD003** - Fees Schedule
+- **OHD004** - Listing Requirements
 
 By submitting an application to list on the Platform, by listing a product, or by continuing to use the Platform after receiving notice of updated terms, you agree to be bound by this Agreement. We recommend that all prospective Sellers obtain independent legal advice before entering into this Agreement.
 
@@ -29,7 +29,7 @@ By submitting an application to list on the Platform, by listing a product, or b
 - **"Agreement"** means OHD001–OHD004 collectively.
 - **"ACL"** means the Australian Consumer Law (Schedule 2 of the _Competition and Consumer Act 2010_ (Cth)).
 - **"Commission"** means the percentage fee applied by OE to the Seller's listed price, per OHD003.
-- **"ELV"** means Extra Low Voltage — circuits or systems operating at or below 50 V AC or 120 V DC.
+- **"ELV"** means Extra Low Voltage, circuits or systems operating at or below 50 V AC or 120 V DC.
 - **"Listing Fee"** means the monthly subscription fee charged per OHD003.
 - **"Platform"** means the Outback Electronics website at [outbackelectronics.com.au](https://outbackelectronics.com.au) and any related services.
 - **"Products"** means items listed by the Seller on the Platform.
@@ -46,7 +46,7 @@ OE acts as a **disclosed payment collection agent** for the Seller. When a custo
 
 ### 3. ELV/LV Platform Scope
 
-The Platform accepts **only Extra Low Voltage (ELV, ≤50 V AC / ≤120 V DC) and Low Voltage (LV) products.** Mains-voltage (240 V AC) products, components, or designs are strictly prohibited — there are no exceptions. This includes any product that connects directly to a mains supply, any mains-rated power supply unit, or any circuit designed to operate at mains voltages even if it includes a step-down stage.
+The Platform accepts **only Extra Low Voltage (ELV, ≤50 V AC / ≤120 V DC) and Low Voltage (LV) products.** Mains-voltage (240 V AC) products, components, or designs are strictly prohibited - there are no exceptions. This includes any product that connects directly to a mains supply, any mains-rated power supply unit, or any circuit designed to operate at mains voltages even if it includes a step-down stage.
 
 Acceptable categories include: Arduino, Raspberry Pi, and custom microcontroller boards and shields; embedded systems and ELV sensor/control modules; 12 V / 24 V / 48 V automotive, caravan, marine, and off-grid electronics; battery management systems; DC-DC converters; and other circuits operating entirely within ELV limits. Software, firmware, and digital products related to the above hardware are also accepted.
 
@@ -153,7 +153,7 @@ If OE receives a credible intellectual property complaint from a rights-holder, 
 
 **Effect of Termination.** On termination: listings are removed within 7 days (immediately for termination for cause); outstanding customer orders placed before termination are completed or refunded; Consigned Stock is returned at the Seller's cost within 30 days; final payment is made within 30 days after all outstanding customer transactions are resolved and all amounts owed to OE are deducted.
 
-Sections 6 (IP Licence — 90-day tail), 11 (ACL), 12 (Indemnity), 13 (IP Compliance), 17 (Governing Law), and any accrued payment obligations survive termination.
+Sections 6 (IP Licence - 90-day tail), 11 (ACL), 12 (Indemnity), 13 (IP Compliance), 17 (Governing Law), and any accrued payment obligations survive termination.
 
 ### 15. Dispute Resolution
 
@@ -201,32 +201,32 @@ All products must operate exclusively at Extra Low Voltage (ELV: ≤50 V AC / �
 
 **Applicable standards** (as relevant to the product category):
 
-- _AS/NZS 3820_ — Essential requirements for electrical equipment;
-- _AS/NZS 62368-1_ — Audio/video, IT, and communications technology equipment;
-- _AS/NZS 4268_ — Radio communications equipment;
+- _AS/NZS 3820_ - Essential requirements for electrical equipment;
+- _AS/NZS 62368-1_ - Audio/video, IT, and communications technology equipment;
+- _AS/NZS 4268_ - Radio communications equipment;
 - Relevant IEC standards for the specific product type.
 
 Sellers do not need formal certification for all products, but designs must be assessed against the relevant standard and documentation must demonstrate how the design meets its requirements.
 
 ### 3. Functionality and Performance
 
-Products must perform all functions and meet all specifications as advertised. Known limitations must be clearly disclosed in the listing — non-disclosure constitutes a misdescription under the ACL. Sellers must test products thoroughly before listing. OE may request evidence of testing at any time.
+Products must perform all functions and meet all specifications as advertised. Known limitations must be clearly disclosed in the listing, non-disclosure constitutes a misdescription under the ACL. Sellers must test products thoroughly before listing. OE may request evidence of testing at any time.
 
 ### 4. Documentation Requirements
 
 For each listed product, the Seller must provide OE with (or make available to customers as applicable):
 
-- **Schematic diagram** — clearly annotated with component values and part numbers;
-- **Assembly or connection instructions** — step-by-step with clear diagrams;
-- **Usage and safety guidelines** — operating voltage/current ranges, maximum ratings, and specific precautions;
-- **Specification sheet** — key electrical parameters, dimensions, and environmental ratings;
-- **Bill of Materials (BOM)** — key components and sources for quality audit purposes.
+- **Schematic diagram**, clearly annotated with component values and part numbers;
+- **Assembly or connection instructions**, step-by-step with clear diagrams;
+- **Usage and safety guidelines**, operating voltage/current ranges, maximum ratings, and specific precautions;
+- **Specification sheet**, key electrical parameters, dimensions, and environmental ratings;
+- **Bill of Materials (BOM)**, key components and sources for quality audit purposes.
 
 Documentation must be accurate, current, and written in clear English. Outdated or inaccurate documentation is a listing breach.
 
 ### 5. Component Quality
 
-All components must be genuine, specification-grade parts from reputable manufacturers or authorised distributors. The use of counterfeit, salvaged, out-of-specification, or remarked components is prohibited and constitutes a serious breach of the Seller Agreement. Sellers should be able to provide sourcing information for key components on request — particularly safety-critical parts such as MOSFETs, gate drivers, voltage regulators, and battery protection ICs.
+All components must be genuine, specification-grade parts from reputable manufacturers or authorised distributors. The use of counterfeit, salvaged, out-of-specification, or remarked components is prohibited and constitutes a serious breach of the Seller Agreement. Sellers should be able to provide sourcing information for key components on request, particularly safety-critical parts such as MOSFETs, gate drivers, voltage regulators, and battery protection ICs.
 
 ### 6. Lithium Battery Products
 
@@ -264,7 +264,7 @@ const BODY_SELLER_FEES = `_SELLER AGREEMENT · OHD003_
 
 ## Fees Schedule
 
-This document sets out the fees payable by Sellers for listing products on the Outback Electronics Platform. It forms part of the Seller Agreement (OHD001–OHD004). All amounts are in Australian Dollars (AUD). Unless otherwise stated, fees are **exclusive of GST** — see Section 5 for GST treatment.
+This document sets out the fees payable by Sellers for listing products on the Outback Electronics Platform. It forms part of the Seller Agreement (OHD001–OHD004). All amounts are in Australian Dollars (AUD). Unless otherwise stated, fees are **exclusive of GST** - see Section 5 for GST treatment.
 
 For questions about fees, contact us at [{{email}}](mailto:{{email}}).
 
@@ -340,13 +340,13 @@ Listings that do not meet these requirements may be suspended, corrected by OE, 
 
 ### 1. Product Photographs
 
-Photographs must: be well-lit, in focus, and accurately represent the product; include at least one shot on a plain white or neutral background; show multiple angles where features are not visible from a single perspective; be of sufficient resolution for customers to zoom in on detail (minimum 1000 × 1000 px recommended); not contain watermarks, unrelated branding, or promotional text overlays; and be of the actual product — not renders, stock images, or competitor products.
+Photographs must: be well-lit, in focus, and accurately represent the product; include at least one shot on a plain white or neutral background; show multiple angles where features are not visible from a single perspective; be of sufficient resolution for customers to zoom in on detail (minimum 1000 × 1000 px recommended); not contain watermarks, unrelated branding, or promotional text overlays; and be of the actual product, not renders, stock images, or competitor products.
 
 **IP in photographs:** By submitting photographs, the Seller warrants it owns the copyright or holds a licence to use them, and grants OE the licence in OHD001 Section 6 to display them in connection with the listing.
 
 ### 2. Product Title
 
-Titles must: accurately describe the product (misleading titles breach the ACL); be concise — preferred format is [Brand / Seller Name] [Product Name] [Key Spec or Variant]; use title case only (not ALL CAPS); not contain promotional language in the title field; and not include competitor brand names for search optimisation purposes.
+Titles must: accurately describe the product (misleading titles breach the ACL); be concise, preferred format is [Brand / Seller Name] [Product Name] [Key Spec or Variant]; use title case only (not ALL CAPS); not contain promotional language in the title field; and not include competitor brand names for search optimisation purposes.
 
 ### 3. Product Description
 
@@ -364,7 +364,7 @@ Keywords must be genuinely relevant to the product. Prohibited: competitor brand
 
 ### 5. Pricing Compliance
 
-Sellers must comply with all price representation requirements under the ACL. In particular: the customer price (Seller price + OE Commission) is the total price — no hidden extras; any "was price" or "RRP" shown must reflect a genuine prior selling price or manufacturer's RRP (false RRPs are misleading under ACL s.18 and may constitute a false representation under ACL s.29(1)(i)); and Sellers must not create artificial urgency through false countdown timers or fabricated stock level warnings.
+Sellers must comply with all price representation requirements under the ACL. In particular: the customer price (Seller price + OE Commission) is the total price, no hidden extras; any "was price" or "RRP" shown must reflect a genuine prior selling price or manufacturer's RRP (false RRPs are misleading under ACL s.18 and may constitute a false representation under ACL s.29(1)(i)); and Sellers must not create artificial urgency through false countdown timers or fabricated stock level warnings.
 
 ### 6. Refund and Return Policy Disclosure
 
@@ -378,11 +378,11 @@ Sellers must maintain accurate, monitored contact information in their seller pr
 
 All listed products must be genuine and the Seller's own work, or legitimately licensed or authorised for sale. Sellers must not list: counterfeit, cloned, or unauthorised reproductions of another party's product; products that infringe a patent, registered design, trade mark, or copyright; or open-source hardware or software projects listed in violation of the applicable open-source licence terms.
 
-The Seller grants OE the IP licence set out in OHD001 Section 6 for all content submitted with a listing — including photographs, descriptions, schematics, and videos. The Seller warrants it has the right to grant this licence.
+The Seller grants OE the IP licence set out in OHD001 Section 6 for all content submitted with a listing, including photographs, descriptions, schematics, and videos. The Seller warrants it has the right to grant this licence.
 
 ### 9. Legal and Regulatory Compliance
 
-Listings must comply with all applicable Australian laws and regulations, including: the Australian Consumer Law (accurate descriptions, no misleading claims); electrical safety regulations (ELV/LV products only — see OHD002 Section 2); dangerous goods regulations (correct labelling for lithium batteries and other regulated items); trade marks (no unauthorised use of third-party trade marks); and ACCC product safety standards applicable to the product category.
+Listings must comply with all applicable Australian laws and regulations, including: the Australian Consumer Law (accurate descriptions, no misleading claims); electrical safety regulations (ELV/LV products only, see OHD002 Section 2); dangerous goods regulations (correct labelling for lithium batteries and other regulated items); trade marks (no unauthorised use of third-party trade marks); and ACCC product safety standards applicable to the product category.
 
 ### 10. Videos (Optional)
 
@@ -434,9 +434,9 @@ You agree to keep your password confidential and are responsible for all use of 
 
 We endeavour to display products accurately but cannot guarantee colours, features, or specifications are error-free. All products are subject to availability. Prices are subject to change. Product descriptions are provided in good faith and do not constitute a warranty beyond what is required by the Australian Consumer Law.
 
-**Australian Consumer Law — Consumer Guarantees:** Our goods come with guarantees that cannot be excluded under the Australian Consumer Law. You are entitled to a replacement or refund for a major failure and compensation for any other reasonably foreseeable loss or damage. You are also entitled to have goods repaired or replaced if they fail to be of acceptable quality and the failure does not amount to a major failure. Nothing in these Legal Terms excludes, restricts, or modifies any right or remedy you have under the Australian Consumer Law.
+**Australian Consumer Law - Consumer Guarantees:** Our goods come with guarantees that cannot be excluded under the Australian Consumer Law. You are entitled to a replacement or refund for a major failure and compensation for any other reasonably foreseeable loss or damage. You are also entitled to have goods repaired or replaced if they fail to be of acceptable quality and the failure does not amount to a major failure. Nothing in these Legal Terms excludes, restricts, or modifies any right or remedy you have under the Australian Consumer Law.
 
-**Electrical Safety and Compliance — ELV/LV Products Only.** Outback Electronics works exclusively with Extra Low Voltage (ELV, ≤50 V AC / ≤120 V DC) and Low Voltage (LV) equipment. We do not supply, repair, or provide services for mains-connected (240 V AC) equipment, and we are not licensed to perform mains-voltage electrical work. Nothing on this Site or in our Services should be interpreted as advice, instruction, or authorisation for mains-voltage work. All mains-voltage electrical installation, repair, or modification work must only be performed by a licensed electrician under applicable state or territory electrical safety legislation (including _AS/NZS 3000_). If your project requires work on mains-voltage infrastructure, please engage a licensed electrician — we can help with the ELV/LV side only. We make no representation regarding the safety ratings, compliance certifications, or fitness for purpose of third-party products or components. You are responsible for verifying that any product is appropriate for your intended application and installation environment before purchase or use.
+**Electrical Safety and Compliance - ELV/LV Products Only.** Outback Electronics works exclusively with Extra Low Voltage (ELV, ≤50 V AC / ≤120 V DC) and Low Voltage (LV) equipment. We do not supply, repair, or provide services for mains-connected (240 V AC) equipment, and we are not licensed to perform mains-voltage electrical work. Nothing on this Site or in our Services should be interpreted as advice, instruction, or authorisation for mains-voltage work. All mains-voltage electrical installation, repair, or modification work must only be performed by a licensed electrician under applicable state or territory electrical safety legislation (including _AS/NZS 3000_). If your project requires work on mains-voltage infrastructure, please engage a licensed electrician - we can help with the ELV/LV side only. We make no representation regarding the safety ratings, compliance certifications, or fitness for purpose of third-party products or components. You are responsible for verifying that any product is appropriate for your intended application and installation environment before purchase or use.
 
 **Lithium Battery Safety.** Products containing lithium cells, or sold for use with lithium-based batteries, carry inherent risks including fire, explosion, and toxic gas release if the cells are punctured, overcharged, over-discharged, short-circuited, exposed to excessive heat or moisture, physically damaged, or otherwise mishandled. You must handle, charge, store, transport, and dispose of lithium batteries strictly in accordance with manufacturer specifications and all applicable dangerous-goods regulations. We are not liable for any property damage (including fire damage or total property loss), personal injury, or death arising from improper handling, storage, charging, modification, or disposal of lithium batteries, to the fullest extent permitted by applicable law. Nothing in this clause limits your rights under the Australian Consumer Law where a product sold by us is defective.
 
@@ -474,7 +474,7 @@ Any software provided is offered 'AS IS' without warranty of any kind. If a EULA
 
 You warrant that you will not use any Security Tool to access, damage, intercept, or interfere with any system, network, account, or data without proper authorisation, or for any other unlawful, unethical, or fraudulent purpose. Using a Security Tool against a system without authorisation is a criminal offence in Australia and most other jurisdictions, and we treat it as a serious breach of these Legal Terms.
 
-**Reporting and Disclosure.** If we reasonably suspect that a Security Tool we have supplied is being, or has been, used for an unauthorised, unlawful, or malicious purpose, we reserve the right to report the matter — including disclosing your personal information, purchase records, and any other relevant details — to law enforcement, a relevant regulator, or an affected third party, without further notice to you. This is in addition to, and does not limit, any other rights we have under our Privacy Policy or applicable law to disclose information where required or permitted.
+**Reporting and Disclosure.** If we reasonably suspect that a Security Tool we have supplied is being, or has been, used for an unauthorised, unlawful, or malicious purpose, we reserve the right to report the matter - including disclosing your personal information, purchase records, and any other relevant details - to law enforcement, a relevant regulator, or an affected third party, without further notice to you. This is in addition to, and does not limit, any other rights we have under our Privacy Policy or applicable law to disclose information where required or permitted.
 
 **No Liability for Misuse.** To the fullest extent permitted by law, we are not liable for any loss, damage, claim, fine, penalty, or legal liability arising from your use, or any other person's use, of a Security Tool for any illegal, unethical, or immoral purpose, or otherwise outside the scope of your documented authorisation. You indemnify us against any claim, loss, or liability arising from such use. Nothing in this clause excludes any consumer guarantee that cannot lawfully be excluded under the Australian Consumer Law.
 
@@ -482,7 +482,7 @@ You warrant that you will not use any Security Tool to access, damage, intercept
 
 Where we provide an AI-powered chat or assistant feature ('AI Assistant'), your messages and related data may be transmitted to and processed by a third-party AI service provider in order to generate a response. Do not submit sensitive personal information, payment card details, or confidential information to the AI Assistant.
 
-**No Professional Advice; Accuracy Not Guaranteed.** Responses from the AI Assistant are generated automatically and may be inaccurate, incomplete, outdated, or entirely fabricated. They do not constitute professional, technical, electrical, legal, or safety advice, and must not be relied upon as a substitute for advice from a qualified professional — particularly for anything involving mains-voltage electricity, lithium battery handling, or safety-critical applications. You are solely responsible for independently verifying any information provided by the AI Assistant before acting on it.
+**No Professional Advice; Accuracy Not Guaranteed.** Responses from the AI Assistant are generated automatically and may be inaccurate, incomplete, outdated, or entirely fabricated. They do not constitute professional, technical, electrical, legal, or safety advice, and must not be relied upon as a substitute for advice from a qualified professional, particularly for anything involving mains-voltage electricity, lithium battery handling, or safety-critical applications. You are solely responsible for independently verifying any information provided by the AI Assistant before acting on it.
 
 **Acceptable Use.** You must not use the AI Assistant to generate, request, or attempt to extract content that is illegal, that facilitates unauthorised access to computer systems, that infringes a third party's intellectual property, or that otherwise breaches our Acceptable Use Policy. We may log, monitor, and review AI Assistant interactions to enforce this Policy and may suspend your access to the AI Assistant for breach, without notice.
 
@@ -490,9 +490,9 @@ Where we provide an AI-powered chat or assistant feature ('AI Assistant'), your 
 
 ### 10. Repair and Technical Services
 
-**Scope — ELV/LV Equipment Only.** Our Repair Services are limited to Extra Low Voltage (ELV, ≤50 V AC / ≤120 V DC) and Low Voltage (LV) equipment. We do not perform repairs on mains-connected (240 V AC) devices and we are not licensed to do so. Any device submitted for repair that is found to contain mains-voltage components beyond our scope will not be worked on; we will advise you and return the device. Where we provide repair, diagnostic, or technical services within our scope ('Repair Services'), the following additional terms apply alongside your rights under the Australian Consumer Law. By submitting a device for Repair Services, you agree to these terms.
+**Scope - ELV/LV Equipment Only.** Our Repair Services are limited to Extra Low Voltage (ELV, ≤50 V AC / ≤120 V DC) and Low Voltage (LV) equipment. We do not perform repairs on mains-connected (240 V AC) devices and we are not licensed to do so. Any device submitted for repair that is found to contain mains-voltage components beyond our scope will not be worked on; we will advise you and return the device. Where we provide repair, diagnostic, or technical services within our scope ('Repair Services'), the following additional terms apply alongside your rights under the Australian Consumer Law. By submitting a device for Repair Services, you agree to these terms.
 
-**How to Submit a Device.** We operate as a mobile service — we do not have a public shopfront. Devices may be submitted in one of three ways: (a) **mail-in** — you may post your device to our returns address at any time without prior arrangement (please include your name, contact details, and a description of the fault); (b) **on-site service** — we can attend your location by appointment; or (c) **drop-off by appointment** — contact us first to arrange a time. Devices sent by post should be packed securely; we are not liable for damage caused by inadequate packaging in transit to us.
+**How to Submit a Device.** We operate as a mobile service, we do not have a public shopfront. Devices may be submitted in one of three ways: (a) **mail-in**, you may post your device to our returns address at any time without prior arrangement (please include your name, contact details, and a description of the fault); (b) **on-site service**, we can attend your location by appointment; or (c) **drop-off by appointment**, contact us first to arrange a time. Devices sent by post should be packed securely; we are not liable for damage caused by inadequate packaging in transit to us.
 
 **Pre-Repair Quote.** We will conduct an initial assessment of your device and provide a written quote before commencing any chargeable repair. Quotes are valid for 14 days from the date of issue unless otherwise stated. We reserve the right to vary a quote if additional faults are discovered during repair that were not apparent at the time of assessment; we will notify you and obtain your approval before proceeding with any work beyond the agreed scope.
 
@@ -586,7 +586,7 @@ We may correct typographical errors, inaccuracies, or omissions in our content a
 
 **THE SERVICES ARE PROVIDED ON AN AS-IS AND AS-AVAILABLE BASIS WITHOUT ANY REPRESENTATION OR WARRANTY OF ANY KIND, WHETHER EXPRESS, IMPLIED, STATUTORY, OR OTHERWISE, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, NON-INFRINGEMENT, ACCURACY, RELIABILITY, OR COMPLETENESS. WE DO NOT WARRANT THAT THE SERVICES WILL BE UNINTERRUPTED, ERROR-FREE, SECURE, OR FREE OF VIRUSES OR OTHER HARMFUL COMPONENTS. YOUR USE OF THE SERVICES IS ENTIRELY AT YOUR OWN RISK.**
 
-**Technical Information.** Any technical information, advice, guides, tutorials, or recommendations made available through the Services (including the forum, repair guides, product descriptions, and our Repair Services) are provided for general informational purposes only and do not constitute professional engineering, electrical safety, or specialist advice. Our technical content relates exclusively to ELV (Extra Low Voltage, ≤50 V AC / ≤120 V DC) and LV equipment; nothing in the Services should be read as guidance for mains-voltage (240 V AC) work. You acknowledge that electronic repairs and modifications involve inherent and serious risks including, without limitation: **electric shock capable of causing death or permanent serious injury; fire and explosion that may result in partial or complete property destruction (including damage to your home or premises); toxic gas release from damaged or mistreated battery cells; damage to connected equipment and infrastructure; personal injury; and voiding of manufacturer warranties**. You should always consult a qualified professional before undertaking any electronic repair, modification, or installation, and must engage a licensed electrician for any mains-voltage work — which is outside our scope entirely. You assume all risk associated with acting on any technical information obtained through the Services and agree that we shall not be liable for any loss, damage, personal injury, serious bodily injury, death, fire, explosion, property damage (including total loss of property), or adverse outcome resulting from reliance on such information, to the fullest extent permitted by law.
+**Technical Information.** Any technical information, advice, guides, tutorials, or recommendations made available through the Services (including the forum, repair guides, product descriptions, and our Repair Services) are provided for general informational purposes only and do not constitute professional engineering, electrical safety, or specialist advice. Our technical content relates exclusively to ELV (Extra Low Voltage, ≤50 V AC / ≤120 V DC) and LV equipment; nothing in the Services should be read as guidance for mains-voltage (240 V AC) work. You acknowledge that electronic repairs and modifications involve inherent and serious risks including, without limitation: **electric shock capable of causing death or permanent serious injury; fire and explosion that may result in partial or complete property destruction (including damage to your home or premises); toxic gas release from damaged or mistreated battery cells; damage to connected equipment and infrastructure; personal injury; and voiding of manufacturer warranties**. You should always consult a qualified professional before undertaking any electronic repair, modification, or installation, and must engage a licensed electrician for any mains-voltage work, which is outside our scope entirely. You assume all risk associated with acting on any technical information obtained through the Services and agree that we shall not be liable for any loss, damage, personal injury, serious bodily injury, death, fire, explosion, property damage (including total loss of property), or adverse outcome resulting from reliance on such information, to the fullest extent permitted by law.
 
 **No Reliance.** Other than as expressly set out in these Legal Terms, you should not rely on any statement made outside these Legal Terms as varying them. This clause does not exclude, and nothing in it should be read as excluding, any liability we may have for misleading or deceptive conduct under section 18 of the Australian Consumer Law, for fraudulent or negligent misrepresentation, or for any other conduct that cannot lawfully be excluded, restricted, or waived.
 
@@ -598,7 +598,7 @@ We may correct typographical errors, inaccuracies, or omissions in our content a
 
 **Exclusive Remedy.** The remedies set out in these Legal Terms are your sole and exclusive remedies in respect of any matter covered by these Legal Terms, to the maximum extent permitted by law.
 
-**These limitations do not apply to liability arising under the Australian Consumer Law or any other applicable mandatory law where such limitation or exclusion would be unlawful.** Where our liability for failure to comply with a consumer guarantee cannot be excluded, it is limited (to the extent permitted by law) to: in the case of goods — repair, replacement, or refund of the purchase price; in the case of services — resupplying the services or paying the cost of having them resupplied.
+**These limitations do not apply to liability arising under the Australian Consumer Law or any other applicable mandatory law where such limitation or exclusion would be unlawful.** Where our liability for failure to comply with a consumer guarantee cannot be excluded, it is limited (to the extent permitted by law) to: in the case of goods, repair, replacement, or refund of the purchase price; in the case of services, resupplying the services or paying the cost of having them resupplied.
 
 **Product Safety and Recalls.** Nothing in these Legal Terms limits any obligation we may have under the _Competition and Consumer Act 2010_ (Cth) or applicable product safety legislation in relation to product recalls, compulsory safety standards, or bans. If we become aware that a product we have supplied may be subject to a recall or poses a safety hazard, we will take steps to notify affected customers as required by law. You can check for current product recalls at the ACCC Product Safety website: [www.productsafety.gov.au](https://www.productsafety.gov.au).
 
@@ -642,7 +642,7 @@ We will not be liable or responsible for any failure or delay in the performance
 
 ---
 
-**Questions?** Email [{{email}}](mailto:{{email}}) — we'll get back to you as soon as we can.`;
+**Questions?** Email [{{email}}](mailto:{{email}}), we'll get back to you as soon as we can.`;
 
 const BODY_PRIVACY = `_LEGAL · PRIVACY POLICY_
 
@@ -765,7 +765,7 @@ To request to review, update, or delete your personal information, visit: [{{acc
 
 ---
 
-**Questions?** Email [{{email}}](mailto:{{email}}) — we'll get back to you as soon as we can.`;
+**Questions?** Email [{{email}}](mailto:{{email}}), we'll get back to you as soon as we can.`;
 
 const BODY_SHIPPING = `_LEGAL · SHIPPING & DELIVERY POLICY_
 
@@ -777,7 +777,7 @@ Please carefully review our Shipping & Delivery Policy when purchasing our produ
 
 **Australian Consumer Law:** Nothing in this policy affects your rights as a consumer under the Australian Consumer Law. Our goods come with guarantees that cannot be excluded, including the guarantee that goods will be delivered within a reasonable time where no specific delivery date is agreed. For remote sales to consumers, the risk of loss of or damage to goods remains with us until the goods are delivered to you (or to a carrier nominated by you other than one we arranged).
 
-**Third-Party Seller Orders:** Outback Electronics is a marketplace. Products sold by third-party sellers are dispatched directly by the seller from their own location. The sender name and address on the parcel will be the seller's — not Outback Electronics. If you are unsure who dispatched your order, check your order confirmation email. For any delivery issue with a third-party seller order, contact us at [{{email}}](mailto:{{email}}) and we will assist you in reaching the seller.
+**Third-Party Seller Orders:** Outback Electronics is a marketplace. Products sold by third-party sellers are dispatched directly by the seller from their own location. The sender name and address on the parcel will be the seller's, not Outback Electronics. If you are unsure who dispatched your order, check your order confirmation email. For any delivery issue with a third-party seller order, contact us at [{{email}}](mailto:{{email}}) and we will assist you in reaching the seller.
 
 ### What Are My Shipping & Delivery Options?
 
@@ -806,7 +806,7 @@ If delivery is delayed for any reason we will let you know as soon as possible a
 
 If your tracking information has not updated for more than 5 business days, or if it has been more than 5 business days past the estimated delivery date with no delivery, please contact us at [{{email}}](mailto:{{email}}) with your order number and tracking details. We will raise an enquiry with Australia Post or the relevant carrier on your behalf.
 
-Where an order is confirmed as lost in transit, we will offer you a replacement or a full refund at your election, subject to stock availability for replacements. We will lodge any carrier claim on your behalf — you do not need to deal with the carrier directly.
+Where an order is confirmed as lost in transit, we will offer you a replacement or a full refund at your election, subject to stock availability for replacements. We will lodge any carrier claim on your behalf, you do not need to deal with the carrier directly.
 
 **Signature on Delivery.** High-value orders may be dispatched with a signature-on-delivery requirement. If no one is available to sign at the time of delivery, a card will be left for redelivery or post office collection. We are not liable for packages left at an unattended delivery address where the carrier has confirmed delivery as per the applicable service terms and no signature was required.
 
@@ -822,7 +822,7 @@ If you have any questions about this policy, please contact us at [{{email}}](ma
 
 ---
 
-**Questions?** Email [{{email}}](mailto:{{email}}) — we'll get back to you as soon as we can.`;
+**Questions?** Email [{{email}}](mailto:{{email}}), we'll get back to you as soon as we can.`;
 
 const BODY_COOKIE = `_LEGAL · COOKIE POLICY_
 
@@ -840,7 +840,7 @@ Cookies set by the website owner are called 'first-party cookies.' Cookies set b
 
 ### Why Do We Use Cookies?
 
-We use first- and third-party cookies for several reasons. Some cookies are required for technical reasons in order for our Website to operate — we refer to these as 'essential' or 'strictly necessary' cookies. Other cookies enable us to track and target the interests of our users to enhance their experience. Third parties serve cookies through our Website for analytics and other purposes.
+We use first- and third-party cookies for several reasons. Some cookies are required for technical reasons in order for our Website to operate, we refer to these as 'essential' or 'strictly necessary' cookies. Other cookies enable us to track and target the interests of our users to enhance their experience. Third parties serve cookies through our Website for analytics and other purposes.
 
 ### How Can I Control Cookies?
 
@@ -902,7 +902,7 @@ If you have any questions about our use of cookies or other technologies, please
 
 ---
 
-**Questions?** Email [{{email}}](mailto:{{email}}) — we'll get back to you as soon as we can.`;
+**Questions?** Email [{{email}}](mailto:{{email}}), we'll get back to you as soon as we can.`;
 
 const BODY_RETURN_PRIVATE = `_LEGAL · RETURN POLICY_
 
@@ -910,27 +910,27 @@ const BODY_RETURN_PRIVATE = `_LEGAL · RETURN POLICY_
 
 Thank you for your purchase. We hope you are happy with it. However, if you are not completely satisfied for any reason, you may return it for a full refund or exchange. Please see below for more information on your rights and our process.
 
-**Third-Party Seller Products:** Outback Electronics is a marketplace. If your product was sold by a third-party seller, your return must go back to that seller — not to Outback Electronics. Your order confirmation will identify the seller. Contact us at [{{email}}](mailto:{{email}}) if you need help identifying the seller or facilitating a return. The return address and process below applies only to products sold directly by Outback Electronics.
+**Third-Party Seller Products:** Outback Electronics is a marketplace. If your product was sold by a third-party seller, your return must go back to that seller - not to Outback Electronics. Your order confirmation will identify the seller. Contact us at [{{email}}](mailto:{{email}}) if you need help identifying the seller or facilitating a return. The return address and process below applies only to products sold directly by Outback Electronics.
 
-### Australian Consumer Law — Your Statutory Rights
+### Australian Consumer Law - Your Statutory Rights
 
 Our products come with guarantees that cannot be excluded under the Australian Consumer Law. You are entitled to a replacement or refund for a major failure and compensation for any other reasonably foreseeable loss or damage. You are also entitled to have the goods repaired or replaced if the goods fail to be of acceptable quality and the failure does not amount to a major failure.
 
-**These rights apply regardless of — and are in addition to — our voluntary change-of-mind policy below.** Nothing in this policy excludes, restricts, or modifies any right or remedy you have under the Australian Consumer Law.
+**These rights apply regardless of, and are in addition to, our voluntary change-of-mind policy below.** Nothing in this policy excludes, restricts, or modifies any right or remedy you have under the Australian Consumer Law.
 
-For warranty claims or ACL issues (e.g. goods not of acceptable quality, not fit for purpose, or not matching description), contact us at [{{email}}](mailto:{{email}}). There is no set time limit for statutory guarantee claims — they apply for a reasonable period depending on the nature of the goods.
+For warranty claims or ACL issues (e.g. goods not of acceptable quality, not fit for purpose, or not matching description), contact us at [{{email}}](mailto:{{email}}). There is no set time limit for statutory guarantee claims, they apply for a reasonable period depending on the nature of the goods.
 
-### Dead on Arrival (DOA) — Goods Not Working on Receipt
+### Dead on Arrival (DOA) - Goods Not Working on Receipt
 
-If your item arrives and does not function at all upon first use ('Dead on Arrival' or 'DOA'), please contact us within **48 hours of delivery** at [{{email}}](mailto:{{email}}). Include your order number, a description of the issue, and photographs or video evidence where possible. Subject to assessment, we will arrange a replacement, repair, or full refund as required by the Australian Consumer Law — at your election for a major failure.
+If your item arrives and does not function at all upon first use ('Dead on Arrival' or 'DOA'), please contact us within **48 hours of delivery** at [{{email}}](mailto:{{email}}). Include your order number, a description of the issue, and photographs or video evidence where possible. Subject to assessment, we will arrange a replacement, repair, or full refund as required by the Australian Consumer Law, at your election for a major failure.
 
-Your statutory rights under the Australian Consumer Law are not limited by this 48-hour notification window — this is our preferred process for handling DOA claims efficiently. If you miss this window, your ACL rights to a remedy for defective goods still apply in full.
+Your statutory rights under the Australian Consumer Law are not limited by this 48-hour notification window, this is our preferred process for handling DOA claims efficiently. If you miss this window, your ACL rights to a remedy for defective goods still apply in full.
 
 ### Items Damaged in Transit
 
 We take care in packaging all orders, but damage can occur during transit. If your order arrives damaged:
 
-- Do not discard any packaging — it may be required for a carrier claim.
+- Do not discard any packaging, it may be required for a carrier claim.
 - Photograph or video the outer packaging and the damaged item before unpacking further.
 - Contact us within **48 hours of delivery** at [{{email}}](mailto:{{email}}) with your order number and photographic evidence.
 
@@ -938,7 +938,7 @@ We will arrange a replacement, repair, or refund as required. Where damage was c
 
 ### Products Posing a Safety Hazard
 
-**If you receive a product that you believe poses an immediate safety hazard — including a product that is sparking, smoking, leaking fluid, swelling, emitting unusual heat, or emitting chemical odours — do not use it. Disconnect it from power immediately if it is safe to do so. Keep it away from flammable materials.**
+**If you receive a product that you believe poses an immediate safety hazard, including a product that is sparking, smoking, leaking fluid, swelling, emitting unusual heat, or emitting chemical odours - do not use it. Disconnect it from power immediately if it is safe to do so. Keep it away from flammable materials.**
 
 Contact us immediately by phone at [{{phone}}](tel:{{phoneHref}}) or by email at [{{email}}](mailto:{{email}}). We will arrange return or inspection as a priority, ahead of any standard returns process. If there is any immediate risk to life or property, call 000 first.
 
@@ -954,7 +954,7 @@ To return an item, please email customer service at [{{email}}](mailto:{{email}}
 
 - **Mail-in (accepted any time, no appointment needed):** Pack the item securely in its original packaging, include proof of purchase and your RMA number, and post to:
 
-  **Outback Electronics** — Attn: Returns (RMA # [your number])
+  **Outback Electronics** - Attn: Returns (RMA # [your number])
   {{address}}, Australia
 
 - **In-person drop-off (by prior appointment only):** Contact us to arrange a suitable time before attending. We do not accept unannounced walk-in returns.
@@ -965,15 +965,15 @@ For **change-of-mind returns**, you are responsible for return shipping charges.
 
 After receiving your return and inspecting the condition of your item, we will process your return. Please allow at least **seven (7) days** from receipt of your item for processing. Refunds will be issued via your original payment method. Card refunds may take 1–2 billing cycles to appear on your statement depending on your card issuer. We will notify you by email when your return has been processed.
 
-### Repair Services — Warranty Returns
+### Repair Services - Warranty Returns
 
-_Our repair services cover ELV (Extra Low Voltage, ≤50 V AC / ≤120 V DC) and LV equipment — including PCs, phones, tablets, microcontroller boards, and embedded systems. We do not repair mains-connected appliances or perform mains wiring._
+_Our repair services cover ELV (Extra Low Voltage, ≤50 V AC / ≤120 V DC) and LV equipment - including PCs, phones, tablets, microcontroller boards, and embedded systems. We do not repair mains-connected appliances or perform mains wiring._
 
 **Repair Warranty Period.** Our repair work is warranted for **90 days from the date of completion**. If the same fault that was repaired reoccurs within the Repair Warranty Period, contact us at [{{email}}](mailto:{{email}}) and we will re-examine and re-repair at no charge, or provide an alternative remedy as required by the Australian Consumer Law.
 
 **What the Repair Warranty Covers.** The Repair Warranty covers the specific fault addressed in the agreed repair. It does not cover: (a) faults unrelated to the repair performed; (b) damage caused by misuse, accidental damage, liquid ingress, or physical impact after collection; (c) damage caused by a pre-existing condition separate from the agreed repair; or (d) further modification or repair by the customer or a third party after collection from us.
 
-**Repairs to Second-Hand or Used Devices.** Where the device you submit for repair is itself second-hand or used (including devices purchased from us as 'Used' or 'Refurbished' stock, traded in, or otherwise acquired second-hand), the Repair Warranty above applies to **our repair work only** — it does not extend, restore, or create any warranty over the device as a whole, and does not cover faults, wear, or failures unrelated to the specific repair performed. The device's separate product warranty (if any) is governed by its own terms, including our Return Policy's used/refurbished goods provisions, and is not affected by the existence of a Repair Warranty on unrelated work.
+**Repairs to Second-Hand or Used Devices.** Where the device you submit for repair is itself second-hand or used (including devices purchased from us as 'Used' or 'Refurbished' stock, traded in, or otherwise acquired second-hand), the Repair Warranty above applies to **our repair work only**, it does not extend, restore, or create any warranty over the device as a whole, and does not cover faults, wear, or failures unrelated to the specific repair performed. The device's separate product warranty (if any) is governed by its own terms, including our Return Policy's used/refurbished goods provisions, and is not affected by the existence of a Repair Warranty on unrelated work.
 
 **Your ACL Rights for Repair Services.** If our Repair Services fail to comply with a consumer guarantee under the Australian Consumer Law (e.g., not carried out with due care and skill), you are entitled to a remedy under the ACL, which may include re-performance of the service or compensation for foreseeable loss. These rights apply regardless of, and in addition to, our Repair Warranty.
 
@@ -986,7 +986,7 @@ The following items are excluded from our voluntary change-of-mind return policy
 - Services (once performed)
 - Custom or bespoke jobs
 
-**Please note:** These exclusions do not affect your rights under the Australian Consumer Law. If any of these items are faulty, not as described, or not fit for purpose, your statutory rights still apply — contact us to arrange a remedy.
+**Please note:** These exclusions do not affect your rights under the Australian Consumer Law. If any of these items are faulty, not as described, or not fit for purpose, your statutory rights still apply - contact us to arrange a remedy.
 
 For defective or damaged products (any category), please contact us at the details below to arrange a repair, replacement, or refund as required by law.
 
@@ -1001,11 +1001,11 @@ You can also obtain information about your consumer rights from the Australian C
 
 ---
 
-**Questions?** Email [{{email}}](mailto:{{email}}) — we'll get back to you as soon as we can.`;
+**Questions?** Email [{{email}}](mailto:{{email}}), we'll get back to you as soon as we can.`;
 
 const BODY_TERMS_COMMERCIAL = `_LEGAL · COMMERCIAL TERMS AND CONDITIONS_
 
-## Terms and Conditions — Commercial Customers
+## Terms and Conditions - Commercial Customers
 
 These Commercial Terms and Conditions apply to any purchase from Outback Electronics ('Company', 'we', 'us', or 'our') made by a business, trade, or wholesale account, or otherwise made for the purposes of resupply, business use, or in trade ('Commercial Customer', 'you'). If you are purchasing as a private individual mainly for personal, domestic, or household use, our standard [Terms and Conditions for Private Customers](/policies/private/terms-and-conditions) apply instead.
 
@@ -1019,7 +1019,7 @@ These Commercial Terms apply to the exclusion of our standard private-customer T
 
 ### 2. Consumer Guarantees and Business Purchases
 
-The Australian Consumer Law ('ACL') consumer guarantees apply to goods and services acquired by a 'consumer' as defined in section 3 of the ACL. Depending on the value and nature of the goods, some business purchases — particularly higher-value purchases, or goods not of a kind ordinarily acquired for personal, domestic, or household use — may fall outside the ACL's consumer guarantee regime and are instead governed by the contractual warranties set out in these Commercial Terms.
+The Australian Consumer Law ('ACL') consumer guarantees apply to goods and services acquired by a 'consumer' as defined in section 3 of the ACL. Depending on the value and nature of the goods, some business purchases - particularly higher-value purchases, or goods not of a kind ordinarily acquired for personal, domestic, or household use - may fall outside the ACL's consumer guarantee regime and are instead governed by the contractual warranties set out in these Commercial Terms.
 
 **Nothing in these Commercial Terms excludes, restricts, or modifies any guarantee, right, or remedy that applies as a matter of law and cannot lawfully be excluded**, including any ACL consumer guarantee that does apply to your purchase. Where the ACL consumer guarantees do not apply to your purchase, the warranties in clause 6 below apply in their place.
 
@@ -1063,7 +1063,7 @@ Any software we supply is offered 'AS IS' without warranty of any kind beyond th
 
 Some software we supply is designed for security research, penetration testing, network diagnostics, or similar dual-use purposes ('Security Tools'). Security Tools are supplied strictly for use on systems and networks your business owns, or for which your business holds documented authorisation (such as a signed penetration-testing engagement letter). You must comply with the _Criminal Code Act 1995_ (Cth), the _Cybercrime Act 2001_ (Cth), and all other applicable laws governing computer access in any jurisdiction in which the Security Tool is used.
 
-If we reasonably suspect a Security Tool we have supplied is being used for an unauthorised or unlawful purpose, we may report the matter — including disclosing your business and personal information — to law enforcement, a regulator, or an affected third party without notice. To the fullest extent permitted by law, we are not liable for any loss, claim, fine, or legal liability arising from use of a Security Tool for any illegal, unethical, or unauthorised purpose, and you indemnify us against any such claim.
+If we reasonably suspect a Security Tool we have supplied is being used for an unauthorised or unlawful purpose, we may report the matter - including disclosing your business and personal information, to law enforcement, a regulator, or an affected third party without notice. To the fullest extent permitted by law, we are not liable for any loss, claim, fine, or legal liability arising from use of a Security Tool for any illegal, unethical, or unauthorised purpose, and you indemnify us against any such claim.
 
 ### 9. Limitation of Liability
 
@@ -1085,11 +1085,11 @@ These Commercial Terms are governed by the laws of Queensland, Australia. Each p
 
 ---
 
-**Questions?** Email [{{email}}](mailto:{{email}}) — we'll get back to you as soon as we can.`;
+**Questions?** Email [{{email}}](mailto:{{email}}), we'll get back to you as soon as we can.`;
 
-const BODY_RETURN_COMMERCIAL = `_LEGAL · RETURN POLICY — COMMERCIAL CUSTOMERS_
+const BODY_RETURN_COMMERCIAL = `_LEGAL · RETURN POLICY - COMMERCIAL CUSTOMERS_
 
-## Return Policy — Commercial Customers
+## Return Policy - Commercial Customers
 
 This Return Policy applies to purchases made on a trade, wholesale, or business account. If you are a private customer purchasing mainly for personal or household use, our [standard Return Policy](/policies/private/return-policy) applies instead.
 
@@ -1101,7 +1101,7 @@ Where the Australian Consumer Law consumer guarantees apply to your purchase (se
 
 If goods are defective on arrival or fail within the applicable warranty period, contact us at [{{email}}](mailto:{{email}}) with your account or invoice number, a description of the fault, and supporting photographs or video where possible. We will assess the claim and, where the goods are confirmed defective, repair, replace, or credit them in accordance with our Commercial Terms and Conditions.
 
-### Change-of-Mind Returns — No General Right
+### Change-of-Mind Returns - No General Right
 
 Unlike our private-customer policy, we do **not** offer a general change-of-mind return right on commercial or trade orders, including bulk and made-to-order stock. Any change-of-mind return is at our sole discretion, must be agreed with us in writing before the goods are sent back, and may be subject to a restocking fee of up to 20% of the invoice value plus return freight, deducted from any credit issued. Goods must be unused, in original packaging, and in resaleable condition to be accepted for a discretionary change-of-mind return.
 
@@ -1113,7 +1113,7 @@ Shortages, incorrect items, or transit damage must be reported in writing within
 
 Email [{{email}}](mailto:{{email}}) to obtain a Return Merchandise Authorisation (RMA) number before sending anything back. Goods returned without a prior RMA number may be refused or delayed. Unless the return relates to a confirmed defect or an error on our part, you are responsible for return freight, which must be sent prepaid to:
 
-**Outback Electronics** — Attn: Trade Returns (RMA # [your number])
+**Outback Electronics** - Attn: Trade Returns (RMA # [your number])
 {{address}}, Australia
 
 ### Credits and Refunds
@@ -1127,7 +1127,7 @@ Email: [{{email}}](mailto:{{email}})
 
 ---
 
-**Questions?** Email [{{email}}](mailto:{{email}}) — we'll get back to you as soon as we can.`;
+**Questions?** Email [{{email}}](mailto:{{email}}), we'll get back to you as soon as we can.`;
 
 const BODY_CUSTOM_WORK = `_LEGAL · CUSTOM WORK AND REVERSE ENGINEERING POLICY_
 
@@ -1139,21 +1139,21 @@ This policy applies whenever Outback Electronics ('Company', 'we', 'us', or 'our
 
 Before we start any Custom Work, we will agree a written quote or statement of work describing the scope, deliverables, fees, and timeline. Work outside this agreed scope ('Change Requests') must be confirmed in writing and may incur additional fees or affect the timeline. Verbal or informal requests made during the course of a job are treated as Change Requests and are not binding until confirmed in writing.
 
-### 2. Ownership of Deliverables — We Retain IP, You Get a Licence
+### 2. Ownership of Deliverables - We Retain IP, You Get a Licence
 
-**Before you accept a quote or statement of work, we will draw your attention to this clause** so you understand, before work begins, that paying for a Custom Work job gives you a licence to use the Deliverable rather than ownership of the underlying intellectual property. This is particularly important for commercial customers commissioning work for resupply or integration into their own products — if you need ownership or a broader licence, raise it with us before the job starts, not after delivery.
+**Before you accept a quote or statement of work, we will draw your attention to this clause** so you understand, before work begins, that paying for a Custom Work job gives you a licence to use the Deliverable rather than ownership of the underlying intellectual property. This is particularly important for commercial customers commissioning work for resupply or integration into their own products, if you need ownership or a broader licence, raise it with us before the job starts, not after delivery.
 
-Unless we agree otherwise in writing for a specific job, **we retain ownership of all intellectual property** in the deliverables created in performing Custom Work — including schematics, PCB layouts, firmware, source code, designs, drawings, and documentation ('Deliverables').
+Unless we agree otherwise in writing for a specific job, **we retain ownership of all intellectual property** in the deliverables created in performing Custom Work, including schematics, PCB layouts, firmware, source code, designs, drawings, and documentation ('Deliverables').
 
-On payment in full for the job, we grant you a **non-exclusive, non-transferable, perpetual licence** to use, operate, and maintain the Deliverable for your own internal or personal purposes, and to have it repaired or modified by us or (where we provide the necessary materials, such as source files) a third party. This licence does **not** include the right to resell, sublicense, manufacture at volume, distribute, or commercially exploit the Deliverable or any copy or derivative of it. If you want to do any of those things, contact us to discuss a separate commercialisation licence — fees and terms for that are negotiated separately and are not covered by this policy.
+On payment in full for the job, we grant you a **non-exclusive, non-transferable, perpetual licence** to use, operate, and maintain the Deliverable for your own internal or personal purposes, and to have it repaired or modified by us or (where we provide the necessary materials, such as source files) a third party. This licence does **not** include the right to resell, sublicense, manufacture at volume, distribute, or commercially exploit the Deliverable or any copy or derivative of it. If you want to do any of those things, contact us to discuss a separate commercialisation licence, fees and terms for that are negotiated separately and are not covered by this policy.
 
-We may reuse general techniques, methods, and know-how developed during your job in other jobs for other customers. We will not disclose your specific designs, source code, or confidential information to another customer — see clause 6 (Confidentiality). Where a job involves recreating or replicating the functionality of a third-party product or tool that is itself publicly available (for example, a reverse-engineered replacement for commercial software), our default position is that the recreation itself is not your confidential information merely because the original product is publicly available, and we may offer similar recreations to other customers. **This default does not apply, and any separate written agreement for the job prevails over it,** where a specific contract, statement of work, or non-disclosure agreement for that job restricts our ability to do so — including where we are engaged as a subcontractor under an NDA that covers the deliverable, the engagement itself, or the surrounding business context. In every case, this reuse right (whether under the general know-how rule above or this clause) is subject to, and does not override, any separate confidentiality or non-disclosure agreement we have entered into with a third party. Where we hold information under such an agreement, we will not use or disclose it in performing work for you, even if it would otherwise qualify as general know-how or a publicly-available recreation.
+We may reuse general techniques, methods, and know-how developed during your job in other jobs for other customers. We will not disclose your specific designs, source code, or confidential information to another customer, see clause 6 (Confidentiality). Where a job involves recreating or replicating the functionality of a third-party product or tool that is itself publicly available (for example, a reverse-engineered replacement for commercial software), our default position is that the recreation itself is not your confidential information merely because the original product is publicly available, and we may offer similar recreations to other customers. **This default does not apply, and any separate written agreement for the job prevails over it,** where a specific contract, statement of work, or non-disclosure agreement for that job restricts our ability to do so, including where we are engaged as a subcontractor under an NDA that covers the deliverable, the engagement itself, or the surrounding business context. In every case, this reuse right (whether under the general know-how rule above or this clause) is subject to, and does not override, any separate confidentiality or non-disclosure agreement we have entered into with a third party. Where we hold information under such an agreement, we will not use or disclose it in performing work for you, even if it would otherwise qualify as general know-how or a publicly-available recreation.
 
-No licence is granted, and no Deliverable will be released to you, until the job is paid in full. We may withhold source files, firmware images, or design files (while still providing the finished physical item, where applicable) until payment is received, unless a specific quote or statement of work for the job otherwise agrees to deliver source files or design files on a different basis — in which case that written agreement prevails over this clause for that job.
+No licence is granted, and no Deliverable will be released to you, until the job is paid in full. We may withhold source files, firmware images, or design files (while still providing the finished physical item, where applicable) until payment is received, unless a specific quote or statement of work for the job otherwise agrees to deliver source files or design files on a different basis, in which case that written agreement prevails over this clause for that job.
 
-### 3. Reverse Engineering — Your Warranty
+### 3. Reverse Engineering - Your Warranty
 
-If you ask us to reverse-engineer an item — including recreating a circuit or board, extracting or decompiling firmware, recovering a design with no remaining documentation, or cloning a part that is no longer manufactured — you warrant to us that:
+If you ask us to reverse-engineer an item, including recreating a circuit or board, extracting or decompiling firmware, recovering a design with no remaining documentation, or cloning a part that is no longer manufactured, you warrant to us that:
 
 - you own the item, or are its lawful licensee or authorised user with the right to have it serviced, repaired, or made interoperable with other equipment;
 - the request is for a legitimate purpose such as repair, maintenance, interoperability, or preservation of a product you are entitled to use, and not for unauthorised cloning of a current commercial product for competing manufacture or resale;
@@ -1184,7 +1184,7 @@ Custom hardware, custom software, and reverse-engineered designs are, by their n
 
 We will keep confidential any proprietary information, designs, or materials you provide to us for a Custom Work job, and will not disclose them to other customers or third parties except: as needed to perform the job (e.g. component suppliers); as required by law; or with your written consent. You should clearly mark any materials you consider confidential. This clause survives completion of the job.
 
-Where you and we have entered into a separate non-disclosure agreement for a job, we will only disclose information covered by that agreement where we are legally compelled to do so — for example, in response to a court order, subpoena, summons, or other binding legal process (including being required to give evidence or testimony in connection with legal proceedings involving you). Where legally permitted to do so, we will give you reasonable notice before making any such disclosure so you have the opportunity to object or seek a protective order. We will not disclose NDA-covered information on the basis of an informal request, a request from a party other than a court or regulator with legal authority to compel disclosure, or our own discretion.
+Where you and we have entered into a separate non-disclosure agreement for a job, we will only disclose information covered by that agreement where we are legally compelled to do so, for example, in response to a court order, subpoena, summons, or other binding legal process (including being required to give evidence or testimony in connection with legal proceedings involving you). Where legally permitted to do so, we will give you reasonable notice before making any such disclosure so you have the opportunity to object or seek a protective order. We will not disclose NDA-covered information on the basis of an informal request, a request from a party other than a court or regulator with legal authority to compel disclosure, or our own discretion.
 
 ### 7. Warranty on Custom Work
 
@@ -1198,7 +1198,7 @@ To the maximum extent permitted by law, our total liability arising out of or in
 
 This limitation does not apply to liability that cannot lawfully be excluded or limited, including any ACL consumer guarantee that applies to your purchase, or to our indemnity obligations under clause 3.
 
-### 7B. Digital Forensics and Data Recovery — Your Warranty
+### 7B. Digital Forensics and Data Recovery - Your Warranty
 
 If you ask us to perform digital forensics, data recovery, or extraction of data from a computer, phone, storage media, or embedded device, you warrant to us that:
 
@@ -1230,7 +1230,7 @@ If you cancel a Custom Work job after we have started, you remain liable for fee
 
 ---
 
-**Questions?** Email [{{email}}](mailto:{{email}}) — we'll get back to you as soon as we can.`;
+**Questions?** Email [{{email}}](mailto:{{email}}), we'll get back to you as soon as we can.`;
 
 const BODY_DISCLAIMER = `_LEGAL · DISCLAIMER_
 
@@ -1242,29 +1242,29 @@ This Disclaimer forms part of our Terms and Conditions. By accessing or using th
 
 The information provided by Outback Electronics ('we', 'us', or 'our') on [outbackelectronics.com.au](https://outbackelectronics.com.au) (the 'Site') is for general informational purposes only. All information on the Site is provided in good faith; however, we make no representation or warranty of any kind, express or implied, regarding the accuracy, adequacy, validity, reliability, availability, or completeness of any information on the Site.
 
-**TO THE FULLEST EXTENT PERMITTED BY LAW, WE SHALL NOT BE LIABLE TO YOU OR ANY THIRD PARTY FOR ANY LOSS OR DAMAGE OF ANY KIND WHATSOEVER — INCLUDING BUT NOT LIMITED TO INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES — INCURRED AS A RESULT OF: (A) YOUR USE OF OR INABILITY TO USE THE SITE; (B) YOUR RELIANCE ON ANY INFORMATION OBTAINED FROM THE SITE; OR (C) ANY ERROR, OMISSION, INTERRUPTION, DELETION, DEFECT, DELAY IN OPERATION, COMPUTER VIRUS, UNAUTHORISED ACCESS, OR OTHER TECHNICAL FAILURE. YOUR USE OF THE SITE AND YOUR RELIANCE ON ANY INFORMATION ON THE SITE IS SOLELY AT YOUR OWN RISK.**
+**TO THE FULLEST EXTENT PERMITTED BY LAW, WE SHALL NOT BE LIABLE TO YOU OR ANY THIRD PARTY FOR ANY LOSS OR DAMAGE OF ANY KIND WHATSOEVER - INCLUDING BUT NOT LIMITED TO INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES - INCURRED AS A RESULT OF: (A) YOUR USE OF OR INABILITY TO USE THE SITE; (B) YOUR RELIANCE ON ANY INFORMATION OBTAINED FROM THE SITE; OR (C) ANY ERROR, OMISSION, INTERRUPTION, DELETION, DEFECT, DELAY IN OPERATION, COMPUTER VIRUS, UNAUTHORISED ACCESS, OR OTHER TECHNICAL FAILURE. YOUR USE OF THE SITE AND YOUR RELIANCE ON ANY INFORMATION ON THE SITE IS SOLELY AT YOUR OWN RISK.**
 
 **Nothing in this Disclaimer excludes, restricts, or modifies any consumer guarantee, right, or remedy conferred by the Australian Consumer Law (Schedule 2 of the Competition and Consumer Act 2010 (Cth)) or any other applicable mandatory legislation that cannot lawfully be excluded or limited.**
 
 ### Technical Information Disclaimer
 
-Any technical information, repair guides, product specifications, tutorials, forum posts, or other technical content available on this Site are provided for general informational purposes only. They do not constitute professional engineering, electrical safety, or specialist advice. Our content relates exclusively to ELV (Extra Low Voltage, ≤50 V AC / ≤120 V DC) and LV equipment — nothing on this Site should be read as guidance for mains-voltage (240 V AC) work. Electronic repairs, modifications, and electrical work involve inherent and serious risks, including, without limitation: **electric shock capable of causing death or permanent serious injury; fire and explosion that may result in partial or complete destruction of property (including your home or premises); toxic gas release from damaged or mishandled battery cells; damage to connected equipment and infrastructure; personal injury; and voiding of manufacturer warranties**. Following any guide or tutorial on this Site does not guarantee safety, accuracy, or a successful outcome for your specific device, application, component selection, or environment. Always verify technical information from authoritative sources and consult a qualified professional where appropriate.
+Any technical information, repair guides, product specifications, tutorials, forum posts, or other technical content available on this Site are provided for general informational purposes only. They do not constitute professional engineering, electrical safety, or specialist advice. Our content relates exclusively to ELV (Extra Low Voltage, ≤50 V AC / ≤120 V DC) and LV equipment - nothing on this Site should be read as guidance for mains-voltage (240 V AC) work. Electronic repairs, modifications, and electrical work involve inherent and serious risks, including, without limitation: **electric shock capable of causing death or permanent serious injury; fire and explosion that may result in partial or complete destruction of property (including your home or premises); toxic gas release from damaged or mishandled battery cells; damage to connected equipment and infrastructure; personal injury; and voiding of manufacturer warranties**. Following any guide or tutorial on this Site does not guarantee safety, accuracy, or a successful outcome for your specific device, application, component selection, or environment. Always verify technical information from authoritative sources and consult a qualified professional where appropriate.
 
-**YOU ASSUME ALL RISK AND RESPONSIBILITY FOR ANY ACTIONS TAKEN IN RELIANCE ON TECHNICAL INFORMATION OBTAINED FROM THIS SITE, INCLUDING WITHOUT LIMITATION ANY REPAIR GUIDES, TUTORIALS, FORUM POSTS, OR PRODUCT DESCRIPTIONS. WE SHALL HAVE NO LIABILITY WHATSOEVER FOR ANY LOSS, DAMAGE, PERSONAL INJURY, SERIOUS BODILY INJURY, DEATH, FIRE, EXPLOSION, PROPERTY DAMAGE (INCLUDING TOTAL OR PARTIAL LOSS OF YOUR HOME OR PREMISES), CONSEQUENTIAL HARM, OR OTHER ADVERSE OUTCOME RESULTING FROM YOUR USE OF OR RELIANCE ON ANY TECHNICAL INFORMATION ON THIS SITE, WHETHER ARISING FROM NEGLIGENCE OR OTHERWISE. YOU SHOULD ALWAYS CONSULT A QUALIFIED PROFESSIONAL — AND IN AUSTRALIA, A LICENSED ELECTRICIAN FOR ANY MAINS-VOLTAGE WORK — BEFORE UNDERTAKING ANY ELECTRICAL OR ELECTRONIC REPAIR, MODIFICATION, OR INSTALLATION.**
+**YOU ASSUME ALL RISK AND RESPONSIBILITY FOR ANY ACTIONS TAKEN IN RELIANCE ON TECHNICAL INFORMATION OBTAINED FROM THIS SITE, INCLUDING WITHOUT LIMITATION ANY REPAIR GUIDES, TUTORIALS, FORUM POSTS, OR PRODUCT DESCRIPTIONS. WE SHALL HAVE NO LIABILITY WHATSOEVER FOR ANY LOSS, DAMAGE, PERSONAL INJURY, SERIOUS BODILY INJURY, DEATH, FIRE, EXPLOSION, PROPERTY DAMAGE (INCLUDING TOTAL OR PARTIAL LOSS OF YOUR HOME OR PREMISES), CONSEQUENTIAL HARM, OR OTHER ADVERSE OUTCOME RESULTING FROM YOUR USE OF OR RELIANCE ON ANY TECHNICAL INFORMATION ON THIS SITE, WHETHER ARISING FROM NEGLIGENCE OR OTHERWISE. YOU SHOULD ALWAYS CONSULT A QUALIFIED PROFESSIONAL - AND IN AUSTRALIA, A LICENSED ELECTRICIAN FOR ANY MAINS-VOLTAGE WORK - BEFORE UNDERTAKING ANY ELECTRICAL OR ELECTRONIC REPAIR, MODIFICATION, OR INSTALLATION.**
 
 **Nothing in this Technical Information Disclaimer excludes, restricts, or modifies any consumer guarantee, right, or remedy conferred by the Australian Consumer Law or any other applicable mandatory legislation that cannot lawfully be excluded.**
 
 ### Scope of Our Work
 
-**⚠ IMPORTANT: Outback Electronics works exclusively with Extra Low Voltage (ELV, ≤50 V AC / ≤120 V DC) and Low Voltage (LV) equipment — including PCs, phones, tablets, microcontroller boards, and embedded systems. We are not licensed electrical contractors and we do not perform, advise on, or accept any responsibility for mains-voltage (240 V AC) wiring or appliance work. Nothing on this Site, in our tutorials, forum, or in our repair or technical services constitutes advice, instruction, or authorisation for any mains-voltage electrical work.**
+**⚠ IMPORTANT: Outback Electronics works exclusively with Extra Low Voltage (ELV, ≤50 V AC / ≤120 V DC) and Low Voltage (LV) equipment, including PCs, phones, tablets, microcontroller boards, and embedded systems. We are not licensed electrical contractors and we do not perform, advise on, or accept any responsibility for mains-voltage (240 V AC) wiring or appliance work. Nothing on this Site, in our tutorials, forum, or in our repair or technical services constitutes advice, instruction, or authorisation for any mains-voltage electrical work.**
 
-**Mains Voltage Hazard:** Mains-voltage electricity (240 V AC in Australia) can cause electrocution, cardiac arrest, severe burns, and death. All work on mains-connected equipment or infrastructure must only be performed by a licensed electrician under applicable state or territory legislation. Even after disconnection from mains supply, capacitors within mains-powered devices may retain lethal stored charge for extended periods. If your project involves mains voltage at any point, engage a licensed electrician — do not rely on this Site.
+**Mains Voltage Hazard:** Mains-voltage electricity (240 V AC in Australia) can cause electrocution, cardiac arrest, severe burns, and death. All work on mains-connected equipment or infrastructure must only be performed by a licensed electrician under applicable state or territory legislation. Even after disconnection from mains supply, capacitors within mains-powered devices may retain lethal stored charge for extended periods. If your project involves mains voltage at any point, engage a licensed electrician - do not rely on this Site.
 
 **Nothing in this section limits your rights under the Australian Consumer Law where a product we have supplied is defective.**
 
 ### Lithium Battery Hazard Warning
 
-**⚠ WARNING — FIRE AND EXPLOSION RISK: Lithium-ion and lithium-polymer batteries can ignite and explode violently if punctured, short-circuited, overcharged, over-discharged, crushed, or exposed to excessive heat or physical damage. A lithium battery fire produces intense heat and toxic fumes, is extremely difficult to extinguish, and can result in complete destruction of property.**
+**⚠ WARNING - FIRE AND EXPLOSION RISK: Lithium-ion and lithium-polymer batteries can ignite and explode violently if punctured, short-circuited, overcharged, over-discharged, crushed, or exposed to excessive heat or physical damage. A lithium battery fire produces intense heat and toxic fumes, is extremely difficult to extinguish, and can result in complete destruction of property.**
 
 You must handle, charge, store, transport, and dispose of lithium batteries strictly in accordance with manufacturer specifications and applicable dangerous-goods regulations. If a lithium battery shows signs of swelling (puffing), leaking, excessive heat generation, unusual odour, or discolouration, cease use immediately, move it away from flammable materials, and consult a qualified professional. Never charge a visibly damaged battery. Always use manufacturer-approved or compatible chargers within specified voltage and current limits.
 
@@ -1367,7 +1367,7 @@ You may not use our Services to offer or promote: items that encourage illegal a
 
 **Third-Party Sellers:** If you list products for sale on our platform, all customer claims, warranty obligations, and ACL liability for those products rest with you as the seller. You must not represent Outback Electronics as providing any warranty, guarantee, or endorsement for your products. Any product-related dispute from a customer will be referred to you as the seller. Outback Electronics' liability as a platform operator does not extend to the quality, safety, or fitness for purpose of products listed by third-party sellers.
 
-**Swap & Sell Classifieds:** Our Swap & Sell classifieds feature lets members post free listings to buy, sell, swap, or give away items directly with other members. We are not a party to, and have no liability for, any transaction arising from a Swap & Sell listing — including non-payment, non-delivery, item condition, item authenticity, or any dispute between the parties to the transaction. You deal with other members at your own risk and are responsible for satisfying yourself as to the legitimacy of the other party and the item before exchanging money or goods. By posting or responding to a Swap & Sell listing, you warrant that: you lawfully own the item, or are authorised to sell or give it away, and it is not stolen, counterfeit, or encumbered; the item is not a regulated, prohibited, or restricted good under the categories listed above (including weapons, mains-voltage equipment, or anything requiring a licence you do not hold); and your listing is accurate and not misleading. We may remove any Swap & Sell listing, and may report a listing or user to police or another relevant authority, without notice, where we reasonably suspect stolen goods, fraud, or another unlawful transaction.
+**Swap & Sell Classifieds:** Our Swap & Sell classifieds feature lets members post free listings to buy, sell, swap, or give away items directly with other members. We are not a party to, and have no liability for, any transaction arising from a Swap & Sell listing, including non-payment, non-delivery, item condition, item authenticity, or any dispute between the parties to the transaction. You deal with other members at your own risk and are responsible for satisfying yourself as to the legitimacy of the other party and the item before exchanging money or goods. By posting or responding to a Swap & Sell listing, you warrant that: you lawfully own the item, or are authorised to sell or give it away, and it is not stolen, counterfeit, or encumbered; the item is not a regulated, prohibited, or restricted good under the categories listed above (including weapons, mains-voltage equipment, or anything requiring a licence you do not hold); and your listing is accurate and not misleading. We may remove any Swap & Sell listing, and may report a listing or user to police or another relevant authority, without notice, where we reasonably suspect stolen goods, fraud, or another unlawful transaction.
 
 ### Reviews and Ratings
 
@@ -1412,11 +1412,11 @@ const BODY_GENERAL_ENGAGEMENT = `_LEGAL · GENERAL TERMS OF ENGAGEMENT_
 
 ## General Terms of Engagement
 
-This document applies to **every** person or business that interacts with Outback Electronics ('Company', 'we', 'us', or 'our') in any capacity — private customer, commercial customer, seller, or otherwise. Our ABN is {{abn}}.
+This document applies to **every** person or business that interacts with Outback Electronics ('Company', 'we', 'us', or 'our') in any capacity - private customer, commercial customer, seller, or otherwise. Our ABN is {{abn}}.
 
 ### Commencement Is Acceptance
 
-By doing any of the following, you accept and agree to be bound by all of our policies that apply to that activity (for example, our Terms and Conditions, Privacy Policy, Return Policy, Acceptable Use Policy, and — where relevant — our Custom Work and Reverse Engineering Policy, Seller Agreement, or Commercial Terms and Conditions):
+By doing any of the following, you accept and agree to be bound by all of our policies that apply to that activity (for example, our Terms and Conditions, Privacy Policy, Return Policy, Acceptable Use Policy, and - where relevant, our Custom Work and Reverse Engineering Policy, Seller Agreement, or Commercial Terms and Conditions):
 
 - placing an order, paying a deposit, or paying for goods or services;
 - submitting a repair, quote, or custom work request, or handing over a device or materials to us;
@@ -1424,11 +1424,11 @@ By doing any of the following, you accept and agree to be bound by all of our po
 - listing a product for sale on our platform as a seller;
 - otherwise using our Site, services, or facilities.
 
-You do not need to separately sign or click-accept each individual policy for it to apply — commencing the relevant activity is itself your acceptance, in the same way that walking into a shop and placing an order implies acceptance of that shop's standard terms of trade. Where we ask you to expressly sign or click-accept a specific document (for example, a quote, a non-disclosure agreement, or a seller agreement), that document applies in addition to, and to the extent of any inconsistency prevails over, this general statement.
+You do not need to separately sign or click-accept each individual policy for it to apply, commencing the relevant activity is itself your acceptance, in the same way that walking into a shop and placing an order implies acceptance of that shop's standard terms of trade. Where we ask you to expressly sign or click-accept a specific document (for example, a quote, a non-disclosure agreement, or a seller agreement), that document applies in addition to, and to the extent of any inconsistency prevails over, this general statement.
 
 ### Which Policies Apply to You
 
-Use the audience selector on this page to view the specific documents that apply to your relationship with us (private customer, commercial customer, or seller). Some documents — such as our Privacy Policy, Cookie Policy, and Acceptable Use Policy — apply to everyone regardless of audience. Others — such as our Commercial Terms and Conditions or Seller Agreement — apply only where that relationship exists.
+Use the audience selector on this page to view the specific documents that apply to your relationship with us (private customer, commercial customer, or seller). Some documents - such as our Privacy Policy, Cookie Policy, and Acceptable Use Policy - apply to everyone regardless of audience. Others, such as our Commercial Terms and Conditions or Seller Agreement, apply only where that relationship exists.
 
 ### Updates to Our Policies
 
@@ -1444,7 +1444,7 @@ We may update any of our policies from time to time. Continuing to engage with u
 
 ---
 
-**Questions?** Email [{{email}}](mailto:{{email}}) — we'll get back to you as soon as we can.`;
+**Questions?** Email [{{email}}](mailto:{{email}}), we'll get back to you as soon as we can.`;
 
 const BODY_GIFT_CARDS = `_LEGAL · GIFT CARDS, STORE CREDIT & REWARDS_
 
@@ -1473,13 +1473,13 @@ Store credit may be issued by us at our discretion (for example, as part of a re
 - is not transferable to another person or account except with our written consent; and
 - may be reversed or adjusted by us where it was issued in error, or where the transaction it relates to is reversed, refunded, or subject to a successful chargeback by the original payment method.
 
-Where store credit was issued as an incentive (for example, a trade-in bonus for accepting credit instead of cash), that bonus amount may be removed if the underlying transaction is later unwound — for example, because the traded-in item was misdescribed, found to be faulty contrary to your description, or found not to be lawfully yours to sell.
+Where store credit was issued as an incentive (for example, a trade-in bonus for accepting credit instead of cash), that bonus amount may be removed if the underlying transaction is later unwound, for example, because the traded-in item was misdescribed, found to be faulty contrary to your description, or found not to be lawfully yours to sell.
 
 ### 3. Rewards Points
 
 Rewards points are issued at our discretion as a loyalty benefit and have no cash value. Points may be redeemed for a discount on a future purchase in accordance with the redemption rate displayed in your account at the time of redemption, which we may change going forward without affecting points already earned.
 
-**Clawback on Refund or Chargeback.** If an order that earned rewards points is later refunded, cancelled, or successfully charged back, we may deduct the points earned on that order from your account, even if you have since redeemed them — in which case your account balance may go negative and must be repaid through future earned points, or we may instead invoice you for the value of the discount obtained using those points, at our discretion.
+**Clawback on Refund or Chargeback.** If an order that earned rewards points is later refunded, cancelled, or successfully charged back, we may deduct the points earned on that order from your account, even if you have since redeemed them - in which case your account balance may go negative and must be repaid through future earned points, or we may instead invoice you for the value of the discount obtained using those points, at our discretion.
 
 **Fraud and Abuse.** We may suspend, adjust, or cancel rewards points, and may close the associated account, where we reasonably suspect the points were earned through fraud, abuse of the program (including the use of multiple accounts), or a breach of these terms.
 
@@ -1495,13 +1495,13 @@ Rewards points have no value if your account is closed for breach of our Terms a
 
 ---
 
-**Questions?** Email [{{email}}](mailto:{{email}}) — we'll get back to you as soon as we can.`;
+**Questions?** Email [{{email}}](mailto:{{email}}), we'll get back to you as soon as we can.`;
 
 const BODY_SALE_OF_GOODS = `_LEGAL · SALE OF GOODS TO US_
 
-## Sale of Goods to Us — Trade-In, E-Waste & Consignment
+## Sale of Goods to Us - Trade-In, E-Waste & Consignment
 
-This policy applies whenever you sell, trade in, consign, or otherwise provide used or end-of-life electronics or equipment to Outback Electronics ('Company', 'we', 'us', or 'our') — whether through our outright purchase, consignment, trade credit, or e-waste take-back programs ('Sale Programs'). Our ABN is {{abn}}. It applies alongside our Terms and Conditions.
+This policy applies whenever you sell, trade in, consign, or otherwise provide used or end-of-life electronics or equipment to Outback Electronics ('Company', 'we', 'us', or 'our') - whether through our outright purchase, consignment, trade credit, or e-waste take-back programs ('Sale Programs'). Our ABN is {{abn}}. It applies alongside our Terms and Conditions.
 
 ### 1. Your Warranties of Title
 
@@ -1516,17 +1516,17 @@ You indemnify us against any claim, loss, or liability arising from a breach of 
 
 ### 2. Verification and Right to Decline or Report
 
-We may ask you for photo ID and proof of ownership (such as a receipt, warranty card, or account login demonstrating control of the device) before accepting an item, particularly for higher-value items or where the circumstances of the offer raise concern. We may decline to accept any item without giving a reason. Where we reasonably suspect an item offered to us is stolen or otherwise unlawfully obtained, we may refuse the transaction, retain the item, and report the matter — including your personal information and any identification you have provided — to police or another relevant authority, without further notice to you.
+We may ask you for photo ID and proof of ownership (such as a receipt, warranty card, or account login demonstrating control of the device) before accepting an item, particularly for higher-value items or where the circumstances of the offer raise concern. We may decline to accept any item without giving a reason. Where we reasonably suspect an item offered to us is stolen or otherwise unlawfully obtained, we may refuse the transaction, retain the item, and report the matter - including your personal information and any identification you have provided, to police or another relevant authority, without further notice to you.
 
 ### 3. Grading and Pricing
 
 Items are graded (e.g. A/B/C/D) and priced based on our assessment of condition, function, and current resale value at the time of inspection, which may differ from any estimate given before physical inspection. We will confirm the final grade and price with you before completing an outright purchase or trade credit transaction. For consignment, the listing price and commission are agreed separately and set out in our Seller Agreement or consignment terms provided to you at the time.
 
-If, after inspection, an item does not match its description (for example, a fault was not disclosed, or an accessory listed as included is missing), we may revise our offer, decline the item, or — where the transaction has already completed — reverse the payment or store credit issued, including any associated bonus (see our Gift Cards, Store Credit & Rewards Terms).
+If, after inspection, an item does not match its description (for example, a fault was not disclosed, or an accessory listed as included is missing), we may revise our offer, decline the item, or - where the transaction has already completed, reverse the payment or store credit issued, including any associated bonus (see our Gift Cards, Store Credit & Rewards Terms).
 
 ### 4. Outright Purchase
 
-Where we purchase an item outright, ownership transfers to us on payment, and the transaction is final — there is no cooling-off period or right to reverse the sale on your part, except as required by law (for example, where you were misled or the transaction was procured by fraud).
+Where we purchase an item outright, ownership transfers to us on payment, and the transaction is final - there is no cooling-off period or right to reverse the sale on your part, except as required by law (for example, where you were misled or the transaction was procured by fraud).
 
 ### 5. Consignment
 
@@ -1550,7 +1550,7 @@ Items accepted for recycling or disposal with no resale value are accepted on th
 
 ---
 
-**Questions?** Email [{{email}}](mailto:{{email}}) — we'll get back to you as soon as we can.`;
+**Questions?** Email [{{email}}](mailto:{{email}}), we'll get back to you as soon as we can.`;
 
 // Maps every audience+slug combination the public site's "viewing as" selector
 // offers (POLICY_AUDIENCE_LABELS/POLICY_AUDIENCE_ORDER in pages-info.jsx) to its

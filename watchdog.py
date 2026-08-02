@@ -2,7 +2,7 @@
 """
 Service watchdog for outbackelectronics + weather-station.
 
-systemd already restarts crashed services — this script's job is to track
+systemd already restarts crashed services, this script's job is to track
 crash frequency and send an email alert when either threshold is breached:
   - 2 crashes within 10 minutes
   - 5 crashes within 1 hour
@@ -38,7 +38,7 @@ def read_env_file(path):
     try:
         st = os.stat(path)
         if st.st_mode & 0o004:
-            log.warning('.env is world-readable (mode %o) — run: chmod 600 .env', st.st_mode & 0o777)
+            log.warning('.env is world-readable (mode %o), run: chmod 600 .env', st.st_mode & 0o777)
         with open(path) as f:
             for line in f:
                 line = line.strip()
@@ -70,7 +70,7 @@ EMAIL_COOLDOWN  = 30 * 60 # minimum seconds between emails per service
 
 def send_alert(service, crash_times, reason):
     if not all([SMTP_HOST, SMTP_USER, SMTP_PASS, NOTIFY_EMAIL]):
-        log.warning('SMTP not configured — cannot send alert for %s', service)
+        log.warning('SMTP not configured, cannot send alert for %s', service)
         return
 
     subject = f'[Outback Electronics] Service alert: {service}'

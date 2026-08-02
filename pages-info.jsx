@@ -67,7 +67,7 @@ function QuotePage({ go, pageParams }) {
   if (submitted) {
     return (
       <>
-        <PageHead crumbs={['Outback','Request a Quote']} title="Quote received." lead="A real human will get back to you within 24 hours — usually sooner for urgent jobs." />
+        <PageHead crumbs={['Outback','Request a Quote']} title="Quote received." lead="A real human will get back to you within 24 hours, usually sooner for urgent jobs." />
         <section className="container" style={{paddingTop: 32, paddingBottom: 60}}>
           <div className="card-paper" style={{padding: 40, maxWidth: 640}}>
             <div className="row-flex"><span className="tag tag-euc">TICKET · {ticketId ? `#${ticketId}` : 'SUBMITTED'}</span></div>
@@ -78,8 +78,8 @@ function QuotePage({ go, pageParams }) {
               <div>kind     : {form.kind}</div>
               <div>budget   : {form.budget}</div>
               <div>urgency  : {form.urgency}</div>
-              <div>location : {form.loc || '—'}</div>
-              <div>summary  : {form.desc.slice(0,120) || '—'}{form.desc.length > 120 ? '…' : ''}</div>
+              <div>location : {form.loc || '-'}</div>
+              <div>summary  : {form.desc.slice(0,120) || '-'}{form.desc.length > 120 ? '…' : ''}</div>
             </div>
             <div className="row-flex" style={{marginTop:24}}>
               <button className="btn" onClick={() => setSubmitted(false)}>Submit another</button>
@@ -111,7 +111,7 @@ function QuotePage({ go, pageParams }) {
             setTicketId(data.id || null);
             setSubmitted(true);
           } catch {
-            setSubmitError('Something went wrong — please try again or call us directly.');
+            setSubmitError('Something went wrong, please try again or call us directly.');
           } finally {
             setSubmitting(false);
           }
@@ -181,12 +181,12 @@ function QuotePage({ go, pageParams }) {
               return (
                 <div style={{marginTop:4, marginBottom:4, padding:'8px 12px', fontSize:13, border:'1px solid var(--line)', background:'var(--bg-elev)', borderColor: capExceeded ? 'var(--rust)' : 'var(--line)'}}>
                   {capExceeded
-                    ? <span style={{color:'var(--rust)'}}>That's {distKm}km — on-site visits for most services are capped at {localCapKm}km. We can still quote; or post the device to us.</span>
+                    ? <span style={{color:'var(--rust)'}}>That's {distKm}km, on-site visits for most services are capped at {localCapKm}km. We can still quote; or post the device to us.</span>
                     : fee === 0
-                      ? <span><span style={{color:'var(--rust)', fontWeight:600}}>Free callout</span> — you're {distKm}km away.</span>
+                      ? <span><span style={{color:'var(--rust)', fontWeight:600}}>Free callout</span> - you're {distKm}km away.</span>
                       : days > 0
-                        ? <span><span style={{fontWeight:600}}>~${fee} travel fee</span> — {distKm}km: fuel + {days * 2} travel days @ ${dailyRate}/day. We'll confirm in the quote.</span>
-                        : <span><span style={{fontWeight:600}}>~${fee} travel fee</span> — {distKm}km at $0.60/km (round trip fuel). We'll confirm in the quote.</span>
+                        ? <span><span style={{fontWeight:600}}>~${fee} travel fee</span>, {distKm}km: fuel + {days * 2} travel days @ ${dailyRate}/day. We'll confirm in the quote.</span>
+                        : <span><span style={{fontWeight:600}}>~${fee} travel fee</span>, {distKm}km at $0.60/km (round trip fuel). We'll confirm in the quote.</span>
                   }
                 </div>
               );
@@ -194,7 +194,7 @@ function QuotePage({ go, pageParams }) {
 
             <hr className="thin" />
             <span className="eyebrow">05 · DESCRIBE THE JOB</span>
-            <p style={{fontSize:13, color:'var(--ink-2)', marginTop:6, marginBottom: 10}}>Plain English is great. Photos can come later — we'll reply with an upload link.</p>
+            <p style={{fontSize:13, color:'var(--ink-2)', marginTop:6, marginBottom: 10}}>Plain English is great. Photos can come later, we'll reply with an upload link.</p>
             <label className="field">
               <textarea className="textarea" value={form.desc} onChange={e => update('desc', e.target.value)} placeholder="My 6kW Fronius inverter is throwing 'AC Voltage High' once it gets over 38°C in the shed. Worked fine all winter. House is 80km west of Birdsville." style={{minHeight: 160}} />
               <div style={{display:'flex', justifyContent:'flex-end', marginTop:4}}>
@@ -240,7 +240,7 @@ function QuotePage({ go, pageParams }) {
 const BOOKING_TYPES = [
   { v: 'dropoff',     l: 'Repair drop-off',  d: 'Bring your device to the bench.' },
   { v: 'appointment', l: 'In-store appointment', d: 'A general consultation or service slot.' },
-  { v: 'callout',     l: 'On-site callout',  d: 'We come to you — travel fees may apply.' },
+  { v: 'callout',     l: 'On-site callout',  d: 'We come to you - travel fees may apply.' },
 ];
 
 function BookingPage({ go, pageParams }) {
@@ -324,14 +324,14 @@ function BookingPage({ go, pageParams }) {
 
   const pageCopy = {
     dropoff:     { title: 'Book a Repair Drop-off',  lead: "Bring your device to the bench. Pick a date and we'll have a slot ready." },
-    appointment: { title: 'Book an In-Store Appointment', lead: 'A general consultation or service slot — pick what fits.' },
+    appointment: { title: 'Book an In-Store Appointment', lead: 'A general consultation or service slot, pick what fits.' },
     callout:     { title: 'Book an On-Site Callout',  lead: 'We come to you. Travel fees may apply depending on distance.' },
-  }[form.type] || { title: 'Book a Repair or Appointment', lead: 'Drop your device at the bench, book an in-store slot, or get a callout — pick what fits.' };
+  }[form.type] || { title: 'Book a Repair or Appointment', lead: 'Drop your device at the bench, book an in-store slot, or get a callout - pick what fits.' };
 
   if (submitted) {
     return (
       <>
-        <PageHead crumbs={['Outback','Book']} title="Booking received." lead="We'll confirm the date and time by email — usually within a business day." />
+        <PageHead crumbs={['Outback','Book']} title="Booking received." lead="We'll confirm the date and time by email, usually within a business day." />
         <section className="container" style={{paddingTop: 32, paddingBottom: 60}}>
           <div className="card-paper" style={{padding: 40, maxWidth: 640}}>
             <div className="row-flex"><span className="tag tag-euc">BOOKING · {bookingId ? `#${bookingId}` : 'SUBMITTED'}</span></div>
@@ -341,7 +341,7 @@ function BookingPage({ go, pageParams }) {
               <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom: 6}}>// YOUR BOOKING</div>
               <div>type     : {BOOKING_TYPES.find(t => t.v === form.type)?.l || form.type}</div>
               <div>date     : {form.preferredDate}{form.preferredTime ? ` · ${form.preferredTime}` : ''}</div>
-              <div>device   : {form.device || '—'}</div>
+              <div>device   : {form.device || '-'}</div>
             </div>
             <div className="row-flex" style={{marginTop:24}}>
               <button className="btn" onClick={() => setSubmitted(false)}>Book another</button>
@@ -372,7 +372,7 @@ function BookingPage({ go, pageParams }) {
             setBookingId(data.id || null);
             setSubmitted(true);
           } catch {
-            setSubmitError('Something went wrong — please try again or call us directly.');
+            setSubmitError('Something went wrong, please try again or call us directly.');
           } finally {
             setSubmitting(false);
           }
@@ -437,12 +437,12 @@ function BookingPage({ go, pageParams }) {
                   return (
                     <div style={{marginTop:4, marginBottom:4, padding:'8px 12px', fontSize:13, border:'1px solid var(--line)', background:'var(--bg-elev)', borderColor: capExceeded ? 'var(--rust)' : 'var(--line)'}}>
                       {capExceeded
-                        ? <span style={{color:'var(--rust)'}}>That's {distKm}km — on-site callouts are capped at {localCapKm}km. Please call us to discuss options.</span>
+                        ? <span style={{color:'var(--rust)'}}>That's {distKm}km, on-site callouts are capped at {localCapKm}km. Please call us to discuss options.</span>
                         : fee === 0
-                          ? <span><span style={{color:'var(--rust)', fontWeight:600}}>Free callout</span> — you're {distKm}km away.</span>
+                          ? <span><span style={{color:'var(--rust)', fontWeight:600}}>Free callout</span> - you're {distKm}km away.</span>
                           : days > 0
-                            ? <span><span style={{fontWeight:600}}>~${fee} travel fee</span> — {distKm}km: fuel + {days * 2} travel days @ ${dailyRate}/day. We'll confirm when we book you in.</span>
-                            : <span><span style={{fontWeight:600}}>~${fee} travel fee</span> — {distKm}km at $0.60/km (round trip fuel). We'll confirm when we book you in.</span>
+                            ? <span><span style={{fontWeight:600}}>~${fee} travel fee</span>, {distKm}km: fuel + {days * 2} travel days @ ${dailyRate}/day. We'll confirm when we book you in.</span>
+                            : <span><span style={{fontWeight:600}}>~${fee} travel fee</span>, {distKm}km at $0.60/km (round trip fuel). We'll confirm when we book you in.</span>
                       }
                     </div>
                   );
@@ -741,14 +741,14 @@ function ReviewPage({ go }) {
   return (
     <>
       <PageHead crumbs={['Outback', 'Review']} title="Leave a Review"
-        lead={`Hi${customerName ? ` ${customerName.split(' ')[0]}` : ''} — tell us how we did. You can review your whole order, or a specific item you bought.`} />
+        lead={`Hi${customerName ? ` ${customerName.split(' ')[0]}` : ''}, tell us how we did. You can review your whole order, or a specific item you bought.`} />
       <section className="container" style={{ paddingTop: 8, paddingBottom: 60 }}>
         <div className="card-paper" style={{ padding: 32, maxWidth: 640 }}>
           {submitted ? (
             <>
               <span className="tag tag-euc">SUBMITTED</span>
               <h3 className="serif" style={{ fontSize: 30, marginTop: 14 }}>Thanks for the feedback.</h3>
-              <p style={{ marginTop: 10, color: 'var(--ink-2)' }}>Your review is in — it'll appear on the site once we've had a look.</p>
+              <p style={{ marginTop: 10, color: 'var(--ink-2)' }}>Your review is in - it'll appear on the site once we've had a look.</p>
               <button className="btn btn-rust" style={{ marginTop: 20 }} onClick={resetForm}>Leave another review →</button>
             </>
           ) : (
@@ -763,7 +763,7 @@ function ReviewPage({ go }) {
               {mode === 'product' && orderItems.length > 0 && (
                 <label className="field">
                   <span className="label">Which item?</span>
-                  {/* Only this order's own items — the dropdown value is the item's index so
+                  {/* Only this order's own items, the dropdown value is the item's index so
                       duplicate names and items without a catalog id still select cleanly. */}
                   <select className="select"
                     value={selectedItem ? String(orderItems.indexOf(selectedItem)) : ''}
@@ -822,7 +822,7 @@ function ReviewPage({ go }) {
 
 
 // ============================================================
-// INFO FOR SELLERS — INDEX
+// INFO FOR SELLERS - INDEX
 // ============================================================
 function SellersPage({ go }) {
   useEffect(() => { go('policies', { audience: 'seller', slug: 'terms-and-conditions' }); }, []);
@@ -850,12 +850,12 @@ function findPolicyAudience(slug, items) {
 
 // Policy bodies are authored with {{email}}/{{phone}}/{{phoneHref}}/{{address}}/{{abn}}
 // placeholders (see policy-defaults.js) so the same text works across every shop
-// setting change without a redeploy — fill them in with live values just before render.
+// setting change without a redeploy, fill them in with live values just before render.
 function interpolatePolicyBody(body, shop) {
   const phone = shop.phone || '';
   const accountUrl = `${shop._portalUrl || 'https://portal.outbackelectronics.com.au'}/account`;
   // Markdown link syntax like [{{email}}](mailto:{{email}}) requires non-empty
-  // link text to render at all — an empty substitution leaves the raw [](...)
+  // link text to render at all, an empty substitution leaves the raw [](...)
   // syntax visible to every visitor, so fall back to plain-English text (matching
   // what the pre-CMS hardcoded pages showed) rather than an empty string.
   const values = {
@@ -913,7 +913,7 @@ function PoliciesPage({ go, pageParams }) {
     return (
       <>
         <PageHead crumbs={['Outback', 'Policies']} title="Policies unavailable"
-          lead="We couldn't load our policy documents right now — please try again shortly." />
+          lead="We couldn't load our policy documents right now, please try again shortly." />
       </>
     );
   }
@@ -1003,7 +1003,7 @@ function WarrantyRegisterPage({ go }) {
       const data = await res.json();
       setOrderData(data);
     } catch {
-      setLookupError('Could not look up order — check your ID or contact us.');
+      setLookupError('Could not look up order, check your ID or contact us.');
     } finally {
       setLooking(false);
     }
@@ -1039,8 +1039,8 @@ function WarrantyRegisterPage({ go }) {
             </p>
             <div className="term" style={{ marginTop: 24 }}>
               <div className="mono" style={{ fontSize: 10, color: 'var(--ink-3)', marginBottom: 6 }}>// REGISTERED BUILD</div>
-              <div>order    : {form.orderId || '—'}</div>
-              <div>received : {form.receivedDate || '—'}</div>
+              <div>order    : {form.orderId || '-'}</div>
+              <div>received : {form.receivedDate || '-'}</div>
               {newParts.length > 0 && newParts.map((e, i) => (
                 <div key={i}>new      : {e.description}</div>
               ))}
@@ -1088,7 +1088,7 @@ function WarrantyRegisterPage({ go }) {
           } catch (err) {
             setSubmitError(err.message && err.message !== 'server_error'
               ? err.message
-              : 'Something went wrong — please try again or contact us directly.');
+              : 'Something went wrong, please try again or contact us directly.');
           } finally {
             setSubmitting(false);
           }
@@ -1128,7 +1128,7 @@ function WarrantyRegisterPage({ go }) {
               <div style={{ marginTop: 16 }}>
                 {hasExpenses ? (
                   <>
-                    <div className="eyebrow" style={{ color: 'var(--eucalyptus)', marginBottom: 10 }}>Build found — {expenses.length} part{expenses.length !== 1 ? 's' : ''}</div>
+                    <div className="eyebrow" style={{ color: 'var(--eucalyptus)', marginBottom: 10 }}>Build found - {expenses.length} part{expenses.length !== 1 ? 's' : ''}</div>
                     <div style={{ display: 'grid', gap: 8 }}>
                       {expenses.map((e, i) => (
                         <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--bg)', border: '1px solid var(--line)', fontSize: 13 }}>
@@ -1173,7 +1173,7 @@ function WarrantyRegisterPage({ go }) {
             <hr className="thin" />
             <ErrorText style={{marginBottom: 12}}>{submitError}</ErrorText>
             <div className="row-flex" style={{ justifyContent: 'space-between' }}>
-              <span className="mono" style={{ fontSize: 11, color: 'var(--ink-2)' }}>KEEP YOUR RECEIPT — IT'S YOUR PROOF OF PURCHASE</span>
+              <span className="mono" style={{ fontSize: 11, color: 'var(--ink-2)' }}>KEEP YOUR RECEIPT - IT'S YOUR PROOF OF PURCHASE</span>
               <button className="btn btn-rust" type="submit" disabled={submitting}>{submitting ? 'Registering…' : 'Register build →'}</button>
             </div>
           </div>
@@ -1234,10 +1234,10 @@ function AboutPage({ go }) {
               const addr = [shop?.suburb, shop?.state, shop?.postcode].filter(Boolean).join(' ');
               return addr ? ` based at ${addr}` : '';
             })()}.
-            We build Arduino and microcontroller projects, repair PCs and phones, write software and AI solutions, and handle off-grid and automotive electronics — for people who live and work where the signal ends.
+            We build Arduino and microcontroller projects, repair PCs and phones, write software and AI solutions, and handle off-grid and automotive electronics, for people who live and work where the signal ends.
           </p>
           <p style={{ color: 'var(--ink-2)', lineHeight: 1.8, marginBottom: 24 }}>
-            No public walk-in. Every visit is by appointment — call, email, or book online. We travel across remote Australia and ship worldwide.
+            No public walk-in. Every visit is by appointment, call, email, or book online. We travel across remote Australia and ship worldwide.
           </p>
           <div className="row-flex" style={{ gap: 12, flexWrap: 'wrap', marginBottom: 32 }}>
             <button className="btn btn-rust" onClick={() => go('quote')}>Get a Quote</button>
@@ -1250,7 +1250,7 @@ function AboutPage({ go }) {
             <div style={{ fontSize: 15, lineHeight: 1.8 }}>
               <div>{[shop?.suburb, shop?.state, shop?.postcode].filter(Boolean).join(' ')}</div>
               {shop?.phone && <div style={{ marginTop: 6 }}>{shop.phone}</div>}
-              <div style={{ marginTop: 6, color: 'var(--ink-3)', fontSize: 13 }}>No public access — appointment only.</div>
+              <div style={{ marginTop: 6, color: 'var(--ink-3)', fontSize: 13 }}>No public access - appointment only.</div>
             </div>
           </div>
         </div>
@@ -1295,7 +1295,7 @@ function CapabilityStatementPage({ go }) {
   return (
     <>
       <PageHead crumbs={['Outback', 'Capability Statement']} title="Capability Statement"
-        lead="Full-Service Electronics & Technology Provider — Blackall, QLD. By appointment only." />
+        lead="Full-Service Electronics & Technology Provider - Blackall, QLD. By appointment only." />
       <section className="container" style={{ paddingTop: 32, paddingBottom: 64 }}>
         <div style={{ maxWidth: 880, margin: '0 auto' }}>
 
@@ -1316,7 +1316,7 @@ function CapabilityStatementPage({ go }) {
 
           <h2 className="serif" style={{ fontSize: 24, marginBottom: 14 }}>Business Overview</h2>
           <p style={{ color: 'var(--ink-2)', lineHeight: 1.8, marginBottom: 16 }}>
-            Outback Electronics is a full-service electronics and technology provider based in Blackall, Queensland. The business covers the complete spectrum — consumer device repair, custom embedded hardware, PCB design, SCADA and industrial control, software development, web hosting, cybersecurity, digital forensics, and technical consulting. If it involves electronics, hardware, or software, Outback Electronics can handle it.
+            Outback Electronics is a full-service electronics and technology provider based in Blackall, Queensland. The business covers the complete spectrum, consumer device repair, custom embedded hardware, PCB design, SCADA and industrial control, software development, web hosting, cybersecurity, digital forensics, and technical consulting. If it involves electronics, hardware, or software, Outback Electronics can handle it.
           </p>
           <p style={{ color: 'var(--ink-2)', lineHeight: 1.8, marginBottom: 32 }}>
             Commercial, agricultural, and research clients can engage Outback Electronics for end-to-end project delivery: from initial requirements through circuit design, PCB layout, firmware, software, and documentation. Mobile and FIFO field service is available across the Central West region.
@@ -1341,12 +1341,12 @@ function CapabilityStatementPage({ go }) {
           <CapabilityStatementTable rows={[
             ['Custom Embedded Systems', 'End-to-end embedded hardware development: requirements through to finished product. AVR, ARM, ESP32, and custom silicon. Suitable for agricultural, industrial, medical, and research applications.'],
             ['Custom PCB Design', 'Schematic capture and PCB layout (KiCad) for client-specified end goals. Client provides the problem; Outback Electronics designs the circuit.'],
-            ['Hardware-Software Integration', 'Software development that interfaces directly with external hardware — instruments, sensors, controllers, and industrial devices. Examples include viscometer interfaces, data loggers, and custom instrument front-ends.'],
+            ['Hardware-Software Integration', 'Software development that interfaces directly with external hardware, instruments, sensors, controllers, and industrial devices. Examples include viscometer interfaces, data loggers, and custom instrument front-ends.'],
             ['Digital Forensics', 'Data recovery and forensic analysis from computers, phones, storage media, and embedded devices. Deleted file recovery, fault diagnosis, and evidence-grade documentation where required.'],
             ['Reverse Engineering', 'Hardware and firmware reverse engineering for compatibility, repair, legacy system support, or security assessment purposes.'],
             ['IoT & Home Automation', 'Design and deployment of IoT sensor networks, smart home systems, and remote monitoring solutions. Custom firmware and cloud/local integration.'],
             ['SCADA & Industrial Control', 'SCADA system design, integration, and troubleshooting. PLC interfacing, sensor integration, and industrial control system development for remote and rural applications.'],
-            ['Product Prototyping', 'Full prototype development for client product concepts — from circuit design and PCB layout through to enclosure, firmware, and production-ready documentation.'],
+            ['Product Prototyping', 'Full prototype development for client product concepts, from circuit design and PCB layout through to enclosure, firmware, and production-ready documentation.'],
           ]} />
 
           <h2 className="serif" style={{ fontSize: 24, marginBottom: 14 }}>Software, Web &amp; Systems</h2>
@@ -1377,7 +1377,7 @@ function CapabilityStatementPage({ go }) {
             ['Full-Spectrum Capability', 'One provider from consumer device repair through to custom embedded hardware, SCADA systems, software development, and web hosting. No need to source multiple specialists.'],
             ['Component-Level Repair', 'Full SMD rework capability. Diagnoses and repairs at component level rather than defaulting to board or unit replacement, reducing cost significantly.'],
             ['Hardware + Software', 'Rare combination of deep hardware engineering and full-stack software development. Able to build complete systems end-to-end including the physical circuit, firmware, and user-facing software.'],
-            ['Regional Availability', 'Based in Blackall — delivering specialist capability to the Central West and surrounding regions where these services are otherwise absent locally.'],
+            ['Regional Availability', 'Based in Blackall - delivering specialist capability to the Central West and surrounding regions where these services are otherwise absent locally.'],
             ['Flexible Engagement', 'Appointment-based with mobile pickup/drop-off. FIFO and remote site visits available for commercial and pastoral clients. Work quoted promptly and transparently.'],
           ]} />
 
@@ -1403,13 +1403,13 @@ function CapabilityStatementPage({ go }) {
 }
 
 // ============================================================
-// SELL YOUR GEAR (used gear — consignment / outright / trade)
+// SELL YOUR GEAR (used gear, consignment / outright / trade)
 // ============================================================
 function SellGearPage({ go }) {
   return (
     <>
       <PageHead crumbs={['Outback','Sell Your Gear']} title="Sell Your Gear"
-        lead="We resell other people's gear too. Here's how to sell yours through us — consignment, outright, or a trade." />
+        lead="We resell other people's gear too. Here's how to sell yours through us, consignment, outright, or a trade." />
 
       <section className="container" style={{paddingTop: 40}}>
         <div className="grid-3" style={{gap: 24}}>
@@ -1495,32 +1495,32 @@ function SellGearPage({ go }) {
 const ACD_STAGES = [
   {
     n: '0', name: 'Birth', active: true,
-    plain: 'The system exists but does nothing yet. It has a heartbeat — a clock, a memory, a boundary between itself and the outside world. Nothing more.',
+    plain: 'The system exists but does nothing yet. It has a heartbeat, a clock, a memory, a boundary between itself and the outside world. Nothing more.',
     tech: 'Runtime persistence · internal state variables · clock and scheduling · sandbox boundary enforcement',
   },
   {
     n: '1', name: 'Waking up', active: true,
-    plain: 'It learns to be awake and asleep. It starts reacting to the world around it — loud sounds, bright movement — without understanding any of it.',
+    plain: 'It learns to be awake and asleep. It starts reacting to the world around it, loud sounds, bright movement - without understanding any of it.',
     tech: 'Wake/sleep transitions · sensory gating · arousal state · adaptive thresholds · raw energy detection',
   },
   {
     n: '2', name: 'Learning to see and hear', active: false,
-    plain: 'It starts making sense of the raw flood of pixels and sound. Not understanding — just finding patterns. The same way a newborn learns to focus before it learns to recognise.',
+    plain: 'It starts making sense of the raw flood of pixels and sound. Not understanding, just finding patterns. The same way a newborn learns to focus before it learns to recognise.',
     tech: 'Visual and auditory latent space stabilisation · temporal continuity · feature persistence · waveform structure modelling',
   },
   {
     n: '3', name: 'Things exist when you look away', active: false,
-    plain: 'It learns that objects are persistent — that the cup is still the cup even when it moves, or is partially hidden. This is object permanence. Babies develop it around 8 months.',
+    plain: 'It learns that objects are persistent, that the cup is still the cup even when it moves, or is partially hidden. This is object permanence. Babies develop it around 8 months.',
     tech: 'Visual identity persistence · motion tracking · partial occlusion handling · re-identification without labels',
   },
   {
     n: '4', name: 'Babbling', active: false,
-    plain: 'It starts making sounds. Not words — just attempts. It hears a sound, tries to reproduce it, listens to what it made, and adjusts. Over and over. The same process a baby uses.',
+    plain: 'It starts making sounds. Not words, just attempts. It hears a sound, tries to reproduce it, listens to what it made, and adjusts. Over and over. The same process a baby uses.',
     tech: 'Sensorimotor audio loop · closed-loop imitation · motor-to-acoustic mapping · iterative error reduction',
   },
   {
     n: '5', name: 'Connecting what it sees to what it hears', active: false,
-    plain: 'It starts noticing that some sounds go with some sights. A moving mouth produces voice. A falling object makes a thud. No meaning yet — just correlation.',
+    plain: 'It starts noticing that some sounds go with some sights. A moving mouth produces voice. A falling object makes a thud. No meaning yet, just correlation.',
     tech: 'Cross-modal temporal synchrony · predictive coupling between visual and auditory streams · co-occurrence learning',
   },
   {
@@ -1530,12 +1530,12 @@ const ACD_STAGES = [
   },
   {
     n: '7', name: 'First words', active: false,
-    plain: 'A word becomes real. Not because it was programmed in — but because the system has seen the thing, heard the word, and had the connection reinforced enough times that it sticks.',
+    plain: 'A word becomes real. Not because it was programmed in, but because the system has seen the thing, heard the word, and had the connection reinforced enough times that it sticks.',
     tech: 'Stable symbol grounding · visual cluster ↔ auditory pattern ↔ reinforcement binding · reusable cross-modal association',
   },
   {
     n: '8+', name: 'Thinking', active: false,
-    plain: 'If the foundations hold, higher capabilities follow — reasoning, planning, memory across time, a model of itself. These are distant goals. We are not there yet, and we will not pretend otherwise.',
+    plain: 'If the foundations hold, higher capabilities follow - reasoning, planning, memory across time, a model of itself. These are distant goals. We are not there yet, and we will not pretend otherwise.',
     tech: 'Abstraction · planning · compositional language · episodic memory · self-modelling · long-term prediction',
   },
 ];
@@ -1543,12 +1543,12 @@ const ACD_STAGES = [
 const ACD_LAYERS = [
   {
     n: '1', name: 'Survival first',
-    plain: 'Before anything else, the system needs to stay stable. This layer manages energy, attention, and whether the system is awake or resting — equivalent to the brainstem keeping a body alive.',
+    plain: 'Before anything else, the system needs to stay stable. This layer manages energy, attention, and whether the system is awake or resting - equivalent to the brainstem keeping a body alive.',
     tech: 'Regulatory layer · arousal control · sleep/wake · metabolic budgeting · sensory gating · sandbox enforcement',
   },
   {
     n: '2', name: 'Raw senses',
-    plain: 'Eyes and ears. This layer takes in the camera and microphone and finds structure in the noise — without labelling or understanding anything. Pure pattern detection.',
+    plain: 'Eyes and ears. This layer takes in the camera and microphone and finds structure in the noise, without labelling or understanding anything. Pure pattern detection.',
     tech: 'Sensory layer · visual and auditory stream ingestion · latent compression · representation stabilisation · no symbolic reasoning',
   },
   {
@@ -1558,17 +1558,17 @@ const ACD_LAYERS = [
   },
   {
     n: '4', name: 'Connecting the senses',
-    plain: 'Sight and sound start to inform each other. Not because we tell it they should — but because they keep happening together, and the system notices.',
+    plain: 'Sight and sound start to inform each other. Not because we tell it they should, but because they keep happening together, and the system notices.',
     tech: 'Cross-modal integration layer · temporal synchrony detection · caregiver-guided binding · shared latent cause learning',
   },
   {
     n: '5', name: 'Drives and motivation',
-    plain: 'It has something like wants — curiosity, the need for stability, a pull toward social interaction. These shape what it pays attention to and what it tries to do.',
+    plain: 'It has something like wants, curiosity, the need for stability, a pull toward social interaction. These shape what it pays attention to and what it tries to do.',
     tech: 'Reinforcement and value layer · internal drives: continuity, stability, curiosity, social reinforcement, integrity · learning pressure shaping',
   },
   {
     n: '6', name: 'Memory',
-    plain: 'It remembers — but not like a hard drive. Memory here is active compression. Important things get reinforced. Useless things fade. Forgetting is a feature.',
+    plain: 'It remembers, but not like a hard drive. Memory here is active compression. Important things get reinforced. Useless things fade. Forgetting is a feature.',
     tech: 'Memory and consolidation layer · replay · compression · reinforcement · pruning · working / episodic / procedural / associative memory types',
   },
   {
@@ -1585,7 +1585,7 @@ function HumanlyAIPage({ go }) {
         crumbs={['Outback', 'AI', 'Humanly AI']}
         title="Humanly AI"
         kicker={<span className="tag tag-euc">RESEARCH · ACD</span>}
-        lead="We are trying to grow a mind from scratch. Not program one. Not train one on the internet. Grow one — the way a brain grows — from raw experience, one stage at a time."
+        lead="We are trying to grow a mind from scratch. Not program one. Not train one on the internet. Grow one, the way a brain grows, from raw experience, one stage at a time."
       />
 
       {/* The idea */}
@@ -1595,21 +1595,21 @@ function HumanlyAIPage({ go }) {
             <span className="eyebrow">THE IDEA</span>
             <h2 className="serif" style={{fontSize: 40, marginTop: 8, lineHeight: 1.15}}>Every AI you've used was taught.<br/>This one is being raised.</h2>
             <p style={{marginTop: 16, fontSize: 16, color: 'var(--ink-2)', lineHeight: 1.8}}>
-              ChatGPT, Gemini, every AI assistant you've encountered — they were trained on billions of pages of human writing before you ever spoke to them. They arrived knowing language, facts, and how to hold a conversation.
+              ChatGPT, Gemini, every AI assistant you've encountered - they were trained on billions of pages of human writing before you ever spoke to them. They arrived knowing language, facts, and how to hold a conversation.
             </p>
             <p style={{marginTop: 12, fontSize: 16, color: 'var(--ink-2)', lineHeight: 1.8}}>
-              Humanly AI starts with none of that. No words. No facts. No prior knowledge of any kind. It starts with a camera, a microphone, and silence — and we are trying to see whether a mind can grow from there, the same way yours did.
+              Humanly AI starts with none of that. No words. No facts. No prior knowledge of any kind. It starts with a camera, a microphone, and silence - and we are trying to see whether a mind can grow from there, the same way yours did.
             </p>
           </div>
           <div style={{padding: 32, background: 'var(--paper)', border: '1px solid var(--line)'}}>
             <span className="eyebrow">IT BEGINS WITH</span>
             <ul className="checks" style={{marginTop: 16, fontSize: 15, lineHeight: 2}}>
-              <li>Eyes — a raw camera feed</li>
-              <li>Ears — a raw microphone feed</li>
-              <li>A voice — controllable audio output</li>
-              <li>Memory — persistent storage</li>
-              <li>Drives — something like hunger and curiosity</li>
-              <li>Hard walls — a strict sandbox it cannot escape</li>
+              <li>Eyes, a raw camera feed</li>
+              <li>Ears, a raw microphone feed</li>
+              <li>A voice, controllable audio output</li>
+              <li>Memory, persistent storage</li>
+              <li>Drives, something like hunger and curiosity</li>
+              <li>Hard walls, a strict sandbox it cannot escape</li>
             </ul>
             <div style={{marginTop: 20, paddingTop: 20, borderTop: '1px solid var(--line)'}}>
               <span className="eyebrow" style={{color: 'var(--rust)'}}>IT DOES NOT BEGIN WITH</span>
@@ -1628,9 +1628,9 @@ function HumanlyAIPage({ go }) {
         <span className="eyebrow">HOW IT LEARNS</span>
         <div className="grid-2" style={{gap: 32, marginTop: 24}}>
           <div>
-            <h3 className="serif" style={{fontSize: 30, lineHeight: 1.2}}>It guesses constantly — and learns from being wrong.</h3>
+            <h3 className="serif" style={{fontSize: 30, lineHeight: 1.2}}>It guesses constantly - and learns from being wrong.</h3>
             <p style={{marginTop: 14, fontSize: 15, color: 'var(--ink-2)', lineHeight: 1.8}}>
-              The system's core loop is prediction. Every moment, it tries to predict what will happen next — what the next frame will look like, what sound is coming. When it's wrong, it adjusts. This is how a brain works too: not storing information like a database, but building a model of the world by constantly testing it.
+              The system's core loop is prediction. Every moment, it tries to predict what will happen next - what the next frame will look like, what sound is coming. When it's wrong, it adjusts. This is how a brain works too: not storing information like a database, but building a model of the world by constantly testing it.
             </p>
             <p style={{marginTop: 12, fontSize: 15, color: 'var(--ink-2)', lineHeight: 1.8}}>
               There is no teacher correcting it with right answers. There is only reality, pushing back.
@@ -1643,10 +1643,10 @@ function HumanlyAIPage({ go }) {
           <div>
             <h3 className="serif" style={{fontSize: 30, lineHeight: 1.2}}>Knowledge is formed. Not installed.</h3>
             <p style={{marginTop: 14, fontSize: 15, color: 'var(--ink-2)', lineHeight: 1.8}}>
-              When you were a baby, nobody uploaded "apple" into your brain. You saw apples, touched them, heard the word while looking at them, and over time the concept formed. We are attempting the same process — grounded, embodied, earned knowledge rather than injected facts.
+              When you were a baby, nobody uploaded "apple" into your brain. You saw apples, touched them, heard the word while looking at them, and over time the concept formed. We are attempting the same process, grounded, embodied, earned knowledge rather than injected facts.
             </p>
             <p style={{marginTop: 12, fontSize: 15, color: 'var(--ink-2)', lineHeight: 1.8}}>
-              If the system eventually knows what an apple is, it will be because it figured it out — not because we told it.
+              If the system eventually knows what an apple is, it will be because it figured it out - not because we told it.
             </p>
             <div className="mono" style={{marginTop: 20, fontSize: 12, color: 'var(--ink-3)', lineHeight: 2, borderLeft: '2px solid var(--line)', paddingLeft: 16}}>
               <div>// technical: grounded cognition via cross-modal</div>
@@ -1661,7 +1661,7 @@ function HumanlyAIPage({ go }) {
         <span className="eyebrow">THE STAGES</span>
         <h2 className="serif" style={{fontSize: 40, marginTop: 8, marginBottom: 8}}>It grows in order.<br/>No skipping ahead.</h2>
         <p style={{fontSize: 15, color: 'var(--ink-2)', marginBottom: 36, maxWidth: 600}}>
-          A human brain doesn't develop all at once. The brainstem comes before the cortex. Vision before language. Babbling before words. We follow the same order — because we believe the order matters.
+          A human brain doesn't develop all at once. The brainstem comes before the cortex. Vision before language. Babbling before words. We follow the same order, because we believe the order matters.
         </p>
         <div style={{position: 'relative', paddingLeft: 36}}>
           <div style={{position: 'absolute', left: 11, top: 8, bottom: 8, width: 1, background: 'var(--line)'}} />
@@ -1688,7 +1688,7 @@ function HumanlyAIPage({ go }) {
         <span className="eyebrow">HOW IT'S BUILT</span>
         <h2 className="serif" style={{fontSize: 40, marginTop: 8, marginBottom: 8}}>Seven layers.<br/>Lowest first.</h2>
         <p style={{fontSize: 15, color: 'var(--ink-2)', marginBottom: 32, maxWidth: 580}}>
-          The system is built in layers, each one depending on the ones below it. The higher layers don't exist yet — and won't until the lower ones are stable. We don't build the roof before the foundations.
+          The system is built in layers, each one depending on the ones below it. The higher layers don't exist yet, and won't until the lower ones are stable. We don't build the roof before the foundations.
         </p>
         <div style={{border: '1px solid var(--line)'}}>
           {ACD_LAYERS.map((l, i) => (
@@ -1711,25 +1711,25 @@ function HumanlyAIPage({ go }) {
             <span className="eyebrow">MEMORY</span>
             <h3 className="serif" style={{fontSize: 28, marginTop: 10, marginBottom: 14}}>It forgets on purpose.</h3>
             <p style={{fontSize: 15, color: 'var(--ink-2)', lineHeight: 1.8, marginBottom: 16}}>
-              Memory here isn't a hard drive. The system doesn't just record everything and keep it forever. Instead, it continuously replays experiences, reinforces what mattered, and lets the rest fade. Forgetting is not a bug — it's how noise gets cleared and real patterns survive.
+              Memory here isn't a hard drive. The system doesn't just record everything and keep it forever. Instead, it continuously replays experiences, reinforces what mattered, and lets the rest fade. Forgetting is not a bug, it's how noise gets cleared and real patterns survive.
             </p>
             <div className="mono" style={{fontSize: 11, color: 'var(--ink-3)', lineHeight: 2, borderTop: '1px solid var(--line)', paddingTop: 14}}>
-              <div>Working memory — what it's attending to right now</div>
-              <div>Episodic memory — compressed records of past interactions</div>
-              <div>Procedural memory — learned behaviours and motor patterns</div>
-              <div>Associative memory — cross-modal bindings (sight ↔ sound)</div>
+              <div>Working memory, what it's attending to right now</div>
+              <div>Episodic memory, compressed records of past interactions</div>
+              <div>Procedural memory, learned behaviours and motor patterns</div>
+              <div>Associative memory, cross-modal bindings (sight ↔ sound)</div>
             </div>
           </div>
           <div style={{padding: 32, background: 'var(--paper)', border: '1px solid var(--line)'}}>
             <span className="eyebrow">SLEEP</span>
             <h3 className="serif" style={{fontSize: 28, marginTop: 10, marginBottom: 14}}>Sleep is when the real work happens.</h3>
             <p style={{fontSize: 15, color: 'var(--ink-2)', lineHeight: 1.8, marginBottom: 16}}>
-              When the system rests, it isn't idle. It replays what it experienced, consolidates what it learned, prunes what it doesn't need, and recalibrates. This mirrors what the human brain does during sleep — which is one reason sleep deprivation destroys learning.
+              When the system rests, it isn't idle. It replays what it experienced, consolidates what it learned, prunes what it doesn't need, and recalibrates. This mirrors what the human brain does during sleep, which is one reason sleep deprivation destroys learning.
             </p>
             <div className="mono" style={{fontSize: 11, color: 'var(--ink-3)', lineHeight: 2, borderTop: '1px solid var(--line)', paddingTop: 14}}>
-              <div>Light sleep — low-level monitoring continues</div>
-              <div>Deep sleep — internal replay and structural maintenance</div>
-              <div>Dream-like replay — recombination of past experiences</div>
+              <div>Light sleep, low-level monitoring continues</div>
+              <div>Deep sleep, internal replay and structural maintenance</div>
+              <div>Dream-like replay, recombination of past experiences</div>
             </div>
           </div>
         </div>
@@ -1746,7 +1746,7 @@ function HumanlyAIPage({ go }) {
                 The system has no access to the internet. It cannot touch the operating system it runs on. It cannot rewrite its own core rules. It cannot give itself more capabilities than it has been granted.
               </p>
               <p style={{marginTop: 12, fontSize: 15, color: 'var(--bg-deep)', lineHeight: 1.8}}>
-                We are doing genuine research into emergent cognition. We take that seriously. The sandbox isn't a footnote — it's a first-class requirement.
+                We are doing genuine research into emergent cognition. We take that seriously. The sandbox isn't a footnote, it's a first-class requirement.
               </p>
             </div>
             <div className="term">
@@ -1770,10 +1770,10 @@ function HumanlyAIPage({ go }) {
         </p>
         <div className="grid-2" style={{gap: 1, border: '1px solid var(--line)', background: 'var(--line)'}}>
           {[
-            { id: 'A', plain: 'It keeps track of an object as it moves — without being told what the object is.', tech: 'Persistent visual object tracking from raw input without labels' },
+            { id: 'A', plain: 'It keeps track of an object as it moves, without being told what the object is.', tech: 'Persistent visual object tracking from raw input without labels' },
             { id: 'B', plain: 'It hears a sound and teaches itself to reproduce it, purely by listening to its own attempts and adjusting.', tech: 'Closed-loop audio imitation via sensorimotor error reduction' },
-            { id: 'C', plain: 'It starts expecting a specific sound when it sees a particular thing — before it understands either.', tech: 'Stable cross-modal association between visual cluster and auditory pattern' },
-            { id: 'D', plain: 'It sees an object and produces the word for it — a word it learned the same way a child does, through repeated experience.', tech: 'Grounded label production: perceived object → acquired sound pattern' },
+            { id: 'C', plain: 'It starts expecting a specific sound when it sees a particular thing, before it understands either.', tech: 'Stable cross-modal association between visual cluster and auditory pattern' },
+            { id: 'D', plain: 'It sees an object and produces the word for it, a word it learned the same way a child does, through repeated experience.', tech: 'Grounded label production: perceived object → acquired sound pattern' },
           ].map(s => (
             <div key={s.id} style={{background: 'var(--paper)', padding: 32}}>
               <div className="mono" style={{fontSize: 11, color: 'var(--rust)', marginBottom: 10, letterSpacing: '.1em'}}>MILESTONE {s.id}</div>
@@ -1789,7 +1789,7 @@ function HumanlyAIPage({ go }) {
         <div style={{maxWidth: 660, margin: '0 auto', textAlign: 'center'}}>
           <h2 className="serif" style={{fontSize: 36, lineHeight: 1.3, marginBottom: 20}}>We are not trying to build something smart.<br/>We are trying to build something that can become smart.</h2>
           <p style={{fontSize: 16, color: 'var(--ink-2)', lineHeight: 1.8, marginBottom: 12}}>
-            The difference matters. Intelligence handed down is borrowed. Intelligence grown from experience — tested against reality, shaped by failure, reinforced by what works — is something else entirely.
+            The difference matters. Intelligence handed down is borrowed. Intelligence grown from experience, tested against reality, shaped by failure, reinforced by what works - is something else entirely.
           </p>
           <p style={{fontSize: 16, color: 'var(--ink-2)', lineHeight: 1.8, marginBottom: 36}}>
             We don't know if it will work. We think it's worth trying.
@@ -1802,7 +1802,7 @@ function HumanlyAIPage({ go }) {
   );
 }
 
-// Public listing of every approved review — product, custom-build and
+// Public listing of every approved review, product, custom-build and
 // whole-order alike (linked from the footer and the homepage testimonial).
 function AllReviewsPage() {
   const [reviews, setReviews] = useState(null);
@@ -1823,7 +1823,7 @@ function AllReviewsPage() {
         {reviews === null ? (
           <div className="skeleton" style={{ height: 220, maxWidth: 720 }} />
         ) : reviews.length === 0 ? (
-          <p style={{ color: 'var(--ink-2)' }}>No reviews yet — check back soon.</p>
+          <p style={{ color: 'var(--ink-2)' }}>No reviews yet, check back soon.</p>
         ) : (
           <>
             <div className="row-flex" style={{ gap: 14, alignItems: 'baseline', marginBottom: 22 }}>
@@ -1874,6 +1874,6 @@ window.OE_PAGES = Object.assign(window.OE_PAGES || {}, {
   about: AboutPage,
   'capability-statement': CapabilityStatementPage,
   'humanly-ai': HumanlyAIPage,
-  repairs: null, // resolved dynamically — alias to services
+  repairs: null, // resolved dynamically - alias to services
 });
 window.dispatchEvent(new Event('oe:pages-updated'));

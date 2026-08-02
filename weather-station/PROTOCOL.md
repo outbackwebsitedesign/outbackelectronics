@@ -1,13 +1,13 @@
-# Outback Electronics Weather Station — API Protocol
+# Outback Electronics Weather Station - API Protocol
 
 This document describes exactly what to send to push sensor data to the
-weather dashboard. You can write your own client in any language — Python,
+weather dashboard. You can write your own client in any language - Python,
 C/C++ (Arduino), MicroPython, Rust, Node.js, curl, anything that can make
 an HTTP POST request.
 
 ---
 
-## Step 1 — Register a station
+## Step 1 - Register a station
 
 Before you can push data you need an API key. Register at:
 
@@ -16,13 +16,13 @@ Before you can push data you need an API key. Register at:
 Click **+ Add Sensor**, enter a station name (e.g. `My Back Yard`), and copy
 your API key. The key is a 64-character hex string and is shown only once.
 
-Your station name is locked to that key — every reading you push will appear
+Your station name is locked to that key, every reading you push will appear
 on the dashboard under that name regardless of what your code sends in
 `station_id`.
 
 ---
 
-## Step 2 — Push a reading
+## Step 2 - Push a reading
 
 ### Endpoint
 
@@ -64,14 +64,14 @@ POST https://weather.outbackelectronics.com.au/api/weather/readings
 
 ### `data` key rules
 
-- Keys must match: **letters, digits, underscores, and dots only** — `/^[a-zA-Z0-9_.]{1,64}$/`
+- Keys must match: **letters, digits, underscores, and dots only** - `/^[a-zA-Z0-9_.]{1,64}$/`
 - Values must be **finite numbers** (integers or floats). Strings, booleans, null, and NaN are silently ignored.
 - Maximum **64 keys** per reading. Additional keys are dropped.
 - Key names are used as labels on the dashboard: underscores become spaces and each word is capitalised. `wind_speed` → **Wind Speed**, `soil_moisture` → **Soil Moisture**.
 
 ### Well-known keys (displayed with units)
 
-These keys get special treatment — the dashboard knows their unit and groups them:
+These keys get special treatment, the dashboard knows their unit and groups them:
 
 | Key | Label | Unit | Group |
 |-----|-------|------|-------|
@@ -95,7 +95,7 @@ These keys get special treatment — the dashboard knows their unit and groups t
 | `battery_percent` | Battery Charge | % | Power |
 
 Any key **not** in the table above appears in a **Custom Sensors** group with
-the key name humanised as the label. You can send any key you like — there is
+the key name humanised as the label. You can send any key you like, there is
 no restriction beyond the character and length rules above.
 
 ### Response
@@ -245,9 +245,9 @@ will trigger the rate limiter (HTTP 429).
 
 ## Notes
 
-- The server timestamp (`ts`) is set server-side at time of receipt — you
+- The server timestamp (`ts`) is set server-side at time of receipt, you
   cannot override it. Use `rtc_time` if you want to record the device's local
   clock time alongside it.
 - All readings are stored indefinitely. There is no rolling delete.
 - Data is live on the dashboard within 1 second of receipt via Server-Sent
-  Events — no polling needed on the browser side.
+  Events, no polling needed on the browser side.
