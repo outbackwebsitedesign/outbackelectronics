@@ -4520,7 +4520,7 @@ function AdminProducts({ sessionInfo = {} }) {
   const [catOptions, setCatOptions] = useState([]);
   const [condOptions, setCondOptions] = useState(PRODUCT_CONDITIONS);
   const [brandOptions, setBrandOptions] = useState([]);
-  const [sellerMembers, setSellerMembers] = useState([]);
+  const [ownerMembers, setOwnerMembers] = useState([]);
   useEffect(() => {
     fetch('/api/admin/catalog', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject())
@@ -4540,7 +4540,12 @@ function AdminProducts({ sessionInfo = {} }) {
     if (canAssignOwner) {
       fetch('/api/admin/staff', { credentials:'include' })
         .then(r => r.ok ? r.json() : Promise.reject())
-        .then(d => setSellerMembers((d.members || []).filter(m => m.role === 'seller')))
+        // Any active staff member can own a listing — the shop owner and
+        // staff sell their own stock too, not just consignment sellers.
+        // Assigning a non-seller is safe: seller commission and the
+        // force-to-draft rule key off the role of whoever saves the product,
+        // not off the owner recorded here.
+        .then(d => setOwnerMembers((d.members || []).filter(m => m.role && m.role !== 'pending')))
         .catch(() => {});
     }
   }, []);
@@ -4780,10 +4785,18 @@ function AdminProducts({ sessionInfo = {} }) {
             <textarea className="textarea" placeholder="Battery cycle count, BIOS rev, replaced components…" value={form.benchNotes||''} onChange={e=>setForm({...form, benchNotes:e.target.value})} />
           </label>
           {canAssignOwner && (
-            <label className="field"><span className="label">Owner / Seller</span>
+            <label className="field">
+              <span className="label">Owner / Seller <span style={{fontWeight:400, color:'var(--ink-3)', fontSize:11}}>who this stock belongs to</span></span>
               <select className="select" value={form.createdBy||''} onChange={e=>setForm({...form, createdBy:e.target.value})}>
                 <option value="">— Unassigned —</option>
-                {sellerMembers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                {['seller', 'owner', 'manager', 'technician', 'staff']
+                  .map(role => [role, ownerMembers.filter(m => m.role === role)])
+                  .filter(([, members]) => members.length > 0)
+                  .map(([role, members]) => (
+                    <optgroup key={role} label={role === 'seller' ? 'Consignment sellers' : role.charAt(0).toUpperCase() + role.slice(1)}>
+                      {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                    </optgroup>
+                  ))}
               </select>
             </label>
           )}
