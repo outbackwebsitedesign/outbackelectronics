@@ -4511,26 +4511,31 @@ function CatalogList({ title, columns, initial, drawer, addLabel }) {
 // ============================================================
 // Column captions for the variant editor rows. `.label` is scoped to
 // `label.field > .label` in the page CSS, so these need their own styling.
-// Auto-generated SKUs: a short prefix from the category plus the next free
-// number for that prefix, e.g. "Solar Panels" -> SOL-004. Only ever suggested
-// for a product with no SKU yet, so a SKU already in use is never rewritten.
+// Auto-generated SKUs follow OHE[cat][nnn]: the house prefix, a three letter
+// category code, then a zero padded sequence number, e.g. OHESOL004.
+// Only ever suggested for a product with no SKU yet, so a SKU already in use
+// is never rewritten.
+const SKU_HOUSE_PREFIX = 'OHE';
 function skuPrefixFor(category) {
   const words = String(category || '').toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').split(/\s+/).filter(Boolean);
   if (words.length === 0) return '';
   // First word, not initials: "Solar Panels" reads better as SOL than SPX, and
-  // sibling categories sharing a prefix simply share one number sequence.
-  return words[0].slice(0, 3).padEnd(3, 'X');
+  // sibling categories sharing a code simply share one number sequence.
+  return SKU_HOUSE_PREFIX + words[0].slice(0, 3).padEnd(3, 'X');
 }
 function nextSkuFor(category, rows) {
   const prefix = skuPrefixFor(category);
   if (!prefix) return '';
-  const re = new RegExp(`^${prefix}-(\\d+)$`, 'i');
-  const used = rows
-    .map(r => re.exec(String(r.sku || '')))
+  // Count product and variant SKUs alike, so a variant never takes a number a
+  // product already holds.
+  const re = new RegExp(`^${prefix}(\\d+)$`, 'i');
+  const all = rows.flatMap(r => [r.sku, ...((r.variants || []).map(v => v.sku))]);
+  const used = all
+    .map(sku => re.exec(String(sku || '')))
     .filter(Boolean)
     .map(m => parseInt(m[1], 10));
   const next = used.length > 0 ? Math.max(...used) + 1 : 1;
-  return `${prefix}-${String(next).padStart(3, '0')}`;
+  return `${prefix}${String(next).padStart(3, '0')}`;
 }
 
 const variantLabelStyle = { fontSize:10, letterSpacing:'.08em', textTransform:'uppercase', color:'var(--ink-3)', marginBottom:4 };
@@ -4751,7 +4756,7 @@ function AdminProducts({ sessionInfo = {} }) {
           </div>
           <div className="grid-2" style={{gap:14}}>
             <label className="field">
-              <span className="label">SKU <span style={{fontWeight:400, color:'var(--ink-3)', fontSize:11}}>auto-filled from the category, editable</span></span>
+              <span className="label">SKU <span style={{fontWeight:400, color:'var(--ink-3)', fontSize:11}}>auto-filled as OHE[cat][nnn], editable</span></span>
               <input className="input" value={form.sku||''} onChange={e=>setForm({...form, sku:e.target.value})}/>
             </label>
             <label className="field"><span className="label">Status</span>
