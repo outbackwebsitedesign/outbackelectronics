@@ -407,7 +407,7 @@ function ProductCard({ p, onClick }) {
   return (
     <div className="product" onClick={onClick}>
       {thumb
-        ? <img src={thumbUrl(thumb, 600)} srcSet={thumbSrcSet(thumb, [300, 450, 600])} sizes="(max-width: 600px) 50vw, (max-width: 1100px) 33vw, 300px" alt={p.name} loading="lazy" style={{width:'100%', aspectRatio:'4/3', objectFit:'cover', display:'block'}} />
+        ? <img src={thumbUrl(thumb, 600)} srcSet={thumbSrcSet(thumb, [300, 450, 600])} sizes="(max-width: 600px) 50vw, (max-width: 1100px) 33vw, 300px" alt={(p.imageAlts||{})[thumb] || p.name} loading="lazy" style={{width:'100%', aspectRatio:'4/3', objectFit:'cover', display:'block'}} />
         : <div className="slot" style={{aspectRatio:'4/3'}}>{(p.name || '').toUpperCase()}</div>}
       <div className="body">
         <div className="meta"><CondLabel cond={p.cond} />{p.cond ? ' · ' : ''}{displaySku}</div>
@@ -1605,7 +1605,7 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
             {activeImage
               ? <button onClick={() => setLightboxOpen(true)} aria-label={`View larger image of ${product.name}`}
                   style={{display:'block', width:'100%', padding:0, border:'none', background:'none', cursor:'zoom-in'}}>
-                  <img src={thumbUrl(activeImage, 800)} srcSet={thumbSrcSet(activeImage, [400, 600, 800])} sizes="(max-width: 900px) 100vw, 50vw" alt={product.name} loading="lazy" style={{width:'100%', aspectRatio:'4/3', maxHeight:'70vh', objectFit:'contain', display:'block', background:'var(--bg-deep)'}} />
+                  <img src={thumbUrl(activeImage, 800)} srcSet={thumbSrcSet(activeImage, [400, 600, 800])} sizes="(max-width: 900px) 100vw, 50vw" alt={(product.imageAlts||{})[activeImage] || product.name} loading="lazy" style={{width:'100%', aspectRatio:'4/3', maxHeight:'70vh', objectFit:'contain', display:'block', background:'var(--bg-deep)'}} />
                 </button>
               : <div className="slot" style={{aspectRatio:'4/3', width:'100%'}}>{(product.name || '').toUpperCase()}</div>}
             {activeImage && (

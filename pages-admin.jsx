@@ -4678,14 +4678,39 @@ function AdminProducts({ sessionInfo = {} }) {
           <div style={{marginBottom:18}}>
             <div className="eyebrow" style={{marginBottom:8}}>IMAGES</div>
             <div style={{display:'flex', flexWrap:'wrap', gap:8, marginBottom:8}}>
-              {(form.images||[]).map((url,i) => (
-                <div key={i} style={{position:'relative', width:80, height:80}}>
-                  <img src={url} loading="lazy" alt="Product image" style={{width:80, height:80, objectFit:'cover', border:'1px solid var(--line)'}} />
-                  <button onClick={() => setForm({...form, images:(form.images||[]).filter((_,j)=>j!==i)})}
-                    style={{position:'absolute',top:2,right:2,background:'rgba(0,0,0,0.6)',color:'#fff',border:'none',borderRadius:2,width:18,height:18,cursor:'pointer',fontSize:12,lineHeight:'18px',padding:0}}>×</button>
+              {(form.images||[]).map((url,i) => {
+                const imgs = form.images || [];
+                const move = (to) => {
+                  if (to < 0 || to >= imgs.length) return;
+                  const next = [...imgs];
+                  const [moved] = next.splice(i, 1);
+                  next.splice(to, 0, moved);
+                  setForm({...form, images: next});
+                };
+                return (
+                <div key={url} style={{width:110}}>
+                  <div style={{position:'relative', width:110, height:80}}>
+                    <img src={url} loading="lazy" alt={(form.imageAlts||{})[url] || 'Product image'} style={{width:110, height:80, objectFit:'cover', border: i===0 ? '2px solid var(--rust)' : '1px solid var(--line)'}} />
+                    <button title="Remove image" aria-label="Remove image" onClick={() => setForm({...form, images: imgs.filter((_,j)=>j!==i)})}
+                      style={{position:'absolute',top:2,right:2,background:'rgba(0,0,0,0.6)',color:'#fff',border:'none',borderRadius:2,width:18,height:18,cursor:'pointer',fontSize:12,lineHeight:'18px',padding:0}}>×</button>
+                    {i===0 && <span className="mono" style={{position:'absolute',bottom:2,left:2,background:'var(--rust)',color:'#fff',fontSize:8,letterSpacing:'.08em',padding:'1px 4px'}}>COVER</span>}
+                  </div>
+                  {/* The first image is the cover everywhere on the public site,
+                      so the order has to be changeable without re-uploading. */}
+                  <div style={{display:'flex', gap:4, marginTop:4}}>
+                    <button type="button" title="Move left" aria-label="Move image left" disabled={i===0} onClick={() => move(i-1)}
+                      style={{flex:1, border:'1px solid var(--line)', background:'var(--bg-elev)', cursor: i===0?'not-allowed':'pointer', opacity: i===0?0.4:1, fontSize:11}}>◀</button>
+                    <button type="button" title="Move right" aria-label="Move image right" disabled={i===imgs.length-1} onClick={() => move(i+1)}
+                      style={{flex:1, border:'1px solid var(--line)', background:'var(--bg-elev)', cursor: i===imgs.length-1?'not-allowed':'pointer', opacity: i===imgs.length-1?0.4:1, fontSize:11}}>▶</button>
+                  </div>
+                  <input className="input" placeholder="Alt text" aria-label={`Alt text for image ${i+1}`}
+                    value={(form.imageAlts||{})[url] || ''}
+                    onChange={e => setForm({...form, imageAlts: {...(form.imageAlts||{}), [url]: e.target.value}})}
+                    style={{marginTop:4, fontSize:11, padding:'4px 6px'}} />
                 </div>
-              ))}
-              <label style={{width:80,height:80,border:'2px dashed var(--line)',display:'grid',placeItems:'center',cursor:'pointer',fontSize:11,color:'var(--ink-3)',flexShrink:0}}>
+                );
+              })}
+              <label style={{width:110,height:80,border:'2px dashed var(--line)',display:'grid',placeItems:'center',cursor:'pointer',fontSize:11,color:'var(--ink-3)',flexShrink:0}}>
                 <span>+ Add</span>
                 <input type="file" accept="image/*" style={{display:'none'}} onChange={async e => {
                   const file = e.target.files[0];
