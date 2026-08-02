@@ -118,11 +118,11 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, r
           let qty = item.qty;
           if (live.stock !== null && qty > live.stock) {
             if (live.stock <= 0) { notices.push(`${item.name} is out of stock and has been removed.`); continue; }
-            notices.push(`${item.name} — only ${live.stock} left, quantity reduced.`);
+            notices.push(`${item.name}: only ${live.stock} left, quantity reduced.`);
             qty = live.stock;
           }
           if (Number(live.price) !== Number(item.price)) {
-            notices.push(`${item.name} — price changed from $${Number(item.price).toLocaleString()} to $${Number(live.price).toLocaleString()}.`);
+            notices.push(`${item.name}: price changed from $${Number(item.price).toLocaleString()} to $${Number(live.price).toLocaleString()}.`);
           }
           next.push({ ...item, name: live.name || item.name, price: live.price, stock: live.stock, bulkQty: live.bulkQty, bulkPrice: live.bulkPrice, qty });
         }

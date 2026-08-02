@@ -2688,7 +2688,7 @@ function RepairJobDrawer({ card, expenses, customers, staff, onSave, onDelete, o
           <input className="input" value={form.device} onChange={e=>set('device',e.target.value)} placeholder="e.g. Panasonic Toughbook 55" /></label>
         <label className="field"><span className="label">Assigned technician</span>
           <select className="select" value={form.who} onChange={e=>set('who',e.target.value)}>
-            <option value="">— Unassigned —</option>
+            <option value="">(Unassigned)</option>
             {(staff||[]).map(m => <option key={m.id||m.name} value={m.name}>{m.name}</option>)}
           </select></label>
       </div>
@@ -4756,7 +4756,7 @@ function AdminProducts({ sessionInfo = {} }) {
           </div>
           <div className="grid-2" style={{gap:14}}>
             <label className="field">
-              <span className="label">Brand <span style={{fontWeight:400, color:'var(--ink-3)', fontSize:11}}>optional — drives the shop's brand filter</span></span>
+              <span className="label">Brand <span style={{fontWeight:400, color:'var(--ink-3)', fontSize:11}}>optional, drives the shop's brand filter</span></span>
               {/* Free text with a datalist rather than a select: brands are
                   derived from products in use, so the first product of a new
                   brand has nothing to pick from. */}
@@ -4774,13 +4774,13 @@ function AdminProducts({ sessionInfo = {} }) {
           <div className="grid-2" style={{gap:14}}>
             <label className="field"><span className="label">Price (AUD)</span><input className="input" type="number" value={form.price||0} onChange={e=>setForm({...form, price:Number(e.target.value)})}/></label>
             <label className="field">
-              <span className="label">Cost Price (AUD) <span style={{fontWeight:400, color:'var(--ink-3)', fontSize:11}}>internal — for stock reports</span></span>
+              <span className="label">Cost Price (AUD) <span style={{fontWeight:400, color:'var(--ink-3)', fontSize:11}}>internal, for stock reports</span></span>
               <input className="input" type="number" step="0.01" min="0" placeholder="0.00" value={form.costPrice||''} onChange={e=>setForm({...form, costPrice:e.target.value ? Number(e.target.value) : ''})} />
             </label>
           </div>
           <div className="grid-2" style={{gap:14}}>
             <label className="field">
-              <span className="label">Was price (AUD) <span style={{fontWeight:400, color:'var(--ink-3)', fontSize:11}}>optional — shown struck through next to the price</span></span>
+              <span className="label">Was price (AUD) <span style={{fontWeight:400, color:'var(--ink-3)', fontSize:11}}>optional, shown struck through next to the price</span></span>
               <input className="input" type="number" step="0.01" min="0" placeholder="0.00" value={form.was||''} onChange={e=>setForm({...form, was:e.target.value ? Number(e.target.value) : ''})} />
             </label>
             <div />
@@ -4793,7 +4793,7 @@ function AdminProducts({ sessionInfo = {} }) {
           )}
           <div className="grid-2" style={{gap:14}}>
             <label className="field">
-              <span className="label">Bulk from qty <span style={{fontWeight:400, color:'var(--ink-3)', fontSize:11}}>optional — 0 for none</span></span>
+              <span className="label">Bulk from qty <span style={{fontWeight:400, color:'var(--ink-3)', fontSize:11}}>optional, 0 for none</span></span>
               <input className="input" type="number" min="0" step="1" placeholder="0" value={form.bulkQty||''} onChange={e=>setForm({...form, bulkQty:e.target.value ? Number(e.target.value) : ''})} />
             </label>
             <label className="field">
@@ -4872,7 +4872,7 @@ function AdminProducts({ sessionInfo = {} }) {
             <label className="field">
               <span className="label">Owner / Seller <span style={{fontWeight:400, color:'var(--ink-3)', fontSize:11}}>who this stock belongs to</span></span>
               <select className="select" value={form.createdBy||''} onChange={e=>setForm({...form, createdBy:e.target.value})}>
-                <option value="">— Unassigned —</option>
+                <option value="">(Unassigned)</option>
                 {['seller', 'owner', 'manager', 'technician', 'staff']
                   .map(role => [role, ownerMembers.filter(m => m.role === role)])
                   .filter(([, members]) => members.length > 0)

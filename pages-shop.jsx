@@ -1647,7 +1647,7 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
             </div>
             {bulkApplied && (
               <div className="mono" style={{fontSize:12, color:'var(--eucalyptus)', marginBottom:24}}>
-                ✓ BULK PRICE APPLIED — {bulkQty}+ AT ${Number(priced.bulkPrice).toLocaleString()} EACH
+                ✓ BULK PRICE APPLIED: {bulkQty}+ AT ${Number(priced.bulkPrice).toLocaleString()} EACH
               </div>
             )}
 
@@ -1679,7 +1679,7 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
                 {bulkAvailable ? (
                   <div style={{fontSize:14}}>
                     Buy <strong>{bulkQty} or more</strong> for <strong>${Number(priced.bulkPrice).toLocaleString()} each</strong>
-                    <span style={{color:'var(--ink-3)'}}> — save ${((Number(priced.price) - Number(priced.bulkPrice)) * bulkQty).toLocaleString()}</span>
+                    <span style={{color:'var(--ink-3)'}}> save ${((Number(priced.price) - Number(priced.bulkPrice)) * bulkQty).toLocaleString()}</span>
                     {unitsToBulk > 0 && (
                       <div className="mono" style={{fontSize:12, color:'var(--ink-3)', marginTop:6}}>
                         ADD {unitsToBulk} MORE TO QUALIFY
@@ -1688,7 +1688,7 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
                   </div>
                 ) : (
                   <div className="mono" style={{fontSize:12, color:'var(--ink-3)'}}>
-                    Bulk price unavailable — only {stockLeft} left, {bulkQty} needed.
+                    Bulk price unavailable: only {stockLeft} left, {bulkQty} needed.
                   </div>
                 )}
               </div>

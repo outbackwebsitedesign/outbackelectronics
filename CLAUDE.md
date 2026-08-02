@@ -15,6 +15,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This mistake was made once and wiped the entire live database. Do not let it happen again.
 
+## Writing style
+
+**Never use em dashes (—).** Not in UI copy, not in code comments, not in commit
+messages, not in chat replies. Use a comma, a colon, a full stop, or brackets
+instead. This applies to every string that ships and every word written about
+the code.
+
 ## Git workflow
 
 **Always commit and push directly to `main`.** Do not open pull requests. The owner merges nothing — changes go straight to production via `git pull` on the server.
