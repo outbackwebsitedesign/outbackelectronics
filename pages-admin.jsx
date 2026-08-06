@@ -10205,8 +10205,17 @@ function SettingsGeneralTab({ shop, setShop, savedShop, announcement, setAnnounc
       </form>
       <form onSubmit={onSiteContentSubmit} style={{background:'var(--paper)', border:'1px solid var(--line)', padding:24}}>
         <span className="eyebrow">Site Content</span>
+        <p style={{fontSize:12, color:'var(--ink-2)', marginTop:8}}>
+          Leave a field blank to use the built-in wording. In the hero fields you can use{' '}
+          <code>{'{{location}}'}</code>, <code>{'{{tradingName}}'}</code>, <code>{'{{phone}}'}</code>,{' '}
+          <code>{'{{email}}'}</code>, <code>{'{{address}}'}</code> and <code>{'{{abn}}'}</code>, they are
+          filled in from Shop Details above. The same wording is sent to browsers and to search engines.
+        </p>
         <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginTop:12}}>
           <div>
+            <label className="field"><span className="label">Home hero eyebrow (small line above the headline)</span><input className="input" value={siteContent.heroEyebrow} onChange={e => setSiteContent({...siteContent, heroEyebrow: e.target.value})} placeholder="e.g. EST. 2023 · APPOINTMENT ONLY · REMOTE ELECTRONICS SUPPORT"/></label>
+            <label className="field"><span className="label">Home hero headline (one line per row, last row is italic)</span><textarea className="input" style={{minHeight:64}} value={siteContent.heroHeadline} onChange={e => setSiteContent({...siteContent, heroHeadline: e.target.value})} placeholder={'e.g. Built for where\nthe signal ends.'}/></label>
+            <label className="field"><span className="label">Home hero paragraph</span><textarea className="input" style={{minHeight:88}} value={siteContent.heroSub} onChange={e => setSiteContent({...siteContent, heroSub: e.target.value})} placeholder="e.g. We sell and repair electronics for people living a long way from a city … serving remote Australia from {{location}} by appointment only."/></label>
             <label className="field"><span className="label">Workshop blurb (home page &amp; services)</span><textarea className="input" style={{minHeight:64}} value={siteContent.workshopBlurb} onChange={e => setSiteContent({...siteContent, workshopBlurb: e.target.value})} placeholder="e.g. One desk, one tech, one ute…"/></label>
           </div>
           <div>
@@ -10561,7 +10570,7 @@ function AdminSettingsFull({ sessionInfo = {} }) {
     bankAccountNumber: '',
   }), []);
   const defaultAnnouncement = useMemo(() => ({ text: '', enabled: false, expiresAt: '' }), []);
-  const defaultSiteContent = useMemo(() => ({ aiHeading: '', aiBody: '', aiEnabled: false, workshopBlurb: '' }), []);
+  const defaultSiteContent = useMemo(() => ({ aiHeading: '', aiBody: '', aiEnabled: false, workshopBlurb: '', heroEyebrow: '', heroHeadline: '', heroSub: '' }), []);
   const [shop, setShop] = useState(defaultShop);
   const [savedShop, setSavedShop] = useState(defaultShop);
   const [announcement, setAnnouncement] = useState(defaultAnnouncement);
@@ -10663,6 +10672,9 @@ function AdminSettingsFull({ sessionInfo = {} }) {
         aiBody: (payload.siteContent?.aiBody || '').trim(),
         aiEnabled: !!payload.siteContent?.aiEnabled,
         workshopBlurb: (payload.siteContent?.workshopBlurb || '').trim(),
+        heroEyebrow: (payload.siteContent?.heroEyebrow || '').trim(),
+        heroHeadline: (payload.siteContent?.heroHeadline || '').trim(),
+        heroSub: (payload.siteContent?.heroSub || '').trim(),
       },
       security: {
         adminUsername: (payload.security?.adminUsername || '').trim(),

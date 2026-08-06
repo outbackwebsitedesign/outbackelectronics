@@ -2140,6 +2140,54 @@ function getBusinessIdentity() {
   return b;
 }
 
+// Home-page hero copy. Editable in admin under Settings, Site Content. These
+// are the values used when a field has not been set there.
+//
+// Defined once, here. The server-rendered shell reads them directly and the SPA
+// receives the resolved values (injected as window.__SITE_CONTENT__ and served
+// by GET /api/settings), so the hero copy cannot drift between what a crawler
+// sees and what a browser renders.
+const HERO_DEFAULTS = {
+  heroEyebrow: 'EST. 2023 · APPOINTMENT ONLY · REMOTE ELECTRONICS SUPPORT',
+  // Last line renders italic in the accent colour, same convention as aiHeading.
+  heroHeadline: 'Built for where\nthe signal ends.',
+  heroSub: 'We sell and repair electronics for people living a long way from a city. Arduino and microcontroller gear, PC and phone parts, software tools, and off-grid equipment, serving remote Australia from {{location}} by appointment only.',
+};
+
+// Site content may reference live business details with the same {{...}}
+// placeholder convention the policy documents use, so copy never hardcodes an
+// address or phone number that later changes in settings.
+function fillSiteContentPlaceholders(text, b) {
+  if (typeof text !== 'string' || !text.includes('{{')) return text;
+  const values = {
+    location: [b.suburb, b.state].filter(Boolean).join(', '),
+    tradingName: b.tradingName,
+    abn: b.abn,
+    phone: b.phone,
+    email: b.email,
+    address: b.address,
+  };
+  return text
+    .replace(/\{\{(\w+)\}\}/g, (match, key) => (key in values ? values[key] : match))
+    .replace(/ {2,}/g, ' ')
+    .trim();
+}
+
+// Stored site content merged over the defaults, with placeholders resolved.
+// This is what both the SSR shell and the SPA render.
+function getSiteContent() {
+  let stored = {};
+  try { stored = readSettings().siteContent || {}; } catch {}
+  const b = getBusinessIdentity();
+  const out = { ...stored };
+  for (const [key, fallback] of Object.entries(HERO_DEFAULTS)) {
+    const v = stored[key];
+    out[key] = (typeof v === 'string' && v.trim()) ? v.trim() : fallback;
+  }
+  for (const key of Object.keys(out)) out[key] = fillSiteContentPlaceholders(out[key], b);
+  return out;
+}
+
 // Nav links mirror the SPA's main navigation so a crawler can walk the site
 // from the raw HTML without running the router.
 const SSR_NAV = [
@@ -2243,12 +2291,19 @@ function ssrHomeBody(b) {
       }).join('')}</ul>`
     : '';
 
+  const sc = getSiteContent();
+  // Matches the SPA: every line but the last is a plain line, the last renders
+  // italic in the accent colour.
+  const headline = String(sc.heroHeadline).split('\n').map((line, i, arr) =>
+    i < arr.length - 1
+      ? `${escHtml(line)}<br />`
+      : `<span class="italic" style="color:var(--rust);">${escHtml(line)}</span>`
+  ).join('');
+
   return `<section class="hero-section"><div class="container" style="padding:48px 0;">
-<p class="eyebrow">EST. 2023 &middot; APPOINTMENT ONLY &middot; REMOTE ELECTRONICS SUPPORT</p>
-<h1 class="serif" style="font-size:56px;margin-top:12px;line-height:1.05;">Built for where the signal ends.</h1>
-<p style="margin-top:18px;font-size:17px;max-width:640px;line-height:1.6;">
-${escHtml(b.tradingName)} sells and repairs electronics for people living a long way from a city. Arduino and microcontroller gear, PC and phone parts, software and AI work, and off-grid power and comms equipment, serving remote Australia from ${escHtml([b.suburb, b.state].filter(Boolean).join(', '))} by appointment only.
-</p>
+<p class="eyebrow">${escHtml(sc.heroEyebrow)}</p>
+<h1 class="serif" style="font-size:56px;margin-top:12px;line-height:1.05;">${headline}</h1>
+<p style="margin-top:18px;font-size:17px;max-width:640px;line-height:1.6;">${escHtml(sc.heroSub)}</p>
 <p style="margin-top:14px;font-size:15px;">
 Call <a href="tel:${escHtml(b.phoneHref)}">${escHtml(b.phone)}</a> or email <a href="mailto:${escHtml(b.email)}">${escHtml(b.email)}</a> &middot; ABN ${escHtml(b.abn)}
 </p>
@@ -2307,9 +2362,17 @@ function injectSsrShell(html, pathname, og) {
 // of the built file. When the server is in front, it swaps that block for the
 // live values from settings.db, so editing the ABN or phone in admin updates
 // the served HTML without a rebuild.
+// Resolved site content handed to the SPA synchronously, so the hero renders
+// from the same strings the server-rendered shell used without waiting on
+// /api/settings and without the SPA carrying its own copy of the defaults.
+function siteContentScript() {
+  const payload = JSON.stringify(getSiteContent()).replace(/</g, '\\u003c');
+  return `<script>window.__SITE_CONTENT__=${payload};</script>`;
+}
+
 function injectBusinessMeta(html) {
   try {
-    const meta = ssrBusinessMeta(getBusinessIdentity());
+    const meta = ssrBusinessMeta(getBusinessIdentity()) + '\n' + siteContentScript();
     if (html.includes('<!--BUSINESS_META-->')) {
       return html.replace(/<!--BUSINESS_META-->[\s\S]*?<!--\/BUSINESS_META-->/, `<!--BUSINESS_META-->\n${meta}\n<!--/BUSINESS_META-->`);
     }
@@ -6982,7 +7045,10 @@ const mainServer = http.createServer(async (req, res) => {
     const s = readSettings();
     const stripeIntegration = (s.integrations || []).find(r => r[0] === 'Stripe');
     const stripePublishableKey = (stripeIntegration && stripeIntegration[3] && stripeIntegration[3].publishableKey) || STRIPE_PUBLISHABLE_KEY || '';
-    return json(res, 200, { siteContent: s.siteContent, stripePublishableKey });
+    // Resolved (defaults merged, placeholders filled) so the SPA renders exactly
+    // what the server-rendered shell does. Admin edits the raw values through
+    // GET /api/admin/settings instead.
+    return json(res, 200, { siteContent: getSiteContent(), stripePublishableKey });
   }
 
 

@@ -41,7 +41,10 @@ function HomePage({ go, addToCart, portalUser }) {
   const heroProduct = useMemo(() => featuredProducts.find(p => p.infiniteStock || p.stock > 0) || featuredProducts[0] || null, [featuredProducts]);
   const [aiData, setAiData] = useState(null);
   const [repairServices, setRepairServices] = useState([]);
-  const [siteContent, setSiteContent] = useState({});
+  // Seeded from the copy the server injected into the document, so the hero
+  // renders correct text on first paint and never falls back to blank strings
+  // if /api/settings is slow or fails.
+  const [siteContent, setSiteContent] = useState(() => (typeof window !== 'undefined' && window.__SITE_CONTENT__) || {});
   const [recentThreads, setRecentThreads] = useState([]);
   const [loading, setLoading] = useState(true);
   const skuCounts = useMemo(() => {
@@ -115,13 +118,19 @@ function HomePage({ go, addToCart, portalUser }) {
         <div className="container" style={{paddingTop: 56, paddingBottom: 56}}>
           <div className="hero-grid" style={{display:'grid', gridTemplateColumns:'1.2fr 1fr', gap: 48, alignItems:'center'}}>
             <div>
-              <span className="eyebrow hero-eyebrow">EST. 2023 · APPOINTMENT ONLY · REMOTE ELECTRONICS SUPPORT</span>
+              {/* Hero copy is editable in admin (Settings, Site Content). The
+                  server resolves defaults and {{placeholders}} and hands the
+                  finished strings to both this and the server-rendered shell. */}
+              <span className="eyebrow hero-eyebrow">{siteContent.heroEyebrow}</span>
               <h1 className="serif hero-headline" style={{fontSize: 92, marginTop: 14, lineHeight: 0.95}}>
-                Built for where<br/>
-                <span className="italic" style={{color:'var(--rust)'}}>the signal ends.</span>
+                {(siteContent.heroHeadline || '').split('\n').map((line, i, arr) =>
+                  i < arr.length - 1
+                    ? <React.Fragment key={i}>{line}<br/></React.Fragment>
+                    : <span key={i} className="italic" style={{color:'var(--rust)'}}>{line}</span>
+                )}
               </h1>
               <p className="hero-sub" style={{marginTop: 22, fontSize: 18, maxWidth: 520, color:'var(--ink-2)'}}>
-                We sell and repair electronics for people living a long way from a city. Arduino and microcontroller gear, PC and phone parts, software tools, and off-grid equipment, serving remote Australia{(shop.suburb || shop.state) ? ` from ${[shop.suburb, shop.state].filter(Boolean).join(', ')}` : ''} by appointment only.
+                {siteContent.heroSub}
               </p>
               <div className="row-flex hero-actions" style={{marginTop: 28}}>
                 <button className="btn btn-rust" onClick={() => go('shop')}>Browse the Shop →</button>
@@ -751,7 +760,10 @@ function ServicesPage({ go }) {
   const shop = useShop();
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [siteContent, setSiteContent] = useState({});
+  // Seeded from the copy the server injected into the document, so the hero
+  // renders correct text on first paint and never falls back to blank strings
+  // if /api/settings is slow or fails.
+  const [siteContent, setSiteContent] = useState(() => (typeof window !== 'undefined' && window.__SITE_CONTENT__) || {});
   const [activeCategory, setActiveCategory] = useState(null);
 
   useEffect(() => {
