@@ -1804,6 +1804,14 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null, cspOverride 
       if (ext === '.html' && data.includes('<!--SHOP_COPYRIGHT-->')) {
         data = Buffer.from(applyShopTemplate(data.toString('utf8')), 'utf8');
       }
+      // SPA routes that have no per-route OG entry are served straight from
+      // dist/index.html here rather than through serveIndexWithOg. They still
+      // need the server-rendered content and business meta, so inject both.
+      if (ext === '.html' && data.includes('<!--SSR_CONTENT-->')) {
+        const ssrOg = resolveOgTags(cleanPath);
+        const text = injectBusinessMeta(injectSsrShell(data.toString('utf8'), cleanPath, ssrOg));
+        data = Buffer.from(text, 'utf8');
+      }
       const extraHeaders = {};
       const baseHeaders = {
         'Content-Type': (types[ext] || 'application/octet-stream'),
@@ -1858,6 +1866,8 @@ const STATIC_OG = {
   '/policies':    { title: 'Policies - Outback Electronics',        description: 'Shipping, returns, warranty and privacy policies for Outback Electronics.',                                          image: '/assets/og-image.webp' },
   '/sellers':     { title: 'Info for Sellers - Outback Electronics', description: 'Sell your surplus electronics through Outback Electronics. Consignment and trade-in options available.',           image: '/assets/og-image.webp' },
   '/gift-cards':  { title: 'Gift Cards - Outback Electronics',      description: 'Give the gift of rugged gear. Outback Electronics gift cards, perfect for the remote tech enthusiast.',            image: '/assets/og-image.webp' },
+  '/capability-statement': { title: 'Capability Statement - Outback Electronics', description: 'Full-service electronics and technology provider in Blackall QLD. Repair, custom hardware, PCB design, SCADA, software, hosting and cybersecurity.', image: '/assets/og-image.webp' },
+  '/reviews':     { title: 'Customer Reviews - Outback Electronics', description: 'What customers across remote Australia say about Outback Electronics repairs, builds and service.',                  image: '/assets/og-image.webp' },
 };
 
 function stripHtml(s) { return String(s || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim(); }
@@ -2045,28 +2055,286 @@ function buildJsonLd(og, pathname) {
   }
   const isHome = pathname === '/' || pathname === '/home';
   if (!isHome) return '';
-  let shopData = {};
-  try { shopData = readSettings().shop || {}; } catch {}
+  const b = getBusinessIdentity();
   const address = {
     '@type': 'PostalAddress',
     addressCountry: 'AU',
-    ...(shopData.suburb  ? { addressLocality: shopData.suburb }  : {}),
-    ...(shopData.state   ? { addressRegion:   shopData.state   } : {}),
-    ...(shopData.postcode ? { postalCode:     shopData.postcode } : {}),
+    ...(b.streetAddress ? { streetAddress:   b.streetAddress } : {}),
+    ...(b.suburb        ? { addressLocality: b.suburb }        : {}),
+    ...(b.state         ? { addressRegion:   b.state   }       : {}),
+    ...(b.postcode      ? { postalCode:      b.postcode }      : {}),
   };
   const ld = {
     '@context': 'https://schema.org',
     '@type': 'LocalBusiness',
-    name: 'Outback Electronics',
+    name: b.tradingName,
+    legalName: b.tradingName,
     url: OG_BASE_URL,
     logo: `${OG_BASE_URL}/assets/logo.webp`,
     image: `${OG_BASE_URL}/assets/og-image.webp`,
     description: og.description,
     address,
-    ...(shopData.phone ? { telephone: shopData.phone } : {}),
-    ...(shopData.email ? { email: shopData.email }     : {}),
+    // ABN, published so business-verification and scam-checker crawlers can
+    // match the site against the ABR record without executing any JavaScript.
+    ...(b.abn ? { identifier: [{ '@type': 'PropertyValue', name: 'ABN', value: b.abn }], taxID: b.abn, vatID: b.abn } : {}),
+    ...(b.phone ? { telephone: b.phone } : {}),
+    ...(b.email ? { email: b.email }     : {}),
+    areaServed: 'AU',
   };
   return `<script type="application/ld+json">${JSON.stringify(ld)}</script>`;
+}
+
+// ── Server-side rendered content shell ───────────────────────────────────────
+//
+// The public site is a client-rendered React SPA, so anything that does not run
+// JavaScript used to receive an empty <div id="root"> and a "this site requires
+// JavaScript" notice. That is everything that matters for trust and discovery:
+// search crawlers, link-preview bots, ABN lookup and scam-checker crawlers,
+// accessibility tooling, and anyone reading view-source.
+//
+// Every main-site document response now carries a real rendering of the page,
+// built on the server from live settings.db plus the published catalogue. The
+// business identity block (registered name, ABN, address, phone, email) is
+// present as plain text on every page, not injected client-side. React clears
+// the container when it mounts, so browsers with JS see the SPA as before.
+//
+// The marker replaced here is <!--SSR_CONTENT--> inside #root in index.html.
+
+// Used when settings.db has no value for a field (fresh install, unreadable
+// file). These are the real registered details, so the raw HTML is never wrong.
+const BUSINESS_FALLBACK = {
+  tradingName: 'Outback Electronics',
+  abn: '99 496 591 295',
+  streetAddress: '137B Thistle Street',
+  suburb: 'Blackall',
+  state: 'QLD',
+  postcode: '4472',
+  phone: '0497 522 768',
+  email: 'outbackhutelectronics@gmail.com',
+  tagline: 'Built for where the signal ends',
+  description: 'An independent electronics outpost serving remote Australia. Arduino and microcontroller builds, PC and phone repairs, software and AI work, and off-grid power and comms gear.',
+};
+
+function getBusinessIdentity() {
+  let shop = {};
+  try { shop = readSettings().shop || {}; } catch {}
+  const pick = (key) => {
+    const v = shop[key];
+    return (typeof v === 'string' && v.trim()) ? v.trim() : BUSINESS_FALLBACK[key];
+  };
+  const b = {
+    tradingName: pick('tradingName'),
+    abn: pick('abn'),
+    streetAddress: pick('streetAddress'),
+    suburb: pick('suburb'),
+    state: pick('state'),
+    postcode: pick('postcode'),
+    phone: pick('phone'),
+    email: pick('email'),
+    tagline: pick('tagline'),
+    description: pick('description'),
+  };
+  b.locality = [b.suburb, b.state, b.postcode].filter(Boolean).join(' ');
+  b.address = [b.streetAddress, b.locality].filter(Boolean).join(', ');
+  b.phoneHref = b.phone.replace(/[^\d+]/g, '');
+  return b;
+}
+
+// Nav links mirror the SPA's main navigation so a crawler can walk the site
+// from the raw HTML without running the router.
+const SSR_NAV = [
+  ['/shop', 'Shop'],
+  ['/services', 'Services'],
+  ['/repairs', 'Repairs'],
+  ['/software', 'Software'],
+  ['/tutorials', 'Tutorials'],
+  ['/ai', 'AI'],
+  ['/about', 'About'],
+  ['/capability-statement', 'Capability Statement'],
+  ['/contact', 'Contact'],
+];
+
+function ssrPrice(p) {
+  const variants = Array.isArray(p.variants) ? p.variants : [];
+  const prices = variants.map(v => Number(v.price) || 0).filter(n => n > 0);
+  const price = prices.length ? Math.min(...prices) : Number(p.priceAud ?? p.price) || 0;
+  return price > 0 ? `$${price.toLocaleString('en-AU', { minimumFractionDigits: 2 })} AUD` : '';
+}
+
+// The identity block. Repeated on every page because a crawler may land on any
+// URL, and a scam checker looking for an ABN should find it wherever it looks.
+function ssrIdentityBlock(b) {
+  return `<section aria-labelledby="ssr-business-details" style="border:1px solid var(--line);background:var(--paper);padding:20px;margin:32px 0;">
+<h2 id="ssr-business-details" style="font-size:18px;margin-bottom:12px;">Business details</h2>
+<dl style="margin:0;font-size:14px;line-height:1.9;">
+<dt style="font-weight:600;">Registered business name</dt><dd style="margin:0 0 8px;">${escHtml(b.tradingName)}</dd>
+<dt style="font-weight:600;">ABN</dt><dd style="margin:0 0 8px;">${escHtml(b.abn)}</dd>
+<dt style="font-weight:600;">Address</dt><dd style="margin:0 0 8px;">${escHtml(b.address)}, Australia</dd>
+<dt style="font-weight:600;">Phone</dt><dd style="margin:0 0 8px;"><a href="tel:${escHtml(b.phoneHref)}">${escHtml(b.phone)}</a></dd>
+<dt style="font-weight:600;">Email</dt><dd style="margin:0 0 8px;"><a href="mailto:${escHtml(b.email)}">${escHtml(b.email)}</a></dd>
+<dt style="font-weight:600;">Website</dt><dd style="margin:0 0 8px;">outbackelectronics.com.au</dd>
+<dt style="font-weight:600;">Access</dt><dd style="margin:0;">By appointment only. There is no public shopfront. Mail-in repairs and returns accepted at the address above.</dd>
+</dl>
+</section>`;
+}
+
+function ssrHeader(b) {
+  const nav = SSR_NAV.map(([href, label]) => `<a href="${href}" style="padding:8px 12px;font-size:13px;">${escHtml(label)}</a>`).join('');
+  return `<div class="utility-bar"><div class="container">
+<div class="links"><span>ABN ${escHtml(b.abn)}</span><span><a href="tel:${escHtml(b.phoneHref)}">${escHtml(b.phone)}</a></span><span><a href="mailto:${escHtml(b.email)}">${escHtml(b.email)}</a></span></div>
+<div class="links"><span>${escHtml(b.address)}</span><span>By appointment only</span></div>
+</div></div>
+<header class="topnav"><div class="container"><div class="row">
+<a class="logo" href="/"><span class="logo-text"><strong style="font-size:18px;">${escHtml(b.tradingName)}</strong><span class="sub">${escHtml(b.tagline)}</span></span></a>
+<nav class="mainlinks" aria-label="Main">${nav}</nav>
+</div></div></header>`;
+}
+
+function ssrFooter(b) {
+  const links = SSR_NAV.concat([['/policies', 'Policies'], ['/quote', 'Request a quote'], ['/gift-cards', 'Gift cards'], ['/memberships', 'Memberships']])
+    .map(([href, label]) => `<li><a href="${href}">${escHtml(label)}</a></li>`).join('');
+  return `<footer><div class="container">
+<div style="display:grid;grid-template-columns:2fr 1fr;gap:32px;">
+<div>
+<div style="font-size:16px;font-weight:700;">${escHtml(b.tradingName)}</div>
+<p style="margin-top:12px;font-size:13px;max-width:420px;line-height:1.6;">${escHtml(b.description)}</p>
+<p style="margin-top:12px;font-size:13px;line-height:1.9;">
+${escHtml(b.address)}, Australia<br />
+Phone <a href="tel:${escHtml(b.phoneHref)}">${escHtml(b.phone)}</a><br />
+Email <a href="mailto:${escHtml(b.email)}">${escHtml(b.email)}</a><br />
+ABN ${escHtml(b.abn)}
+</p>
+</div>
+<div><h3>Site</h3><ul>${links}</ul></div>
+</div>
+<div class="baseline"><span>&copy; 2023-${new Date().getFullYear()} ${escHtml(b.tradingName)} &middot; ABN ${escHtml(b.abn)}</span></div>
+</div></footer>`;
+}
+
+// Home page body: the headline and intro the SPA renders, plus the live
+// service and product catalogue so crawlers see the actual offering.
+function ssrHomeBody(b) {
+  let services = [];
+  try { services = readServices().filter(s => s.status === 'published').slice(0, 12); } catch {}
+  let products = [];
+  try { products = readProducts().filter(p => p.status === 'published').slice(0, 12); } catch {}
+
+  const serviceHtml = services.length
+    ? `<ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.8;">${services.map(s => {
+        const href = `/service/${encodeURIComponent(s.slug || s.id)}`;
+        const desc = s.description ? ` - ${escHtml(stripHtml(s.description).slice(0, 140))}` : '';
+        return `<li><a href="${href}">${escHtml(s.name || 'Service')}</a>${desc}</li>`;
+      }).join('')}</ul>`
+    : `<ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.8;">
+<li>Electronics and PCB repair, component-level SMD rework</li>
+<li>PC, laptop, phone, tablet and console repair</li>
+<li>Custom embedded hardware, PCB design and firmware</li>
+<li>Software, web and app development</li>
+<li>Solar, 12V and off-grid power systems</li>
+<li>Networking, CCTV and security systems</li>
+<li>Data recovery, digital forensics and cybersecurity</li>
+</ul>`;
+
+  const productHtml = products.length
+    ? `<ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.8;">${products.map(p => {
+        const href = `/product/${encodeURIComponent(p.sku || p.slug || p.id)}`;
+        const price = ssrPrice(p);
+        return `<li><a href="${href}">${escHtml(p.name || 'Product')}</a>${price ? ` - ${escHtml(price)}` : ''}</li>`;
+      }).join('')}</ul>`
+    : '';
+
+  return `<section class="hero-section"><div class="container" style="padding:48px 0;">
+<p class="eyebrow">EST. 2023 &middot; APPOINTMENT ONLY &middot; REMOTE ELECTRONICS SUPPORT</p>
+<h1 class="serif" style="font-size:56px;margin-top:12px;line-height:1.05;">Built for where the signal ends.</h1>
+<p style="margin-top:18px;font-size:17px;max-width:640px;line-height:1.6;">
+${escHtml(b.tradingName)} sells and repairs electronics for people living a long way from a city. Arduino and microcontroller gear, PC and phone parts, software and AI work, and off-grid power and comms equipment, serving remote Australia from ${escHtml([b.suburb, b.state].filter(Boolean).join(', '))} by appointment only.
+</p>
+<p style="margin-top:14px;font-size:15px;">
+Call <a href="tel:${escHtml(b.phoneHref)}">${escHtml(b.phone)}</a> or email <a href="mailto:${escHtml(b.email)}">${escHtml(b.email)}</a> &middot; ABN ${escHtml(b.abn)}
+</p>
+</div></section>
+<div class="container">
+${ssrIdentityBlock(b)}
+<section style="margin:32px 0;"><h2 style="font-size:22px;margin-bottom:12px;">What we do</h2>${serviceHtml}</section>
+${productHtml ? `<section style="margin:32px 0;"><h2 style="font-size:22px;margin-bottom:12px;">From the shop</h2>${productHtml}<p style="margin-top:10px;font-size:14px;"><a href="/shop">Browse the full shop</a></p></section>` : ''}
+</div>`;
+}
+
+// Every other main-site route: real heading and description from the same
+// metadata the OG tags use, plus the identity block.
+function ssrPageBody(b, og, pathname) {
+  const heading = String(og && og.title || 'Outback Electronics').replace(/\s+-\s+Outback Electronics.*$/, '').trim() || 'Outback Electronics';
+  const lead = String(og && og.description || b.description);
+  return `<div class="container" style="padding-top:40px;">
+<h1 class="serif" style="font-size:44px;line-height:1.1;">${escHtml(heading)}</h1>
+<p style="margin-top:16px;font-size:16px;max-width:680px;line-height:1.6;">${escHtml(lead)}</p>
+<p style="margin-top:14px;font-size:15px;">
+${escHtml(b.tradingName)} &middot; ABN ${escHtml(b.abn)} &middot; ${escHtml(b.address)} &middot;
+<a href="tel:${escHtml(b.phoneHref)}">${escHtml(b.phone)}</a> &middot;
+<a href="mailto:${escHtml(b.email)}">${escHtml(b.email)}</a>
+</p>
+${ssrIdentityBlock(b)}
+</div>`;
+}
+
+function renderSsrShell(pathname, og) {
+  const b = getBusinessIdentity();
+  const isHome = pathname === '/' || pathname === '/home';
+  const body = isHome ? ssrHomeBody(b) : ssrPageBody(b, og, pathname);
+  return `${ssrHeader(b)}
+<main id="ssr-main">${body}</main>
+<p class="container" style="font-size:13px;color:var(--ink-2);padding-bottom:24px;">Browsing the shop, placing orders and booking repairs need JavaScript. The business and contact details above are complete without it.</p>
+${ssrFooter(b)}`;
+}
+
+// Replaces the <!--SSR_CONTENT--> marker inside #root. Safe to call on any HTML,
+// it is a no-op when the marker is absent (other services' entry pages).
+function injectSsrShell(html, pathname, og) {
+  if (!html.includes('<!--SSR_CONTENT-->')) return html;
+  try {
+    return html.replace('<!--SSR_CONTENT-->', renderSsrShell(pathname, og));
+  } catch (err) {
+    console.error('[ssr] shell render failed:', err && err.message);
+    return html;
+  }
+}
+
+// Machine-readable business identity in <head>, so a crawler that only reads
+// meta tags still gets the ABN and contact details.
+//
+// index.html ships a static copy of these tags between <!--BUSINESS_META--> and
+// <!--/BUSINESS_META--> so they are correct under `vite dev` and in any raw copy
+// of the built file. When the server is in front, it swaps that block for the
+// live values from settings.db, so editing the ABN or phone in admin updates
+// the served HTML without a rebuild.
+function injectBusinessMeta(html) {
+  try {
+    const meta = ssrBusinessMeta(getBusinessIdentity());
+    if (html.includes('<!--BUSINESS_META-->')) {
+      return html.replace(/<!--BUSINESS_META-->[\s\S]*?<!--\/BUSINESS_META-->/, `<!--BUSINESS_META-->\n${meta}\n<!--/BUSINESS_META-->`);
+    }
+    return html.replace(/<\/head>/, `${meta}\n</head>`);
+  } catch (err) {
+    console.error('[ssr] business meta inject failed:', err && err.message);
+    return html;
+  }
+}
+
+function ssrBusinessMeta(b) {
+  return [
+    `<meta name="abn" content="${escOg(b.abn)}" />`,
+    `<meta name="business:abn" content="${escOg(b.abn)}" />`,
+    `<meta name="business:legal_name" content="${escOg(b.tradingName)}" />`,
+    `<meta name="business:contact_data:street_address" content="${escOg(b.streetAddress)}" />`,
+    `<meta name="business:contact_data:locality" content="${escOg(b.suburb)}" />`,
+    `<meta name="business:contact_data:region" content="${escOg(b.state)}" />`,
+    `<meta name="business:contact_data:postal_code" content="${escOg(b.postcode)}" />`,
+    `<meta name="business:contact_data:country_name" content="Australia" />`,
+    `<meta name="business:contact_data:phone_number" content="${escOg(b.phone)}" />`,
+    `<meta name="business:contact_data:email" content="${escOg(b.email)}" />`,
+    `<meta name="geo.region" content="AU-${escOg(b.state)}" />`,
+    `<meta name="geo.placename" content="${escOg(b.suburb)}" />`,
+  ].join('\n');
 }
 
 function serveIndexWithOg(req, res, og, pathname) {
@@ -2079,7 +2347,7 @@ function serveIndexWithOg(req, res, og, pathname) {
     const absoluteImage = og.image && og.image.startsWith('/') ? OG_BASE_URL + og.image : og.image;
     const jsonLd = buildJsonLd(og, pathname);
     const extraHead = [heroPreload, jsonLd].filter(Boolean).join('\n');
-    const html = template
+    const html = injectBusinessMeta(injectSsrShell(template, pathname, og))
       .replace(/<\/head>/, `${extraHead}\n</head>`)
       .replace(/<title>[^<]*<\/title>/, `<title>${escOg(og.title)}</title>`)
       .replace(/<meta name="description"[^>]*\/?>/, `<meta name="description" content="${escOg(og.description)}" />`)

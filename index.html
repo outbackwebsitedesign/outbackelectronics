@@ -17,6 +17,20 @@
 <meta name="twitter:title" content="Outback Electronics - Built for where the signal ends" />
 <meta name="twitter:description" content="Arduino &amp; microcontroller builds, PC &amp; phone repairs, software and AI solutions, and off-grid electronics. Serving remote Australia by appointment." />
 <meta name="twitter:image" content="https://outbackelectronics.com.au/assets/og-image.webp" />
+<!--BUSINESS_META-->
+<meta name="abn" content="99 496 591 295" />
+<meta name="business:abn" content="99 496 591 295" />
+<meta name="business:legal_name" content="Outback Electronics" />
+<meta name="business:contact_data:street_address" content="137B Thistle Street" />
+<meta name="business:contact_data:locality" content="Blackall" />
+<meta name="business:contact_data:region" content="QLD" />
+<meta name="business:contact_data:postal_code" content="4472" />
+<meta name="business:contact_data:country_name" content="Australia" />
+<meta name="business:contact_data:phone_number" content="0497 522 768" />
+<meta name="business:contact_data:email" content="outbackhutelectronics@gmail.com" />
+<meta name="geo.region" content="AU-QLD" />
+<meta name="geo.placename" content="Blackall" />
+<!--/BUSINESS_META-->
 <link rel="canonical" href="https://outbackelectronics.com.au/" />
 <link rel="icon" type="image/png" href="/favicon.png" />
 <link rel="stylesheet" href="/mobile.css" />
@@ -572,10 +586,16 @@ if ('serviceWorker' in navigator) {
 </div>
 <noscript>
 <div style="background:#b5451b;color:#fbf7ed;padding:12px 16px;text-align:center;font-family:system-ui,sans-serif;font-size:14px;">
-This site requires JavaScript to browse the shop and place orders. Please enable JavaScript, or call us to order by phone.
+Browsing the shop, placing orders and booking repairs need JavaScript. Everything below is readable without it, or call us to order by phone.
 </div>
 </noscript>
-<div id="root"><div class="utility-bar"><div class="container"><div class="links"></div><div class="links"></div></div></div></div>
+<!--
+  #root holds the server-rendered page. server.js replaces the SSR_CONTENT
+  marker with real content (headings, catalogue, business details including the
+  ABN) before sending the document, so clients that never run JavaScript still
+  get the page. React clears this container when it mounts.
+-->
+<div id="root"><!--SSR_CONTENT--></div>
 
 <script>window.addEventListener('load',function(){(function(){function pv(){fetch('/api/analytics/event',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'pageview',page:location.pathname+location.search,referrer:document.referrer}),keepalive:true}).catch(function(){});}pv();window.addEventListener('popstate',pv);})();});</script>
 <script type="module" src="/src/main.jsx"></script>
