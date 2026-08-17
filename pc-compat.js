@@ -144,6 +144,20 @@ export function categoryLabel(key) {
   return PC_CATEGORY_MAP[key]?.label || key || 'Part';
 }
 
+/**
+ * Display name for a part: brand then name, but only where the name does not
+ * already start with the brand. Distributor descriptions nearly always lead
+ * with the manufacturer, so joining blindly gives "AMD AMD Ryzen 5 7600".
+ */
+export function partDisplayName(part) {
+  if (!part) return 'Part';
+  const name = String(part.name || '').trim();
+  const brand = String(part.brand || '').trim();
+  if (!brand) return name || 'Part';
+  if (!name) return brand;
+  return name.toLowerCase().startsWith(brand.toLowerCase()) ? name : `${brand} ${name}`;
+}
+
 // ── Small helpers ────────────────────────────────────────────────────────────
 
 const num = (v) => {
@@ -472,7 +486,7 @@ export function buildQuoteLineItems(build, parts) {
   const sorted = [...resolved].sort((a, b) => order.indexOf(a.part.category) - order.indexOf(b.part.category));
   const lines = sorted.map((r, i) => ({
     id: `pcb-${i}-${r.part.id || 'part'}`,
-    description: `${categoryLabel(r.part.category)}: ${[r.part.brand, r.part.name].filter(Boolean).join(' ')}`,
+    description: `${categoryLabel(r.part.category)}: ${partDisplayName(r.part)}`,
     amount: Number(r.part.priceAud) || 0,
     qty: r.qty,
   }));

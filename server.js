@@ -806,12 +806,168 @@ function writeQuotes(quotes) { atomicWriteFile(QUOTES_DB_PATH, JSON.stringify({ 
 function readPcBuilder() {
   try {
     const p = JSON.parse(cachedReadFile(PC_BUILDER_DB_PATH));
-    return { parts: Array.isArray(p.parts) ? p.parts : [], builds: Array.isArray(p.builds) ? p.builds : [] };
-  } catch { return { parts: [], builds: [] }; }
+    return {
+      parts: Array.isArray(p.parts) ? p.parts : [],
+      builds: Array.isArray(p.builds) ? p.builds : [],
+      suppliers: Array.isArray(p.suppliers) ? p.suppliers : [],
+    };
+  } catch { return { parts: [], builds: [], suppliers: [] }; }
 }
 function writePcBuilder(data) {
-  atomicWriteFile(PC_BUILDER_DB_PATH, JSON.stringify({ parts: data.parts || [], builds: data.builds || [] }, null, 2));
+  atomicWriteFile(PC_BUILDER_DB_PATH, JSON.stringify({
+    parts: data.parts || [], builds: data.builds || [], suppliers: data.suppliers || [],
+  }, null, 2));
 }
+// Mirrors partDisplayName() in pc-compat.js: distributor descriptions nearly
+// always lead with the manufacturer, so joining brand and name blindly gives
+// quote lines reading "AMD AMD Ryzen 5 7600".
+function pcPartDisplayName(part) {
+  const name = String((part && part.name) || '').trim();
+  const brand = String((part && part.brand) || '').trim();
+  if (!brand) return name || 'Part';
+  if (!name) return brand;
+  return name.toLowerCase().startsWith(brand.toLowerCase()) ? name : `${brand} ${name}`;
+}
+
+// Distributor price files run to tens of thousands of rows, well past the 1MB
+// default body cap, so feed endpoints get their own limit.
+const FEED_MAX_BYTES = 25e6;
+
+// ── Supplier price feeds ─────────────────────────────────────────────────────
+// Distributor price files (Leader, Synnex and the like) arrive as CSV or TSV
+// with no agreed column names, so nothing here is supplier-specific: staff map
+// the file's columns onto part fields once and the mapping is saved against the
+// supplier. Adding a second distributor is configuration, not code.
+
+// RFC 4180-ish parser. Handles quoted fields, embedded delimiters and newlines,
+// doubled quotes, CRLF and a UTF-8 BOM. Distributor files break every one of
+// those at some point, usually in the product description.
+function parseDelimited(text, delimiter) {
+  const src = String(text || '').replace(/^﻿/, '');
+  const rows = [];
+  let row = [];
+  let field = '';
+  let inQuotes = false;
+  let i = 0;
+  while (i < src.length) {
+    const ch = src[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (src[i + 1] === '"') { field += '"'; i += 2; continue; }
+        inQuotes = false; i++; continue;
+      }
+      field += ch; i++; continue;
+    }
+    if (ch === '"') { inQuotes = true; i++; continue; }
+    if (ch === delimiter) { row.push(field); field = ''; i++; continue; }
+    if (ch === '\r') { i++; continue; }
+    if (ch === '\n') { row.push(field); rows.push(row); row = []; field = ''; i++; continue; }
+    field += ch; i++;
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row); }
+  // Trailing blank lines are normal at the end of an exported file.
+  return rows.filter(r => r.length > 1 || (r[0] || '').trim() !== '');
+}
+
+// Pick the delimiter that yields the most consistent column count across the
+// first few lines, so tab-separated exports work without staff telling us.
+function detectDelimiter(text) {
+  const sample = String(text || '').split(/\r?\n/).slice(0, 20).join('\n');
+  let best = ',';
+  let bestScore = -1;
+  for (const d of [',', '\t', ';', '|']) {
+    const rows = parseDelimited(sample, d).slice(0, 10);
+    if (rows.length < 2) continue;
+    const counts = rows.map(r => r.length);
+    const max = Math.max(...counts);
+    if (max < 2) continue;
+    const consistent = counts.filter(c => c === max).length;
+    const score = max * consistent;
+    if (score > bestScore) { bestScore = score; best = d; }
+  }
+  return best;
+}
+
+// Header name guesses, first match wins. Deliberately generous: a wrong guess
+// costs one dropdown change in the mapping screen, a missing guess costs more.
+const FEED_COLUMN_HINTS = [
+  ['supplierSku', ['sku', 'part number', 'partnumber', 'part no', 'partno', 'item code', 'itemcode', 'product code', 'productcode', 'stock code', 'stockcode', 'mpn', 'model', 'code']],
+  ['name',        ['description', 'product name', 'productname', 'item name', 'title', 'name', 'product']],
+  ['brand',       ['brand', 'manufacturer', 'vendor', 'make']],
+  ['price',       ['dealer price', 'dealerprice', 'reseller price', 'nett', 'net price', 'buy price', 'cost', 'ex gst', 'exgst', 'price']],
+  ['rrp',         ['rrp', 'retail', 'srp', 'list price']],
+  ['stock',       ['stock', 'qty', 'quantity', 'available', 'soh', 'on hand', 'onhand', 'inventory']],
+  ['category',    ['category', 'group', 'product group', 'type', 'class', 'department', 'sub category', 'subcategory']],
+];
+
+function suggestFeedMapping(headers) {
+  const norm = headers.map(h => String(h || '').trim().toLowerCase());
+  const used = new Set();
+  const map = {};
+  for (const [field, hints] of FEED_COLUMN_HINTS) {
+    let found = -1;
+    // Exact header match beats a substring match, so a "Price" column is not
+    // stolen by "Price Group" appearing earlier in the file.
+    for (const hint of hints) {
+      found = norm.findIndex((h, idx) => !used.has(idx) && h === hint);
+      if (found >= 0) break;
+      found = norm.findIndex((h, idx) => !used.has(idx) && h.includes(hint));
+      if (found >= 0) break;
+    }
+    if (found >= 0) { map[field] = headers[found]; used.add(found); }
+  }
+  return map;
+}
+
+// Distributor files quote prices as "1,234.56", "$1234.56", "1234.56 ex" and
+// occasionally with a trailing minus. Anything unparseable becomes null so the
+// row is reported rather than silently priced at zero.
+function parseFeedNumber(raw) {
+  if (raw == null) return null;
+  const s = String(raw).replace(/[$\s,]/g, '').replace(/(ex|inc)gst$/i, '');
+  if (!s || !/[0-9]/.test(s)) return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+const DEFAULT_FEED_CATEGORY_RULES = [
+  { match: 'motherboard', category: 'motherboard' },
+  { match: 'cpu, processor', category: 'cpu' },
+  { match: 'graphics, video card, vga, gpu', category: 'gpu' },
+  { match: 'memory, ram, dimm', category: 'ram' },
+  { match: 'ssd, hard drive, hdd, nvme, storage', category: 'storage' },
+  { match: 'power supply, psu', category: 'psu' },
+  { match: 'case, chassis', category: 'case' },
+  { match: 'cooler, cooling, heatsink', category: 'cooler' },
+  { match: 'fan', category: 'fan' },
+  { match: 'monitor', category: 'monitor' },
+];
+
+// A feed row only enters the library if a rule claims it. A distributor sells
+// printers, cables and toner as well as PC parts, so the rules are the filter,
+// not just a classifier, and an unmatched row is skipped rather than dumped in.
+function categoriseFeedRow(text, rules) {
+  const hay = String(text || '').toLowerCase();
+  for (const rule of rules || []) {
+    const terms = String(rule.match || '').split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+    if (terms.some(t => hay.includes(t))) return rule.category;
+  }
+  return null;
+}
+
+// Sell price from the distributor's cost. Feeds are normally ex-GST while shop
+// prices are displayed inc-GST, so GST is added unless the feed already has it.
+function feedSellPrice(cost, supplier, category) {
+  const markup = Number(
+    (supplier.markupByCategory || {})[category] != null
+      ? supplier.markupByCategory[category]
+      : supplier.markupPercent
+  ) || 0;
+  let price = cost * (1 + markup / 100);
+  if (!supplier.priceIncludesGst) price *= 1 + (Number(supplier.gstPercent) || 10) / 100;
+  return Math.round(price * 100) / 100;
+}
+
 // Builds get their own human-readable reference (PCB-0001) so staff can talk
 // about a build without quoting a timestamp id.
 function nextPcBuildRef(builds) {
@@ -8397,7 +8553,215 @@ const adminServer = http.createServer(async (req, res) => {
   if (req.method === 'GET' && url.pathname === '/api/admin/pc-builder') {
     const session = requireRole(req, res, 'technician'); if (!session) return;
     const data = readPcBuilder();
-    return json(res, 200, { parts: data.parts, builds: data.builds });
+    // The parts library runs to thousands of rows once a distributor feed is
+    // imported, so it is not shipped with every page load. Parts are fetched
+    // per category, per search or by id from /pc-builder/parts below.
+    return json(res, 200, { builds: data.builds, suppliers: data.suppliers, partCount: data.parts.length });
+  }
+
+  // Parts query. `ids` resolves the exact parts a build references, otherwise
+  // this is the category-filtered, searchable list behind the picker.
+  if (req.method === 'GET' && url.pathname === '/api/admin/pc-builder/parts') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    const data = readPcBuilder();
+    const idsParam = url.searchParams.get('ids');
+    if (idsParam) {
+      const want = new Set(idsParam.split(',').map(s => s.trim()).filter(Boolean));
+      return json(res, 200, { items: data.parts.filter(p => want.has(p.id)), total: want.size });
+    }
+    const category = url.searchParams.get('category') || '';
+    const q = (url.searchParams.get('q') || '').trim().toLowerCase();
+    const limit = Math.min(Math.max(parseInt(url.searchParams.get('limit')) || 100, 1), 500);
+    const offset = Math.max(parseInt(url.searchParams.get('offset')) || 0, 0);
+    let items = data.parts;
+    if (category && category !== 'all') items = items.filter(p => p.category === category);
+    if (q) {
+      items = items.filter(p =>
+        `${p.brand || ''} ${p.name || ''}`.toLowerCase().includes(q) ||
+        String(p.sku || '').toLowerCase().includes(q) ||
+        String(p.supplierSku || '').toLowerCase().includes(q)
+      );
+    }
+    const total = items.length;
+    items = [...items].sort((a, b) =>
+      (a.category || '').localeCompare(b.category || '') ||
+      `${a.brand || ''} ${a.name || ''}`.localeCompare(`${b.brand || ''} ${b.name || ''}`)
+    ).slice(offset, offset + limit);
+    // Per-category counts drive the library's filter dropdown without a
+    // second request.
+    const counts = {};
+    for (const p of data.parts) counts[p.category] = (counts[p.category] || 0) + 1;
+    return json(res, 200, { items, total, counts, partCount: data.parts.length });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/pc-builder/suppliers/save') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    if (!body.name || !String(body.name).trim()) return json(res, 400, { error: 'name_required' });
+    const data = readPcBuilder();
+    const idx = data.suppliers.findIndex(s => s.id && s.id === body.id);
+    const item = {
+      ...body,
+      id: body.id || 'sup-' + Date.now(),
+      name: String(body.name).trim(),
+      columnMap: body.columnMap && typeof body.columnMap === 'object' ? body.columnMap : {},
+      categoryRules: Array.isArray(body.categoryRules) ? body.categoryRules : DEFAULT_FEED_CATEGORY_RULES,
+      markupPercent: Number(body.markupPercent) || 0,
+      markupByCategory: body.markupByCategory && typeof body.markupByCategory === 'object' ? body.markupByCategory : {},
+      gstPercent: body.gstPercent == null ? 10 : Number(body.gstPercent),
+      priceIncludesGst: !!body.priceIncludesGst,
+      updatedAt: new Date().toISOString(),
+    };
+    if (idx >= 0) { data.suppliers[idx] = item; } else { data.suppliers.push(item); }
+    writePcBuilder(data);
+    return json(res, 200, { ok: true, item });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/pc-builder/suppliers/delete') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const data = readPcBuilder();
+    // Parts keep their supplierSku so a re-added supplier re-links cleanly.
+    data.suppliers = data.suppliers.filter(s => s.id !== body.id);
+    writePcBuilder(data);
+    return json(res, 200, { ok: true });
+  }
+
+  // Step one of an import: read the file, report its columns and guess the
+  // mapping. Nothing is written, this only tells staff what we think we see.
+  if (req.method === 'POST' && url.pathname === '/api/admin/pc-builder/feed/preview') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req, FEED_MAX_BYTES); } catch { return json(res, 400, { error: 'invalid_json', message: 'That file could not be read, it may be larger than 25MB.' }); }
+    const text = String(body.csv || '');
+    if (!text.trim()) return json(res, 400, { error: 'empty_file' });
+    const delimiter = body.delimiter || detectDelimiter(text);
+    const rows = parseDelimited(text, delimiter);
+    if (rows.length < 2) return json(res, 422, { error: 'no_rows', message: 'No data rows found. Check the file is a CSV or tab-separated export.' });
+    const headers = rows[0].map(h => String(h || '').trim());
+    return json(res, 200, {
+      ok: true,
+      delimiter,
+      headers,
+      rowCount: rows.length - 1,
+      sample: rows.slice(1, 6).map(r => headers.reduce((o, h, i) => { o[h] = r[i] ?? ''; return o; }, {})),
+      suggestedMap: suggestFeedMapping(headers),
+    });
+  }
+
+  // Step two: apply the mapping. Always runs as a dry run unless the caller
+  // explicitly commits, so staff see the damage before it happens.
+  if (req.method === 'POST' && url.pathname === '/api/admin/pc-builder/feed/import') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req, FEED_MAX_BYTES); } catch { return json(res, 400, { error: 'invalid_json', message: 'That file could not be read, it may be larger than 25MB.' }); }
+    const data = readPcBuilder();
+    const supplier = data.suppliers.find(s => s.id === body.supplierId);
+    if (!supplier) return json(res, 404, { error: 'supplier_not_found' });
+    const map = body.columnMap || supplier.columnMap || {};
+    if (!map.supplierSku || !map.name || !map.price) {
+      return json(res, 422, { error: 'mapping_incomplete', message: 'Map at least the SKU, name and price columns before importing.' });
+    }
+    const text = String(body.csv || '');
+    const delimiter = body.delimiter || detectDelimiter(text);
+    const rows = parseDelimited(text, delimiter);
+    if (rows.length < 2) return json(res, 422, { error: 'no_rows' });
+
+    const headers = rows[0].map(h => String(h || '').trim());
+    const colOf = (field) => headers.indexOf(map[field]);
+    const idx = {
+      sku: colOf('supplierSku'), name: colOf('name'), brand: colOf('brand'),
+      price: colOf('price'), stock: colOf('stock'), category: colOf('category'),
+    };
+    if (idx.sku < 0 || idx.name < 0 || idx.price < 0) {
+      return json(res, 422, { error: 'mapping_invalid', message: 'A mapped column is not present in this file. Re-check the mapping against the file you uploaded.' });
+    }
+    const rules = supplier.categoryRules || DEFAULT_FEED_CATEGORY_RULES;
+    const commit = body.commit === true;
+
+    // Existing parts from this supplier, keyed by SKU, so a re-import updates
+    // rather than duplicates.
+    const bySku = new Map();
+    for (const p of data.parts) {
+      if (p.supplierId === supplier.id && p.supplierSku) bySku.set(String(p.supplierSku).toLowerCase(), p);
+    }
+
+    const summary = { created: 0, priceChanged: 0, unchanged: 0, skippedNoCategory: 0, skippedBadPrice: 0, rows: rows.length - 1 };
+    const samples = { created: [], priceChanged: [] };
+    const now = new Date().toISOString();
+
+    for (let r = 1; r < rows.length; r++) {
+      const row = rows[r];
+      const sku = String(row[idx.sku] ?? '').trim();
+      // Distributor descriptions wrap across lines and pad with runs of spaces,
+      // which would otherwise land verbatim in a part name and then in a quote.
+      const name = String(row[idx.name] ?? '').replace(/\s+/g, ' ').trim();
+      if (!sku || !name) continue;
+      const cost = parseFeedNumber(row[idx.price]);
+      const supplierCategory = idx.category >= 0 ? String(row[idx.category] ?? '') : '';
+      const category = categoriseFeedRow(`${supplierCategory} ${name}`, rules);
+      if (!category) { summary.skippedNoCategory++; continue; }
+      if (cost == null) { summary.skippedBadPrice++; continue; }
+
+      const brand = idx.brand >= 0 ? String(row[idx.brand] ?? '').replace(/\s+/g, ' ').trim() : '';
+      const stock = idx.stock >= 0 ? parseFeedNumber(row[idx.stock]) : null;
+      const existing = bySku.get(sku.toLowerCase());
+
+      if (existing) {
+        const sell = existing.priceLocked ? Number(existing.priceAud) || 0 : feedSellPrice(cost, supplier, existing.category || category);
+        const changed = (Number(existing.cost) || 0) !== cost || (Number(existing.priceAud) || 0) !== sell;
+        if (changed) {
+          summary.priceChanged++;
+          if (samples.priceChanged.length < 8) {
+            samples.priceChanged.push({ name: existing.name, from: Number(existing.priceAud) || 0, to: sell, costFrom: Number(existing.cost) || 0, costTo: cost });
+          }
+          if (commit) {
+            // Specs are staff-curated and a price file knows nothing about
+            // socket or GPU clearance, so they are never touched here. The
+            // category is left alone too, staff may have recategorised a row
+            // the rules got wrong.
+            existing.cost = cost;
+            existing.priceAud = sell;
+            if (stock != null) existing.stock = stock;
+            existing.supplierPrice = cost;
+            existing.feedName = name;
+            existing.updatedAt = now;
+          }
+        } else {
+          summary.unchanged++;
+        }
+        continue;
+      }
+
+      summary.created++;
+      if (samples.created.length < 8) samples.created.push({ name, category, cost, price: feedSellPrice(cost, supplier, category) });
+      if (commit) {
+        data.parts.push({
+          id: 'pcp-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+          category,
+          name,
+          brand,
+          sku,
+          supplierId: supplier.id,
+          supplierSku: sku,
+          supplierPrice: cost,
+          cost,
+          priceAud: feedSellPrice(cost, supplier, category),
+          stock: stock != null ? stock : null,
+          specs: {},
+          notes: '',
+          feedName: name,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+    }
+
+    if (commit) {
+      const sIdx = data.suppliers.findIndex(s => s.id === supplier.id);
+      data.suppliers[sIdx] = { ...supplier, columnMap: map, lastImportAt: now, lastImportCounts: summary };
+      writePcBuilder(data);
+    }
+
+    return json(res, 200, { ok: true, dryRun: !commit, summary, samples });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/admin/pc-builder/parts/save') {
@@ -8516,7 +8880,7 @@ const adminServer = http.createServer(async (req, res) => {
       const qty = Math.max(1, Number(it.qty) || 1);
       lineItems.push({
         id: `pcb-${lineItems.length}-${part.id || 'part'}`,
-        description: `${PC_PART_CATEGORY_LABELS[part.category] || 'Part'}: ${[part.brand, part.name].filter(Boolean).join(' ')}`,
+        description: `${PC_PART_CATEGORY_LABELS[part.category] || 'Part'}: ${pcPartDisplayName(part)}`,
         amount: Number(part.priceAud) || 0,
         qty,
       });

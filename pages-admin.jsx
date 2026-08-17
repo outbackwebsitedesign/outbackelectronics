@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { getCsrf, ensureCsrf } from './src/lib/api.js';
 import { renderMarkdown, estimateReadTime, slugify } from './markdown.jsx';
 import { PRODUCT_CONDITIONS } from './src/lib/conditions.js';
-import { PC_PART_CATEGORIES, PC_CATEGORY_MAP, categoryLabel, checkBuild, buildTotals } from './pc-compat.js';
+import { PC_PART_CATEGORIES, PC_CATEGORY_MAP, categoryLabel, partDisplayName, checkBuild, buildTotals } from './pc-compat.js';
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 // Canonical date format for all order dates: "27 May 2026"
@@ -3443,7 +3443,7 @@ function blankPcPart(category) {
 }
 
 const pcMoney = (n) => `$${(Number(n) || 0).toLocaleString('en-AU', { minimumFractionDigits:2, maximumFractionDigits:2 })}`;
-const pcPartLabel = (p) => [p.brand, p.name].filter(Boolean).join(' ') || p.name || 'Part';
+const pcPartLabel = (p) => partDisplayName(p);
 
 // One spec input, driven by the field definition in PC_PART_CATEGORIES.
 function PcSpecField({ field, value, onChange }) {
@@ -3569,7 +3569,23 @@ function PcPartEditor({ part, onClose, onSaved, onDeleted }) {
           <input className="input" type="number" value={form.priceAud ?? ''} onChange={e => setForm(f => ({ ...f, priceAud: e.target.value }))}/></label>
         <label className="field"><span className="label">Our cost (AUD)</span>
           <input className="input" type="number" value={form.cost ?? ''} onChange={e => setForm(f => ({ ...f, cost: e.target.value }))}/></label>
+        {form.supplierSku && (
+          <label className="field" style={{gridColumn:'1 / -1'}}>
+            <span className="label">Sell price on supplier imports</span>
+            <select className="input" value={form.priceLocked ? 'locked' : 'auto'}
+              onChange={e => setForm(f => ({ ...f, priceLocked: e.target.value === 'locked' }))}>
+              <option value="auto">Recalculate from cost and markup</option>
+              <option value="locked">Keep my price, only update the cost</option>
+            </select>
+          </label>
+        )}
       </div>
+      {form.supplierSku && (
+        <p className="mono" style={{fontSize:11, color:'var(--ink-2)', margin:'10px 0 0'}}>
+          From supplier feed · SKU {form.supplierSku}
+          {form.stock != null ? ` · ${form.stock} in stock` : ''}
+        </p>
+      )}
 
       {cat.fields.length > 0 && <>
         <h4 style={{margin:'22px 0 10px', fontSize:13, letterSpacing:'.04em'}}>{cat.label} specs</h4>
@@ -3589,27 +3605,48 @@ function PcPartEditor({ part, onClose, onSaved, onDeleted }) {
   );
 }
 
+// Debounced server-side parts query. The library is far too big to ship to the
+// browser once a distributor feed is in, so every list of parts is a request.
+function usePartsQuery({ category, q, limit = 60, enabled = true, reloadKey = 0 }) {
+  const [state, setState] = useState({ items: [], total: 0, counts: {}, loading: enabled });
+  useEffect(() => {
+    if (!enabled) return;
+    let cancelled = false;
+    setState(s => ({ ...s, loading: true }));
+    const t = setTimeout(() => {
+      const params = new URLSearchParams();
+      if (category) params.set('category', category);
+      if (q) params.set('q', q);
+      params.set('limit', String(limit));
+      fetch(`/api/admin/pc-builder/parts?${params}`, { credentials:'include' })
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(d => { if (!cancelled) setState({ items: d.items || [], total: d.total || 0, counts: d.counts || {}, loading: false }); })
+        .catch(() => { if (!cancelled) setState(s => ({ ...s, loading: false })); });
+    }, q ? 220 : 0);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [category, q, limit, enabled, reloadKey]);
+  return state;
+}
+
 // Choose a part for one category, from the library, with search.
-function PcPartPicker({ category, parts, onPick, onClose, onNewPart }) {
+function PcPartPicker({ category, onPick, onClose, onNewPart }) {
   const [q, setQ] = useState('');
   const cat = PC_CATEGORY_MAP[category] || PC_CATEGORY_MAP.other;
-  const matches = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    return (parts || [])
-      .filter(p => p.category === category)
-      .filter(p => !needle || pcPartLabel(p).toLowerCase().includes(needle) || (p.sku || '').toLowerCase().includes(needle))
-      .sort((a, b) => pcPartLabel(a).localeCompare(pcPartLabel(b)));
-  }, [parts, category, q]);
+  const { items: matches, total, loading } = usePartsQuery({ category, q });
 
   return (
     <Drawer open onClose={onClose} title={`Choose ${cat.label.toLowerCase()}`}
       footer={<button className="btn btn-ghost btn-sm" onClick={onNewPart}>+ Add a new {cat.label.toLowerCase()} to the library</button>}>
       <input className="input" autoFocus placeholder={`Search ${cat.label.toLowerCase()}…`} value={q} onChange={e => setQ(e.target.value)} style={{marginBottom:14}}/>
-      {matches.length === 0 && (
+      {loading && <p style={{fontSize:13, color:'var(--ink-2)'}}>Searching…</p>}
+      {!loading && matches.length === 0 && (
         <p style={{fontSize:13, color:'var(--ink-2)'}}>
-          {parts.some(p => p.category === category)
-            ? 'Nothing matches that search.'
-            : `No ${cat.label.toLowerCase()} in the parts library yet.`}
+          {q ? 'Nothing matches that search.' : `No ${cat.label.toLowerCase()} in the parts library yet.`}
+        </p>
+      )}
+      {total > matches.length && (
+        <p className="mono" style={{fontSize:11, color:'var(--ink-2)', margin:'0 0 8px'}}>
+          Showing {matches.length} of {total.toLocaleString()}, narrow the search to see more.
         </p>
       )}
       <div style={{display:'grid', gap:6}}>
@@ -3648,80 +3685,90 @@ function pcSpecSummary(part) {
   return bits.filter(Boolean).join(' · ');
 }
 
-function PcPartsLibrary({ parts, onPartsChange, products }) {
+function PcPartsLibrary({ products, onLibraryChanged }) {
   const [edit, setEdit] = useState(null);
   const [catFilter, setCatFilter] = useState('all');
+  const [q, setQ] = useState('');
   const [importOpen, setImportOpen] = useState(false);
-
-  const rows = useMemo(() => {
-    const out = catFilter === 'all' ? parts : parts.filter(p => p.category === catFilter);
-    return [...out].sort((a, b) => (a.category || '').localeCompare(b.category || '') || pcPartLabel(a).localeCompare(pcPartLabel(b)));
-  }, [parts, catFilter]);
+  const [reloadKey, setReloadKey] = useState(0);
+  const { items: rows, total, counts, loading } = usePartsQuery({
+    category: catFilter === 'all' ? '' : catFilter, q, limit: 200, enabled: true, reloadKey,
+  });
+  const refresh = () => { setReloadKey(k => k + 1); onLibraryChanged?.(); };
 
   return (
     <>
       <div className="row-flex" style={{justifyContent:'space-between', gap:10, flexWrap:'wrap', marginBottom:14}}>
-        <select className="input" style={{maxWidth:220}} value={catFilter} onChange={e => setCatFilter(e.target.value)}>
-          <option value="all">All categories ({parts.length})</option>
-          {PC_PART_CATEGORIES.map(c => (
-            <option key={c.key} value={c.key}>{c.label} ({parts.filter(p => p.category === c.key).length})</option>
-          ))}
-        </select>
+        <div className="row-flex" style={{gap:8, flex:1, minWidth:260}}>
+          <select className="input" style={{maxWidth:220}} value={catFilter} onChange={e => setCatFilter(e.target.value)}>
+            <option value="all">All categories</option>
+            {PC_PART_CATEGORIES.map(c => (
+              <option key={c.key} value={c.key}>{c.label}{counts[c.key] ? ` (${counts[c.key]})` : ''}</option>
+            ))}
+          </select>
+          <input className="input" style={{flex:1, maxWidth:280}} placeholder="Search parts…" value={q} onChange={e => setQ(e.target.value)}/>
+        </div>
         <div className="row-flex" style={{gap:8}}>
           <button className="btn btn-ghost btn-sm" onClick={() => setImportOpen(true)}>Import from products</button>
           <button className="btn btn-rust btn-sm" onClick={() => setEdit(blankPcPart(catFilter === 'all' ? 'cpu' : catFilter))}>+ New part</button>
         </div>
       </div>
+      {total > rows.length && (
+        <p className="mono" style={{fontSize:11, color:'var(--ink-2)', margin:'0 0 8px'}}>
+          Showing {rows.length} of {total.toLocaleString()} matching parts, narrow by category or search to see more.
+        </p>
+      )}
       <Table
+        loading={loading}
         columns={[
           { key:'category', label:'Category', w:'130px', sort:true, render:r => <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{categoryLabel(r.category)}</span> },
           { key:'name', label:'Part', w:'2fr', sort:r => pcPartLabel(r), render:r => pcPartLabel(r) },
           { key:'specs', label:'Specs', w:'2fr', render:r => <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{pcSpecSummary(r) || '-'}</span> },
+          { key:'stock', label:'Stock', w:'70px', sort:r => Number(r.stock) || 0, render:r => r.stock == null
+            ? <span style={{color:'var(--ink-3)'}}>-</span>
+            : <span className="mono" style={{fontSize:12, color: Number(r.stock) > 0 ? 'var(--ink)' : 'var(--rust)'}}>{r.stock}</span> },
           { key:'cost', label:'Cost', w:'90px', sort:r => Number(r.cost) || 0, render:r => <span className="mono" style={{fontSize:12, color:'var(--ink-2)'}}>{pcMoney(r.cost)}</span> },
-          { key:'priceAud', label:'Price', w:'100px', sort:r => Number(r.priceAud) || 0, render:r => <span className="mono" style={{fontWeight:600}}>{pcMoney(r.priceAud)}</span> },
+          { key:'priceAud', label:'Price', w:'100px', sort:r => Number(r.priceAud) || 0, render:r => (
+            <span className="mono" style={{fontWeight:600}}>{pcMoney(r.priceAud)}{r.priceLocked && <span title="Price locked against feed updates" style={{color:'var(--ochre)'}}> ×</span>}</span>
+          ) },
         ]}
         rows={rows}
         onRowClick={r => setEdit(r)}
-        emptyMessage="No parts yet. Add one, or import products from the catalog."
+        emptyMessage="No parts yet. Add one, import products from the catalog, or import a supplier price file."
         defaultSort={{ key:'category', dir:'asc' }}
       />
       {edit && (
         <PcPartEditor
           part={edit}
           onClose={() => setEdit(null)}
-          onSaved={(item, isNew) => {
-            onPartsChange(ps => isNew ? [...ps, item] : ps.map(p => p.id === item.id ? item : p));
-            setEdit(null);
-          }}
-          onDeleted={(id) => { onPartsChange(ps => ps.filter(p => p.id !== id)); setEdit(null); }}
+          onSaved={() => { setEdit(null); refresh(); }}
+          onDeleted={() => { setEdit(null); refresh(); }}
         />
       )}
       {importOpen && (
         <PcImportProducts
           products={products}
-          parts={parts}
           onClose={() => setImportOpen(false)}
-          onImported={(items) => { onPartsChange(ps => [...ps, ...items]); setImportOpen(false); }}
+          onImported={() => { setImportOpen(false); refresh(); }}
         />
       )}
     </>
   );
 }
 
-function PcImportProducts({ products, parts, onClose, onImported }) {
+function PcImportProducts({ products, onClose, onImported }) {
   const [q, setQ] = useState('');
   const [category, setCategory] = useState('cpu');
   const [picked, setPicked] = useState([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
-  const alreadyIn = useMemo(() => new Set(parts.map(p => p.productId).filter(Boolean)), [parts]);
+  // Products already imported are skipped server-side, so no filtering here.
   const matches = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return (products || [])
-      .filter(p => !alreadyIn.has(p.id))
       .filter(p => !needle || (p.name || '').toLowerCase().includes(needle) || (p.sku || '').toLowerCase().includes(needle))
       .slice(0, 40);
-  }, [products, q, alreadyIn]);
+  }, [products, q]);
 
   const doImport = async () => {
     if (!picked.length) return;
@@ -3772,7 +3819,378 @@ function PcImportProducts({ products, parts, onClose, onImported }) {
   );
 }
 
-function PcBuildPage({ build, parts, customers, onPartsChange, onClose, onSave, onDelete }) {
+// Supplier config: how one distributor's price file maps onto part fields, and
+// what markup turns their cost into our sell price.
+function PcSupplierEditor({ supplier, onClose, onSaved, onDeleted }) {
+  const [form, setForm] = useState(supplier);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState(null);
+  const savedSnapRef = React.useRef(JSON.stringify(supplier));
+  const dirty = JSON.stringify(form) !== savedSnapRef.current;
+
+  const setRule = (idx, patch) => setForm(f => ({ ...f, categoryRules: f.categoryRules.map((r, i) => i === idx ? { ...r, ...patch } : r) }));
+  const addRule = () => setForm(f => ({ ...f, categoryRules: [...(f.categoryRules || []), { match:'', category:'other' }] }));
+  const removeRule = (idx) => setForm(f => ({ ...f, categoryRules: f.categoryRules.filter((_, i) => i !== idx) }));
+
+  const save = async () => {
+    if (!(form.name || '').trim()) { setErr('Give the supplier a name.'); return; }
+    setSaving(true); setErr(null);
+    const r = await fetch('/api/admin/pc-builder/suppliers/save', {
+      method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(form),
+    }).catch(() => null);
+    setSaving(false);
+    if (!r || !r.ok) { setErr('Could not save the supplier, please try again.'); return; }
+    const d = await r.json();
+    savedSnapRef.current = JSON.stringify(d.item);
+    onSaved(d.item, !supplier.id);
+  };
+
+  const remove = async () => {
+    if (!await adminConfirm(`Delete supplier "${form.name}"? Parts already imported stay in the library.`, {
+      title:'Delete supplier', confirmLabel:'Delete supplier', danger:true })) return;
+    const r = await fetch('/api/admin/pc-builder/suppliers/delete', {
+      method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: form.id }),
+    }).catch(() => null);
+    if (!r || !r.ok) { setErr('Could not delete the supplier.'); return; }
+    onDeleted(form.id);
+  };
+
+  return (
+    <Drawer open onClose={onClose} dirty={dirty} title={supplier.id ? 'Edit supplier' : 'New supplier'}
+      footer={
+        <div className="row-flex" style={{justifyContent:'space-between', gap:8}}>
+          {supplier.id ? <button className="btn btn-ghost btn-sm" onClick={remove} style={{color:'var(--rust)'}}>Delete</button> : <span/>}
+          <div className="row-flex" style={{gap:8}}>
+            <button className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
+            <button className="btn btn-rust btn-sm" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save supplier'}</button>
+          </div>
+        </div>
+      }>
+      {err && <div className="mono" style={{fontSize:12, color:'var(--rust)', marginBottom:12}}>{err}</div>}
+      <div className="form-grid">
+        <label className="field" style={{gridColumn:'1 / -1'}}><span className="label">Supplier name</span>
+          <input className="input" value={form.name || ''} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Leader"/></label>
+        <label className="field"><span className="label">Default markup (%)</span>
+          <input className="input" type="number" value={form.markupPercent ?? ''} onChange={e => setForm(f => ({ ...f, markupPercent: e.target.value }))}/></label>
+        <label className="field"><span className="label">GST (%)</span>
+          <input className="input" type="number" value={form.gstPercent ?? 10} onChange={e => setForm(f => ({ ...f, gstPercent: e.target.value }))}/></label>
+        <label className="field" style={{gridColumn:'1 / -1'}}>
+          <span className="label">Feed prices already include GST</span>
+          <select className="input" value={form.priceIncludesGst ? 'yes' : 'no'} onChange={e => setForm(f => ({ ...f, priceIncludesGst: e.target.value === 'yes' }))}>
+            <option value="no">No, prices are ex-GST (usual for distributors)</option>
+            <option value="yes">Yes, prices already include GST</option>
+          </select>
+        </label>
+      </div>
+
+      <h4 style={{margin:'22px 0 6px', fontSize:13}}>Markup by category</h4>
+      <p style={{fontSize:12, color:'var(--ink-2)', margin:'0 0 10px'}}>
+        Overrides the default for that category. Leave blank to use {Number(form.markupPercent) || 0}%.
+      </p>
+      <div className="form-grid">
+        {PC_PART_CATEGORIES.filter(c => c.key !== 'other').map(c => (
+          <label key={c.key} className="field"><span className="label">{c.label}</span>
+            <input className="input" type="number" placeholder={`${Number(form.markupPercent) || 0}`}
+              value={(form.markupByCategory || {})[c.key] ?? ''}
+              onChange={e => setForm(f => {
+                const m = { ...(f.markupByCategory || {}) };
+                if (e.target.value === '') delete m[c.key]; else m[c.key] = Number(e.target.value);
+                return { ...f, markupByCategory: m };
+              })}/></label>
+        ))}
+      </div>
+
+      <h4 style={{margin:'22px 0 6px', fontSize:13}}>Category rules</h4>
+      <p style={{fontSize:12, color:'var(--ink-2)', margin:'0 0 10px'}}>
+        A feed row is only imported if one of these matches its category or name, so a distributor's printers and cables stay out of the parts library.
+        Comma-separated terms, first rule that matches wins.
+      </p>
+      {(form.categoryRules || []).map((r, i) => (
+        <div key={i} className="row-flex" style={{gap:8, marginBottom:6}}>
+          <input className="input" style={{flex:1}} value={r.match || ''} placeholder="graphics, video card, gpu"
+            onChange={e => setRule(i, { match: e.target.value })}/>
+          <select className="input" style={{width:150}} value={r.category} onChange={e => setRule(i, { category: e.target.value })}>
+            {PC_PART_CATEGORIES.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+          </select>
+          <button className="btn btn-ghost btn-sm" style={{padding:'2px 7px', fontSize:11, color:'var(--rust)'}} onClick={() => removeRule(i)} aria-label="Remove rule">×</button>
+        </div>
+      ))}
+      <button className="btn btn-ghost btn-sm" onClick={addRule}>+ Add rule</button>
+    </Drawer>
+  );
+}
+
+// Import wizard: read the file, confirm the column mapping, dry run, commit.
+function PcFeedImport({ supplier, onClose, onImported }) {
+  const [csv, setCsv] = useState('');
+  const [fileName, setFileName] = useState('');
+  const [preview, setPreview] = useState(null);
+  const [map, setMap] = useState({});
+  const [result, setResult] = useState(null);
+  const [busy, setBusy] = useState(null);
+  const [err, setErr] = useState(null);
+
+  const onFile = (file) => {
+    if (!file) return;
+    setErr(null); setResult(null); setPreview(null);
+    setFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const text = String(reader.result || '');
+      setCsv(text);
+      setBusy('preview');
+      const r = await fetch('/api/admin/pc-builder/feed/preview', {
+        method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ csv: text }),
+      }).catch(() => null);
+      setBusy(null);
+      if (!r || !r.ok) {
+        const d = r ? await r.json().catch(() => ({})) : {};
+        setErr(d.message || 'Could not read that file.');
+        return;
+      }
+      const d = await r.json();
+      setPreview(d);
+      // A saved mapping from last time wins, it has already been corrected by
+      // a human, but only where the column still exists in this file.
+      const saved = supplier.columnMap || {};
+      const merged = { ...d.suggestedMap };
+      for (const [k, v] of Object.entries(saved)) if (d.headers.includes(v)) merged[k] = v;
+      setMap(merged);
+    };
+    reader.onerror = () => setErr('Could not read that file.');
+    reader.readAsText(file);
+  };
+
+  const run = async (commit) => {
+    setBusy(commit ? 'commit' : 'dry'); setErr(null);
+    const r = await fetch('/api/admin/pc-builder/feed/import', {
+      method:'POST', headers:postHeaders(), credentials:'include',
+      body: JSON.stringify({ supplierId: supplier.id, csv, columnMap: map, delimiter: preview?.delimiter, commit }),
+    }).catch(() => null);
+    setBusy(null);
+    if (!r || !r.ok) {
+      const d = r ? await r.json().catch(() => ({})) : {};
+      setErr(d.message || 'Import failed, please try again.');
+      return;
+    }
+    const d = await r.json();
+    setResult(d);
+    if (commit) {
+      adminToast(`${d.summary.created} part(s) added, ${d.summary.priceChanged} price(s) updated.`, 'success');
+      onImported();
+    }
+  };
+
+  const FIELD_LABELS = [
+    ['supplierSku', 'SKU / stock code', true],
+    ['name', 'Product name', true],
+    ['price', 'Your cost price', true],
+    ['brand', 'Brand', false],
+    ['stock', 'Stock on hand', false],
+    ['category', 'Supplier category', false],
+  ];
+  const mappingReady = map.supplierSku && map.name && map.price;
+
+  return (
+    <Drawer open onClose={onClose} title={`Import price file · ${supplier.name}`}
+      footer={
+        <div className="row-flex" style={{justifyContent:'flex-end', gap:8}}>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>Close</button>
+          {preview && !result?.summary && (
+            <button className="btn btn-ghost btn-sm" onClick={() => run(false)} disabled={!mappingReady || !!busy}>
+              {busy === 'dry' ? 'Checking…' : 'Preview changes'}
+            </button>
+          )}
+          {result && result.dryRun && (
+            <button className="btn btn-rust btn-sm" onClick={() => run(true)} disabled={!!busy}>
+              {busy === 'commit' ? 'Importing…' : 'Apply import'}
+            </button>
+          )}
+        </div>
+      }>
+      {err && <div className="mono" style={{fontSize:12, color:'var(--rust)', marginBottom:12}}>{err}</div>}
+
+      <label className="field" style={{marginBottom:14}}>
+        <span className="label">Price file (CSV or tab-separated)</span>
+        <input className="input" type="file" accept=".csv,.tsv,.txt,text/csv" onChange={e => onFile(e.target.files?.[0])}/>
+      </label>
+      {busy === 'preview' && <p style={{fontSize:13, color:'var(--ink-2)'}}>Reading {fileName}…</p>}
+
+      {preview && (
+        <>
+          <p className="mono" style={{fontSize:11, color:'var(--ink-2)', margin:'0 0 14px'}}>
+            {fileName} · {preview.rowCount.toLocaleString()} rows · {preview.headers.length} columns
+            {preview.delimiter === '\t' ? ' · tab separated' : ''}
+          </p>
+
+          <h4 style={{margin:'0 0 6px', fontSize:13}}>Column mapping</h4>
+          <p style={{fontSize:12, color:'var(--ink-2)', margin:'0 0 10px'}}>
+            Guessed from the headers. Correct anything wrong, it is saved against {supplier.name} for next time.
+          </p>
+          <div className="form-grid">
+            {FIELD_LABELS.map(([key, label, required]) => (
+              <label key={key} className="field">
+                <span className="label">{label}{required && <span style={{color:'var(--rust)'}}> *</span>}</span>
+                <select className="input" value={map[key] || ''} onChange={e => setMap(m => ({ ...m, [key]: e.target.value || undefined }))}>
+                  <option value="">Not mapped</option>
+                  {preview.headers.map(h => <option key={h} value={h}>{h}</option>)}
+                </select>
+              </label>
+            ))}
+          </div>
+
+          {map.name && (
+            <>
+              <h4 style={{margin:'20px 0 8px', fontSize:13}}>First rows as mapped</h4>
+              <div style={{overflowX:'auto', border:'1px solid var(--line)'}}>
+                <table style={{borderCollapse:'collapse', width:'100%', fontSize:12}}>
+                  <thead><tr>
+                    {FIELD_LABELS.filter(([k]) => map[k]).map(([k, l]) => (
+                      <th key={k} style={{textAlign:'left', padding:'6px 8px', borderBottom:'1px solid var(--line)', whiteSpace:'nowrap', color:'var(--ink-2)', fontWeight:500}}>{l}</th>
+                    ))}
+                  </tr></thead>
+                  <tbody>
+                    {preview.sample.map((row, i) => (
+                      <tr key={i}>
+                        {FIELD_LABELS.filter(([k]) => map[k]).map(([k]) => (
+                          <td key={k} style={{padding:'6px 8px', borderBottom:'1px solid var(--line)', maxWidth:220, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{row[map[k]]}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </>
+      )}
+
+      {result && (
+        <div style={{marginTop:20, border:'1px solid var(--line)', padding:14}}>
+          <h4 style={{margin:'0 0 10px', fontSize:13}}>
+            {result.dryRun ? 'Preview, nothing saved yet' : 'Import complete'}
+          </h4>
+          {[
+            ['New parts to add', result.summary.created],
+            ['Prices to update', result.summary.priceChanged],
+            ['Already up to date', result.summary.unchanged],
+            ['Skipped, no category rule matched', result.summary.skippedNoCategory],
+            ['Skipped, price could not be read', result.summary.skippedBadPrice],
+          ].map(([label, n]) => (
+            <div key={label} className="row-flex" style={{justifyContent:'space-between', marginBottom:3}}>
+              <span style={{fontSize:12.5, color:'var(--ink-2)'}}>{label}</span>
+              <span className="mono" style={{fontWeight:600}}>{n.toLocaleString()}</span>
+            </div>
+          ))}
+          {result.summary.skippedNoCategory > 0 && (
+            <p style={{fontSize:11.5, color:'var(--ink-2)', margin:'8px 0 0'}}>
+              Skipped rows are normal, a distributor list carries plenty that is not a PC part. Add a category rule if something is missing.
+            </p>
+          )}
+          {result.samples?.created?.length > 0 && (
+            <>
+              <div className="mono" style={{fontSize:10, letterSpacing:'.08em', color:'var(--ink-2)', margin:'14px 0 6px'}}>SAMPLE OF NEW PARTS</div>
+              {result.samples.created.map((s, i) => (
+                <div key={i} className="row-flex" style={{justifyContent:'space-between', gap:10, fontSize:12, marginBottom:2}}>
+                  <span style={{minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{s.name}</span>
+                  <span className="mono" style={{whiteSpace:'nowrap', color:'var(--ink-2)'}}>{categoryLabel(s.category)} · {pcMoney(s.price)}</span>
+                </div>
+              ))}
+            </>
+          )}
+          {result.samples?.priceChanged?.length > 0 && (
+            <>
+              <div className="mono" style={{fontSize:10, letterSpacing:'.08em', color:'var(--ink-2)', margin:'14px 0 6px'}}>SAMPLE OF PRICE CHANGES</div>
+              {result.samples.priceChanged.map((s, i) => (
+                <div key={i} className="row-flex" style={{justifyContent:'space-between', gap:10, fontSize:12, marginBottom:2}}>
+                  <span style={{minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{s.name}</span>
+                  <span className="mono" style={{whiteSpace:'nowrap', color: s.to > s.from ? 'var(--rust)' : 'var(--ink-2)'}}>
+                    {pcMoney(s.from)} → {pcMoney(s.to)}
+                  </span>
+                </div>
+              ))}
+            </>
+          )}
+          <p style={{fontSize:11.5, color:'var(--ink-2)', margin:'12px 0 0'}}>
+            Specs you have filled in are never overwritten by a price file, and parts with a locked price keep it.
+          </p>
+        </div>
+      )}
+    </Drawer>
+  );
+}
+
+function PcSuppliers({ suppliers, onSuppliersChange, onPartsReload }) {
+  const [edit, setEdit] = useState(null);
+  const [importing, setImporting] = useState(null);
+  const blank = () => ({ id:'', name:'', markupPercent:30, markupByCategory:{}, gstPercent:10, priceIncludesGst:false, categoryRules:[
+    { match:'motherboard', category:'motherboard' },
+    { match:'cpu, processor', category:'cpu' },
+    { match:'graphics, video card, vga, gpu', category:'gpu' },
+    { match:'memory, ram, dimm', category:'ram' },
+    { match:'ssd, hard drive, hdd, nvme, storage', category:'storage' },
+    { match:'power supply, psu', category:'psu' },
+    { match:'case, chassis', category:'case' },
+    { match:'cooler, cooling, heatsink', category:'cooler' },
+    { match:'fan', category:'fan' },
+    { match:'monitor', category:'monitor' },
+  ] });
+
+  return (
+    <>
+      <div className="row-flex" style={{justifyContent:'flex-end', marginBottom:14}}>
+        <button className="btn btn-rust btn-sm" onClick={() => setEdit(blank())}>+ New supplier</button>
+      </div>
+      {suppliers.length === 0 && (
+        <p style={{fontSize:13, color:'var(--ink-2)'}}>
+          No suppliers yet. Add one, then import their price file to populate the parts library.
+        </p>
+      )}
+      <div style={{display:'grid', gap:10}}>
+        {suppliers.map(s => (
+          <div key={s.id} style={{border:'1px solid var(--line)', padding:14}}>
+            <div className="row-flex" style={{justifyContent:'space-between', gap:10, flexWrap:'wrap'}}>
+              <div>
+                <div style={{fontSize:15, fontWeight:600}}>{s.name}</div>
+                <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:3}}>
+                  {Number(s.markupPercent) || 0}% markup
+                  {s.priceIncludesGst ? ' · feed inc GST' : ` · feed ex GST, +${Number(s.gstPercent) || 10}%`}
+                  {' · '}{(s.categoryRules || []).length} category rules
+                </div>
+                <div className="mono" style={{fontSize:11, color:'var(--ink-3)', marginTop:2}}>
+                  {s.lastImportAt
+                    ? `Last import ${new Date(s.lastImportAt).toLocaleString('en-AU')} · ${s.lastImportCounts?.created || 0} added, ${s.lastImportCounts?.priceChanged || 0} repriced`
+                    : 'Never imported'}
+                </div>
+              </div>
+              <div className="row-flex" style={{gap:8}}>
+                <button className="btn btn-ghost btn-sm" onClick={() => setEdit(s)}>Settings</button>
+                <button className="btn btn-rust btn-sm" onClick={() => setImporting(s)}>Import price file</button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {edit && (
+        <PcSupplierEditor
+          supplier={edit}
+          onClose={() => setEdit(null)}
+          onSaved={(item, isNew) => { onSuppliersChange(ss => isNew ? [...ss, item] : ss.map(s => s.id === item.id ? item : s)); setEdit(null); }}
+          onDeleted={(id) => { onSuppliersChange(ss => ss.filter(s => s.id !== id)); setEdit(null); }}
+        />
+      )}
+      {importing && (
+        <PcFeedImport
+          supplier={importing}
+          onClose={() => setImporting(null)}
+          onImported={onPartsReload}
+        />
+      )}
+    </>
+  );
+}
+
+function PcBuildPage({ build, customers, onClose, onSave, onDelete }) {
   const [form, setForm] = useState(build);
   const [picking, setPicking] = useState(null);   // category key
   const [newPart, setNewPart] = useState(null);
@@ -3780,6 +4198,24 @@ function PcBuildPage({ build, parts, customers, onPartsChange, onClose, onSave, 
   const [err, setErr] = useState(null);
   const savedSnapRef = React.useRef(JSON.stringify(build));
   const dirty = JSON.stringify(form) !== savedSnapRef.current;
+
+  // Only the parts this build references are fetched, never the whole library.
+  // Until they arrive, each item's stored snapshot keeps the page rendering,
+  // so a slow request shows slightly stale prices rather than an empty build.
+  const [parts, setParts] = useState(() => (build.items || []).map(it => it.snapshot).filter(Boolean));
+  useEffect(() => {
+    const ids = [...new Set((build.items || []).map(it => it.partId).filter(Boolean))];
+    if (!ids.length) return;
+    fetch(`/api/admin/pc-builder/parts?ids=${encodeURIComponent(ids.join(','))}`, { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setParts(cur => {
+        const byId = new Map(cur.map(p => [p.id, p]));
+        for (const p of d.items || []) byId.set(p.id, p);
+        return [...byId.values()];
+      }))
+      .catch(() => {});
+  }, [build.id]);
+  const rememberPart = (part) => setParts(cur => cur.some(p => p.id === part.id) ? cur.map(p => p.id === part.id ? part : p) : [...cur, part]);
 
   const check = useMemo(() => checkBuild(form.items, parts), [form.items, parts]);
   const totals = useMemo(() => buildTotals(form, parts), [form, parts]);
@@ -3798,6 +4234,7 @@ function PcBuildPage({ build, parts, customers, onPartsChange, onClose, onSave, 
   const addPart = (part) => {
     // The snapshot keeps a saved build readable if the part is later deleted
     // from the library, live prices still win while the part exists.
+    rememberPart(part);
     setForm(f => ({ ...f, items: [...(f.items || []), { partId: part.id, qty: 1, snapshot: { ...part } }] }));
     setPicking(null);
   };
@@ -4046,7 +4483,6 @@ function PcBuildPage({ build, parts, customers, onPartsChange, onClose, onSave, 
       {picking && (
         <PcPartPicker
           category={picking}
-          parts={parts}
           onPick={addPart}
           onClose={() => setPicking(null)}
           onNewPart={() => { setNewPart(blankPcPart(picking)); setPicking(null); }}
@@ -4056,11 +4492,7 @@ function PcBuildPage({ build, parts, customers, onPartsChange, onClose, onSave, 
         <PcPartEditor
           part={newPart}
           onClose={() => setNewPart(null)}
-          onSaved={(item) => {
-            onPartsChange(ps => ps.some(p => p.id === item.id) ? ps.map(p => p.id === item.id ? item : p) : [...ps, item]);
-            addPart(item);
-            setNewPart(null);
-          }}
+          onSaved={(item) => { addPart(item); setNewPart(null); }}
           onDeleted={() => setNewPart(null)}
         />
       )}
@@ -4077,8 +4509,9 @@ function PcBuildPage({ build, parts, customers, onPartsChange, onClose, onSave, 
 }
 
 function AdminPcBuilder({ search }) {
-  const [parts, setParts] = useState([]);
+  const [partCount, setPartCount] = useState(0);
   const [builds, setBuilds] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -4086,12 +4519,15 @@ function AdminPcBuilder({ search }) {
   const [openId, setOpenId] = useUrlState('open', null, { push: true });
   const [edit, setEdit] = useState(null);
 
-  useEffect(() => {
+  const loadBuilderData = React.useCallback(() => (
     fetch('/api/admin/pc-builder', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject())
-      .then(d => { setParts(d.parts || []); setBuilds(d.builds || []); })
+      .then(d => { setPartCount(d.partCount || 0); setBuilds(d.builds || []); setSuppliers(d.suppliers || []); })
       .catch(() => {})
-      .finally(() => setLoading(false));
+  ), []);
+
+  useEffect(() => {
+    loadBuilderData().finally(() => setLoading(false));
     fetch('/api/admin/customers', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject()).then(d => setCustomers(d.items || [])).catch(() => {});
     fetch('/api/admin/catalog', { credentials:'include' })
@@ -4113,9 +4549,7 @@ function AdminPcBuilder({ search }) {
     return (
       <PcBuildPage
         build={edit}
-        parts={parts}
         customers={customers}
-        onPartsChange={setParts}
         onClose={() => setOpenId(null)}
         onSave={(saved, isNew) => setBuilds(bs => isNew ? [saved, ...bs] : bs.map(b => b.id === saved.id ? saved : b))}
         onDelete={(id) => { setBuilds(bs => bs.filter(b => b.id !== id)); setOpenId(null); }}
@@ -4134,7 +4568,7 @@ function AdminPcBuilder({ search }) {
     <div style={{padding:32}}>
       <div className="row-flex" style={{justifyContent:'space-between', marginBottom:14, flexWrap:'wrap', gap:10}}>
         <div className="tabs tabs-row" style={{margin:0}}>
-          {[['builds', `Builds (${builds.length})`], ['parts', `Parts library (${parts.length})`]].map(([k, l]) => (
+          {[['builds', `Builds (${builds.length})`], ['parts', `Parts library (${partCount.toLocaleString()})`], ['suppliers', `Supplier feeds (${suppliers.length})`]].map(([k, l]) => (
             <div key={k} role="button" tabIndex={0} className={`tab ${tab === k ? 'active' : ''}`} style={{cursor:'pointer'}}
               onClick={() => setTab(k)}
               onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setTab(k); } }}>{l}</div>
@@ -4167,8 +4601,10 @@ function AdminPcBuilder({ search }) {
           emptyMessage="No builds yet. Start one and pick parts from the library."
           defaultSort={{ key:'ref', dir:'desc' }}
         />
+      ) : tab === 'parts' ? (
+        <PcPartsLibrary products={products} onLibraryChanged={loadBuilderData}/>
       ) : (
-        <PcPartsLibrary parts={parts} onPartsChange={setParts} products={products}/>
+        <PcSuppliers suppliers={suppliers} onSuppliersChange={setSuppliers} onPartsReload={loadBuilderData}/>
       )}
     </div>
   );
