@@ -143,6 +143,18 @@ const CUSTOMERS_DB_PATH = path.join(__dirname, 'customers.db');
 const REPAIRS_DB_PATH   = path.join(__dirname, 'repairs.db');
 const QUOTES_DB_PATH    = path.join(__dirname, 'quotes.db');
 const HDD_REPORTS_DB_PATH = path.join(__dirname, 'hdd-reports.db');
+// PC builder: the parts library and saved builds share one file, they are only
+// ever read and written together by the admin PC Builder section.
+const PC_BUILDER_DB_PATH = path.join(__dirname, 'pc-builder.db');
+// Category labels for quote line items. The full category and spec schema plus
+// the compatibility rules live in pc-compat.js, which is browser-side ESM, so
+// only the labels the server needs for quote text are mirrored here.
+const PC_PART_CATEGORY_LABELS = {
+  cpu: 'CPU', cooler: 'CPU Cooler', motherboard: 'Motherboard', ram: 'Memory',
+  gpu: 'Graphics Card', storage: 'Storage', psu: 'Power Supply', case: 'Case',
+  fan: 'Case Fan', os: 'Operating System', monitor: 'Monitor',
+  peripheral: 'Peripheral', other: 'Other',
+};
 // Same margin orders/repair jobs apply to linked parts expenses (PARTS_MARGIN in pages-admin.jsx).
 const QUOTE_PARTS_MARGIN = 0.20;
 const REVIEWS_DB_PATH   = path.join(__dirname, 'reviews.db');
@@ -789,6 +801,25 @@ function readQuotes() {
   try { const p = JSON.parse(cachedReadFile(QUOTES_DB_PATH)); return Array.isArray(p.quotes) ? p.quotes : []; } catch { return []; }
 }
 function writeQuotes(quotes) { atomicWriteFile(QUOTES_DB_PATH, JSON.stringify({ quotes }, null, 2)); }
+
+// ── PC builder ───────────────────────────────────────────────────────────────
+function readPcBuilder() {
+  try {
+    const p = JSON.parse(cachedReadFile(PC_BUILDER_DB_PATH));
+    return { parts: Array.isArray(p.parts) ? p.parts : [], builds: Array.isArray(p.builds) ? p.builds : [] };
+  } catch { return { parts: [], builds: [] }; }
+}
+function writePcBuilder(data) {
+  atomicWriteFile(PC_BUILDER_DB_PATH, JSON.stringify({ parts: data.parts || [], builds: data.builds || [] }, null, 2));
+}
+// Builds get their own human-readable reference (PCB-0001) so staff can talk
+// about a build without quoting a timestamp id.
+function nextPcBuildRef(builds) {
+  const used = new Set(builds.map(b => { const m = String(b.ref || '').match(/^PCB-(\d+)$/); return m ? parseInt(m[1]) : null; }).filter(n => n != null));
+  let n = 1;
+  while (used.has(n)) n++;
+  return `PCB-${String(n).padStart(4, '0')}`;
+}
 
 function readHddReports() {
   try { const p = JSON.parse(cachedReadFile(HDD_REPORTS_DB_PATH)); return Array.isArray(p.reports) ? p.reports : []; } catch { return []; }
@@ -8357,6 +8388,192 @@ const adminServer = http.createServer(async (req, res) => {
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     writeQuotes(readQuotes().filter(q => q.id !== body.id));
     return json(res, 200, { ok: true });
+  }
+
+  // ── PC builder ─────────────────────────────────────────────────────────────
+  // Parts library and saved builds. Compatibility checking runs in the browser
+  // (pc-compat.js) because it is live feedback while parts are picked, what is
+  // stored here is the build itself plus the issue summary at save time.
+  if (req.method === 'GET' && url.pathname === '/api/admin/pc-builder') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    const data = readPcBuilder();
+    return json(res, 200, { parts: data.parts, builds: data.builds });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/pc-builder/parts/save') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    if (!body.name || !String(body.name).trim()) return json(res, 400, { error: 'name_required' });
+    if (!body.category) return json(res, 400, { error: 'category_required' });
+    const data = readPcBuilder();
+    const idx = data.parts.findIndex(p => p.id && p.id === body.id);
+    const item = {
+      ...body,
+      id: body.id || 'pcp-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+      name: String(body.name).trim(),
+      priceAud: Number(body.priceAud) || 0,
+      cost: Number(body.cost) || 0,
+      specs: body.specs && typeof body.specs === 'object' ? body.specs : {},
+      updatedAt: new Date().toISOString(),
+    };
+    if (idx >= 0) { data.parts[idx] = item; } else { item.createdAt = item.updatedAt; data.parts.push(item); }
+    writePcBuilder(data);
+    return json(res, 200, { ok: true, item });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/pc-builder/parts/delete') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const data = readPcBuilder();
+    // A part still sitting in a saved build keeps that build readable through
+    // the snapshot stored on the build item, so deleting is safe here.
+    data.parts = data.parts.filter(p => p.id !== body.id);
+    writePcBuilder(data);
+    return json(res, 200, { ok: true });
+  }
+
+  // Bring catalog products in as parts so stock the shop already lists does not
+  // have to be typed twice. Specs start empty and are filled in by staff.
+  if (req.method === 'POST' && url.pathname === '/api/admin/pc-builder/parts/import') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const ids = Array.isArray(body.productIds) ? body.productIds : [];
+    const category = body.category || 'other';
+    if (!ids.length) return json(res, 400, { error: 'no_products' });
+    const products = readProducts();
+    const data = readPcBuilder();
+    const now = new Date().toISOString();
+    const added = [];
+    for (const pid of ids) {
+      const p = products.find(x => x.id === pid);
+      if (!p) continue;
+      if (data.parts.some(x => x.productId === pid)) continue;
+      const item = {
+        id: 'pcp-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+        category,
+        name: p.name || p.title || p.sku || 'Product',
+        brand: p.brand || '',
+        sku: p.sku || '',
+        priceAud: Number(p.priceAud ?? p.price) || 0,
+        cost: Number(p.cost) || 0,
+        productId: p.id,
+        specs: {},
+        notes: '',
+        createdAt: now,
+        updatedAt: now,
+      };
+      data.parts.push(item);
+      added.push(item);
+    }
+    writePcBuilder(data);
+    return json(res, 200, { ok: true, items: added, parts: data.parts });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/pc-builder/builds/save') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const data = readPcBuilder();
+    const idx = data.builds.findIndex(b => b.id && b.id === body.id);
+    const item = {
+      ...body,
+      id: body.id || 'pcb-' + Date.now(),
+      ref: body.ref || (idx >= 0 ? data.builds[idx].ref : nextPcBuildRef(data.builds)),
+      name: String(body.name || '').trim() || 'Untitled build',
+      items: Array.isArray(body.items) ? body.items : [],
+      labour: Array.isArray(body.labour) ? body.labour : [],
+      status: body.status || 'draft',
+      updatedAt: new Date().toISOString(),
+    };
+    if (idx >= 0) { data.builds[idx] = item; } else { item.createdAt = item.updatedAt; data.builds.push(item); }
+    writePcBuilder(data);
+    return json(res, 200, { ok: true, item });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/pc-builder/builds/delete') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const data = readPcBuilder();
+    data.builds = data.builds.filter(b => b.id !== body.id);
+    writePcBuilder(data);
+    return json(res, 200, { ok: true });
+  }
+
+  // Turn a build into a real quote. Line items arrive priced from the browser
+  // but are re-derived here from the stored part prices so a stale tab cannot
+  // quote yesterday's numbers.
+  if (req.method === 'POST' && url.pathname === '/api/admin/pc-builder/builds/quote') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const data = readPcBuilder();
+    const build = data.builds.find(b => b.id === body.buildId);
+    if (!build) return json(res, 404, { error: 'build_not_found' });
+
+    const partsById = new Map(data.parts.map(p => [p.id, p]));
+    const lineItems = [];
+    for (const it of build.items || []) {
+      const part = partsById.get(it.partId) || it.snapshot;
+      if (!part) continue;
+      const qty = Math.max(1, Number(it.qty) || 1);
+      lineItems.push({
+        id: `pcb-${lineItems.length}-${part.id || 'part'}`,
+        description: `${PC_PART_CATEGORY_LABELS[part.category] || 'Part'}: ${[part.brand, part.name].filter(Boolean).join(' ')}`,
+        amount: Number(part.priceAud) || 0,
+        qty,
+      });
+    }
+    for (const l of build.labour || []) {
+      if (!l || (!l.description && !l.amount)) continue;
+      lineItems.push({
+        id: `pcb-labour-${lineItems.length}`,
+        description: l.description || 'Assembly',
+        amount: Number(l.amount) || 0,
+        qty: Math.max(1, Number(l.qty) || 1),
+      });
+    }
+    if (!lineItems.length) return json(res, 400, { error: 'build_empty' });
+
+    const subtotal = Math.round(lineItems.reduce((s, i) => s + i.amount * i.qty, 0) * 100) / 100;
+    const discountType = build.discountType || 'percent';
+    const discountValue = Number(build.discountValue) || 0;
+    const discountAmount = Math.round(
+      (discountType === 'percent' ? subtotal * (discountValue / 100) : discountValue) * 100
+    ) / 100;
+    const total = Math.round((subtotal - Math.min(discountAmount, subtotal)) * 100) / 100;
+
+    const quotes = readQuotes();
+    // Re-quoting a build updates the quote it already produced rather than
+    // leaving a trail of near-identical drafts behind.
+    const existing = build.quoteId ? quotes.find(q => q.id === build.quoteId) : null;
+    const quote = {
+      ...(existing || {}),
+      id: existing?.id || 'quot-' + Date.now(),
+      quoteRef: existing?.quoteRef || nextQuoteRef(quotes),
+      cust: build.cust || existing?.cust || '',
+      email: build.email || existing?.email || '',
+      phone: build.phone || existing?.phone || '',
+      loc: build.loc || existing?.loc || '',
+      shippingAddress: build.shippingAddress || existing?.shippingAddress || '',
+      lineItems,
+      validDays: Number(build.validDays) || 30,
+      discountType,
+      discountValue: discountValue || '',
+      discountAmount: Math.min(discountAmount, subtotal),
+      total,
+      notes: build.notes || '',
+      status: existing?.status || 'in-review',
+      sourcePcBuildId: build.id,
+      createdAt: existing?.createdAt || new Date().toISOString(),
+      date: existing?.date || new Date().toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' }),
+    };
+    const qIdx = quotes.findIndex(q => q.id === quote.id);
+    if (qIdx >= 0) { quotes[qIdx] = quote; } else { quotes.push(quote); }
+    writeQuotes(quotes);
+
+    const bIdx = data.builds.findIndex(b => b.id === build.id);
+    data.builds[bIdx] = { ...build, quoteId: quote.id, quoteRef: quote.quoteRef, status: build.status === 'draft' ? 'quoted' : build.status, updatedAt: new Date().toISOString() };
+    writePcBuilder(data);
+
+    return json(res, 200, { ok: true, quote, build: data.builds[bIdx] });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/admin/hdd-reports/save') {

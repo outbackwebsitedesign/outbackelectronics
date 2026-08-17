@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { getCsrf, ensureCsrf } from './src/lib/api.js';
 import { renderMarkdown, estimateReadTime, slugify } from './markdown.jsx';
 import { PRODUCT_CONDITIONS } from './src/lib/conditions.js';
+import { PC_PART_CATEGORIES, PC_CATEGORY_MAP, categoryLabel, checkBuild, buildTotals } from './pc-compat.js';
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 // Canonical date format for all order dates: "27 May 2026"
@@ -470,6 +471,7 @@ const NAV_ICONS = {
   repairs:      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>,
   'hdd-reports': <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="2" y="7" width="20" height="10" rx="2"/><line x1="6" y1="12" x2="6.01" y2="12"/><line x1="10" y1="12" x2="18" y2="12"/><path d="M6 17v3M18 17v3"/></svg>,
   quotes:       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>,
+  'pc-builder': <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="6" y="2" width="12" height="20" rx="1"/><line x1="9" y1="6" x2="15" y2="6"/><line x1="9" y1="9" x2="15" y2="9"/><circle cx="12" cy="16" r="2.5"/></svg>,
   reviews:      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
   ewaste:       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>,
   bookings:     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
@@ -504,6 +506,7 @@ const ADMIN_SECTIONS = [
     { id:'repairs',   label:'Repair Jobs',   minRole:'staff', excludeRoles:['seller'] },
     { id:'hdd-reports', label:'HDD Condition Reports', minRole:'staff', excludeRoles:['seller'] },
     { id:'quotes',    label:'Quotes',  minRole:'staff', excludeRoles:['seller'] },
+    { id:'pc-builder', label:'PC Builder', minRole:'technician' },
     { id:'reviews',   label:'Reviews',       minRole:'staff', excludeRoles:['seller'] },
     { id:'ewaste',    label:'eWaste Intake', minRole:'technician' },
     { id:'bookings',  label:'Bookings',      minRole:'manager' },
@@ -1103,7 +1106,7 @@ function AdminOverview({ go }) {
 // unsaved-changes guard and beforeunload warning without the overlay/panel
 // styling, since this replaces the Orders list in place rather than floating
 // over it.
-function OrderPage({ title, dirty, onClose, footer, children, backLabel = 'Back' }) {
+function OrderPage({ title, dirty, onClose, footer, children, backLabel = 'Back', maxWidth = 860 }) {
   const confirmingRef = React.useRef(false);
   const dirtyRef = React.useRef(dirty);
   dirtyRef.current = dirty;
@@ -1133,7 +1136,7 @@ function OrderPage({ title, dirty, onClose, footer, children, backLabel = 'Back'
   }, [dirty]);
 
   return (
-    <div style={{padding:32, maxWidth:860}}>
+    <div style={{padding:32, maxWidth}}>
       <div className="row-flex" style={{justifyContent:'space-between', marginBottom:18, gap:12}}>
         <button className="btn btn-ghost btn-sm" onClick={requestClose}>
           <Icon name="chevronLeft" size={12}/> {backLabel}
@@ -3409,6 +3412,764 @@ function AdminQuotes({ search, sessionInfo, siteUrl }) {
         onRowClick={openRow}
         defaultSort={{ key: 'quoteRef', dir: 'desc' }}
       />
+    </div>
+  );
+}
+
+// ============================================================
+// PC BUILDER
+// ============================================================
+// A PC Part Picker style builder: pick a part per category from the parts
+// library, get live compatibility and physical-fit warnings, then turn the
+// finished build into a quote. The rules and the part spec schema live in
+// pc-compat.js so they stay testable and free of React.
+
+const PC_BUILD_STATUS_MAP = {
+  draft:    { bg:'var(--bg-deep)', fg:'var(--ink-2)' },
+  quoted:   { bg:'#d8e7d0', fg:'#345526' },
+  ordered:  { bg:'var(--ochre)', fg:'var(--dark)' },
+  built:    { bg:'#345526', fg:'#fff' },
+  archived: { bg:'#f3d5c5', fg:'#7a3a18' },
+};
+
+const PC_SEVERITY_STYLE = {
+  error:   { bg:'#f9e2d6', border:'#c2643a', fg:'#7a3a18', label:'Blocker' },
+  warning: { bg:'#fff4d6', border:'#d39a37', fg:'#7a5d10', label:'Check' },
+  info:    { bg:'var(--bg-deep)', border:'var(--line)', fg:'var(--ink-2)', label:'Note' },
+};
+
+function blankPcPart(category) {
+  return { id:'', category: category || 'cpu', name:'', brand:'', sku:'', priceAud:'', cost:'', specs:{}, notes:'' };
+}
+
+const pcMoney = (n) => `$${(Number(n) || 0).toLocaleString('en-AU', { minimumFractionDigits:2, maximumFractionDigits:2 })}`;
+const pcPartLabel = (p) => [p.brand, p.name].filter(Boolean).join(' ') || p.name || 'Part';
+
+// One spec input, driven by the field definition in PC_PART_CATEGORIES.
+function PcSpecField({ field, value, onChange }) {
+  if (field.type === 'bool') {
+    // Tri-state on purpose: "not recorded" is different from "no", and the
+    // compatibility rules skip a check rather than guess when a spec is unset.
+    return (
+      <label className="field">
+        <span className="label">{field.label}</span>
+        <select className="input" value={value === true ? 'yes' : value === false ? 'no' : ''}
+          onChange={e => onChange(e.target.value === '' ? undefined : e.target.value === 'yes')}>
+          <option value="">Not recorded</option>
+          <option value="yes">Yes</option>
+          <option value="no">No</option>
+        </select>
+      </label>
+    );
+  }
+  if (field.type === 'select') {
+    return (
+      <label className="field">
+        <span className="label">{field.label}</span>
+        <select className="input" value={value ?? ''} onChange={e => onChange(e.target.value || undefined)}>
+          <option value="">Not recorded</option>
+          {field.options.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+      </label>
+    );
+  }
+  if (field.type === 'multiselect') {
+    const selected = Array.isArray(value) ? value : [];
+    const toggle = (o) => onChange(selected.includes(o) ? selected.filter(x => x !== o) : [...selected, o]);
+    return (
+      <div className="field" style={{gridColumn:'1 / -1'}}>
+        <span className="label">{field.label}</span>
+        <div className="row-flex" style={{flexWrap:'wrap', gap:6, marginTop:4}}>
+          {field.options.map(o => (
+            <button key={o} type="button" className={`btn btn-sm ${selected.includes(o) ? '' : 'btn-ghost'}`}
+              onClick={() => toggle(o)} style={{padding:'3px 8px', fontSize:11}}>{o}</button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <label className="field">
+      <span className="label">{field.label}</span>
+      <input className="input" type={field.type === 'number' ? 'number' : 'text'} value={value ?? ''}
+        onChange={e => {
+          const raw = e.target.value;
+          if (raw === '') return onChange(undefined);
+          onChange(field.type === 'number' ? Number(raw) : raw);
+        }}/>
+    </label>
+  );
+}
+
+function PcPartEditor({ part, onClose, onSaved, onDeleted }) {
+  const [form, setForm] = useState(part);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState(null);
+  const savedSnapRef = React.useRef(JSON.stringify(part));
+  const dirty = JSON.stringify(form) !== savedSnapRef.current;
+  const cat = PC_CATEGORY_MAP[form.category] || PC_CATEGORY_MAP.other;
+  const setSpec = (key, val) => setForm(f => {
+    const specs = { ...(f.specs || {}) };
+    if (val === undefined) delete specs[key]; else specs[key] = val;
+    return { ...f, specs };
+  });
+
+  const save = async () => {
+    if (!form.name.trim()) { setErr('Give the part a name before saving.'); return; }
+    setSaving(true); setErr(null);
+    const r = await fetch('/api/admin/pc-builder/parts/save', {
+      method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(form),
+    }).catch(() => null);
+    setSaving(false);
+    if (!r || !r.ok) { setErr('Could not save the part, please try again.'); return; }
+    const d = await r.json();
+    savedSnapRef.current = JSON.stringify(d.item);
+    onSaved(d.item, !part.id);
+  };
+
+  const remove = async () => {
+    if (!await adminConfirm(`Delete "${pcPartLabel(form)}" from the parts library?`, {
+      title:'Delete part', confirmLabel:'Delete part', danger:true,
+    })) return;
+    const r = await fetch('/api/admin/pc-builder/parts/delete', {
+      method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: form.id }),
+    }).catch(() => null);
+    if (!r || !r.ok) { setErr('Could not delete the part, please try again.'); return; }
+    onDeleted(form.id);
+  };
+
+  return (
+    <Drawer open onClose={onClose} dirty={dirty} title={part.id ? 'Edit part' : 'New part'}
+      footer={
+        <div className="row-flex" style={{justifyContent:'space-between', gap:8}}>
+          {part.id
+            ? <button className="btn btn-ghost btn-sm" onClick={remove} style={{color:'var(--rust)'}}>Delete</button>
+            : <span/>}
+          <div className="row-flex" style={{gap:8}}>
+            <button className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
+            <button className="btn btn-rust btn-sm" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save part'}</button>
+          </div>
+        </div>
+      }>
+      {err && <div className="mono" style={{fontSize:12, color:'var(--rust)', marginBottom:12}}>{err}</div>}
+      <div className="form-grid">
+        <label className="field">
+          <span className="label">Category</span>
+          <select className="input" value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value, specs: {} }))}>
+            {PC_PART_CATEGORIES.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+          </select>
+        </label>
+        <label className="field"><span className="label">Brand</span>
+          <input className="input" value={form.brand || ''} onChange={e => setForm(f => ({ ...f, brand: e.target.value }))}/></label>
+        <label className="field" style={{gridColumn:'1 / -1'}}><span className="label">Name</span>
+          <input className="input" value={form.name || ''} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Ryzen 5 7600"/></label>
+        <label className="field"><span className="label">SKU</span>
+          <input className="input" value={form.sku || ''} onChange={e => setForm(f => ({ ...f, sku: e.target.value }))}/></label>
+        <label className="field"><span className="label">Sell price (AUD)</span>
+          <input className="input" type="number" value={form.priceAud ?? ''} onChange={e => setForm(f => ({ ...f, priceAud: e.target.value }))}/></label>
+        <label className="field"><span className="label">Our cost (AUD)</span>
+          <input className="input" type="number" value={form.cost ?? ''} onChange={e => setForm(f => ({ ...f, cost: e.target.value }))}/></label>
+      </div>
+
+      {cat.fields.length > 0 && <>
+        <h4 style={{margin:'22px 0 10px', fontSize:13, letterSpacing:'.04em'}}>{cat.label} specs</h4>
+        <p style={{fontSize:12, color:'var(--ink-2)', margin:'0 0 12px'}}>
+          Anything left as "not recorded" is skipped by the compatibility checker rather than guessed at.
+        </p>
+        <div className="form-grid">
+          {cat.fields.map(f => (
+            <PcSpecField key={f.key} field={f} value={(form.specs || {})[f.key]} onChange={v => setSpec(f.key, v)}/>
+          ))}
+        </div>
+      </>}
+
+      <label className="field" style={{marginTop:18}}><span className="label">Notes</span>
+        <textarea className="input" rows={3} value={form.notes || ''} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}/></label>
+    </Drawer>
+  );
+}
+
+// Choose a part for one category, from the library, with search.
+function PcPartPicker({ category, parts, onPick, onClose, onNewPart }) {
+  const [q, setQ] = useState('');
+  const cat = PC_CATEGORY_MAP[category] || PC_CATEGORY_MAP.other;
+  const matches = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return (parts || [])
+      .filter(p => p.category === category)
+      .filter(p => !needle || pcPartLabel(p).toLowerCase().includes(needle) || (p.sku || '').toLowerCase().includes(needle))
+      .sort((a, b) => pcPartLabel(a).localeCompare(pcPartLabel(b)));
+  }, [parts, category, q]);
+
+  return (
+    <Drawer open onClose={onClose} title={`Choose ${cat.label.toLowerCase()}`}
+      footer={<button className="btn btn-ghost btn-sm" onClick={onNewPart}>+ Add a new {cat.label.toLowerCase()} to the library</button>}>
+      <input className="input" autoFocus placeholder={`Search ${cat.label.toLowerCase()}…`} value={q} onChange={e => setQ(e.target.value)} style={{marginBottom:14}}/>
+      {matches.length === 0 && (
+        <p style={{fontSize:13, color:'var(--ink-2)'}}>
+          {parts.some(p => p.category === category)
+            ? 'Nothing matches that search.'
+            : `No ${cat.label.toLowerCase()} in the parts library yet.`}
+        </p>
+      )}
+      <div style={{display:'grid', gap:6}}>
+        {matches.map(p => (
+          <button key={p.id} type="button" onClick={() => onPick(p)}
+            style={{textAlign:'left', background:'var(--bg-deep)', border:'1px solid var(--line)', padding:'10px 12px', cursor:'pointer', display:'flex', justifyContent:'space-between', gap:12, alignItems:'center'}}>
+            <span style={{minWidth:0}}>
+              <span style={{display:'block', fontSize:13, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{pcPartLabel(p)}</span>
+              <span className="mono" style={{fontSize:10.5, color:'var(--ink-2)'}}>{pcSpecSummary(p) || (p.sku || 'no specs recorded')}</span>
+            </span>
+            <span className="mono" style={{fontWeight:600, whiteSpace:'nowrap'}}>{pcMoney(p.priceAud)}</span>
+          </button>
+        ))}
+      </div>
+    </Drawer>
+  );
+}
+
+// A one-line "why this part" summary for pickers and build rows.
+function pcSpecSummary(part) {
+  const s = part.specs || {};
+  const bits = [];
+  const push = (v, suffix = '') => { if (v !== undefined && v !== null && v !== '') bits.push(`${v}${suffix}`); };
+  switch (part.category) {
+    case 'cpu': push(s.socket); push(s.cores, 'C'); push(s.tdp, 'W'); break;
+    case 'motherboard': push(s.socket); push(s.formFactor); push(s.memoryType); break;
+    case 'ram': push(s.capacityGb, 'GB'); push(s.memoryType); push(s.speedMhz, 'MHz'); break;
+    case 'gpu': push(s.lengthMm, 'mm'); push(s.tdp, 'W'); break;
+    case 'storage': push(s.capacityGb, 'GB'); push(s.interface); break;
+    case 'psu': push(s.wattage, 'W'); push(s.formFactor); push(s.efficiency); break;
+    case 'case': push(s.maxBoardFormFactor); push(s.maxGpuLengthMm ? `GPU ${s.maxGpuLengthMm}mm` : ''); break;
+    case 'cooler': push(s.coolerType); push(s.radiatorMm ? `${s.radiatorMm}mm rad` : (s.heightMm ? `${s.heightMm}mm tall` : '')); break;
+    case 'fan': push(s.sizeMm, 'mm'); break;
+    default: break;
+  }
+  return bits.filter(Boolean).join(' · ');
+}
+
+function PcPartsLibrary({ parts, onPartsChange, products }) {
+  const [edit, setEdit] = useState(null);
+  const [catFilter, setCatFilter] = useState('all');
+  const [importOpen, setImportOpen] = useState(false);
+
+  const rows = useMemo(() => {
+    const out = catFilter === 'all' ? parts : parts.filter(p => p.category === catFilter);
+    return [...out].sort((a, b) => (a.category || '').localeCompare(b.category || '') || pcPartLabel(a).localeCompare(pcPartLabel(b)));
+  }, [parts, catFilter]);
+
+  return (
+    <>
+      <div className="row-flex" style={{justifyContent:'space-between', gap:10, flexWrap:'wrap', marginBottom:14}}>
+        <select className="input" style={{maxWidth:220}} value={catFilter} onChange={e => setCatFilter(e.target.value)}>
+          <option value="all">All categories ({parts.length})</option>
+          {PC_PART_CATEGORIES.map(c => (
+            <option key={c.key} value={c.key}>{c.label} ({parts.filter(p => p.category === c.key).length})</option>
+          ))}
+        </select>
+        <div className="row-flex" style={{gap:8}}>
+          <button className="btn btn-ghost btn-sm" onClick={() => setImportOpen(true)}>Import from products</button>
+          <button className="btn btn-rust btn-sm" onClick={() => setEdit(blankPcPart(catFilter === 'all' ? 'cpu' : catFilter))}>+ New part</button>
+        </div>
+      </div>
+      <Table
+        columns={[
+          { key:'category', label:'Category', w:'130px', sort:true, render:r => <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{categoryLabel(r.category)}</span> },
+          { key:'name', label:'Part', w:'2fr', sort:r => pcPartLabel(r), render:r => pcPartLabel(r) },
+          { key:'specs', label:'Specs', w:'2fr', render:r => <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{pcSpecSummary(r) || '-'}</span> },
+          { key:'cost', label:'Cost', w:'90px', sort:r => Number(r.cost) || 0, render:r => <span className="mono" style={{fontSize:12, color:'var(--ink-2)'}}>{pcMoney(r.cost)}</span> },
+          { key:'priceAud', label:'Price', w:'100px', sort:r => Number(r.priceAud) || 0, render:r => <span className="mono" style={{fontWeight:600}}>{pcMoney(r.priceAud)}</span> },
+        ]}
+        rows={rows}
+        onRowClick={r => setEdit(r)}
+        emptyMessage="No parts yet. Add one, or import products from the catalog."
+        defaultSort={{ key:'category', dir:'asc' }}
+      />
+      {edit && (
+        <PcPartEditor
+          part={edit}
+          onClose={() => setEdit(null)}
+          onSaved={(item, isNew) => {
+            onPartsChange(ps => isNew ? [...ps, item] : ps.map(p => p.id === item.id ? item : p));
+            setEdit(null);
+          }}
+          onDeleted={(id) => { onPartsChange(ps => ps.filter(p => p.id !== id)); setEdit(null); }}
+        />
+      )}
+      {importOpen && (
+        <PcImportProducts
+          products={products}
+          parts={parts}
+          onClose={() => setImportOpen(false)}
+          onImported={(items) => { onPartsChange(ps => [...ps, ...items]); setImportOpen(false); }}
+        />
+      )}
+    </>
+  );
+}
+
+function PcImportProducts({ products, parts, onClose, onImported }) {
+  const [q, setQ] = useState('');
+  const [category, setCategory] = useState('cpu');
+  const [picked, setPicked] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const alreadyIn = useMemo(() => new Set(parts.map(p => p.productId).filter(Boolean)), [parts]);
+  const matches = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return (products || [])
+      .filter(p => !alreadyIn.has(p.id))
+      .filter(p => !needle || (p.name || '').toLowerCase().includes(needle) || (p.sku || '').toLowerCase().includes(needle))
+      .slice(0, 40);
+  }, [products, q, alreadyIn]);
+
+  const doImport = async () => {
+    if (!picked.length) return;
+    setBusy(true); setErr(null);
+    const r = await fetch('/api/admin/pc-builder/parts/import', {
+      method:'POST', headers:postHeaders(), credentials:'include',
+      body: JSON.stringify({ productIds: picked, category }),
+    }).catch(() => null);
+    setBusy(false);
+    if (!r || !r.ok) { setErr('Import failed, please try again.'); return; }
+    const d = await r.json();
+    adminToast(`${(d.items || []).length} part(s) imported. Add their specs so compatibility checks can run.`, 'success');
+    onImported(d.items || []);
+  };
+
+  return (
+    <Drawer open onClose={onClose} title="Import products as parts"
+      footer={
+        <div className="row-flex" style={{justifyContent:'flex-end', gap:8}}>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
+          <button className="btn btn-rust btn-sm" onClick={doImport} disabled={busy || !picked.length}>
+            {busy ? 'Importing…' : `Import ${picked.length || ''}`.trim()}
+          </button>
+        </div>
+      }>
+      {err && <div className="mono" style={{fontSize:12, color:'var(--rust)', marginBottom:12}}>{err}</div>}
+      <p style={{fontSize:12, color:'var(--ink-2)', margin:'0 0 12px'}}>
+        Imported parts carry the product's name and price. Specs come across empty, fill them in so the compatibility checks can run.
+      </p>
+      <label className="field" style={{marginBottom:10}}><span className="label">Import as category</span>
+        <select className="input" value={category} onChange={e => setCategory(e.target.value)}>
+          {PC_PART_CATEGORIES.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+        </select>
+      </label>
+      <input className="input" placeholder="Search products…" value={q} onChange={e => setQ(e.target.value)} style={{marginBottom:12}}/>
+      <div style={{display:'grid', gap:4, maxHeight:'46vh', overflowY:'auto'}}>
+        {matches.length === 0 && <p style={{fontSize:13, color:'var(--ink-2)'}}>No products left to import.</p>}
+        {matches.map(p => (
+          <label key={p.id} className="row-flex" style={{gap:8, padding:'7px 9px', background:'var(--bg-deep)', cursor:'pointer'}}>
+            <input type="checkbox" checked={picked.includes(p.id)}
+              onChange={e => setPicked(cur => e.target.checked ? [...cur, p.id] : cur.filter(x => x !== p.id))}/>
+            <span style={{flex:1, fontSize:13, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{p.name}</span>
+            <span className="mono" style={{fontSize:12}}>{pcMoney(p.priceAud ?? p.price)}</span>
+          </label>
+        ))}
+      </div>
+    </Drawer>
+  );
+}
+
+function PcBuildPage({ build, parts, customers, onPartsChange, onClose, onSave, onDelete }) {
+  const [form, setForm] = useState(build);
+  const [picking, setPicking] = useState(null);   // category key
+  const [newPart, setNewPart] = useState(null);
+  const [busy, setBusy] = useState(null);         // 'save' | 'quote' | 'delete'
+  const [err, setErr] = useState(null);
+  const savedSnapRef = React.useRef(JSON.stringify(build));
+  const dirty = JSON.stringify(form) !== savedSnapRef.current;
+
+  const check = useMemo(() => checkBuild(form.items, parts), [form.items, parts]);
+  const totals = useMemo(() => buildTotals(form, parts), [form, parts]);
+  const partsById = useMemo(() => new Map(parts.map(p => [p.id, p])), [parts]);
+  const discountAmount = useMemo(() => {
+    const v = Number(form.discountValue) || 0;
+    const raw = (form.discountType || 'percent') === 'percent' ? totals.total * (v / 100) : v;
+    return Math.min(Math.round(raw * 100) / 100, totals.total);
+  }, [form.discountType, form.discountValue, totals.total]);
+  const grandTotal = Math.round((totals.total - discountAmount) * 100) / 100;
+
+  const itemsFor = (cat) => (form.items || [])
+    .map((it, idx) => ({ it, idx, part: partsById.get(it.partId) || it.snapshot }))
+    .filter(x => x.part && x.part.category === cat);
+
+  const addPart = (part) => {
+    // The snapshot keeps a saved build readable if the part is later deleted
+    // from the library, live prices still win while the part exists.
+    setForm(f => ({ ...f, items: [...(f.items || []), { partId: part.id, qty: 1, snapshot: { ...part } }] }));
+    setPicking(null);
+  };
+  const setQty = (idx, qty) => setForm(f => ({ ...f, items: f.items.map((it, i) => i === idx ? { ...it, qty: Math.max(1, Number(qty) || 1) } : it) }));
+  const removeAt = (idx) => setForm(f => ({ ...f, items: f.items.filter((_, i) => i !== idx) }));
+
+  const setLabour = (idx, patch) => setForm(f => ({ ...f, labour: (f.labour || []).map((l, i) => i === idx ? { ...l, ...patch } : l) }));
+  const addLabour = () => setForm(f => ({ ...f, labour: [...(f.labour || []), { description:'Assembly and testing', amount:'', qty:1 }] }));
+  const removeLabour = (idx) => setForm(f => ({ ...f, labour: (f.labour || []).filter((_, i) => i !== idx) }));
+
+  const persist = async () => {
+    const payload = { ...form, issueSummary: { errors: check.errors.length, warnings: check.warnings.length }, estimatedWatts: check.wattage };
+    const r = await fetch('/api/admin/pc-builder/builds/save', {
+      method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(payload),
+    }).catch(() => null);
+    if (!r || !r.ok) return null;
+    const d = await r.json();
+    savedSnapRef.current = JSON.stringify(d.item);
+    setForm(d.item);
+    return d.item;
+  };
+
+  const doSave = async () => {
+    setBusy('save'); setErr(null);
+    const item = await persist();
+    setBusy(null);
+    if (!item) { setErr('Could not save the build, please try again.'); return; }
+    onSave(item, !build.id);
+    adminToast('Build saved.', 'success');
+  };
+
+  const doQuote = async () => {
+    if (check.errors.length && !await adminConfirm(
+      `This build has ${check.errors.length} blocking compatibility issue(s).\nQuote it anyway?`,
+      { title:'Compatibility blockers', confirmLabel:'Quote anyway', danger:true })) return;
+    setBusy('quote'); setErr(null);
+    const item = await persist();
+    if (!item) { setBusy(null); setErr('Could not save the build, so no quote was created.'); return; }
+    const r = await fetch('/api/admin/pc-builder/builds/quote', {
+      method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ buildId: item.id }),
+    }).catch(() => null);
+    setBusy(null);
+    if (!r || !r.ok) {
+      const reason = r && r.status === 400 ? 'Add at least one part or labour line first.' : 'Could not create the quote, please try again.';
+      setErr(reason);
+      return;
+    }
+    const d = await r.json();
+    savedSnapRef.current = JSON.stringify(d.build);
+    setForm(d.build);
+    onSave(d.build, false);
+    adminToast(`Quote ${d.quote.quoteRef} created, opening it now.`, 'success');
+    window.location.href = `/quotes?open=${encodeURIComponent(d.quote.id)}`;
+  };
+
+  const doDelete = async () => {
+    if (!await adminConfirm(`Delete build ${form.ref || form.name}? Any quote already created from it stays.`, {
+      title:'Delete build', confirmLabel:'Delete build', danger:true })) return;
+    setBusy('delete');
+    const r = await fetch('/api/admin/pc-builder/builds/delete', {
+      method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: form.id }),
+    }).catch(() => null);
+    setBusy(null);
+    if (!r || !r.ok) { setErr('Could not delete the build, please try again.'); return; }
+    onDelete(form.id);
+  };
+
+  const applyCustomer = (name) => {
+    const c = (customers || []).find(x => `${x.name}${x.email ? ` (${x.email})` : ''}` === name || x.name === name);
+    if (c) setForm(f => ({ ...f, cust: c.name || '', email: c.email || '', phone: c.phone || '', loc: c.loc || '', shippingAddress: c.shippingAddress || '' }));
+    else setForm(f => ({ ...f, cust: name }));
+  };
+
+  return (
+    <>
+      <OrderPage
+        maxWidth={1180}
+        title={build.id ? `${form.ref || 'Build'} · ${form.name || 'Untitled build'}` : 'New PC build'}
+        dirty={dirty}
+        onClose={onClose}
+        backLabel="All builds"
+        footer={
+          <div className="row-flex" style={{justifyContent:'space-between', gap:8, flexWrap:'wrap'}}>
+            {build.id
+              ? <button className="btn btn-ghost btn-sm" onClick={doDelete} disabled={!!busy} style={{color:'var(--rust)'}}>Delete build</button>
+              : <span/>}
+            <div className="row-flex" style={{gap:8}}>
+              {form.quoteId && (
+                <a className="btn btn-ghost btn-sm" href={`/quotes?open=${encodeURIComponent(form.quoteId)}`} style={{textDecoration:'none'}}>
+                  Open quote {form.quoteRef || ''}
+                </a>
+              )}
+              <button className="btn btn-ghost btn-sm" onClick={doSave} disabled={!!busy}>{busy === 'save' ? 'Saving…' : 'Save build'}</button>
+              <button className="btn btn-rust btn-sm" onClick={doQuote} disabled={!!busy}>
+                {busy === 'quote' ? 'Creating…' : form.quoteId ? 'Update quote' : 'Create quote'}
+              </button>
+            </div>
+          </div>
+        }>
+        {err && <div className="mono" style={{fontSize:12, color:'var(--rust)', marginBottom:14}}>{err}</div>}
+
+        <div className="form-grid" style={{marginBottom:22}}>
+          <label className="field"><span className="label">Build name</span>
+            <input className="input" value={form.name || ''} placeholder="Gaming tower for J. Smith"
+              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}/></label>
+          <label className="field"><span className="label">Status</span>
+            <select className="input" value={form.status || 'draft'} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
+              {['draft','quoted','ordered','built','archived'].map(s => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
+            </select></label>
+          <label className="field"><span className="label">Customer</span>
+            <input className="input" list="pc-build-customers" value={form.cust || ''} onChange={e => applyCustomer(e.target.value)}/>
+            <datalist id="pc-build-customers">
+              {(customers || []).slice(0, 300).map(c => <option key={c.id} value={c.name}>{c.email}</option>)}
+            </datalist></label>
+          <label className="field"><span className="label">Email</span>
+            <input className="input" value={form.email || ''} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}/></label>
+        </div>
+
+        <div className="pc-builder-grid">
+          {/* Part picker, one row per category */}
+          <div>
+            {PC_PART_CATEGORIES.map(cat => {
+              const chosen = itemsFor(cat.key);
+              const canAddMore = cat.multi || chosen.length === 0;
+              return (
+                <div key={cat.key} style={{borderBottom:'1px solid var(--line)', padding:'10px 0'}}>
+                  <div className="row-flex" style={{justifyContent:'space-between', gap:10, alignItems:'center'}}>
+                    <span className="mono" style={{fontSize:10.5, letterSpacing:'.1em', color:'var(--ink-2)'}}>
+                      {cat.label.toUpperCase()}{cat.required && <span style={{color:'var(--rust)'}}> *</span>}
+                    </span>
+                    {canAddMore && (
+                      <button className="btn btn-ghost btn-sm" style={{padding:'2px 8px', fontSize:11}} onClick={() => setPicking(cat.key)}>
+                        {chosen.length ? '+ Add another' : '+ Choose'}
+                      </button>
+                    )}
+                  </div>
+                  {chosen.length === 0 && (
+                    <div style={{fontSize:13, color:'var(--ink-3)', paddingTop:4}}>Nothing selected</div>
+                  )}
+                  {chosen.map(({ it, idx, part }) => (
+                    <div key={idx} className="row-flex" style={{gap:10, alignItems:'center', paddingTop:6}}>
+                      <span style={{flex:1, minWidth:0}}>
+                        <span style={{display:'block', fontSize:13.5}}>{pcPartLabel(part)}</span>
+                        <span className="mono" style={{fontSize:10.5, color:'var(--ink-2)'}}>{pcSpecSummary(part) || 'no specs recorded'}</span>
+                      </span>
+                      <input className="input" type="number" min="1" value={it.qty || 1} onChange={e => setQty(idx, e.target.value)}
+                        style={{width:58, padding:'3px 6px', fontSize:12}} aria-label={`${pcPartLabel(part)} quantity`}/>
+                      <span className="mono" style={{width:88, textAlign:'right', fontWeight:600}}>{pcMoney((Number(part.priceAud) || 0) * (Number(it.qty) || 1))}</span>
+                      <button className="btn btn-ghost btn-sm" style={{padding:'2px 7px', fontSize:11, color:'var(--rust)'}} onClick={() => removeAt(idx)} aria-label="Remove part">×</button>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+
+            <h4 style={{margin:'22px 0 8px', fontSize:13}}>Labour and services</h4>
+            {(form.labour || []).map((l, idx) => (
+              <div key={idx} className="row-flex" style={{gap:8, marginBottom:6, alignItems:'center'}}>
+                <input className="input" style={{flex:1}} value={l.description || ''} placeholder="Assembly and testing"
+                  onChange={e => setLabour(idx, { description: e.target.value })}/>
+                <input className="input" type="number" min="1" style={{width:58}} value={l.qty ?? 1} onChange={e => setLabour(idx, { qty: e.target.value })} aria-label="Quantity"/>
+                <input className="input" type="number" style={{width:100}} value={l.amount ?? ''} placeholder="0.00"
+                  onChange={e => setLabour(idx, { amount: e.target.value })} aria-label="Amount"/>
+                <button className="btn btn-ghost btn-sm" style={{padding:'2px 7px', fontSize:11, color:'var(--rust)'}} onClick={() => removeLabour(idx)} aria-label="Remove line">×</button>
+              </div>
+            ))}
+            <button className="btn btn-ghost btn-sm" onClick={addLabour}>+ Add labour line</button>
+
+            <label className="field" style={{marginTop:20}}><span className="label">Notes for the quote</span>
+              <textarea className="input" rows={3} value={form.notes || ''} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}/></label>
+          </div>
+
+          {/* Summary, compatibility and pricing */}
+          <div className="pc-builder-aside">
+            <div style={{border:'1px solid var(--line)', padding:14, marginBottom:14}}>
+              <div className="row-flex" style={{justifyContent:'space-between', marginBottom:6}}>
+                <span style={{fontSize:12.5, color:'var(--ink-2)'}}>Estimated draw</span>
+                <span className="mono" style={{fontWeight:600}}>{check.wattage} W</span>
+              </div>
+              <div className="row-flex" style={{justifyContent:'space-between'}}>
+                <span style={{fontSize:12.5, color:'var(--ink-2)'}}>Suggested PSU</span>
+                <span className="mono" style={{fontWeight:600}}>{check.recommendedPsu} W</span>
+              </div>
+            </div>
+
+            <div style={{marginBottom:14}}>
+              <div className="row-flex" style={{gap:6, marginBottom:8, alignItems:'center'}}>
+                <span className="mono" style={{fontSize:10.5, letterSpacing:'.1em', color:'var(--ink-2)'}}>COMPATIBILITY</span>
+                <span className="mono" style={{fontSize:10.5, padding:'1px 6px', background: check.errors.length ? 'var(--rust)' : check.warnings.length ? 'var(--ochre)' : '#345526', color:'#fff'}}>
+                  {check.errors.length ? `${check.errors.length} blocker${check.errors.length > 1 ? 's' : ''}` : check.warnings.length ? `${check.warnings.length} to check` : 'All clear'}
+                </span>
+              </div>
+              {check.issues.length === 0 && (
+                <p style={{fontSize:12.5, color:'var(--ink-2)', margin:0}}>Nothing flagged against the parts selected so far.</p>
+              )}
+              <div style={{display:'grid', gap:6}}>
+                {check.issues.map((iss, i) => {
+                  const st = PC_SEVERITY_STYLE[iss.severity];
+                  return (
+                    <div key={`${iss.code}-${i}`} style={{background:st.bg, borderLeft:`3px solid ${st.border}`, padding:'7px 9px'}}>
+                      <span className="mono" style={{fontSize:9.5, letterSpacing:'.08em', color:st.fg, display:'block', marginBottom:2}}>{st.label.toUpperCase()}</span>
+                      <span style={{fontSize:12.5, display:'block', color:'var(--ink)'}}>{iss.message}</span>
+                      {iss.hint && <span style={{fontSize:11.5, display:'block', color:'var(--ink-2)', marginTop:2}}>{iss.hint}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div style={{border:'1px solid var(--line)', padding:14}}>
+              <div className="row-flex" style={{justifyContent:'space-between', marginBottom:4}}>
+                <span style={{fontSize:12.5, color:'var(--ink-2)'}}>Parts</span>
+                <span className="mono">{pcMoney(totals.partsSubtotal)}</span>
+              </div>
+              <div className="row-flex" style={{justifyContent:'space-between', marginBottom:8}}>
+                <span style={{fontSize:12.5, color:'var(--ink-2)'}}>Labour</span>
+                <span className="mono">{pcMoney(totals.labourSubtotal)}</span>
+              </div>
+              <div className="row-flex" style={{gap:6, marginBottom:8}}>
+                <select className="input" style={{flex:1, fontSize:12}} value={form.discountType || 'percent'} onChange={e => setForm(f => ({ ...f, discountType: e.target.value }))}>
+                  <option value="percent">Discount %</option>
+                  <option value="fixed">Discount $</option>
+                </select>
+                <input className="input" type="number" style={{width:82}} value={form.discountValue ?? ''} placeholder="0"
+                  onChange={e => setForm(f => ({ ...f, discountValue: e.target.value }))} aria-label="Discount value"/>
+              </div>
+              {discountAmount > 0 && (
+                <div className="row-flex" style={{justifyContent:'space-between', marginBottom:6}}>
+                  <span style={{fontSize:12.5, color:'var(--ink-2)'}}>Discount</span>
+                  <span className="mono" style={{color:'var(--rust)'}}>-{pcMoney(discountAmount)}</span>
+                </div>
+              )}
+              <div className="row-flex" style={{justifyContent:'space-between', paddingTop:8, borderTop:'1px solid var(--line)'}}>
+                <span style={{fontWeight:600}}>Quote total</span>
+                <span className="mono" style={{fontWeight:700, fontSize:16}}>{pcMoney(grandTotal)}</span>
+              </div>
+              <div className="row-flex" style={{justifyContent:'space-between', marginTop:6}}>
+                <span style={{fontSize:11.5, color:'var(--ink-2)'}}>Parts cost / margin</span>
+                <span className="mono" style={{fontSize:11.5, color:'var(--ink-2)'}}>{pcMoney(totals.partsCost)} / {pcMoney(grandTotal - totals.partsCost)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </OrderPage>
+
+      {picking && (
+        <PcPartPicker
+          category={picking}
+          parts={parts}
+          onPick={addPart}
+          onClose={() => setPicking(null)}
+          onNewPart={() => { setNewPart(blankPcPart(picking)); setPicking(null); }}
+        />
+      )}
+      {newPart && (
+        <PcPartEditor
+          part={newPart}
+          onClose={() => setNewPart(null)}
+          onSaved={(item) => {
+            onPartsChange(ps => ps.some(p => p.id === item.id) ? ps.map(p => p.id === item.id ? item : p) : [...ps, item]);
+            addPart(item);
+            setNewPart(null);
+          }}
+          onDeleted={() => setNewPart(null)}
+        />
+      )}
+      <style>{`
+        .pc-builder-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28px; align-items: start; }
+        .pc-builder-aside { position: sticky; top: 18px; }
+        @media (max-width: 900px) {
+          .pc-builder-grid { grid-template-columns: minmax(0, 1fr); }
+          .pc-builder-aside { position: static; }
+        }
+      `}</style>
+    </>
+  );
+}
+
+function AdminPcBuilder({ search }) {
+  const [parts, setParts] = useState([]);
+  const [builds, setBuilds] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useUrlState('tab', 'builds');
+  const [openId, setOpenId] = useUrlState('open', null, { push: true });
+  const [edit, setEdit] = useState(null);
+
+  useEffect(() => {
+    fetch('/api/admin/pc-builder', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => { setParts(d.parts || []); setBuilds(d.builds || []); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+    fetch('/api/admin/customers', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject()).then(d => setCustomers(d.items || [])).catch(() => {});
+    fetch('/api/admin/catalog', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject()).then(d => setProducts(d.products || [])).catch(() => {});
+  }, []);
+
+  const blankBuild = () => ({ id:'', ref:'', name:'', cust:'', email:'', phone:'', loc:'', shippingAddress:'', items:[], labour:[], discountType:'percent', discountValue:'', validDays:30, notes:'', status:'draft' });
+
+  useEffect(() => {
+    const cur = edit === null ? null : (edit.id || 'new');
+    if (openId === cur) return;
+    if (openId == null) { setEdit(null); return; }
+    if (openId === 'new') { setEdit(blankBuild()); return; }
+    const b = builds.find(x => x.id === openId);
+    if (b) setEdit(b);
+  }, [openId, builds]);
+
+  if (edit !== null) {
+    return (
+      <PcBuildPage
+        build={edit}
+        parts={parts}
+        customers={customers}
+        onPartsChange={setParts}
+        onClose={() => setOpenId(null)}
+        onSave={(saved, isNew) => setBuilds(bs => isNew ? [saved, ...bs] : bs.map(b => b.id === saved.id ? saved : b))}
+        onDelete={(id) => { setBuilds(bs => bs.filter(b => b.id !== id)); setOpenId(null); }}
+      />
+    );
+  }
+
+  const q = (search || '').toLowerCase().trim();
+  const visibleBuilds = !q ? builds : builds.filter(b =>
+    (b.ref || '').toLowerCase().includes(q) ||
+    (b.name || '').toLowerCase().includes(q) ||
+    (b.cust || '').toLowerCase().includes(q)
+  );
+
+  return (
+    <div style={{padding:32}}>
+      <div className="row-flex" style={{justifyContent:'space-between', marginBottom:14, flexWrap:'wrap', gap:10}}>
+        <div className="tabs tabs-row" style={{margin:0}}>
+          {[['builds', `Builds (${builds.length})`], ['parts', `Parts library (${parts.length})`]].map(([k, l]) => (
+            <div key={k} role="button" tabIndex={0} className={`tab ${tab === k ? 'active' : ''}`} style={{cursor:'pointer'}}
+              onClick={() => setTab(k)}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setTab(k); } }}>{l}</div>
+          ))}
+        </div>
+        {tab === 'builds' && <button className="btn btn-rust btn-sm" onClick={() => setOpenId('new')}>+ New build</button>}
+      </div>
+
+      {tab === 'builds' ? (
+        <Table
+          loading={loading}
+          columns={[
+            { key:'ref', label:'Build #', w:'110px', sort:true, render:r => <span className="mono" style={{fontSize:12, color:'var(--rust)'}}>{r.ref || r.id}</span> },
+            { key:'name', label:'Build', w:'2fr', sort:true, render:r => r.name || 'Untitled build' },
+            { key:'cust', label:'Customer', w:'1.4fr', sort:true, render:r => r.cust || '-' },
+            { key:'parts', label:'Parts', w:'70px', sort:r => (r.items || []).length, render:r => <span className="mono" style={{fontSize:12}}>{(r.items || []).length}</span> },
+            { key:'issues', label:'Issues', w:'110px', render:r => {
+              const s = r.issueSummary || {};
+              if (s.errors) return <span className="mono" style={{fontSize:11, color:'var(--rust)'}}>{s.errors} blocker{s.errors > 1 ? 's' : ''}</span>;
+              if (s.warnings) return <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{s.warnings} to check</span>;
+              return <span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>clear</span>;
+            } },
+            { key:'status', label:'Status', w:'100px', sort:r => r.status || 'draft', render:r => <StatusPill value={r.status || 'draft'} map={PC_BUILD_STATUS_MAP}/> },
+            { key:'quoteRef', label:'Quote', w:'100px', render:r => r.quoteRef
+              ? <a className="mono" style={{fontSize:11}} href={`/quotes?open=${encodeURIComponent(r.quoteId)}`} onClick={e => e.stopPropagation()}>{r.quoteRef}</a>
+              : <span style={{color:'var(--ink-3)'}}>-</span> },
+          ]}
+          rows={visibleBuilds}
+          onRowClick={r => setOpenId(r.id)}
+          emptyMessage="No builds yet. Start one and pick parts from the library."
+          defaultSort={{ key:'ref', dir:'desc' }}
+        />
+      ) : (
+        <PcPartsLibrary parts={parts} onPartsChange={setParts} products={products}/>
+      )}
     </div>
   );
 }
@@ -11161,6 +11922,7 @@ const ADMIN_VIEWS = {
   repairs:    { c: AdminRepairs,    t:'Repair Jobs' },
   'hdd-reports': { c: AdminHddReports, t:'HDD Condition Reports', staticSubtitle:'S.M.A.R.T. summary · condition notes · printable PDF' },
   quotes:     { c: AdminQuotes,     t:'Quotes' },
+  'pc-builder': { c: AdminPcBuilder, t:'PC Builder', staticSubtitle:'pick parts · check fit and compatibility · quote it' },
   reviews:    { c: AdminReviews,    t:'Reviews',           staticSubtitle:'pending · approved · rejected' },
   ewaste:     { c: AdminEwaste,     t:'eWaste Intake' },
   bookings:   { c: AdminBookings,   t:'Bookings' },
@@ -11188,7 +11950,7 @@ const ADMIN_VIEWS = {
 };
 
 const ADMIN_ALL_IDS = new Set([
-  'overview','orders','payment-plans','repairs','hdd-reports','quotes','reviews','ewaste','bookings','availability',
+  'overview','orders','payment-plans','repairs','hdd-reports','quotes','pc-builder','reviews','ewaste','bookings','availability',
   'products','services','software','tutorials','ai',
   'groups','customers','sellers','clients',
   'memberships','gift-cards','rewards','expenses','tax-reports','policies','seller-billing','settings','audit-log',

@@ -84,7 +84,7 @@ Each entry point in `src/` (e.g. `src/main.jsx`) imports the relevant page JSX a
 
 No database server. All data is stored as flat JSON files in the repo root with `.db` extension (e.g. `products.db`, `orders.db`, `forum.db`). Writes use an atomic rename pattern (write to `.tmp`, then `fs.rename`). `settings.db` is the single source of truth for all settings — `readSettings()` uses inline code fallbacks for missing keys; there is no `settings.defaults.json` file.
 
-Key data files: `products.db`, `orders.db`, `customers.db`, `repairs.db`, `quotes.db`, `services.db`, `forum.db`, `staff.db`, `sellers.db`, `memberships.db`, `gift-cards.db`, `software.db`, `tutorials.db`, `carts.db`.
+Key data files: `products.db`, `orders.db`, `customers.db`, `repairs.db`, `quotes.db`, `services.db`, `forum.db`, `staff.db`, `sellers.db`, `memberships.db`, `gift-cards.db`, `software.db`, `tutorials.db`, `carts.db`, `pc-builder.db`.
 
 Session stores are also flat JSON: `sessions.db` (admin), `forum-sessions.db`, `portal-sessions.db`.
 
