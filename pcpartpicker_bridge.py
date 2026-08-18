@@ -9,11 +9,13 @@ is not starting Python and a HTTP session for every product.
 """
 
 import json
+import os
 import re
 import sys
 
 try:
     import pypartpicker
+    from pypartpicker.errors import CloudflareException, RateLimitException
 except Exception as exc:
     print(json.dumps({"fatal": "dependency_missing", "message": str(exc)}), flush=True)
     raise SystemExit(2)
@@ -42,16 +44,22 @@ def score(name, brand, query):
     return value
 
 
-client = pypartpicker.Client(max_retries=3, retry_delay=1)
+# On the Raspberry Pi we do not want pyppeteer downloading an x86 Chromium
+# build. The site is being queried from the shop's normal residential
+# connection, where the ordinary HTML path is what we want. If PCPartPicker
+# presents Cloudflare, report it cleanly and let the caller retry later.
+client = pypartpicker.Client(max_retries=1, retry_delay=0, no_js=True)
+DEFAULT_REGION = os.environ.get("PCPARTPICKER_REGION", "au")
 
 
 def lookup(req):
     brand = str(req.get("brand") or "").strip()
     query = str(req.get("mpn") or req.get("model") or "").strip()
+    region = str(req.get("region") or DEFAULT_REGION or "au").strip().lower()
     if not query:
         return {"ok": False, "reason": "missing_identity"}
 
-    # Search with the exact identifier first. Supplier names often duplicate the
+    # Search the model/MPN exactly first. Supplier names often duplicate the
     # brand ("ASRock ASRock ..."), so only add the brand on a second attempt.
     queries = [query]
     if brand and norm(brand) not in norm(query).split():
@@ -60,7 +68,7 @@ def lookup(req):
     parts = []
     seen = set()
     for q in queries:
-        result = client.get_part_search(q)
+        result = client.get_part_search(q, region=region)
         for part in getattr(result, "parts", []) or []:
             url = getattr(part, "url", None)
             key = url or getattr(part, "name", "")
@@ -79,7 +87,11 @@ def lookup(req):
     if not ranked:
         return {"ok": False, "reason": "not_found"}
     if len(ranked) > 1 and ranked[0][0] < 700 and ranked[0][0] - ranked[1][0] < 80:
-        return {"ok": False, "reason": "ambiguous", "candidates": [getattr(x[1], "name", "") for x in ranked[:3]]}
+        return {
+            "ok": False,
+            "reason": "ambiguous",
+            "candidates": [getattr(x[1], "name", "") for x in ranked[:3]],
+        }
 
     best_score, candidate = ranked[0]
     url = getattr(candidate, "url", None)
@@ -110,6 +122,10 @@ for line in sys.stdin:
         request_id = request.get("id")
         result = lookup(request)
         result["id"] = request_id
+    except CloudflareException as exc:
+        result = {"id": request_id, "ok": False, "reason": "blocked", "message": str(exc)}
+    except RateLimitException as exc:
+        result = {"id": request_id, "ok": False, "reason": "rate_limited", "message": str(exc)}
     except Exception as exc:
         result = {
             "id": request_id,
