@@ -1014,6 +1014,39 @@ function sourceRank(sourceId) {
   return String(sourceId).startsWith('builtin') ? 2 : 1;
 }
 
+// The product code to look a part up by. Prefers a real part number, then the
+// undecorated source name, and falls back to reconstructing one from the
+// display name.
+//
+// That fallback matters: sourceName was added later, so any category synced
+// before it has none, and the display name carries appended detail. A power
+// supply reads "MAG A750GL PCIE5 750W Black", and asking Icecat for that finds
+// nothing, which is why power supplies scored zero out of 3,273 while
+// motherboards, which had been re-synced, scored 28%.
+const DECORATION_RE = new RegExp(
+  '\\s+(?:' +
+  '\\d+(?:\\.\\d+)?(?:W|mm|GB|TB|Hz|rpm)' +      // 750W, 360mm, 2TB, 165Hz, 7200rpm
+  '|CL\\d+' +                                        // CL36
+  '|DDR\\d-\\d+' +                                 // DDR5-6000
+  '|\\d+MB cache' +
+  '|\\d+(?:\\.\\d+)?"' +                         // 3.5"
+  '|M\\.2(?: NVMe| SATA)?|SATA|SSD|HDD' +
+  '|Black|White|Silver|Grey|Gray|Pink|Blue|Red|Green' +
+  ')$', 'i');
+
+function pcProductCode(part) {
+  if (part.mpn && String(part.mpn).trim()) return String(part.mpn).trim();
+  let code = String(part.sourceName || part.name || '').trim();
+  if (!part.sourceName) {
+    // Peel the appended detail back off, one trailing token at a time.
+    let prev = null;
+    while (prev !== code) { prev = code; code = code.replace(DECORATION_RE, '').trim(); }
+  }
+  const brand = String(part.brand || '').trim();
+  if (brand && code.toLowerCase().startsWith(brand.toLowerCase() + ' ')) code = code.slice(brand.length + 1).trim();
+  return code;
+}
+
 // The specs each category needs before the fit checks can run, and therefore
 // what enrichment is trying to obtain. A part already holding all of these is
 // left alone.
@@ -9142,7 +9175,7 @@ const adminServer = http.createServer(async (req, res) => {
       if (aborted) return;
       summary.tried++;
       const result = await icecat.lookup({
-        brand: part.brand, mpn: part.mpn || part.sourceName || part.name, credentials: creds,
+        brand: part.brand, mpn: pcProductCode(part), credentials: creds,
       });
       part.icecatTriedAt = now;
       if (!result.ok) {
