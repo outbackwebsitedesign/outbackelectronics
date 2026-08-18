@@ -4592,6 +4592,14 @@ function PcIcecatEnrich({ onPartsReload }) {
           const st = stats[c.key];
           const pr = progress[c.key];
           const pct = pr && pr.total ? Math.round(((pr.complete + pr.tried) / pr.total) * 100) : 0;
+          // What the selected mode would actually work through. Retry puts the
+          // not-found parts back in the queue and refresh takes everything, so
+          // showing only the never-tried count read as "0 to go" while
+          // thousands were about to be looked up again.
+          const toGo = !pr ? 0
+            : mode === 'refresh' ? pr.total
+            : mode === 'retry' ? pr.outstanding + pr.tried
+            : pr.outstanding;
           return (
             <div key={c.key} className="row-flex" style={{justifyContent:'space-between', gap:10, alignItems:'center', flexWrap:'wrap'}}>
               <span style={{fontSize:13, minWidth:150, flex:1}}>{c.label}
@@ -4612,15 +4620,15 @@ function PcIcecatEnrich({ onPartsReload }) {
                   <span className="mono" style={{fontSize:11, color:'var(--ink-2)', whiteSpace:'nowrap'}}>
                     {pr.complete.toLocaleString()} have specs
                     {pr.tried ? ` · ${pr.tried.toLocaleString()} not found` : ''}
-                    {' · '}{pr.outstanding.toLocaleString()} to go of {pr.total.toLocaleString()}
+                    {' · '}{toGo.toLocaleString()} to {mode === 'refresh' ? 'refresh' : mode === 'retry' ? 'retry' : 'go'} of {pr.total.toLocaleString()}
                   </span>
                 )}
                 <button className="btn btn-ghost btn-sm" onClick={() => runCategory(c.key)}
-                  disabled={!!running || ready === false || (mode === 'new' && pr && pr.outstanding === 0)}>
+                  disabled={!!running || ready === false || (pr && toGo === 0)}>
                   {running === c.key ? 'Working…'
+                    : pr && toGo === 0 ? 'Done'
                     : mode === 'refresh' ? 'Refresh'
                     : mode === 'retry' ? 'Retry'
-                    : pr && pr.outstanding === 0 ? 'Done'
                     : st ? 'Continue' : 'Fill in'}
                 </button>
               </span>
