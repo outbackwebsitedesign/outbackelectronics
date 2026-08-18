@@ -5757,6 +5757,11 @@ function AdminProducts({ sessionInfo = {} }) {
   // Dirty tracking against the last persisted snapshot, so closing the editor
   // with unsaved edits warns instead of silently discarding them.
   const savedSnapRef = React.useRef('{}');
+  // A pending duplicate: the copied fields are parked here, then picked up by
+  // the openId effect when it opens the editor on 'new'. Going through a ref
+  // rather than setForm directly keeps the effect the only thing that seeds the
+  // form, so the two cannot race and blank each other out.
+  const dupRef = React.useRef(null);
   const dirty = JSON.stringify(form) !== savedSnapRef.current;
   // The footer's Cancel closes directly rather than through OrderPage's own
   // back button, so it needs the same guard.
@@ -5775,8 +5780,13 @@ function AdminProducts({ sessionInfo = {} }) {
     setNewCat(false);
     if (openId == null) { setEdit(null); return; }
     if (openId === 'new') {
-      const blank = { id:'', sku:'', status:'draft', cat: catOptions[0] || '', cond: condOptions[0] || '', stock:0, priceAud:0 };
-      setEdit('new'); setForm(blank); savedSnapRef.current = JSON.stringify(blank);
+      const dup = dupRef.current;
+      dupRef.current = null;
+      const blank = dup || { id:'', sku:'', status:'draft', cat: catOptions[0] || '', cond: condOptions[0] || '', stock:0, priceAud:0 };
+      setEdit('new'); setForm(blank);
+      // A duplicate starts dirty on purpose: nothing of it is saved yet, so
+      // closing the editor should warn rather than quietly bin the copy.
+      savedSnapRef.current = dup ? '{}' : JSON.stringify(blank);
       return;
     }
     const r = rows.find(x => x.id === openId);
@@ -5816,6 +5826,26 @@ function AdminProducts({ sessionInfo = {} }) {
     savedSnapRef.current = JSON.stringify(form);
     setSaving(false);
     setOpenId(null);
+  };
+  // Copy the open listing into a fresh, unsaved draft. Everything carries over
+  // except the things that must not be shared between two listings: the id and
+  // SKUs (blank, so the server assigns new ones on save), the published status
+  // and the "was" price, which is a claim about what this particular listing
+  // has actually charged.
+  const duplicate = async () => {
+    if (dirty && !await adminConfirm('This product has unsaved changes. They will be copied into the duplicate but not saved here.\nContinue?', {
+      title: 'Unsaved changes', confirmLabel: 'Duplicate anyway', cancelLabel: 'Keep editing',
+    })) return;
+    const { id: _id, sku: _sku, _inCarts: _c, ...rest } = form;
+    dupRef.current = {
+      ...rest,
+      id: '', sku: '', status: 'draft',
+      name: form.name ? `${form.name} (copy)` : '',
+      was: '', wasPriceConfirmed: false,
+      ...(Array.isArray(form.variants) ? { variants: form.variants.map(v => ({ ...v, sku: '' })) } : {}),
+    };
+    setSaveError(null);
+    setOpenId('new');
   };
   const remove = async () => {
     const item = edit;
@@ -5883,6 +5913,7 @@ function AdminProducts({ sessionInfo = {} }) {
           <div className="row-flex" style={{justifyContent:'space-between'}}>
             {edit!=='new' && <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={remove}>Delete</button>}
             <div className="row-flex" style={{gap:8, marginLeft:'auto'}}>
+              {edit!=='new' && <button className="btn btn-ghost btn-sm" onClick={duplicate}>Duplicate</button>}
               <button className="btn btn-ghost btn-sm" onClick={closeGuarded}>Cancel</button>
               <button className="btn btn-sm" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
             </div>
