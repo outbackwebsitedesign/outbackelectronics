@@ -1056,22 +1056,19 @@ const ICECAT_FIT_SPECS = {
   cooler: ['heightMm', 'sockets'],
   psu: ['lengthMm', 'pcie8pin'],
   gpu: ['tdp'],
-  // The datasets already carry generation, capacity, speed and latency, so the
-  // only thing left worth fetching for memory is the module height, which is
-  // what fouls a tower cooler.
-  ram: ['heightMm'],
 };
 
-// Categories whose listing names are product lines rather than manufacturer
-// product codes, so a name-based lookup cannot work and only parts carrying a
-// real part number are worth attempting.
+// Memory used to sit here as a part-number-only category. It was removed: no
+// public dataset carries a part number, so the library had none, and a category
+// that can only act on parts holding one could never do anything at all.
 //
-// Memory is the clear case: the listings call a kit "Vengeance RGB 32 GB"
-// while Icecat knows it as CMH32GX5M2E6000C36W. Measured at 0 matches from 70
-// tried by name, against an immediate hit for the same kit by part number.
-// Without this the category would spend eleven thousand lookups to learn
-// nothing and mark every part as tried on the way.
-const ICECAT_MPN_ONLY = new Set(['ram']);
+// Memory is not special in needing one either. Its listings name a product line
+// ("Vengeance RGB 32 GB") rather than a code, but so do most cases, and cases
+// match by name only about 2% of the time. The difference is degree, not kind.
+//
+// Part numbers now arrive from successful lookups, so once enough are recorded
+// a memory pass becomes worth adding back.
+const ICECAT_MPN_ONLY = new Set();
 const hasAllSpecs = (p, needed) => needed.every(k => {
   const v = (p.specs || {})[k];
   return v !== undefined && v !== null && v !== '';
@@ -9249,6 +9246,18 @@ const adminServer = http.createServer(async (req, res) => {
       }
       summary.found++;
       part.icecatOutcome = 'found';
+      // Keep the identifiers the datasheet came back with. Nothing else in the
+      // system supplies a part number: no public dataset carries one, so the
+      // library had none at all, which made every part number field decorative
+      // and any lookup depending on one impossible. A successful match is the
+      // one moment the real code is known, so it is recorded, which makes the
+      // part searchable by the number printed on its box and makes any later
+      // lookup exact instead of a guess at the model name.
+      const info = result.data.GeneralInfo || {};
+      const partCode = info.BrandPartCode || info.ProductCode;
+      if (!part.mpn && partCode) part.mpn = String(partCode).trim();
+      const gtins = Array.isArray(info.GTIN) ? info.GTIN : (info.GTIN ? [info.GTIN] : []);
+      if (!part.gtin && gtins.length) part.gtin = String(gtins[0]).trim();
       const mapped = icecat.mapIcecatFeatures(result.data, category);
       const before = JSON.stringify(part.specs || {});
       const owner = { ...(part.specOwner || {}) };

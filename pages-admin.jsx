@@ -4491,10 +4491,6 @@ const ICECAT_CATEGORIES = [
   { key: 'cooler', label: 'CPU coolers', gains: 'height, supported sockets' },
   { key: 'psu', label: 'Power supplies', gains: 'depth, PCIe connectors' },
   { key: 'gpu', label: 'Graphics cards', gains: 'power draw' },
-  // The datasets already carry generation, capacity, speed and latency for
-  // memory, so the only thing worth fetching is the module height, which is
-  // what fouls a tower cooler.
-  { key: 'ram', label: 'Memory', gains: 'module height, for cooler clearance. Needs a part number on the part' },
 ];
 
 function PcIcecatEnrich({ onPartsReload }) {
