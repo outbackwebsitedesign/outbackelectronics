@@ -1056,6 +1056,10 @@ const ICECAT_FIT_SPECS = {
   cooler: ['heightMm', 'sockets'],
   psu: ['lengthMm', 'pcie8pin'],
   gpu: ['tdp'],
+  // The datasets already carry generation, capacity, speed and latency, so the
+  // only thing left worth fetching for memory is the module height, which is
+  // what fouls a tower cooler.
+  ram: ['heightMm'],
 };
 
 function upsertSeedParts(data, items, { sourceId = null, mergeByName = false } = {}) {

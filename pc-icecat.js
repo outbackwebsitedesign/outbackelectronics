@@ -69,6 +69,9 @@ const FEATURE_MAP = {
     ['moduleCount', ['number of modules', 'module count', 'kit size']],
     ['speedMhz', ['memory clock speed', 'memory speed', 'clock speed']],
     ['casLatency', ['cas latency', 'cl']],
+    // Icecat states the module height directly. "Package height" is the box it
+    // ships in, and the exact-match-first rule keeps them apart.
+    ['heightMm', ['height', 'module height', 'memory height']],
     ['colour', ['colour', 'color']],
   ],
   storage: [

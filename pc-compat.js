@@ -100,6 +100,7 @@ export const PC_PART_CATEGORIES = [
       { key: 'capacityGb', label: 'Kit capacity (GB)', type: 'number' },
       { key: 'speedMhz', label: 'Speed (MHz)', type: 'number' },
       { key: 'casLatency', label: 'CAS latency', type: 'number' },
+      { key: 'heightMm', label: 'Module height (mm)', type: 'number' },
     ],
   },
   {
@@ -447,6 +448,24 @@ export function checkBuild(items, parts) {
     const mounts = num(caseS.fanMounts);
     if (mounts != null && fans > mounts) {
       issues.push(issue('warning', 'fan-mounts', `${fans} case fans selected but ${kase.name} has ${mounts} mounting points.`));
+    }
+  }
+
+  // 10b. Tall memory under a large air cooler. A tower cooler overhangs the
+  // first DIMM slots, and heatspreaders above roughly 35mm are what actually
+  // foul it. Neither figure is a hard limit we can prove from the data we
+  // have, since coolers rarely publish their own memory clearance, so this
+  // warns rather than blocks.
+  const TALL_RAM_MM = 35;
+  if (cooler && coolerS.coolerType !== 'Liquid (AIO)') {
+    const tallest = ramRows
+      .map(r => num(r.part.specs?.heightMm))
+      .filter(h => h != null)
+      .sort((a, b) => b - a)[0];
+    if (tallest != null && tallest > TALL_RAM_MM) {
+      issues.push(issue('warning', 'ram-height',
+        `Memory is ${tallest}mm tall and ${cooler.name} is an air cooler.`,
+        'Tower coolers overhang the first memory slots, so check the cooler\'s memory clearance or fit low profile modules.'));
     }
   }
 
