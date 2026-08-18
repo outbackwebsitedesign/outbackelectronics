@@ -377,6 +377,138 @@ function mapMemory(rows) {
   return out;
 }
 
+function mapStorage(rows) {
+  const out = [];
+  for (const r of rows) {
+    const name = cleanName(r.name);
+    if (!name) continue;
+    const specs = {};
+
+    // "M.2 PCIe 4.0 X4", "M.2 PCIe 3.0 X2", "SATA 6 Gb/s", "M.2 SATA", "U.2".
+    // Only the family matters to the compatibility rules: an M.2 drive occupies
+    // an M.2 slot and a SATA drive occupies a SATA port, whatever the revision.
+    const iface = String(r.interface || '');
+    if (/^m\.?2/i.test(iface)) specs.interface = /sata/i.test(iface) ? 'M.2 SATA' : 'M.2 NVMe';
+    else if (/^u\.?2/i.test(iface)) specs.interface = 'U.2';
+    else if (/sata/i.test(iface)) specs.interface = 'SATA';
+
+    // "M.2-2280", "2.5\"", "3.5\"". The physical size decides which bay it
+    // needs, which is what the case bay counts are checked against.
+    const ff = String(r.form_factor || '');
+    if (/^m\.?2/i.test(ff)) specs.driveSize = 'M.2';
+    else if (/2\.5/.test(ff)) specs.driveSize = '2.5"';
+    else if (/3\.5/.test(ff)) specs.driveSize = '3.5"';
+    else if (specs.interface && specs.interface.startsWith('M.2')) specs.driveSize = 'M.2';
+
+    const cap = intCount(r.capacity);
+    if (cap) specs.capacityGb = cap;
+    if (!Object.keys(specs).length) continue;
+
+    const capLabel = cap ? (cap >= 1000 && cap % 1000 === 0 ? `${cap / 1000}TB` : `${cap}GB`) : '';
+    out.push({
+      seedId: variantId('sto-d', name, specs, ['capacityGb', 'interface', 'driveSize']),
+      category: 'storage', brand: brandOf(name),
+      name: withDetail(name, capLabel, specs.interface),
+      specs,
+    });
+  }
+  return out;
+}
+
+function mapCaseFans(rows) {
+  const out = [];
+  for (const r of rows) {
+    const name = cleanName(r.name);
+    if (!name) continue;
+    const specs = {};
+    const size = intCount(r.size);
+    if (size) specs.sizeMm = size;
+    const col = normaliseColour(r.color);
+    if (col) specs.colour = col;
+    if (!Object.keys(specs).length) continue;
+    out.push({
+      seedId: variantId('fan-d', name, specs, ['sizeMm', 'colour']),
+      category: 'fan', brand: brandOf(name),
+      name: withDetail(name, size ? `${size}mm` : '', specs.colour),
+      specs,
+    });
+  }
+  return out;
+}
+
+function mapMonitors(rows) {
+  const out = [];
+  for (const r of rows) {
+    const name = cleanName(r.name);
+    if (!name) continue;
+    const specs = {};
+    const size = Number(r.screen_size);
+    if (Number.isFinite(size) && size > 0) specs.sizeIn = size;
+    const hz = intCount(r.refresh_rate);
+    if (hz) specs.refreshHz = hz;
+    if (!Object.keys(specs).length) continue;
+    // Resolution is what a customer actually picks on, so it goes in the name
+    // even though no compatibility rule reads it.
+    const res = Array.isArray(r.resolution) && r.resolution.length === 2 ? `${r.resolution[0]}x${r.resolution[1]}` : '';
+    out.push({
+      seedId: variantId('mon-d', name, specs, ['sizeIn', 'refreshHz']),
+      category: 'monitor', brand: brandOf(name),
+      name: withDetail(name, size ? `${size}"` : '', res, hz ? `${hz}Hz` : ''),
+      specs,
+    });
+  }
+  return out;
+}
+
+// Accessories and peripherals carry no compatibility rules: nothing about a
+// keyboard can stop a machine booting. They exist so a complete system can be
+// quoted from one build instead of the extras being typed in by hand every
+// time, so the mapper keeps the descriptive detail in the name and records only
+// colour, which the build colour theme reads.
+function makeAccessoryMapper(prefix, category, detail) {
+  return (rows) => {
+    const out = [];
+    for (const r of rows) {
+      const name = cleanName(r.name);
+      if (!name) continue;
+      const specs = {};
+      const col = normaliseColour(r.color);
+      if (col) specs.colour = col;
+      const extras = (detail ? detail(r) : []).filter(Boolean);
+      out.push({
+        seedId: variantId(prefix, name, specs, ['colour']),
+        category, brand: brandOf(name),
+        name: withDetail(name, ...extras, specs.colour),
+        specs,
+      });
+    }
+    return out;
+  };
+}
+
+const ACCESSORY_FILES = [
+  { file: 'thermal-paste', prefix: 'tp-d', category: 'other', detail: r => [r.amount ? `${r.amount}g` : ''] },
+  { file: 'fan-controller', prefix: 'fc-d', category: 'other', detail: r => [r.channels ? `${r.channels} channel` : ''] },
+  { file: 'ups', prefix: 'ups-d', category: 'other', detail: r => [r.capacity_va ? `${r.capacity_va}VA` : '', r.capacity_w ? `${r.capacity_w}W` : ''] },
+  { file: 'sound-card', prefix: 'snd-d', category: 'other', detail: r => [r.channels ? `${r.channels}ch` : ''] },
+  { file: 'wired-network-card', prefix: 'net-d', category: 'other', detail: r => [r.interface] },
+  { file: 'wireless-network-card', prefix: 'wifi-d', category: 'other', detail: r => [r.protocol] },
+  { file: 'case-accessory', prefix: 'acc-d', category: 'other', detail: r => [r.type, r.form_factor] },
+];
+
+const PERIPHERAL_FILES = [
+  { file: 'keyboard', prefix: 'kb-d', category: 'peripheral', detail: r => [r.style, r.switches, r.connection_type] },
+  { file: 'mouse', prefix: 'mou-d', category: 'peripheral', detail: r => [r.connection_type, r.max_dpi ? `${r.max_dpi}dpi` : ''] },
+  { file: 'headphones', prefix: 'hp-d', category: 'peripheral', detail: r => [r.type, r.wireless ? 'wireless' : ''] },
+  { file: 'speakers', prefix: 'spk-d', category: 'peripheral', detail: r => [r.configuration, r.wattage ? `${r.wattage}W` : ''] },
+  { file: 'webcam', prefix: 'cam-d', category: 'peripheral', detail: r => [r.fov ? `${r.fov} FOV` : ''] },
+];
+
+const bundleFiles = (defs) => defs.map(d => ({
+  url: `${RAW_PARTS}/${d.file}.json`,
+  map: makeAccessoryMapper(d.prefix, d.category, d.detail),
+}));
+
 // ── Source registry ──────────────────────────────────────────────────────────
 
 // The built-in catalogs ship in the repo, so they need no network and are the
@@ -469,6 +601,39 @@ const DATA_SOURCES = [
     provenance: 'docyx/pc-part-dataset, scraped from PCPartPicker',
     gives: 'generation, kit size, module count, speed, colour',
     map: mapMemory,
+  },
+  {
+    id: 'storage', label: 'Storage', category: 'storage', format: 'json',
+    url: `${RAW_PARTS}/internal-hard-drive.json`,
+    provenance: 'docyx/pc-part-dataset, scraped from PCPartPicker',
+    gives: 'interface, drive size and capacity, which the M.2 slot, SATA port and drive bay checks read',
+    map: mapStorage,
+  },
+  {
+    id: 'case-fans', label: 'Case fans', category: 'fan', format: 'json',
+    url: `${RAW_PARTS}/case-fan.json`,
+    provenance: 'docyx/pc-part-dataset, scraped from PCPartPicker',
+    gives: 'size and colour',
+    map: mapCaseFans,
+  },
+  {
+    id: 'monitors', label: 'Monitors', category: 'monitor', format: 'json',
+    url: `${RAW_PARTS}/monitor.json`,
+    provenance: 'docyx/pc-part-dataset, scraped from PCPartPicker',
+    gives: 'screen size, resolution and refresh rate, for quoting a complete system',
+    map: mapMonitors,
+  },
+  {
+    id: 'accessories', label: 'Accessories and expansion', category: 'other', kind: 'bundle',
+    provenance: 'docyx/pc-part-dataset, scraped from PCPartPicker',
+    gives: 'thermal paste, fan controllers, UPS units, sound and network cards. Support brackets, cable extensions and risers are not in any dataset and stay manual',
+    files: () => bundleFiles(ACCESSORY_FILES),
+  },
+  {
+    id: 'peripherals', label: 'Peripherals', category: 'peripheral', kind: 'bundle',
+    provenance: 'docyx/pc-part-dataset, scraped from PCPartPicker',
+    gives: 'keyboards, mice, headsets, speakers and webcams, for quoting a complete system',
+    files: () => bundleFiles(PERIPHERAL_FILES),
   },
   // Last on purpose. These fill in the specs the datasets above do not carry,
   // merging into the parts those already created rather than sitting alongside

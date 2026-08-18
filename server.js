@@ -9038,10 +9038,32 @@ const adminServer = http.createServer(async (req, res) => {
     const started = Date.now();
     let items;
     try {
-      // Built-in catalogs ship with the site, so they are read straight off
-      // disk with no network involved and work even when nothing else does.
-      const text = src.kind === 'builtin' ? null : await fetchDataset(src.url);
-      items = parseSource(src, text);
+      if (src.kind === 'builtin') {
+        // Built-in catalogs ship with the site, so they are read straight off
+        // disk with no network involved and work even when nothing else does.
+        items = parseSource(src, null);
+      } else if (src.kind === 'bundle') {
+        // Accessories and peripherals span several small files. One failing
+        // file should not lose the rest, so each is caught on its own and the
+        // failures are reported rather than silently dropped.
+        items = [];
+        const failed = [];
+        for (const file of src.files()) {
+          try {
+            const rows = JSON.parse(await fetchDataset(file.url));
+            items = items.concat(file.map(rows));
+          } catch (err) {
+            failed.push(`${file.url.split('/').pop()} (${err && err.message})`);
+          }
+        }
+        if (!items.length && failed.length) throw new Error(failed.join('; '));
+        if (failed.length) console.error('[pc-datasource]', src.id, 'partial:', failed.join('; '));
+        // Same de-duplication the single-file path applies.
+        const seen = new Set();
+        items = items.filter(i => !seen.has(i.seedId) && seen.add(i.seedId));
+      } else {
+        items = parseSource(src, await fetchDataset(src.url));
+      }
     } catch (err) {
       const data = readPcBuilder();
       const state = { lastAttemptAt: new Date().toISOString(), error: String(err && err.message || err).slice(0, 200) };
