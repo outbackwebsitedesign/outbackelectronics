@@ -1,29 +1,14 @@
-// Icecat lookup: fill a part's specs from the manufacturer's own datasheet.
+// Compatibility-spec enrichment.
 //
-// This is the answer to the specs no bulk dataset carries. Case clearances,
-// cooler heights and motherboard M.2 counts are published by the manufacturer
-// and syndicated through Icecat, matched on manufacturer part number, which is
-// what a supplier quote gives you. It is a per-part lookup rather than a bulk
-// import, which suits ordering per build instead of stocking a range.
-//
-// CommonJS so server.js can require it. Pure apart from the fetch, so the
-// mapping can be tested against a saved response.
-//
-// Credentials come from the environment, as the other integrations do:
-//   ICECAT_USERNAME   the account name from your Icecat registration
-//   ICECAT_APP_KEY    optional, only needed for Full Icecat brands
-//
-// Coverage is not guaranteed. Open Icecat is free for brands that sponsor it;
-// others return 403 asking for a Full Icecat key. The lookup reports which of
-// the two happened rather than just failing, so it is clear whether a miss is
-// a missing product or a brand you are not entitled to.
+// Open Icecat remains the first source. When a product is absent from Open
+// Icecat or restricted to Full Icecat, the lookup falls back to a conservative
+// PCPartPicker detail-page lookup. Both sources are converted into the existing
+// PC builder spec schema by mapIcecatFeatures(), so server.js and the admin UI
+// can keep their existing write path.
 
+const pcpartpicker = require('./pc-partpicker');
 const ICECAT_ENDPOINT = 'https://live.icecat.biz/api';
 
-// Icecat feature names vary by category and by how a brand fills them in, so
-// each spec lists several spellings. Matching is case-insensitive on the
-// normalised name, longest pattern first, and anything unmatched is still
-// returned so staff can map it by hand and so gaps here are visible.
 const FEATURE_MAP = {
   case: [
     ['maxGpuLengthMm', ['maximum video card length', 'maximum graphics card length', 'compatible graphics card length', 'gpu clearance', 'max gpu length', 'video card compatibility']],
@@ -60,12 +45,16 @@ const FEATURE_MAP = {
     ['lengthMm', ['length', 'card length', 'product length', 'graphics card length']],
     ['tdp', ['power consumption', 'tdp', 'graphics card power']],
     ['slotWidth', ['expansion slots occupied', 'slot width', 'number of slots']],
+    ['pcie8pin', ['pcie 8-pin connectors', 'pci express 8-pin connectors', '8-pin pcie connectors']],
+    ['pcie12vhpwr', ['12vhpwr', '12v-2x6', '16-pin power connector']],
     ['colour', ['colour', 'color']],
   ],
   psu: [
     ['wattage', ['total power output', 'power supply wattage', 'output power', 'wattage']],
     ['formFactor', ['power supply form factor', 'psu form factor', 'form factor']],
     ['lengthMm', ['depth', 'length', 'product depth']],
+    ['pcie8pin', ['pcie 6+2-pin connectors', 'pcie 8-pin connectors', 'pci express power connectors']],
+    ['pcie12vhpwr', ['12vhpwr connectors', '12v-2x6 connectors', '16-pin pcie connectors']],
     ['efficiency', ['80 plus certification', 'efficiency certification', '80 plus']],
     ['colour', ['colour', 'color']],
   ],
@@ -91,9 +80,6 @@ const FEATURE_MAP = {
 };
 
 const normalise = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
-
-// Icecat presents values as "355 mm", "4 x SATA", "ATX, Micro-ATX", "Black".
-// Pull the leading number for numeric specs and leave text ones alone.
 function numberFrom(raw) {
   const m = String(raw).replace(/,/g, '').match(/(-?\d+(?:\.\d+)?)/);
   if (!m) return undefined;
@@ -101,84 +87,70 @@ function numberFrom(raw) {
   return Number.isFinite(n) ? n : undefined;
 }
 
-// Which specs are numbers, so the right coercion is applied.
 const NUMERIC_SPECS = new Set([
   'maxGpuLengthMm', 'maxCoolerHeightMm', 'maxPsuLengthMm', 'bays35', 'bays25', 'fanMounts',
   'fansIncluded', 'radiatorMm', 'memorySlots', 'maxMemoryGb', 'm2Slots', 'sataPorts',
   'pcieX16Slots', 'heightMm', 'tdpRating', 'lengthMm', 'tdp', 'slotWidth', 'wattage',
-  'capacityGb', 'moduleCount', 'speedMhz', 'casLatency', 'rpm', 'cacheMb', 'sizeMm',
+  'pcie8pin', 'capacityGb', 'moduleCount', 'speedMhz', 'casLatency', 'rpm', 'cacheMb', 'sizeMm',
 ]);
-
-// Icecat writes free text where our schema wants one of a fixed set. A case
-// listing "ATX, Micro-ATX, Mini-ITX" means it takes up to ATX, so the largest
-// wins; a colour of "Matte Black" is Black. A value that cannot be coerced is
-// dropped rather than stored as something the checker will not understand.
+const BOOL_SPECS = new Set(['pcie12vhpwr']);
 const BOARD_ORDER = ['Mini-ITX', 'Micro-ATX', 'ATX', 'E-ATX'];
 
 function coerceSpec(key, value) {
   const t = String(value).toLowerCase();
-  const pickBoard = () => {
-    const found = BOARD_ORDER.filter(ff => t.includes(ff.toLowerCase().replace('-', ' ')) || t.includes(ff.toLowerCase()));
-    return found.length ? found[found.length - 1] : undefined;
-  };
   switch (key) {
-    case 'maxBoardFormFactor': return pickBoard();
+    case 'maxBoardFormFactor': {
+      const found = BOARD_ORDER.filter(ff => t.includes(ff.toLowerCase().replace('-', ' ')) || t.includes(ff.toLowerCase()));
+      return found.length ? found[found.length - 1] : undefined;
+    }
     case 'formFactor': {
-      // A board states one size, so take the first named rather than the largest.
       const found = BOARD_ORDER.filter(ff => t.includes(ff.toLowerCase().replace('-', ' ')) || t.includes(ff.toLowerCase()));
       return found.length ? found[0] : undefined;
     }
-    case 'psuFormFactor': {
+    case 'psuFormFactor':
       for (const ff of ['SFX-L', 'SFX', 'TFX', 'ATX']) if (t.includes(ff.toLowerCase())) return ff;
       return undefined;
-    }
-    case 'memoryType': {
+    case 'memoryType':
       for (const g of ['DDR5', 'DDR4', 'DDR3']) if (t.includes(g.toLowerCase())) return g;
       return undefined;
-    }
-    case 'interface': {
+    case 'interface':
       if (/m\.?2/.test(t)) return /sata/.test(t) ? 'M.2 SATA' : 'M.2 NVMe';
       if (/u\.?2/.test(t)) return 'U.2';
       if (/sata/.test(t)) return 'SATA';
       return undefined;
-    }
-    case 'driveSize': {
+    case 'driveSize':
       if (/m\.?2/.test(t)) return 'M.2';
       if (/2\.5/.test(t)) return '2.5"';
       if (/3\.5/.test(t)) return '3.5"';
       return undefined;
-    }
-    case 'colour': {
-      for (const [word, out] of [['white','White'],['black','Black'],['silver','Silver'],['grey','Grey'],['gray','Grey'],
-        ['pink','Pink'],['blue','Blue'],['red','Red'],['green','Green'],['wood','Wood / natural']]) {
-        if (t.includes(word)) return out;
-      }
+    case 'colour':
+      for (const [word, out] of [['white','White'],['black','Black'],['silver','Silver'],['grey','Grey'],['gray','Grey'],['pink','Pink'],['blue','Blue'],['red','Red'],['green','Green'],['wood','Wood / natural']]) if (t.includes(word)) return out;
       return undefined;
-    }
     case 'socket': {
-      // "Socket AM5", "LGA 1700", "FCLGA1700" all name the same thing our
-      // vocabulary spells one way.
       const cleaned = String(value).replace(/socket/ig, '').replace(/^fc/i, '').replace(/\s+/g, '').toUpperCase();
       const m = cleaned.match(/(LGA\d+(?:-\d+)?|AM\d\+?|FM\d\+?|STRX?\d|SP\d|G34|C32|SWRX\d)/);
       return m ? m[1] : undefined;
     }
     case 'sockets': {
-      // Coolers list several. Keep them as the array the checker expects.
-      const found = String(value).split(/[,;/]/).map(x => x.trim()).filter(Boolean);
+      const found = Array.isArray(value) ? value : String(value).split(/[,;/]/).map(x => x.trim()).filter(Boolean);
       return found.length ? found : undefined;
     }
     default: return value;
   }
 }
 
-/**
- * Flatten an Icecat response into { specs, matched, unmatched }.
- * `specs` are the values recognised for this category, `matched` explains which
- * Icecat feature produced each one so staff can see the reasoning, and
- * `unmatched` is everything else the datasheet carried, so a spec this mapping
- * does not know about is visible rather than silently dropped.
- */
 function mapIcecatFeatures(data, category) {
+  if (data && data.__pcpartpickerRawSpecs) {
+    const specs = pcpartpicker.mapSpecs(data.__pcpartpickerRawSpecs, category);
+    return {
+      specs,
+      matched: Object.entries(specs).map(([spec, value]) => ({ spec, feature: 'PCPartPicker', raw: value, value })),
+      unmatched: [],
+      source: 'pcpartpicker',
+      sourceUrl: data.__pcpartpickerUrl || '',
+    };
+  }
+
   const groups = (data && data.FeaturesGroups) || [];
   const flat = [];
   for (const g of groups) {
@@ -191,26 +163,14 @@ function mapIcecatFeatures(data, category) {
   }
 
   const rules = FEATURE_MAP[category] || [];
-  const specs = {};
-  const matched = [];
-  const usedFeature = new Set();
-
+  const specs = {}, matched = [], usedFeature = new Set();
   for (const [specKey, patterns] of rules) {
-    // Longest pattern first so "maximum cpu cooler height" wins over "height".
     const sorted = [...patterns].sort((a, b) => b.length - a.length);
     let hit = null;
     for (const pat of sorted) {
       const patTokens = pat.split(' ').filter(Boolean);
       hit = flat.find(f => !usedFeature.has(f.name) && normalise(f.name) === pat)
-        // Every word of the pattern must appear, in any order. Icecat inserts
-        // qualifiers mid-name ("Number of M.2 (M) slots", "PCI Express x16
-        // (Gen 4.x) slots"), which a plain substring match misses even though
-        // the feature is exactly the one wanted.
-        || flat.find(f => {
-          if (usedFeature.has(f.name)) return false;
-          const n = normalise(f.name);
-          return patTokens.every(t => n.includes(t));
-        });
+        || flat.find(f => !usedFeature.has(f.name) && patTokens.every(t => normalise(f.name).includes(t)));
       if (hit) break;
     }
     if (!hit) continue;
@@ -218,8 +178,10 @@ function mapIcecatFeatures(data, category) {
     if (NUMERIC_SPECS.has(specKey)) {
       value = numberFrom(value);
       if (value === undefined) continue;
-    }
-    if (!NUMERIC_SPECS.has(specKey)) {
+    } else if (BOOL_SPECS.has(specKey)) {
+      const t = normalise(value);
+      value = !/^(?:0|no|none|false)$/.test(t);
+    } else {
       value = coerceSpec(specKey, value);
       if (value === undefined) continue;
     }
@@ -227,29 +189,30 @@ function mapIcecatFeatures(data, category) {
     usedFeature.add(hit.name);
     matched.push({ spec: specKey, feature: hit.name, raw: hit.value, value });
   }
-
-  const unmatched = flat.filter(f => !usedFeature.has(f.name));
-  return { specs, matched, unmatched };
+  return { specs, matched, unmatched: flat.filter(f => !usedFeature.has(f.name)), source: 'icecat' };
 }
 
-// Credentials are supplied by the caller, which reads them from Settings,
-// Integrations. The environment is only a fallback for an existing deployment.
 function credentials(supplied) {
   return {
     username: (supplied && supplied.username) || process.env.ICECAT_USERNAME || '',
     appKey: (supplied && supplied.appKey) || process.env.ICECAT_APP_KEY || '',
   };
 }
+function isConfigured() { return !!credentials().username; }
 
-function isConfigured() {
-  return !!credentials().username;
+async function tryPcPartPicker({ brand, mpn }) {
+  const p = await pcpartpicker.lookup({ brand, mpn });
+  if (!p.ok) return p;
+  return {
+    ok: true,
+    data: {
+      __pcpartpickerRawSpecs: p.rawSpecs,
+      __pcpartpickerUrl: p.url,
+    },
+    source: 'pcpartpicker',
+  };
 }
 
-/**
- * Look a product up by GTIN, or by brand plus manufacturer part number.
- * Returns { ok, data } or { ok:false, reason, message } where reason is one of
- * not_configured | not_found | brand_restricted | error.
- */
 async function lookup({ gtin, brand, mpn, lang = 'en', credentials: supplied }) {
   const { username, appKey } = credentials(supplied);
   if (!username) return { ok: false, reason: 'not_configured', message: 'Add an Icecat integration under Settings, Integrations to use lookups.' };
@@ -259,9 +222,6 @@ async function lookup({ gtin, brand, mpn, lang = 'en', credentials: supplied }) 
   if (gtin) params.set('GTIN', String(gtin).trim());
   else {
     const b = String(brand).trim();
-    // Icecat wants the product code without the brand on the front. Our part
-    // names lead with it ("MSI MAG B650 TOMAHAWK WIFI"), and leaving it in
-    // makes every lookup miss.
     let code = String(mpn).trim();
     if (b && code.toLowerCase().startsWith(b.toLowerCase() + ' ')) code = code.slice(b.length + 1).trim();
     params.set('Brand', b);
@@ -273,24 +233,25 @@ async function lookup({ gtin, brand, mpn, lang = 'en', credentials: supplied }) 
   const timer = setTimeout(() => controller.abort(), 20000);
   try {
     const res = await fetch(`${ICECAT_ENDPOINT}?${params}`, { signal: controller.signal });
-    const text = await res.text();
+    const raw = await res.text();
     let body = null;
-    try { body = JSON.parse(text); } catch { /* handled below */ }
-    if (!res.ok) {
-      const msg = (body && (body.Message || body.Error)) || `Icecat returned ${res.status}`;
-      // 403 means the brand is Full Icecat rather than Open Icecat, which is a
-      // subscription question and not a missing product. A wrong username also
-      // comes back as 404, and reporting that as "no match" makes every lookup
-      // look like a coverage problem when it is really a typo in the settings.
-      const reason = /user is unknown|unknown user|invalid user/i.test(msg)
-        ? 'bad_credentials'
-        : res.status === 403 ? 'brand_restricted'
-        : res.status === 404 ? 'not_found'
-        : 'error';
-      return { ok: false, reason, message: msg, status: res.status };
+    try { body = JSON.parse(raw); } catch {}
+    if (res.ok && body && body.data) return { ok: true, data: body.data, source: 'icecat' };
+
+    const msg = (body && (body.Message || body.Error)) || `Icecat returned ${res.status}`;
+    if (/user is unknown|unknown user|invalid user/i.test(msg)) return { ok: false, reason: 'bad_credentials', message: msg, status: res.status };
+
+    if (res.status === 403 || res.status === 404) {
+      const p = await tryPcPartPicker({ brand, mpn });
+      if (p.ok) return p;
+      return {
+        ok: false,
+        reason: res.status === 403 ? 'brand_restricted' : 'not_found',
+        message: `${msg}; PCPartPicker: ${p.reason || 'no match'}`,
+        status: res.status,
+      };
     }
-    if (!body || !body.data) return { ok: false, reason: 'not_found', message: 'No datasheet returned for that product.' };
-    return { ok: true, data: body.data };
+    return { ok: false, reason: 'error', message: msg, status: res.status };
   } catch (err) {
     return { ok: false, reason: 'error', message: err && err.name === 'AbortError' ? 'Icecat timed out.' : String(err && err.message || err) };
   } finally {
