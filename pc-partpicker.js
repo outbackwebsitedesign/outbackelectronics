@@ -1,3 +1,13 @@
+// NOT WIRED TO ANYTHING. Kept for reference only.
+//
+// Automated access to PCPartPicker is against their terms and they enforce it
+// at the IP level. Driving lookups through this module got the shop's own
+// address blocked, which removed PCPartPicker from staff browsers across the
+// whole network, not just from this code. Throttling does not solve that; the
+// block is a response to automated access at all, not to its rate.
+//
+// Do not reconnect this without an arrangement with PCPartPicker.
+
 // PCPartPicker enrichment backed by the maintained Python `pypartpicker`
 // package. A single persistent Python process is shared across lookups so bulk
 // enrichment does not start a new interpreter/session for every part.

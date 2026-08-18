@@ -3,7 +3,9 @@
 // Kept separate from pages-admin.jsx so this can be enabled without making the
 // already-large admin component harder to maintain. The script only calls the
 // existing read-only parts query and single-part Icecat lookup endpoint. That
-// lookup now falls through to PCPartPicker on Open Icecat misses. No save,
+// lookup used to fall through to PCPartPicker on Open Icecat misses. That path
+// has been removed: automated access is against their terms and got the shop's
+// IP blocked. The source column below can therefore only report Icecat now. No save,
 // enrich, import, or other database-writing endpoint is called here.
 
 import { ensureCsrf, getCsrf } from './src/lib/api.js';

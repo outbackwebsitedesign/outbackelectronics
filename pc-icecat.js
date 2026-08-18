@@ -6,7 +6,12 @@
 // PC builder spec schema by mapIcecatFeatures(), so server.js and the admin UI
 // can keep their existing write path.
 
-const pcpartpicker = require('./pc-partpicker');
+// There is deliberately no PCPartPicker fallback here. Automated access is
+// against their terms and they enforce it at the IP level: driving lookups
+// through pc-partpicker.js got the shop's own address blocked, which took
+// PCPartPicker away from staff browsers on the whole network, not just from
+// this code. pc-partpicker.js is kept in the repo but is not wired to
+// anything. Do not reconnect it without an arrangement with PCPartPicker.
 const ICECAT_ENDPOINT = 'https://live.icecat.biz/api';
 
 const FEATURE_MAP = {
@@ -140,17 +145,6 @@ function coerceSpec(key, value) {
 }
 
 function mapIcecatFeatures(data, category) {
-  if (data && data.__pcpartpickerRawSpecs) {
-    const specs = pcpartpicker.mapSpecs(data.__pcpartpickerRawSpecs, category);
-    return {
-      specs,
-      matched: Object.entries(specs).map(([spec, value]) => ({ spec, feature: 'PCPartPicker', raw: value, value })),
-      unmatched: [],
-      source: 'pcpartpicker',
-      sourceUrl: data.__pcpartpickerUrl || '',
-    };
-  }
-
   const groups = (data && data.FeaturesGroups) || [];
   const flat = [];
   for (const g of groups) {
@@ -200,19 +194,6 @@ function credentials(supplied) {
 }
 function isConfigured() { return !!credentials().username; }
 
-async function tryPcPartPicker({ brand, mpn }) {
-  const p = await pcpartpicker.lookup({ brand, mpn });
-  if (!p.ok) return p;
-  return {
-    ok: true,
-    data: {
-      __pcpartpickerRawSpecs: p.rawSpecs,
-      __pcpartpickerUrl: p.url,
-    },
-    source: 'pcpartpicker',
-  };
-}
-
 async function lookup({ gtin, brand, mpn, lang = 'en', credentials: supplied }) {
   const { username, appKey } = credentials(supplied);
   if (!username) return { ok: false, reason: 'not_configured', message: 'Add an Icecat integration under Settings, Integrations to use lookups.' };
@@ -242,12 +223,10 @@ async function lookup({ gtin, brand, mpn, lang = 'en', credentials: supplied }) 
     if (/user is unknown|unknown user|invalid user/i.test(msg)) return { ok: false, reason: 'bad_credentials', message: msg, status: res.status };
 
     if (res.status === 403 || res.status === 404) {
-      const p = await tryPcPartPicker({ brand, mpn });
-      if (p.ok) return p;
       return {
         ok: false,
         reason: res.status === 403 ? 'brand_restricted' : 'not_found',
-        message: `${msg}; PCPartPicker: ${p.reason || 'no match'}`,
+        message: msg,
         status: res.status,
       };
     }
