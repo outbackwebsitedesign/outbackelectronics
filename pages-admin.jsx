@@ -4251,6 +4251,144 @@ function PcFeedImport({ supplier, onClose, onImported }) {
   );
 }
 
+// External spec datasets. One button pulls every source in turn and upserts
+// what it finds; the loop lives here rather than server-side so progress is
+// visible and one slow dataset cannot time out the whole run.
+function PcDataSources({ onPartsReload }) {
+  const [sources, setSources] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [running, setRunning] = useState(null);   // source id currently syncing
+  const [results, setResults] = useState({});     // id -> {ok, summary} | {error}
+  const [stopped, setStopped] = useState(false);
+  const cancelRef = React.useRef(false);
+
+  const load = React.useCallback(() => (
+    fetch('/api/admin/pc-builder/sources', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setSources(d.sources || []))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  ), []);
+  useEffect(() => { load(); }, [load]);
+
+  const syncOne = async (id) => {
+    setRunning(id);
+    const r = await fetch('/api/admin/pc-builder/sources/sync', {
+      method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ sourceId: id }),
+    }).catch(() => null);
+    let outcome;
+    if (!r || !r.ok) {
+      const d = r ? await r.json().catch(() => ({})) : {};
+      outcome = { error: d.message || 'Could not reach the source.' };
+    } else {
+      outcome = await r.json();
+    }
+    setResults(cur => ({ ...cur, [id]: outcome }));
+    setRunning(null);
+    return outcome;
+  };
+
+  const syncAll = async () => {
+    if (!await adminConfirm(
+      `Pull all ${sources.length} datasets and update the parts library?\n\nThis adds parts and fills in missing specs. It never changes prices, and never overwrites a spec you have edited.`,
+      { title:'Update from datasets', confirmLabel:'Update all' })) return;
+    cancelRef.current = false;
+    setStopped(false);
+    setResults({});
+    for (const src of sources) {
+      if (cancelRef.current) { setStopped(true); break; }
+      await syncOne(src.id);
+    }
+    setRunning(null);
+    await load();
+    onPartsReload?.();
+  };
+
+  const totals = Object.values(results).reduce((acc, r) => {
+    if (r && r.summary) { acc.created += r.summary.created; acc.updated += r.summary.updated; acc.kept += r.summary.keptStaffEdits; }
+    if (r && r.error) acc.failed++;
+    return acc;
+  }, { created:0, updated:0, kept:0, failed:0 });
+  const anyResults = Object.keys(results).length > 0;
+
+  return (
+    <>
+      <div className="row-flex" style={{justifyContent:'space-between', gap:10, flexWrap:'wrap', marginBottom:14}}>
+        <p style={{fontSize:12.5, color:'var(--ink-2)', margin:0, maxWidth:620}}>
+          Public specification datasets. Updating pulls each one and fills in specs on parts already in the library,
+          adding any it does not have. Prices are never imported, and a spec you have edited is never overwritten.
+        </p>
+        <div className="row-flex" style={{gap:8}}>
+          {running && (
+            <button className="btn btn-ghost btn-sm" onClick={() => { cancelRef.current = true; }}>Stop after this one</button>
+          )}
+          <button className="btn btn-rust btn-sm" onClick={syncAll} disabled={!!running || loading}>
+            {running ? 'Updating…' : 'Update all from datasets'}
+          </button>
+        </div>
+      </div>
+
+      {anyResults && (
+        <div style={{border:'1px solid var(--line)', padding:'10px 12px', marginBottom:14}}>
+          <span className="mono" style={{fontSize:10.5, letterSpacing:'.1em', color:'var(--ink-2)'}}>THIS RUN</span>
+          <div className="row-flex" style={{gap:18, marginTop:6, flexWrap:'wrap'}}>
+            <span style={{fontSize:13}}><strong className="mono">{totals.created.toLocaleString()}</strong> parts added</span>
+            <span style={{fontSize:13}}><strong className="mono">{totals.updated.toLocaleString()}</strong> specs filled in</span>
+            {totals.kept > 0 && <span style={{fontSize:13, color:'var(--ink-2)'}}><strong className="mono">{totals.kept.toLocaleString()}</strong> left as you edited them</span>}
+            {totals.failed > 0 && <span style={{fontSize:13, color:'var(--rust)'}}><strong className="mono">{totals.failed}</strong> source(s) failed</span>}
+          </div>
+          {stopped && <div style={{fontSize:12, color:'var(--ink-2)', marginTop:5}}>Stopped early, the remaining sources were not touched.</div>}
+        </div>
+      )}
+
+      {loading && <p style={{fontSize:13, color:'var(--ink-2)'}}>Loading sources…</p>}
+      <div style={{display:'grid', gap:10}}>
+        {sources.map(src => {
+          const res = results[src.id];
+          const st = src.state;
+          const isRunning = running === src.id;
+          return (
+            <div key={src.id} style={{border:'1px solid var(--line)', padding:14, opacity: isRunning ? 0.75 : 1}}>
+              <div className="row-flex" style={{justifyContent:'space-between', gap:10, flexWrap:'wrap', alignItems:'flex-start'}}>
+                <div style={{minWidth:0, flex:1}}>
+                  <div className="row-flex" style={{gap:8, alignItems:'center'}}>
+                    <span style={{fontSize:15, fontWeight:600}}>{src.label}</span>
+                    <span className="mono" style={{fontSize:9.5, padding:'1px 6px', background:'var(--bg-deep)', color:'var(--ink-2)'}}>
+                      {categoryLabel(src.category).toUpperCase()}
+                    </span>
+                  </div>
+                  <div style={{fontSize:12.5, color:'var(--ink-2)', marginTop:3}}>Gives: {src.gives}</div>
+                  <div className="mono" style={{fontSize:10.5, color:'var(--ink-3)', marginTop:2}}>{src.provenance}</div>
+                  <div className="mono" style={{fontSize:10.5, color:'var(--ink-3)', marginTop:2}}>
+                    {st && st.lastSyncAt
+                      ? `Last updated ${new Date(st.lastSyncAt).toLocaleString('en-AU')} · ${(st.rows || 0).toLocaleString()} rows read`
+                      : 'Never updated'}
+                    {st && st.error && <span style={{color:'var(--rust)'}}> · last attempt failed: {st.error}</span>}
+                  </div>
+                </div>
+                <button className="btn btn-ghost btn-sm" onClick={async () => { await syncOne(src.id); await load(); onPartsReload?.(); }} disabled={!!running}>
+                  {isRunning ? 'Updating…' : 'Update'}
+                </button>
+              </div>
+              {res && (
+                <div style={{marginTop:8, paddingTop:8, borderTop:'1px solid var(--line)'}}>
+                  {res.error
+                    ? <span style={{fontSize:12.5, color:'var(--rust)'}}>{res.error}</span>
+                    : <span style={{fontSize:12.5}}>
+                        {res.summary.created.toLocaleString()} added · {res.summary.updated.toLocaleString()} specs filled in ·
+                        {' '}{res.summary.unchanged.toLocaleString()} already current
+                        {res.summary.keptStaffEdits > 0 && ` · ${res.summary.keptStaffEdits.toLocaleString()} left as you edited them`}
+                      </span>}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
 function PcSuppliers({ suppliers, onSuppliersChange, onPartsReload }) {
   const [edit, setEdit] = useState(null);
   const [importing, setImporting] = useState(null);
@@ -4726,7 +4864,7 @@ function AdminPcBuilder({ search }) {
     <div style={{padding:32}}>
       <div className="row-flex" style={{justifyContent:'space-between', marginBottom:14, flexWrap:'wrap', gap:10}}>
         <div className="tabs tabs-row" style={{margin:0}}>
-          {[['builds', `Builds (${builds.length})`], ['parts', `Parts library (${partCount.toLocaleString()})`], ['suppliers', `Supplier feeds (${suppliers.length})`]].map(([k, l]) => (
+          {[['builds', `Builds (${builds.length})`], ['parts', `Parts library (${partCount.toLocaleString()})`], ['sources', 'Data sources'], ['suppliers', `Supplier feeds (${suppliers.length})`]].map(([k, l]) => (
             <div key={k} role="button" tabIndex={0} className={`tab ${tab === k ? 'active' : ''}`} style={{cursor:'pointer'}}
               onClick={() => setTab(k)}
               onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setTab(k); } }}>{l}</div>
@@ -4761,6 +4899,8 @@ function AdminPcBuilder({ search }) {
         />
       ) : tab === 'parts' ? (
         <PcPartsLibrary products={products} onLibraryChanged={loadBuilderData}/>
+      ) : tab === 'sources' ? (
+        <PcDataSources onPartsReload={loadBuilderData}/>
       ) : (
         <PcSuppliers suppliers={suppliers} onSuppliersChange={setSuppliers} onPartsReload={loadBuilderData}/>
       )}

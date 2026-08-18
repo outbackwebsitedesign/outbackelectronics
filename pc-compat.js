@@ -438,6 +438,14 @@ export function checkBuild(items, parts) {
     }
   }
 
+  // 11a. A graphics card with no recorded TDP contributes nothing to the power
+  // estimate, which quietly under-sizes the PSU on the one part most likely to
+  // dominate the load. Datasets that carry a card's physical length often carry
+  // no power figure, so this is common and worth saying out loud.
+  if (gpu && num(gpuS.tdp) == null) {
+    issues.push(issue('warning', 'gpu-tdp-unknown', `Power draw not recorded for ${gpu.name}, so the estimate below excludes it.`, 'Add the card\'s TDP before sizing a power supply from that number.'));
+  }
+
   // 11. Display output.
   if (cpu && !gpu && cpuS.integratedGraphics === false) {
     issues.push(issue('error', 'no-display', `${cpu.name} has no integrated graphics and no graphics card is selected.`, 'The machine will boot with no display output.'));

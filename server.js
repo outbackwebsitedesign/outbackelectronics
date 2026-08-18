@@ -9,6 +9,7 @@ const crypto = require('crypto');
 const sharp = require('sharp');
 const PDFDocument = require('pdfkit');
 const POLICY_DEFAULTS = require('./policy-defaults');
+const { DATA_SOURCES, parseSource } = require('./pc-datasources');
 
 const gzipCache = new Map();
 
@@ -810,12 +811,14 @@ function readPcBuilder() {
       parts: Array.isArray(p.parts) ? p.parts : [],
       builds: Array.isArray(p.builds) ? p.builds : [],
       suppliers: Array.isArray(p.suppliers) ? p.suppliers : [],
+      sourceState: p.sourceState && typeof p.sourceState === 'object' ? p.sourceState : {},
     };
-  } catch { return { parts: [], builds: [], suppliers: [] }; }
+  } catch { return { parts: [], builds: [], suppliers: [], sourceState: {} }; }
 }
 function writePcBuilder(data) {
   atomicWriteFile(PC_BUILDER_DB_PATH, JSON.stringify({
     parts: data.parts || [], builds: data.builds || [], suppliers: data.suppliers || [],
+    sourceState: data.sourceState || {},
   }, null, 2));
 }
 // Mirrors partDisplayName() in pc-compat.js: distributor descriptions nearly
@@ -991,6 +994,87 @@ function feedSellPrice(cost, supplier, category) {
   let price = cost * (1 + markup / 100);
   if (!supplier.priceIncludesGst) price *= 1 + (Number(supplier.gstPercent) || 10) / 100;
   return Math.round(price * 100) / 100;
+}
+
+// Upsert catalog parts, keyed by seedId. Shared by the built-in catalog loader
+// and the external dataset sync, so both get the same guarantees: re-running is
+// idempotent, and specs a staff member has edited are never overwritten. Their
+// figure was checked against the manufacturer, the imported one was not.
+//
+// Specs are merged rather than replaced, because different sources fill in
+// different fields: one dataset knows a card's length, another knows its power
+// draw, and a sync of either must not wipe what the other contributed.
+function upsertSeedParts(data, items, { sourceId = null } = {}) {
+  const bySeed = new Map();
+  for (const p of data.parts) if (p.seedId) bySeed.set(p.seedId, p);
+  const now = new Date().toISOString();
+  const summary = { created: 0, updated: 0, unchanged: 0, keptStaffEdits: 0 };
+
+  for (const it of items) {
+    if (!it || !it.seedId || !it.category || !it.name) continue;
+    const specs = it.specs && typeof it.specs === 'object' ? it.specs : {};
+    const existing = bySeed.get(it.seedId);
+    if (existing) {
+      if (existing.specsEditedByStaff) { summary.keptStaffEdits++; continue; }
+      const merged = { ...(existing.specs || {}), ...specs };
+      const changed = JSON.stringify(merged) !== JSON.stringify(existing.specs || {})
+        || existing.name !== it.name || (existing.brand || '') !== (it.brand || '');
+      if (!changed) { summary.unchanged++; continue; }
+      existing.category = it.category;
+      existing.name = it.name;
+      existing.brand = it.brand || '';
+      existing.specs = merged;
+      existing.specsNeedCheck = !!it.verify;
+      if (sourceId) existing.sourceId = sourceId;
+      existing.updatedAt = now;
+      summary.updated++;
+      continue;
+    }
+    data.parts.push({
+      id: 'pcp-seed-' + it.seedId,
+      seedId: it.seedId,
+      sourceId: sourceId || undefined,
+      category: it.category,
+      name: it.name,
+      brand: it.brand || '',
+      sku: '',
+      // Deliberately unpriced. These datasets carry US retail figures that have
+      // nothing to do with what this shop pays or charges.
+      priceAud: 0,
+      cost: 0,
+      stock: null,
+      specs,
+      specsNeedCheck: !!it.verify,
+      notes: '',
+      createdAt: now,
+      updatedAt: now,
+    });
+    bySeed.set(it.seedId, data.parts[data.parts.length - 1]);
+    summary.created++;
+  }
+  return summary;
+}
+
+// Fetch one dataset. Capped and timed out: these are multi-megabyte files from
+// a third party, and a hung or oversized response must not take the shop's
+// admin down with it.
+const DATASET_MAX_BYTES = 60e6;
+const DATASET_TIMEOUT_MS = 90e3;
+
+async function fetchDataset(url) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), DATASET_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { signal: controller.signal, headers: { 'User-Agent': 'outback-electronics-pc-builder' } });
+    if (!res.ok) throw new Error(`source returned ${res.status}`);
+    const len = Number(res.headers.get('content-length') || 0);
+    if (len && len > DATASET_MAX_BYTES) throw new Error('source file is too large');
+    const text = await res.text();
+    if (text.length > DATASET_MAX_BYTES) throw new Error('source file is too large');
+    return text;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // Builds get their own human-readable reference (PCB-0001) so staff can talk
@@ -8870,48 +8954,63 @@ const adminServer = http.createServer(async (req, res) => {
     const items = Array.isArray(body.items) ? body.items : [];
     if (!items.length) return json(res, 400, { error: 'no_items' });
     const data = readPcBuilder();
-    const bySeed = new Map();
-    for (const p of data.parts) if (p.seedId) bySeed.set(p.seedId, p);
-    const now = new Date().toISOString();
-    const summary = { created: 0, updated: 0, keptStaffEdits: 0 };
-
-    for (const it of items) {
-      if (!it || !it.seedId || !it.category || !it.name) continue;
-      const specs = it.specs && typeof it.specs === 'object' ? it.specs : {};
-      const existing = bySeed.get(it.seedId);
-      if (existing) {
-        if (existing.specsEditedByStaff) { summary.keptStaffEdits++; continue; }
-        existing.category = it.category;
-        existing.name = it.name;
-        existing.brand = it.brand || '';
-        existing.specs = specs;
-        existing.specsNeedCheck = !!it.verify;
-        existing.updatedAt = now;
-        summary.updated++;
-        continue;
-      }
-      data.parts.push({
-        id: 'pcp-seed-' + it.seedId,
-        seedId: it.seedId,
-        category: it.category,
-        name: it.name,
-        brand: it.brand || '',
-        sku: '',
-        // Deliberately unpriced: the catalog carries specs, pricing comes from
-        // the shop catalog or a supplier feed.
-        priceAud: 0,
-        cost: 0,
-        stock: null,
-        specs,
-        specsNeedCheck: !!it.verify,
-        notes: '',
-        createdAt: now,
-        updatedAt: now,
-      });
-      summary.created++;
-    }
+    const summary = upsertSeedParts(data, items);
     writePcBuilder(data);
     return json(res, 200, { ok: true, summary, partCount: data.parts.length });
+  }
+
+  // ── External spec datasets ─────────────────────────────────────────────────
+  // Sources are declared in pc-datasources.js. Syncing pulls each file, maps it
+  // into our schema and upserts by seedId, so it can be re-run safely and never
+  // clobbers a spec someone has checked.
+  if (req.method === 'GET' && url.pathname === '/api/admin/pc-builder/sources') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    const data = readPcBuilder();
+    return json(res, 200, {
+      sources: DATA_SOURCES.map(src => ({
+        id: src.id, label: src.label, category: src.category,
+        provenance: src.provenance, gives: src.gives, url: src.url,
+        state: data.sourceState[src.id] || null,
+      })),
+    });
+  }
+
+  // One source per request. The client drives the loop so it can show progress
+  // and so a single slow dataset cannot time out the whole run.
+  if (req.method === 'POST' && url.pathname === '/api/admin/pc-builder/sources/sync') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const src = DATA_SOURCES.find(x => x.id === body.sourceId);
+    if (!src) return json(res, 404, { error: 'source_not_found' });
+
+    const started = Date.now();
+    let items;
+    try {
+      const text = await fetchDataset(src.url);
+      items = parseSource(src, text);
+    } catch (err) {
+      const data = readPcBuilder();
+      const state = { lastAttemptAt: new Date().toISOString(), error: String(err && err.message || err).slice(0, 200) };
+      data.sourceState[src.id] = { ...(data.sourceState[src.id] || {}), ...state };
+      writePcBuilder(data);
+      console.error('[pc-datasource]', src.id, err && err.message);
+      return json(res, 502, { error: 'source_unavailable', message: `Could not read ${src.label}: ${state.error}` });
+    }
+    if (!items.length) return json(res, 422, { error: 'source_empty', message: `${src.label} returned no usable rows.` });
+
+    const data = readPcBuilder();
+    const summary = upsertSeedParts(data, items, { sourceId: src.id });
+    data.sourceState[src.id] = {
+      lastSyncAt: new Date().toISOString(),
+      lastAttemptAt: new Date().toISOString(),
+      rows: items.length,
+      summary,
+      seconds: Math.round((Date.now() - started) / 100) / 10,
+      error: null,
+    };
+    writePcBuilder(data);
+    auditAdminAction({ req, session, action: 'pc-builder.source.sync', result: { status: 'ok', changed: { source: src.id, ...summary } } });
+    return json(res, 200, { ok: true, sourceId: src.id, label: src.label, rows: items.length, summary, partCount: data.parts.length });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/admin/pc-builder/parts/import') {
