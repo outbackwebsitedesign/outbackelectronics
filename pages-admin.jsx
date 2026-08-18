@@ -4481,6 +4481,104 @@ function PcDataSources({ onPartsReload }) {
   );
 }
 
+// Icecat enrichment. The datasets give a broad library but not the fit specs,
+// and the builder is used before anything is ordered, so there is no part
+// number to type and no time for staff to research parts by hand. This fills
+// the gaps ahead of time, by brand and model name, so a build just works.
+const ICECAT_CATEGORIES = [
+  { key: 'case', label: 'Cases', gains: 'GPU clearance, cooler clearance' },
+  { key: 'motherboard', label: 'Motherboards', gains: 'M.2 slots, SATA ports' },
+  { key: 'cooler', label: 'CPU coolers', gains: 'height, supported sockets' },
+  { key: 'psu', label: 'Power supplies', gains: 'depth, PCIe connectors' },
+  { key: 'gpu', label: 'Graphics cards', gains: 'power draw' },
+];
+
+function PcIcecatEnrich({ onPartsReload }) {
+  const [ready, setReady] = useState(null);
+  const [running, setRunning] = useState(null);
+  const [stats, setStats] = useState({});
+  const cancelRef = React.useRef(false);
+
+  useEffect(() => {
+    fetch('/api/admin/pc-builder/icecat/status', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject()).then(d => setReady(!!d.configured)).catch(() => setReady(null));
+  }, []);
+
+  const runCategory = async (cat) => {
+    setRunning(cat);
+    const totals = { tried:0, found:0, filled:0, noMatch:0, restricted:0, failed:0, remaining:0 };
+    // Batched so progress shows and a long run can be stopped part way.
+    for (let i = 0; i < 400; i++) {
+      if (cancelRef.current) break;
+      const r = await fetch('/api/admin/pc-builder/icecat/enrich', {
+        method:'POST', headers:postHeaders(), credentials:'include',
+        body: JSON.stringify({ category: cat, limit: 25 }),
+      }).catch(() => null);
+      if (!r || !r.ok) {
+        const d = r ? await r.json().catch(() => ({})) : {};
+        adminToast(d.message || 'Enrichment failed.');
+        break;
+      }
+      const d = await r.json();
+      for (const k of Object.keys(totals)) totals[k] = k === 'remaining' ? d.summary.remaining : totals[k] + d.summary[k];
+      setStats(cur => ({ ...cur, [cat]: { ...totals } }));
+      if (!d.summary.tried || !d.summary.remaining) break;
+    }
+    setRunning(null);
+    cancelRef.current = false;
+    onPartsReload?.();
+  };
+
+  return (
+    <div style={{border:'1px solid var(--line)', padding:14, marginBottom:14}}>
+      <div className="row-flex" style={{justifyContent:'space-between', gap:10, flexWrap:'wrap', marginBottom:8}}>
+        <div>
+          <div style={{fontSize:15, fontWeight:600}}>Fill in fit specs from Icecat</div>
+          <div style={{fontSize:12.5, color:'var(--ink-2)', marginTop:3, maxWidth:640}}>
+            The datasets above give a broad library but not the specs the fit checks need. This looks parts up by
+            brand and model name and fills those in ahead of time, so a build can be put together and quoted without
+            anyone having to go and find a part number.
+          </div>
+        </div>
+        {running && <button className="btn btn-ghost btn-sm" onClick={() => { cancelRef.current = true; }}>Stop</button>}
+      </div>
+      {ready === false && (
+        <div style={{fontSize:12.5, color:'var(--rust)', marginBottom:8}}>
+          Not set up yet. Add an Icecat integration under Settings, Integrations.
+        </div>
+      )}
+      <div style={{display:'grid', gap:6}}>
+        {ICECAT_CATEGORIES.map(c => {
+          const st = stats[c.key];
+          return (
+            <div key={c.key} className="row-flex" style={{justifyContent:'space-between', gap:10, alignItems:'center', flexWrap:'wrap'}}>
+              <span style={{fontSize:13, minWidth:150}}>{c.label}
+                <span style={{fontSize:11.5, color:'var(--ink-2)'}}> · {c.gains}</span>
+              </span>
+              <span className="row-flex" style={{gap:10, alignItems:'center'}}>
+                {st && (
+                  <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>
+                    {st.filled.toLocaleString()} filled of {st.tried.toLocaleString()} tried
+                    {st.noMatch ? ` · ${st.noMatch.toLocaleString()} no match` : ''}
+                    {st.restricted ? ` · ${st.restricted.toLocaleString()} need a paid key` : ''}
+                    {st.remaining ? ` · ${st.remaining.toLocaleString()} left` : ''}
+                  </span>
+                )}
+                <button className="btn btn-ghost btn-sm" onClick={() => runCategory(c.key)} disabled={!!running || ready === false}>
+                  {running === c.key ? 'Working…' : st ? 'Continue' : 'Fill in'}
+                </button>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <p style={{fontSize:11.5, color:'var(--ink-2)', margin:'10px 0 0'}}>
+        Safe to re-run. Parts already tried are skipped for a month, and a spec you have edited is never overwritten.
+      </p>
+    </div>
+  );
+}
+
 function PcSuppliers({ suppliers, onSuppliersChange, onPartsReload }) {
   const [edit, setEdit] = useState(null);
   const [importing, setImporting] = useState(null);
@@ -5020,7 +5118,10 @@ function AdminPcBuilder({ search }) {
       ) : tab === 'parts' ? (
         <PcPartsLibrary products={products} onLibraryChanged={loadBuilderData}/>
       ) : tab === 'sources' ? (
-        <PcDataSources onPartsReload={loadBuilderData}/>
+        <>
+          <PcIcecatEnrich onPartsReload={loadBuilderData}/>
+          <PcDataSources onPartsReload={loadBuilderData}/>
+        </>
       ) : (
         <PcSuppliers suppliers={suppliers} onSuppliersChange={setSuppliers} onPartsReload={loadBuilderData}/>
       )}

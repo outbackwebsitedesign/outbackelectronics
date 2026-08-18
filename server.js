@@ -1010,8 +1010,20 @@ function feedSellPrice(cost, supplier, category) {
 // nobody claims can always be filled in.
 function sourceRank(sourceId) {
   if (!sourceId) return 0;
+  if (sourceId === 'icecat') return 3;          // the manufacturer's own datasheet
   return String(sourceId).startsWith('builtin') ? 2 : 1;
 }
+
+// The specs each category needs before the fit checks can run, and therefore
+// what enrichment is trying to obtain. A part already holding all of these is
+// left alone.
+const ICECAT_FIT_SPECS = {
+  case: ['maxGpuLengthMm', 'maxCoolerHeightMm'],
+  motherboard: ['m2Slots', 'sataPorts'],
+  cooler: ['heightMm', 'sockets'],
+  psu: ['lengthMm', 'pcie8pin'],
+  gpu: ['tdp'],
+};
 
 function upsertSeedParts(data, items, { sourceId = null, mergeByName = false } = {}) {
   const bySeed = new Map();
@@ -1064,6 +1076,11 @@ function upsertSeedParts(data, items, { sourceId = null, mergeByName = false } =
       const identityOnly = mergedIntoExisting;
       const changed = JSON.stringify(merged) !== JSON.stringify(existing.specs || {})
         || (!identityOnly && (existing.name !== it.name || (existing.brand || '') !== (it.brand || '')));
+      // The undecorated source name is metadata rather than a spec, so it is
+      // recorded even when nothing else moved. Gating it behind the change
+      // check meant an already-current library never gained the one field an
+      // Icecat lookup needs to identify the product.
+      if (it.sourceName && existing.sourceName !== it.sourceName) existing.sourceName = it.sourceName;
       if (!changed) { summary.unchanged++; continue; }
       existing.category = it.category;
       // A part matched by identity keeps the name it already had, which came
@@ -1071,6 +1088,7 @@ function upsertSeedParts(data, items, { sourceId = null, mergeByName = false } =
       if (!mergedIntoExisting) {
         existing.name = it.name;
         existing.brand = it.brand || '';
+        if (it.sourceName) existing.sourceName = it.sourceName;
       }
       existing.specs = merged;
       existing.specOwner = owner;
@@ -1086,6 +1104,10 @@ function upsertSeedParts(data, items, { sourceId = null, mergeByName = false } =
       sourceId: sourceId || undefined,
       category: it.category,
       name: it.name,
+      // The undecorated name from the source. Icecat matches on a product code
+      // and many brands use the model name as exactly that, so this is what an
+      // Icecat lookup can try when no part number has been entered.
+      sourceName: it.sourceName || undefined,
       brand: it.brand || '',
       sku: '',
       // Deliberately unpriced. These datasets carry US retail figures that have
@@ -9037,9 +9059,17 @@ const adminServer = http.createServer(async (req, res) => {
     const session = requireRole(req, res, 'technician'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     const category = body.category || 'other';
-    const result = await icecat.lookup({ gtin: body.gtin, brand: body.brand, mpn: body.mpn, credentials: getIcecatCredentials() });
+    // Falls back to the model name as the product code. Many component brands
+    // use the model name as their Icecat product code, so this succeeds often
+    // enough to be worth trying before asking someone to find the box.
+    const result = await icecat.lookup({
+      gtin: body.gtin, brand: body.brand, mpn: body.mpn || body.productName,
+      credentials: getIcecatCredentials(),
+    });
     if (!result.ok) {
-      const status = result.reason === 'not_configured' ? 503 : result.reason === 'not_found' ? 404 : result.reason === 'brand_restricted' ? 403 : 502;
+      const status = result.reason === 'not_configured' || result.reason === 'bad_credentials' ? 503
+        : result.reason === 'not_found' ? 404
+        : result.reason === 'brand_restricted' ? 403 : 502;
       return json(res, status, { error: result.reason, message: result.message });
     }
     const mapped = icecat.mapIcecatFeatures(result.data, category);
@@ -9050,10 +9080,97 @@ const adminServer = http.createServer(async (req, res) => {
       brand: (info.Brand && (info.Brand.Value || info.Brand)) || body.brand || '',
       specs: mapped.specs,
       matched: mapped.matched,
+      // So the UI can say whether this came from a real part number or a guess
+      // at the model name, which is worth knowing before applying it.
+      matchedBy: body.mpn ? 'part number' : body.gtin ? 'barcode' : 'model name',
       // Everything the datasheet had that this mapping does not know about, so
       // a spec we could be reading is visible rather than silently discarded.
       unmatched: mapped.unmatched.slice(0, 60),
     });
+  }
+
+  // Bulk enrichment. The builder is used before anything is ordered, so there
+  // is no box and no supplier quote to read a part number off, and staff should
+  // not be researching parts by hand. This walks the library looking up parts by
+  // brand and model name, which is what many manufacturers use as their Icecat
+  // product code, and fills in the fit specs no public dataset carries.
+  //
+  // Done in batches the client loops over, so progress is visible and a long
+  // run can be stopped. Parts already tried are skipped, so repeated runs cost
+  // nothing and only reach newly imported parts.
+  if (req.method === 'POST' && url.pathname === '/api/admin/pc-builder/icecat/enrich') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const creds = getIcecatCredentials();
+    if (!creds.username) return json(res, 503, { error: 'not_configured', message: 'Add an Icecat integration under Settings, Integrations first.' });
+
+    const category = body.category;
+    if (!ICECAT_FIT_SPECS[category]) return json(res, 400, { error: 'bad_category' });
+    const limit = Math.min(Math.max(parseInt(body.limit) || 20, 1), 50);
+    const retryDays = 30;
+    const cutoff = Date.now() - retryDays * 864e5;
+
+    const data = readPcBuilder();
+    const needed = ICECAT_FIT_SPECS[category];
+    const candidates = data.parts.filter(p => {
+      if (p.category !== category) return false;
+      if (p.specsEditedByStaff) return false;
+      const specs = p.specs || {};
+      // Only parts still missing something the fit checks need.
+      if (needed.every(k => specs[k] !== undefined && specs[k] !== null && specs[k] !== '')) return false;
+      if (p.icecatTriedAt && Date.parse(p.icecatTriedAt) > cutoff) return false;
+      return !!(p.brand && (p.sourceName || p.name));
+    });
+
+    const batch = candidates.slice(0, limit);
+    const now = new Date().toISOString();
+    const summary = { tried: 0, found: 0, filled: 0, noMatch: 0, restricted: 0, failed: 0, remaining: Math.max(candidates.length - batch.length, 0) };
+    const examples = [];
+
+    for (const part of batch) {
+      summary.tried++;
+      const result = await icecat.lookup({
+        brand: part.brand, mpn: part.mpn || part.sourceName || part.name, credentials: creds,
+      });
+      part.icecatTriedAt = now;
+      if (!result.ok) {
+        if (result.reason === 'not_found') summary.noMatch++;
+        else if (result.reason === 'brand_restricted') summary.restricted++;
+        else summary.failed++;
+        // A credentials problem affects every row, so stop rather than burning
+        // through the library marking thousands of parts as tried.
+        if (result.reason === 'bad_credentials' || result.reason === 'not_configured') {
+          writePcBuilder(data);
+          return json(res, 503, { error: result.reason, message: result.message });
+        }
+        continue;
+      }
+      summary.found++;
+      const mapped = icecat.mapIcecatFeatures(result.data, category);
+      const before = JSON.stringify(part.specs || {});
+      const owner = { ...(part.specOwner || {}) };
+      const merged = { ...(part.specs || {}) };
+      for (const [field, value] of Object.entries(mapped.specs)) {
+        const cur = merged[field];
+        const empty = cur === undefined || cur === null || cur === '';
+        // Icecat is the manufacturer's own datasheet, so it outranks the
+        // scraped listings, but never a figure a staff member has checked.
+        if (empty || sourceRank('icecat') >= sourceRank(owner[field])) {
+          merged[field] = value;
+          owner[field] = 'icecat';
+        }
+      }
+      if (JSON.stringify(merged) !== before) {
+        part.specs = merged;
+        part.specOwner = owner;
+        part.specsNeedCheck = false;
+        part.updatedAt = now;
+        summary.filled++;
+        if (examples.length < 6) examples.push({ name: part.name, gained: needed.filter(k => merged[k] != null) });
+      }
+    }
+    writePcBuilder(data);
+    return json(res, 200, { ok: true, category, summary, examples });
   }
 
   if (req.method === 'GET' && url.pathname === '/api/admin/pc-builder/icecat/status') {

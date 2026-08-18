@@ -265,7 +265,7 @@ function mapMotherboards(rows) {
     if (col) specs.colour = col;
     out.push({
       seedId: variantId('mb-d', name, specs, ['socket', 'colour']),
-      category: 'motherboard', brand: brandOf(name), name: withDetail(name, specs.colour), specs,
+      category: 'motherboard', brand: brandOf(name), sourceName: name, name: withDetail(name, specs.colour), specs,
     });
   }
   return out;
@@ -288,7 +288,7 @@ function mapPowerSupplies(rows) {
     if (!Object.keys(specs).length) continue;
     out.push({
       seedId: variantId('psu-d', name, specs, ['wattage', 'formFactor', 'colour']),
-      category: 'psu', brand: brandOf(name), name: withDetail(name, specs.wattage ? `${specs.wattage}W` : '', specs.colour), specs,
+      category: 'psu', brand: brandOf(name), sourceName: name, name: withDetail(name, specs.wattage ? `${specs.wattage}W` : '', specs.colour), specs,
     });
   }
   return out;
@@ -316,7 +316,7 @@ function mapCases(rows) {
     if (!Object.keys(specs).length) continue;
     out.push({
       seedId: variantId('case-d', name, specs, ['maxBoardFormFactor', 'colour']),
-      category: 'case', brand: brandOf(name), name: withDetail(name, specs.colour), specs,
+      category: 'case', brand: brandOf(name), sourceName: name, name: withDetail(name, specs.colour), specs,
     });
   }
   return out;
@@ -338,7 +338,7 @@ function mapCoolers(rows) {
     if (!Object.keys(specs).length) continue;
     out.push({
       seedId: variantId('cool-d', name, specs, ['radiatorMm', 'colour']),
-      category: 'cooler', brand: brandOf(name), name: withDetail(name, specs.radiatorMm ? `${specs.radiatorMm}mm` : '', specs.colour), specs,
+      category: 'cooler', brand: brandOf(name), sourceName: name, name: withDetail(name, specs.radiatorMm ? `${specs.radiatorMm}mm` : '', specs.colour), specs,
     });
   }
   return out;
@@ -371,7 +371,7 @@ function mapMemory(rows) {
     const speedLabel = specs.memoryType && specs.speedMhz ? `${specs.memoryType}-${specs.speedMhz}` : '';
     out.push({
       seedId: variantId('ram-d', name, specs, ['memoryType', 'capacityGb', 'moduleCount', 'speedMhz', 'casLatency', 'colour']),
-      category: 'ram', brand: brandOf(name), name: withDetail(name, speedLabel, cl ? `CL${cl}` : '', specs.colour), specs,
+      category: 'ram', brand: brandOf(name), sourceName: name, name: withDetail(name, speedLabel, cl ? `CL${cl}` : '', specs.colour), specs,
     });
   }
   return out;
@@ -444,7 +444,7 @@ function mapCaseFans(rows) {
     if (!Object.keys(specs).length) continue;
     out.push({
       seedId: variantId('fan-d', name, specs, ['sizeMm', 'colour']),
-      category: 'fan', brand: brandOf(name),
+      category: 'fan', brand: brandOf(name), sourceName: name,
       name: withDetail(name, size ? `${size}mm` : '', specs.colour),
       specs,
     });
@@ -468,7 +468,7 @@ function mapMonitors(rows) {
     const res = Array.isArray(r.resolution) && r.resolution.length === 2 ? `${r.resolution[0]}x${r.resolution[1]}` : '';
     out.push({
       seedId: variantId('mon-d', name, specs, ['sizeIn', 'refreshHz']),
-      category: 'monitor', brand: brandOf(name),
+      category: 'monitor', brand: brandOf(name), sourceName: name,
       name: withDetail(name, size ? `${size}"` : '', res, hz ? `${hz}Hz` : ''),
       specs,
     });
@@ -493,7 +493,7 @@ function makeAccessoryMapper(prefix, category, detail) {
       const extras = (detail ? detail(r) : []).filter(Boolean);
       out.push({
         seedId: variantId(prefix, name, specs, ['colour']),
-        category, brand: brandOf(name),
+        category, brand: brandOf(name), sourceName: name,
         name: withDetail(name, ...extras, specs.colour),
         specs,
       });

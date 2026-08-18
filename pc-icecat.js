@@ -45,8 +45,8 @@ const FEATURE_MAP = {
     ['memoryType', ['memory type', 'supported memory types', 'internal memory type', 'ram type']],
     ['memorySlots', ['number of memory slots', 'memory slots', 'memory slots type', 'dimm slots']],
     ['maxMemoryGb', ['maximum internal memory', 'max memory', 'maximum memory supported']],
-    ['m2Slots', ['number of m.2 slots', 'm.2 slots', 'm.2 connectors', 'number of m.2 connectors']],
-    ['sataPorts', ['number of sata connectors', 'sata connectors', 'sata iii ports', 'number of serial ata connectors']],
+    ['m2Slots', ['m.2 slots', 'm.2 connectors', 'm.2 sockets']],
+    ['sataPorts', ['sata iii connectors', 'sata connectors', 'serial ata connectors', 'sata ports']],
     ['pcieX16Slots', ['number of pci express x16 slots', 'pci express x16 slots', 'pcie x16 slots']],
   ],
   cooler: [
@@ -200,8 +200,17 @@ function mapIcecatFeatures(data, category) {
     const sorted = [...patterns].sort((a, b) => b.length - a.length);
     let hit = null;
     for (const pat of sorted) {
+      const patTokens = pat.split(' ').filter(Boolean);
       hit = flat.find(f => !usedFeature.has(f.name) && normalise(f.name) === pat)
-        || flat.find(f => !usedFeature.has(f.name) && normalise(f.name).includes(pat));
+        // Every word of the pattern must appear, in any order. Icecat inserts
+        // qualifiers mid-name ("Number of M.2 (M) slots", "PCI Express x16
+        // (Gen 4.x) slots"), which a plain substring match misses even though
+        // the feature is exactly the one wanted.
+        || flat.find(f => {
+          if (usedFeature.has(f.name)) return false;
+          const n = normalise(f.name);
+          return patTokens.every(t => n.includes(t));
+        });
       if (hit) break;
     }
     if (!hit) continue;
@@ -248,7 +257,16 @@ async function lookup({ gtin, brand, mpn, lang = 'en', credentials: supplied }) 
 
   const params = new URLSearchParams({ lang, shopname: username, content: '' });
   if (gtin) params.set('GTIN', String(gtin).trim());
-  else { params.set('Brand', String(brand).trim()); params.set('ProductCode', String(mpn).trim()); }
+  else {
+    const b = String(brand).trim();
+    // Icecat wants the product code without the brand on the front. Our part
+    // names lead with it ("MSI MAG B650 TOMAHAWK WIFI"), and leaving it in
+    // makes every lookup miss.
+    let code = String(mpn).trim();
+    if (b && code.toLowerCase().startsWith(b.toLowerCase() + ' ')) code = code.slice(b.length + 1).trim();
+    params.set('Brand', b);
+    params.set('ProductCode', code);
+  }
   if (appKey) params.set('app_key', appKey);
 
   const controller = new AbortController();
@@ -261,8 +279,14 @@ async function lookup({ gtin, brand, mpn, lang = 'en', credentials: supplied }) 
     if (!res.ok) {
       const msg = (body && (body.Message || body.Error)) || `Icecat returned ${res.status}`;
       // 403 means the brand is Full Icecat rather than Open Icecat, which is a
-      // subscription question and not a missing product. Worth saying plainly.
-      const reason = res.status === 403 ? 'brand_restricted' : res.status === 404 ? 'not_found' : 'error';
+      // subscription question and not a missing product. A wrong username also
+      // comes back as 404, and reporting that as "no match" makes every lookup
+      // look like a coverage problem when it is really a typo in the settings.
+      const reason = /user is unknown|unknown user|invalid user/i.test(msg)
+        ? 'bad_credentials'
+        : res.status === 403 ? 'brand_restricted'
+        : res.status === 404 ? 'not_found'
+        : 'error';
       return { ok: false, reason, message: msg, status: res.status };
     }
     if (!body || !body.data) return { ok: false, reason: 'not_found', message: 'No datasheet returned for that product.' };
