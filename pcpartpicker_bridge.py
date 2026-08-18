@@ -11,9 +11,16 @@ is not starting Python and a HTTP session for every product.
 import json
 import os
 import re
+import shutil
 import sys
 
+# The production service account intentionally has no home directory. Keep any
+# pyppeteer state in /tmp and, critically, use Raspberry Pi OS's native ARM
+# Chromium rather than allowing pyppeteer to download its bundled x86 build.
+os.environ.setdefault("PYPPETEER_HOME", "/tmp/outbackelectronics-pyppeteer")
+
 try:
+    import pyppeteer
     import pypartpicker
     from pypartpicker.errors import CloudflareException, RateLimitException
 except Exception as exc:
@@ -44,11 +51,35 @@ def score(name, brand, query):
     return value
 
 
-# On the Raspberry Pi we do not want pyppeteer downloading an x86 Chromium
-# build. The site is being queried from the shop's normal residential
-# connection, where the ordinary HTML path is what we want. If PCPartPicker
-# presents Cloudflare, report it cleanly and let the caller retry later.
-client = pypartpicker.Client(max_retries=1, retry_delay=0, no_js=True)
+# requests-html, which pypartpicker uses for JS rendering, calls
+# pyppeteer.launch() without an executablePath. Patch that single launch point
+# so Cloudflare challenges are rendered with the Chromium already installed on
+# Raspberry Pi OS. The wrapper leaves every other pyppeteer option intact.
+CHROMIUM = (
+    os.environ.get("PCPARTPICKER_CHROMIUM")
+    or shutil.which("chromium")
+    or shutil.which("chromium-browser")
+)
+if CHROMIUM:
+    _original_launch = pyppeteer.launch
+
+    async def _launch_native_chromium(*args, **kwargs):
+        kwargs.setdefault("executablePath", CHROMIUM)
+        browser_args = list(kwargs.get("args") or [])
+        for flag in ("--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"):
+            if flag not in browser_args:
+                browser_args.append(flag)
+        kwargs["args"] = browser_args
+        return await _original_launch(*args, **kwargs)
+
+    pyppeteer.launch = _launch_native_chromium
+
+# JS rendering is enabled. pypartpicker first attempts a normal HTTP request;
+# if PCPartPicker presents its Cloudflare page, requests-html renders that page
+# in the native browser and retries. Keep retries deliberately low because this
+# runs inside the admin enrichment workflow and should fail cleanly rather than
+# hammering PCPartPicker.
+client = pypartpicker.Client(max_retries=2, retry_delay=2, no_js=False)
 DEFAULT_REGION = os.environ.get("PCPARTPICKER_REGION", "au")
 
 
@@ -58,6 +89,12 @@ def lookup(req):
     region = str(req.get("region") or DEFAULT_REGION or "au").strip().lower()
     if not query:
         return {"ok": False, "reason": "missing_identity"}
+    if not CHROMIUM:
+        return {
+            "ok": False,
+            "reason": "browser_missing",
+            "message": "Chromium was not found. Set PCPARTPICKER_CHROMIUM or install chromium.",
+        }
 
     # Search the model/MPN exactly first. Supplier names often duplicate the
     # brand ("ASRock ASRock ..."), so only add the brand on a second attempt.
@@ -98,7 +135,7 @@ def lookup(req):
     if not url:
         return {"ok": False, "reason": "missing_product_url"}
 
-    part = client.get_part(url)
+    part = client.get_part(url, region=region)
     specs = getattr(part, "specs", None) or {}
     if not specs:
         return {"ok": False, "reason": "no_specs", "url": url}
