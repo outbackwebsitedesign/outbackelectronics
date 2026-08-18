@@ -3512,6 +3512,16 @@ function PcPartEditor({ part, onClose, onSaved, onDeleted }) {
   // manufacturer part number. Results are shown for confirmation rather than
   // applied straight away, because a datasheet can describe a near neighbour.
   const [icecat, setIcecat] = useState(null);   // null | {loading} | result | {error}
+  // Whether Icecat is configured at all, so the editor can say "not set up"
+  // rather than offering a button that always fails.
+  const [icecatReady, setIcecatReady] = useState(null);
+  useEffect(() => {
+    fetch('/api/admin/pc-builder/icecat/status', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setIcecatReady(!!d.configured))
+      .catch(() => setIcecatReady(null));
+  }, []);
+  const hasLookupKey = !!((form.mpn && form.mpn.trim()) || (form.gtin && form.gtin.trim()));
   const doIcecat = async () => {
     setIcecat({ loading: true });
     const r = await fetch('/api/admin/pc-builder/icecat/lookup', {
@@ -3613,13 +3623,25 @@ function PcPartEditor({ part, onClose, onSaved, onDeleted }) {
         </p>
       )}
 
-      {(form.mpn || form.gtin) && (
-        <div style={{marginTop:14}}>
-          <button className="btn btn-ghost btn-sm" onClick={doIcecat} disabled={icecat && icecat.loading}>
+      {/* Always visible, not hidden until a part number is typed. Parts that
+          came from a dataset have no part number, and those are exactly the
+          ones whose specs need filling in, so hiding the button put it out of
+          reach precisely when it was wanted. */}
+      <div style={{background:'var(--bg-deep)', padding:'10px 12px', marginTop:16}}>
+        <div className="row-flex" style={{gap:10, alignItems:'center', flexWrap:'wrap'}}>
+          <button className="btn btn-ghost btn-sm" onClick={doIcecat}
+            disabled={(icecat && icecat.loading) || !hasLookupKey || icecatReady === false}>
             {icecat && icecat.loading ? 'Looking up…' : 'Fetch specs from Icecat'}
           </button>
+          <span style={{fontSize:11.5, color:'var(--ink-2)', flex:1, minWidth:180}}>
+            {icecatReady === false
+              ? 'Not set up yet. Add an Icecat integration under Settings, Integrations.'
+              : !hasLookupKey
+              ? 'Enter the manufacturer part number or barcode above first, from the box or the supplier quote.'
+              : `Looks up ${[form.brand, form.mpn || form.gtin].filter(Boolean).join(' ')} and fills in the specs it publishes.`}
+          </span>
         </div>
-      )}
+      </div>
       {icecat && icecat.error && (
         <div style={{background:'#f9e2d6', borderLeft:'3px solid var(--rust)', padding:'8px 10px', marginTop:10}}>
           <span style={{fontSize:12.5}}>{icecat.error}</span>
