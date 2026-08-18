@@ -1,12 +1,5 @@
 #!/usr/bin/env python3
-"""Persistent JSON-lines bridge between Node and pypartpicker.
-
-stdin:  one JSON object per line: {"id":..., "brand":..., "mpn":..., "model":...}
-stdout: one JSON object per line with the same id.
-
-The process keeps a single pypartpicker Client alive so a bulk enrichment run
-is not starting Python and a HTTP session for every product.
-"""
+"""Persistent JSON-lines bridge between Node and pypartpicker."""
 
 import json
 import os
@@ -14,14 +7,12 @@ import re
 import shutil
 import sys
 
-# The production service account intentionally has no home directory. Keep any
-# pyppeteer state in /tmp and, critically, use Raspberry Pi OS's native ARM
-# Chromium rather than allowing pyppeteer to download its bundled x86 build.
 os.environ.setdefault("PYPPETEER_HOME", "/tmp/outbackelectronics-pyppeteer")
 
 try:
     import pyppeteer
     import pypartpicker
+    from requests_html import HTMLSession
     from pypartpicker.errors import CloudflareException, RateLimitException
 except Exception as exc:
     print(json.dumps({"fatal": "dependency_missing", "message": str(exc)}), flush=True)
@@ -51,22 +42,24 @@ def score(name, brand, query):
     return value
 
 
-# requests-html, which pypartpicker uses for JS rendering, calls
-# pyppeteer.launch() without an executablePath. Patch that single launch point
-# so Cloudflare challenges are rendered with the Chromium already installed on
-# Raspberry Pi OS. The wrapper leaves every other pyppeteer option intact.
 CHROMIUM = (
     os.environ.get("PCPARTPICKER_CHROMIUM")
     or shutil.which("chromium")
     or shutil.which("chromium-browser")
 )
+
 if CHROMIUM:
     _original_launch = pyppeteer.launch
 
     async def _launch_native_chromium(*args, **kwargs):
         kwargs.setdefault("executablePath", CHROMIUM)
         browser_args = list(kwargs.get("args") or [])
-        for flag in ("--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"):
+        for flag in (
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-gpu",
+        ):
             if flag not in browser_args:
                 browser_args.append(flag)
         kwargs["args"] = browser_args
@@ -74,12 +67,68 @@ if CHROMIUM:
 
     pyppeteer.launch = _launch_native_chromium
 
-# JS rendering is enabled. pypartpicker first attempts a normal HTTP request;
-# if PCPartPicker presents its Cloudflare page, requests-html renders that page
-# in the native browser and retries. Keep retries deliberately low because this
-# runs inside the admin enrichment workflow and should fail cleanly rather than
-# hammering PCPartPicker.
-client = pypartpicker.Client(max_retries=2, retry_delay=2, no_js=False)
+
+# pypartpicker 2.0.5 only renders a page whose title is "Just a moment...".
+# PCPartPicker currently returns "Verification"/"Unavailable" to our search
+# requests, which pypartpicker labels RateLimitException *without ever invoking
+# Chromium*. Use a custom response retriever so those verification pages get the
+# same browser-render attempt before we conclude that the connection is blocked.
+_session = HTMLSession()
+
+
+def _title(response):
+    try:
+        node = response.html.find("title", first=True)
+        return (node.text if node is not None else "").strip()
+    except Exception:
+        return ""
+
+
+def _page_title(response):
+    try:
+        node = response.html.find(".pageTitle", first=True)
+        return (node.text if node is not None else "").strip()
+    except Exception:
+        return ""
+
+
+def _challenge_kind(response):
+    title = _title(response)
+    page_title = _page_title(response)
+    if title == "Just a moment...":
+        return "cloudflare"
+    if title == "Unavailable" or page_title == "Verification":
+        return "verification"
+    return None
+
+
+def response_retriever(url):
+    response = _session.get(url, timeout=20)
+    challenge = _challenge_kind(response)
+    if challenge and CHROMIUM:
+        try:
+            # Render the actual requested URL in the Pi's installed Chromium.
+            # sleep gives PCPartPicker's verification JS a chance to complete.
+            response.html.render(timeout=45, sleep=4, reload=True, keep_page=False)
+        except Exception as exc:
+            if challenge == "verification":
+                raise RateLimitException(f"PCPartPicker verification could not be rendered: {exc}")
+            raise CloudflareException(f"PCPartPicker Cloudflare challenge could not be rendered: {exc}")
+        challenge = _challenge_kind(response)
+
+    if challenge == "verification":
+        raise RateLimitException(f"PCPartPicker verification/rate-limit still active after browser render: {url}")
+    if challenge == "cloudflare":
+        raise CloudflareException(f"PCPartPicker Cloudflare challenge still active after browser render: {url}")
+    return response
+
+
+client = pypartpicker.Client(
+    max_retries=1,
+    retry_delay=0,
+    no_js=False,
+    response_retriever=response_retriever,
+)
 DEFAULT_REGION = os.environ.get("PCPARTPICKER_REGION", "au")
 
 
@@ -96,8 +145,6 @@ def lookup(req):
             "message": "Chromium was not found. Set PCPARTPICKER_CHROMIUM or install chromium.",
         }
 
-    # Search the model/MPN exactly first. Supplier names often duplicate the
-    # brand ("ASRock ASRock ..."), so only add the brand on a second attempt.
     queries = [query]
     if brand and norm(brand) not in norm(query).split():
         queries.append(f"{brand} {query}")
@@ -106,7 +153,10 @@ def lookup(req):
     seen = set()
     for q in queries:
         result = client.get_part_search(q, region=region)
-        for part in getattr(result, "parts", []) or []:
+        # pypartpicker returns a bare list when search redirects directly to a
+        # product page, despite its annotated PartSearchResult return type.
+        candidates = result if isinstance(result, list) else (getattr(result, "parts", []) or [])
+        for part in candidates:
             url = getattr(part, "url", None)
             key = url or getattr(part, "name", "")
             if key and key not in seen:
