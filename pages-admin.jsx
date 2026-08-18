@@ -4491,6 +4491,10 @@ const ICECAT_CATEGORIES = [
   { key: 'cooler', label: 'CPU coolers', gains: 'height, supported sockets' },
   { key: 'psu', label: 'Power supplies', gains: 'depth, PCIe connectors' },
   { key: 'gpu', label: 'Graphics cards', gains: 'power draw' },
+  // The datasets already carry generation, capacity, speed and latency for
+  // memory, so the only thing worth fetching is the module height, which is
+  // what fouls a tower cooler.
+  { key: 'ram', label: 'Memory', gains: 'module height, for cooler clearance. Needs a part number on the part' },
 ];
 
 function PcIcecatEnrich({ onPartsReload }) {
@@ -4604,14 +4608,21 @@ function PcIcecatEnrich({ onPartsReload }) {
             <div key={c.key} className="row-flex" style={{justifyContent:'space-between', gap:10, alignItems:'center', flexWrap:'wrap'}}>
               <span style={{fontSize:13, minWidth:150, flex:1}}>{c.label}
                 <span style={{fontSize:11.5, color:'var(--ink-2)'}}> · {c.gains}</span>
+                {pr && pr.mpnOnly && pr.total === 0 && (
+                  <span style={{display:'block', fontSize:11.5, color:'var(--ink-2)', marginTop:3}}>
+                    Nothing to look up yet. Memory is identified by part number, not model name, so this only
+                    reaches parts where a manufacturer part number has been entered.
+                  </span>
+                )}
                 {pr && pr.total > 0 && (
                   // Green for parts that came back with specs, rust for ones
                   // looked up and not found. Both are progress, but only one is
                   // useful, and a single bar hid which was which.
                   <span style={{display:'flex', height:4, background:'var(--line)', marginTop:5, maxWidth:280, overflow:'hidden'}}
-                    title={`${pr.complete.toLocaleString()} with specs, ${pr.tried.toLocaleString()} not found, ${pr.outstanding.toLocaleString()} still to try`}>
+                    title={`${pr.complete.toLocaleString()} with specs, ${(pr.notFound || 0).toLocaleString()} no match, ${(pr.restricted || 0).toLocaleString()} need a paid key, ${pr.outstanding.toLocaleString()} still to try`}>
                     <span style={{height:4, width:`${(pr.complete / pr.total) * 100}%`, background:'#345526'}}/>
-                    <span style={{height:4, width:`${(pr.tried / pr.total) * 100}%`, background:'var(--rust)', opacity:0.55}}/>
+                    <span style={{height:4, width:`${((pr.restricted || 0) / pr.total) * 100}%`, background:'var(--ochre)'}}/>
+                    <span style={{height:4, width:`${((pr.notFound || 0) / pr.total) * 100}%`, background:'var(--rust)', opacity:0.55}}/>
                   </span>
                 )}
               </span>
@@ -4619,7 +4630,9 @@ function PcIcecatEnrich({ onPartsReload }) {
                 {pr && (
                   <span className="mono" style={{fontSize:11, color:'var(--ink-2)', whiteSpace:'nowrap'}}>
                     {pr.complete.toLocaleString()} have specs
-                    {pr.tried ? ` · ${pr.tried.toLocaleString()} not found` : ''}
+                    {pr.notFound ? ` · ${pr.notFound.toLocaleString()} no match` : ''}
+                    {pr.restricted ? ` · ${pr.restricted.toLocaleString()} need a paid key` : ''}
+                    {pr.errored ? ` · ${pr.errored.toLocaleString()} failed` : ''}
                     {' · '}{toGo.toLocaleString()} to {mode === 'refresh' ? 'refresh' : mode === 'retry' ? 'retry' : 'go'} of {pr.total.toLocaleString()}
                   </span>
                 )}
@@ -4643,7 +4656,10 @@ function PcIcecatEnrich({ onPartsReload }) {
             <span style={{width:10, height:4, background:'#345526', display:'inline-block'}}/> with specs
           </span>
           <span className="row-flex" style={{gap:5, alignItems:'center'}}>
-            <span style={{width:10, height:4, background:'var(--rust)', opacity:0.55, display:'inline-block'}}/> looked up, not found
+            <span style={{width:10, height:4, background:'var(--ochre)', display:'inline-block'}}/> held by Icecat, needs a paid key
+          </span>
+          <span className="row-flex" style={{gap:5, alignItems:'center'}}>
+            <span style={{width:10, height:4, background:'var(--rust)', opacity:0.55, display:'inline-block'}}/> looked up, no such product
           </span>
           <span className="row-flex" style={{gap:5, alignItems:'center'}}>
             <span style={{width:10, height:4, background:'var(--line)', display:'inline-block'}}/> still to try
@@ -4651,7 +4667,9 @@ function PcIcecatEnrich({ onPartsReload }) {
         </span>
         A full pass over every category takes a while, so leave it running. Stopping is safe: the figures above are
         counted from the library itself, so they carry across restarts and a resumed run picks up where it left off.
-        Not-found parts are left alone for a month, unless you pick Retry above. Refresh re-fetches parts that already
+        Parts needing a paid key are the ones a Full Icecat subscription would unlock, so that figure is the one
+        worth watching if you are deciding whether to pay. Tried parts are left alone for a month, unless you pick
+        Retry above. Refresh re-fetches parts that already
         have specs, to pick up a corrected datasheet. Neither ever overwrites a spec you have edited yourself.
       </p>
     </div>

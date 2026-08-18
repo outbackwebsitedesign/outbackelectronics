@@ -1062,6 +1062,18 @@ const ICECAT_FIT_SPECS = {
   ram: ['heightMm'],
 };
 
+// Categories whose listing names are product lines rather than manufacturer
+// product codes, so a name-based lookup cannot work and only parts carrying a
+// real part number are worth attempting.
+//
+// Memory is the clear case: the listings call a kit "Vengeance RGB 32 GB"
+// while Icecat knows it as CMH32GX5M2E6000C36W. Measured at 0 matches from 70
+// tried by name, against an immediate hit for the same kit by part number.
+// Without this the category would spend eleven thousand lookups to learn
+// nothing and mark every part as tried on the way.
+const ICECAT_MPN_ONLY = new Set(['ram']);
+const icecatHasMpn = (p) => !!(p.mpn && String(p.mpn).trim());
+
 function upsertSeedParts(data, items, { sourceId = null, mergeByName = false } = {}) {
   const bySeed = new Map();
   for (const p of data.parts) if (p.seedId) bySeed.set(p.seedId, p);
@@ -9160,6 +9172,7 @@ const adminServer = http.createServer(async (req, res) => {
       if (p.category !== category) return false;
       // A figure someone has checked is never re-fetched, in any mode.
       if (p.specsEditedByStaff) return false;
+      if (ICECAT_MPN_ONLY.has(category) && !icecatHasMpn(p)) return false;
       if (mode !== 'refresh' && hasAll(p)) return false;
       if (mode === 'new' && p.icecatTriedAt && Date.parse(p.icecatTriedAt) > cutoff) return false;
       return !!(p.brand && (p.sourceName || p.name));
@@ -9183,6 +9196,12 @@ const adminServer = http.createServer(async (req, res) => {
       });
       part.icecatTriedAt = now;
       if (!result.ok) {
+        // Why it failed is kept on the part. "No such product" and "this brand
+        // needs a paid subscription" are very different: the second is a
+        // product Icecat holds and we are simply not entitled to read, so the
+        // count of those is what says whether paying would be worth it.
+        part.icecatOutcome = result.reason === 'brand_restricted' ? 'restricted'
+          : result.reason === 'not_found' ? 'not_found' : 'error';
         if (result.reason === 'not_found') summary.noMatch++;
         else if (result.reason === 'brand_restricted') summary.restricted++;
         else summary.failed++;
@@ -9192,6 +9211,7 @@ const adminServer = http.createServer(async (req, res) => {
         return;
       }
       summary.found++;
+      part.icecatOutcome = 'found';
       const mapped = icecat.mapIcecatFeatures(result.data, category);
       const before = JSON.stringify(part.specs || {});
       const owner = { ...(part.specOwner || {}) };
@@ -9234,17 +9254,29 @@ const adminServer = http.createServer(async (req, res) => {
     const data = readPcBuilder();
     const progress = {};
     for (const [cat, needed] of Object.entries(ICECAT_FIT_SPECS)) {
-      const parts = data.parts.filter(p => p.category === cat);
+      // For part-number-only categories, count only the parts that can
+      // actually be looked up, so the totals do not imply work that cannot
+      // happen.
+      const parts = data.parts.filter(p => p.category === cat && (!ICECAT_MPN_ONLY.has(cat) || icecatHasMpn(p)));
       const complete = parts.filter(p => needed.every(k => {
         const v = (p.specs || {})[k];
         return v !== undefined && v !== null && v !== '';
       }));
-      const tried = parts.filter(p => p.icecatTriedAt && !complete.includes(p));
+      const done = new Set(complete);
+      const tried = parts.filter(p => p.icecatTriedAt && !done.has(p));
+      const restricted = tried.filter(p => p.icecatOutcome === 'restricted');
+      const errored = tried.filter(p => p.icecatOutcome === 'error');
       progress[cat] = {
+        mpnOnly: ICECAT_MPN_ONLY.has(cat),
         total: parts.length,
         complete: complete.length,
         tried: tried.length,
-        // What a run would still attempt.
+        // Held by Icecat but behind a Full Icecat subscription.
+        restricted: restricted.length,
+        // Looked up, no such product. Parts tried before this outcome was
+        // recorded fall here too, since there is no way to tell retrospectively.
+        notFound: tried.length - restricted.length - errored.length,
+        errored: errored.length,
         outstanding: parts.length - complete.length - tried.length,
       };
     }
