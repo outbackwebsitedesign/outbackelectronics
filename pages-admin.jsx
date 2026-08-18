@@ -4605,7 +4605,28 @@ function PcVendorFetch({ onPartsReload }) {
     onPartsReload?.();
   };
 
+  // Re-checks everything this panel has written and removes what could not be
+  // true. The first version of the page parser paired section headings with
+  // each other and stored chipset "Memory" and socket "CPU" as though they were
+  // readings, so anything written before it validated needs clearing out. Parts
+  // it clears go back to never-tried so a later run reads them again.
+  const repair = async () => {
+    setBusy('repair');
+    const r = await fetch('/api/admin/pc-builder/vendor/repair', {
+      method:'POST', headers:postHeaders(), credentials:'include', body: '{}',
+    }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : {};
+    if (!r || !r.ok) adminToast(d.message || 'Could not check the stored values.');
+    else if (!d.cleared) adminToast(`Checked ${d.checked.toLocaleString()} values, all of them plausible.`);
+    else adminToast(`Removed ${d.cleared.toLocaleString()} impossible values from ${d.partsAffected.toLocaleString()} parts.`);
+    setBusy(null);
+    load();
+    onPartsReload?.();
+  };
+
   const vendors = status?.vendors || [];
+  // "Psu" and "Gpu" read as typos in a list of proper words.
+  const categoryLabel = (c) => ({ psu:'PSU', gpu:'GPU', cpu:'CPU', ram:'Memory', os:'Operating system' }[c] || c);
 
   return (
     <div style={{border:'1px solid var(--line)', padding:14, marginBottom:14}}>
@@ -4623,6 +4644,9 @@ function PcVendorFetch({ onPartsReload }) {
             <option value="retry">Try everything again</option>
           </select>
           {busy && <button className="btn btn-ghost btn-sm" onClick={() => { cancelRef.current = true; }}>Stop</button>}
+          <button className="btn btn-ghost btn-sm" onClick={repair} disabled={!!busy}>
+            {busy === 'repair' ? 'Checking…' : 'Check stored values'}
+          </button>
         </div>
       </div>
 
@@ -4661,7 +4685,7 @@ function PcVendorFetch({ onPartsReload }) {
                 const imgPct = c.total ? Math.round((c.withImage / c.total) * 100) : 0;
                 return (
                   <div key={cat} className="row-flex" style={{gap:10, alignItems:'center'}}>
-                    <span style={{fontSize:12, width:96, textTransform:'capitalize'}}>{cat}</span>
+                    <span style={{fontSize:12, width:96, textTransform:'capitalize'}}>{categoryLabel(cat)}</span>
                     <span style={{flex:1, minWidth:120}}>
                       <span style={{display:'block', height:6, background:'var(--bg-deep)', border:'1px solid var(--line)'}}>
                         <span style={{display:'block', height:'100%', width:`${pct}%`, background:'var(--rust)'}}/>

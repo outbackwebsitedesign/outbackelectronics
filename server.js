@@ -9361,10 +9361,9 @@ const adminServer = http.createServer(async (req, res) => {
     const urls = index.urls.filter(u => !category || u.category === category).map(u => u.url);
     if (!urls.length) return json(res, 200, { ok: true, summary: { tried: 0, remaining: 0 }, note: 'No indexed pages for that category.' });
 
-    const brands = new Set(v.brands.map(b => b.toLowerCase()));
     const candidates = data.parts.filter(p => {
       if (category && p.category !== category) return false;
-      if (!brands.has(String(p.brand || '').trim().toLowerCase())) return false;
+      if (!vendor.vendorMatchesPart(v, p)) return false;
       if (p.specsEditedByStaff) return false;
       if (mode === 'new' && p.vendorTriedAt) return false;
       return true;
@@ -9429,10 +9428,19 @@ const adminServer = http.createServer(async (req, res) => {
       // in it points at the same file.
       const key = partImages.imageKey(part);
       if (!partImages.hasImage(key)) {
+        // Some vendors split the specs and the pictures across two URLs. Asus
+        // puts the table on a /spec tab that carries no images at all, which
+        // is why it read specs for every board and stored no photo for any of
+        // them. Where that is the case the product page is fetched as well.
+        let imageHtml = page.html, imageBase = page.url;
+        if (v.imagePath && v.imagePath(match.url) !== pageUrl) {
+          const imgPage = await vendor.fetchPage(v.imagePath(match.url));
+          if (imgPage.ok) { imageHtml = imgPage.html; imageBase = imgPage.url; }
+        }
         // The part is passed in so the picture is chosen for this exact
         // colourway. Without it, every Meshify 3 shares one photo whatever
         // colour it is.
-        const src = vendor.extractImage(page.html, page.url, part, v.brands);
+        const src = vendor.extractImage(imageHtml, imageBase, part, v.brands);
         if (src) {
           const img = await vendor.fetchBinary(src);
           if (img.ok) {
@@ -9461,13 +9469,58 @@ const adminServer = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true, vendorId: v.id, category, summary, examples, blocked: blockedRun });
   }
 
+  // Undo a bad fetch.
+  //
+  // The first version of the page parser paired a label with whatever text
+  // followed it, which on a page that is a run of section headings pairs each
+  // heading with the next one. Asus's spec tab is exactly that, and it wrote
+  // chipset "Memory", memory type "Graphics" and socket "CPU" into the library
+  // as though they were readings. The parser validates now, but values written
+  // before it did are still sitting there, and a wrong spec is worse than a
+  // missing one because the fit checks act on it.
+  //
+  // This re-checks every spec the vendor fetch owns and removes the ones that
+  // could not be true, leaving specs from other sources and anything a staff
+  // member has edited untouched. Parts it clears are put back to never-tried so
+  // a later run can read them again properly.
+  if (req.method === 'POST' && url.pathname === '/api/admin/pc-builder/vendor/repair') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    const data = readPcBuilder();
+    let checked = 0, cleared = 0, partsAffected = 0;
+    const examples = [];
+    for (const part of data.parts) {
+      if (!part.specOwner || part.specsEditedByStaff) continue;
+      let touched = false;
+      for (const [field, owner] of Object.entries(part.specOwner)) {
+        if (owner !== 'vendor') continue;
+        checked++;
+        const value = (part.specs || {})[field];
+        if (value === undefined || value === null || value === '') continue;
+        if (vendor.validate(field, value) !== null) continue;
+        if (examples.length < 10) examples.push({ name: part.name, field, was: value });
+        delete part.specs[field];
+        delete part.specOwner[field];
+        cleared++;
+        touched = true;
+      }
+      if (touched) {
+        partsAffected++;
+        // Back to never-tried, so the part is fetched again with the parser
+        // that validates rather than being skipped as already done.
+        delete part.vendorTriedAt;
+        delete part.vendorOutcome;
+      }
+    }
+    if (cleared) writePcBuilder(data);
+    return json(res, 200, { ok: true, checked, cleared, partsAffected, examples });
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/admin/pc-builder/vendor/status') {
     const session = requireRole(req, res, 'technician'); if (!session) return;
     const data = readPcBuilder();
     const vendors = vendor.VENDORS.map(v => {
       const index = data.sourceState[`vendorIndex:${v.id}`];
-      const brands = new Set(v.brands.map(b => b.toLowerCase()));
-      const parts = data.parts.filter(p => brands.has(String(p.brand || '').trim().toLowerCase()));
+      const parts = data.parts.filter(p => vendor.vendorMatchesPart(v, p));
       const byCategory = {};
       for (const p of parts) {
         const c = (byCategory[p.category] = byCategory[p.category] || { total: 0, tried: 0, filled: 0, withImage: 0, noPage: 0 });

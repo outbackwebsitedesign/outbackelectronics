@@ -69,14 +69,26 @@ const VENDORS = [
   {
     id: 'asus', label: 'Asus', brands: ['Asus', 'ASUS', 'ROG', 'Asus ROG'],
     roots: [
-      { category: 'motherboard', url: 'https://rog.asus.com/motherboards-group/' },
+      // The listing page yields only the handful of boards it shows above the
+      // fold; the rest arrive as the page is scrolled, which a plain request
+      // never sees. Indexing it found four pages against 2,822 Asus parts in
+      // the library. The sitemap is the full set.
+      //
+      // This covers the ROG families (Strix, Maximus, Crosshair and the rest).
+      // PRIME, TUF and ProArt sit on www.asus.com under per-country sitemaps
+      // and are not indexed yet.
+      { category: 'motherboard', url: 'https://rog.asus.com/sitemap/product1.xml' },
     ],
     // Asus product URLs are /motherboards/<family>/<model>/, sometimes with a
     // "-model" suffix and sometimes not, so both shapes have to be accepted.
     productPattern: /^https:\/\/rog\.asus\.com\/motherboards\/[a-z0-9-]+\/[a-z0-9-]+\/?$/i,
     follow: 2,
-    // Asus keeps the spec table on a separate tab of the product page.
+    // Asus keeps the spec table on a separate tab of the product page, and
+    // that tab carries no images at all: it returned specs and zero photos.
+    // The pictures are on the product page itself, so the two are read from
+    // different URLs.
     specPath: (u) => u.replace(/\/$/, '') + '/spec',
+    imagePath: (u) => u,
   },
 ];
 
@@ -90,6 +102,32 @@ function vendorForBrand(brand) {
   if (!brand) return null;
   const id = BRAND_TO_VENDOR[String(brand).trim().toLowerCase()];
   return id ? VENDOR_BY_ID[id] : null;
+}
+
+/**
+ * Whether a part is made by this vendor.
+ *
+ * The brand field cannot be trusted to hold the whole brand. The public
+ * datasets take the first word of the product name and call it the brand, so
+ * the library holds 852 parts under "Cooler", 465 under "Lian" and 154 under
+ * "be". Matching on the full name found three Cooler Master parts out of 852
+ * and made the whole panel look broken.
+ *
+ * So the name is checked too: a part whose name begins with the vendor's name
+ * is that vendor's, whatever the brand column says. Anchoring at the start
+ * matters, since "Cooler" appears in half the cooler names on the market and
+ * only a leading "Cooler Master" means the manufacturer.
+ */
+function vendorMatchesPart(vendor, part) {
+  const brand = String(part?.brand || '').trim().toLowerCase();
+  const nameToks = nameTokens(part?.sourceName || part?.name || '');
+  for (const alias of vendor.brands) {
+    const aliasToks = nameTokens(alias);
+    if (!aliasToks.length) continue;
+    if (brand === alias.toLowerCase()) return true;
+    if (aliasToks.every((t, i) => nameToks[i] === t)) return true;
+  }
+  return false;
 }
 
 // ── Label map ────────────────────────────────────────────────────────────────
@@ -112,27 +150,27 @@ const LABEL_MAP = {
     ['bays35', /3\.5"?.*(bay|drive)/i, 'count'],
     ['bays25', /2\.5"?.*(bay|drive)/i, 'count'],
     ['fansIncluded', /(fans? included|pre-?installed fans?|included fans?)/i, 'count'],
-    ['colour', /^colou?rs?$|product colou?r/i, 'text'],
+    ['colour', /^colou?rs?$|product colou?r/i, 'colour'],
   ],
   cooler: [
     ['heightMm', /^(height|cooler height|overall height|dimensions? \(h\))/i, 'mmMin'],
     ['radiatorMm', /radiator (size|dimension|length)/i, 'mmMax'],
     ['tdpRating', /(max(imum)? )?tdp|cooling capacity|heat dissipation/i, 'watts'],
-    ['sockets', /(socket|cpu) (support|compatibility)|compatible sockets?|supported sockets?/i, 'text'],
-    ['colour', /^colou?rs?$|product colou?r/i, 'text'],
+    ['sockets', /(socket|cpu) (support|compatibility)|compatible sockets?|supported sockets?/i, 'socketList'],
+    ['colour', /^colou?rs?$|product colou?r/i, 'colour'],
   ],
   psu: [
     ['wattage', /(output|total|rated) power|wattage/i, 'watts'],
     ['formFactor', /(psu |power supply )?form ?factor|psu type/i, 'psuForm'],
     ['lengthMm', /^(depth|length)$|dimensions? \(d\)|psu (depth|length)/i, 'mmMin'],
-    ['efficiency', /(80 ?plus|efficiency)/i, 'text'],
-    ['colour', /^colou?rs?$|product colou?r/i, 'text'],
+    ['efficiency', /(80 ?plus|efficiency)/i, 'efficiency'],
+    ['colour', /^colou?rs?$|product colou?r/i, 'colour'],
   ],
   motherboard: [
-    ['socket', /^socket|cpu socket|processor socket/i, 'text'],
-    ['chipset', /^chipset|motherboard chipset/i, 'text'],
+    ['socket', /^socket|cpu socket|processor socket/i, 'socket'],
+    ['chipset', /^chipset|motherboard chipset/i, 'chipset'],
     ['formFactor', /form ?factor/i, 'boardMax'],
-    ['memoryType', /memory (type|support)|^memory$/i, 'text'],
+    ['memoryType', /memory (type|support)|^memory$/i, 'memoryType'],
     ['memorySlots', /(memory|dimm) slots?|number of dimm/i, 'count'],
     ['m2Slots', /m\.?2 (slot|socket|connector)/i, 'count'],
     ['sataPorts', /sata.*(port|connector)/i, 'count'],
@@ -140,7 +178,7 @@ const LABEL_MAP = {
   ],
   fan: [
     ['sizeMm', /fan size|dimensions?/i, 'mmMax'],
-    ['colour', /^colou?rs?$|product colou?r/i, 'text'],
+    ['colour', /^colou?rs?$|product colou?r/i, 'colour'],
   ],
 };
 
@@ -208,10 +246,66 @@ function coerce(kind, raw) {
       for (const f of PSU_FORMS) if (new RegExp(f.replace('-', '-?'), 'i').test(value)) return f;
       return null;
     }
+    case 'socket': case 'socketList': case 'chipset': case 'memoryType':
+    case 'efficiency': case 'colour':
+      return validate(kind, value);
     case 'text':
       return value.length > 120 ? null : value;
     default:
       return null;
+  }
+}
+
+
+// ── Validation ───────────────────────────────────────────────────────────────
+//
+// Pairing a label with the text that follows it is the only approach that works
+// across vendors who agree on no markup, but it pairs happily with the wrong
+// thing when a page is a run of section headings. Asus's spec tab is exactly
+// that, and it produced chipset "Memory", memory type "Graphics" and socket
+// "CPU": three headings, each read as the value of the one above it.
+//
+// Nothing catches that except knowing what a real answer looks like, so every
+// text-shaped spec is checked against the vocabulary it has to come from. A
+// value that fails is dropped, not stored. A blank spec skips a compatibility
+// rule and says so; an invented one is reported to staff as fact and gets the
+// wrong parts ordered.
+
+const SOCKET_RE = /^(LGA\s?\d{3,4}[A-Z]?|AM[1-5]\+?|FM[12]\+?|sTRX4|sWRX8|sTR5|TR4|SP[3-6]|BGA\d+)$/i;
+const CHIPSET_RE = /^[A-Z]{1,4}\s?\d{2,4}[A-Z]{0,2}$/i;
+const MEMORY_RE = /\bDDR([2-5])\b/i;
+const EFFICIENCY_RE = /80\s?plus\s?(titanium|platinum|gold|silver|bronze|white|standard)?|titanium|platinum|gold|silver|bronze/i;
+
+function validate(key, value) {
+  // Only the text-shaped specs have a vocabulary to check against. Numbers were
+  // parsed out of the page by pattern and are already as constrained as they
+  // can be, so anything not listed here passes through.
+  switch (key) {
+    case 'socket': {
+      const m = String(value).match(/(LGA\s?\d{3,4}[A-Z]?|AM[1-5]\+?|FM[12]\+?|sTRX4|sWRX8|sTR5|TR4|SP[3-6])/i);
+      return m ? m[1].replace(/\s+/g, '').toUpperCase().replace(/^AM(\d)/, 'AM$1') : null;
+    }
+    case 'socketList': {
+      const found = [...String(value).matchAll(/(LGA\s?\d{3,4}[A-Z]?|AM[1-5]\+?|FM[12]\+?|sTRX4|sWRX8|sTR5|TR4)/gi)]
+        .map(m => m[1].replace(/\s+/g, '').toUpperCase());
+      return found.length ? [...new Set(found)] : null;
+    }
+    case 'chipset':
+      return CHIPSET_RE.test(String(value).trim()) ? String(value).trim().toUpperCase() : null;
+    case 'memoryType': {
+      const m = String(value).match(MEMORY_RE);
+      return m ? `DDR${m[1]}` : null;
+    }
+    case 'efficiency':
+      return EFFICIENCY_RE.test(String(value)) ? String(value).trim().slice(0, 40) : null;
+    case 'colour': {
+      const c = coloursIn(nameTokens(value));
+      // One colour only. "Black / White" is two products listed together, not
+      // a colour, and picking either would be a guess.
+      return c.length === 1 ? c[0][0].toUpperCase() + c[0].slice(1) : null;
+    }
+    default:
+      return value;
   }
 }
 
@@ -310,12 +404,17 @@ function canonicalColour(value) {
   return COLOUR_SYNONYMS[t] || t;
 }
 
+// Single characters are kept. In component model names the one-letter suffix
+// is the identity: ROG STRIX X870-A and X870-F are different boards with
+// different M.2 counts, and dropping the letter made them the same string.
+// Doing so matched a TUF B550-PLUS against a STRIX B550-F and wrote that
+// board's six M.2 slots onto a board with two.
 function nameTokens(s) {
   return String(s || '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ')
     .split(' ')
-    .filter(t => t && t.length > 1 && !STOPWORDS.has(t));
+    .filter(t => t && !STOPWORDS.has(t));
 }
 
 const NOT_A_PRODUCT = /logo|favicon|placeholder|sprite|banner|icon[-_.]|android-chrome|apple-touch|\/flags?\//i;
@@ -480,6 +579,15 @@ function identifyingTokens(part, aliases = []) {
   return nameTokens(part?.sourceName || part?.name || '').filter(t => !drop.has(t));
 }
 
+// Panel, trim and finish options. A vendor sells one model in several finishes
+// and spells them out in the URL ("pop-xl-air/rgb-black-tg-clear"), while the
+// library records the model plainly. These words describe how a unit is dressed
+// rather than which model it is, so they do not count against a match.
+//
+// They are excluded from the count only, never used to bridge a gap: a name
+// that actually says RGB still has to find RGB in the slug.
+const FINISH_NOISE = new Set(['tg', 'tempered', 'glass', 'clear', 'dark', 'light', 'tint', 'tinted', 'mesh', 'solid', 'panel', 'ver', 'version']);
+
 const PATH_NOISE = new Set(['products', 'product', 'category', 'en', 'global', 'us', 'au', 'motherboards', 'cases', 'cooling', 'coolers', 'fans', 'power', 'supplies', 'supply', 'model', 'spec', 'rev']);
 
 function matchUrl(part, urls, aliases = []) {
@@ -500,6 +608,16 @@ function matchUrl(part, urls, aliases = []) {
     // rather than a lower score.
     if (colour && slugColours.length && !slugColours.includes(colour)) continue;
 
+    // Model numbers have to agree exactly, in both directions. Everything else
+    // here is a threshold, and a threshold cannot tell a Pop Air from a Pop 2
+    // Air: every word of the first appears in the second. A digit is never
+    // decoration in a component name, so a number on one side and not the
+    // other means these are two different products, whatever else lines up.
+    const digits = (toks) => new Set(toks.filter(t => /\d/.test(t)));
+    const wantDigits = digits(want);
+    const slugDigits = digits(slug);
+    if (wantDigits.size !== slugDigits.size || [...wantDigits].some(t => !slugDigits.has(t))) continue;
+
     const hits = want.filter(t => slug.includes(t)).length;
     const cover = hits / want.length;
     // The other direction matters too. Without it "North" matches the North XL
@@ -507,9 +625,15 @@ function matchUrl(part, urls, aliases = []) {
     // slugs contain the word. Requiring the slug to be mostly accounted for by
     // the part's own name is what separates them.
     const named = new Set(want);
-    const extra = slug.filter(t => !named.has(t) && !COLOUR_SYNONYMS[t]);
+    const extra = slug.filter(t => !named.has(t) && !COLOUR_SYNONYMS[t] && !FINISH_NOISE.has(t));
     const precision = (slug.length - extra.length) / slug.length;
-    if (cover < 0.6 || precision < 0.4) continue;
+    // Near-exact both ways. A loose threshold is fine when the difference
+    // between two products is a whole word, and useless when it is one letter:
+    // at 0.6 cover, "X870-A" matched "X870-F" on four tokens out of five. The
+    // colour words are already excluded from the count on both sides, so a
+    // library part named plainly still matches a page whose slug spells the
+    // manufacturer's colour out in full.
+    if (cover < 0.85 || precision < 0.8) continue;
 
     const score = cover + precision + (colour && slugColours.includes(colour) ? 0.5 : 0);
     if (!best || score > best.score) best = { url, score, cover, precision };
@@ -627,7 +751,7 @@ async function crawlVendor(vendor, { delayMs = 700, maxPages = 120 } = {}) {
 }
 
 module.exports = {
-  VENDORS, VENDOR_BY_ID, vendorForBrand, identifyingTokens, canonicalColour, coloursIn, sitemapLocs,
+  VENDORS, VENDOR_BY_ID, vendorForBrand, vendorMatchesPart, validate, identifyingTokens, canonicalColour, coloursIn, sitemapLocs,
   extractSpecs, extractImage, extractLinks, textPairs,
   matchUrl, nameTokens, coerce,
   fetchPage, fetchBinary, crawlVendor, sleep,
