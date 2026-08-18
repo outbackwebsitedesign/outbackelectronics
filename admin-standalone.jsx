@@ -1,3 +1,5 @@
+import './pc-dryrun-ui.js';
+
 /* global React, ReactDOM */
 
 const AdminPage = window.OE_PAGES && window.OE_PAGES.admin;
