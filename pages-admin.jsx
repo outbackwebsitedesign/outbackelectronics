@@ -3758,7 +3758,7 @@ function pcSpecSummary(part) {
     case 'motherboard': push(s.socket); push(s.formFactor); push(s.memoryType); break;
     case 'ram': push(s.capacityGb, 'GB'); push(s.memoryType); push(s.speedMhz, 'MHz'); push(s.casLatency ? `CL${s.casLatency}` : ''); break;
     case 'gpu': push(s.lengthMm, 'mm'); push(s.tdp, 'W'); break;
-    case 'storage': push(s.capacityGb, 'GB'); push(s.interface); break;
+    case 'storage': push(s.capacityGb, 'GB'); push(s.rpm ? `${s.rpm}rpm` : s.driveType); push(s.interface); break;
     case 'psu': push(s.wattage, 'W'); push(s.formFactor); push(s.efficiency); break;
     case 'case': push(s.maxBoardFormFactor); push(s.maxGpuLengthMm ? `GPU ${s.maxGpuLengthMm}mm` : ''); break;
     case 'cooler': push(s.coolerType); push(s.radiatorMm ? `${s.radiatorMm}mm rad` : (s.heightMm ? `${s.heightMm}mm tall` : '')); break;

@@ -119,6 +119,9 @@ export const PC_PART_CATEGORIES = [
       { key: 'interface', label: 'Interface', type: 'select', options: STORAGE_INTERFACES },
       { key: 'driveSize', label: 'Drive size', type: 'select', options: STORAGE_SIZES },
       { key: 'capacityGb', label: 'Capacity (GB)', type: 'number' },
+      { key: 'driveType', label: 'Type', type: 'select', options: ['SSD', 'HDD'] },
+      { key: 'rpm', label: 'Spindle speed (rpm)', type: 'number' },
+      { key: 'cacheMb', label: 'Cache (MB)', type: 'number' },
     ],
   },
   {

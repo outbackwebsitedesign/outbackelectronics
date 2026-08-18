@@ -402,13 +402,29 @@ function mapStorage(rows) {
 
     const cap = intCount(r.capacity);
     if (cap) specs.capacityGb = cap;
+
+    // `type` holds "SSD" or the spindle speed for a mechanical drive, which is
+    // the main thing separating otherwise identically named drives: this source
+    // names a whole Barracuda generation just "Seagate BarraCuda", so without
+    // the speed and cache twenty-two distinct 1TB drives collapse into one.
+    const type = String(r.type || '').trim();
+    if (/^ssd$/i.test(type)) specs.driveType = 'SSD';
+    else if (/^\d+$/.test(type)) { specs.driveType = 'HDD'; specs.rpm = Number(type); }
+    const cache = intCount(r.cache);
+    if (cache) specs.cacheMb = cache;
     if (!Object.keys(specs).length) continue;
 
     const capLabel = cap ? (cap >= 1000 && cap % 1000 === 0 ? `${cap / 1000}TB` : `${cap}GB`) : '';
+    const speedLabel = specs.rpm ? `${specs.rpm}rpm` : (specs.driveType === 'SSD' ? 'SSD' : '');
     out.push({
-      seedId: variantId('sto-d', name, specs, ['capacityGb', 'interface', 'driveSize']),
+      seedId: variantId('sto-d', name, specs, ['capacityGb', 'interface', 'driveSize', 'driveType', 'rpm', 'cacheMb']),
       category: 'storage', brand: brandOf(name),
-      name: withDetail(name, capLabel, specs.interface),
+      // An M.2 interface already implies the M.2 size, so naming both reads
+      // "M.2 M.2 NVMe".
+      name: withDetail(
+        name, capLabel, speedLabel,
+        String(specs.interface || '').startsWith('M.2') ? '' : specs.driveSize,
+        specs.interface, cache ? `${cache}MB cache` : ''),
       specs,
     });
   }
