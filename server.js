@@ -1062,9 +1062,15 @@ const ICECAT_FIT_SPECS = {
 // public dataset carries a part number, so the library had none, and a category
 // that can only act on parts holding one could never do anything at all.
 //
-// Memory is not special in needing one either. Its listings name a product line
-// ("Vengeance RGB 32 GB") rather than a code, but so do most cases, and cases
-// match by name only about 2% of the time. The difference is degree, not kind.
+// Memory cannot be looked up by name at all, and that is a different problem
+// from the categories that merely do it badly.
+//
+// A board name identifies one product. MSI and Gigabyte publish the model name
+// as their part code outright ("Z790 AORUS ELITE X WIFI7" is both), and where a
+// brand does not, as with Asus and 90MB1F90-M0EAY0, Icecat still resolves the
+// model name to the product. A memory name identifies a family: "Vengeance RGB
+// 32 GB" covers dozens of kits differing by speed, latency and colour, so there
+// is no single product to resolve to. One to one against one to many.
 //
 // Part numbers now arrive from successful lookups, so once enough are recorded
 // a memory pass becomes worth adding back.
