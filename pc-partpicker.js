@@ -117,8 +117,6 @@ function startBridge() {
   });
   child.stderr.setEncoding('utf8');
   child.stderr.on('data', chunk => {
-    // Keep stderr concise but visible in service logs for Cloudflare/Chromium
-    // failures that pypartpicker cannot recover from.
     const line = String(chunk || '').trim();
     if (line) console.warn('[pypartpicker]', line.slice(0, 1000));
   });
@@ -156,15 +154,15 @@ function bridgeLookup(payload, timeoutMs = 60000) {
 }
 
 async function lookup({ category, brand = '', model = '', mpn = '' }) {
-  if (!CATEGORY_PATH[category]) return { ok:false, reason:'unsupported_category' };
+  if (category && !CATEGORY_PATH[category]) return { ok:false, reason:'unsupported_category' };
   const query = String(mpn || model || '').trim();
   if (!query) return { ok:false, reason:'missing_identity' };
 
   const result = await bridgeLookup({ brand, mpn:query, model });
   if (!result.ok) return result;
   const rawSpecs = result.rawSpecs || {};
-  const specs = mapSpecs(rawSpecs, category);
-  if (!Object.keys(specs).length) {
+  const specs = category ? mapSpecs(rawSpecs, category) : {};
+  if (category && !Object.keys(specs).length) {
     return { ok:false, reason:'no_useful_specs', url:result.url, rawSpecs, matchedName:result.name };
   }
   return {
