@@ -1,0 +1,70 @@
+name: pypartpicker smoke
+
+on:
+  push:
+    branches: [pypartpicker-integration]
+  pull_request:
+    branches: [main]
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install pypartpicker
+        run: python -m pip install -r requirements-pcpartpicker.txt
+      - name: Test Node field mapping
+        run: |
+          node - <<'JS'
+          const { mapSpecs } = require('./pc-partpicker');
+          const tests = [
+            ['case', {'Maximum Video Card Length':'355 mm','Maximum CPU Cooler Height':'170 mm'}, {maxGpuLengthMm:355,maxCoolerHeightMm:170}],
+            ['motherboard', {'M.2 Slots':'3','SATA 6 Gb/s':'4'}, {m2Slots:3,sataPorts:4}],
+            ['cooler', {'Height':'165 mm','CPU Socket':'AM5, AM4, LGA1700'}, {heightMm:165}],
+            ['gpu', {'TDP':'220 W','Length':'242 mm'}, {tdp:220,lengthMm:242}],
+            ['psu', {'Length':'160 mm','PCIe 6+2-Pin Connectors':'4'}, {lengthMm:160,pcie8pin:4}],
+          ];
+          for (const [cat, raw, expected] of tests) {
+            const got = mapSpecs(raw, cat);
+            for (const [k,v] of Object.entries(expected)) if (got[k] !== v) throw new Error(`${cat}.${k}: ${got[k]} != ${v}`);
+          }
+          console.log('Node mapping tests passed');
+          JS
+      - name: Test bridge protocol and live access
+        run: |
+          python - <<'PY'
+          import json, subprocess, sys
+          proc = subprocess.Popen([sys.executable, 'pcpartpicker_bridge.py'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1)
+          tests = [
+              ('ASRock', 'B650M Pro RS'),
+              ('Corsair', 'RM850x'),
+              ('Noctua', 'NH-D15'),
+          ]
+          results = []
+          for i, (brand, mpn) in enumerate(tests, 1):
+              proc.stdin.write(json.dumps({'id':i, 'brand':brand, 'mpn':mpn, 'region':'au'}) + '\n')
+              proc.stdin.flush()
+              line = proc.stdout.readline().strip()
+              if not line:
+                  raise SystemExit(f'no bridge response for {brand} {mpn}')
+              result = json.loads(line)
+              print(json.dumps(result, indent=2)[:5000])
+              if result.get('id') != i:
+                  raise SystemExit('bridge response id mismatch')
+              results.append(result)
+          proc.terminate()
+
+          successes = sum(bool(r.get('ok') and r.get('rawSpecs')) for r in results)
+          blocked = sum(r.get('reason') in ('blocked', 'rate_limited') for r in results)
+          other_failures = [r for r in results if not r.get('ok') and r.get('reason') not in ('blocked', 'rate_limited')]
+          if other_failures:
+              raise SystemExit(f'Unexpected bridge failures: {other_failures}')
+          if successes:
+              print(f'{successes}/{len(results)} live lookups succeeded')
+          else:
+              print(f'GitHub runner is blocked by PCPartPicker/Cloudflare ({blocked}/{len(results)}); bridge protocol and error classification passed')
+          PY
