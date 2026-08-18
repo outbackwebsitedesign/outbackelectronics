@@ -4600,7 +4600,13 @@ function PcIcecatEnrich({ onPartsReload }) {
           // not-found parts back in the queue and refresh takes everything, so
           // showing only the never-tried count read as "0 to go" while
           // thousands were about to be looked up again.
+          // Once a retry or refresh has started, the slate for those parts has
+          // been wiped, so outstanding already counts them and drains as the
+          // run works through. Before it starts, show the size of the pool
+          // that mode is about to take on.
+          const passOpen = pr && pr.pass && pr.pass.mode === mode;
           const toGo = !pr ? 0
+            : passOpen ? pr.outstanding
             : mode === 'refresh' ? pr.total
             : mode === 'retry' ? pr.outstanding + pr.tried
             : pr.outstanding;

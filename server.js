@@ -1072,6 +1072,10 @@ const ICECAT_FIT_SPECS = {
 // Without this the category would spend eleven thousand lookups to learn
 // nothing and mark every part as tried on the way.
 const ICECAT_MPN_ONLY = new Set(['ram']);
+const hasAllSpecs = (p, needed) => needed.every(k => {
+  const v = (p.specs || {})[k];
+  return v !== undefined && v !== null && v !== '';
+});
 const icecatHasMpn = (p) => !!(p.mpn && String(p.mpn).trim());
 
 function upsertSeedParts(data, items, { sourceId = null, mergeByName = false } = {}) {
@@ -9162,19 +9166,47 @@ const adminServer = http.createServer(async (req, res) => {
     const mode = ['new', 'retry', 'refresh'].includes(body.mode) ? body.mode : 'new';
     const cutoff = Date.now() - 30 * 864e5;
 
+    const now = new Date().toISOString();
     const data = readPcBuilder();
     const needed = ICECAT_FIT_SPECS[category];
-    const hasAll = (p) => needed.every(k => {
-      const v = (p.specs || {})[k];
-      return v !== undefined && v !== null && v !== '';
-    });
+
+    // Retry and refresh wipe the slate rather than tracking what has already
+    // been re-attempted. Starting a retry clears the tried marks on the parts
+    // it covers, putting them back to never-run, and the pass then behaves
+    // exactly like a fresh one: the outstanding count starts high and drains.
+    //
+    // Tracking it any other way left the figure standing still, because the
+    // work left in a retry is total minus complete, which retrying does not
+    // change. The marker below exists only so the wipe happens once at the
+    // start of a run and not on every batch.
+    const passKey = `icecatPass:${category}`;
+    const existingPass = data.sourceState[passKey];
+    if (mode !== 'new' && (!existingPass || existingPass.mode !== mode)) {
+      let cleared = 0;
+      for (const p of data.parts) {
+        if (p.category !== category || p.specsEditedByStaff) continue;
+        // Refresh covers everything; retry covers what still lacks its specs.
+        if (mode === 'retry' && hasAllSpecs(p, needed)) continue;
+        if (p.icecatTriedAt || p.icecatOutcome) {
+          delete p.icecatTriedAt;
+          delete p.icecatOutcome;
+          cleared++;
+        }
+      }
+      data.sourceState[passKey] = { mode, startedAt: now, cleared };
+    } else if (mode === 'new' && existingPass) {
+      delete data.sourceState[passKey];
+    }
+    const hasAll = (p) => hasAllSpecs(p, needed);
     const candidates = data.parts.filter(p => {
       if (p.category !== category) return false;
       // A figure someone has checked is never re-fetched, in any mode.
       if (p.specsEditedByStaff) return false;
       if (ICECAT_MPN_ONLY.has(category) && !icecatHasMpn(p)) return false;
       if (mode !== 'refresh' && hasAll(p)) return false;
-      if (mode === 'new' && p.icecatTriedAt && Date.parse(p.icecatTriedAt) > cutoff) return false;
+      // Applies in every mode now. Retry and refresh cleared the marks up
+      // front, so anything still carrying one was done during this run.
+      if (p.icecatTriedAt && Date.parse(p.icecatTriedAt) > cutoff) return false;
       return !!(p.brand && (p.sourceName || p.name));
     });
 
@@ -9185,7 +9217,6 @@ const adminServer = http.createServer(async (req, res) => {
     const triedAt = (p) => (p.icecatTriedAt ? Date.parse(p.icecatTriedAt) || 0 : 0);
     if (mode !== 'new') candidates.sort((a, b) => triedAt(a) - triedAt(b));
     const batch = candidates.slice(0, limit);
-    const now = new Date().toISOString();
     const summary = { tried: 0, found: 0, filled: 0, noMatch: 0, restricted: 0, failed: 0, remaining: Math.max(candidates.length - batch.length, 0) };
     const examples = [];
 
@@ -9246,6 +9277,8 @@ const adminServer = http.createServer(async (req, res) => {
       if (aborted) break;
       await Promise.all(batch.slice(i, i + CONCURRENCY).map(runOne));
     }
+    summary.remaining = Math.max(candidates.length - batch.length, 0);
+    if (summary.remaining === 0) delete data.sourceState[passKey];
     writePcBuilder(data);
     if (aborted) return json(res, 503, { error: aborted.reason, message: aborted.message });
     return json(res, 200, { ok: true, category, summary, examples });
@@ -9285,6 +9318,8 @@ const adminServer = http.createServer(async (req, res) => {
         errored: errored.length,
         outstanding: parts.length - complete.length - tried.length,
       };
+      const openPass = data.sourceState[`icecatPass:${cat}`];
+      if (openPass) progress[cat].pass = { mode: openPass.mode, startedAt: openPass.startedAt };
     }
     return json(res, 200, { configured: !!getIcecatCredentials().username, progress });
   }
