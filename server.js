@@ -3538,6 +3538,22 @@ function getStripeWebhookSecret() {
   } catch { return STRIPE_WEBHOOK_SECRET; }
 }
 
+// Credentials come from Settings, Integrations in the admin, exactly as the
+// other integrations do. The environment is only a fallback so an existing
+// deployment keeps working; nothing has to be set by editing a file.
+function getIcecatCredentials() {
+  try {
+    const s = readSettings();
+    const entry = s.integrations.find(r => r[0] === 'Icecat' && r[2] !== false);
+    return {
+      username: entry?.[3]?.username || process.env.ICECAT_USERNAME || '',
+      appKey: entry?.[3]?.apiKey || process.env.ICECAT_APP_KEY || '',
+    };
+  } catch {
+    return { username: process.env.ICECAT_USERNAME || '', appKey: process.env.ICECAT_APP_KEY || '' };
+  }
+}
+
 function getAuspostKey() {
   try {
     const s = readSettings();
@@ -9021,7 +9037,7 @@ const adminServer = http.createServer(async (req, res) => {
     const session = requireRole(req, res, 'technician'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     const category = body.category || 'other';
-    const result = await icecat.lookup({ gtin: body.gtin, brand: body.brand, mpn: body.mpn });
+    const result = await icecat.lookup({ gtin: body.gtin, brand: body.brand, mpn: body.mpn, credentials: getIcecatCredentials() });
     if (!result.ok) {
       const status = result.reason === 'not_configured' ? 503 : result.reason === 'not_found' ? 404 : result.reason === 'brand_restricted' ? 403 : 502;
       return json(res, status, { error: result.reason, message: result.message });
@@ -9042,7 +9058,7 @@ const adminServer = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && url.pathname === '/api/admin/pc-builder/icecat/status') {
     const session = requireRole(req, res, 'technician'); if (!session) return;
-    return json(res, 200, { configured: icecat.isConfigured() });
+    return json(res, 200, { configured: !!getIcecatCredentials().username });
   }
 
   // ── External spec datasets ─────────────────────────────────────────────────

@@ -104,7 +104,7 @@ All configured via environment variables:
 | Stripe | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PUBLISHABLE_KEY` |
 | Australia Post | `AUSPOST_API_KEY` |
 | SMTP (email) | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `NOTIFY_EMAIL` |
-| Icecat (PC builder specs) | `ICECAT_USERNAME`, `ICECAT_APP_KEY` |
+| Icecat (PC builder specs) | Settings → Integrations → Icecat (env fallback: `ICECAT_USERNAME`, `ICECAT_APP_KEY`) |
 
 Missing keys degrade gracefully (features disabled, no crash).
 

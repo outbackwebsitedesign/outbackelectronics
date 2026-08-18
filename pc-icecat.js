@@ -223,10 +223,12 @@ function mapIcecatFeatures(data, category) {
   return { specs, matched, unmatched };
 }
 
-function credentials() {
+// Credentials are supplied by the caller, which reads them from Settings,
+// Integrations. The environment is only a fallback for an existing deployment.
+function credentials(supplied) {
   return {
-    username: process.env.ICECAT_USERNAME || '',
-    appKey: process.env.ICECAT_APP_KEY || '',
+    username: (supplied && supplied.username) || process.env.ICECAT_USERNAME || '',
+    appKey: (supplied && supplied.appKey) || process.env.ICECAT_APP_KEY || '',
   };
 }
 
@@ -239,9 +241,9 @@ function isConfigured() {
  * Returns { ok, data } or { ok:false, reason, message } where reason is one of
  * not_configured | not_found | brand_restricted | error.
  */
-async function lookup({ gtin, brand, mpn, lang = 'en' }) {
-  const { username, appKey } = credentials();
-  if (!username) return { ok: false, reason: 'not_configured', message: 'Set ICECAT_USERNAME to use Icecat lookups.' };
+async function lookup({ gtin, brand, mpn, lang = 'en', credentials: supplied }) {
+  const { username, appKey } = credentials(supplied);
+  if (!username) return { ok: false, reason: 'not_configured', message: 'Add an Icecat integration under Settings, Integrations to use lookups.' };
   if (!gtin && !(brand && mpn)) return { ok: false, reason: 'error', message: 'Provide a GTIN, or a brand and part number.' };
 
   const params = new URLSearchParams({ lang, shopname: username, content: '' });

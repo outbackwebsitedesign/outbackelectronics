@@ -4533,6 +4533,7 @@ function PcBuildPage({ build, customers, onClose, onSave, onDelete }) {
   const [form, setForm] = useState(build);
   const [picking, setPicking] = useState(null);   // category key
   const [newPart, setNewPart] = useState(null);
+  const [editPart, setEditPart] = useState(null);   // a part in this build, opened for editing
   const [busy, setBusy] = useState(null);         // 'save' | 'quote' | 'delete'
   const [err, setErr] = useState(null);
   const savedSnapRef = React.useRef(JSON.stringify(build));
@@ -4729,10 +4730,18 @@ function PcBuildPage({ build, customers, onClose, onSave, onDelete }) {
                   )}
                   {chosen.map(({ it, idx, part }) => (
                     <div key={idx} className="row-flex" style={{gap:10, alignItems:'center', paddingTop:6}}>
-                      <span style={{flex:1, minWidth:0}}>
-                        <span style={{display:'block', fontSize:13.5}}>{pcPartLabel(part)}</span>
-                        <span className="mono" style={{fontSize:10.5, color:'var(--ink-2)'}}>{pcSpecSummary(part) || 'no specs recorded'}</span>
-                      </span>
+                      {/* Clicking the part opens the same editor as the library,
+                          so specs can be corrected or fetched from Icecat right
+                          where the gap was noticed, without leaving the build. */}
+                      <button type="button" onClick={() => setEditPart(part)}
+                        title="Edit this part's details and specs"
+                        style={{flex:1, minWidth:0, textAlign:'left', background:'none', border:'none', padding:0, cursor:'pointer', font:'inherit'}}>
+                        <span style={{display:'block', fontSize:13.5, textDecoration:'underline', textDecorationColor:'var(--line)', textUnderlineOffset:3}}>{pcPartLabel(part)}</span>
+                        <span className="mono" style={{fontSize:10.5, color:'var(--ink-2)'}}>
+                          {pcSpecSummary(part) || 'no specs recorded'}
+                          {part.specsNeedCheck ? ' · unverified' : ''}
+                        </span>
+                      </button>
                       <input className="input" type="number" min="1" value={it.qty || 1} onChange={e => setQty(idx, e.target.value)}
                         style={{width:58, padding:'3px 6px', fontSize:12}} aria-label={`${pcPartLabel(part)} quantity`}/>
                       <span className="mono" style={{width:88, textAlign:'right', fontWeight:600}}>{pcMoney((Number(part.priceAud) || 0) * (Number(it.qty) || 1))}</span>
@@ -4860,6 +4869,25 @@ function PcBuildPage({ build, customers, onClose, onSave, onDelete }) {
           onClose={() => setNewPart(null)}
           onSaved={(item) => { addPart(item); setNewPart(null); }}
           onDeleted={() => setNewPart(null)}
+        />
+      )}
+      {editPart && (
+        <PcPartEditor
+          part={editPart}
+          onClose={() => setEditPart(null)}
+          onSaved={(item) => {
+            // Refresh the build's copy so the compatibility panel and totals
+            // reflect the edit immediately, and refresh the snapshot stored on
+            // the item so a reload does not show the old figures.
+            rememberPart(item);
+            setForm(f => ({ ...f, items: (f.items || []).map(i => i.partId === item.id ? { ...i, snapshot: { ...item } } : i) }));
+            setEditPart(null);
+            adminToast('Part updated.', 'success');
+          }}
+          onDeleted={(id) => {
+            setForm(f => ({ ...f, items: (f.items || []).filter(i => i.partId !== id) }));
+            setEditPart(null);
+          }}
         />
       )}
       <style>{`
@@ -11999,7 +12027,17 @@ function SettingsIntegrationsTab({ integrations, setIntegrations, savedIntegrati
                 <label className="field"><span className="label">Notification address</span><input className="input" value={integrationForm.notifyEmail} onChange={e => setIntegrationForm({...integrationForm, notifyEmail: e.target.value})} placeholder="orders@yourshop.com"/></label>
                 <p style={{fontSize:11, color:'var(--ink-3)', margin:'-4px 0 8px'}}>Use a Gmail app password (not your account password)</p>
               </>}
-              {integrationForm.name !== 'Stripe' && integrationForm.name !== 'Email' && <>
+              {integrationForm.name === 'Icecat' && <>
+                <label className="field"><span className="label">Icecat username</span>
+                  <input className="input" value={integrationForm.username || ''} onChange={e => setIntegrationForm({...integrationForm, username: e.target.value})} placeholder="your Icecat account name"/></label>
+                <label className="field"><span className="label">App key (Full Icecat only)</span>
+                  <input className="input" type="password" value={integrationForm.apiKey || ''} onChange={e => setIntegrationForm({...integrationForm, apiKey: e.target.value})} placeholder="leave blank for the free Open Icecat tier"/></label>
+                <p style={{fontSize:11, color:'var(--ink-3)', margin:'-4px 0 8px'}}>
+                  Register free at icecat.biz. The username alone covers Open Icecat brands; an app key is needed for the rest.
+                  Used by the PC Builder to fill in specs from a part number.
+                </p>
+              </>}
+              {integrationForm.name !== 'Stripe' && integrationForm.name !== 'Email' && integrationForm.name !== 'Icecat' && <>
                 <label className="field"><span className="label">Endpoint</span><input className="input" value={integrationForm.endpoint} onChange={e => setIntegrationForm({...integrationForm, endpoint: e.target.value})} placeholder="e.g. api.mailchimp.com"/></label>
                 <label className="field"><span className="label">API Key</span><input className="input" value={integrationForm.apiKey} onChange={e => setIntegrationForm({...integrationForm, apiKey: e.target.value})}/></label>
                 <label className="field"><span className="label">Notes</span><input className="input" value={integrationForm.notes} onChange={e => setIntegrationForm({...integrationForm, notes: e.target.value})}/></label>
@@ -12019,7 +12057,16 @@ function SettingsIntegrationsTab({ integrations, setIntegrations, savedIntegrati
               <label className="field"><span className="label">Notification address</span><input className="input" value={integrationForm.notifyEmail} onChange={e => setIntegrationForm({...integrationForm, notifyEmail: e.target.value})} placeholder="orders@yourshop.com"/></label>
               <p style={{fontSize:11, color:'var(--ink-3)', margin:'-4px 0 8px'}}>Use a Gmail app password (not your account password)</p>
             </>}
-            {integrationModal.mode === 'edit' && integrationForm.name !== 'Stripe' && integrationForm.name !== 'Email' && <>
+            {integrationModal.mode === 'edit' && integrationForm.name === 'Icecat' && <>
+              <label className="field"><span className="label">Icecat username</span>
+                <input className="input" value={integrationForm.username || ''} onChange={e => setIntegrationForm({...integrationForm, username: e.target.value})} placeholder="your Icecat account name"/></label>
+              <label className="field"><span className="label">App key (Full Icecat only)</span>
+                <input className="input" type="password" value={integrationForm.apiKey || ''} onChange={e => setIntegrationForm({...integrationForm, apiKey: e.target.value})} placeholder="leave blank for the free Open Icecat tier"/></label>
+              <p style={{fontSize:11, color:'var(--ink-3)', margin:'-4px 0 8px'}}>
+                The username alone covers Open Icecat brands; an app key is needed for the rest.
+              </p>
+            </>}
+            {integrationModal.mode === 'edit' && integrationForm.name !== 'Stripe' && integrationForm.name !== 'Email' && integrationForm.name !== 'Icecat' && <>
               <label className="field"><span className="label">Endpoint</span><input className="input" value={integrationForm.endpoint} onChange={e => setIntegrationForm({...integrationForm, endpoint: e.target.value})}/></label>
               <label className="field"><span className="label">API Key</span><input className="input" value={integrationForm.apiKey} onChange={e => setIntegrationForm({...integrationForm, apiKey: e.target.value})}/></label>
               <label className="field"><span className="label">Notes</span><input className="input" value={integrationForm.notes} onChange={e => setIntegrationForm({...integrationForm, notes: e.target.value})}/></label>
@@ -12317,25 +12364,30 @@ function AdminSettingsFull({ sessionInfo = {} }) {
   const openIntegrationModal = (idx) => {
     const r = integrations[idx];
     const cfg = r[3] || {};
-    setIntegrationForm({ name: r[0], endpoint: r[1], secretKey: cfg.secretKey || '', publishableKey: cfg.publishableKey || '', webhookSecret: cfg.webhookSecret || '', host: cfg.host || '', port: cfg.port || '', user: cfg.user || '', pass: cfg.pass || '', notifyEmail: cfg.notifyEmail || '', apiKey: cfg.apiKey || '', notes: cfg.notes || '' });
+    setIntegrationForm({ name: r[0], endpoint: r[1], secretKey: cfg.secretKey || '', publishableKey: cfg.publishableKey || '', webhookSecret: cfg.webhookSecret || '', host: cfg.host || '', port: cfg.port || '', user: cfg.user || '', pass: cfg.pass || '', notifyEmail: cfg.notifyEmail || '', apiKey: cfg.apiKey || '', username: cfg.username || '', notes: cfg.notes || '' });
     setIntegrationModal({ mode: 'edit', idx });
   };
   const openAddIntegrationModal = () => {
-    setIntegrationForm({ name: '', endpoint: '', secretKey: '', webhookSecret: '', apiKey: '', notes: '' });
+    setIntegrationForm({ name: '', endpoint: '', secretKey: '', webhookSecret: '', apiKey: '', username: '', notes: '' });
     setIntegrationModal({ mode: 'add', idx: null });
   };
   const saveIntegrationModal = () => {
     const { mode, idx } = integrationModal;
     const isStripe = integrationForm.name === 'Stripe';
     const isEmail = integrationForm.name === 'Email';
+    const isIcecat = integrationForm.name === 'Icecat';
     const config = isStripe
       ? { secretKey: integrationForm.secretKey, publishableKey: integrationForm.publishableKey, webhookSecret: integrationForm.webhookSecret }
       : isEmail
       ? { host: integrationForm.host, port: integrationForm.port, user: integrationForm.user, pass: integrationForm.pass, notifyEmail: integrationForm.notifyEmail }
+      // The username is an account name rather than a secret, so it stays
+      // readable; the app key goes in apiKey, which is encrypted at rest.
+      : isIcecat
+      ? { username: integrationForm.username || '', apiKey: integrationForm.apiKey || '' }
       : { apiKey: integrationForm.apiKey, notes: integrationForm.notes };
     if (mode === 'add') {
       if (!integrationForm.name.trim()) return;
-      const defaultEndpoints = { Stripe: 'api.stripe.com', Email: integrationForm.host || 'smtp.gmail.com', AusPost: 'digitalapi.auspost.com.au' };
+      const defaultEndpoints = { Stripe: 'api.stripe.com', Email: integrationForm.host || 'smtp.gmail.com', AusPost: 'digitalapi.auspost.com.au', Icecat: 'live.icecat.biz' };
       const endpoint = integrationForm.endpoint.trim() || defaultEndpoints[integrationForm.name] || '';
       setIntegrations([...integrations, [integrationForm.name.trim(), endpoint, true, config]]);
     } else {
