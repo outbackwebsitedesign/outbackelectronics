@@ -3508,6 +3508,27 @@ function PcPartEditor({ part, onClose, onSaved, onDeleted }) {
   const savedSnapRef = React.useRef(JSON.stringify(part));
   const dirty = JSON.stringify(form) !== savedSnapRef.current;
   const cat = PC_CATEGORY_MAP[form.category] || PC_CATEGORY_MAP.other;
+  // Icecat fills in the specs no bulk dataset carries, looked up per part by
+  // manufacturer part number. Results are shown for confirmation rather than
+  // applied straight away, because a datasheet can describe a near neighbour.
+  const [icecat, setIcecat] = useState(null);   // null | {loading} | result | {error}
+  const doIcecat = async () => {
+    setIcecat({ loading: true });
+    const r = await fetch('/api/admin/pc-builder/icecat/lookup', {
+      method:'POST', headers:postHeaders(), credentials:'include',
+      body: JSON.stringify({ category: form.category, brand: form.brand, mpn: form.mpn, gtin: form.gtin }),
+    }).catch(() => null);
+    if (!r) { setIcecat({ error: 'Could not reach the server.' }); return; }
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { setIcecat({ error: d.message || 'Lookup failed.', reason: d.error }); return; }
+    setIcecat(d);
+  };
+  const applyIcecat = () => {
+    setForm(f => ({ ...f, specs: { ...(f.specs || {}), ...(icecat.specs || {}) } }));
+    adminToast(`${Object.keys(icecat.specs || {}).length} spec(s) filled in from Icecat.`, 'success');
+    setIcecat(null);
+  };
+
   const setSpec = (key, val) => setForm(f => {
     const specs = { ...(f.specs || {}) };
     if (val === undefined) delete specs[key]; else specs[key] = val;
@@ -3565,6 +3586,11 @@ function PcPartEditor({ part, onClose, onSaved, onDeleted }) {
           <input className="input" value={form.name || ''} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Ryzen 5 7600"/></label>
         <label className="field"><span className="label">SKU</span>
           <input className="input" value={form.sku || ''} onChange={e => setForm(f => ({ ...f, sku: e.target.value }))}/></label>
+        <label className="field"><span className="label">Manufacturer part number</span>
+          <input className="input" value={form.mpn || ''} placeholder="CMH32GX5M2E6000C36W"
+            onChange={e => setForm(f => ({ ...f, mpn: e.target.value }))}/></label>
+        <label className="field"><span className="label">Barcode (GTIN / EAN)</span>
+          <input className="input" value={form.gtin || ''} onChange={e => setForm(f => ({ ...f, gtin: e.target.value }))}/></label>
         <label className="field"><span className="label">Sell price (AUD)</span>
           <input className="input" type="number" value={form.priceAud ?? ''} onChange={e => setForm(f => ({ ...f, priceAud: e.target.value }))}/></label>
         <label className="field"><span className="label">Our cost (AUD)</span>
@@ -3585,6 +3611,65 @@ function PcPartEditor({ part, onClose, onSaved, onDeleted }) {
           From supplier feed · SKU {form.supplierSku}
           {form.stock != null ? ` · ${form.stock} in stock` : ''}
         </p>
+      )}
+
+      {(form.mpn || form.gtin) && (
+        <div style={{marginTop:14}}>
+          <button className="btn btn-ghost btn-sm" onClick={doIcecat} disabled={icecat && icecat.loading}>
+            {icecat && icecat.loading ? 'Looking up…' : 'Fetch specs from Icecat'}
+          </button>
+        </div>
+      )}
+      {icecat && icecat.error && (
+        <div style={{background:'#f9e2d6', borderLeft:'3px solid var(--rust)', padding:'8px 10px', marginTop:10}}>
+          <span style={{fontSize:12.5}}>{icecat.error}</span>
+          {icecat.reason === 'brand_restricted' && (
+            <span style={{fontSize:11.5, color:'var(--ink-2)', display:'block', marginTop:3}}>
+              That brand is Full Icecat rather than the free Open Icecat tier. Set ICECAT_APP_KEY to reach it.
+            </span>
+          )}
+          {icecat.reason === 'not_configured' && (
+            <span style={{fontSize:11.5, color:'var(--ink-2)', display:'block', marginTop:3}}>
+              Register free at icecat.biz, then set ICECAT_USERNAME on the server.
+            </span>
+          )}
+        </div>
+      )}
+      {icecat && icecat.ok && (
+        <div style={{border:'1px solid var(--line)', padding:12, marginTop:10}}>
+          <div className="row-flex" style={{justifyContent:'space-between', gap:10, marginBottom:8}}>
+            <span style={{fontSize:13, fontWeight:600, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{icecat.title || 'Datasheet found'}</span>
+            <button className="btn btn-rust btn-sm" onClick={applyIcecat} disabled={!Object.keys(icecat.specs || {}).length}>
+              Apply {Object.keys(icecat.specs || {}).length} spec(s)
+            </button>
+          </div>
+          {icecat.matched.map(m => (
+            <div key={m.spec} className="row-flex" style={{justifyContent:'space-between', gap:10, fontSize:12, marginBottom:2}}>
+              <span style={{color:'var(--ink-2)'}}>{m.feature}</span>
+              <span className="mono">{String(m.value)}</span>
+            </div>
+          ))}
+          {!Object.keys(icecat.specs || {}).length && (
+            <p style={{fontSize:12.5, color:'var(--ink-2)', margin:0}}>
+              A datasheet was found but none of its fields matched a spec we use. The list below is what it carried.
+            </p>
+          )}
+          {icecat.unmatched.length > 0 && (
+            <details style={{marginTop:8}}>
+              <summary style={{fontSize:11.5, color:'var(--ink-2)', cursor:'pointer'}}>
+                {icecat.unmatched.length} other field(s) on the datasheet
+              </summary>
+              <div style={{marginTop:6, maxHeight:180, overflowY:'auto'}}>
+                {icecat.unmatched.map((u, i) => (
+                  <div key={i} className="row-flex" style={{justifyContent:'space-between', gap:10, fontSize:11.5, marginBottom:1}}>
+                    <span style={{color:'var(--ink-2)'}}>{u.name}</span>
+                    <span className="mono">{u.value}</span>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+        </div>
       )}
 
       {form.specsNeedCheck && (

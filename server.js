@@ -10,6 +10,7 @@ const sharp = require('sharp');
 const PDFDocument = require('pdfkit');
 const POLICY_DEFAULTS = require('./policy-defaults');
 const { DATA_SOURCES, parseSource, identityKey } = require('./pc-datasources');
+const icecat = require('./pc-icecat');
 
 const gzipCache = new Map();
 
@@ -8777,7 +8778,8 @@ const adminServer = http.createServer(async (req, res) => {
       items = items.filter(p => {
         const specs = p.specs || {};
         const hay = [
-          p.brand, p.name, p.sku, p.supplierSku, specs.chipset, specs.socket, specs.colour,
+          p.brand, p.name, p.sku, p.supplierSku, p.mpn, p.gtin,
+          specs.chipset, specs.socket, specs.colour,
         ].filter(Boolean).join(' ').toLowerCase();
         return terms.every(t => hay.includes(t));
       });
@@ -9011,6 +9013,38 @@ const adminServer = http.createServer(async (req, res) => {
   // re-running it corrects specs rather than duplicating parts. Specs a staff
   // member has edited are left alone: a shipped default must never overwrite a
   // figure someone checked against the manufacturer.
+  // Look one part up in Icecat by part number. This is the route to the specs
+  // no bulk dataset carries (case clearances, cooler heights, board M.2 counts),
+  // and it is per-part on purpose: ordering per build means the useful question
+  // is "what are the specs of this exact thing I am about to quote".
+  if (req.method === 'POST' && url.pathname === '/api/admin/pc-builder/icecat/lookup') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const category = body.category || 'other';
+    const result = await icecat.lookup({ gtin: body.gtin, brand: body.brand, mpn: body.mpn });
+    if (!result.ok) {
+      const status = result.reason === 'not_configured' ? 503 : result.reason === 'not_found' ? 404 : result.reason === 'brand_restricted' ? 403 : 502;
+      return json(res, status, { error: result.reason, message: result.message });
+    }
+    const mapped = icecat.mapIcecatFeatures(result.data, category);
+    const info = result.data.GeneralInfo || {};
+    return json(res, 200, {
+      ok: true,
+      title: info.Title || info.ProductName || '',
+      brand: (info.Brand && (info.Brand.Value || info.Brand)) || body.brand || '',
+      specs: mapped.specs,
+      matched: mapped.matched,
+      // Everything the datasheet had that this mapping does not know about, so
+      // a spec we could be reading is visible rather than silently discarded.
+      unmatched: mapped.unmatched.slice(0, 60),
+    });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/admin/pc-builder/icecat/status') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    return json(res, 200, { configured: icecat.isConfigured() });
+  }
+
   // ── External spec datasets ─────────────────────────────────────────────────
   // Sources are declared in pc-datasources.js. Syncing pulls each file, maps it
   // into our schema and upserts by seedId, so it can be re-run safely and never
