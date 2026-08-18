@@ -4497,12 +4497,18 @@ function PcIcecatEnrich({ onPartsReload }) {
   const [ready, setReady] = useState(null);
   const [running, setRunning] = useState(null);
   const [stats, setStats] = useState({});
+  const [progress, setProgress] = useState({});
   const cancelRef = React.useRef(false);
 
-  useEffect(() => {
+  // Progress comes from the library, not from counting up during a run, so it
+  // survives stopping and restarting and reflects everything ever done.
+  const loadProgress = React.useCallback(() => (
     fetch('/api/admin/pc-builder/icecat/status', { credentials:'include' })
-      .then(r => r.ok ? r.json() : Promise.reject()).then(d => setReady(!!d.configured)).catch(() => setReady(null));
-  }, []);
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => { setReady(!!d.configured); setProgress(d.progress || {}); })
+      .catch(() => setReady(null))
+  ), []);
+  useEffect(() => { loadProgress(); }, [loadProgress]);
 
   // Categories are independent, so "all" just walks them in turn. Kept
   // sequential between categories on purpose: the concurrency that makes this
@@ -4536,8 +4542,12 @@ function PcIcecatEnrich({ onPartsReload }) {
       const d = await r.json();
       for (const k of Object.keys(totals)) totals[k] = k === 'remaining' ? d.summary.remaining : totals[k] + d.summary[k];
       setStats(cur => ({ ...cur, [cat]: { ...totals } }));
+      // Every few batches, so the persistent figures visibly move without a
+      // request per batch.
+      if (i % 4 === 3) loadProgress();
       if (!d.summary.tried || !d.summary.remaining) break;
     }
+    loadProgress();
     if (!keepRunning) {
       setRunning(null);
       cancelRef.current = false;
@@ -4571,22 +4581,29 @@ function PcIcecatEnrich({ onPartsReload }) {
       <div style={{display:'grid', gap:6}}>
         {ICECAT_CATEGORIES.map(c => {
           const st = stats[c.key];
+          const pr = progress[c.key];
+          const pct = pr && pr.total ? Math.round(((pr.complete + pr.tried) / pr.total) * 100) : 0;
           return (
             <div key={c.key} className="row-flex" style={{justifyContent:'space-between', gap:10, alignItems:'center', flexWrap:'wrap'}}>
-              <span style={{fontSize:13, minWidth:150}}>{c.label}
+              <span style={{fontSize:13, minWidth:150, flex:1}}>{c.label}
                 <span style={{fontSize:11.5, color:'var(--ink-2)'}}> · {c.gains}</span>
-              </span>
-              <span className="row-flex" style={{gap:10, alignItems:'center'}}>
-                {st && (
-                  <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>
-                    {st.filled.toLocaleString()} filled of {st.tried.toLocaleString()} tried
-                    {st.noMatch ? ` · ${st.noMatch.toLocaleString()} no match` : ''}
-                    {st.restricted ? ` · ${st.restricted.toLocaleString()} need a paid key` : ''}
-                    {st.remaining ? ` · ${st.remaining.toLocaleString()} left` : ''}
+                {pr && pr.total > 0 && (
+                  <span style={{display:'block', height:3, background:'var(--line)', marginTop:4, maxWidth:260}}>
+                    <span style={{display:'block', height:3, width:`${pct}%`, background: pr.complete ? '#345526' : 'var(--ochre)'}}/>
                   </span>
                 )}
-                <button className="btn btn-ghost btn-sm" onClick={() => runCategory(c.key)} disabled={!!running || ready === false}>
-                  {running === c.key ? 'Working…' : st ? 'Continue' : 'Fill in'}
+              </span>
+              <span className="row-flex" style={{gap:10, alignItems:'center'}}>
+                {pr && (
+                  <span className="mono" style={{fontSize:11, color:'var(--ink-2)', whiteSpace:'nowrap'}}>
+                    {pr.complete.toLocaleString()} have specs
+                    {pr.tried ? ` · ${pr.tried.toLocaleString()} not found` : ''}
+                    {' · '}{pr.outstanding.toLocaleString()} to go of {pr.total.toLocaleString()}
+                  </span>
+                )}
+                <button className="btn btn-ghost btn-sm" onClick={() => runCategory(c.key)}
+                  disabled={!!running || ready === false || (pr && pr.outstanding === 0)}>
+                  {running === c.key ? 'Working…' : pr && pr.outstanding === 0 ? 'Done' : st ? 'Continue' : 'Fill in'}
                 </button>
               </span>
             </div>
@@ -4595,7 +4612,8 @@ function PcIcecatEnrich({ onPartsReload }) {
       </div>
       <p style={{fontSize:11.5, color:'var(--ink-2)', margin:'10px 0 0'}}>
         Safe to re-run. Parts already tried are skipped for a month, and a spec you have edited is never overwritten.
-        A full pass over every category takes a while, so leave it running; stopping keeps everything already filled in.
+        A full pass over every category takes a while, so leave it running. Stopping is safe: the figures above are
+        counted from the library itself, so they carry across restarts and a resumed run picks up where it left off.
       </p>
     </div>
   );

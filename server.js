@@ -9184,7 +9184,28 @@ const adminServer = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && url.pathname === '/api/admin/pc-builder/icecat/status') {
     const session = requireRole(req, res, 'technician'); if (!session) return;
-    return json(res, 200, { configured: !!getIcecatCredentials().username });
+    // Progress is reported from the library itself rather than counted up
+    // during a run. A run does 25 parts at a time out of thousands, so a
+    // per-run counter resets to zero on every restart and never visibly moves,
+    // which reads as though nothing was kept.
+    const data = readPcBuilder();
+    const progress = {};
+    for (const [cat, needed] of Object.entries(ICECAT_FIT_SPECS)) {
+      const parts = data.parts.filter(p => p.category === cat);
+      const complete = parts.filter(p => needed.every(k => {
+        const v = (p.specs || {})[k];
+        return v !== undefined && v !== null && v !== '';
+      }));
+      const tried = parts.filter(p => p.icecatTriedAt && !complete.includes(p));
+      progress[cat] = {
+        total: parts.length,
+        complete: complete.length,
+        tried: tried.length,
+        // What a run would still attempt.
+        outstanding: parts.length - complete.length - tried.length,
+      };
+    }
+    return json(res, 200, { configured: !!getIcecatCredentials().username, progress });
   }
 
   // ── External spec datasets ─────────────────────────────────────────────────
