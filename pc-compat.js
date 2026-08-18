@@ -11,7 +11,20 @@
 
 // ── Vocabularies ─────────────────────────────────────────────────────────────
 
-export const CPU_SOCKETS = ['AM5', 'AM4', 'LGA1851', 'LGA1700', 'LGA1200', 'LGA1151', 'sTR5', 'SP6'];
+// Current desktop sockets first, then legacy desktop (a repair and refurb shop
+// still sees these daily), then workstation and server. Matches the sockets
+// present in the generated catalog in pc-parts-cpus.js.
+export const CPU_SOCKETS = [
+  // Current desktop
+  'AM5', 'LGA1851', 'LGA1700', 'AM4',
+  // Legacy desktop
+  'LGA1200', 'LGA1151', 'LGA1150', 'LGA1155', 'LGA1156', 'LGA775',
+  'AM3+', 'AM3', 'AM2+', 'AM1', 'FM2+', 'FM2', 'FM1',
+  // Workstation and server
+  'sTR5', 'sWRX8', 'sTRX4', 'sTR4', 'SP6', 'SP5', 'SP3',
+  'LGA2066', 'LGA2011-3', 'LGA2011', 'LGA1366', 'LGA1248',
+  'LGA4677', 'LGA4189', 'LGA3647', 'G34', 'C32',
+];
 export const MEMORY_TYPES = ['DDR5', 'DDR4', 'DDR3'];
 export const BOARD_FORM_FACTORS = ['E-ATX', 'ATX', 'Micro-ATX', 'Mini-ITX'];
 export const PSU_FORM_FACTORS = ['ATX', 'SFX', 'SFX-L', 'TFX'];

@@ -27,17 +27,12 @@
 // so memoryType is intentionally unset on those: the board decides, and the
 // compatibility check reads it from there.
 
+// Only the parts the generated catalog in pc-parts-cpus.js does not yet carry.
+// That file is the comprehensive CPU list, sourced from published spec data;
+// these are the newest releases its upstream dataset has not caught up with,
+// so loading both gives full coverage with no duplicates in the picker.
 const CPUS = [
   // AMD AM5, DDR5 only. Every Ryzen 7000/9000 desktop part has an RDNA2 iGPU.
-  { seedId:'cpu-amd-7600',     brand:'AMD', name:'Ryzen 5 7600',      specs:{ socket:'AM5', memoryType:'DDR5', tdp:65,  cores:6,  integratedGraphics:true, coolerIncluded:true } },
-  { seedId:'cpu-amd-7600x',    brand:'AMD', name:'Ryzen 5 7600X',     specs:{ socket:'AM5', memoryType:'DDR5', tdp:105, cores:6,  integratedGraphics:true, coolerIncluded:false } },
-  { seedId:'cpu-amd-7700',     brand:'AMD', name:'Ryzen 7 7700',      specs:{ socket:'AM5', memoryType:'DDR5', tdp:65,  cores:8,  integratedGraphics:true, coolerIncluded:true } },
-  { seedId:'cpu-amd-7700x',    brand:'AMD', name:'Ryzen 7 7700X',     specs:{ socket:'AM5', memoryType:'DDR5', tdp:105, cores:8,  integratedGraphics:true, coolerIncluded:false } },
-  { seedId:'cpu-amd-7800x3d',  brand:'AMD', name:'Ryzen 7 7800X3D',   specs:{ socket:'AM5', memoryType:'DDR5', tdp:120, cores:8,  integratedGraphics:true, coolerIncluded:false } },
-  { seedId:'cpu-amd-7900',     brand:'AMD', name:'Ryzen 9 7900',      specs:{ socket:'AM5', memoryType:'DDR5', tdp:65,  cores:12, integratedGraphics:true, coolerIncluded:true } },
-  { seedId:'cpu-amd-7900x',    brand:'AMD', name:'Ryzen 9 7900X',     specs:{ socket:'AM5', memoryType:'DDR5', tdp:170, cores:12, integratedGraphics:true, coolerIncluded:false } },
-  { seedId:'cpu-amd-7950x',    brand:'AMD', name:'Ryzen 9 7950X',     specs:{ socket:'AM5', memoryType:'DDR5', tdp:170, cores:16, integratedGraphics:true, coolerIncluded:false } },
-  { seedId:'cpu-amd-7950x3d',  brand:'AMD', name:'Ryzen 9 7950X3D',   specs:{ socket:'AM5', memoryType:'DDR5', tdp:120, cores:16, integratedGraphics:true, coolerIncluded:false } },
   { seedId:'cpu-amd-9600x',    brand:'AMD', name:'Ryzen 5 9600X',     specs:{ socket:'AM5', memoryType:'DDR5', tdp:65,  cores:6,  integratedGraphics:true, coolerIncluded:false } },
   { seedId:'cpu-amd-9700x',    brand:'AMD', name:'Ryzen 7 9700X',     specs:{ socket:'AM5', memoryType:'DDR5', tdp:65,  cores:8,  integratedGraphics:true, coolerIncluded:false } },
   { seedId:'cpu-amd-9800x3d',  brand:'AMD', name:'Ryzen 7 9800X3D',   specs:{ socket:'AM5', memoryType:'DDR5', tdp:120, cores:8,  integratedGraphics:true, coolerIncluded:false } },
@@ -46,23 +41,8 @@ const CPUS = [
   { seedId:'cpu-amd-9950x3d',  brand:'AMD', name:'Ryzen 9 9950X3D',   specs:{ socket:'AM5', memoryType:'DDR5', tdp:170, cores:16, integratedGraphics:true, coolerIncluded:false } },
 
   // AMD AM4, DDR4. Only the G parts carry integrated graphics.
-  { seedId:'cpu-amd-5600',     brand:'AMD', name:'Ryzen 5 5600',      specs:{ socket:'AM4', memoryType:'DDR4', tdp:65,  cores:6,  integratedGraphics:false, coolerIncluded:true } },
-  { seedId:'cpu-amd-5600x',    brand:'AMD', name:'Ryzen 5 5600X',     specs:{ socket:'AM4', memoryType:'DDR4', tdp:65,  cores:6,  integratedGraphics:false, coolerIncluded:true } },
-  { seedId:'cpu-amd-5600g',    brand:'AMD', name:'Ryzen 5 5600G',     specs:{ socket:'AM4', memoryType:'DDR4', tdp:65,  cores:6,  integratedGraphics:true,  coolerIncluded:true } },
-  { seedId:'cpu-amd-5700x',    brand:'AMD', name:'Ryzen 7 5700X',     specs:{ socket:'AM4', memoryType:'DDR4', tdp:65,  cores:8,  integratedGraphics:false, coolerIncluded:false } },
-  { seedId:'cpu-amd-5700g',    brand:'AMD', name:'Ryzen 7 5700G',     specs:{ socket:'AM4', memoryType:'DDR4', tdp:65,  cores:8,  integratedGraphics:true,  coolerIncluded:true } },
-  { seedId:'cpu-amd-5800x',    brand:'AMD', name:'Ryzen 7 5800X',     specs:{ socket:'AM4', memoryType:'DDR4', tdp:105, cores:8,  integratedGraphics:false, coolerIncluded:false } },
-  { seedId:'cpu-amd-5800x3d',  brand:'AMD', name:'Ryzen 7 5800X3D',   specs:{ socket:'AM4', memoryType:'DDR4', tdp:105, cores:8,  integratedGraphics:false, coolerIncluded:false } },
-  { seedId:'cpu-amd-5900x',    brand:'AMD', name:'Ryzen 9 5900X',     specs:{ socket:'AM4', memoryType:'DDR4', tdp:105, cores:12, integratedGraphics:false, coolerIncluded:false } },
-  { seedId:'cpu-amd-5950x',    brand:'AMD', name:'Ryzen 9 5950X',     specs:{ socket:'AM4', memoryType:'DDR4', tdp:105, cores:16, integratedGraphics:false, coolerIncluded:false } },
 
   // Intel LGA1700. memoryType left unset: these run DDR4 or DDR5 by board.
-  { seedId:'cpu-intel-12400f',  brand:'Intel', name:'Core i5-12400F',  specs:{ socket:'LGA1700', tdp:65,  cores:6,  integratedGraphics:false, coolerIncluded:true } },
-  { seedId:'cpu-intel-12600k',  brand:'Intel', name:'Core i5-12600K',  specs:{ socket:'LGA1700', tdp:125, cores:10, integratedGraphics:true,  coolerIncluded:false } },
-  { seedId:'cpu-intel-13400f',  brand:'Intel', name:'Core i5-13400F',  specs:{ socket:'LGA1700', tdp:65,  cores:10, integratedGraphics:false, coolerIncluded:true } },
-  { seedId:'cpu-intel-13600k',  brand:'Intel', name:'Core i5-13600K',  specs:{ socket:'LGA1700', tdp:125, cores:14, integratedGraphics:true,  coolerIncluded:false } },
-  { seedId:'cpu-intel-13700k',  brand:'Intel', name:'Core i7-13700K',  specs:{ socket:'LGA1700', tdp:125, cores:16, integratedGraphics:true,  coolerIncluded:false } },
-  { seedId:'cpu-intel-13900k',  brand:'Intel', name:'Core i9-13900K',  specs:{ socket:'LGA1700', tdp:125, cores:24, integratedGraphics:true,  coolerIncluded:false } },
   { seedId:'cpu-intel-14600k',  brand:'Intel', name:'Core i5-14600K',  specs:{ socket:'LGA1700', tdp:125, cores:14, integratedGraphics:true,  coolerIncluded:false } },
   { seedId:'cpu-intel-14700k',  brand:'Intel', name:'Core i7-14700K',  specs:{ socket:'LGA1700', tdp:125, cores:20, integratedGraphics:true,  coolerIncluded:false } },
   { seedId:'cpu-intel-14900k',  brand:'Intel', name:'Core i9-14900K',  specs:{ socket:'LGA1700', tdp:125, cores:24, integratedGraphics:true,  coolerIncluded:false } },

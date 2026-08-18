@@ -4,7 +4,6 @@ import { getCsrf, ensureCsrf } from './src/lib/api.js';
 import { renderMarkdown, estimateReadTime, slugify } from './markdown.jsx';
 import { PRODUCT_CONDITIONS } from './src/lib/conditions.js';
 import { PC_PART_CATEGORIES, PC_CATEGORY_MAP, categoryLabel, partDisplayName, checkBuild, buildTotals } from './pc-compat.js';
-import { PC_PARTS_SEED } from './pc-parts-seed.js';
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 // Canonical date format for all order dates: "27 May 2026"
@@ -3701,27 +3700,34 @@ function PcPartsLibrary({ products, onLibraryChanged }) {
   const [q, setQ] = useState('');
   const [importOpen, setImportOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
-  const [seeding, setSeeding] = useState(false);
+  const [seeding, setSeeding] = useState(false); // false | 'seed' | 'cpus'
   const { items: rows, total, counts, loading } = usePartsQuery({
     category: catFilter === 'all' ? '' : catFilter, q, limit: 200, enabled: true, reloadKey,
   });
   const refresh = () => { setReloadKey(k => k + 1); onLibraryChanged?.(); };
 
-  // Loads the components shipped in pc-parts-seed.js. Safe to re-run: parts are
-  // keyed by seedId, so this corrects shipped specs and never duplicates.
-  const loadSeedCatalog = async () => {
+  // Both catalogs are dynamically imported so their data stays out of the admin
+  // bundle until someone actually loads them. Safe to re-run: parts are keyed by
+  // seedId, so this corrects shipped specs and never duplicates.
+  const loadCatalog = async (which) => {
+    const isCpus = which === 'cpus';
+    const mod = isCpus ? await import('./pc-parts-cpus.js') : await import('./pc-parts-seed.js');
+    const items = isCpus ? mod.PC_CPU_CATALOG : mod.PC_PARTS_SEED;
+    const what = isCpus
+      ? `${items.length.toLocaleString()} CPUs, covering current and older sockets`
+      : `${items.length} components across every category`;
     if (!await adminConfirm(
-      `Load ${PC_PARTS_SEED.length} components into the parts library?\n\nThey come with specs but no prices, and anything you have already edited is left untouched.`,
-      { title: 'Load component catalog', confirmLabel: 'Load catalog' })) return;
-    setSeeding(true);
+      `Load ${what} into the parts library?\n\nThey come with specs but no prices, and anything you have already edited is left untouched.`,
+      { title: isCpus ? 'Load CPU database' : 'Load component catalog', confirmLabel: 'Load' })) return;
+    setSeeding(which);
     const r = await fetch('/api/admin/pc-builder/parts/seed', {
-      method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ items: PC_PARTS_SEED }),
+      method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ items }),
     }).catch(() => null);
     setSeeding(false);
-    if (!r || !r.ok) { adminToast('Could not load the component catalog, please try again.'); return; }
+    if (!r || !r.ok) { adminToast('Could not load the catalog, please try again.'); return; }
     const d = await r.json();
     const kept = d.summary.keptStaffEdits ? `, ${d.summary.keptStaffEdits} left as you edited them` : '';
-    adminToast(`${d.summary.created} components added, ${d.summary.updated} refreshed${kept}.`, 'success');
+    adminToast(`${d.summary.created.toLocaleString()} added, ${d.summary.updated.toLocaleString()} refreshed${kept}.`, 'success');
     refresh();
   };
 
@@ -3738,8 +3744,11 @@ function PcPartsLibrary({ products, onLibraryChanged }) {
           <input className="input" style={{flex:1, maxWidth:280}} placeholder="Search parts…" value={q} onChange={e => setQ(e.target.value)}/>
         </div>
         <div className="row-flex" style={{gap:8}}>
-          <button className="btn btn-ghost btn-sm" onClick={loadSeedCatalog} disabled={seeding}>
-            {seeding ? 'Loading…' : 'Load component catalog'}
+          <button className="btn btn-ghost btn-sm" onClick={() => loadCatalog('seed')} disabled={!!seeding}>
+            {seeding === 'seed' ? 'Loading…' : 'Load component catalog'}
+          </button>
+          <button className="btn btn-ghost btn-sm" onClick={() => loadCatalog('cpus')} disabled={!!seeding}>
+            {seeding === 'cpus' ? 'Loading…' : 'Load CPU database'}
           </button>
           <button className="btn btn-ghost btn-sm" onClick={() => setImportOpen(true)}>Import from products</button>
           <button className="btn btn-rust btn-sm" onClick={() => setEdit(blankPcPart(catFilter === 'all' ? 'cpu' : catFilter))}>+ New part</button>
