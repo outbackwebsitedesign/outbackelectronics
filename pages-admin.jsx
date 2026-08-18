@@ -4498,6 +4498,7 @@ function PcIcecatEnrich({ onPartsReload }) {
   const [running, setRunning] = useState(null);
   const [stats, setStats] = useState({});
   const [progress, setProgress] = useState({});
+  const [mode, setMode] = useState('new');
   const cancelRef = React.useRef(false);
 
   // Progress comes from the library, not from counting up during a run, so it
@@ -4524,6 +4525,9 @@ function PcIcecatEnrich({ onPartsReload }) {
     onPartsReload?.();
   };
 
+  const modeRef = React.useRef(mode);
+  modeRef.current = mode;
+
   const runCategory = async (cat, { keepRunning = false } = {}) => {
     setRunning(cat);
     const totals = { tried:0, found:0, filled:0, noMatch:0, restricted:0, failed:0, remaining:0 };
@@ -4532,7 +4536,7 @@ function PcIcecatEnrich({ onPartsReload }) {
       if (cancelRef.current) break;
       const r = await fetch('/api/admin/pc-builder/icecat/enrich', {
         method:'POST', headers:postHeaders(), credentials:'include',
-        body: JSON.stringify({ category: cat, limit: 25 }),
+        body: JSON.stringify({ category: cat, limit: 25, mode: modeRef.current }),
       }).catch(() => null);
       if (!r || !r.ok) {
         const d = r ? await r.json().catch(() => ({})) : {};
@@ -4566,7 +4570,12 @@ function PcIcecatEnrich({ onPartsReload }) {
             anyone having to go and find a part number.
           </div>
         </div>
-        <div className="row-flex" style={{gap:8}}>
+        <div className="row-flex" style={{gap:8, alignItems:'center'}}>
+          <select className="input" style={{fontSize:12, maxWidth:210}} value={mode} onChange={e => setMode(e.target.value)} disabled={!!running}>
+            <option value="new">Parts not tried yet</option>
+            <option value="retry">Also retry ones not found</option>
+            <option value="refresh">Everything, refresh existing too</option>
+          </select>
           {running && <button className="btn btn-ghost btn-sm" onClick={() => { cancelRef.current = true; }}>Stop</button>}
           <button className="btn btn-rust btn-sm" onClick={runAll} disabled={!!running || ready === false}>
             {running ? 'Working…' : 'Fill in all categories'}
@@ -4588,8 +4597,13 @@ function PcIcecatEnrich({ onPartsReload }) {
               <span style={{fontSize:13, minWidth:150, flex:1}}>{c.label}
                 <span style={{fontSize:11.5, color:'var(--ink-2)'}}> · {c.gains}</span>
                 {pr && pr.total > 0 && (
-                  <span style={{display:'block', height:3, background:'var(--line)', marginTop:4, maxWidth:260}}>
-                    <span style={{display:'block', height:3, width:`${pct}%`, background: pr.complete ? '#345526' : 'var(--ochre)'}}/>
+                  // Green for parts that came back with specs, rust for ones
+                  // looked up and not found. Both are progress, but only one is
+                  // useful, and a single bar hid which was which.
+                  <span style={{display:'flex', height:4, background:'var(--line)', marginTop:5, maxWidth:280, overflow:'hidden'}}
+                    title={`${pr.complete.toLocaleString()} with specs, ${pr.tried.toLocaleString()} not found, ${pr.outstanding.toLocaleString()} still to try`}>
+                    <span style={{height:4, width:`${(pr.complete / pr.total) * 100}%`, background:'#345526'}}/>
+                    <span style={{height:4, width:`${(pr.tried / pr.total) * 100}%`, background:'var(--rust)', opacity:0.55}}/>
                   </span>
                 )}
               </span>
@@ -4602,8 +4616,12 @@ function PcIcecatEnrich({ onPartsReload }) {
                   </span>
                 )}
                 <button className="btn btn-ghost btn-sm" onClick={() => runCategory(c.key)}
-                  disabled={!!running || ready === false || (pr && pr.outstanding === 0)}>
-                  {running === c.key ? 'Working…' : pr && pr.outstanding === 0 ? 'Done' : st ? 'Continue' : 'Fill in'}
+                  disabled={!!running || ready === false || (mode === 'new' && pr && pr.outstanding === 0)}>
+                  {running === c.key ? 'Working…'
+                    : mode === 'refresh' ? 'Refresh'
+                    : mode === 'retry' ? 'Retry'
+                    : pr && pr.outstanding === 0 ? 'Done'
+                    : st ? 'Continue' : 'Fill in'}
                 </button>
               </span>
             </div>
@@ -4612,8 +4630,21 @@ function PcIcecatEnrich({ onPartsReload }) {
       </div>
       <p style={{fontSize:11.5, color:'var(--ink-2)', margin:'10px 0 0'}}>
         Safe to re-run. Parts already tried are skipped for a month, and a spec you have edited is never overwritten.
+        <span className="row-flex" style={{gap:12, alignItems:'center', marginBottom:4}}>
+          <span className="row-flex" style={{gap:5, alignItems:'center'}}>
+            <span style={{width:10, height:4, background:'#345526', display:'inline-block'}}/> with specs
+          </span>
+          <span className="row-flex" style={{gap:5, alignItems:'center'}}>
+            <span style={{width:10, height:4, background:'var(--rust)', opacity:0.55, display:'inline-block'}}/> looked up, not found
+          </span>
+          <span className="row-flex" style={{gap:5, alignItems:'center'}}>
+            <span style={{width:10, height:4, background:'var(--line)', display:'inline-block'}}/> still to try
+          </span>
+        </span>
         A full pass over every category takes a while, so leave it running. Stopping is safe: the figures above are
         counted from the library itself, so they carry across restarts and a resumed run picks up where it left off.
+        Not-found parts are left alone for a month, unless you pick Retry above. Refresh re-fetches parts that already
+        have specs, to pick up a corrected datasheet. Neither ever overwrites a spec you have edited yourself.
       </p>
     </div>
   );

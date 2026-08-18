@@ -9107,18 +9107,24 @@ const adminServer = http.createServer(async (req, res) => {
     const category = body.category;
     if (!ICECAT_FIT_SPECS[category]) return json(res, 400, { error: 'bad_category' });
     const limit = Math.min(Math.max(parseInt(body.limit) || 20, 1), 50);
-    const retryDays = 30;
-    const cutoff = Date.now() - retryDays * 864e5;
+    // new     : parts never tried, or last tried over a month ago (the default)
+    // retry   : also parts already tried and not found, ignoring the month wait
+    // refresh : everything, including parts that already have their specs
+    const mode = ['new', 'retry', 'refresh'].includes(body.mode) ? body.mode : 'new';
+    const cutoff = Date.now() - 30 * 864e5;
 
     const data = readPcBuilder();
     const needed = ICECAT_FIT_SPECS[category];
+    const hasAll = (p) => needed.every(k => {
+      const v = (p.specs || {})[k];
+      return v !== undefined && v !== null && v !== '';
+    });
     const candidates = data.parts.filter(p => {
       if (p.category !== category) return false;
+      // A figure someone has checked is never re-fetched, in any mode.
       if (p.specsEditedByStaff) return false;
-      const specs = p.specs || {};
-      // Only parts still missing something the fit checks need.
-      if (needed.every(k => specs[k] !== undefined && specs[k] !== null && specs[k] !== '')) return false;
-      if (p.icecatTriedAt && Date.parse(p.icecatTriedAt) > cutoff) return false;
+      if (mode !== 'refresh' && hasAll(p)) return false;
+      if (mode === 'new' && p.icecatTriedAt && Date.parse(p.icecatTriedAt) > cutoff) return false;
       return !!(p.brand && (p.sourceName || p.name));
     });
 
