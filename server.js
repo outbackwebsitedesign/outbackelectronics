@@ -9127,7 +9127,13 @@ const adminServer = http.createServer(async (req, res) => {
     const summary = { tried: 0, found: 0, filled: 0, noMatch: 0, restricted: 0, failed: 0, remaining: Math.max(candidates.length - batch.length, 0) };
     const examples = [];
 
-    for (const part of batch) {
+    // A few lookups in flight at once. Sequentially, a category of five
+    // thousand parts takes close to half an hour at roughly a third of a
+    // second each; this keeps it to a few minutes without hammering Icecat.
+    const CONCURRENCY = 5;
+    let aborted = null;
+    const runOne = async (part) => {
+      if (aborted) return;
       summary.tried++;
       const result = await icecat.lookup({
         brand: part.brand, mpn: part.mpn || part.sourceName || part.name, credentials: creds,
@@ -9139,11 +9145,8 @@ const adminServer = http.createServer(async (req, res) => {
         else summary.failed++;
         // A credentials problem affects every row, so stop rather than burning
         // through the library marking thousands of parts as tried.
-        if (result.reason === 'bad_credentials' || result.reason === 'not_configured') {
-          writePcBuilder(data);
-          return json(res, 503, { error: result.reason, message: result.message });
-        }
-        continue;
+        if (result.reason === 'bad_credentials' || result.reason === 'not_configured') aborted = result;
+        return;
       }
       summary.found++;
       const mapped = icecat.mapIcecatFeatures(result.data, category);
@@ -9168,8 +9171,14 @@ const adminServer = http.createServer(async (req, res) => {
         summary.filled++;
         if (examples.length < 6) examples.push({ name: part.name, gained: needed.filter(k => merged[k] != null) });
       }
+    };
+
+    for (let i = 0; i < batch.length; i += CONCURRENCY) {
+      if (aborted) break;
+      await Promise.all(batch.slice(i, i + CONCURRENCY).map(runOne));
     }
     writePcBuilder(data);
+    if (aborted) return json(res, 503, { error: aborted.reason, message: aborted.message });
     return json(res, 200, { ok: true, category, summary, examples });
   }
 

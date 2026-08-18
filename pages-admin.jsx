@@ -4504,7 +4504,21 @@ function PcIcecatEnrich({ onPartsReload }) {
       .then(r => r.ok ? r.json() : Promise.reject()).then(d => setReady(!!d.configured)).catch(() => setReady(null));
   }, []);
 
-  const runCategory = async (cat) => {
+  // Categories are independent, so "all" just walks them in turn. Kept
+  // sequential between categories on purpose: the concurrency that makes this
+  // quick already happens inside each batch, and five categories firing at once
+  // would only mean five times the load on Icecat for no extra speed.
+  const runAll = async () => {
+    cancelRef.current = false;
+    for (const c of ICECAT_CATEGORIES) {
+      if (cancelRef.current) break;
+      await runCategory(c.key, { keepRunning: true });
+    }
+    setRunning(null);
+    onPartsReload?.();
+  };
+
+  const runCategory = async (cat, { keepRunning = false } = {}) => {
     setRunning(cat);
     const totals = { tried:0, found:0, filled:0, noMatch:0, restricted:0, failed:0, remaining:0 };
     // Batched so progress shows and a long run can be stopped part way.
@@ -4524,9 +4538,11 @@ function PcIcecatEnrich({ onPartsReload }) {
       setStats(cur => ({ ...cur, [cat]: { ...totals } }));
       if (!d.summary.tried || !d.summary.remaining) break;
     }
-    setRunning(null);
-    cancelRef.current = false;
-    onPartsReload?.();
+    if (!keepRunning) {
+      setRunning(null);
+      cancelRef.current = false;
+      onPartsReload?.();
+    }
   };
 
   return (
@@ -4540,7 +4556,12 @@ function PcIcecatEnrich({ onPartsReload }) {
             anyone having to go and find a part number.
           </div>
         </div>
-        {running && <button className="btn btn-ghost btn-sm" onClick={() => { cancelRef.current = true; }}>Stop</button>}
+        <div className="row-flex" style={{gap:8}}>
+          {running && <button className="btn btn-ghost btn-sm" onClick={() => { cancelRef.current = true; }}>Stop</button>}
+          <button className="btn btn-rust btn-sm" onClick={runAll} disabled={!!running || ready === false}>
+            {running ? 'Working…' : 'Fill in all categories'}
+          </button>
+        </div>
       </div>
       {ready === false && (
         <div style={{fontSize:12.5, color:'var(--rust)', marginBottom:8}}>
@@ -4574,6 +4595,7 @@ function PcIcecatEnrich({ onPartsReload }) {
       </div>
       <p style={{fontSize:11.5, color:'var(--ink-2)', margin:'10px 0 0'}}>
         Safe to re-run. Parts already tried are skipped for a month, and a spec you have edited is never overwritten.
+        A full pass over every category takes a while, so leave it running; stopping keeps everything already filled in.
       </p>
     </div>
   );
