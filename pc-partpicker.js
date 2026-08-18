@@ -21,7 +21,6 @@ const CATEGORY_PATH = {
   psu: 'power-supply',
 };
 
-const wanted = new Set(Object.keys(CATEGORY_PATH));
 const text = (s) => String(s || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'").replace(/\s+/g, ' ').trim();
 const norm = (s) => text(s).toLowerCase().replace(/[®™]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 const num = (s) => { const m = String(s || '').replace(/,/g, '').match(/\d+(?:\.\d+)?/); return m ? Number(m[0]) : undefined; };
@@ -66,7 +65,6 @@ function scoreCandidate(candidate, brand, model) {
 
 function parseSpecs(html) {
   const specs = {};
-  // Current product pages render each spec as group--spec with a title/content.
   const blockRe = /<[^>]+class=["'][^"']*group--spec[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>\s*(?=<[^>]+class=["'][^"']*group--spec|<\/div>|<\/section>)/gi;
   let m;
   while ((m = blockRe.exec(html))) {
@@ -75,7 +73,6 @@ function parseSpecs(html) {
     const vm = block.match(/class=["'][^"']*group__content[^"']*["'][^>]*>([\s\S]*?)<\//i);
     if (tm && vm) specs[text(tm[1])] = text(vm[1]);
   }
-  // More tolerant fallback for markup where the wrappers nest deeper.
   if (!Object.keys(specs).length) {
     const pairRe = /class=["'][^"']*group__title[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>[\s\S]{0,1000}?class=["'][^"']*group__content[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/gi;
     while ((m = pairRe.exec(html))) specs[text(m[1])] = text(m[2]);
@@ -137,7 +134,6 @@ function mapSpecs(raw, category) {
 }
 
 async function lookup({ category, brand = '', model = '', mpn = '' }) {
-  if (!wanted.has(category)) return { ok: false, reason: 'unsupported_category' };
   const query = String(mpn || model || '').trim();
   if (!query) return { ok: false, reason: 'missing_identity' };
   const searchUrl = `${BASE_URL}/search/?q=${encodeURIComponent([brand, query].filter(Boolean).join(' '))}`;
@@ -147,7 +143,6 @@ async function lookup({ category, brand = '', model = '', mpn = '' }) {
     if (blocked(searchHtml, search.status)) return { ok: false, reason: 'blocked', status: search.status };
     if (!search.ok) return { ok: false, reason: 'http_error', status: search.status };
 
-    // A sufficiently specific search can redirect straight to /product/.
     let productUrl = search.url.includes('/product/') ? search.url : '';
     if (!productUrl) {
       const links = productLinks(searchHtml)
@@ -155,8 +150,6 @@ async function lookup({ category, brand = '', model = '', mpn = '' }) {
         .filter(x => x.score >= 200)
         .sort((a, b) => b.score - a.score);
       if (!links.length) return { ok: false, reason: 'not_found' };
-      // Refuse ambiguous weak matches. A wrong compatibility spec is worse than
-      // a blank one.
       if (links[1] && links[0].score < 700 && links[0].score - links[1].score < 80) return { ok: false, reason: 'ambiguous' };
       productUrl = BASE_URL + links[0].path;
     }
@@ -168,8 +161,8 @@ async function lookup({ category, brand = '', model = '', mpn = '' }) {
     if (product.status < 200 || product.status >= 300) return { ok: false, reason: 'http_error', status: product.status };
     const rawSpecs = parseSpecs(product.html);
     if (!Object.keys(rawSpecs).length) return { ok: false, reason: 'parse_failed' };
-    const specs = mapSpecs(rawSpecs, category);
-    if (!Object.keys(specs).length) return { ok: false, reason: 'no_useful_specs', url: productUrl };
+    const specs = category ? mapSpecs(rawSpecs, category) : {};
+    if (category && !Object.keys(specs).length) return { ok: false, reason: 'no_useful_specs', url: productUrl, rawSpecs };
     return { ok: true, specs, rawSpecs, url: productUrl };
   } catch (err) {
     return { ok: false, reason: err && err.name === 'AbortError' ? 'timeout' : 'error', message: String(err && err.message || err) };
