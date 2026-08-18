@@ -8771,13 +8771,22 @@ const adminServer = http.createServer(async (req, res) => {
     if (!body.category) return json(res, 400, { error: 'category_required' });
     const data = readPcBuilder();
     const idx = data.parts.findIndex(p => p.id && p.id === body.id);
+    const prev = idx >= 0 ? data.parts[idx] : null;
+    const specs = body.specs && typeof body.specs === 'object' ? body.specs : {};
+    // Once a human has touched the specs of a part that came from the built-in
+    // catalog, re-running the seed leaves it alone. Their figure was checked,
+    // the shipped default was not.
+    const specsTouched = !!prev && !!prev.seedId && JSON.stringify(prev.specs || {}) !== JSON.stringify(specs);
     const item = {
       ...body,
       id: body.id || 'pcp-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
       name: String(body.name).trim(),
       priceAud: Number(body.priceAud) || 0,
       cost: Number(body.cost) || 0,
-      specs: body.specs && typeof body.specs === 'object' ? body.specs : {},
+      specs,
+      specsEditedByStaff: (prev && prev.specsEditedByStaff) || specsTouched,
+      // Editing the specs is the act of checking them, so the badge clears.
+      specsNeedCheck: specsTouched ? false : (body.specsNeedCheck || false),
       updatedAt: new Date().toISOString(),
     };
     if (idx >= 0) { data.parts[idx] = item; } else { item.createdAt = item.updatedAt; data.parts.push(item); }
@@ -8798,6 +8807,60 @@ const adminServer = http.createServer(async (req, res) => {
 
   // Bring catalog products in as parts so stock the shop already lists does not
   // have to be typed twice. Specs start empty and are filled in by staff.
+  // Load the built-in component catalog (pc-parts-seed.js). Keyed by seedId so
+  // re-running it corrects specs rather than duplicating parts. Specs a staff
+  // member has edited are left alone: a shipped default must never overwrite a
+  // figure someone checked against the manufacturer.
+  if (req.method === 'POST' && url.pathname === '/api/admin/pc-builder/parts/seed') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    let body; try { body = await readJson(req, 4e6); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const items = Array.isArray(body.items) ? body.items : [];
+    if (!items.length) return json(res, 400, { error: 'no_items' });
+    const data = readPcBuilder();
+    const bySeed = new Map();
+    for (const p of data.parts) if (p.seedId) bySeed.set(p.seedId, p);
+    const now = new Date().toISOString();
+    const summary = { created: 0, updated: 0, keptStaffEdits: 0 };
+
+    for (const it of items) {
+      if (!it || !it.seedId || !it.category || !it.name) continue;
+      const specs = it.specs && typeof it.specs === 'object' ? it.specs : {};
+      const existing = bySeed.get(it.seedId);
+      if (existing) {
+        if (existing.specsEditedByStaff) { summary.keptStaffEdits++; continue; }
+        existing.category = it.category;
+        existing.name = it.name;
+        existing.brand = it.brand || '';
+        existing.specs = specs;
+        existing.specsNeedCheck = !!it.verify;
+        existing.updatedAt = now;
+        summary.updated++;
+        continue;
+      }
+      data.parts.push({
+        id: 'pcp-seed-' + it.seedId,
+        seedId: it.seedId,
+        category: it.category,
+        name: it.name,
+        brand: it.brand || '',
+        sku: '',
+        // Deliberately unpriced: the catalog carries specs, pricing comes from
+        // the shop catalog or a supplier feed.
+        priceAud: 0,
+        cost: 0,
+        stock: null,
+        specs,
+        specsNeedCheck: !!it.verify,
+        notes: '',
+        createdAt: now,
+        updatedAt: now,
+      });
+      summary.created++;
+    }
+    writePcBuilder(data);
+    return json(res, 200, { ok: true, summary, partCount: data.parts.length });
+  }
+
   if (req.method === 'POST' && url.pathname === '/api/admin/pc-builder/parts/import') {
     const session = requireRole(req, res, 'technician'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }

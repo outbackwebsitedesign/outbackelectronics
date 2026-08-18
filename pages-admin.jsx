@@ -4,6 +4,7 @@ import { getCsrf, ensureCsrf } from './src/lib/api.js';
 import { renderMarkdown, estimateReadTime, slugify } from './markdown.jsx';
 import { PRODUCT_CONDITIONS } from './src/lib/conditions.js';
 import { PC_PART_CATEGORIES, PC_CATEGORY_MAP, categoryLabel, partDisplayName, checkBuild, buildTotals } from './pc-compat.js';
+import { PC_PARTS_SEED } from './pc-parts-seed.js';
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 // Canonical date format for all order dates: "27 May 2026"
@@ -3587,6 +3588,15 @@ function PcPartEditor({ part, onClose, onSaved, onDeleted }) {
         </p>
       )}
 
+      {form.specsNeedCheck && (
+        <div style={{background:'#fff4d6', borderLeft:'3px solid var(--ochre)', padding:'8px 10px', margin:'14px 0 0'}}>
+          <span className="mono" style={{fontSize:9.5, letterSpacing:'.08em', color:'#7a5d10', display:'block', marginBottom:2}}>UNVERIFIED</span>
+          <span style={{fontSize:12.5}}>
+            These specs came from the built-in catalog. Check the dimensions against the manufacturer page before quoting a build on them.
+            Saving any change here marks them checked.
+          </span>
+        </div>
+      )}
       {cat.fields.length > 0 && <>
         <h4 style={{margin:'22px 0 10px', fontSize:13, letterSpacing:'.04em'}}>{cat.label} specs</h4>
         <p style={{fontSize:12, color:'var(--ink-2)', margin:'0 0 12px'}}>
@@ -3691,10 +3701,29 @@ function PcPartsLibrary({ products, onLibraryChanged }) {
   const [q, setQ] = useState('');
   const [importOpen, setImportOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [seeding, setSeeding] = useState(false);
   const { items: rows, total, counts, loading } = usePartsQuery({
     category: catFilter === 'all' ? '' : catFilter, q, limit: 200, enabled: true, reloadKey,
   });
   const refresh = () => { setReloadKey(k => k + 1); onLibraryChanged?.(); };
+
+  // Loads the components shipped in pc-parts-seed.js. Safe to re-run: parts are
+  // keyed by seedId, so this corrects shipped specs and never duplicates.
+  const loadSeedCatalog = async () => {
+    if (!await adminConfirm(
+      `Load ${PC_PARTS_SEED.length} components into the parts library?\n\nThey come with specs but no prices, and anything you have already edited is left untouched.`,
+      { title: 'Load component catalog', confirmLabel: 'Load catalog' })) return;
+    setSeeding(true);
+    const r = await fetch('/api/admin/pc-builder/parts/seed', {
+      method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ items: PC_PARTS_SEED }),
+    }).catch(() => null);
+    setSeeding(false);
+    if (!r || !r.ok) { adminToast('Could not load the component catalog, please try again.'); return; }
+    const d = await r.json();
+    const kept = d.summary.keptStaffEdits ? `, ${d.summary.keptStaffEdits} left as you edited them` : '';
+    adminToast(`${d.summary.created} components added, ${d.summary.updated} refreshed${kept}.`, 'success');
+    refresh();
+  };
 
   return (
     <>
@@ -3709,6 +3738,9 @@ function PcPartsLibrary({ products, onLibraryChanged }) {
           <input className="input" style={{flex:1, maxWidth:280}} placeholder="Search parts…" value={q} onChange={e => setQ(e.target.value)}/>
         </div>
         <div className="row-flex" style={{gap:8}}>
+          <button className="btn btn-ghost btn-sm" onClick={loadSeedCatalog} disabled={seeding}>
+            {seeding ? 'Loading…' : 'Load component catalog'}
+          </button>
           <button className="btn btn-ghost btn-sm" onClick={() => setImportOpen(true)}>Import from products</button>
           <button className="btn btn-rust btn-sm" onClick={() => setEdit(blankPcPart(catFilter === 'all' ? 'cpu' : catFilter))}>+ New part</button>
         </div>
@@ -3723,7 +3755,15 @@ function PcPartsLibrary({ products, onLibraryChanged }) {
         columns={[
           { key:'category', label:'Category', w:'130px', sort:true, render:r => <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{categoryLabel(r.category)}</span> },
           { key:'name', label:'Part', w:'2fr', sort:r => pcPartLabel(r), render:r => pcPartLabel(r) },
-          { key:'specs', label:'Specs', w:'2fr', render:r => <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{pcSpecSummary(r) || '-'}</span> },
+          { key:'specs', label:'Specs', w:'2fr', render:r => (
+            <span className="row-flex" style={{gap:6, alignItems:'center', minWidth:0}}>
+              <span className="mono" style={{fontSize:11, color:'var(--ink-2)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{pcSpecSummary(r) || '-'}</span>
+              {r.specsNeedCheck && (
+                <span className="mono" title="From the built-in catalog, dimensions not yet checked against the manufacturer"
+                  style={{fontSize:9, padding:'1px 5px', background:'#fff4d6', color:'#7a5d10', whiteSpace:'nowrap', flexShrink:0}}>UNVERIFIED</span>
+              )}
+            </span>
+          ) },
           { key:'stock', label:'Stock', w:'70px', sort:r => Number(r.stock) || 0, render:r => r.stock == null
             ? <span style={{color:'var(--ink-3)'}}>-</span>
             : <span className="mono" style={{fontSize:12, color: Number(r.stock) > 0 ? 'var(--ink)' : 'var(--rust)'}}>{r.stock}</span> },
