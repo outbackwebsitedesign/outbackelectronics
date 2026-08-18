@@ -802,6 +802,22 @@ No. We currently ship only to addresses within Australia. We do not offer intern
 
 If delivery is delayed for any reason we will let you know as soon as possible and will advise you of a revised estimated delivery date.
 
+### Backorders & Pre-orders
+
+Some products are offered on backorder, meaning we do not hold the item in stock at the time you order it and will obtain it from our supplier or distributor once your order is placed. Backordered items are clearly marked as such on the product page and in your cart before you pay.
+
+**Lead times are estimates.** Any lead time shown against a backordered item (for example 'ships in 3 weeks') is our good-faith estimate based on the supplier or distributor advice available to us at the time of listing. It is an estimate, not a guaranteed delivery date, and it is not a term of your contract with us. Supplier production runs, freight schedules, customs clearance, currency and stock allocation are outside our control and can move the date.
+
+**What we commit to.** We will only offer an item on backorder where we have reasonable grounds to believe we can supply it within the estimate shown. If the estimate changes, we will contact you with a revised date as soon as our supplier advises us. We will not leave you waiting without an update.
+
+**Your right to cancel.** You may cancel any backordered item that has not yet been dispatched, at any time and for any reason, for a full refund of the amount paid for that item to your original payment method. You do not need to wait for the estimate to pass, and you do not need to give a reason. If we tell you the lead time has blown out and you would rather not wait, cancel and we will refund you.
+
+**Where an order contains both stocked and backordered items,** we will normally hold the order and ship it together unless you ask us to split it. Splitting an order may attract a second shipping charge, which we will tell you about before we do it.
+
+**Payment.** Backordered items are paid for at the time of order. That payment secures your place in the queue for the incoming stock. It is refundable in full at any time before dispatch, as set out above.
+
+**Australian Consumer Law.** Nothing in this section limits or excludes the consumer guarantees, including the guarantee that goods will be supplied within a reasonable time where no delivery date is agreed. Where a delay becomes unreasonable, your rights under the Australian Consumer Law, including the right to a refund, are unaffected. What this section does is make clear that a published lead-time estimate is an estimate given in good faith rather than a promised date, and that your remedy for a supplier delay is to cancel for a full refund rather than a claim for any loss the delay causes you.
+
 ### What If My Order Is Lost or Missing?
 
 If your tracking information has not updated for more than 5 business days, or if it has been more than 5 business days past the estimated delivery date with no delivery, please contact us at [{{email}}](mailto:{{email}}) with your order number and tracking details. We will raise an enquiry with Australia Post or the relevant carrier on your behalf.
@@ -1571,7 +1587,7 @@ const POLICY_DEFAULTS = [
   // private
   { audience: 'private', slug: 'terms-and-conditions', title: 'Terms & Conditions', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_TERMS_PRIVATE },
   { audience: 'private', slug: 'privacy-policy', title: 'Privacy Policy', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_PRIVACY },
-  { audience: 'private', slug: 'shipping-and-delivery', title: 'Shipping & Delivery', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_SHIPPING },
+  { audience: 'private', slug: 'shipping-and-delivery', title: 'Shipping & Delivery', updatedAt: '2026-08-18T00:00:00.000Z', body: BODY_SHIPPING },
   { audience: 'private', slug: 'cookie-policy', title: 'Cookie Policy', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_COOKIE },
   { audience: 'private', slug: 'return-policy', title: 'Return Policy', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_RETURN_PRIVATE },
   { audience: 'private', slug: 'custom-work', title: 'Custom Work & Reverse Engineering', updatedAt: '2026-06-19T00:00:00.000Z', body: BODY_CUSTOM_WORK },
@@ -1585,7 +1601,7 @@ const POLICY_DEFAULTS = [
   { audience: 'commercial', slug: 'return-policy', title: 'Return Policy', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_RETURN_COMMERCIAL },
   { audience: 'commercial', slug: 'custom-work', title: 'Custom Work & Reverse Engineering', updatedAt: '2026-06-19T00:00:00.000Z', body: BODY_CUSTOM_WORK },
   { audience: 'commercial', slug: 'privacy-policy', title: 'Privacy Policy', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_PRIVACY },
-  { audience: 'commercial', slug: 'shipping-and-delivery', title: 'Shipping & Delivery', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_SHIPPING },
+  { audience: 'commercial', slug: 'shipping-and-delivery', title: 'Shipping & Delivery', updatedAt: '2026-08-18T00:00:00.000Z', body: BODY_SHIPPING },
   { audience: 'commercial', slug: 'cookie-policy', title: 'Cookie Policy', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_COOKIE },
   { audience: 'commercial', slug: 'disclaimer', title: 'Disclaimer', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_DISCLAIMER },
   { audience: 'commercial', slug: 'acceptable-use', title: 'Acceptable Use Policy', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_ACCEPTABLE_USE },

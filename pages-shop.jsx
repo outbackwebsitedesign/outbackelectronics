@@ -1791,6 +1791,19 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
               </div>
             )}
 
+            {/* Point-of-sale disclosure for backorders. The lead time has to be
+                presented as an estimate before the customer pays, otherwise it
+                reads as a promised date. The cancel-any-time-for-a-full-refund
+                offer is the part that actually holds up: under the Australian
+                Consumer Law a delivery estimate cannot simply be disclaimed. */}
+            {onBackorder && (
+              <p style={{fontSize:12, color:'var(--ink-2)', lineHeight:1.55, marginBottom:16}}>
+                This item is not in stock and is ordered in from our supplier. Any lead time shown is a good-faith estimate, not a guaranteed date.
+                We will let you know if it changes, and you can cancel for a full refund any time before it ships.{' '}
+                <a href="/policies/shipping-and-delivery" target="_blank" rel="noopener noreferrer" style={{color:'var(--rust)'}}>Backorder policy</a>
+              </p>
+            )}
+
             <div style={{display:'flex', gap:12}}>
               <button className="btn btn-rust" style={{flex:1, justifyContent:'center'}}
                 disabled={!inStock}

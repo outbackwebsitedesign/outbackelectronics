@@ -456,9 +456,18 @@ function CartPage({ go, cart, removeFromCart, updateQty, clearCart, addToCart, r
                     {item.sku && <div className="mono" style={{fontSize:11, color:'var(--ink-3)', marginTop:3}}>SKU: {item.sku}</div>}
                     {item.cond && <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:2}}>{item.cond}</div>}
                     {isBackorder(item) && (
-                      <div className="mono" style={{fontSize:11, color:'var(--ochre)', marginTop:4}}>
-                        ON BACKORDER{backorderLead(item) ? ` - SHIPS IN ${backorderLead(item).toUpperCase()}` : ''}
-                      </div>
+                      <>
+                        <div className="mono" style={{fontSize:11, color:'var(--ochre)', marginTop:4}}>
+                          ON BACKORDER{backorderLead(item) ? ` - SHIPS IN ${backorderLead(item).toUpperCase()}` : ''}
+                        </div>
+                        {/* Repeated here, not just on the product page: this is
+                            the last screen before payment, so it is where the
+                            estimate has to be labelled an estimate. */}
+                        <div style={{fontSize:11, color:'var(--ink-2)', marginTop:3, lineHeight:1.5}}>
+                          Estimate only, not a guaranteed date. Cancellable for a full refund any time before it ships.{' '}
+                          <a href="/policies/shipping-and-delivery" target="_blank" rel="noopener noreferrer" style={{color:'var(--rust)'}}>Backorder policy</a>
+                        </div>
+                      </>
                     )}
                     {toBulk > 0 && (
                       <div className="mono" style={{fontSize:11, color:'var(--eucalyptus)', marginTop:4}}>
