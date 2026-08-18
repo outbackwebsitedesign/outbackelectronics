@@ -9178,6 +9178,12 @@ const adminServer = http.createServer(async (req, res) => {
       return !!(p.brand && (p.sourceName || p.name));
     });
 
+    // Least recently tried first, never-tried before that. Without this,
+    // retry and refresh take the same head of the list on every batch: nothing
+    // filters an already-tried part out in those modes, so a run would loop
+    // over the first twenty-five parts and never reach the rest.
+    const triedAt = (p) => (p.icecatTriedAt ? Date.parse(p.icecatTriedAt) || 0 : 0);
+    if (mode !== 'new') candidates.sort((a, b) => triedAt(a) - triedAt(b));
     const batch = candidates.slice(0, limit);
     const now = new Date().toISOString();
     const summary = { tried: 0, found: 0, filled: 0, noMatch: 0, restricted: 0, failed: 0, remaining: Math.max(candidates.length - batch.length, 0) };
