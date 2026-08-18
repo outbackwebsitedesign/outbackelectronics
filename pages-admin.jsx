@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { getCsrf, ensureCsrf } from './src/lib/api.js';
 import { renderMarkdown, estimateReadTime, slugify } from './markdown.jsx';
 import { PRODUCT_CONDITIONS } from './src/lib/conditions.js';
-import { PC_PART_CATEGORIES, PC_CATEGORY_MAP, categoryLabel, partDisplayName, checkBuild, buildTotals, compatibilityFilter } from './pc-compat.js';
+import { PC_PART_CATEGORIES, PC_CATEGORY_MAP, PART_COLOURS, categoryLabel, partDisplayName, checkBuild, buildTotals, compatibilityFilter } from './pc-compat.js';
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 // Canonical date format for all order dates: "27 May 2026"
@@ -3616,8 +3616,8 @@ function PcPartEditor({ part, onClose, onSaved, onDeleted }) {
 
 // Debounced server-side parts query. The library is far too big to ship to the
 // browser once a distributor feed is in, so every list of parts is a request.
-function usePartsQuery({ category, q, limit = 60, enabled = true, reloadKey = 0, filter = null }) {
-  const [state, setState] = useState({ items: [], total: 0, counts: {}, filteredOutByFit: 0, loading: enabled });
+function usePartsQuery({ category, q, limit = 60, enabled = true, reloadKey = 0, filter = null, colour = '' }) {
+  const [state, setState] = useState({ items: [], total: 0, counts: {}, filteredOutByFit: 0, filteredOutByColour: 0, loading: enabled });
   const filterKey = filter && filter.length ? JSON.stringify(filter) : '';
   useEffect(() => {
     if (!enabled) return;
@@ -3628,30 +3628,35 @@ function usePartsQuery({ category, q, limit = 60, enabled = true, reloadKey = 0,
       if (category) params.set('category', category);
       if (q) params.set('q', q);
       if (filterKey) params.set('filter', filterKey);
+      if (colour) params.set('colour', colour);
       params.set('limit', String(limit));
       fetch(`/api/admin/pc-builder/parts?${params}`, { credentials:'include' })
         .then(r => r.ok ? r.json() : Promise.reject())
-        .then(d => { if (!cancelled) setState({ items: d.items || [], total: d.total || 0, counts: d.counts || {}, filteredOutByFit: d.filteredOutByFit || 0, loading: false }); })
+        .then(d => { if (!cancelled) setState({ items: d.items || [], total: d.total || 0, counts: d.counts || {}, filteredOutByFit: d.filteredOutByFit || 0, filteredOutByColour: d.filteredOutByColour || 0, loading: false }); })
         .catch(() => { if (!cancelled) setState(s => ({ ...s, loading: false })); });
     }, q ? 220 : 0);
     return () => { cancelled = true; clearTimeout(t); };
-  }, [category, q, limit, enabled, reloadKey, filterKey]);
+  }, [category, q, limit, enabled, reloadKey, filterKey, colour]);
   return state;
 }
 
 // Choose a part for one category, from the library, with search.
-function PcPartPicker({ category, items, parts, onPick, onClose, onNewPart }) {
+function PcPartPicker({ category, items, parts, colourTheme = '', onPick, onClose, onNewPart }) {
   const [q, setQ] = useState('');
   const [compatibleOnly, setCompatibleOnly] = useState(true);
+  // Defaults to the build's colour theme, so a white build offers white parts
+  // without setting it on every picker.
+  const [colour, setColour] = useState(colourTheme);
   const cat = PC_CATEGORY_MAP[category] || PC_CATEGORY_MAP.other;
+  const supportsColour = (cat.fields || []).some(f => f.key === 'colour');
   // Constraints come from what is already in the build, so picking a 14900K
   // leaves only LGA1700 boards on offer.
   const filter = useMemo(
     () => compatibilityFilter(category, items, parts),
     [category, items, parts]
   );
-  const { items: matches, total, filteredOutByFit, loading } = usePartsQuery({
-    category, q, filter: compatibleOnly ? filter : null,
+  const { items: matches, total, filteredOutByFit, filteredOutByColour, loading } = usePartsQuery({
+    category, q, filter: compatibleOnly ? filter : null, colour: supportsColour ? colour : '',
   });
   const constraintSummary = filter.map(c => {
     const label = { socket:'socket', memoryType:'memory', formFactor:'form factor', sockets:'socket',
@@ -3667,6 +3672,26 @@ function PcPartPicker({ category, items, parts, onPick, onClose, onNewPart }) {
     <Drawer open onClose={onClose} title={`Choose ${cat.label.toLowerCase()}`}
       footer={<button className="btn btn-ghost btn-sm" onClick={onNewPart}>+ Add a new {cat.label.toLowerCase()} to the library</button>}>
       <input className="input" autoFocus placeholder={`Search ${cat.label.toLowerCase()}…`} value={q} onChange={e => setQ(e.target.value)} style={{marginBottom:10}}/>
+
+      {supportsColour && (
+        <div className="row-flex" style={{gap:8, alignItems:'center', marginBottom:10}}>
+          <span style={{fontSize:12.5, color:'var(--ink-2)', whiteSpace:'nowrap'}}>Colour</span>
+          <select className="input" style={{flex:1, fontSize:12}} value={colour} onChange={e => setColour(e.target.value)}>
+            <option value="">Any colour</option>
+            {PART_COLOURS.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          {colour && filteredOutByColour > 0 && (
+            <span className="mono" style={{fontSize:10.5, color:'var(--ink-2)', whiteSpace:'nowrap'}}>
+              {filteredOutByColour.toLocaleString()} other colours hidden
+            </span>
+          )}
+        </div>
+      )}
+      {supportsColour && colour && (
+        <p style={{fontSize:11.5, color:'var(--ink-2)', margin:'-4px 0 10px'}}>
+          Parts with no colour recorded are still shown, since most imported parts have none yet.
+        </p>
+      )}
 
       {filter.length > 0 && (
         <div style={{background:'var(--bg-deep)', padding:'8px 10px', marginBottom:12}}>
@@ -3711,7 +3736,9 @@ function PcPartPicker({ category, items, parts, onPick, onClose, onNewPart }) {
             style={{textAlign:'left', background:'var(--bg-deep)', border:'1px solid var(--line)', padding:'10px 12px', cursor:'pointer', display:'flex', justifyContent:'space-between', gap:12, alignItems:'center'}}>
             <span style={{minWidth:0}}>
               <span style={{display:'block', fontSize:13, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{pcPartLabel(p)}</span>
-              <span className="mono" style={{fontSize:10.5, color:'var(--ink-2)'}}>{pcSpecSummary(p) || (p.sku || 'no specs recorded')}</span>
+              <span className="mono" style={{fontSize:10.5, color:'var(--ink-2)'}}>
+                {(p.specs || {}).colour ? `${p.specs.colour} · ` : ''}{pcSpecSummary(p) || (p.sku || 'no specs recorded')}
+              </span>
             </span>
             <span className="mono" style={{fontWeight:600, whiteSpace:'nowrap'}}>{pcMoney(p.priceAud)}</span>
           </button>
@@ -3748,8 +3775,9 @@ function PcPartsLibrary({ products, onLibraryChanged }) {
   const [importOpen, setImportOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [seeding, setSeeding] = useState(false); // false | 'seed' | 'cpus'
+  const [colourFilter, setColourFilter] = useState('');
   const { items: rows, total, counts, loading } = usePartsQuery({
-    category: catFilter === 'all' ? '' : catFilter, q, limit: 200, enabled: true, reloadKey,
+    category: catFilter === 'all' ? '' : catFilter, q, limit: 200, enabled: true, reloadKey, colour: colourFilter,
   });
   const refresh = () => { setReloadKey(k => k + 1); onLibraryChanged?.(); };
 
@@ -3789,6 +3817,10 @@ function PcPartsLibrary({ products, onLibraryChanged }) {
             ))}
           </select>
           <input className="input" style={{flex:1, maxWidth:280}} placeholder="Search parts…" value={q} onChange={e => setQ(e.target.value)}/>
+          <select className="input" style={{maxWidth:150}} value={colourFilter} onChange={e => setColourFilter(e.target.value)}>
+            <option value="">Any colour</option>
+            {PART_COLOURS.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
         </div>
         <div className="row-flex" style={{gap:8}}>
           <button className="btn btn-ghost btn-sm" onClick={() => loadCatalog('seed')} disabled={!!seeding}>
@@ -3811,6 +3843,9 @@ function PcPartsLibrary({ products, onLibraryChanged }) {
         columns={[
           { key:'category', label:'Category', w:'130px', sort:true, render:r => <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{categoryLabel(r.category)}</span> },
           { key:'name', label:'Part', w:'2fr', sort:r => pcPartLabel(r), render:r => pcPartLabel(r) },
+          { key:'colour', label:'Colour', w:'90px', sort:r => (r.specs || {}).colour || '', render:r => (r.specs || {}).colour
+            ? <span style={{fontSize:12}}>{r.specs.colour}</span>
+            : <span style={{color:'var(--ink-3)'}}>-</span> },
           { key:'specs', label:'Specs', w:'2fr', render:r => (
             <span className="row-flex" style={{gap:6, alignItems:'center', minWidth:0}}>
               <span className="mono" style={{fontSize:11, color:'var(--ink-2)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{pcSpecSummary(r) || '-'}</span>
@@ -4314,6 +4349,15 @@ function PcBuildPage({ build, customers, onClose, onSave, onDelete }) {
   const rememberPart = (part) => setParts(cur => cur.some(p => p.id === part.id) ? cur.map(p => p.id === part.id ? part : p) : [...cur, part]);
 
   const check = useMemo(() => checkBuild(form.items, parts), [form.items, parts]);
+  // Colour is a customer requirement rather than a fit problem, so it is
+  // reported next to the compatibility list rather than inside it.
+  const colourClashes = useMemo(() => {
+    if (!form.colourTheme) return [];
+    const byId = new Map(parts.map(p => [p.id, p]));
+    return (form.items || [])
+      .map(it => ({ part: byId.get(it.partId) || it.snapshot }))
+      .filter(x => x.part && x.part.specs && x.part.specs.colour && x.part.specs.colour !== form.colourTheme);
+  }, [form.items, form.colourTheme, parts]);
   const totals = useMemo(() => buildTotals(form, parts), [form, parts]);
   const partsById = useMemo(() => new Map(parts.map(p => [p.id, p])), [parts]);
   const discountAmount = useMemo(() => {
@@ -4440,6 +4484,11 @@ function PcBuildPage({ build, customers, onClose, onSave, onDelete }) {
             <select className="input" value={form.status || 'draft'} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
               {['draft','quoted','ordered','built','archived'].map(s => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
             </select></label>
+          <label className="field"><span className="label">Colour theme</span>
+            <select className="input" value={form.colourTheme || ''} onChange={e => setForm(f => ({ ...f, colourTheme: e.target.value }))}>
+              <option value="">No preference</option>
+              {PART_COLOURS.map(c => <option key={c} value={c}>{c}</option>)}
+            </select></label>
           <label className="field"><span className="label">Customer</span>
             <input className="input" list="pc-build-customers" value={form.cust || ''} onChange={e => applyCustomer(e.target.value)}/>
             <datalist id="pc-build-customers">
@@ -4516,6 +4565,16 @@ function PcBuildPage({ build, customers, onClose, onSave, onDelete }) {
               </div>
             </div>
 
+            {colourClashes.length > 0 && (
+              <div style={{background:'#fff4d6', borderLeft:'3px solid var(--ochre)', padding:'7px 9px', marginBottom:14}}>
+                <span className="mono" style={{fontSize:9.5, letterSpacing:'.08em', color:'#7a5d10', display:'block', marginBottom:2}}>COLOUR</span>
+                <span style={{fontSize:12.5, display:'block'}}>
+                  {colourClashes.length} part{colourClashes.length > 1 ? 's do' : ' does'} not match the {form.colourTheme.toLowerCase()} theme:
+                  {' '}{colourClashes.map(c => `${pcPartLabel(c.part)} (${c.part.specs.colour})`).join(', ')}.
+                </span>
+              </div>
+            )}
+
             <div style={{marginBottom:14}}>
               <div className="row-flex" style={{gap:6, marginBottom:8, alignItems:'center'}}>
                 <span className="mono" style={{fontSize:10.5, letterSpacing:'.1em', color:'var(--ink-2)'}}>COMPATIBILITY</span>
@@ -4581,6 +4640,7 @@ function PcBuildPage({ build, customers, onClose, onSave, onDelete }) {
           category={picking}
           items={form.items}
           parts={parts}
+          colourTheme={form.colourTheme || ''}
           onPick={addPart}
           onClose={() => setPicking(null)}
           onNewPart={() => { setNewPart(blankPcPart(picking)); setPicking(null); }}

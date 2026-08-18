@@ -8604,6 +8604,20 @@ const adminServer = http.createServer(async (req, res) => {
     // `total` stays the unfiltered count so the picker can say how many were
     // hidden and offer to show them.
     let filteredOutByFit = 0;
+    // Colour is tracked separately from fit so the picker can say which of the
+    // two hid a part. A part with no colour recorded still shows: most of a
+    // freshly imported feed has none, and hiding those would empty the picker
+    // the moment a build has a colour theme.
+    let filteredOutByColour = 0;
+    const colour = url.searchParams.get('colour');
+    if (colour) {
+      const before = items.length;
+      items = items.filter(p => {
+        const c = (p.specs || {}).colour;
+        return !c || String(c) === colour;
+      });
+      filteredOutByColour = before - items.length;
+    }
     const filterRaw = url.searchParams.get('filter');
     if (filterRaw) {
       let constraints = null;
@@ -8630,7 +8644,7 @@ const adminServer = http.createServer(async (req, res) => {
     // second request.
     const counts = {};
     for (const p of data.parts) counts[p.category] = (counts[p.category] || 0) + 1;
-    return json(res, 200, { items, total, counts, filteredOutByFit, partCount: data.parts.length });
+    return json(res, 200, { items, total, counts, filteredOutByFit, filteredOutByColour, partCount: data.parts.length });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/admin/pc-builder/suppliers/save') {

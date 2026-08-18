@@ -32,6 +32,13 @@ export const STORAGE_INTERFACES = ['M.2 NVMe', 'M.2 SATA', 'SATA', 'U.2'];
 export const STORAGE_SIZES = ['M.2', '2.5"', '3.5"'];
 export const COOLER_TYPES = ['Air', 'Liquid (AIO)'];
 
+// Colour is a build requirement in its own right: a customer asking for a white
+// build wants every visible part to match, and a black GPU ruins it as surely as
+// a wrong socket stops it booting. Recorded on the categories you actually see
+// through a side panel, not on CPUs or drives.
+export const PART_COLOURS = ['Black', 'White', 'Silver', 'Grey', 'Pink', 'Blue', 'Red', 'Green', 'Wood / natural', 'Multi / RGB'];
+const COLOUR_FIELD = { key: 'colour', label: 'Colour', type: 'select', options: PART_COLOURS };
+
 // Boards fit a case if the case lists their form factor. Larger cases almost
 // always take smaller boards, so the case's declared support is expanded
 // downwards rather than making staff tick four boxes on every case.
@@ -61,6 +68,7 @@ export const PC_PART_CATEGORIES = [
   {
     key: 'cooler', label: 'CPU Cooler', required: false, multi: false,
     fields: [
+      COLOUR_FIELD,
       { key: 'coolerType', label: 'Type', type: 'select', options: COOLER_TYPES },
       { key: 'sockets', label: 'Supported sockets', type: 'multiselect', options: CPU_SOCKETS },
       { key: 'heightMm', label: 'Height (mm, air)', type: 'number' },
@@ -71,6 +79,7 @@ export const PC_PART_CATEGORIES = [
   {
     key: 'motherboard', label: 'Motherboard', required: true, multi: false,
     fields: [
+      COLOUR_FIELD,
       { key: 'socket', label: 'Socket', type: 'select', options: CPU_SOCKETS },
       { key: 'chipset', label: 'Chipset', type: 'text' },
       { key: 'formFactor', label: 'Form factor', type: 'select', options: BOARD_FORM_FACTORS },
@@ -85,6 +94,7 @@ export const PC_PART_CATEGORIES = [
   {
     key: 'ram', label: 'Memory', required: true, multi: true,
     fields: [
+      COLOUR_FIELD,
       { key: 'memoryType', label: 'Memory type', type: 'select', options: MEMORY_TYPES },
       { key: 'moduleCount', label: 'Modules per kit', type: 'number' },
       { key: 'capacityGb', label: 'Kit capacity (GB)', type: 'number' },
@@ -94,6 +104,7 @@ export const PC_PART_CATEGORIES = [
   {
     key: 'gpu', label: 'Graphics Card', required: false, multi: false,
     fields: [
+      COLOUR_FIELD,
       { key: 'lengthMm', label: 'Length (mm)', type: 'number' },
       { key: 'slotWidth', label: 'Slot width', type: 'number' },
       { key: 'tdp', label: 'TDP (W)', type: 'number' },
@@ -112,6 +123,7 @@ export const PC_PART_CATEGORIES = [
   {
     key: 'psu', label: 'Power Supply', required: true, multi: false,
     fields: [
+      COLOUR_FIELD,
       { key: 'wattage', label: 'Wattage (W)', type: 'number' },
       { key: 'formFactor', label: 'Form factor', type: 'select', options: PSU_FORM_FACTORS },
       { key: 'lengthMm', label: 'Length (mm)', type: 'number' },
@@ -123,6 +135,7 @@ export const PC_PART_CATEGORIES = [
   {
     key: 'case', label: 'Case', required: true, multi: false,
     fields: [
+      COLOUR_FIELD,
       { key: 'maxBoardFormFactor', label: 'Largest board it takes', type: 'select', options: BOARD_FORM_FACTORS },
       { key: 'maxGpuLengthMm', label: 'Max GPU length (mm)', type: 'number' },
       { key: 'maxCoolerHeightMm', label: 'Max cooler height (mm)', type: 'number' },
@@ -138,16 +151,17 @@ export const PC_PART_CATEGORIES = [
   {
     key: 'fan', label: 'Case Fan', required: false, multi: true,
     fields: [
+      COLOUR_FIELD,
       { key: 'sizeMm', label: 'Size (mm)', type: 'number' },
       { key: 'watts', label: 'Draw (W)', type: 'number' },
     ],
   },
   { key: 'os', label: 'Operating System', required: false, multi: false, fields: [] },
-  { key: 'monitor', label: 'Monitor', required: false, multi: true, fields: [
+  { key: 'monitor', label: 'Monitor', required: false, multi: true, fields: [ COLOUR_FIELD,
     { key: 'sizeIn', label: 'Size (in)', type: 'number' },
     { key: 'refreshHz', label: 'Refresh (Hz)', type: 'number' },
   ] },
-  { key: 'peripheral', label: 'Peripheral', required: false, multi: true, fields: [] },
+  { key: 'peripheral', label: 'Peripheral', required: false, multi: true, fields: [ COLOUR_FIELD,] },
   { key: 'other', label: 'Other', required: false, multi: true, fields: [] },
 ];
 
