@@ -208,12 +208,20 @@ function renderResults(card) {
     if (panel) panel.remove();
     return;
   }
+
+  // MutationObserver calls render again after we touch the card. Keeping a
+  // signature on the generated panel prevents an endless replaceChildren ->
+  // observer -> replaceChildren loop when the underlying state has not changed.
+  const signature = JSON.stringify(entries.map(([category, result]) => [category, result]));
+  if (panel && panel.dataset.signature === signature) return;
+
   if (!panel) {
     panel = document.createElement('div');
     panel.dataset.pcDryrunResults = '1';
     panel.style.marginTop = '10px';
     card.appendChild(panel);
   }
+  panel.dataset.signature = signature;
   panel.replaceChildren();
 
   for (const [category, result] of entries) {
