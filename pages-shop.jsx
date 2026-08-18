@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useContext, useRef } from 'react';
 import { getCsrf, ensureCsrf } from './src/lib/api.js';
 import { bulkUnitPrice, hasBulkPrice, bulkOfferAvailable, availableStock, productPrice, isBackorder, onHandStock, backorderLead } from './src/lib/pricing.js';
 import { CONDITION_COLORS } from './src/lib/conditions.js';
+import { renderMarkdown } from './markdown.jsx';
 
 const _fallbackShopCtx = React.createContext({});
 const useShop = () => useContext(window.__ShopContext__ || _fallbackShopCtx);
@@ -1746,11 +1747,12 @@ function ProductDetailPage({ go, addToCart, pageParams }) {
             )}
 
             {(product.description || product.desc) && (
-              // Descriptions are plain text typed into a textarea, so the line
-              // breaks the author put in are the only structure they have.
+              // Descriptions are written as markdown in the admin editor, so
+              // headings, bold, lists and tables render here. Plain text still
+              // reads the same way, the renderer just treats it as paragraphs.
               // `desc` is the key the editor wrote before it was corrected;
               // reading it here saves re-saving every older product.
-              <p style={{color:'var(--ink-2)', fontSize:15, lineHeight:1.7, marginBottom:24, whiteSpace:'pre-wrap'}}>{product.description || product.desc}</p>
+              <div style={{color:'var(--ink-2)', fontSize:15, lineHeight:1.7, marginBottom:24}}>{renderMarkdown(product.description || product.desc)}</div>
             )}
 
             {Array.isArray(product.specs) && product.specs.filter(sp => sp && (sp.name || sp.value)).length > 0 && (

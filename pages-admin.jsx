@@ -5926,16 +5926,25 @@ function AdminProducts({ sessionInfo = {} }) {
               })}
               <label style={{width:110,height:80,border:'2px dashed var(--line)',display:'grid',placeItems:'center',cursor:'pointer',fontSize:11,color:'var(--ink-3)',flexShrink:0}}>
                 <span>+ Add</span>
-                <input type="file" accept="image/*" style={{display:'none'}} onChange={async e => {
-                  const file = e.target.files[0];
-                  if (!file) return;
-                  try {
-                    const url = await uploadImage(file);
-                    setForm(f => ({...f, images:[...(f.images||[]), url]}));
-                  } catch (err) {
-                    alert('Image upload failed: ' + (err?.message || 'unknown error'));
-                  }
+                {/* Multi-select: a product usually gets its whole photo set in
+                    one go, so uploading them one file at a time is needless
+                    work. Files upload in the order they were picked, and each
+                    one is appended as it lands so a failure part-way through
+                    still keeps what already uploaded. */}
+                <input type="file" accept="image/*" multiple style={{display:'none'}} onChange={async e => {
+                  const files = Array.from(e.target.files || []);
                   e.target.value = '';
+                  if (!files.length) return;
+                  const failed = [];
+                  for (const file of files) {
+                    try {
+                      const url = await uploadImage(file);
+                      setForm(f => ({...f, images:[...(f.images||[]), url]}));
+                    } catch (err) {
+                      failed.push(file.name + ' (' + (err?.message || 'unknown error') + ')');
+                    }
+                  }
+                  if (failed.length) alert('Image upload failed for:\n' + failed.join('\n'));
                 }} />
               </label>
             </div>
@@ -6101,13 +6110,17 @@ function AdminProducts({ sessionInfo = {} }) {
               <div style={{fontSize:11, color:'var(--ink-3)', marginTop:-6, marginBottom:8}}>Used for AusPost shipping quotes. Defaults applied if left blank.</div>
             </>
           )}
-          <label className="field">
-            <span className="label">Description <span style={{fontWeight:400, color:'var(--ink-3)', fontSize:11}}>shown on the public product page</span></span>
+          {/* A div, not a label: MarkdownField contains a hidden file input, and
+              a label would make clicking anywhere in it open the file dialog. */}
+          <div className="field">
+            <span className="label">Description <span style={{fontWeight:400, color:'var(--ink-3)', fontSize:11}}>shown on the public product page, supports markdown</span></span>
             {/* Stored as `description`, the shop reads that key. Older products
                 saved the text under `desc`, which nothing ever read; fall back to
                 it here and drop it on the next save. */}
-            <textarea className="textarea" placeholder="Bench-tested, 38-point check, ships with charger…" value={form.description ?? form.desc ?? ''} onChange={e=>setForm({...form, description:e.target.value, desc:undefined})} />
-          </label>
+            <MarkdownField value={form.description ?? form.desc ?? ''} minHeight={180}
+              placeholder="Bench-tested, 38-point check, ships with charger…"
+              onChange={v=>setForm({...form, description:v, desc:undefined})} />
+          </div>
           <label className="field"><span className="label">Bench check notes (internal)</span>
             <textarea className="textarea" placeholder="Battery cycle count, BIOS rev, replaced components…" value={form.benchNotes||''} onChange={e=>setForm({...form, benchNotes:e.target.value})} />
           </label>
