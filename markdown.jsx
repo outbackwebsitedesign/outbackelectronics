@@ -11,7 +11,10 @@ export function renderMarkdown(md) {
 
   const inlineRender = (text) => {
     const parts = [];
-    const pattern = /(`[^`]+`|\*\*[^*]+\*\*|_[^_]+_|\[([^\]]+)\]\(([^)]+)\)|!\[([^\]]*)\]\(([^)]+)\))/g;
+    // `**bold**` is listed before `*italic*` so a bold run is never chewed up
+    // as two italics. Both `_x_` and `*x*` mean italic. The `*` form must hug
+    // its text on both sides, otherwise "5 * 3 * 2" would italicise.
+    const pattern = /(`[^`]+`|\*\*[^*]+\*\*|_[^_]+_|\*[^*\s](?:[^*\n]*[^*\s])?\*|\[([^\]]+)\]\(([^)]+)\)|!\[([^\]]*)\]\(([^)]+)\))/g;
     let last = 0, m;
     while ((m = pattern.exec(text)) !== null) {
       if (m.index > last) parts.push(text.slice(last, m.index));
@@ -23,7 +26,7 @@ export function renderMarkdown(md) {
         parts.push(<a key={m.index} href={href} style={{color:'var(--rust)'}} target="_blank" rel="noopener noreferrer">{m[2]}</a>);
       } else if (t.startsWith('**')) {
         parts.push(<strong key={m.index}>{t.slice(2,-2)}</strong>);
-      } else if (t.startsWith('_')) {
+      } else if (t.startsWith('_') || t.startsWith('*')) {
         parts.push(<em key={m.index}>{t.slice(1,-1)}</em>);
       } else {
         parts.push(<code key={m.index} style={{background:'var(--bg-elev)', padding:'1px 5px', fontFamily:'monospace', fontSize:'0.9em'}}>{t.slice(1,-1)}</code>);
