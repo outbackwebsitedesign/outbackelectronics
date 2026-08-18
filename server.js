@@ -821,6 +821,31 @@ function writePcBuilder(data) {
 // Mirrors partDisplayName() in pc-compat.js: distributor descriptions nearly
 // always lead with the manufacturer, so joining brand and name blindly gives
 // quote lines reading "AMD AMD Ryzen 5 7600".
+// Mirrors partMatchesFilter() in pc-compat.js. Only the operator evaluation is
+// duplicated, never the compatibility rules themselves: the browser derives the
+// constraint list from the build (compatibilityFilter) and sends it here, so
+// there is still exactly one place that knows what fits what.
+//
+// A spec that is not recorded always passes. An unknown value cannot be proven
+// incompatible, and hiding those would bury every part with a blank spec.
+function pcPartMatchesFilter(part, constraints) {
+  const specs = (part && part.specs) || {};
+  for (const c of constraints) {
+    if (!c || !c.field) continue;
+    const v = specs[c.field];
+    if (v === undefined || v === null || v === '') continue;
+    switch (c.op) {
+      case 'eq':       if (String(v) !== String(c.value)) return false; break;
+      case 'in':       if (!Array.isArray(c.value) || !c.value.map(String).includes(String(v))) return false; break;
+      case 'contains': if (!Array.isArray(v) || !v.map(String).includes(String(c.value))) return false; break;
+      case 'lte':      if (Number(v) > Number(c.value)) return false; break;
+      case 'gte':      if (Number(v) < Number(c.value)) return false; break;
+      default: break;
+    }
+  }
+  return true;
+}
+
 function pcPartDisplayName(part) {
   const name = String((part && part.name) || '').trim();
   const brand = String((part && part.brand) || '').trim();
@@ -8575,6 +8600,20 @@ const adminServer = http.createServer(async (req, res) => {
     const offset = Math.max(parseInt(url.searchParams.get('offset')) || 0, 0);
     let items = data.parts;
     if (category && category !== 'all') items = items.filter(p => p.category === category);
+    // Compatibility constraints derived in the browser from the current build.
+    // `total` stays the unfiltered count so the picker can say how many were
+    // hidden and offer to show them.
+    let filteredOutByFit = 0;
+    const filterRaw = url.searchParams.get('filter');
+    if (filterRaw) {
+      let constraints = null;
+      try { constraints = JSON.parse(filterRaw); } catch { constraints = null; }
+      if (Array.isArray(constraints) && constraints.length) {
+        const before = items.length;
+        items = items.filter(p => pcPartMatchesFilter(p, constraints));
+        filteredOutByFit = before - items.length;
+      }
+    }
     if (q) {
       items = items.filter(p =>
         `${p.brand || ''} ${p.name || ''}`.toLowerCase().includes(q) ||
@@ -8591,7 +8630,7 @@ const adminServer = http.createServer(async (req, res) => {
     // second request.
     const counts = {};
     for (const p of data.parts) counts[p.category] = (counts[p.category] || 0) + 1;
-    return json(res, 200, { items, total, counts, partCount: data.parts.length });
+    return json(res, 200, { items, total, counts, filteredOutByFit, partCount: data.parts.length });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/admin/pc-builder/suppliers/save') {

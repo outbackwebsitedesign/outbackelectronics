@@ -471,6 +471,109 @@ export function checkBuild(items, parts) {
   return { issues, errors, warnings, infos, wattage, recommendedPsu, ok: errors.length === 0 };
 }
 
+// ── Compatibility filtering for the part picker ──────────────────────────────
+// The picker should offer only parts that fit what is already chosen. Rather
+// than teaching the server the rules, this derives a plain list of constraints
+// from the current build and the server applies them as dumb field matches, so
+// the rules still live in exactly one place.
+//
+// A constraint is { field, op, value } against part.specs, where op is one of
+// eq | in | contains | lte | gte. A part whose spec is not recorded is always
+// included: an unknown value cannot be proven incompatible, which is the same
+// principle checkBuild() uses when it skips a rule and says the check did not
+// run. Hiding those would quietly bury every part with a blank spec.
+
+export function compatibilityFilter(category, items, parts) {
+  const g = {};
+  for (const r of selectedParts(items, parts)) {
+    const c = r.part.category || 'other';
+    (g[c] = g[c] || []).push(r);
+  }
+  const one = (cat) => (g[cat] && g[cat].length ? g[cat][0].part : null);
+  const specOf = (cat) => one(cat)?.specs || {};
+
+  const cpu = specOf('cpu'), board = specOf('motherboard'), kase = specOf('case');
+  const gpu = specOf('gpu'), psu = specOf('psu'), cooler = specOf('cooler');
+  const ram = (g.ram || []).map(r => r.part.specs || {});
+  const out = [];
+  const add = (field, op, value) => {
+    if (value === undefined || value === null || value === '') return;
+    if (Array.isArray(value) && !value.length) return;
+    out.push({ field, op, value });
+  };
+
+  switch (category) {
+    case 'cpu':
+      add('socket', 'eq', board.socket);
+      // A DDR4 board cannot take a DDR5-only chip. Parts supporting both leave
+      // memoryType unset and pass either way.
+      add('memoryType', 'eq', board.memoryType);
+      break;
+
+    case 'motherboard':
+      add('socket', 'eq', cpu.socket);
+      add('memoryType', 'eq', cpu.memoryType || ram.find(r => r.memoryType)?.memoryType);
+      add('formFactor', 'in', kase.maxBoardFormFactor ? boardFormFactorsFitting(kase.maxBoardFormFactor) : null);
+      break;
+
+    case 'ram':
+      add('memoryType', 'eq', board.memoryType || cpu.memoryType);
+      break;
+
+    case 'cooler':
+      add('sockets', 'contains', cpu.socket || board.socket);
+      add('heightMm', 'lte', kase.maxCoolerHeightMm);
+      add('radiatorMm', 'lte', kase.radiatorMm);
+      add('tdpRating', 'gte', cpu.tdp);
+      break;
+
+    case 'gpu':
+      add('lengthMm', 'lte', kase.maxGpuLengthMm);
+      break;
+
+    case 'psu':
+      add('formFactor', 'eq', kase.psuFormFactor);
+      add('lengthMm', 'lte', kase.maxPsuLengthMm);
+      // Only meaningful once there is something to power.
+      if (items && items.length) add('wattage', 'gte', estimateWattage(items, parts));
+      if (gpu.pcie8pin) add('pcie8pin', 'gte', gpu.pcie8pin);
+      break;
+
+    case 'case':
+      add('maxBoardFormFactor', 'in', board.formFactor
+        ? BOARD_SIZE_ORDER.slice(BOARD_SIZE_ORDER.indexOf(board.formFactor)).filter(Boolean)
+        : null);
+      add('maxGpuLengthMm', 'gte', gpu.lengthMm);
+      add('maxCoolerHeightMm', 'gte', cooler.coolerType === 'Liquid (AIO)' ? null : cooler.heightMm);
+      add('radiatorMm', 'gte', cooler.coolerType === 'Liquid (AIO)' ? cooler.radiatorMm : null);
+      add('psuFormFactor', 'eq', psu.formFactor);
+      break;
+
+    default:
+      break;
+  }
+  return out;
+}
+
+/** Apply the constraints above to one part. Shared by the server and the UI. */
+export function partMatchesFilter(part, constraints) {
+  const specs = (part && part.specs) || {};
+  for (const c of constraints || []) {
+    const v = specs[c.field];
+    // Not recorded, so it cannot be ruled out.
+    if (v === undefined || v === null || v === '') continue;
+    switch (c.op) {
+      case 'eq':       if (String(v) !== String(c.value)) return false; break;
+      case 'in':       if (!c.value.map(String).includes(String(v))) return false; break;
+      case 'contains': if (!Array.isArray(v) || !v.map(String).includes(String(c.value))) return false; break;
+      case 'lte':      if (Number(v) > Number(c.value)) return false; break;
+      case 'gte':      if (Number(v) < Number(c.value)) return false; break;
+      default: break;
+    }
+  }
+  return true;
+}
+
 // ── Pricing ──────────────────────────────────────────────────────────────────
 
 /**

@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { getCsrf, ensureCsrf } from './src/lib/api.js';
 import { renderMarkdown, estimateReadTime, slugify } from './markdown.jsx';
 import { PRODUCT_CONDITIONS } from './src/lib/conditions.js';
-import { PC_PART_CATEGORIES, PC_CATEGORY_MAP, categoryLabel, partDisplayName, checkBuild, buildTotals } from './pc-compat.js';
+import { PC_PART_CATEGORIES, PC_CATEGORY_MAP, categoryLabel, partDisplayName, checkBuild, buildTotals, compatibilityFilter } from './pc-compat.js';
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 // Canonical date format for all order dates: "27 May 2026"
@@ -3616,8 +3616,9 @@ function PcPartEditor({ part, onClose, onSaved, onDeleted }) {
 
 // Debounced server-side parts query. The library is far too big to ship to the
 // browser once a distributor feed is in, so every list of parts is a request.
-function usePartsQuery({ category, q, limit = 60, enabled = true, reloadKey = 0 }) {
-  const [state, setState] = useState({ items: [], total: 0, counts: {}, loading: enabled });
+function usePartsQuery({ category, q, limit = 60, enabled = true, reloadKey = 0, filter = null }) {
+  const [state, setState] = useState({ items: [], total: 0, counts: {}, filteredOutByFit: 0, loading: enabled });
+  const filterKey = filter && filter.length ? JSON.stringify(filter) : '';
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
@@ -3626,31 +3627,77 @@ function usePartsQuery({ category, q, limit = 60, enabled = true, reloadKey = 0 
       const params = new URLSearchParams();
       if (category) params.set('category', category);
       if (q) params.set('q', q);
+      if (filterKey) params.set('filter', filterKey);
       params.set('limit', String(limit));
       fetch(`/api/admin/pc-builder/parts?${params}`, { credentials:'include' })
         .then(r => r.ok ? r.json() : Promise.reject())
-        .then(d => { if (!cancelled) setState({ items: d.items || [], total: d.total || 0, counts: d.counts || {}, loading: false }); })
+        .then(d => { if (!cancelled) setState({ items: d.items || [], total: d.total || 0, counts: d.counts || {}, filteredOutByFit: d.filteredOutByFit || 0, loading: false }); })
         .catch(() => { if (!cancelled) setState(s => ({ ...s, loading: false })); });
     }, q ? 220 : 0);
     return () => { cancelled = true; clearTimeout(t); };
-  }, [category, q, limit, enabled, reloadKey]);
+  }, [category, q, limit, enabled, reloadKey, filterKey]);
   return state;
 }
 
 // Choose a part for one category, from the library, with search.
-function PcPartPicker({ category, onPick, onClose, onNewPart }) {
+function PcPartPicker({ category, items, parts, onPick, onClose, onNewPart }) {
   const [q, setQ] = useState('');
+  const [compatibleOnly, setCompatibleOnly] = useState(true);
   const cat = PC_CATEGORY_MAP[category] || PC_CATEGORY_MAP.other;
-  const { items: matches, total, loading } = usePartsQuery({ category, q });
+  // Constraints come from what is already in the build, so picking a 14900K
+  // leaves only LGA1700 boards on offer.
+  const filter = useMemo(
+    () => compatibilityFilter(category, items, parts),
+    [category, items, parts]
+  );
+  const { items: matches, total, filteredOutByFit, loading } = usePartsQuery({
+    category, q, filter: compatibleOnly ? filter : null,
+  });
+  const constraintSummary = filter.map(c => {
+    const label = { socket:'socket', memoryType:'memory', formFactor:'form factor', sockets:'socket',
+      heightMm:'height', radiatorMm:'radiator', lengthMm:'length', wattage:'wattage',
+      maxBoardFormFactor:'board size', maxGpuLengthMm:'GPU clearance', maxCoolerHeightMm:'cooler clearance',
+      psuFormFactor:'PSU type', pcie8pin:'PCIe power', tdpRating:'cooling capacity' }[c.field] || c.field;
+    const v = Array.isArray(c.value) ? c.value.join(' / ') : c.value;
+    const op = c.op === 'lte' ? '≤ ' : c.op === 'gte' ? '≥ ' : '';
+    return `${label} ${op}${v}`;
+  });
 
   return (
     <Drawer open onClose={onClose} title={`Choose ${cat.label.toLowerCase()}`}
       footer={<button className="btn btn-ghost btn-sm" onClick={onNewPart}>+ Add a new {cat.label.toLowerCase()} to the library</button>}>
-      <input className="input" autoFocus placeholder={`Search ${cat.label.toLowerCase()}…`} value={q} onChange={e => setQ(e.target.value)} style={{marginBottom:14}}/>
+      <input className="input" autoFocus placeholder={`Search ${cat.label.toLowerCase()}…`} value={q} onChange={e => setQ(e.target.value)} style={{marginBottom:10}}/>
+
+      {filter.length > 0 && (
+        <div style={{background:'var(--bg-deep)', padding:'8px 10px', marginBottom:12}}>
+          <label className="row-flex" style={{gap:7, alignItems:'center', cursor:'pointer'}}>
+            <input type="checkbox" checked={compatibleOnly} onChange={e => setCompatibleOnly(e.target.checked)}/>
+            <span style={{fontSize:12.5}}>Only show what fits this build</span>
+          </label>
+          <div className="mono" style={{fontSize:10.5, color:'var(--ink-2)', marginTop:4}}>
+            Matching on {constraintSummary.join(' · ')}
+          </div>
+          {compatibleOnly && filteredOutByFit > 0 && (
+            <div style={{fontSize:11.5, color:'var(--ink-2)', marginTop:4}}>
+              {filteredOutByFit.toLocaleString()} hidden as incompatible.
+              {' '}<button type="button" onClick={() => setCompatibleOnly(false)}
+                style={{background:'none', border:'none', padding:0, color:'var(--rust)', cursor:'pointer', font:'inherit', textDecoration:'underline'}}>Show them anyway</button>
+            </div>
+          )}
+          {!compatibleOnly && (
+            <div style={{fontSize:11.5, color:'var(--rust)', marginTop:4}}>
+              Showing everything, including parts that will not fit.
+            </div>
+          )}
+        </div>
+      )}
+
       {loading && <p style={{fontSize:13, color:'var(--ink-2)'}}>Searching…</p>}
       {!loading && matches.length === 0 && (
         <p style={{fontSize:13, color:'var(--ink-2)'}}>
-          {q ? 'Nothing matches that search.' : `No ${cat.label.toLowerCase()} in the parts library yet.`}
+          {compatibleOnly && filteredOutByFit > 0
+            ? `Nothing in the library fits this build yet. ${filteredOutByFit.toLocaleString()} ${cat.label.toLowerCase()} were excluded, untick the box above to see them.`
+            : q ? 'Nothing matches that search.' : `No ${cat.label.toLowerCase()} in the parts library yet.`}
         </p>
       )}
       {total > matches.length && (
@@ -4532,6 +4579,8 @@ function PcBuildPage({ build, customers, onClose, onSave, onDelete }) {
       {picking && (
         <PcPartPicker
           category={picking}
+          items={form.items}
+          parts={parts}
           onPick={addPart}
           onClose={() => setPicking(null)}
           onNewPart={() => { setNewPart(blankPcPart(picking)); setPicking(null); }}
