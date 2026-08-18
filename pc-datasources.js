@@ -233,7 +233,10 @@ function mapVideoCards(rows) {
       const tdp = tdpForChipset(chipset);
       if (tdp) specs.tdp = tdp;
     }
-    const display = withDetail(name, chipset);
+    // Colour belongs in the name as well as the specs: the black and the white
+    // version of the same card are otherwise identical rows in the picker, and
+    // a quote line would not say which one was quoted.
+    const display = withDetail(name, chipset, specs.colour);
     out.push({
       seedId: variantId('gpu-d', name, specs, ['chipset', 'lengthMm', 'colour']),
       category: 'gpu', brand: brandOf(name), name: display, specs,

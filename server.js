@@ -8768,11 +8768,19 @@ const adminServer = http.createServer(async (req, res) => {
       }
     }
     if (q) {
-      items = items.filter(p =>
-        `${p.brand || ''} ${p.name || ''}`.toLowerCase().includes(q) ||
-        String(p.sku || '').toLowerCase().includes(q) ||
-        String(p.supplierSku || '').toLowerCase().includes(q)
-      );
+      // Every word must appear, in any order, anywhere in the part. A single
+      // substring match meant typing a card the way a person says it
+      // ("Zotac 4070 Ti Super Trinity") found nothing, because the listing
+      // reads "Zotac GAMING Trinity GeForce RTX 4070 Ti SUPER" and the words
+      // are not contiguous in that order.
+      const terms = q.split(/\s+/).filter(Boolean);
+      items = items.filter(p => {
+        const specs = p.specs || {};
+        const hay = [
+          p.brand, p.name, p.sku, p.supplierSku, specs.chipset, specs.socket, specs.colour,
+        ].filter(Boolean).join(' ').toLowerCase();
+        return terms.every(t => hay.includes(t));
+      });
     }
     const total = items.length;
     items = [...items].sort((a, b) =>
