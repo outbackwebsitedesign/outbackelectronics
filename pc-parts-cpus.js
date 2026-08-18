@@ -17,7 +17,7 @@
 // Generated 2026-08-18 from github.com/felixsteinke/cpu-spec-dataset
 // (compiled from Intel ARK and AMD published specifications).
 
-export const PC_CPU_CATALOG = [
+const PC_CPU_CATALOG = [
   { seedId:"cpu-a-1045t", brand:"AMD", name:"1045T", specs:{"socket":"AM3","tdp":95,"integratedGraphics":false} },
   { seedId:"cpu-a-1075t", brand:"AMD", name:"1075T", specs:{"socket":"AM3","memoryType":"DDR3","tdp":95,"cores":6,"integratedGraphics":false} },
   { seedId:"cpu-a-255e", brand:"AMD", name:"255e", specs:{"socket":"AM3","memoryType":"DDR3","tdp":45,"cores":2,"integratedGraphics":false} },
@@ -1795,4 +1795,4 @@ export const PC_CPU_CATALOG = [
   { seedId:"cpu-i-intel-xeon-x7560", brand:"Intel", name:"Intel Xeon X7560", specs:{"socket":"LGA1567","memoryType":"DDR3","tdp":130,"cores":8} },
 ].map(c => ({ ...c, category: 'cpu' }));
 
-export default PC_CPU_CATALOG;
+module.exports = { PC_CPU_CATALOG };

@@ -3756,7 +3756,7 @@ function pcSpecSummary(part) {
   switch (part.category) {
     case 'cpu': push(s.socket); push(s.cores, 'C'); push(s.tdp, 'W'); break;
     case 'motherboard': push(s.socket); push(s.formFactor); push(s.memoryType); break;
-    case 'ram': push(s.capacityGb, 'GB'); push(s.memoryType); push(s.speedMhz, 'MHz'); break;
+    case 'ram': push(s.capacityGb, 'GB'); push(s.memoryType); push(s.speedMhz, 'MHz'); push(s.casLatency ? `CL${s.casLatency}` : ''); break;
     case 'gpu': push(s.lengthMm, 'mm'); push(s.tdp, 'W'); break;
     case 'storage': push(s.capacityGb, 'GB'); push(s.interface); break;
     case 'psu': push(s.wattage, 'W'); push(s.formFactor); push(s.efficiency); break;
@@ -3774,37 +3774,11 @@ function PcPartsLibrary({ products, onLibraryChanged }) {
   const [q, setQ] = useState('');
   const [importOpen, setImportOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
-  const [seeding, setSeeding] = useState(false); // false | 'seed' | 'cpus'
   const [colourFilter, setColourFilter] = useState('');
   const { items: rows, total, counts, loading } = usePartsQuery({
     category: catFilter === 'all' ? '' : catFilter, q, limit: 200, enabled: true, reloadKey, colour: colourFilter,
   });
   const refresh = () => { setReloadKey(k => k + 1); onLibraryChanged?.(); };
-
-  // Both catalogs are dynamically imported so their data stays out of the admin
-  // bundle until someone actually loads them. Safe to re-run: parts are keyed by
-  // seedId, so this corrects shipped specs and never duplicates.
-  const loadCatalog = async (which) => {
-    const isCpus = which === 'cpus';
-    const mod = isCpus ? await import('./pc-parts-cpus.js') : await import('./pc-parts-seed.js');
-    const items = isCpus ? mod.PC_CPU_CATALOG : mod.PC_PARTS_SEED;
-    const what = isCpus
-      ? `${items.length.toLocaleString()} CPUs, covering current and older sockets`
-      : `${items.length} components across every category`;
-    if (!await adminConfirm(
-      `Load ${what} into the parts library?\n\nThey come with specs but no prices, and anything you have already edited is left untouched.`,
-      { title: isCpus ? 'Load CPU database' : 'Load component catalog', confirmLabel: 'Load' })) return;
-    setSeeding(which);
-    const r = await fetch('/api/admin/pc-builder/parts/seed', {
-      method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ items }),
-    }).catch(() => null);
-    setSeeding(false);
-    if (!r || !r.ok) { adminToast('Could not load the catalog, please try again.'); return; }
-    const d = await r.json();
-    const kept = d.summary.keptStaffEdits ? `, ${d.summary.keptStaffEdits} left as you edited them` : '';
-    adminToast(`${d.summary.created.toLocaleString()} added, ${d.summary.updated.toLocaleString()} refreshed${kept}.`, 'success');
-    refresh();
-  };
 
   return (
     <>
@@ -3823,12 +3797,6 @@ function PcPartsLibrary({ products, onLibraryChanged }) {
           </select>
         </div>
         <div className="row-flex" style={{gap:8}}>
-          <button className="btn btn-ghost btn-sm" onClick={() => loadCatalog('seed')} disabled={!!seeding}>
-            {seeding === 'seed' ? 'Loading…' : 'Load component catalog'}
-          </button>
-          <button className="btn btn-ghost btn-sm" onClick={() => loadCatalog('cpus')} disabled={!!seeding}>
-            {seeding === 'cpus' ? 'Loading…' : 'Load CPU database'}
-          </button>
           <button className="btn btn-ghost btn-sm" onClick={() => setImportOpen(true)}>Import from products</button>
           <button className="btn btn-rust btn-sm" onClick={() => setEdit(blankPcPart(catFilter === 'all' ? 'cpu' : catFilter))}>+ New part</button>
         </div>
@@ -3865,7 +3833,7 @@ function PcPartsLibrary({ products, onLibraryChanged }) {
         ]}
         rows={rows}
         onRowClick={r => setEdit(r)}
-        emptyMessage="No parts yet. Add one, import products from the catalog, or import a supplier price file."
+        emptyMessage="No parts yet. Update from the Data sources tab, add one by hand, or import a supplier price file."
         defaultSort={{ key:'category', dir:'asc' }}
       />
       {edit && (
@@ -4305,10 +4273,16 @@ function PcDataSources({ onPartsReload }) {
   };
 
   const totals = Object.values(results).reduce((acc, r) => {
-    if (r && r.summary) { acc.created += r.summary.created; acc.updated += r.summary.updated; acc.kept += r.summary.keptStaffEdits; }
+    if (r && r.summary) {
+      acc.created += r.summary.created;
+      acc.updated += r.summary.updated;
+      acc.merged += r.summary.merged || 0;
+      acc.unchanged += r.summary.unchanged || 0;
+      acc.kept += r.summary.keptStaffEdits;
+    }
     if (r && r.error) acc.failed++;
     return acc;
-  }, { created:0, updated:0, kept:0, failed:0 });
+  }, { created:0, updated:0, merged:0, unchanged:0, kept:0, failed:0 });
   const anyResults = Object.keys(results).length > 0;
 
   return (
@@ -4333,10 +4307,17 @@ function PcDataSources({ onPartsReload }) {
           <span className="mono" style={{fontSize:10.5, letterSpacing:'.1em', color:'var(--ink-2)'}}>THIS RUN</span>
           <div className="row-flex" style={{gap:18, marginTop:6, flexWrap:'wrap'}}>
             <span style={{fontSize:13}}><strong className="mono">{totals.created.toLocaleString()}</strong> parts added</span>
-            <span style={{fontSize:13}}><strong className="mono">{totals.updated.toLocaleString()}</strong> specs filled in</span>
+            {totals.updated > 0 && <span style={{fontSize:13}}><strong className="mono">{totals.updated.toLocaleString()}</strong> existing parts updated</span>}
+            {totals.merged > 0 && <span style={{fontSize:13}}><strong className="mono">{totals.merged.toLocaleString()}</strong> merged into matching parts</span>}
+            {totals.unchanged > 0 && <span style={{fontSize:13, color:'var(--ink-2)'}}><strong className="mono">{totals.unchanged.toLocaleString()}</strong> already current</span>}
             {totals.kept > 0 && <span style={{fontSize:13, color:'var(--ink-2)'}}><strong className="mono">{totals.kept.toLocaleString()}</strong> left as you edited them</span>}
             {totals.failed > 0 && <span style={{fontSize:13, color:'var(--rust)'}}><strong className="mono">{totals.failed}</strong> source(s) failed</span>}
           </div>
+          {totals.created > 0 && totals.updated === 0 && totals.unchanged === 0 && (
+            <div style={{fontSize:11.5, color:'var(--ink-2)', marginTop:5}}>
+              Everything was new, so nothing needed updating. Running this again will report them as already current.
+            </div>
+          )}
           {stopped && <div style={{fontSize:12, color:'var(--ink-2)', marginTop:5}}>Stopped early, the remaining sources were not touched.</div>}
         </div>
       )}
@@ -4375,9 +4356,13 @@ function PcDataSources({ onPartsReload }) {
                   {res.error
                     ? <span style={{fontSize:12.5, color:'var(--rust)'}}>{res.error}</span>
                     : <span style={{fontSize:12.5}}>
-                        {res.summary.created.toLocaleString()} added · {res.summary.updated.toLocaleString()} specs filled in ·
-                        {' '}{res.summary.unchanged.toLocaleString()} already current
-                        {res.summary.keptStaffEdits > 0 && ` · ${res.summary.keptStaffEdits.toLocaleString()} left as you edited them`}
+                        {[
+                          `${res.summary.created.toLocaleString()} added`,
+                          res.summary.updated ? `${res.summary.updated.toLocaleString()} updated` : null,
+                          res.summary.merged ? `${res.summary.merged.toLocaleString()} merged into matching parts` : null,
+                          res.summary.unchanged ? `${res.summary.unchanged.toLocaleString()} already current` : null,
+                          res.summary.keptStaffEdits ? `${res.summary.keptStaffEdits.toLocaleString()} left as you edited them` : null,
+                        ].filter(Boolean).join(' · ')}
                       </span>}
                 </div>
               )}
@@ -4695,11 +4680,11 @@ function PcBuildPage({ build, customers, onClose, onSave, onDelete }) {
             <div style={{border:'1px solid var(--line)', padding:14, marginBottom:14}}>
               <div className="row-flex" style={{justifyContent:'space-between', marginBottom:6}}>
                 <span style={{fontSize:12.5, color:'var(--ink-2)'}}>Estimated draw</span>
-                <span className="mono" style={{fontWeight:600}}>{check.wattage} W</span>
+                <span className="mono" style={{fontWeight:600}}>{check.wattage ? `${check.wattage} W` : '-'}</span>
               </div>
               <div className="row-flex" style={{justifyContent:'space-between'}}>
                 <span style={{fontSize:12.5, color:'var(--ink-2)'}}>Suggested PSU</span>
-                <span className="mono" style={{fontWeight:600}}>{check.recommendedPsu} W</span>
+                <span className="mono" style={{fontWeight:600}}>{check.recommendedPsu ? `${check.recommendedPsu} W` : '-'}</span>
               </div>
             </div>
 

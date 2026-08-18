@@ -99,6 +99,7 @@ export const PC_PART_CATEGORIES = [
       { key: 'moduleCount', label: 'Modules per kit', type: 'number' },
       { key: 'capacityGb', label: 'Kit capacity (GB)', type: 'number' },
       { key: 'speedMhz', label: 'Speed (MHz)', type: 'number' },
+      { key: 'casLatency', label: 'CAS latency', type: 'number' },
     ],
   },
   {
@@ -227,7 +228,12 @@ const WATTS_PER_FAN = 3;
 const WATTS_PER_RAM_MODULE = 4;
 
 export function estimateWattage(items, parts) {
-  const g = groupByCategory(selectedParts(items, parts));
+  const resolved = selectedParts(items, parts);
+  // An empty build draws nothing. The base figure covers the board and general
+  // overhead, so adding it before anything is selected reported a machine that
+  // does not exist yet as drawing 60W.
+  if (!resolved.length) return 0;
+  const g = groupByCategory(resolved);
   let w = BASE_SYSTEM_WATTS;
   const add = (n) => { if (n) w += n; };
 
@@ -244,6 +250,9 @@ export function estimateWattage(items, parts) {
 
 /** Wattage we would actually recommend buying: load plus headroom, rounded up. */
 export function recommendedPsuWattage(load) {
+  // Nothing selected, nothing to recommend. Returning the smallest unit in the
+  // list would put a confident figure against an empty build.
+  if (!load) return 0;
   const target = load * 1.4;
   const steps = [400, 450, 500, 550, 600, 650, 750, 850, 1000, 1200, 1500, 1600];
   return steps.find(s => s >= target) || Math.ceil(target / 100) * 100;

@@ -228,7 +228,11 @@ function mapVideoCards(rows) {
     if (col) specs.colour = col;
     if (!Object.keys(specs).length) continue;
     const chipset = r.chipset ? String(r.chipset).trim() : '';
-    if (chipset) specs.chipset = chipset;
+    if (chipset) {
+      specs.chipset = chipset;
+      const tdp = tdpForChipset(chipset);
+      if (tdp) specs.tdp = tdp;
+    }
     const display = withDetail(name, chipset);
     out.push({
       seedId: variantId('gpu-d', name, specs, ['chipset', 'lengthMm', 'colour']),
@@ -353,19 +357,55 @@ function mapMemory(rows) {
       if (count > 0 && each > 0) specs.capacityGb = count * each;
     }
     if (Array.isArray(r.speed) && r.speed.length === 2 && Number(r.speed[1]) > 0) specs.speedMhz = Number(r.speed[1]);
+    // Latency distinguishes otherwise identical kits (a DDR5-6000 CL30 and a
+    // CL36 are different products at different prices), so without it they
+    // collapse into one part the way the colour variants used to.
+    const cl = intCount(r.cas_latency);
+    if (cl) specs.casLatency = cl;
     const col = normaliseColour(r.color);
     if (col) specs.colour = col;
     if (!Object.keys(specs).length) continue;
     const speedLabel = specs.memoryType && specs.speedMhz ? `${specs.memoryType}-${specs.speedMhz}` : '';
     out.push({
-      seedId: variantId('ram-d', name, specs, ['memoryType', 'capacityGb', 'moduleCount', 'speedMhz', 'colour']),
-      category: 'ram', brand: brandOf(name), name: withDetail(name, speedLabel, specs.colour), specs,
+      seedId: variantId('ram-d', name, specs, ['memoryType', 'capacityGb', 'moduleCount', 'speedMhz', 'casLatency', 'colour']),
+      category: 'ram', brand: brandOf(name), name: withDetail(name, speedLabel, cl ? `CL${cl}` : '', specs.colour), specs,
     });
   }
   return out;
 }
 
 // ── Source registry ──────────────────────────────────────────────────────────
+
+// The built-in catalogs ship in the repo, so they need no network and are the
+// fallback when a remote source is unreachable. They are the only source for
+// case clearances, cooler heights and socket support, graphics card power draw,
+// and the storage, fan and OS categories.
+const { PC_PARTS_SEED } = require('./pc-parts-seed');
+const { PC_CPU_CATALOG } = require('./pc-parts-cpus');
+
+// Remote card listings give a card's length but almost never its power draw,
+// which left the build power estimate excluding the part most likely to
+// dominate it. The built-in catalog records draw per GPU chip, and every card
+// row names its chipset, so the two join up.
+const TDP_BY_CHIPSET = (() => {
+  const map = new Map();
+  for (const p of PC_PARTS_SEED) {
+    if (p.category !== 'gpu') continue;
+    const tdp = p.specs && p.specs.tdp;
+    if (tdp) map.set(String(p.name).toLowerCase().replace(/[^a-z0-9]/g, ''), tdp);
+  }
+  return map;
+})();
+
+function tdpForChipset(chipset) {
+  if (!chipset) return undefined;
+  const key = String(chipset).toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (TDP_BY_CHIPSET.has(key)) return TDP_BY_CHIPSET.get(key);
+  // Card listings append the memory size ("GeForce RTX 3060 12GB"), so retry
+  // without a trailing capacity before giving up.
+  const trimmed = key.replace(/\d+gb$/, '');
+  return TDP_BY_CHIPSET.get(trimmed);
+}
 
 const RAW_CPU = 'https://raw.githubusercontent.com/felixsteinke/cpu-spec-dataset/main/dataset';
 const RAW_PARTS = 'https://raw.githubusercontent.com/docyx/pc-part-dataset/main/data/json';
@@ -427,9 +467,49 @@ const DATA_SOURCES = [
     gives: 'generation, kit size, module count, speed, colour',
     map: mapMemory,
   },
+  // Last on purpose. These fill in the specs the datasets above do not carry,
+  // merging into the parts those already created rather than sitting alongside
+  // them as a second copy of the same product.
+  {
+    id: 'builtin-cpus', label: 'Built-in CPU catalog', category: 'cpu', kind: 'builtin', mergeByName: true,
+    provenance: 'Ships with the site, generated from the CPU sources above',
+    gives: 'the same CPUs, available offline when the sources above cannot be reached',
+    load: () => PC_CPU_CATALOG,
+  },
+  {
+    id: 'builtin-catalog', label: 'Built-in component catalog', category: 'all', kind: 'builtin', mergeByName: true,
+    provenance: 'Ships with the site, no network needed',
+    gives: 'case clearances, cooler heights and sockets, GPU power draw, and the storage, fan and OS categories',
+    load: () => PC_PARTS_SEED,
+  },
 ];
 
+// Identity of a physical product across sources. The built-in catalog calls a
+// case "4000D Airflow" by Corsair while a listing calls it "Corsair 4000D
+// Airflow Black", and they are the same case: without this they land as two
+// parts, one holding the clearances and the other the colour, and whichever
+// staff happen to pick decides whether the fit checks run at all.
+//
+// Colour stays in the key, because the black and the white version really are
+// different products to order.
+const COLOUR_TOKENS = ['black', 'white', 'silver', 'grey', 'gray', 'pink', 'blue', 'red', 'green', 'chalk', 'rgb'];
+function identityKey(part) {
+  const brand = String(part.brand || '').toLowerCase().trim();
+  let text = String(part.name || '').toLowerCase();
+  if (brand && text.startsWith(brand)) text = text.slice(brand.length);
+  // Colour words are removed by name, not by stripping anything in brackets.
+  // The built-in catalog writes form factor in brackets too, so discarding
+  // bracketed text made "B650 (ATX)" and "B650 (Mini-ITX)" the same product and
+  // let them overwrite each other's form factor and slot count on every sync.
+  for (const c of COLOUR_TOKENS) text = text.replace(new RegExp(`\\b${c}\\b`, 'g'), ' ');
+  const model = text.replace(/[^a-z0-9]/g, '');
+  const colour = (part.specs && part.specs.colour) ? String(part.specs.colour).toLowerCase().replace(/[^a-z]/g, '') : '';
+  if (!model) return null;
+  return `${part.category}|${brand.replace(/[^a-z0-9]/g, '')}|${model}|${colour}`;
+}
+
 function parseSource(source, text) {
+  if (source.kind === 'builtin') return source.load();
   const rows = source.format === 'csv' ? parseCsv(text) : JSON.parse(text);
   if (!Array.isArray(rows)) throw new Error('expected a list of rows');
   const mapped = source.map(rows);
@@ -443,6 +523,7 @@ function parseSource(source, text) {
 module.exports = {
   DATA_SOURCES,
   parseSource,
+  identityKey,
   parseCsv,
   normaliseColour,
   mapIntelCpus,

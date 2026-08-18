@@ -59,11 +59,11 @@ async function load(url, localPath) {
 // Generated ${new Date().toISOString().slice(0, 10)} from github.com/felixsteinke/cpu-spec-dataset
 // (compiled from Intel ARK and AMD published specifications).
 
-export const PC_CPU_CATALOG = [
+const PC_CPU_CATALOG = [
 ${body}
 ].map(c => ({ ...c, category: 'cpu' }));
 
-export default PC_CPU_CATALOG;
+module.exports = { PC_CPU_CATALOG };
 `;
   const dest = path.join(__dirname, '..', 'pc-parts-cpus.js');
   fs.writeFileSync(dest, out);

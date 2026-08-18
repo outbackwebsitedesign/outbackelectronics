@@ -1,5 +1,10 @@
 // Built-in PC component catalog.
 //
+// Loaded through the admin Data sources tab alongside the external datasets,
+// and it is the only source for the specs none of them publish: case
+// clearances, cooler heights and socket support, graphics card power draw, and
+// the storage, fan and OS categories entirely.
+//
 // Ships in code (unlike pc-builder.db, which is gitignored and starts empty on
 // a fresh deploy) so the parts library has real components in it before any
 // supplier feed is connected. Loading it is idempotent: entries are keyed by
@@ -250,7 +255,7 @@ const OS = [
 // Flattened, each entry stamped with its category.
 const withCategory = (category, items) => items.map(i => ({ ...i, category }));
 
-export const PC_PARTS_SEED = [
+const PC_PARTS_SEED = [
   ...withCategory('cpu', CPUS),
   ...withCategory('motherboard', MOTHERBOARDS),
   ...withCategory('gpu', GPUS),
@@ -263,4 +268,4 @@ export const PC_PARTS_SEED = [
   ...withCategory('os', OS),
 ];
 
-export default PC_PARTS_SEED;
+module.exports = { PC_PARTS_SEED };

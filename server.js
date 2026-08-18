@@ -9,7 +9,7 @@ const crypto = require('crypto');
 const sharp = require('sharp');
 const PDFDocument = require('pdfkit');
 const POLICY_DEFAULTS = require('./policy-defaults');
-const { DATA_SOURCES, parseSource } = require('./pc-datasources');
+const { DATA_SOURCES, parseSource, identityKey } = require('./pc-datasources');
 
 const gzipCache = new Map();
 
@@ -1004,30 +1004,79 @@ function feedSellPrice(cost, supplier, category) {
 // Specs are merged rather than replaced, because different sources fill in
 // different fields: one dataset knows a card's length, another knows its power
 // draw, and a sync of either must not wipe what the other contributed.
-function upsertSeedParts(data, items, { sourceId = null } = {}) {
+// The curated built-in catalog outranks the scraped listings when they disagree
+// about the same spec. An unknown or absent owner ranks lowest, so a value
+// nobody claims can always be filled in.
+function sourceRank(sourceId) {
+  if (!sourceId) return 0;
+  return String(sourceId).startsWith('builtin') ? 2 : 1;
+}
+
+function upsertSeedParts(data, items, { sourceId = null, mergeByName = false } = {}) {
   const bySeed = new Map();
   for (const p of data.parts) if (p.seedId) bySeed.set(p.seedId, p);
+  // Only built-in catalogs merge by product identity, and only into parts a
+  // remote source already created. It is how case clearances and cooler heights
+  // reach the listing for the same product instead of forming a second entry
+  // that has the fit data while the one staff pick does not.
+  const byIdentity = new Map();
+  if (mergeByName) {
+    for (const p of data.parts) {
+      const k = identityKey(p);
+      if (k && !byIdentity.has(k)) byIdentity.set(k, p);
+    }
+  }
   const now = new Date().toISOString();
-  const summary = { created: 0, updated: 0, unchanged: 0, keptStaffEdits: 0 };
+  const summary = { created: 0, updated: 0, merged: 0, unchanged: 0, keptStaffEdits: 0 };
 
   for (const it of items) {
     if (!it || !it.seedId || !it.category || !it.name) continue;
     const specs = it.specs && typeof it.specs === 'object' ? it.specs : {};
-    const existing = bySeed.get(it.seedId);
+    let existing = bySeed.get(it.seedId);
+    let mergedIntoExisting = false;
+    if (!existing && mergeByName) {
+      const k = identityKey(it);
+      const hit = k ? byIdentity.get(k) : null;
+      if (hit) { existing = hit; mergedIntoExisting = true; }
+    }
     if (existing) {
       if (existing.specsEditedByStaff) { summary.keptStaffEdits++; continue; }
-      const merged = { ...(existing.specs || {}), ...specs };
+      // Sources disagree sometimes, and blind last-write-wins made them fight:
+      // a listing calls the Corsair 5000D an ATX case while the built-in
+      // catalog records that it takes E-ATX, so each sync undid the other for
+      // ever. Every spec therefore remembers which source set it, and a source
+      // may only overwrite a value from an equal or lower ranked source. The
+      // curated built-in catalog outranks the scraped listings, and a source
+      // always gets to correct its own earlier figure.
+      const owner = { ...(existing.specOwner || {}) };
+      const merged = { ...(existing.specs || {}) };
+      for (const [field, value] of Object.entries(specs)) {
+        const current = merged[field];
+        const isEmpty = current === undefined || current === null || current === '';
+        if (isEmpty || sourceRank(sourceId) >= sourceRank(owner[field])) {
+          merged[field] = value;
+          if (sourceId) owner[field] = sourceId;
+        }
+      }
+      // A part matched by identity deliberately keeps the name it already had,
+      // so comparing names there would report a change on every single run.
+      const identityOnly = mergedIntoExisting;
       const changed = JSON.stringify(merged) !== JSON.stringify(existing.specs || {})
-        || existing.name !== it.name || (existing.brand || '') !== (it.brand || '');
+        || (!identityOnly && (existing.name !== it.name || (existing.brand || '') !== (it.brand || '')));
       if (!changed) { summary.unchanged++; continue; }
       existing.category = it.category;
-      existing.name = it.name;
-      existing.brand = it.brand || '';
+      // A part matched by identity keeps the name it already had, which came
+      // from the listing and carries the retail detail staff search on.
+      if (!mergedIntoExisting) {
+        existing.name = it.name;
+        existing.brand = it.brand || '';
+      }
       existing.specs = merged;
+      existing.specOwner = owner;
       existing.specsNeedCheck = !!it.verify;
       if (sourceId) existing.sourceId = sourceId;
       existing.updatedAt = now;
-      summary.updated++;
+      if (mergedIntoExisting) summary.merged++; else summary.updated++;
       continue;
     }
     data.parts.push({
@@ -1044,12 +1093,18 @@ function upsertSeedParts(data, items, { sourceId = null } = {}) {
       cost: 0,
       stock: null,
       specs,
+      specOwner: sourceId ? Object.fromEntries(Object.keys(specs).map(f => [f, sourceId])) : undefined,
       specsNeedCheck: !!it.verify,
       notes: '',
       createdAt: now,
       updatedAt: now,
     });
-    bySeed.set(it.seedId, data.parts[data.parts.length - 1]);
+    const added = data.parts[data.parts.length - 1];
+    bySeed.set(it.seedId, added);
+    if (mergeByName) {
+      const k = identityKey(added);
+      if (k && !byIdentity.has(k)) byIdentity.set(k, added);
+    }
     summary.created++;
   }
   return summary;
@@ -8948,17 +9003,6 @@ const adminServer = http.createServer(async (req, res) => {
   // re-running it corrects specs rather than duplicating parts. Specs a staff
   // member has edited are left alone: a shipped default must never overwrite a
   // figure someone checked against the manufacturer.
-  if (req.method === 'POST' && url.pathname === '/api/admin/pc-builder/parts/seed') {
-    const session = requireRole(req, res, 'technician'); if (!session) return;
-    let body; try { body = await readJson(req, 4e6); } catch { return json(res, 400, { error: 'invalid_json' }); }
-    const items = Array.isArray(body.items) ? body.items : [];
-    if (!items.length) return json(res, 400, { error: 'no_items' });
-    const data = readPcBuilder();
-    const summary = upsertSeedParts(data, items);
-    writePcBuilder(data);
-    return json(res, 200, { ok: true, summary, partCount: data.parts.length });
-  }
-
   // ── External spec datasets ─────────────────────────────────────────────────
   // Sources are declared in pc-datasources.js. Syncing pulls each file, maps it
   // into our schema and upserts by seedId, so it can be re-run safely and never
@@ -8986,7 +9030,9 @@ const adminServer = http.createServer(async (req, res) => {
     const started = Date.now();
     let items;
     try {
-      const text = await fetchDataset(src.url);
+      // Built-in catalogs ship with the site, so they are read straight off
+      // disk with no network involved and work even when nothing else does.
+      const text = src.kind === 'builtin' ? null : await fetchDataset(src.url);
       items = parseSource(src, text);
     } catch (err) {
       const data = readPcBuilder();
@@ -8999,7 +9045,7 @@ const adminServer = http.createServer(async (req, res) => {
     if (!items.length) return json(res, 422, { error: 'source_empty', message: `${src.label} returned no usable rows.` });
 
     const data = readPcBuilder();
-    const summary = upsertSeedParts(data, items, { sourceId: src.id });
+    const summary = upsertSeedParts(data, items, { sourceId: src.id, mergeByName: !!src.mergeByName });
     data.sourceState[src.id] = {
       lastSyncAt: new Date().toISOString(),
       lastAttemptAt: new Date().toISOString(),
