@@ -11,6 +11,8 @@ const PDFDocument = require('pdfkit');
 const POLICY_DEFAULTS = require('./policy-defaults');
 const { DATA_SOURCES, parseSource, identityKey } = require('./pc-datasources');
 const icecat = require('./pc-icecat');
+const vendor = require('./pc-vendor');
+const partImages = require('./pc-images');
 
 const gzipCache = new Map();
 
@@ -1010,6 +1012,7 @@ function feedSellPrice(cost, supplier, category) {
 // nobody claims can always be filled in.
 function sourceRank(sourceId) {
   if (!sourceId) return 0;
+  if (sourceId === 'vendor') return 4;          // the manufacturer's own product page
   if (sourceId === 'icecat') return 3;          // the manufacturer's own datasheet
   return String(sourceId).startsWith('builtin') ? 2 : 1;
 }
@@ -9297,6 +9300,198 @@ const adminServer = http.createServer(async (req, res) => {
     writePcBuilder(data);
     if (aborted) return json(res, 503, { error: aborted.reason, message: aborted.message });
     return json(res, 200, { ok: true, category, summary, examples });
+  }
+
+  // ── Manufacturer spec pages ────────────────────────────────────────────────
+  //
+  // Icecat's free tier leaves the fit specs empty for most cases, coolers and
+  // power supplies, and those are the figures a build is wrong without. The
+  // manufacturer publishes all of them, so this reads them from the source,
+  // and takes the product photo from the same page while it is open.
+
+  // Step one, run per vendor: collect the product URLs from the vendor's own
+  // listing pages. Done once and cached, so matching a part to a page after
+  // this costs no requests at all. Without it, every part would need a search
+  // request before its page could even be found, which is four times the
+  // traffic for the same result.
+  if (req.method === 'POST' && url.pathname === '/api/admin/pc-builder/vendor/index') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const v = vendor.VENDOR_BY_ID[body.vendorId];
+    if (!v) return json(res, 400, { error: 'bad_vendor' });
+
+    const result = await vendor.crawlVendor(v);
+    const data = readPcBuilder();
+    data.sourceState[`vendorIndex:${v.id}`] = {
+      urls: result.urls,
+      indexedAt: new Date().toISOString(),
+      pagesFetched: result.pagesFetched,
+      problems: result.problems.slice(0, 10),
+    };
+    writePcBuilder(data);
+    return json(res, 200, {
+      ok: true, vendorId: v.id, label: v.label,
+      found: result.urls.length, pagesFetched: result.pagesFetched,
+      problems: result.problems.slice(0, 10),
+    });
+  }
+
+  // Step two: match parts to those URLs and read one page each.
+  //
+  // Batched like the Icecat pass so progress is visible and a run can be
+  // stopped, but slower on purpose. Concurrency of two with a pause between
+  // requests is roughly a browsing human, and a part is fetched once and never
+  // again. Hammering a site in a loop is what got this business's own address
+  // blocked by PCPartPicker, and that took the site away from staff browsers
+  // across the whole network. Being slow costs nothing here.
+  if (req.method === 'POST' && url.pathname === '/api/admin/pc-builder/vendor/fetch') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const v = vendor.VENDOR_BY_ID[body.vendorId];
+    if (!v) return json(res, 400, { error: 'bad_vendor' });
+    const category = body.category;
+    const limit = Math.min(Math.max(parseInt(body.limit) || 10, 1), 25);
+    const mode = ['new', 'retry'].includes(body.mode) ? body.mode : 'new';
+
+    const data = readPcBuilder();
+    const index = data.sourceState[`vendorIndex:${v.id}`];
+    if (!index || !index.urls?.length) {
+      return json(res, 409, { error: 'not_indexed', message: `Index ${v.label} first.` });
+    }
+    const urls = index.urls.filter(u => !category || u.category === category).map(u => u.url);
+    if (!urls.length) return json(res, 200, { ok: true, summary: { tried: 0, remaining: 0 }, note: 'No indexed pages for that category.' });
+
+    const brands = new Set(v.brands.map(b => b.toLowerCase()));
+    const candidates = data.parts.filter(p => {
+      if (category && p.category !== category) return false;
+      if (!brands.has(String(p.brand || '').trim().toLowerCase())) return false;
+      if (p.specsEditedByStaff) return false;
+      if (mode === 'new' && p.vendorTriedAt) return false;
+      return true;
+    });
+
+    const batch = candidates.slice(0, limit);
+    const summary = { tried: 0, matched: 0, filled: 0, images: 0, noPage: 0, blocked: 0, failed: 0, remaining: Math.max(candidates.length - batch.length, 0) };
+    const examples = [];
+    const now = new Date().toISOString();
+    let blockedRun = false;
+
+    const runOne = async (part) => {
+      if (blockedRun) return;
+      summary.tried++;
+      part.vendorTriedAt = now;
+      const match = vendor.matchUrl(part, urls, v.brands);
+      if (!match) { part.vendorOutcome = 'no_page'; summary.noPage++; return; }
+      summary.matched++;
+
+      const pageUrl = v.specPath ? v.specPath(match.url) : match.url;
+      const page = await vendor.fetchPage(pageUrl);
+      if (!page.ok) {
+        part.vendorOutcome = page.reason === 'blocked' ? 'blocked' : 'error';
+        if (page.reason === 'blocked') {
+          summary.blocked++;
+          // Bot protection applies to the whole site, not to one page, so
+          // carrying on would mean marking every remaining part as tried
+          // against a wall. Stop and say so instead.
+          blockedRun = true;
+        } else summary.failed++;
+        return;
+      }
+      part.vendorUrl = match.url;
+
+      const { specs: found } = vendor.extractSpecs(page.html, part.category);
+      const owner = { ...(part.specOwner || {}) };
+      const merged = { ...(part.specs || {}) };
+      let changed = false;
+      for (const [field, value] of Object.entries(found)) {
+        const cur = merged[field];
+        const empty = cur === undefined || cur === null || cur === '';
+        // The manufacturer's own page is the best source there is, so it
+        // outranks the scraped datasets and Icecat alike, but never a figure a
+        // staff member has checked by hand.
+        if (empty || sourceRank('vendor') >= sourceRank(owner[field])) {
+          if (merged[field] !== value) changed = true;
+          merged[field] = value;
+          owner[field] = 'vendor';
+        }
+      }
+      if (changed) {
+        part.specs = merged;
+        part.specOwner = owner;
+        part.specsNeedCheck = false;
+        part.updatedAt = now;
+        summary.filled++;
+        if (examples.length < 6) examples.push({ name: part.name, url: match.url, gained: Object.keys(found) });
+      }
+
+      // The picture, from the page already in hand. Keyed by what it shows
+      // rather than by the part, so a memory line downloads once and every kit
+      // in it points at the same file.
+      const key = partImages.imageKey(part);
+      if (!partImages.hasImage(key)) {
+        // The part is passed in so the picture is chosen for this exact
+        // colourway. Without it, every Meshify 3 shares one photo whatever
+        // colour it is.
+        const src = vendor.extractImage(page.html, page.url, part, v.brands);
+        if (src) {
+          const img = await vendor.fetchBinary(src);
+          if (img.ok) {
+            const stored = await partImages.storeImage(key, img.buffer);
+            if (stored.ok) summary.images++;
+          }
+        }
+      }
+      if (partImages.hasImage(key)) {
+        part.imageKey = key;
+        part.imageUrls = partImages.urlsFor(key);
+      }
+      part.vendorOutcome = changed ? 'found' : (part.imageKey ? 'image_only' : 'no_specs');
+    };
+
+    // Two at a time with a pause between rounds. A category of five thousand
+    // parts is a long job at this rate, which is why it is batched and
+    // resumable rather than sped up.
+    const CONCURRENCY = 2;
+    for (let i = 0; i < batch.length && !blockedRun; i += CONCURRENCY) {
+      await Promise.all(batch.slice(i, i + CONCURRENCY).map(runOne));
+      if (i + CONCURRENCY < batch.length) await vendor.sleep(600);
+    }
+    summary.remaining = Math.max(candidates.length - batch.length, 0);
+    writePcBuilder(data);
+    return json(res, 200, { ok: true, vendorId: v.id, category, summary, examples, blocked: blockedRun });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/admin/pc-builder/vendor/status') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    const data = readPcBuilder();
+    const vendors = vendor.VENDORS.map(v => {
+      const index = data.sourceState[`vendorIndex:${v.id}`];
+      const brands = new Set(v.brands.map(b => b.toLowerCase()));
+      const parts = data.parts.filter(p => brands.has(String(p.brand || '').trim().toLowerCase()));
+      const byCategory = {};
+      for (const p of parts) {
+        const c = (byCategory[p.category] = byCategory[p.category] || { total: 0, tried: 0, filled: 0, withImage: 0, noPage: 0 });
+        c.total++;
+        if (p.vendorTriedAt) c.tried++;
+        if (p.vendorOutcome === 'found') c.filled++;
+        if (p.imageKey) c.withImage++;
+        if (p.vendorOutcome === 'no_page') c.noPage++;
+      }
+      return {
+        id: v.id, label: v.label,
+        categories: v.roots.map(r => r.category),
+        indexed: index ? { count: index.urls.length, at: index.indexedAt } : null,
+        parts: parts.length,
+        byCategory,
+      };
+    });
+    // Images are counted off disk rather than from the library, so a figure
+    // here is what actually exists rather than what was once recorded.
+    return json(res, 200, {
+      vendors,
+      imagesStored: partImages.countStored(),
+      resizerAvailable: partImages.sharpAvailable(),
+    });
   }
 
   if (req.method === 'GET' && url.pathname === '/api/admin/pc-builder/icecat/status') {

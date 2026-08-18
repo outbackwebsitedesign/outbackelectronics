@@ -3841,10 +3841,13 @@ function PcPartPicker({ category, items, parts, colourTheme = '', onPick, onClos
         {matches.map(p => (
           <button key={p.id} type="button" onClick={() => onPick(p)}
             style={{textAlign:'left', background:'var(--bg-deep)', border:'1px solid var(--line)', padding:'10px 12px', cursor:'pointer', display:'flex', justifyContent:'space-between', gap:12, alignItems:'center'}}>
-            <span style={{minWidth:0}}>
-              <span style={{display:'block', fontSize:13, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{pcPartLabel(p)}</span>
-              <span className="mono" style={{fontSize:10.5, color:'var(--ink-2)'}}>
-                {(p.specs || {}).colour ? `${p.specs.colour} · ` : ''}{pcSpecSummary(p) || (p.sku || 'no specs recorded')}
+            <span className="row-flex" style={{minWidth:0, gap:10, alignItems:'center'}}>
+              <PcPartThumb part={p}/>
+              <span style={{minWidth:0}}>
+                <span style={{display:'block', fontSize:13, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{pcPartLabel(p)}</span>
+                <span className="mono" style={{fontSize:10.5, color:'var(--ink-2)'}}>
+                  {(p.specs || {}).colour ? `${p.specs.colour} · ` : ''}{pcSpecSummary(p) || (p.sku || 'no specs recorded')}
+                </span>
               </span>
             </span>
             <span className="mono" style={{fontWeight:600, whiteSpace:'nowrap'}}>{pcMoney(p.priceAud)}</span>
@@ -3852,6 +3855,42 @@ function PcPartPicker({ category, items, parts, colourTheme = '', onPick, onClos
         ))}
       </div>
     </Drawer>
+  );
+}
+
+
+/**
+ * The part's picture in a list.
+ *
+ * A part with no picture gets a marked placeholder rather than an empty square.
+ * Left blank, a missing photo reads as a missing product when someone is
+ * scrolling, and most of the library has no photo yet because half the
+ * manufacturers block automated access to their spec pages.
+ *
+ * Loaded lazily and at a fixed size so a list of fifty rows neither reflows as
+ * images arrive nor fetches all fifty at once.
+ */
+function PcPartThumb({ part, size = 44 }) {
+  const [failed, setFailed] = useState(false);
+  const src = part?.imageUrls?.thumb;
+  const box = {
+    width: size, height: size, flexShrink: 0, borderRadius: 3,
+    border: '1px solid var(--line)', background: 'var(--bg)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+  };
+  if (!src || failed) {
+    return (
+      <span style={box} title="No picture on file" aria-hidden="true">
+        <span style={{fontSize:15, color:'var(--ink-2)', opacity:0.5}}>▤</span>
+      </span>
+    );
+  }
+  return (
+    <span style={box}>
+      <img src={src} alt="" loading="lazy" width={size} height={size}
+        onError={() => setFailed(true)}
+        style={{width:'100%', height:'100%', objectFit:'contain'}}/>
+    </span>
   );
 }
 
@@ -4492,6 +4531,167 @@ const ICECAT_CATEGORIES = [
   { key: 'psu', label: 'Power supplies', gains: 'depth, PCIe connectors' },
   { key: 'gpu', label: 'Graphics cards', gains: 'power draw' },
 ];
+
+
+/**
+ * Reading specs and photos off the manufacturers' own product pages.
+ *
+ * This exists because the free Icecat tier leaves case clearances, cooler
+ * heights and PSU depths empty, and those are the figures a build is wrong
+ * without. The manufacturer publishes every one of them.
+ *
+ * Two stages, and the first is not optional. Indexing walks a vendor's listing
+ * pages once and remembers where every product lives, so matching parts to
+ * pages afterwards costs no requests. Fetching then reads one page per part,
+ * two at a time with a pause, and never reads the same part twice.
+ */
+function PcVendorFetch({ onPartsReload }) {
+  const [status, setStatus] = useState(null);
+  const [busy, setBusy] = useState(null);
+  const [stats, setStats] = useState({});
+  const [mode, setMode] = useState('new');
+  const cancelRef = React.useRef(false);
+  const modeRef = React.useRef(mode);
+  modeRef.current = mode;
+
+  const load = React.useCallback(() => (
+    fetch('/api/admin/pc-builder/vendor/status', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(setStatus)
+      .catch(() => setStatus(null))
+  ), []);
+  useEffect(() => { load(); }, [load]);
+
+  const indexVendor = async (vendorId) => {
+    setBusy(`index:${vendorId}`);
+    const r = await fetch('/api/admin/pc-builder/vendor/index', {
+      method:'POST', headers:postHeaders(), credentials:'include',
+      body: JSON.stringify({ vendorId }),
+    }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : {};
+    if (!r || !r.ok) adminToast(d.message || 'Could not index that manufacturer.');
+    else adminToast(`Found ${d.found} product pages from ${d.pagesFetched} requests.`);
+    setBusy(null);
+    load();
+  };
+
+  const fetchVendor = async (vendorId, category) => {
+    setBusy(`fetch:${vendorId}:${category}`);
+    cancelRef.current = false;
+    const totals = { tried:0, matched:0, filled:0, images:0, noPage:0, blocked:0, failed:0, remaining:0 };
+    for (let i = 0; i < 500; i++) {
+      if (cancelRef.current) break;
+      const r = await fetch('/api/admin/pc-builder/vendor/fetch', {
+        method:'POST', headers:postHeaders(), credentials:'include',
+        body: JSON.stringify({ vendorId, category, limit: 10, mode: modeRef.current }),
+      }).catch(() => null);
+      if (!r || !r.ok) {
+        const d = r ? await r.json().catch(() => ({})) : {};
+        adminToast(d.message || 'Fetch failed.');
+        break;
+      }
+      const d = await r.json();
+      for (const k of Object.keys(totals)) totals[k] = k === 'remaining' ? d.summary.remaining : totals[k] + (d.summary[k] || 0);
+      setStats(cur => ({ ...cur, [`${vendorId}:${category}`]: { ...totals } }));
+      // Bot protection applies to a whole site, so once it answers there is
+      // nothing to be gained by working through the rest of the queue.
+      if (d.blocked) { adminToast('That manufacturer is blocking automated requests. Stopped.'); break; }
+      if (i % 3 === 2) load();
+      if (!d.summary.tried || !d.summary.remaining) break;
+    }
+    setBusy(null);
+    cancelRef.current = false;
+    load();
+    onPartsReload?.();
+  };
+
+  const vendors = status?.vendors || [];
+
+  return (
+    <div style={{border:'1px solid var(--line)', padding:14, marginBottom:14}}>
+      <div className="row-flex" style={{justifyContent:'space-between', gap:10, flexWrap:'wrap', marginBottom:10}}>
+        <div>
+          <div style={{fontSize:15, fontWeight:600}}>Specs and photos from the manufacturer</div>
+          <div style={{fontSize:12.5, color:'var(--ink-2)', marginTop:3, maxWidth:660}}>
+            Reads each part's own product page for the clearances Icecat's free tier leaves blank, and stores the
+            product photo from the same page. Index a manufacturer once, then fetch. A part is only ever read once.
+          </div>
+        </div>
+        <div className="row-flex" style={{gap:8, alignItems:'center'}}>
+          <select className="input" style={{fontSize:12, maxWidth:200}} value={mode} onChange={e => setMode(e.target.value)} disabled={!!busy}>
+            <option value="new">Parts not tried yet</option>
+            <option value="retry">Try everything again</option>
+          </select>
+          {busy && <button className="btn btn-ghost btn-sm" onClick={() => { cancelRef.current = true; }}>Stop</button>}
+        </div>
+      </div>
+
+      {status && !status.resizerAvailable && (
+        <div style={{fontSize:12.5, color:'var(--rust)', marginBottom:8}}>
+          Image resizing is unavailable on this server, so photos will not be stored. Specs still work.
+        </div>
+      )}
+      {status && (
+        <div style={{fontSize:12, color:'var(--ink-2)', marginBottom:10}}>
+          {status.imagesStored.toLocaleString()} product photos stored.
+        </div>
+      )}
+
+      <div style={{display:'grid', gap:10}}>
+        {vendors.map(v => (
+          <div key={v.id} style={{border:'1px solid var(--line)', padding:10}}>
+            <div className="row-flex" style={{justifyContent:'space-between', gap:10, alignItems:'center', flexWrap:'wrap'}}>
+              <div>
+                <span style={{fontSize:13.5, fontWeight:600}}>{v.label}</span>
+                <span className="mono" style={{fontSize:11, color:'var(--ink-2)', marginLeft:8}}>
+                  {v.parts.toLocaleString()} parts in the library
+                  {v.indexed ? ` · ${v.indexed.count.toLocaleString()} pages indexed` : ' · not indexed yet'}
+                </span>
+              </div>
+              <button className="btn btn-ghost btn-sm" onClick={() => indexVendor(v.id)} disabled={!!busy}>
+                {busy === `index:${v.id}` ? 'Indexing…' : v.indexed ? 'Re-index' : 'Index pages'}
+              </button>
+            </div>
+
+            <div style={{display:'grid', gap:5, marginTop:8}}>
+              {v.categories.map(cat => {
+                const c = v.byCategory[cat] || { total:0, tried:0, filled:0, withImage:0, noPage:0 };
+                const st = stats[`${v.id}:${cat}`];
+                const pct = c.total ? Math.round((c.tried / c.total) * 100) : 0;
+                const imgPct = c.total ? Math.round((c.withImage / c.total) * 100) : 0;
+                return (
+                  <div key={cat} className="row-flex" style={{gap:10, alignItems:'center'}}>
+                    <span style={{fontSize:12, width:96, textTransform:'capitalize'}}>{cat}</span>
+                    <span style={{flex:1, minWidth:120}}>
+                      <span style={{display:'block', height:6, background:'var(--bg-deep)', border:'1px solid var(--line)'}}>
+                        <span style={{display:'block', height:'100%', width:`${pct}%`, background:'var(--rust)'}}/>
+                      </span>
+                      <span className="mono" style={{fontSize:10.5, color:'var(--ink-2)'}}>
+                        {c.filled.toLocaleString()} with specs · {c.withImage.toLocaleString()} with a photo ({imgPct}%)
+                        {c.noPage ? ` · ${c.noPage.toLocaleString()} with no page found` : ''}
+                        {st ? ` · this run: ${st.filled} specs, ${st.images} photos, ${st.remaining} to go` : ''}
+                      </span>
+                    </span>
+                    <button className="btn btn-rust btn-sm" disabled={!!busy || !v.indexed || !c.total}
+                      onClick={() => fetchVendor(v.id, cat)}>
+                      {busy === `fetch:${v.id}:${cat}` ? 'Working…' : 'Fetch'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{fontSize:12, color:'var(--ink-2)', marginTop:10, maxWidth:660}}>
+        Only manufacturers that serve their pages to a plain request are listed. MSI, Gigabyte, ASRock, Corsair,
+        be quiet! and Seasonic all sit behind bot protection and return nothing, so they are left out rather than
+        half working.
+      </div>
+    </div>
+  );
+}
 
 function PcIcecatEnrich({ onPartsReload }) {
   const [ready, setReady] = useState(null);
@@ -5219,6 +5419,7 @@ function AdminPcBuilder({ search }) {
       ) : tab === 'sources' ? (
         <>
           <PcIcecatEnrich onPartsReload={loadBuilderData}/>
+          <PcVendorFetch onPartsReload={loadBuilderData}/>
           <PcDataSources onPartsReload={loadBuilderData}/>
         </>
       ) : (

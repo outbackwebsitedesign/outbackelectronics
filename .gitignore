@@ -15,3 +15,6 @@ package-lock.json
 *.pem
 *.key
 secrets.*
+
+# Product images fetched from manufacturer pages, rebuilt on demand, never commit
+assets/part-images/
