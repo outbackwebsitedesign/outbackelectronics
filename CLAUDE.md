@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+Keep this file under 200 lines. When adding something, tighten or cut something else rather than letting it grow.
+
 ## ⚠️ CRITICAL - DATA SAFETY - READ THIS FIRST
 
 **The `.db` files are the entire business database.** They are not in the repo (gitignored) but live alongside the code on the production server. They contain every order, customer, product, service, repair job, and financial record.
