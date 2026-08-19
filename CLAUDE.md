@@ -15,7 +15,7 @@ Keep this file under 200 lines. When adding something, tighten or cut something 
 
 The same applies to the other gitignored live-data directories: `drive-files/`, `photos-files/`, `swap-files/`, `radio-media/`, `assets/part-images/`, and `.env`.
 
-**For deployment, always use `git pull`**, it only updates tracked files and leaves `.db` files and `.env` alone.
+**`./deploy.sh` is the only deploy command.** It updates the code with `git pull`, which touches tracked files only and leaves `.db` files and `.env` alone. Never add a deploy step that could remove untracked files.
 
 This mistake was made once and wiped the entire live database. Do not let it happen again.
 
@@ -28,7 +28,7 @@ the code.
 
 ## Git workflow
 
-**Always commit and push directly to `main`.** Do not open pull requests. The owner merges nothing, changes go straight to production via `git pull` on the server.
+**Always commit and push directly to `main`.** Do not open pull requests. The owner merges nothing, changes go straight to production when `./deploy.sh` is run on the server.
 
 When running inside a Claude Code web session, the environment pre-creates a feature branch (e.g. `claude/next-todo-issue-*`). In that case: commit on the session branch, then fast-forward merge to `main` and push `main`. That is the accepted flow, the feature branch is just session scaffolding, not a real branch to review or merge via PR.
 
@@ -42,7 +42,7 @@ When running inside a Claude Code web session, the environment pre-creates a fea
 npm run dev      # Vite dev server (frontend hot-reload only, no backend)
 npm run build    # Vite production build → dist/
 npm start        # Run the Node.js server (all services, one process)
-./deploy.sh      # Production deploy: git pull, npm install, build, restart systemd units
+./deploy.sh      # The ONLY deploy command: pull, install, build, restart systemd units
 ```
 
 There is no linter and no test runner configured, and there are no test files in the repo. Playwright is a dependency (used by ad-hoc audit scripts), so `npx playwright test` will find nothing unless spec files are added first. Verify changes by reading the code and, where it matters, by running the server.
