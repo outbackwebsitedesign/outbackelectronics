@@ -147,6 +147,7 @@ const CUSTOMERS_DB_PATH = path.join(__dirname, 'customers.db');
 const REPAIRS_DB_PATH   = path.join(__dirname, 'repairs.db');
 const QUOTES_DB_PATH    = path.join(__dirname, 'quotes.db');
 const HDD_REPORTS_DB_PATH = path.join(__dirname, 'hdd-reports.db');
+const SAFETY_NOTICES_DB_PATH = path.join(__dirname, 'safety-notices.db');
 // PC builder: the parts library and saved builds share one file, they are only
 // ever read and written together by the admin PC Builder section.
 const PC_BUILDER_DB_PATH = path.join(__dirname, 'pc-builder.db');
@@ -1230,6 +1231,14 @@ function writeHddReports(reports) { atomicWriteFile(HDD_REPORTS_DB_PATH, JSON.st
 function nextHddReportId(reports) {
   const maxN = reports.reduce((max, r) => { const m = String(r.id || '').match(/^HDD-(\d+)$/); return m ? Math.max(max, parseInt(m[1])) : max; }, 0);
   return `HDD-${String(maxN + 1).padStart(4, '0')}`;
+}
+function readSafetyNotices() {
+  try { const p = JSON.parse(cachedReadFile(SAFETY_NOTICES_DB_PATH)); return Array.isArray(p.notices) ? p.notices : []; } catch { return []; }
+}
+function writeSafetyNotices(notices) { atomicWriteFile(SAFETY_NOTICES_DB_PATH, JSON.stringify({ notices }, null, 2)); }
+function nextSafetyNoticeId(notices) {
+  const maxN = notices.reduce((max, r) => { const m = String(r.id || '').match(/^DDN-(\d+)$/); return m ? Math.max(max, parseInt(m[1])) : max; }, 0);
+  return `DDN-${String(maxN + 1).padStart(4, '0')}`;
 }
 
 function readReviews() {
@@ -3983,7 +3992,7 @@ function buildInvoicePdf(order, shop) {
     const hasLogo = fs.existsSync(logoPath);
 
     // Header band
-    doc.rect(0, 0, doc.page.width, 110).fill(RUST);
+    doc.rect(0, 0, doc.page.width, 100).fill(RUST);
     if (hasLogo) {
       try { doc.image(logoPath, 50, 22, { width: 66 }); } catch {}
     }
@@ -4735,6 +4744,189 @@ function buildHddReportPdf(report, shop) {
         doc.text(`Signed electronically · ${signedDateStr}`, 50, lineY + 20);
       }
     }
+
+    doc.end();
+  });
+}
+
+// Dangerous-device release notice. Printed, signed by hand at collection, and kept
+// as the written acknowledgment clause 7 of the Repair Intake Terms reserves the
+// right to require before an unsafe device goes back into service.
+function buildSafetyNoticePdf(notice, shop) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: 'A4', margin: 50, bufferPages: true });
+    const chunks = [];
+    doc.on('data', c => chunks.push(c));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const RUST = '#b5451b';
+    const pageBottom = doc.page.height - 50;
+    const shopName = shop.tradingName || shop.name || 'Outback Electronics';
+    const shopAddress = shop.address || [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ');
+    const logoPath = path.join(__dirname, 'assets', 'logo.png');
+    const hasLogo = fs.existsSync(logoPath);
+    const fmtDate = (v) => new Date(v).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
+
+    // Header band, same treatment as the condition report and invoice
+    doc.rect(0, 0, doc.page.width, 110).fill(RUST);
+    if (hasLogo) { try { doc.image(logoPath, 50, 22, { width: 66 }); } catch {} }
+    doc.fillColor('#fff').font('Helvetica-Bold').fontSize(18).text(shopName, hasLogo ? 130 : 50, 26, { width: 220 });
+    doc.font('Helvetica').fontSize(9).fillColor('#fde6d6')
+      .text(shopAddress || '', hasLogo ? 130 : 50, 50, { width: 220 })
+      .text([shop.phone, shop.email].filter(Boolean).join('  ·  '), hasLogo ? 130 : 50, 64, { width: 220 });
+    doc.font('Helvetica-Bold').fontSize(16).fillColor('#fff').text('DANGEROUS DEVICE NOTICE', 0, 26, { width: 545, align: 'right' });
+    doc.font('Helvetica-Bold').fontSize(10).fillColor('#fde6d6').text('SEVERE ELECTRICAL FAULT', 0, 48, { width: 545, align: 'right' });
+    doc.font('Helvetica').fontSize(9).fillColor('#fde6d6')
+      .text(`Notice #: ${notice.id || 'DRAFT'}`, 0, 66, { width: 545, align: 'right' })
+      .text(`Date: ${fmtDate(notice.createdAt || Date.now())}`, 0, 80, { width: 545, align: 'right' });
+
+    let y = 126;
+    const sectionTitle = (label, yy) => {
+      doc.font('Helvetica-Bold').fontSize(11).fillColor(RUST).text(label, 50, yy);
+      return yy + 15;
+    };
+    const para = (text, yy, opts = {}) => {
+      doc.font(opts.bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(opts.size || 10).fillColor(opts.color || '#222')
+        .text(text, 50, yy, { width: 495, align: 'justify', lineGap: 1.5 });
+      return doc.y + (opts.gap == null ? 8 : opts.gap);
+    };
+
+    // Warning banner
+    doc.rect(50, y, 495, 46).fill('#fbe9e4');
+    doc.rect(50, y, 4, 46).fill(RUST);
+    doc.font('Helvetica-Bold').fontSize(12).fillColor(RUST)
+      .text('DO NOT USE THIS DEVICE', 66, y + 9, { width: 465 });
+    doc.font('Helvetica').fontSize(9).fillColor('#7a2f13')
+      .text('This device has a severe electrical fault, is unsafe to operate, and is being returned unrepaired.', 66, y + 27, { width: 465 });
+    y += 54;
+
+    // Device and customer
+    y = sectionTitle('Device and Customer', y);
+    const rows = [
+      ['Customer', notice.customerName || ''],
+      ['Contact', [notice.customerEmail, notice.customerPhone].filter(Boolean).join('  ·  ')],
+      ['Device', notice.deviceDescription || ''],
+      ['Serial / identifier', notice.deviceSerial || ''],
+      ['Repair job', notice.repairJobId || ''],
+      ['Quoted repair', notice.quotedRepair || ''],
+      ['Quoted amount', notice.quotedAmount ? `$${Number(notice.quotedAmount).toLocaleString('en-AU', { minimumFractionDigits: 2 })}` : ''],
+    ].filter(r => r[1]);
+    doc.font('Helvetica').fontSize(10);
+    for (const [label, value] of rows) {
+      doc.fillColor('#888').text(label, 50, y, { width: 130 });
+      doc.fillColor('#222').text(value, 185, y, { width: 360 });
+      y = Math.max(doc.y, y + 12) + 1;
+    }
+    y += 6;
+
+    // The finding
+    y = sectionTitle('Fault Identified', y);
+    y = para(notice.faultDescription || 'A severe electrical fault was identified during assessment of this device.', y);
+    if (notice.riskDetail) {
+      y = sectionTitle('Specific Risk', y);
+      y = para(notice.riskDetail, y);
+    }
+
+    if (y > pageBottom - 300) { doc.addPage(); y = 50; }
+
+    // Declaration
+    y = sectionTitle('Customer Declaration and Assumption of Risk', y);
+    y = para('I acknowledge and declare that:', y, { gap: 4 });
+    const decls = [
+      'Outback Electronics has advised me that the device described above has been found to have a severe electrical fault and has warned me that it is unsafe to operate.',
+      // Default on. The usual case is a fault that arrived with the device, and the
+      // notice is materially weaker if it does not say so on its face.
+      notice.faultPreExisting === false ? null
+        : 'I understand that the fault was identified during assessment, that it was present in the device when it was submitted, and that it was not caused by Outback Electronics. No repair to the faulty components has been carried out.',
+      notice.repairDeclined === false ? null
+        : 'I have been quoted for the parts and work required to make the device serviceable, and I have declined that repair. I have asked for the device to be returned to me unrepaired.',
+      'I have been advised not to use, power on, charge, or connect the device, and to have it assessed by a licensed electrician or other qualified professional before any further use.',
+      'I am taking possession of the device against that advice, of my own free choice, and with full knowledge of the risk.',
+      'I accept full responsibility for the device from the moment it is released to me, and for any loss, damage to property, fire, personal injury, or death that may result from its possession, use, storage, charging, or disposal.',
+      'I release Outback Electronics from liability for any such loss, damage, injury, or death arising from my use or possession of the device after its release to me, and I accept that Outback Electronics has not repaired, made safe, or certified this device as fit for use.',
+    ].filter(Boolean);
+    doc.font('Helvetica').fontSize(9).fillColor('#222');
+    for (const line of decls) {
+      if (y > pageBottom - 40) { doc.addPage(); y = 50; }
+      doc.circle(56, y + 4.2, 1.7).fill('#222');
+      doc.fillColor('#222').text(line, 66, y, { width: 479, align: 'justify', lineGap: 0.8 });
+      y = doc.y + 4;
+    }
+    y += 2;
+
+    // Carve-out, signatures, and the retention note are one indivisible block,
+    // 187pt measured. Kept together so signatures never sit apart from the
+    // declaration they attest to.
+    if (y > pageBottom - 190) { doc.addPage(); y = 50; }
+
+    // Statutory carve-out, matching the position taken across our policy documents
+    doc.rect(50, y, 495, 34).fill('#f6f3ee');
+    doc.font('Helvetica').fontSize(8).fillColor('#5c5348')
+      .text('Nothing in this declaration excludes, restricts, or modifies any guarantee, right, or remedy you have under the Australian Consumer Law that cannot lawfully be excluded, including in respect of liability for death or personal injury caused by negligence. This document records the warning given to you and your decision to take the device notwithstanding that warning.', 60, y + 7, { width: 475, align: 'justify', lineGap: 0.5 });
+    y += 46;
+
+
+    // Signature blocks
+    y = sectionTitle('Signatures', y);
+    const sigLine = (label, x, yy, width) => {
+      doc.moveTo(x, yy).lineTo(x + width, yy).strokeColor('#999').lineWidth(0.8).stroke();
+      doc.font('Helvetica').fontSize(8).fillColor('#888').text(label, x, yy + 5, { width });
+    };
+
+    const colW = 232;
+    const rightX = 50 + colW + 31;
+    const sigTop = y + 40;
+
+    doc.font('Helvetica-Bold').fontSize(9).fillColor('#222').text('Customer', 50, y);
+    doc.font('Helvetica-Bold').fontSize(9).fillColor('#222').text('For Outback Electronics', rightX, y);
+
+    // Company signature: use the signer's stored e-signature where one exists,
+    // otherwise leave a blank rule to sign by hand on the printed copy.
+    let companySigDrawn = false;
+    if (notice.signedByStaffId) {
+      const candidate = path.join(__dirname, 'assets/signatures', `${notice.signedByStaffId}.png`);
+      if (fs.existsSync(candidate)) {
+        try { doc.image(candidate, rightX, sigTop - 46, { fit: [150, 42] }); companySigDrawn = true; } catch {}
+      }
+    }
+    if (!companySigDrawn && notice.signedBy) {
+      doc.font('Helvetica-Oblique').fontSize(16).fillColor('#222').text(notice.signedBy, rightX, sigTop - 24, { width: colW });
+    }
+
+    sigLine('Signature', 50, sigTop, colW);
+    sigLine('Signature', rightX, sigTop, colW);
+
+    const nameY = sigTop + 32;
+    doc.font('Helvetica').fontSize(9).fillColor('#222')
+      .text(notice.customerName || '', 50, nameY - 12, { width: colW });
+    doc.font('Helvetica').fontSize(9).fillColor('#222')
+      .text(notice.signedBy || '', rightX, nameY - 12, { width: colW });
+    sigLine('Print name', 50, nameY, colW);
+    sigLine('Print name', rightX, nameY, colW);
+
+    const dateY = nameY + 32;
+    sigLine('Date', 50, dateY, colW);
+    sigLine('Date', rightX, dateY, colW);
+
+    doc.font('Helvetica').fontSize(7.5).fillColor('#999')
+      .text('Retain the signed original. A copy is provided to the customer.', 50, dateY + 22, { width: 495, align: 'center' });
+
+    // Identify every sheet, so a notice that runs to two pages cannot have a
+    // signature page floating free of the declaration it belongs to.
+    const range = doc.bufferedPageRange();
+    for (let i = 0; i < range.count; i++) {
+      doc.switchToPage(range.start + i);
+      // Writing into the bottom margin makes PDFKit spill onto a fresh page, so
+      // drop the margin for the stamp and put it back afterwards.
+      const keepBottom = doc.page.margins.bottom;
+      doc.page.margins.bottom = 0;
+      doc.font('Helvetica').fontSize(7.5).fillColor('#999')
+        .text(`${shopName}  ·  Dangerous Device Notice ${notice.id || 'DRAFT'}`, 50, pageBottom + 16, { width: 300, lineBreak: false })
+        .text(`Page ${i + 1} of ${range.count}`, 245, pageBottom + 16, { width: 300, align: 'right', lineBreak: false });
+      doc.page.margins.bottom = keepBottom;
+    }
+    doc.flushPages();
 
     doc.end();
   });
@@ -7943,6 +8135,14 @@ const adminServer = http.createServer(async (req, res) => {
     const session = requireRole(req, res, 'staff'); if (!session) return;
     return json(res, 200, { items: readQuotes() });
   }
+  if (req.method === 'GET' && url.pathname === '/api/admin/safety-notices') {
+    const session = requireRole(req, res, 'staff'); if (!session) return;
+    return json(res, 200, { items: readSafetyNotices() });
+  }
+  if (req.method === 'GET' && url.pathname === '/api/admin/safety-notices/next-id') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    return json(res, 200, { id: nextSafetyNoticeId(readSafetyNotices()) });
+  }
   if (req.method === 'GET' && url.pathname === '/api/admin/hdd-reports') {
     const session = requireRole(req, res, 'staff'); if (!session) return;
     return json(res, 200, { items: readHddReports() });
@@ -9811,6 +10011,50 @@ const adminServer = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true, quote, build: data.builds[bIdx] });
   }
 
+  if (req.method === 'POST' && url.pathname === '/api/admin/safety-notices/save') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    if (!String(body.customerName || '').trim()) return json(res, 422, { error: 'customer_required', message: 'Customer name is required.' });
+    if (!String(body.deviceDescription || '').trim()) return json(res, 422, { error: 'device_required', message: 'Device description is required.' });
+    const notices = readSafetyNotices();
+    const idx = notices.findIndex(r => r.id && r.id === body.id);
+    // The signer is taken from the authenticated session, never from the request
+    // body, so the name on a signed notice cannot be altered by the client.
+    body.signedBy = session.username;
+    body.signedByStaffId = session.staffId || null;
+    body.signedAt = new Date().toISOString();
+    if (idx >= 0) { notices[idx] = body; } else {
+      body.id = nextSafetyNoticeId(notices);
+      body.createdAt = body.createdAt || new Date().toISOString();
+      notices.push(body);
+    }
+    writeSafetyNotices(notices);
+    return json(res, 200, { ok: true, item: body });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/safety-notices/pdf') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    // An unsaved draft carries no session-derived signer, so stamp one for the
+    // preview rather than printing a blank "For Outback Electronics" name.
+    const notice = { ...body, signedBy: body.signedBy || session.username, signedByStaffId: body.signedByStaffId || session.staffId || null };
+    const { shop } = readSettings();
+    const buffer = await buildSafetyNoticePdf(notice, shop);
+    const safeRef = String(body.id || 'draft').replace(/[^a-zA-Z0-9_-]+/g, '-');
+    res.writeHead(200, {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="dangerous-device-notice-${safeRef}.pdf"`,
+      'Content-Length': buffer.length,
+      'X-Content-Type-Options': 'nosniff',
+    });
+    res.end(buffer);
+    return;
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/safety-notices/delete') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    writeSafetyNotices(readSafetyNotices().filter(r => r.id !== body.id));
+    return json(res, 200, { ok: true });
+  }
   if (req.method === 'POST' && url.pathname === '/api/admin/hdd-reports/save') {
     const session = requireRole(req, res, 'technician'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }

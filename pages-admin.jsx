@@ -469,6 +469,7 @@ const NAV_ICONS = {
   orders:       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>,
   'payment-plans': <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="13" x2="12" y2="19"/><path d="M14 14.5c0-.83-.9-1.5-2-1.5s-2 .67-2 1.5.9 1.5 2 1.5 2 .67 2 1.5-.9 1.5-2 1.5-2-.67-2-1.5"/></svg>,
   repairs:      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>,
+  'safety-notices': <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
   'hdd-reports': <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="2" y="7" width="20" height="10" rx="2"/><line x1="6" y1="12" x2="6.01" y2="12"/><line x1="10" y1="12" x2="18" y2="12"/><path d="M6 17v3M18 17v3"/></svg>,
   quotes:       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>,
   'pc-builder': <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="6" y="2" width="12" height="20" rx="1"/><line x1="9" y1="6" x2="15" y2="6"/><line x1="9" y1="9" x2="15" y2="9"/><circle cx="12" cy="16" r="2.5"/></svg>,
@@ -505,6 +506,7 @@ const ADMIN_SECTIONS = [
     { id:'payment-plans', label:'Payment Plans', minRole:'technician' },
     { id:'repairs',   label:'Repair Jobs',   minRole:'staff', excludeRoles:['seller'] },
     { id:'hdd-reports', label:'HDD Condition Reports', minRole:'staff', excludeRoles:['seller'] },
+    { id:'safety-notices', label:'Dangerous Device Notices', minRole:'staff', excludeRoles:['seller'] },
     { id:'quotes',    label:'Quotes',  minRole:'staff', excludeRoles:['seller'] },
     { id:'pc-builder', label:'PC Builder', minRole:'technician' },
     { id:'reviews',   label:'Reviews',       minRole:'staff', excludeRoles:['seller'] },
@@ -13263,12 +13265,212 @@ function AdminAuditLog() {
   );
 }
 
+// Dangerous device notice. Printed and signed by hand when an unsafe device goes
+// back to the customer, usually because they declined the quoted repair. Clause 7
+// of the Repair Intake Terms reserves the right to require this before release.
+function AdminSafetyNotices({ sessionInfo = {} }) {
+  const [notices, setNotices] = useState([]);
+  const [edit, setEdit] = useState(null);
+  const [form, setForm] = useState({});
+  const [repairJobs, setRepairJobs] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState('');
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const reload = () => {
+    fetch('/api/admin/safety-notices', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setNotices(d.items || []))
+      .catch(() => setNotices([]));
+  };
+  useEffect(() => {
+    reload();
+    fetch('/api/admin/repairs', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => {
+        const board = d.columns || d.items || [];
+        const cards = Array.isArray(board) ? board.flatMap(c => c.cards || []) : [];
+        setRepairJobs(cards);
+      })
+      .catch(() => setRepairJobs([]));
+    fetch('/api/admin/customers', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setCustomers(d.items || []))
+      .catch(() => setCustomers([]));
+  }, []);
+
+  const blank = () => ({
+    customerName: '', customerEmail: '', customerPhone: '',
+    deviceDescription: '', deviceSerial: '', repairJobId: '',
+    faultDescription: '', riskDetail: '',
+    quotedRepair: '', quotedAmount: '',
+    faultPreExisting: true, repairDeclined: true,
+  });
+
+  const applyJob = (jobId) => {
+    const j = repairJobs.find(x => x.id === jobId);
+    if (!j) { set('repairJobId', jobId); return; }
+    setForm(f => ({
+      ...f,
+      repairJobId: j.id,
+      customerName: j.customer || j.name || f.customerName,
+      customerEmail: j.email || f.customerEmail,
+      customerPhone: j.phone || f.customerPhone,
+      deviceDescription: f.deviceDescription || j.device || j.title || '',
+    }));
+  };
+
+  const save = async () => {
+    setSaving(true);
+    const r = await fetch('/api/admin/safety-notices/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(form) }).catch(()=>null);
+    setSaving(false);
+    if (!r || !r.ok) {
+      const msg = r ? ((await r.json().catch(()=>({}))).message || 'Failed to save notice.') : 'Failed to save notice.';
+      adminToast(msg);
+      return null;
+    }
+    const d = await r.json();
+    setNotices(ns => form.id ? ns.map(x => x.id === form.id ? d.item : x) : [...ns, d.item]);
+    setForm(d.item);
+    return d.item;
+  };
+
+  const printPdf = async (payload) => {
+    const r = await fetch('/api/admin/safety-notices/pdf', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(payload || form) }).catch(()=>null);
+    if (!r || !r.ok) { adminToast('Failed to generate the notice PDF.'); return; }
+    const blob = await r.blob();
+    window.open(URL.createObjectURL(blob), '_blank');
+  };
+
+  const saveAndPrint = async () => {
+    const saved = await save();
+    if (saved) printPdf(saved);
+  };
+
+  const del = async () => {
+    if (!form.id || !(await adminConfirm(`Delete notice ${form.id}? This cannot be undone.`, { title:'Delete notice', confirmLabel:'Delete', danger:true }))) return;
+    const r = await fetch('/api/admin/safety-notices/delete', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: form.id }) }).catch(()=>null);
+    if (!r || !r.ok) { adminToast('Failed to delete notice.'); return; }
+    setNotices(ns => ns.filter(x => x.id !== form.id));
+    setEdit(null);
+  };
+
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return notices;
+    return notices.filter(n => [n.id, n.customerName, n.deviceDescription, n.repairJobId].some(v => String(v || '').toLowerCase().includes(q)));
+  }, [notices, search]);
+
+  return (
+    <div style={{padding:32, display:'grid', gap:24}}>
+      <div style={{padding:16, background:'var(--paper)', border:'1px solid var(--line)', borderLeft:'3px solid var(--rust)', fontSize:13, color:'var(--ink-2)', lineHeight:1.6}}>
+        Use this when an unsafe device goes back to a customer, for example where they have declined the quoted repair.
+        Print it, have the customer sign the paper copy at handover, and keep the signed original. It records the warning
+        given and the customer's decision to take the device anyway.
+      </div>
+
+      <div className="row-flex" style={{justifyContent:'space-between', flexWrap:'wrap', gap:10}}>
+        <input className="input" style={{maxWidth:280}} placeholder="Search notice, customer, device…" value={search} onChange={e=>setSearch(e.target.value)} />
+        <button className="btn btn-sm" onClick={() => { setForm(blank()); setEdit({}); }}>New notice</button>
+      </div>
+
+      <Table
+        columns={[
+          { key:'id', label:'#', w:'110px', render:r => <span className="mono" style={{fontSize:11, color:'var(--rust)'}}>{r.id}</span> },
+          { key:'customerName', label:'Customer', w:'1.3fr', render:r => r.customerName || '-' },
+          { key:'deviceDescription', label:'Device', w:'1.6fr', render:r => <span style={{fontSize:13, color:'var(--ink-2)'}}>{r.deviceDescription || '-'}</span> },
+          { key:'repairJobId', label:'Job', w:'120px', render:r => <span className="mono" style={{fontSize:11}}>{r.repairJobId || '-'}</span> },
+          { key:'createdAt', label:'Raised', w:'130px', render:r => <span className="mono" style={{fontSize:11}}>{r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-AU') : '-'}</span> },
+          { key:'print', label:'', w:'90px', render:r => (
+            <button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); printPdf(r); }}>Print</button>
+          ) },
+        ]}
+        rows={visible}
+        onRowClick={r => { setForm(r); setEdit(r); }}
+      />
+      {visible.length === 0 && <div style={{ padding: 24, background: 'var(--paper)', border: '1px solid var(--line)', fontSize: 13, color: 'var(--ink-2)', textAlign: 'center' }}>{notices.length === 0 ? 'No notices raised yet.' : 'No notices match this search.'}</div>}
+
+      {edit !== null && (
+        <Drawer open={true} onClose={() => setEdit(null)} title={form.id ? `Notice ${form.id}` : 'New dangerous device notice'}
+          footer={<div className="row-flex" style={{justifyContent:'space-between'}}>
+            {form.id
+              ? <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} onClick={del}>Delete</button>
+              : <span />}
+            <div className="row-flex" style={{gap:8}}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setEdit(null)}>Close</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => printPdf()} disabled={saving}>Preview PDF</button>
+              <button className="btn btn-sm" onClick={saveAndPrint} disabled={saving}>{saving ? 'Saving…' : 'Save & print'}</button>
+            </div>
+          </div>}
+        >
+          <div style={{display:'grid', gap:14}}>
+            <label className="field"><span className="label">Repair job (optional, fills the customer in)</span>
+              <select className="select" value={form.repairJobId || ''} onChange={e => applyJob(e.target.value)}>
+                <option value="">Not linked to a job</option>
+                {repairJobs.map(j => <option key={j.id} value={j.id}>{j.id}{j.customer ? ` - ${j.customer}` : ''}</option>)}
+              </select>
+            </label>
+
+            <div className="grid-2" style={{gap:12}}>
+              <label className="field"><span className="label">Customer name *</span>
+                <input className="input" value={form.customerName || ''} onChange={e => set('customerName', e.target.value)} placeholder="Full name" /></label>
+              <label className="field"><span className="label">Phone</span>
+                <input className="input" value={form.customerPhone || ''} onChange={e => set('customerPhone', e.target.value)} /></label>
+            </div>
+            <label className="field"><span className="label">Email</span>
+              <input className="input" value={form.customerEmail || ''} onChange={e => set('customerEmail', e.target.value)} /></label>
+
+            <div className="grid-2" style={{gap:12}}>
+              <label className="field"><span className="label">Device *</span>
+                <input className="input" value={form.deviceDescription || ''} onChange={e => set('deviceDescription', e.target.value)} placeholder="e.g. Custom desktop PC, ASUS B550 board" /></label>
+              <label className="field"><span className="label">Serial / identifier</span>
+                <input className="input" value={form.deviceSerial || ''} onChange={e => set('deviceSerial', e.target.value)} /></label>
+            </div>
+
+            <label className="field"><span className="label">Fault found</span>
+              <textarea className="textarea" rows={3} value={form.faultDescription || ''} onChange={e => set('faultDescription', e.target.value)}
+                placeholder="e.g. Catastrophic motherboard failure which has also destroyed the power supply. Both are unsafe to power on." /></label>
+
+            <label className="field"><span className="label">Specific risk (optional, printed as its own section)</span>
+              <textarea className="textarea" rows={2} value={form.riskDetail || ''} onChange={e => set('riskDetail', e.target.value)}
+                placeholder="e.g. Risk of fire or electric shock if mains power is applied." /></label>
+
+            <div className="grid-2" style={{gap:12}}>
+              <label className="field"><span className="label">Quoted repair (optional)</span>
+                <input className="input" value={form.quotedRepair || ''} onChange={e => set('quotedRepair', e.target.value)} placeholder="e.g. Replacement motherboard and PSU" /></label>
+              <label className="field"><span className="label">Quoted amount (optional)</span>
+                <input className="input" type="number" min="0" step="0.01" value={form.quotedAmount || ''} onChange={e => set('quotedAmount', e.target.value)} /></label>
+            </div>
+
+            <label style={{display:'flex', gap:10, alignItems:'flex-start', fontSize:13, lineHeight:1.5, cursor:'pointer'}}>
+              <input type="checkbox" checked={form.faultPreExisting !== false} onChange={e => set('faultPreExisting', e.target.checked)} style={{marginTop:3}} />
+              <span>The fault was present when the device was submitted and was not caused by us. Prints a declaration to that effect.</span>
+            </label>
+            <label style={{display:'flex', gap:10, alignItems:'flex-start', fontSize:13, lineHeight:1.5, cursor:'pointer'}}>
+              <input type="checkbox" checked={form.repairDeclined !== false} onChange={e => set('repairDeclined', e.target.checked)} style={{marginTop:3}} />
+              <span>The customer was quoted for the repair and declined it. Prints a declaration to that effect.</span>
+            </label>
+
+            <div style={{fontSize:12, color:'var(--ink-2)', lineHeight:1.6, padding:'12px 14px', background:'var(--bg-elev)', border:'1px solid var(--line)'}}>
+              The notice is signed by {sessionInfo.username || 'the logged-in staff member'} for Outback Electronics.
+              Your saved signature is used if you have uploaded one in Settings, otherwise the printed form leaves a blank
+              line for you to sign by hand. The customer signs the printed copy.
+            </div>
+          </div>
+        </Drawer>
+      )}
+    </div>
+  );
+}
+
 const ADMIN_VIEWS = {
   overview:   { c: AdminOverview,   t:'Overview',         staticSubtitle:'shop heartbeat · today' },
   orders:     { c: AdminOrders,     t:'Orders' },
   'payment-plans': { c: PaymentPlansView, t:'Payment Plans', staticSubtitle:'active instalment plans · due dates · status' },
   repairs:    { c: AdminRepairs,    t:'Repair Jobs' },
   'hdd-reports': { c: AdminHddReports, t:'HDD Condition Reports', staticSubtitle:'S.M.A.R.T. summary · condition notes · printable PDF' },
+  'safety-notices': { c: AdminSafetyNotices, t:'Dangerous Device Notices', staticSubtitle:'severe electrical fault · customer acknowledgement · printable PDF' },
   quotes:     { c: AdminQuotes,     t:'Quotes' },
   'pc-builder': { c: AdminPcBuilder, t:'PC Builder', staticSubtitle:'pick parts · check fit and compatibility · quote it' },
   reviews:    { c: AdminReviews,    t:'Reviews',           staticSubtitle:'pending · approved · rejected' },
@@ -13298,7 +13500,7 @@ const ADMIN_VIEWS = {
 };
 
 const ADMIN_ALL_IDS = new Set([
-  'overview','orders','payment-plans','repairs','hdd-reports','quotes','pc-builder','reviews','ewaste','bookings','availability',
+  'overview','orders','payment-plans','repairs','hdd-reports','safety-notices','quotes','pc-builder','reviews','ewaste','bookings','availability',
   'products','services','software','tutorials','ai',
   'groups','customers','sellers','clients',
   'memberships','gift-cards','rewards','expenses','tax-reports','policies','seller-billing','settings','audit-log',
