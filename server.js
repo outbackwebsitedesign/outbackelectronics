@@ -4809,6 +4809,7 @@ function buildSafetyNoticePdf(notice, shop) {
       ['Device', notice.deviceDescription || ''],
       ['Serial / identifier', notice.deviceSerial || ''],
       ['Repair job', notice.repairJobId || ''],
+      ['Order', notice.orderId || ''],
       ['Quoted repair', notice.quotedRepair || ''],
       ['Quoted amount', notice.quotedAmount ? `$${Number(notice.quotedAmount).toLocaleString('en-AU', { minimumFractionDigits: 2 })}` : ''],
     ].filter(r => r[1]);
@@ -4828,6 +4829,10 @@ function buildSafetyNoticePdf(notice, shop) {
       y = para(notice.riskDetail, y);
     }
 
+    // Says who did the assessment and on what authority. Without it the notice
+    // reads as though the fault were found by someone unqualified.
+    y = para(`Assessed by ${notice.signedBy || 'a technician'} of ${shopName}, qualified to assess and work on Extra Low Voltage and Low Voltage equipment. Mains-connected work sits outside our licence.`, y, { size: 8.5, color: '#5c5348', gap: 6 });
+
     if (y > pageBottom - 300) { doc.addPage(); y = 50; }
 
     // Declaration
@@ -4841,7 +4846,11 @@ function buildSafetyNoticePdf(notice, shop) {
         : 'I understand that the fault was identified during assessment, that it was present in the device when it was submitted, and that it was not caused by Outback Electronics. No repair to the faulty components has been carried out.',
       notice.repairDeclined === false ? null
         : 'I have been quoted for the parts and work required to make the device serviceable, and I have declined that repair. I have asked for the device to be returned to me unrepaired.',
-      'I have been advised not to use, power on, charge, or connect the device, and to have it assessed by a licensed electrician or other qualified professional before any further use.',
+      // Mains-connected by default: a desktop PC is the common case, and the
+      // referral is about the mains side, not about the assessment already done.
+      notice.mainsConnected === false
+        ? 'I have been advised not to use, power on, charge, or connect the device.'
+        : 'I have been advised not to use, power on, or connect the device. Because this device draws power from the mains supply, I have been advised that a licensed electrician should be consulted before it is connected to mains power again.',
       'I am taking possession of the device against that advice, of my own free choice, and with full knowledge of the risk.',
       'I accept full responsibility for the device from the moment it is released to me, and for any loss, damage to property, fire, personal injury, or death that may result from its possession, use, storage, charging, or disposal.',
       'I release Outback Electronics from liability for any such loss, damage, injury, or death arising from my use or possession of the device after its release to me, and I accept that Outback Electronics has not repaired, made safe, or certified this device as fit for use.',

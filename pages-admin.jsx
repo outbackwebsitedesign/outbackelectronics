@@ -13273,9 +13273,11 @@ function AdminSafetyNotices({ sessionInfo = {} }) {
   const [edit, setEdit] = useState(null);
   const [form, setForm] = useState({});
   const [repairJobs, setRepairJobs] = useState([]);
+  const [orders, setOrders] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
+  const [linkType, setLinkType] = useState('repair');
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const reload = () => {
@@ -13294,6 +13296,10 @@ function AdminSafetyNotices({ sessionInfo = {} }) {
         setRepairJobs(cards);
       })
       .catch(() => setRepairJobs([]));
+    fetch('/api/admin/orders', { credentials:'include' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setOrders(d.items || []))
+      .catch(() => setOrders([]));
     fetch('/api/admin/customers', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(d => setCustomers(d.items || []))
@@ -13305,15 +13311,31 @@ function AdminSafetyNotices({ sessionInfo = {} }) {
     deviceDescription: '', deviceSerial: '', repairJobId: '',
     faultDescription: '', riskDetail: '',
     quotedRepair: '', quotedAmount: '',
-    faultPreExisting: true, repairDeclined: true,
+    faultPreExisting: true, repairDeclined: true, mainsConnected: true,
+    orderId: '',
   });
+
+  const applyOrder = (orderId) => {
+    const o = orders.find(x => x.id === orderId);
+    if (!o) { setForm(f => ({ ...f, orderId, repairJobId: '' })); return; }
+    setForm(f => ({
+      ...f,
+      orderId: o.id,
+      repairJobId: '',
+      customerName: o.cust || f.customerName,
+      customerEmail: o.email || f.customerEmail,
+      customerPhone: o.phone || f.customerPhone,
+      deviceDescription: f.deviceDescription || (typeof o.items === 'string' ? o.items : ''),
+    }));
+  };
 
   const applyJob = (jobId) => {
     const j = repairJobs.find(x => x.id === jobId);
-    if (!j) { set('repairJobId', jobId); return; }
+    if (!j) { setForm(f => ({ ...f, repairJobId: jobId, orderId: '' })); return; }
     setForm(f => ({
       ...f,
       repairJobId: j.id,
+      orderId: '',
       customerName: j.customer || j.name || f.customerName,
       customerEmail: j.email || f.customerEmail,
       customerPhone: j.phone || f.customerPhone,
@@ -13359,7 +13381,7 @@ function AdminSafetyNotices({ sessionInfo = {} }) {
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return notices;
-    return notices.filter(n => [n.id, n.customerName, n.deviceDescription, n.repairJobId].some(v => String(v || '').toLowerCase().includes(q)));
+    return notices.filter(n => [n.id, n.customerName, n.deviceDescription, n.repairJobId, n.orderId].some(v => String(v || '').toLowerCase().includes(q)));
   }, [notices, search]);
 
   return (
@@ -13372,7 +13394,7 @@ function AdminSafetyNotices({ sessionInfo = {} }) {
 
       <div className="row-flex" style={{justifyContent:'space-between', flexWrap:'wrap', gap:10}}>
         <input className="input" style={{maxWidth:280}} placeholder="Search notice, customer, device…" value={search} onChange={e=>setSearch(e.target.value)} />
-        <button className="btn btn-sm" onClick={() => { setForm(blank()); setEdit({}); }}>New notice</button>
+        <button className="btn btn-sm" onClick={() => { setForm(blank()); setLinkType('repair'); setEdit({}); }}>New notice</button>
       </div>
 
       <Table
@@ -13380,14 +13402,14 @@ function AdminSafetyNotices({ sessionInfo = {} }) {
           { key:'id', label:'#', w:'110px', render:r => <span className="mono" style={{fontSize:11, color:'var(--rust)'}}>{r.id}</span> },
           { key:'customerName', label:'Customer', w:'1.3fr', render:r => r.customerName || '-' },
           { key:'deviceDescription', label:'Device', w:'1.6fr', render:r => <span style={{fontSize:13, color:'var(--ink-2)'}}>{r.deviceDescription || '-'}</span> },
-          { key:'repairJobId', label:'Job', w:'120px', render:r => <span className="mono" style={{fontSize:11}}>{r.repairJobId || '-'}</span> },
+          { key:'repairJobId', label:'Linked to', w:'130px', render:r => <span className="mono" style={{fontSize:11}}>{r.repairJobId || r.orderId || '-'}</span> },
           { key:'createdAt', label:'Raised', w:'130px', render:r => <span className="mono" style={{fontSize:11}}>{r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-AU') : '-'}</span> },
           { key:'print', label:'', w:'90px', render:r => (
             <button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); printPdf(r); }}>Print</button>
           ) },
         ]}
         rows={visible}
-        onRowClick={r => { setForm(r); setEdit(r); }}
+        onRowClick={r => { setForm(r); setLinkType(r.orderId ? 'order' : r.repairJobId ? 'repair' : 'none'); setEdit(r); }}
       />
       {visible.length === 0 && <div style={{ padding: 24, background: 'var(--paper)', border: '1px solid var(--line)', fontSize: 13, color: 'var(--ink-2)', textAlign: 'center' }}>{notices.length === 0 ? 'No notices raised yet.' : 'No notices match this search.'}</div>}
 
@@ -13405,12 +13427,32 @@ function AdminSafetyNotices({ sessionInfo = {} }) {
           </div>}
         >
           <div style={{display:'grid', gap:14}}>
-            <label className="field"><span className="label">Repair job (optional, fills the customer in)</span>
-              <select className="select" value={form.repairJobId || ''} onChange={e => applyJob(e.target.value)}>
-                <option value="">Not linked to a job</option>
-                {repairJobs.map(j => <option key={j.id} value={j.id}>{j.id}{j.customer ? ` - ${j.customer}` : ''}</option>)}
-              </select>
-            </label>
+            <div className="grid-2" style={{gap:12}}>
+              <label className="field"><span className="label">Link to</span>
+                <select className="select" value={linkType}
+                  onChange={e => { const t = e.target.value; setLinkType(t); setForm(f => ({ ...f, repairJobId: '', orderId: '' })); }}>
+                  <option value="repair">Repair job</option>
+                  <option value="order">Order</option>
+                  <option value="none">Nothing</option>
+                </select>
+              </label>
+              {linkType === 'repair' && (
+                <label className="field"><span className="label">Repair job (fills the customer in)</span>
+                  <select className="select" value={form.repairJobId || ''} onChange={e => applyJob(e.target.value)}>
+                    <option value="">Select a job…</option>
+                    {repairJobs.map(j => <option key={j.id} value={j.id}>{j.id}{j.customer ? ` - ${j.customer}` : ''}</option>)}
+                  </select>
+                </label>
+              )}
+              {linkType === 'order' && (
+                <label className="field"><span className="label">Order (fills the customer in)</span>
+                  <select className="select" value={form.orderId || ''} onChange={e => applyOrder(e.target.value)}>
+                    <option value="">Select an order…</option>
+                    {orders.map(o => <option key={o.id} value={o.id}>{o.id}{o.cust ? ` - ${o.cust}` : ''}</option>)}
+                  </select>
+                </label>
+              )}
+            </div>
 
             <div className="grid-2" style={{gap:12}}>
               <label className="field"><span className="label">Customer name *</span>
@@ -13450,6 +13492,10 @@ function AdminSafetyNotices({ sessionInfo = {} }) {
             <label style={{display:'flex', gap:10, alignItems:'flex-start', fontSize:13, lineHeight:1.5, cursor:'pointer'}}>
               <input type="checkbox" checked={form.repairDeclined !== false} onChange={e => set('repairDeclined', e.target.checked)} style={{marginTop:3}} />
               <span>The customer was quoted for the repair and declined it. Prints a declaration to that effect.</span>
+            </label>
+            <label style={{display:'flex', gap:10, alignItems:'flex-start', fontSize:13, lineHeight:1.5, cursor:'pointer'}}>
+              <input type="checkbox" checked={form.mainsConnected !== false} onChange={e => set('mainsConnected', e.target.checked)} style={{marginTop:3}} />
+              <span>The device plugs into mains, such as a desktop PC. Prints advice to consult a licensed electrician before it goes back on mains power. Leave unticked for battery or ELV-only devices.</span>
             </label>
 
             <div style={{fontSize:12, color:'var(--ink-2)', lineHeight:1.6, padding:'12px 14px', background:'var(--bg-elev)', border:'1px solid var(--line)'}}>

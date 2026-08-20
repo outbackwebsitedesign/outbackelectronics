@@ -1621,7 +1621,7 @@ Where, in our reasonable opinion, a Device presents a risk of fire, electric sho
 
 - decline to return the Device to service until the hazard has been addressed;
 - require your written acknowledgment of the risk before release; or
-- require that the Device be assessed by a licensed electrician or other qualified professional before further use.
+- where the Device draws power from the mains supply, require that it be inspected by a licensed electrician before it is next connected to mains power.
 
 We are not liable for any loss arising from our reasonable refusal to return an unsafe Device to service.
 
