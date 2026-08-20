@@ -4784,7 +4784,7 @@ function buildSafetyNoticePdf(notice, shop) {
     let y = 126;
     const sectionTitle = (label, yy) => {
       doc.font('Helvetica-Bold').fontSize(11).fillColor(RUST).text(label, 50, yy);
-      return yy + 15;
+      return yy + 14;
     };
     const para = (text, yy, opts = {}) => {
       doc.font(opts.bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(opts.size || 10).fillColor(opts.color || '#222')
@@ -4799,7 +4799,7 @@ function buildSafetyNoticePdf(notice, shop) {
       .text('DO NOT USE THIS DEVICE', 66, y + 9, { width: 465 });
     doc.font('Helvetica').fontSize(9).fillColor('#7a2f13')
       .text('This device has a severe electrical fault, is unsafe to operate, and is being returned unrepaired.', 66, y + 27, { width: 465 });
-    y += 54;
+    y += 50;
 
     // Device and customer
     y = sectionTitle('Device and Customer', y);
@@ -4817,7 +4817,7 @@ function buildSafetyNoticePdf(notice, shop) {
     for (const [label, value] of rows) {
       doc.fillColor('#888').text(label, 50, y, { width: 130 });
       doc.fillColor('#222').text(value, 185, y, { width: 360 });
-      y = Math.max(doc.y, y + 12) + 1;
+      y = Math.max(doc.y, y + 11) + 1;
     }
     y += 6;
 
@@ -4860,23 +4860,33 @@ function buildSafetyNoticePdf(notice, shop) {
       if (y > pageBottom - 40) { doc.addPage(); y = 50; }
       doc.circle(56, y + 4.2, 1.7).fill('#222');
       doc.fillColor('#222').text(line, 66, y, { width: 479, align: 'justify', lineGap: 0.8 });
-      y = doc.y + 4;
+      y = doc.y + 3;
     }
     y += 2;
 
-    // Carve-out and signatures are one indivisible block, 165pt measured, kept
-    // together so signatures never sit apart from the declaration they attest to.
-    if (y > pageBottom - 168) { doc.addPage(); y = 50; }
+    // Carve-out, signature rules, and their labels are one indivisible block:
+    // signatures must never sit on a sheet away from the declaration they
+    // attest to. The height is derived from the very constants used to draw it
+    // below, so the guard cannot drift out of step with the layout again. An
+    // under-estimate here is what silently spills the notice onto extra pages.
+    const CARVE_H = 46;      // shaded box plus the gap after it
+    const SIG_TITLE_H = 14;  // "Signatures" heading
+    const SIG_TOP_OFF = 46;  // heading baseline down to the signature rule
+    const NAME_OFF = 30;     // signature rule down to the print-name rule
+    const DATE_OFF = 30;     // print-name rule down to the date rule
+    const DATE_LABEL_H = 14; // "Date" caption under the last rule
+    const SIGN_BLOCK_H = CARVE_H + SIG_TITLE_H + SIG_TOP_OFF + NAME_OFF + DATE_OFF + DATE_LABEL_H;
+    if (y > pageBottom - SIGN_BLOCK_H) { doc.addPage(); y = 50; }
 
     // Statutory carve-out, matching the position taken across our policy documents
     doc.rect(50, y, 495, 34).fill('#f6f3ee');
     doc.font('Helvetica').fontSize(8).fillColor('#5c5348')
       .text('Nothing in this declaration excludes, restricts, or modifies any guarantee, right, or remedy you have under the Australian Consumer Law that cannot lawfully be excluded, including in respect of liability for death or personal injury caused by negligence. This document records the warning given to you and your decision to take the device notwithstanding that warning.', 60, y + 7, { width: 475, align: 'justify', lineGap: 0.5 });
-    y += 46;
-
+    y += CARVE_H;
 
     // Signature blocks
-    y = sectionTitle('Signatures', y);
+    doc.font('Helvetica-Bold').fontSize(11).fillColor(RUST).text('Signatures', 50, y);
+    y += SIG_TITLE_H;
     const sigLine = (label, x, yy, width) => {
       doc.moveTo(x, yy).lineTo(x + width, yy).strokeColor('#999').lineWidth(0.8).stroke();
       doc.font('Helvetica').fontSize(8).fillColor('#888').text(label, x, yy + 5, { width });
@@ -4884,7 +4894,7 @@ function buildSafetyNoticePdf(notice, shop) {
 
     const colW = 232;
     const rightX = 50 + colW + 31;
-    const sigTop = y + 54;
+    const sigTop = y + SIG_TOP_OFF;
 
     doc.font('Helvetica-Bold').fontSize(9).fillColor('#222').text('Customer', 50, y);
     doc.font('Helvetica-Bold').fontSize(9).fillColor('#222').text('For Outback Electronics', rightX, y);
@@ -4897,7 +4907,7 @@ function buildSafetyNoticePdf(notice, shop) {
       if (fs.existsSync(candidate)) {
         // Anchored to the rule, not the label: the box runs from just under
         // the heading down to the signature line.
-        try { doc.image(candidate, rightX, sigTop - 40, { fit: [150, 36] }); companySigDrawn = true; } catch {}
+        try { doc.image(candidate, rightX, sigTop - 34, { fit: [150, 32] }); companySigDrawn = true; } catch {}
       }
     }
     if (!companySigDrawn && notice.signedBy) {
@@ -4907,7 +4917,7 @@ function buildSafetyNoticePdf(notice, shop) {
     sigLine('Signature', 50, sigTop, colW);
     sigLine('Signature', rightX, sigTop, colW);
 
-    const nameY = sigTop + 32;
+    const nameY = sigTop + NAME_OFF;
     doc.font('Helvetica').fontSize(9).fillColor('#222')
       .text(notice.customerName || '', 50, nameY - 12, { width: colW });
     doc.font('Helvetica').fontSize(9).fillColor('#222')
@@ -4915,7 +4925,7 @@ function buildSafetyNoticePdf(notice, shop) {
     sigLine('Print name', 50, nameY, colW);
     sigLine('Print name', rightX, nameY, colW);
 
-    const dateY = nameY + 32;
+    const dateY = nameY + DATE_OFF;
     // Our side is filled in; the customer dates their own line by hand.
     doc.font('Helvetica').fontSize(9).fillColor('#222')
       .text(fmtDate(notice.signedAt || notice.createdAt || Date.now()), rightX, dateY - 12, { width: colW });
