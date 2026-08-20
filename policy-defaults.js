@@ -1592,11 +1592,11 @@ Second, that the device is yours, or that you are otherwise entitled to authoris
 
 ### 4. Assessment and Quote
 
-We assess the device and send you a written quote before any chargeable work starts. Quotes hold for 14 days unless we say otherwise.
+We assess the device first, then send you a written quote for the repair. Quotes hold for 14 days unless we say otherwise, and no repair work starts until you approve the quote.
+
+**Some assessments are free and some are not.** Whether diagnosing your fault is chargeable depends on the work it takes, so it is decided job by job rather than by a standing rule. Where a diagnostic fee applies to your job, we tell you the amount, and how it is treated if you go ahead with the repair, before we start.
 
 If something turns up during the repair that was not visible at assessment, we stop and come back to you with a revised quote. We do not go beyond the agreed scope without your approval.
-
-If you decide not to proceed once we have assessed the device, a diagnostic fee may apply. We tell you that amount before assessment begins, not after.
 
 ### 5. Back Up Your Data First
 
