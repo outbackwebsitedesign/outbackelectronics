@@ -4831,7 +4831,7 @@ function buildSafetyNoticePdf(notice, shop) {
 
     // Says who did the assessment and on what authority. Without it the notice
     // reads as though the fault were found by someone unqualified.
-    y = para(`Assessed by ${notice.signedBy || 'a technician'} of ${shopName}, qualified to assess and work on Extra Low Voltage and Low Voltage equipment. Mains-connected work sits outside our licence.`, y, { size: 8.5, color: '#5c5348', gap: 6 });
+    y = para(`Assessed by ${notice.signedBy || 'a technician'} of ${shopName}. Extra Low Voltage and Low Voltage work requires no electrical licence and is within our scope. Mains-voltage work does require a licensed electrician and is outside it.`, y, { size: 8.5, color: '#5c5348', gap: 6 });
 
     if (y > pageBottom - 300) { doc.addPage(); y = 50; }
 
@@ -4884,7 +4884,7 @@ function buildSafetyNoticePdf(notice, shop) {
 
     const colW = 232;
     const rightX = 50 + colW + 31;
-    const sigTop = y + 40;
+    const sigTop = y + 54;
 
     doc.font('Helvetica-Bold').fontSize(9).fillColor('#222').text('Customer', 50, y);
     doc.font('Helvetica-Bold').fontSize(9).fillColor('#222').text('For Outback Electronics', rightX, y);
@@ -4895,11 +4895,13 @@ function buildSafetyNoticePdf(notice, shop) {
     if (notice.signedByStaffId) {
       const candidate = path.join(__dirname, 'assets/signatures', `${notice.signedByStaffId}.png`);
       if (fs.existsSync(candidate)) {
-        try { doc.image(candidate, rightX, sigTop - 46, { fit: [150, 42] }); companySigDrawn = true; } catch {}
+        // Anchored to the rule, not the label: the box runs from just under
+        // the heading down to the signature line.
+        try { doc.image(candidate, rightX, sigTop - 40, { fit: [150, 36] }); companySigDrawn = true; } catch {}
       }
     }
     if (!companySigDrawn && notice.signedBy) {
-      doc.font('Helvetica-Oblique').fontSize(16).fillColor('#222').text(notice.signedBy, rightX, sigTop - 24, { width: colW });
+      doc.font('Helvetica-Oblique').fontSize(16).fillColor('#222').text(notice.signedBy, rightX, sigTop - 26, { width: colW });
     }
 
     sigLine('Signature', 50, sigTop, colW);
@@ -4914,6 +4916,9 @@ function buildSafetyNoticePdf(notice, shop) {
     sigLine('Print name', rightX, nameY, colW);
 
     const dateY = nameY + 32;
+    // Our side is filled in; the customer dates their own line by hand.
+    doc.font('Helvetica').fontSize(9).fillColor('#222')
+      .text(fmtDate(notice.signedAt || notice.createdAt || Date.now()), rightX, dateY - 12, { width: colW });
     sigLine('Date', 50, dateY, colW);
     sigLine('Date', rightX, dateY, colW);
 
