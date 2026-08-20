@@ -4864,10 +4864,9 @@ function buildSafetyNoticePdf(notice, shop) {
     }
     y += 2;
 
-    // Carve-out, signatures, and the retention note are one indivisible block,
-    // 187pt measured. Kept together so signatures never sit apart from the
-    // declaration they attest to.
-    if (y > pageBottom - 190) { doc.addPage(); y = 50; }
+    // Carve-out and signatures are one indivisible block, 165pt measured, kept
+    // together so signatures never sit apart from the declaration they attest to.
+    if (y > pageBottom - 168) { doc.addPage(); y = 50; }
 
     // Statutory carve-out, matching the position taken across our policy documents
     doc.rect(50, y, 495, 34).fill('#f6f3ee');
@@ -4917,9 +4916,6 @@ function buildSafetyNoticePdf(notice, shop) {
     const dateY = nameY + 32;
     sigLine('Date', 50, dateY, colW);
     sigLine('Date', rightX, dateY, colW);
-
-    doc.font('Helvetica').fontSize(7.5).fillColor('#999')
-      .text('Retain the signed original. A copy is provided to the customer.', 50, dateY + 22, { width: 495, align: 'center' });
 
     // Identify every sheet, so a notice that runs to two pages cannot have a
     // signature page floating free of the declaration it belongs to.
