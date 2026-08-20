@@ -1799,7 +1799,7 @@ function validatePolicyPayload(value) {
 }
 function policyKey(audience, slug) { return `${audience}::${normalizePolicySlug(slug)}`; }
 // The default-only half of the merge never changes at runtime, so build it once
-// at module load instead of re-allocating 31 objects on every request.
+// at module load instead of re-allocating every default object on every request.
 const POLICY_DEFAULTS_MAP = new Map(POLICY_DEFAULTS.map(d => [policyKey(d.audience, d.slug), {
   id: `default:${d.audience}:${d.slug}`,
   audience: d.audience, slug: d.slug, title: d.title, body: d.body,
@@ -7341,7 +7341,7 @@ const mainServer = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/quote/request') {
     if (publicRateLimited(getIp(req), 'quote/request')) return json(res, 429, { error: 'too_many_requests' });
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
-    const { name, email, loc, kind, budget, urgency, desc } = body || {};
+    const { name, email, loc, kind, budget, urgency, desc, intakeTermsAccepted } = body || {};
     if (!name || !email || !desc) return json(res, 422, { error: 'missing_fields' });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())) return json(res, 422, { error: 'invalid_email', message: 'Email address is invalid.' });
     if (String(desc).trim().length > 2000) return json(res, 422, { error: 'description_too_long', message: 'Description must be 2000 characters or fewer.' });
@@ -7355,6 +7355,7 @@ const mainServer = http.createServer(async (req, res) => {
       budget: String(budget || '').trim(),
       urgency: String(urgency || '').trim(),
       description: String(desc).trim(),
+      intakeTermsAcceptedAt: intakeTermsAccepted ? new Date().toISOString() : null,
       status: 'new',
       createdAt: new Date().toISOString(),
     };
@@ -7385,7 +7386,7 @@ const mainServer = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/bookings/request') {
     if (publicRateLimited(getIp(req), 'bookings/request')) return json(res, 429, { error: 'too_many_requests' });
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
-    const { type, name, email, phone, preferredDate, preferredTime, device, address, notes, durationMinutes: rawDuration, lat: rawLat, lng: rawLng } = body || {};
+    const { type, name, email, phone, preferredDate, preferredTime, device, address, notes, durationMinutes: rawDuration, lat: rawLat, lng: rawLng, intakeTermsAccepted } = body || {};
     const BOOKING_TYPES = ['dropoff', 'appointment', 'callout'];
     if (!name || !email || !preferredDate) return json(res, 422, { error: 'missing_fields' });
     if (!BOOKING_TYPES.includes(type)) return json(res, 422, { error: 'invalid_type' });
@@ -7434,6 +7435,9 @@ const mainServer = http.createServer(async (req, res) => {
       address: String(address || '').trim(),
       notes: String(notes || '').trim(),
       blockedSlots,
+      // Timestamped here rather than trusting a client-supplied time, this is the
+      // record that the customer saw the storage-fee and uncollected-goods terms.
+      intakeTermsAcceptedAt: intakeTermsAccepted ? new Date().toISOString() : null,
       status: 'new',
       createdAt: new Date().toISOString(),
     };

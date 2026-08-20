@@ -490,7 +490,7 @@ Where we provide an AI-powered chat or assistant feature ('AI Assistant'), your 
 
 ### 10. Repair and Technical Services
 
-**Scope - ELV/LV Equipment Only.** Our Repair Services are limited to Extra Low Voltage (ELV, ≤50 V AC / ≤120 V DC) and Low Voltage (LV) equipment. We do not perform repairs on mains-connected (240 V AC) devices and we are not licensed to do so. Any device submitted for repair that is found to contain mains-voltage components beyond our scope will not be worked on; we will advise you and return the device. Where we provide repair, diagnostic, or technical services within our scope ('Repair Services'), the following additional terms apply alongside your rights under the Australian Consumer Law. By submitting a device for Repair Services, you agree to these terms.
+**Scope - ELV/LV Equipment Only.** Our Repair Services are limited to Extra Low Voltage (ELV, ≤50 V AC / ≤120 V DC) and Low Voltage (LV) equipment. We do not perform repairs on mains-connected (240 V AC) devices and we are not licensed to do so. Any device submitted for repair that is found to contain mains-voltage components beyond our scope will not be worked on; we will advise you and return the device. Where we provide repair, diagnostic, or technical services within our scope ('Repair Services'), the following additional terms apply alongside your rights under the Australian Consumer Law. By submitting a device for Repair Services, you agree to these terms. They are set out in full, including collection deadlines and storage fees, in our Repair Intake Terms.
 
 **How to Submit a Device.** We operate as a mobile service, we do not have a public shopfront. Devices may be submitted in one of three ways: (a) **mail-in**, you may post your device to our returns address at any time without prior arrangement (please include your name, contact details, and a description of the fault); (b) **on-site service**, we can attend your location by appointment; or (c) **drop-off by appointment**, contact us first to arrange a time. Devices sent by post should be packed securely; we are not liable for damage caused by inadequate packaging in transit to us.
 
@@ -506,7 +506,7 @@ Where we provide an AI-powered chat or assistant feature ('AI Assistant'), your 
 
 **Safety-Critical Findings.** If during the course of repair we identify a condition that, in our reasonable opinion, presents a risk of fire, electric shock, explosion, or other serious safety hazard, we reserve the right to: (a) decline to return the device to service until the safety issue is addressed; (b) require written acknowledgment of the risk before collection; or (c) advise you to have the device assessed by a licensed electrician or other qualified professional before use. We are not liable for any loss arising from our reasonable refusal to return an unsafe device to service.
 
-**Uncollected Devices.** If you fail to collect your device or respond to our communications within 90 days of being notified that it is ready (or that repair has been declined), we reserve the right to dispose of the device responsibly. We will make at least two attempts to contact you before disposal. No compensation is payable for any device disposed of under this clause.
+**Uncollected Devices.** You have 14 days from the date we notify you that your device is ready (or that repair has been declined) to collect it, arrange return postage, or otherwise respond to us. If you have not responded within those 14 days, a storage fee of $5.00 per day per device applies from day 15 until the device is collected, payable before collection along with any outstanding repair charges. We will make at least two further attempts to contact you using the details you gave us at intake. If the device remains uncollected six months after our first ready-for-collection notice, we will deal with it as uncollected goods under the _Disposal of Uncollected Goods Act 1967_ (Qld), following the notice, waiting-period, and disposal requirements that Act sets out, and may deduct unpaid repair charges, accrued storage fees, and reasonable costs of sale from any proceeds. Full detail is in our Repair Intake Terms.
 
 **Devices Beyond Economical Repair.** If the estimated cost of repair exceeds the assessed fair market value of the device, we will advise you. You may choose to proceed with repair at the quoted cost, collect the device (a diagnostic fee may apply), or authorise disposal. We are not liable for consequential loss arising from a device being assessed as beyond economical repair.
 
@@ -991,6 +991,8 @@ _Our repair services cover ELV (Extra Low Voltage, ≤50 V AC / ≤120 V DC) and
 
 **Repairs to Second-Hand or Used Devices.** Where the device you submit for repair is itself second-hand or used (including devices purchased from us as 'Used' or 'Refurbished' stock, traded in, or otherwise acquired second-hand), the Repair Warranty above applies to **our repair work only**, it does not extend, restore, or create any warranty over the device as a whole, and does not cover faults, wear, or failures unrelated to the specific repair performed. The device's separate product warranty (if any) is governed by its own terms, including our Return Policy's used/refurbished goods provisions, and is not affected by the existence of a Repair Warranty on unrelated work.
 
+**Intake Terms.** Everything covering how a device is submitted, assessed, quoted, collected, and (if left uncollected) disposed of, including our collection deadline and storage fees, is set out in our Repair Intake Terms.
+
 **Your ACL Rights for Repair Services.** If our Repair Services fail to comply with a consumer guarantee under the Australian Consumer Law (e.g., not carried out with due care and skill), you are entitled to a remedy under the ACL, which may include re-performance of the service or compensation for foreseeable loss. These rights apply regardless of, and in addition to, our Repair Warranty.
 
 ### Exceptions (Change-of-Mind Returns Only)
@@ -1432,7 +1434,7 @@ This document applies to **every** person or business that interacts with Outbac
 
 ### Commencement Is Acceptance
 
-By doing any of the following, you accept and agree to be bound by all of our policies that apply to that activity (for example, our Terms and Conditions, Privacy Policy, Return Policy, Acceptable Use Policy, and - where relevant, our Custom Work and Reverse Engineering Policy, Seller Agreement, or Commercial Terms and Conditions):
+By doing any of the following, you accept and agree to be bound by all of our policies that apply to that activity (for example, our Terms and Conditions, Privacy Policy, Return Policy, Acceptable Use Policy, and - where relevant, our Repair Intake Terms, Custom Work and Reverse Engineering Policy, Seller Agreement, or Commercial Terms and Conditions):
 
 - placing an order, paying a deposit, or paying for goods or services;
 - submitting a repair, quote, or custom work request, or handing over a device or materials to us;
@@ -1568,31 +1570,154 @@ Items accepted for recycling or disposal with no resale value are accepted on th
 
 **Questions?** Email [{{email}}](mailto:{{email}}), we'll get back to you as soon as we can.`;
 
+const BODY_REPAIR_INTAKE = `_LEGAL · REPAIR INTAKE TERMS_
+
+## Repair Intake Terms
+
+These terms govern every device you hand over, post, or otherwise submit to Outback Electronics ('Company', 'we', 'us', or 'our') for repair, diagnostic, or technical work ('Repair Services'). Our ABN is {{abn}}.
+
+**By submitting a device for Repair Services, you agree to these terms.** They apply alongside your rights under the Australian Consumer Law, our Terms and Conditions, our Return Policy, and our Privacy Policy. Nothing in this document excludes, restricts, or modifies any right or remedy you have under the Australian Consumer Law.
+
+### 1. Scope - ELV and LV Equipment Only
+
+Our Repair Services are limited to Extra Low Voltage (ELV, at or below 50 V AC / 120 V DC) and Low Voltage (LV) equipment, including PCs, laptops, phones, tablets, microcontroller boards, embedded systems, and off-grid power and communications gear.
+
+We do not perform repairs on mains-connected (240 V AC) devices and we are not licensed to do so. Any device submitted for repair that is found to contain mains-voltage components beyond our scope will not be worked on; we will advise you and return the device.
+
+### 2. How to Submit a Device
+
+We operate as a mobile service, we do not have a public shopfront. Devices may be submitted in one of three ways:
+
+- **Mail-in.** You may post your device to our returns address at any time without prior arrangement. Please include your name, contact details, and a description of the fault.
+- **On-site service.** We can attend your location by appointment.
+- **Drop-off by appointment.** Contact us first to arrange a time.
+
+Devices sent by post should be packed securely. We are not liable for damage caused by inadequate packaging in transit to us.
+
+### 3. What You Tell Us at Intake
+
+You warrant that, to the best of your knowledge, you have disclosed all known damage, faults, modifications, liquid exposure, and relevant history at the time of submission.
+
+You also warrant that you own the device or are otherwise entitled to authorise work on it. We may decline to work on, or to return, any device we reasonably believe to be stolen or subject to a dispute over ownership, and we may report the matter to police.
+
+### 4. Assessment and Quote
+
+We will conduct an initial assessment of your device and provide a written quote before commencing any chargeable repair. Quotes are valid for **14 days** from the date of issue unless otherwise stated.
+
+We reserve the right to vary a quote if additional faults are discovered during repair that were not apparent at the time of assessment. We will notify you and obtain your approval before proceeding with any work beyond the agreed scope.
+
+A diagnostic fee may apply where we assess a device and you choose not to proceed with the quoted repair. Any diagnostic fee will be disclosed to you before assessment begins.
+
+### 5. Back Up Your Data First
+
+**You are solely responsible for backing up all data, software, settings, and personal information stored on your device before submitting it for Repair Services.**
+
+We take reasonable care but are not liable for any loss, alteration, or corruption of data or software that occurs in connection with Repair Services, whether arising from negligence or otherwise. Some repairs (including storage, board-level, and firmware work) carry an inherent risk of total data loss.
+
+Where we access data on your device, we do so only as far as necessary to diagnose, repair, or verify the fault, and we handle any personal information in accordance with our Privacy Policy.
+
+### 6. Pre-Existing Conditions and Consequential Failure
+
+We are not liable for any damage, deterioration, or failure caused by pre-existing conditions, undisclosed damage, prior unauthorised repairs, manufacturing defects, or latent faults that were present before submission. Where a pre-existing condition is discovered during repair, we will advise you before proceeding.
+
+Electronic devices may contain multiple faults not apparent during or immediately after repair. To the fullest extent permitted by applicable law, we are not liable for any loss, damage, fire, personal injury, or adverse outcome caused by:
+
+- a fault that was not the subject of the agreed repair;
+- faults that manifest after repair as a result of pre-existing conditions; or
+- your subsequent use of the device inconsistently with our repair instructions or manufacturer specifications.
+
+These limitations do not limit your rights under the Australian Consumer Law in respect of our Repair Services.
+
+### 7. Safety-Critical Findings
+
+If during the course of repair we identify a condition that, in our reasonable opinion, presents a risk of fire, electric shock, explosion, or other serious safety hazard, we reserve the right to:
+
+- decline to return the device to service until the safety issue is addressed;
+- require written acknowledgment of the risk before collection; or
+- advise you to have the device assessed by a licensed electrician or other qualified professional before use.
+
+We are not liable for any loss arising from our reasonable refusal to return an unsafe device to service.
+
+### 8. Devices Beyond Economical Repair
+
+If the estimated cost of repair exceeds the assessed fair market value of the device, we will advise you. You may choose to proceed with repair at the quoted cost, collect the device (a diagnostic fee may apply), or authorise disposal. We are not liable for consequential loss arising from a device being assessed as beyond economical repair.
+
+### 9. Collection, Storage Fees, and Uncollected Goods
+
+We will notify you by email, SMS, or phone when your device is ready for collection or return (including where we have declined or been unable to complete the repair). The date of that first notice starts the timeline below.
+
+**14 days to respond.** You have **14 days** from the date we notify you to collect your device, arrange return postage, or otherwise respond to us. Responding means contacting us to arrange collection or delivery, not simply acknowledging the notice.
+
+**Storage fee.** If you have not responded within those 14 days, a storage fee of **$5.00 per day** applies from day 15 onward, for each device, until the device is collected or otherwise dealt with under this clause. The storage fee reflects our reasonable cost of holding, insuring, and safeguarding your device. It is payable before collection, together with any outstanding repair charges. We may waive or reduce the fee at our discretion, and we will not charge storage for any period of delay caused by us.
+
+**Our contact attempts.** We will make at least **two** further attempts to contact you, using the contact details you gave us at intake, before treating a device as uncollected. It is your responsibility to keep those details current.
+
+**After six months.** If your device remains uncollected **six months** after the date of our first ready-for-collection notice, we will deal with it as uncollected goods under the _Disposal of Uncollected Goods Act 1967_ (Qld). We will follow the notice, waiting-period, and disposal requirements that Act sets out for goods of the relevant value, which may include selling the device by public auction or private sale.
+
+Where a device is sold under that Act, we may deduct our unpaid repair charges, accrued storage fees, and reasonable costs of sale from the proceeds. Any surplus is dealt with as the Act requires. Nothing in this clause limits your rights under that Act, including your right to reclaim the goods at any time before disposal by paying what is owed.
+
+**Data on uncollected devices.** Devices disposed of under this clause may still hold your data. We take reasonable steps to erase storage media before sale or disposal, but you should not rely on this as a data-protection measure. Back up and, where you can, remove sensitive data before submitting a device.
+
+### 10. Repair Warranty
+
+Subject to the exclusions in these terms, we provide a **90-day warranty on parts and labour** for completed repair work, running from the date the repair is completed.
+
+The Repair Warranty covers the specific fault addressed in the agreed repair. It does not cover:
+
+- faults unrelated to the repair performed;
+- damage caused by misuse, accidental damage, liquid ingress, or physical impact after collection;
+- damage caused by a pre-existing condition separate from the agreed repair; or
+- further modification or repair by you or a third party after collection from us.
+
+Where the device you submit is itself second-hand or used, the Repair Warranty applies to **our repair work only**. It does not extend, restore, or create any warranty over the device as a whole.
+
+If the same fault reoccurs within the warranty period, contact us at [{{email}}](mailto:{{email}}) and we will re-examine and re-repair at no charge, or provide an alternative remedy as required by the Australian Consumer Law. Full warranty-return detail is in our Return Policy.
+
+### 11. Your Rights Under the Australian Consumer Law
+
+If our Repair Services fail to comply with a consumer guarantee under the Australian Consumer Law (for example, they are not carried out with due care and skill), you are entitled to a remedy under the ACL, which may include re-performance of the service or compensation for reasonably foreseeable loss. These rights apply regardless of, and in addition to, our Repair Warranty.
+
+You can obtain information about your consumer rights from the Australian Competition and Consumer Commission (ACCC) at [www.accc.gov.au](https://www.accc.gov.au) or the Queensland Office of Fair Trading at [www.qld.gov.au/law/fair-trading](https://www.qld.gov.au/law/fair-trading).
+
+### 12. Contact Us
+
+**Outback Electronics**
+
+- {{address}}, Australia
+- Phone: [{{phone}}](tel:{{phoneHref}})
+- Email: [{{email}}](mailto:{{email}})
+
+---
+
+**Questions?** Email [{{email}}](mailto:{{email}}), we'll get back to you as soon as we can.`;
+
 // Maps every audience+slug combination the public site's "viewing as" selector
 // offers (POLICY_AUDIENCE_LABELS/POLICY_AUDIENCE_ORDER in pages-info.jsx) to its
 // default body. Several slugs
 // (privacy-policy, cookie-policy, disclaimer, acceptable-use, custom-work,
-// gift-cards-store-credit-rewards, sale-of-goods-to-us) share identical text
-// across audiences and so share the same BODY_* constant.
+// gift-cards-store-credit-rewards, sale-of-goods-to-us, repair-intake-terms)
+// share identical text across audiences and so share the same BODY_* constant.
 const POLICY_DEFAULTS = [
   // all
-  { audience: 'all', slug: 'terms-of-engagement', title: 'General Terms of Engagement', updatedAt: '2026-06-19T00:00:00.000Z', body: BODY_GENERAL_ENGAGEMENT },
+  { audience: 'all', slug: 'terms-of-engagement', title: 'General Terms of Engagement', updatedAt: '2026-08-20T00:00:00.000Z', body: BODY_GENERAL_ENGAGEMENT },
   { audience: 'all', slug: 'privacy-policy', title: 'Privacy Policy', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_PRIVACY },
   { audience: 'all', slug: 'cookie-policy', title: 'Cookie Policy', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_COOKIE },
   { audience: 'all', slug: 'acceptable-use', title: 'Acceptable Use Policy', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_ACCEPTABLE_USE },
   { audience: 'all', slug: 'disclaimer', title: 'Disclaimer', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_DISCLAIMER },
+  { audience: 'all', slug: 'repair-intake-terms', title: 'Repair Intake Terms', updatedAt: '2026-08-20T00:00:00.000Z', body: BODY_REPAIR_INTAKE },
   { audience: 'all', slug: 'gift-cards-store-credit-rewards', title: 'Gift Cards, Store Credit & Rewards Terms', updatedAt: '2026-06-19T00:00:00.000Z', body: BODY_GIFT_CARDS },
   { audience: 'all', slug: 'sale-of-goods-to-us', title: 'Sale of Goods to Us', updatedAt: '2026-06-19T00:00:00.000Z', body: BODY_SALE_OF_GOODS },
 
   // private
-  { audience: 'private', slug: 'terms-and-conditions', title: 'Terms & Conditions', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_TERMS_PRIVATE },
+  { audience: 'private', slug: 'terms-and-conditions', title: 'Terms & Conditions', updatedAt: '2026-08-20T00:00:00.000Z', body: BODY_TERMS_PRIVATE },
   { audience: 'private', slug: 'privacy-policy', title: 'Privacy Policy', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_PRIVACY },
   { audience: 'private', slug: 'shipping-and-delivery', title: 'Shipping & Delivery', updatedAt: '2026-08-18T00:00:00.000Z', body: BODY_SHIPPING },
   { audience: 'private', slug: 'cookie-policy', title: 'Cookie Policy', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_COOKIE },
-  { audience: 'private', slug: 'return-policy', title: 'Return Policy', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_RETURN_PRIVATE },
+  { audience: 'private', slug: 'return-policy', title: 'Return Policy', updatedAt: '2026-08-20T00:00:00.000Z', body: BODY_RETURN_PRIVATE },
   { audience: 'private', slug: 'custom-work', title: 'Custom Work & Reverse Engineering', updatedAt: '2026-06-19T00:00:00.000Z', body: BODY_CUSTOM_WORK },
   { audience: 'private', slug: 'disclaimer', title: 'Disclaimer', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_DISCLAIMER },
   { audience: 'private', slug: 'acceptable-use', title: 'Acceptable Use Policy', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_ACCEPTABLE_USE },
+  { audience: 'private', slug: 'repair-intake-terms', title: 'Repair Intake Terms', updatedAt: '2026-08-20T00:00:00.000Z', body: BODY_REPAIR_INTAKE },
   { audience: 'private', slug: 'gift-cards-store-credit-rewards', title: 'Gift Cards, Store Credit & Rewards Terms', updatedAt: '2026-06-19T00:00:00.000Z', body: BODY_GIFT_CARDS },
   { audience: 'private', slug: 'sale-of-goods-to-us', title: 'Sale of Goods to Us', updatedAt: '2026-06-19T00:00:00.000Z', body: BODY_SALE_OF_GOODS },
 
@@ -1605,6 +1730,7 @@ const POLICY_DEFAULTS = [
   { audience: 'commercial', slug: 'cookie-policy', title: 'Cookie Policy', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_COOKIE },
   { audience: 'commercial', slug: 'disclaimer', title: 'Disclaimer', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_DISCLAIMER },
   { audience: 'commercial', slug: 'acceptable-use', title: 'Acceptable Use Policy', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_ACCEPTABLE_USE },
+  { audience: 'commercial', slug: 'repair-intake-terms', title: 'Repair Intake Terms', updatedAt: '2026-08-20T00:00:00.000Z', body: BODY_REPAIR_INTAKE },
   { audience: 'commercial', slug: 'gift-cards-store-credit-rewards', title: 'Gift Cards, Store Credit & Rewards Terms', updatedAt: '2026-06-19T00:00:00.000Z', body: BODY_GIFT_CARDS },
   { audience: 'commercial', slug: 'sale-of-goods-to-us', title: 'Sale of Goods to Us', updatedAt: '2026-06-19T00:00:00.000Z', body: BODY_SALE_OF_GOODS },
 

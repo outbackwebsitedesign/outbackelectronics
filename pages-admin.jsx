@@ -6008,6 +6008,7 @@ function AdminBookings() {
             <div>device   : {edit.device || edit.serviceName || '-'}</div>
             {edit.address && <div>address  : {edit.address}</div>}
             {edit.notes && <div>notes    : {edit.notes}</div>}
+            <div>intake   : {edit.intakeTermsAcceptedAt ? `terms accepted ${new Date(edit.intakeTermsAcceptedAt).toLocaleString('en-AU')}` : 'no acceptance recorded'}</div>
           </div>
           <label className="field"><span className="label">Status</span>
             <select className="select" value={form.status||'new'} onChange={e=>setForm({...form,status:e.target.value})}>

@@ -1915,6 +1915,7 @@ function ServiceDetailPage({ go, pageParams, portalUser, onPortalUserChange }) {
   const [planFrequency, setPlanFrequency] = useState('fortnightly');
   const [planInstallmentAmount, setPlanInstallmentAmount] = useState('');
   const [planCollectionMethod, setPlanCollectionMethod] = useState('manual');
+  const [intakeAccepted, setIntakeAccepted] = useState(false);
 
   useEffect(() => {
     fetch('/api/shop-info').then(r => r.json()).then(d => {
@@ -1925,7 +1926,7 @@ function ServiceDetailPage({ go, pageParams, portalUser, onPortalUserChange }) {
 
   useEffect(() => {
     setService(pageParams || null);
-    if (pageParams && !pageParams._notFound) { setBookForm({ name: '', email: '', loc: '', date: '', notes: '' }); setBookError(null); setDistanceKm(null); }
+    if (pageParams && !pageParams._notFound) { setBookForm({ name: '', email: '', loc: '', date: '', notes: '' }); setBookError(null); setDistanceKm(null); setIntakeAccepted(false); }
   }, [pageParams]);
 
   // Debounced geocode on loc change
@@ -1963,6 +1964,7 @@ function ServiceDetailPage({ go, pageParams, portalUser, onPortalUserChange }) {
     e.preventDefault();
     setBookError(null);
     if (!portalUser) { setBookError('Please sign in or create an account before booking.'); return; }
+    if (!intakeAccepted) { setBookError('Please confirm you have read the Repair Intake Terms before booking.'); return; }
     if (checkoutMode === 'plan' && !(Number(planInstallmentAmount) > 0)) { setBookError('Enter an instalment amount greater than zero.'); return; }
     setBooking(true);
     try {
@@ -1982,6 +1984,7 @@ function ServiceDetailPage({ go, pageParams, portalUser, onPortalUserChange }) {
           desc: `Service booking: ${service.name}${bookForm.date ? ` · Preferred date: ${bookForm.date}` : ''}${travelLine}${bookForm.notes ? ` · Notes: ${bookForm.notes}` : ''}`,
           _service: service.name,
           _serviceSku: service.sku || '',
+          intakeTermsAccepted: true,
         }),
       }).catch(() => {});
       const resp = await fetch(checkoutMode === 'plan' ? '/api/checkout/payment-plan' : '/api/checkout', {
@@ -2115,9 +2118,15 @@ function ServiceDetailPage({ go, pageParams, portalUser, onPortalUserChange }) {
                   )}
                 </div>
               )}
+              <label style={{display:'flex', gap:10, alignItems:'flex-start', marginBottom:14, fontSize:13, lineHeight:1.5, cursor:'pointer'}}>
+                <input type="checkbox" checked={intakeAccepted} onChange={e => setIntakeAccepted(e.target.checked)} style={{marginTop:3, flexShrink:0}} />
+                <span>
+                  I have read and agree to the <a href="/policies/repair-intake-terms" target="_blank" rel="noopener noreferrer" style={{color:'var(--rust)', fontWeight:600}}>Repair Intake Terms</a>. I understand I am responsible for backing up my own data, that a device left uncollected for 14 days after we tell you it is ready attracts a $5 per day storage fee, and that a device still uncollected after six months is dealt with under the Disposal of Uncollected Goods Act 1967 (Qld).
+                </span>
+              </label>
               <ErrorText style={{marginBottom:12}}>{bookError}</ErrorText>
               <div style={{display:'flex', gap:12, alignItems:'center'}}>
-                <button type="submit" className="btn btn-rust" style={{flex:1, justifyContent:'center', gap:8}} disabled={booking || outOfRange || !portalUser} aria-busy={booking}>
+                <button type="submit" className="btn btn-rust" style={{flex:1, justifyContent:'center', gap:8}} disabled={booking || outOfRange || !portalUser || !intakeAccepted} aria-busy={booking}>
                   {booking ? <><span className="spinner" aria-hidden="true" /> Redirecting…</> : checkoutMode === 'plan'
                     ? `Set Up Payment Plan - $${fixedPrice.toLocaleString('en-AU', {minimumFractionDigits:2})} total →`
                     : travelFee > 0

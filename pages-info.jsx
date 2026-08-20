@@ -254,6 +254,7 @@ function BookingPage({ go, pageParams }) {
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [calloutInfo, setCalloutInfo] = useState(null);
   const [addrGeocoding, setAddrGeocoding] = useState(false);
+  const [intakeAccepted, setIntakeAccepted] = useState(false);
 
   const [form, setForm] = useState({
     type: pageParams?.type || 'dropoff',
@@ -344,7 +345,7 @@ function BookingPage({ go, pageParams }) {
               <div>device   : {form.device || '-'}</div>
             </div>
             <div className="row-flex" style={{marginTop:24}}>
-              <button className="btn" onClick={() => setSubmitted(false)}>Book another</button>
+              <button className="btn" onClick={() => { setIntakeAccepted(false); setSubmitted(false); }}>Book another</button>
               <button className="btn btn-ghost" onClick={() => go('home')}>Back to home</button>
             </div>
           </div>
@@ -365,7 +366,7 @@ function BookingPage({ go, pageParams }) {
             const res = await fetch('/api/bookings/request', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() },
-              body: JSON.stringify(form),
+              body: JSON.stringify({ ...form, intakeTermsAccepted: true }),
             });
             if (!res.ok) throw new Error('server_error');
             const data = await res.json().catch(() => ({}));
@@ -462,10 +463,17 @@ function BookingPage({ go, pageParams }) {
             </label>
 
             <hr className="thin" />
+            <span className="eyebrow">05 · INTAKE TERMS</span>
+            <label style={{display:'flex', gap:10, alignItems:'flex-start', marginTop:12, marginBottom:16, fontSize:13, lineHeight:1.5, cursor:'pointer'}}>
+              <input type="checkbox" required checked={intakeAccepted} onChange={e => setIntakeAccepted(e.target.checked)} style={{marginTop:3, flexShrink:0}} />
+              <span>
+                I have read and agree to the <a href="/policies/repair-intake-terms" target="_blank" rel="noopener noreferrer" style={{color:'var(--rust)', fontWeight:600}}>Repair Intake Terms</a>. I understand I am responsible for backing up my own data, that a device left uncollected for 14 days after you tell me it is ready attracts a $5 per day storage fee, and that a device still uncollected after six months is dealt with under the Disposal of Uncollected Goods Act 1967 (Qld).
+              </span>
+            </label>
             <ErrorText style={{marginBottom: 12}}>{submitError}</ErrorText>
             <div className="row-flex" style={{justifyContent:'space-between'}}>
               <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>WE CONFIRM BY EMAIL · BY APPOINTMENT ONLY</span>
-              <button className="btn btn-rust" type="submit" disabled={submitting}>{submitting ? 'Booking…' : 'Book now →'}</button>
+              <button className="btn btn-rust" type="submit" disabled={submitting || !intakeAccepted}>{submitting ? 'Booking…' : 'Book now →'}</button>
             </div>
           </div>
         </form>
