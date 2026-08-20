@@ -490,25 +490,11 @@ Where we provide an AI-powered chat or assistant feature ('AI Assistant'), your 
 
 ### 10. Repair and Technical Services
 
-**Scope - ELV/LV Equipment Only.** Our Repair Services are limited to Extra Low Voltage (ELV, ≤50 V AC / ≤120 V DC) and Low Voltage (LV) equipment. We do not perform repairs on mains-connected (240 V AC) devices and we are not licensed to do so. Any device submitted for repair that is found to contain mains-voltage components beyond our scope will not be worked on; we will advise you and return the device. Where we provide repair, diagnostic, or technical services within our scope ('Repair Services'), the following additional terms apply alongside your rights under the Australian Consumer Law. By submitting a device for Repair Services, you agree to these terms. They are set out in full, including collection deadlines and storage fees, in our Repair Intake Terms.
+We repair low-voltage electronics only, and are not licensed for mains-connected work.
 
-**How to Submit a Device.** We operate as a mobile service, we do not have a public shopfront. Devices may be submitted in one of three ways: (a) **mail-in**, you may post your device to our returns address at any time without prior arrangement (please include your name, contact details, and a description of the fault); (b) **on-site service**, we can attend your location by appointment; or (c) **drop-off by appointment**, contact us first to arrange a time. Devices sent by post should be packed securely; we are not liable for damage caused by inadequate packaging in transit to us.
+Where we provide repair, diagnostic, or technical services ('Repair Services'), our **Repair Intake Terms** apply in addition to these Terms and to your rights under the Australian Consumer Law. By submitting a device for Repair Services, you agree to them. They set out the voltage limits, how to get a device to us, what you tell us at handover, assessment and quoting, data backup, pre-existing faults, safety findings, devices beyond economical repair, and collection, including the storage fee that applies after 14 days and the disposal of devices left uncollected for six months.
 
-**Pre-Repair Quote.** We will conduct an initial assessment of your device and provide a written quote before commencing any chargeable repair. Quotes are valid for 14 days from the date of issue unless otherwise stated. We reserve the right to vary a quote if additional faults are discovered during repair that were not apparent at the time of assessment; we will notify you and obtain your approval before proceeding with any work beyond the agreed scope.
-
-**Pre-Existing Conditions and Undisclosed Damage.** You warrant that, to the best of your knowledge, you have disclosed all known damage, faults, modifications, liquid exposure, and relevant history at the time of submission. We are not liable for any damage, deterioration, or failure caused by pre-existing conditions, undisclosed damage, prior unauthorised repairs, manufacturing defects, or latent faults that were present before submission. Where a pre-existing condition is discovered during repair, we will advise you before proceeding.
-
-**No Liability for Consequential Failure.** Electronic devices may contain multiple faults not apparent during or immediately after repair. To the fullest extent permitted by applicable law, we are not liable for any loss, damage, fire, personal injury, or adverse outcome caused by: (a) a fault that was not the subject of the agreed repair; (b) faults that manifest after repair as a result of pre-existing conditions; or (c) the customer's subsequent use of the device inconsistently with our repair instructions or manufacturer specifications. These limitations do not limit your rights under the Australian Consumer Law in respect of our Repair Services.
-
-**Repair Warranty.** Subject to the exclusions set out in these terms, we provide a **90-day warranty on parts and labour** for completed repair work. This warranty covers the specific fault addressed in the agreed repair and does not extend to other components, pre-existing conditions, or damage caused by subsequent misuse or further modification. The repair warranty is voided if the device is further modified, damaged, or repaired by a third party after our repair. This warranty is in addition to your rights under the Australian Consumer Law, which cannot be excluded.
-
-**Customer Data and Software.** You are solely responsible for backing up all data, software, settings, and personal information stored on your device before submitting it for Repair Services. We take reasonable care but are not liable for any loss, alteration, or corruption of data or software that occurs in connection with Repair Services, whether arising from negligence or otherwise.
-
-**Safety-Critical Findings.** If during the course of repair we identify a condition that, in our reasonable opinion, presents a risk of fire, electric shock, explosion, or other serious safety hazard, we reserve the right to: (a) decline to return the device to service until the safety issue is addressed; (b) require written acknowledgment of the risk before collection; or (c) advise you to have the device assessed by a licensed electrician or other qualified professional before use. We are not liable for any loss arising from our reasonable refusal to return an unsafe device to service.
-
-**Uncollected Devices.** You have 14 days from the date we notify you that your device is ready (or that repair has been declined) to collect it, arrange return postage, or otherwise respond to us. If you have not responded within those 14 days, a storage fee of $5.00 per day per device applies from day 15 until the device is collected, payable before collection along with any outstanding repair charges. We will make at least two further attempts to contact you using the details you gave us at intake. If the device remains uncollected six months after our first ready-for-collection notice, we will deal with it as uncollected goods under the _Disposal of Uncollected Goods Act 1967_ (Qld), following the notice, waiting-period, and disposal requirements that Act sets out, and may deduct unpaid repair charges, accrued storage fees, and reasonable costs of sale from any proceeds. Full detail is in our Repair Intake Terms.
-
-**Devices Beyond Economical Repair.** If the estimated cost of repair exceeds the assessed fair market value of the device, we will advise you. You may choose to proceed with repair at the quoted cost, collect the device (a diagnostic fee may apply), or authorise disposal. We are not liable for consequential loss arising from a device being assessed as beyond economical repair.
+The warranty on completed repair work is in our **Return Policy**.
 
 ### 11. Prohibited Activities
 
@@ -1574,112 +1560,83 @@ const BODY_REPAIR_INTAKE = `_LEGAL · REPAIR INTAKE TERMS_
 
 ## Repair Intake Terms
 
-These terms govern every device you hand over, post, or otherwise submit to Outback Electronics ('Company', 'we', 'us', or 'our') for repair, diagnostic, or technical work ('Repair Services'). Our ABN is {{abn}}.
+These terms cover what happens to a device you leave with us: how to get it to us, how we quote, how we look after it, and what happens if it is never collected. Our ABN is {{abn}}.
 
-**By submitting a device for Repair Services, you agree to these terms.** They apply alongside your rights under the Australian Consumer Law, our Terms and Conditions, our Return Policy, and our Privacy Policy. Nothing in this document excludes, restricts, or modifies any right or remedy you have under the Australian Consumer Law.
+**By submitting a device for repair, diagnostic, or technical work ('Repair Services'), you agree to these terms.** Nothing in this document excludes, restricts, or modifies any right or remedy you have under the Australian Consumer Law.
 
-### 1. Scope - ELV and LV Equipment Only
+Two related documents sit alongside this one, and this one does not repeat them. The warranty on completed repair work, and your remedies if our work falls short, are in our Return Policy under 'Repair Services - Warranty Returns'. What a repaired device is and is not certified for afterwards is in our Disclaimer under 'Repair Services Disclaimer'.
 
-Our Repair Services are limited to Extra Low Voltage (ELV, at or below 50 V AC / 120 V DC) and Low Voltage (LV) equipment, including PCs, laptops, phones, tablets, microcontroller boards, embedded systems, and off-grid power and communications gear.
+### 1. What We Work On
 
-We do not perform repairs on mains-connected (240 V AC) devices and we are not licensed to do so. Any device submitted for repair that is found to contain mains-voltage components beyond our scope will not be worked on; we will advise you and return the device.
+We repair Extra Low Voltage (ELV, at or below 50 V AC / 120 V DC) and Low Voltage equipment: PCs, laptops, phones, tablets, microcontroller boards, embedded systems, and off-grid power and communications gear.
 
-### 2. How to Submit a Device
+We are not licensed for mains-connected (240 V AC) work and we do not do it. If a device turns out to hold mains-voltage components outside our scope, we stop, tell you, and send it back.
 
-We operate as a mobile service, we do not have a public shopfront. Devices may be submitted in one of three ways:
+### 2. Getting a Device to Us
 
-- **Mail-in.** You may post your device to our returns address at any time without prior arrangement. Please include your name, contact details, and a description of the fault.
-- **On-site service.** We can attend your location by appointment.
-- **Drop-off by appointment.** Contact us first to arrange a time.
+We are a mobile service with no public shopfront. There are three ways in:
 
-Devices sent by post should be packed securely. We are not liable for damage caused by inadequate packaging in transit to us.
+- **Post it.** Send it to our returns address at any time, no prior arrangement needed. Include your name, contact details, and what the fault is.
+- **We come to you.** On-site service, by appointment.
+- **Drop it off.** By appointment only, so contact us first to arrange a time.
 
-### 3. What You Tell Us at Intake
+Pack posted devices properly. Damage caused in transit to us by inadequate packaging is not ours to carry.
 
-You warrant that, to the best of your knowledge, you have disclosed all known damage, faults, modifications, liquid exposure, and relevant history at the time of submission.
+### 3. What You Tell Us at Handover
 
-You also warrant that you own the device or are otherwise entitled to authorise work on it. We may decline to work on, or to return, any device we reasonably believe to be stolen or subject to a dispute over ownership, and we may report the matter to police.
+When you submit a device you confirm two things.
+
+First, that you have told us about the damage, faults, modifications, liquid exposure, and repair history you know about. We plan and price the work from what you tell us.
+
+Second, that the device is yours, or that you are otherwise entitled to authorise work on it. We may decline to work on, or to hand back, a device we reasonably believe to be stolen or subject to a dispute over ownership, and we may refer the matter to police.
 
 ### 4. Assessment and Quote
 
-We will conduct an initial assessment of your device and provide a written quote before commencing any chargeable repair. Quotes are valid for **14 days** from the date of issue unless otherwise stated.
+We assess the device and send you a written quote before any chargeable work starts. Quotes hold for 14 days unless we say otherwise.
 
-We reserve the right to vary a quote if additional faults are discovered during repair that were not apparent at the time of assessment. We will notify you and obtain your approval before proceeding with any work beyond the agreed scope.
+If something turns up during the repair that was not visible at assessment, we stop and come back to you with a revised quote. We do not go beyond the agreed scope without your approval.
 
-A diagnostic fee may apply where we assess a device and you choose not to proceed with the quoted repair. Any diagnostic fee will be disclosed to you before assessment begins.
+If you decide not to proceed once we have assessed the device, a diagnostic fee may apply. We tell you that amount before assessment begins, not after.
 
 ### 5. Back Up Your Data First
 
-**You are solely responsible for backing up all data, software, settings, and personal information stored on your device before submitting it for Repair Services.**
+**Back up everything before you send or hand over a device:** data, software, licences, settings, photos, all of it.
 
-We take reasonable care but are not liable for any loss, alteration, or corruption of data or software that occurs in connection with Repair Services, whether arising from negligence or otherwise. Some repairs (including storage, board-level, and firmware work) carry an inherent risk of total data loss.
+We take reasonable care, but work on storage, boards, and firmware carries a real risk of total data loss, and we are not liable for data or software lost, altered, or corrupted in connection with Repair Services. Where we need to reach data to diagnose or verify a fault, we look only as far as the job requires, and we handle anything personal under our Privacy Policy.
 
-Where we access data on your device, we do so only as far as necessary to diagnose, repair, or verify the fault, and we handle any personal information in accordance with our Privacy Policy.
+### 6. Faults That Were Already There
 
-### 6. Pre-Existing Conditions and Consequential Failure
+A device that arrives with one fault often has others, and we quote and repair only what we have been asked to.
 
-We are not liable for any damage, deterioration, or failure caused by pre-existing conditions, undisclosed damage, prior unauthorised repairs, manufacturing defects, or latent faults that were present before submission. Where a pre-existing condition is discovered during repair, we will advise you before proceeding.
+We are not liable for damage or failure traced to a pre-existing condition, undisclosed damage, an earlier unauthorised repair, a manufacturing defect, or a latent fault present before submission. Where we find one during the repair, we tell you before going any further. None of this limits your rights under the Australian Consumer Law in respect of our work.
 
-Electronic devices may contain multiple faults not apparent during or immediately after repair. To the fullest extent permitted by applicable law, we are not liable for any loss, damage, fire, personal injury, or adverse outcome caused by:
+Liability for faults that surface after a repair, and what a repaired device is certified for, are covered in our Disclaimer.
 
-- a fault that was not the subject of the agreed repair;
-- faults that manifest after repair as a result of pre-existing conditions; or
-- your subsequent use of the device inconsistently with our repair instructions or manufacturer specifications.
+### 7. If We Find Something Dangerous
 
-These limitations do not limit your rights under the Australian Consumer Law in respect of our Repair Services.
+If we form the reasonable view that a device presents a risk of fire, electric shock, explosion, or similar, we may hold it until the hazard is addressed, ask you to acknowledge the risk in writing before you take it back, or tell you to have it assessed by a licensed electrician or other qualified professional first.
 
-### 7. Safety-Critical Findings
+We are not liable for loss caused by our reasonable refusal to put an unsafe device back into service.
 
-If during the course of repair we identify a condition that, in our reasonable opinion, presents a risk of fire, electric shock, explosion, or other serious safety hazard, we reserve the right to:
+### 8. When Repair Costs More Than the Device
 
-- decline to return the device to service until the safety issue is addressed;
-- require written acknowledgment of the risk before collection; or
-- advise you to have the device assessed by a licensed electrician or other qualified professional before use.
+If the quoted repair would cost more than the device is worth, we tell you. You can go ahead anyway, take the device back (a diagnostic fee may apply), or ask us to dispose of it. We are not liable for consequential loss because a device was assessed this way.
 
-We are not liable for any loss arising from our reasonable refusal to return an unsafe device to service.
+### 9. Collecting Your Device
 
-### 8. Devices Beyond Economical Repair
+We tell you by email, SMS, or phone when your device is ready, including where we have declined the repair or could not complete it. That first notice starts the clock.
 
-If the estimated cost of repair exceeds the assessed fair market value of the device, we will advise you. You may choose to proceed with repair at the quoted cost, collect the device (a diagnostic fee may apply), or authorise disposal. We are not liable for consequential loss arising from a device being assessed as beyond economical repair.
+**Days 1 to 14, no charge.** You have 14 days from that notice to collect the device, arrange return postage, or otherwise get back to us. Getting back to us means arranging collection or delivery, not simply acknowledging the message.
 
-### 9. Collection, Storage Fees, and Uncollected Goods
+**Day 15 onward, $5.00 per day.** After those 14 days a storage fee of $5.00 per device per day applies, payable before collection along with anything still owing on the repair. It covers our cost of holding and safeguarding your device. We do not charge it for any delay of our own making, and we may reduce or waive it.
 
-We will notify you by email, SMS, or phone when your device is ready for collection or return (including where we have declined or been unable to complete the repair). The date of that first notice starts the timeline below.
+**We keep trying to reach you.** We make at least two further attempts on the contact details you gave us at handover. Keeping those details current is your responsibility.
 
-**14 days to respond.** You have **14 days** from the date we notify you to collect your device, arrange return postage, or otherwise respond to us. Responding means contacting us to arrange collection or delivery, not simply acknowledging the notice.
+**After six months, disposal.** If the device is still with us six months after that first notice, we deal with it as uncollected goods under the _Disposal of Uncollected Goods Act 1967_ (Qld), following the notice, waiting-period, and disposal steps that Act sets out for goods of its value. Where a device is sold, we may take unpaid repair charges, accrued storage fees, and reasonable costs of sale out of the proceeds, and the balance is dealt with as the Act requires. You can reclaim the device at any point before disposal by settling what is owed, and nothing here cuts down your rights under that Act.
 
-**Storage fee.** If you have not responded within those 14 days, a storage fee of **$5.00 per day** applies from day 15 onward, for each device, until the device is collected or otherwise dealt with under this clause. The storage fee reflects our reasonable cost of holding, insuring, and safeguarding your device. It is payable before collection, together with any outstanding repair charges. We may waive or reduce the fee at our discretion, and we will not charge storage for any period of delay caused by us.
+**Data on uncollected devices.** A device disposed of this way may still hold your data. We take reasonable steps to wipe storage first, but that is not a substitute for your own precautions. Back up and remove what matters before you submit a device.
 
-**Our contact attempts.** We will make at least **two** further attempts to contact you, using the contact details you gave us at intake, before treating a device as uncollected. It is your responsibility to keep those details current.
-
-**After six months.** If your device remains uncollected **six months** after the date of our first ready-for-collection notice, we will deal with it as uncollected goods under the _Disposal of Uncollected Goods Act 1967_ (Qld). We will follow the notice, waiting-period, and disposal requirements that Act sets out for goods of the relevant value, which may include selling the device by public auction or private sale.
-
-Where a device is sold under that Act, we may deduct our unpaid repair charges, accrued storage fees, and reasonable costs of sale from the proceeds. Any surplus is dealt with as the Act requires. Nothing in this clause limits your rights under that Act, including your right to reclaim the goods at any time before disposal by paying what is owed.
-
-**Data on uncollected devices.** Devices disposed of under this clause may still hold your data. We take reasonable steps to erase storage media before sale or disposal, but you should not rely on this as a data-protection measure. Back up and, where you can, remove sensitive data before submitting a device.
-
-### 10. Repair Warranty
-
-Subject to the exclusions in these terms, we provide a **90-day warranty on parts and labour** for completed repair work, running from the date the repair is completed.
-
-The Repair Warranty covers the specific fault addressed in the agreed repair. It does not cover:
-
-- faults unrelated to the repair performed;
-- damage caused by misuse, accidental damage, liquid ingress, or physical impact after collection;
-- damage caused by a pre-existing condition separate from the agreed repair; or
-- further modification or repair by you or a third party after collection from us.
-
-Where the device you submit is itself second-hand or used, the Repair Warranty applies to **our repair work only**. It does not extend, restore, or create any warranty over the device as a whole.
-
-If the same fault reoccurs within the warranty period, contact us at [{{email}}](mailto:{{email}}) and we will re-examine and re-repair at no charge, or provide an alternative remedy as required by the Australian Consumer Law. Full warranty-return detail is in our Return Policy.
-
-### 11. Your Rights Under the Australian Consumer Law
-
-If our Repair Services fail to comply with a consumer guarantee under the Australian Consumer Law (for example, they are not carried out with due care and skill), you are entitled to a remedy under the ACL, which may include re-performance of the service or compensation for reasonably foreseeable loss. These rights apply regardless of, and in addition to, our Repair Warranty.
-
-You can obtain information about your consumer rights from the Australian Competition and Consumer Commission (ACCC) at [www.accc.gov.au](https://www.accc.gov.au) or the Queensland Office of Fair Trading at [www.qld.gov.au/law/fair-trading](https://www.qld.gov.au/law/fair-trading).
-
-### 12. Contact Us
+### 10. Contact Us
 
 **Outback Electronics**
 
