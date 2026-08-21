@@ -686,6 +686,9 @@ function orderRemainingBalance(o) {
 // plan is cancelled, the whole remaining balance falls due immediately, and the
 // account is referred for collection, per the Payment Plans policy.
 const PLAN_DEFAULT_GRACE_DAYS = 7;
+// Days overdue at which the customer gets a final notice, so nobody is referred
+// for collection without a clear warning and a chance to talk to us first.
+const PLAN_FINAL_NOTICE_DAYS = 3;
 
 function addPlanFrequency(date, frequency) {
   const d = new Date(date);
@@ -3312,6 +3315,21 @@ function emailInstallmentFailed({ orderId, customerName, amount, dueDate }) {
       <p>We tried to charge your saved card <strong>${escHtml(amtStr)}</strong> for order ${escHtml(orderId)} but the payment didn't go through.</p>
       <p>Please update your card details in the customer portal, or get in touch so we can arrange another way to pay. We'll try again automatically, but it's best to sort this out as soon as you can.</p>
       <a class="btn" href="${getPortalUrl()}/orders">Update payment details →</a>
+    `),
+  };
+}
+
+function emailPlanFinalNotice({ orderId, customerName, amount, balance, dueDate, referOn }) {
+  const amtStr = `$${Number(amount).toLocaleString('en-AU', { minimumFractionDigits: 2 })}`;
+  const balStr = `$${Number(balance).toLocaleString('en-AU', { minimumFractionDigits: 2 })}`;
+  const fmt = d => new Date(d + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
+  return {
+    subject: `Final notice, order ${orderId}`,
+    html: emailHtml('Final notice before referral', `
+      <p>Hi ${escHtml(customerName || 'there')},</p>
+      <p>Your instalment of <strong>${escHtml(amtStr)}</strong> for order ${escHtml(orderId)} was due on ${escHtml(fmt(dueDate))} and is still outstanding.</p>
+      <p>If it is not paid, or you have not contacted us, by <strong>${escHtml(fmt(referOn))}</strong> the payment plan will be cancelled, the remaining balance of ${escHtml(balStr)} will become payable in full, and the account will be referred for collection. Collection costs would be added to what you owe.</p>
+      <p><strong>Please get in touch before then.</strong> If money is tight right now, tell us. We can look at rescheduling the remaining instalments, lowering them, or pausing the plan for a while. None of that costs you anything, and we would far rather sort something out with you than send this anywhere.</p>
     `),
   };
 }
@@ -12734,7 +12752,27 @@ async function runDuePaymentPlanCharges() {
         continue;
       }
 
-      if (plan.collectionMethod === 'auto') {
+      // Final notice: sent once per overdue instalment, a few days before the
+      // plan would default. Deliberately not a `continue`, an auto-charge or
+      // reminder still runs the same day.
+      let planState = plan;
+      const finalNoticeFrom = new Date(dueDate);
+      finalNoticeFrom.setDate(finalNoticeFrom.getDate() + PLAN_FINAL_NOTICE_DAYS);
+      if (today >= finalNoticeFrom && planState.finalNoticeSentFor !== progress.nextDue.dueDate) {
+        planState = { ...planState, finalNoticeSentFor: progress.nextDue.dueDate };
+        orders[i] = { ...order, paymentPlan: planState };
+        dirty = true;
+        if (order.email) {
+          const referOn = new Date(dueDate);
+          referOn.setDate(referOn.getDate() + PLAN_DEFAULT_GRACE_DAYS + 1);
+          sendEmail({ to: order.email, ...emailPlanFinalNotice({
+            orderId: order.id, customerName: order.cust, amount: progress.nextDue.amount,
+            balance: progress.remaining, dueDate: progress.nextDue.dueDate, referOn: ymd(referOn),
+          }) }).catch(() => {});
+        }
+      }
+
+      if (planState.collectionMethod === 'auto') {
         if (today < dueDate) continue; // only charge on/after the due date, never early
         if (!stripeConfigured) continue;
         const custUser = users.find(u => (u.email || '').toLowerCase() === (order.email || '').toLowerCase());
@@ -12763,7 +12801,7 @@ async function runDuePaymentPlanCharges() {
           const updatedOrder = {
             ...order,
             payments: [...(order.payments || []), { amount: progress.nextDue.amount, method: 'Stripe', note: `Auto-charge - instalment due ${progress.nextDue.dueDate}`, date: nowStr }],
-            paymentPlan: { ...plan, lastAutoAttempt: { dueDate: progress.nextDue.dueDate, date: new Date().toISOString(), status: 'ok', error: '' } },
+            paymentPlan: { ...planState, lastAutoAttempt: { dueDate: progress.nextDue.dueDate, date: new Date().toISOString(), status: 'ok', error: '' } },
           };
           orders[i] = updatedOrder;
           dirty = true;
@@ -12776,7 +12814,7 @@ async function runDuePaymentPlanCharges() {
             sendEmail({ to: order.email, ...tmpl }).catch(() => {});
           }
         } else {
-          orders[i] = { ...order, paymentPlan: { ...plan, lastAutoAttempt: { dueDate: progress.nextDue.dueDate, date: new Date().toISOString(), status: 'failed', error: errMsg } } };
+          orders[i] = { ...order, paymentPlan: { ...planState, lastAutoAttempt: { dueDate: progress.nextDue.dueDate, date: new Date().toISOString(), status: 'failed', error: errMsg } } };
           dirty = true;
           if (order.email) {
             sendEmail({ to: order.email, ...emailInstallmentFailed({ orderId: order.id, customerName: order.cust, amount: progress.nextDue.amount, dueDate: progress.nextDue.dueDate }) }).catch(() => {});
@@ -12790,9 +12828,9 @@ async function runDuePaymentPlanCharges() {
 
       // manual / customer-initiated: reminder only, no charge attempt
       const reminderFrom = new Date(dueDate);
-      reminderFrom.setDate(reminderFrom.getDate() - (Number(plan.reminderDaysBefore) || 3));
+      reminderFrom.setDate(reminderFrom.getDate() - (Number(planState.reminderDaysBefore) || 3));
       if (today < reminderFrom) continue;
-      if (plan.lastReminderSentFor === progress.nextDue.dueDate) continue;
+      if (planState.lastReminderSentFor === progress.nextDue.dueDate) continue;
       if (order.email) {
         const tmpl = emailInstallmentReminder({
           orderId: order.id, customerName: order.cust,
@@ -12801,7 +12839,7 @@ async function runDuePaymentPlanCharges() {
         });
         sendEmail({ to: order.email, ...tmpl }).catch(() => {});
       }
-      orders[i] = { ...order, paymentPlan: { ...plan, lastReminderSentFor: progress.nextDue.dueDate } };
+      orders[i] = { ...order, paymentPlan: { ...planState, lastReminderSentFor: progress.nextDue.dueDate } };
       dirty = true;
     }
     if (dirty) writeOrders(orders);

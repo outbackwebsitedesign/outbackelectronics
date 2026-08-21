@@ -1731,7 +1731,9 @@ You may pay an instalment early, pay more than the scheduled instalment, or pay 
 
 If an instalment is missed, or an automatic card payment fails, we will let you know. **Talk to us straight away.** A Payment Plan is a goodwill arrangement and we would much rather rearrange a schedule than fall out over it. Where you contact us before an instalment falls more than 7 days behind, we may reschedule the remaining instalments, reduce the instalment amount, or pause the plan while you get back on your feet. None of that costs you anything.
 
-**The 7-day rule.** Where an instalment remains unpaid **more than 7 days after its due date**, the Payment Plan is automatically in default. On default, and without further notice to you:
+**Final notice.** Where an instalment is 3 days overdue, we send you a final notice by email. It tells you what is owed, the exact date the plan will default, and that the account will be referred for collection on that date. It also invites you to contact us so we can rearrange things instead. Nobody is referred for collection without receiving that notice first.
+
+**The 7-day rule.** Where an instalment remains unpaid **more than 7 days after its due date**, and you have not paid it or contacted us in the meantime, the Payment Plan is automatically in default. On default:
 
 - the Payment Plan is **cancelled**;
 - the **entire remaining balance of the order becomes immediately due and payable**, not just the missed instalment; and
@@ -1739,13 +1741,27 @@ If an instalment is missed, or an automatic card payment fails, we will let you 
 
 **You pay the cost of recovery.** Once an account is referred, you are liable for all costs and expenses we incur in recovering the debt, including debt collection agency and mercantile agent commissions and fees (including where charged as a percentage of the debt), field call and account investigation fees, court or tribunal filing and enforcement costs, and legal costs. These costs are in addition to the balance owing and form part of the debt. We will tell you what they are.
 
-We may also pause any work not yet completed on the order and decline to release or dispatch goods we still hold, in accordance with clause 7.
+We may also pause any work not yet completed on the order and decline to release or dispatch goods we still hold, in accordance with clause 8.
 
-**How to avoid all of this: contact us.** The 7 days exists so an account cannot drift indefinitely, not to catch anyone out. We will not refer an account where you have talked to us and we have agreed a way forward.
+**How to avoid all of this: contact us.** The 7 days exists so an account cannot drift indefinitely, not to catch anyone out. We will not refer an account where you have talked to us and we have agreed a way forward. See clause 7 if the problem is that your circumstances have changed.
 
 **We do not report Payment Plans to credit reporting bodies.** A missed instalment under this policy is not listed as a credit default.
 
-### 7. Ownership of Goods
+### 7. Financial Hardship
+
+We offer Payment Plans precisely because paying a larger amount in one go is not always possible. If your circumstances change and you cannot keep to your schedule, tell us. You do not need to wait until an instalment is missed, and you do not need to explain more than you are comfortable explaining.
+
+**What you can ask for.** Depending on your situation we may: reschedule the remaining instalments over a longer period; reduce the instalment amount; pause the plan for an agreed period; move the due dates to line up with when you are actually paid; or change how instalments are collected, for example switching off automatic card payments so nothing is taken unexpectedly.
+
+**What it costs.** Nothing. We do not charge a fee to vary a plan, we do not charge interest, and asking for help does not put your plan into default or affect anything else you buy from us.
+
+**How to ask.** Email [{{email}}](mailto:{{email}}) or call [{{phone}}](tel:{{phoneHref}}) and tell us what you can manage. We will confirm any new arrangement with you in writing, and the new schedule then replaces the old one.
+
+**While we are talking.** Where you have contacted us about hardship and we are working out an arrangement with you, we will not treat the plan as in default under clause 6 and we will not refer the account for collection.
+
+**If we cannot agree.** If we cannot reach an arrangement, we will tell you plainly where that leaves the balance and give you a reasonable time to make other arrangements before anything else happens. Nothing in this clause limits your rights under the Australian Consumer Law or any other law.
+
+### 8. Ownership of Goods
 
 Where goods are supplied to you before the Payment Plan is paid out, **title in those goods does not pass to you until we have received the full price in cleared funds.** Risk in the goods passes to you on delivery or collection, so you should insure them from that point. Until title passes you must not sell, encumber, or dispose of the goods.
 
@@ -1753,7 +1769,7 @@ Where goods are supplied to you before the Payment Plan is paid out, **title in 
 
 Where we still hold an item, including a device submitted for repair, we may decline to release it until all amounts owing in respect of that item have been paid. The storage provisions of our Repair Intake Terms continue to apply to a device awaiting collection.
 
-### 8. Cancelling a Plan
+### 9. Cancelling a Plan
 
 **By you.** You may cancel a Payment Plan at any time by telling us in writing. The remaining balance then becomes payable, and we will agree a reasonable time and method for you to pay it.
 
@@ -1761,21 +1777,21 @@ Where we still hold an item, including a device submitted for repair, we may dec
 
 Cancelling a plan does not cancel your order or the amount you owe for it, and it does not forfeit any payment you have already made. Every payment you have made remains credited to your order.
 
-### 9. Cancellations, Returns, and Faulty Goods
+### 10. Cancellations, Returns, and Faulty Goods
 
 If your order is cancelled or returned while a Payment Plan is running, we will stop collecting instalments, apply any refund due against the outstanding balance, and refund you any amount you have paid beyond what you owe. Where you have a right to a refund under the Australian Consumer Law, that right applies in full regardless of how much of the plan you have paid.
 
 Being on a Payment Plan does not affect your consumer guarantees, your warranty rights, or your rights under our Return Policy.
 
-### 10. Your Information
+### 11. Your Information
 
 Where you choose automatic card payment, your card is stored by our payment provider, Stripe, and not by us. We hold the instalment schedule and the record of payments received against your order. We handle all of this in accordance with our Privacy Policy.
 
-### 11. Changes to This Policy
+### 12. Changes to This Policy
 
 We may update this policy from time to time. The version in force when your Payment Plan was agreed continues to apply to that plan, unless we agree a change with you in writing.
 
-### 12. Contact Us
+### 13. Contact Us
 
 **Outback Electronics**
 
