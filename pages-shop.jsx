@@ -1910,20 +1910,7 @@ function ServiceDetailPage({ go, pageParams, portalUser, onPortalUserChange }) {
   const [bookError, setBookError] = useState(null);
   const [distanceKm, setDistanceKm] = useState(null); // null = not checked yet
   const [geocoding, setGeocoding] = useState(false);
-  const [planMinTotal, setPlanMinTotal] = useState(300);
-  const [checkoutMode, setCheckoutMode] = useState('full'); // 'full' | 'plan'
-  const [planFrequency, setPlanFrequency] = useState('fortnightly');
-  const [planInstallmentAmount, setPlanInstallmentAmount] = useState('');
-  const [planCollectionMethod, setPlanCollectionMethod] = useState('manual');
   const [intakeAccepted, setIntakeAccepted] = useState(false);
-
-  useEffect(() => {
-    fetch('/api/shop-info').then(r => r.json()).then(d => {
-      const min = Number(d.shop?.paymentPlanMinTotal);
-      if (min > 0) setPlanMinTotal(min);
-    }).catch(() => {});
-  }, []);
-
   useEffect(() => {
     setService(pageParams || null);
     if (pageParams && !pageParams._notFound) { setBookForm({ name: '', email: '', loc: '', date: '', notes: '' }); setBookError(null); setDistanceKm(null); setIntakeAccepted(false); }
@@ -1957,15 +1944,12 @@ function ServiceDetailPage({ go, pageParams, portalUser, onPortalUserChange }) {
   const isHighValue = fixedPrice >= CALLOUT_HIVAL_THRESHOLD;
   const outOfRange = distanceKm !== null && distanceKm > CALLOUT_LOCAL_CAP_KM && !isHighValue;
   const travelFee = distanceKm !== null && !outOfRange ? calloutFeeAud(distanceKm) : null;
-  // Payment plans don't carry the travel-fee calculation, so only offer one when there's no travel fee to add.
-  const planEligible = fixedPrice >= planMinTotal && !(travelFee > 0);
 
   const handlePayAndBook = async (e) => {
     e.preventDefault();
     setBookError(null);
     if (!portalUser) { setBookError('Please sign in or create an account before booking.'); return; }
     if (!intakeAccepted) { setBookError('Please confirm you have read the Repair Intake Terms before booking.'); return; }
-    if (checkoutMode === 'plan' && !(Number(planInstallmentAmount) > 0)) { setBookError('Enter an instalment amount greater than zero.'); return; }
     setBooking(true);
     try {
       await fetch('/api/csrf-token', { credentials: 'include' }).catch(() => {});
@@ -1987,13 +1971,12 @@ function ServiceDetailPage({ go, pageParams, portalUser, onPortalUserChange }) {
           intakeTermsAccepted: true,
         }),
       }).catch(() => {});
-      const resp = await fetch(checkoutMode === 'plan' ? '/api/checkout/payment-plan' : '/api/checkout', {
+      const resp = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
         body: JSON.stringify({
           items: [{ productId: service.id, name: service.name, priceAud: fixedPrice, quantity: 1 }],
           travelDistanceKm: distanceKm || 0,
-          ...(checkoutMode === 'plan' ? { paymentPlan: { frequency: planFrequency, installmentAmount: Number(planInstallmentAmount), collectionMethod: planCollectionMethod } } : {}),
         }),
       });
       const data = await resp.json().catch(() => ({}));
@@ -2089,35 +2072,6 @@ function ServiceDetailPage({ go, pageParams, portalUser, onPortalUserChange }) {
               {portalUser === null && InlineAuthGate && (
                 <InlineAuthGate title="Sign in to book" onAuthenticated={user => { onPortalUserChange?.(user); setBookError(null); }} />
               )}
-              {portalUser && planEligible && (
-                <div style={{marginBottom:14}}>
-                  <div className="tabs" style={{marginBottom:12}}>
-                    <div role="button" tabIndex={0} className={`tab ${checkoutMode === 'full' ? 'active' : ''}`} onClick={() => setCheckoutMode('full')}>Pay in full</div>
-                    <div role="button" tabIndex={0} className={`tab ${checkoutMode === 'plan' ? 'active' : ''}`} onClick={() => setCheckoutMode('plan')}>Split into instalments</div>
-                  </div>
-                  {checkoutMode === 'plan' && (
-                    <div style={{display:'grid', gap:8}}>
-                      <div style={{display:'flex', gap:8}}>
-                        <label className="field" style={{margin:0, flex:1}}><span className="label">Instalment ($)</span>
-                          <input className="input" type="number" min="0" step="0.01" value={planInstallmentAmount} onChange={e => setPlanInstallmentAmount(e.target.value)} style={{fontSize:13}} /></label>
-                        <label className="field" style={{margin:0, flex:1}}><span className="label">Frequency</span>
-                          <select className="select" value={planFrequency} onChange={e => setPlanFrequency(e.target.value)} style={{fontSize:13}}>
-                            <option value="weekly">Weekly</option>
-                            <option value="fortnightly">Fortnightly</option>
-                            <option value="monthly">Monthly</option>
-                          </select>
-                        </label>
-                      </div>
-                      <label className="field" style={{margin:0}}><span className="label">How you'll pay each instalment</span>
-                        <select className="select" value={planCollectionMethod} onChange={e => setPlanCollectionMethod(e.target.value)} style={{fontSize:13}}>
-                          <option value="manual">Outback Electronics will contact me to collect it</option>
-                          <option value="customer">I'll pay each one myself in the portal</option>
-                        </select>
-                      </label>
-                    </div>
-                  )}
-                </div>
-              )}
               <label style={{display:'flex', gap:10, alignItems:'flex-start', marginBottom:14, fontSize:13, lineHeight:1.5, cursor:'pointer'}}>
                 <input type="checkbox" checked={intakeAccepted} onChange={e => setIntakeAccepted(e.target.checked)} style={{marginTop:3, flexShrink:0}} />
                 <span>
@@ -2127,8 +2081,7 @@ function ServiceDetailPage({ go, pageParams, portalUser, onPortalUserChange }) {
               <ErrorText style={{marginBottom:12}}>{bookError}</ErrorText>
               <div style={{display:'flex', gap:12, alignItems:'center'}}>
                 <button type="submit" className="btn btn-rust" style={{flex:1, justifyContent:'center', gap:8}} disabled={booking || outOfRange || !portalUser || !intakeAccepted} aria-busy={booking}>
-                  {booking ? <><span className="spinner" aria-hidden="true" /> Redirecting…</> : checkoutMode === 'plan'
-                    ? `Set Up Payment Plan - $${fixedPrice.toLocaleString('en-AU', {minimumFractionDigits:2})} total →`
+                  {booking ? <><span className="spinner" aria-hidden="true" /> Redirecting…</>
                     : travelFee > 0
                     ? `Pay now - $${(fixedPrice + travelFee).toLocaleString('en-AU', {minimumFractionDigits:2})} (incl. travel) →`
                     : `Pay now - $${fixedPrice.toLocaleString('en-AU', {minimumFractionDigits:2})} →`}

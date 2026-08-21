@@ -6786,7 +6786,17 @@ const mainServer = http.createServer(async (req, res) => {
   // the gift-card-covers-the-order branch of /api/checkout above. Gift cards,
   // rewards points, and store credit aren't supported on this path, those
   // redemptions are for "pay in full" checkout only.
+  //
+  // Self-service payment plans are CLOSED. Per the Payment Plans policy a plan
+  // exists only where the customer asked for one and we set it up for them, so
+  // there is no instalment option at checkout and this endpoint refuses every
+  // request. Staff still create plans on an order via
+  // /api/admin/orders/payment-plan/save. The handler below is kept intact
+  // rather than deleted so the path can be reopened if that policy changes.
   if (req.method === 'POST' && url.pathname === '/api/checkout/payment-plan') {
+    return json(res, 403, { error: 'plan_not_self_service', message: 'Payment plans are arranged with us directly, they are not set up at checkout. Get in touch and we will sort one out for you.' });
+  }
+  if (false && req.method === 'POST' && url.pathname === '/api/checkout/payment-plan') {
     if (publicRateLimited(getIp(req), 'checkout')) return json(res, 429, { error: 'too_many_requests', message: 'Too many requests. Please wait a moment and try again.' });
     const checkoutPortalSession = getPortalSession(req);
     if (!checkoutPortalSession) return json(res, 401, { error: 'login_required', message: 'Please sign in or create an account to check out.' });

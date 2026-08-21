@@ -450,7 +450,7 @@ We reserve the right to refuse any order, correct pricing errors, or cancel orde
 
 **Invoiced Work and Payment Terms.** Where we perform work that is not paid for through our checkout at the time of order (for example repair work, custom work, or on-site service), we will issue an invoice. Unless a different period is stated on the invoice or agreed with you in writing, payment is due within **14 days of the invoice date**. Where we have agreed a deposit, a part payment, or an instalment arrangement, the balance is due on the date agreed in writing, and any payment you make is applied first to the oldest amount owing on your account.
 
-**Overdue Amounts.** Where an invoiced amount remains unpaid after its due date, we may: (a) charge interest at **1.5% per month** (or part of a month) on the overdue balance, calculated from the due date until payment is received in full; (b) suspend further work for you, including work already in progress, until the account is clear; and (c) withhold any item of yours in our possession until all amounts owing in respect of that item are paid, in accordance with our Repair Intake Terms. We will give you written notice before we begin charging interest, and we may reduce or waive it at our discretion.
+**Overdue Amounts.** Where an invoiced amount remains unpaid after its due date, we may: (a) charge interest at **1.5% per month** (or part of a month) on the overdue balance, calculated from the due date until payment is received in full; (b) suspend further work for you, including work already in progress, until the account is clear; and (c) withhold any item of yours in our possession until all amounts owing in respect of that item are paid, in accordance with our Repair Intake Terms. We will give you written notice before we begin charging interest, and we may reduce or waive it at our discretion. **This clause does not apply to instalments falling due under an agreed Payment Plan**, which are interest-free and fee-free and are governed by our Payment Plans policy.
 
 **Costs of Recovery.** Where an amount is overdue and we take steps to recover it, you are liable for the reasonable costs we actually incur in doing so, including debt collection agency or mercantile agent fees, court or tribunal filing fees, enforcement costs, and reasonable legal costs. We will claim only costs that are reasonable and that we have genuinely incurred, and we will tell you what those costs are before adding them to your account. Nothing in this clause requires you to pay an amount that a court or tribunal declines to allow, and nothing in this clause limits your rights under the Australian Consumer Law.
 
@@ -1045,7 +1045,7 @@ Title in goods does not pass to you until payment in full has been received by u
 
 **Application of Payments.** Any payment you make is applied first to recovery costs, then to accrued interest, then to the oldest outstanding invoice, regardless of any allocation you nominate.
 
-**Costs of Recovery.** You indemnify us against, and must pay on demand, all costs and expenses we incur in recovering or attempting to recover any overdue amount from you, including: debt collection agency and mercantile agent commissions and fees (including where charged as a percentage of the debt); field call, skip trace, and account investigation fees; credit reporting and default listing costs; court or tribunal filing, service, and enforcement costs; and legal costs on a full indemnity basis. These costs form part of the debt owing and accrue interest under this clause in the same way as the underlying amount. Where a debt is referred to a collection agency, that agency's commission is payable by you in addition to the principal debt and accrued interest.
+**Costs of Recovery.** You indemnify us against, and must pay on demand, all costs and expenses we incur in recovering or attempting to recover any overdue amount from you, including: debt collection agency and mercantile agent commissions and fees (including where charged as a percentage of the debt); field call, skip trace, and account investigation fees; credit reporting and default listing costs; court or tribunal filing, service, and enforcement costs; and legal costs on a full indemnity basis. These costs form part of the debt owing and accrue interest under this clause in the same way as the underlying amount. Where a debt is referred to a collection agency, that agency's commission is payable by you in addition to the principal debt and accrued interest. This clause and the interest provision above do not apply to instalments falling due under an agreed Payment Plan, which are interest-free and fee-free and are governed by our Payment Plans policy.
 
 **Default.** You are in default if any amount is unpaid after its due date, or if you become insolvent, enter administration, receivership, or liquidation, or cease or threaten to cease trading. On default we may, without limiting any other right: declare all amounts owing on the account immediately due and payable regardless of their stated terms; suspend or cancel undelivered orders; withdraw credit terms; retake possession of any goods in which title has not passed; and refer the debt for collection or commence recovery proceedings.
 
@@ -1679,6 +1679,98 @@ Where the quoted cost of repair exceeds the assessed fair market value of the De
 // (privacy-policy, cookie-policy, disclaimer, acceptable-use, custom-work,
 // gift-cards-store-credit-rewards, sale-of-goods-to-us, repair-intake-terms)
 // share identical text across audiences and so share the same BODY_* constant.
+const BODY_PAYMENT_PLANS = `_LEGAL · PAYMENT PLANS_
+
+## Payment Plans
+
+This policy applies where Outback Electronics ('we', 'us', or 'our') agrees to let you pay for goods or services by instalments rather than in a single payment (a 'Payment Plan'). It applies alongside, and in addition to, our Terms and Conditions (private or commercial, as applicable), our Return Policy, our Repair Intake Terms, and our Privacy Policy. Our ABN is {{abn}}. Contact us at [{{phone}}](tel:{{phoneHref}}) or [{{email}}](mailto:{{email}}) to ask about a Payment Plan.
+
+**Nothing in this policy excludes, restricts, or modifies any right or remedy you have under the Australian Consumer Law.**
+
+### 1. What a Payment Plan Is
+
+A Payment Plan is an arrangement under which we agree to accept the price of an order in scheduled instalments instead of up front. It is offered as a goodwill accommodation to help spread the cost of a larger job, and is not a credit product, a loan, or a buy-now-pay-later facility.
+
+**No interest and no fees.** We charge **no interest, no establishment fee, no account-keeping fee, no instalment fee, and no late fee** on a Payment Plan. The total you pay across all instalments is exactly the price of the order, and it does not change because you paid over time rather than at once. Any provision of our Terms and Conditions that would otherwise apply interest or recovery costs to an overdue amount does **not** apply to instalments under an active Payment Plan.
+
+### 2. Availability
+
+**By request only.** Payment Plans are not offered or advertised as a checkout option and are not available for self-service. A Payment Plan exists only where you have asked us for one and we have agreed to it and set it up for you.
+
+**At our discretion.** We are not obliged to offer or agree to a Payment Plan, and we may decline a request without giving reasons. Agreeing to a plan on one order does not oblige us to agree to one on any future order.
+
+**Minimum order value.** Payment Plans are available only on orders at or above a minimum value, which we will tell you when you ask. Gift cards, store credit, and memberships cannot be bought on a Payment Plan, and a Payment Plan cannot be combined with gift card, store credit, or rewards point redemption on the same order.
+
+### 3. Setting Up a Plan
+
+Before a plan starts we will confirm with you, in writing: the total amount payable; the instalment amount; how often instalments fall due (weekly, fortnightly, or monthly); the date of the first instalment; and how each instalment will be collected. Your instalment schedule is then visible to you at any time in the customer portal, showing what has been paid and what is next due.
+
+The final instalment in a schedule may be smaller than the others, because it is sized to whatever balance remains.
+
+### 4. How Instalments Are Collected
+
+We will agree one of the following with you when the plan is set up:
+
+- **You pay each instalment.** We email you a reminder before each instalment falls due, and you pay it yourself through the customer portal.
+- **We collect it directly.** We arrange each instalment with you as it falls due, for example by bank transfer or in person.
+- **Automatic card payment.** Where you expressly choose this method and save a card to your account, you authorise us to charge that card for each scheduled instalment on or after its due date, without contacting you first, until the plan is paid out or you cancel the authority. We will never charge the card before an instalment's due date, and never for more than the instalment then due.
+
+**Cancelling an automatic payment authority.** You may withdraw your authority for automatic card payments at any time by removing the saved card in the customer portal or by telling us in writing. Withdrawing the authority does not cancel the plan or the amount you owe, it only changes how instalments are collected, and we will agree another method with you.
+
+**Keeping your details current.** It is your responsibility to keep your contact details and, where you have chosen automatic payment, your card details current. An expired or cancelled card will cause instalments to fail.
+
+### 5. Paying Early
+
+You may pay an instalment early, pay more than the scheduled instalment, or pay the whole remaining balance out at any time, at no cost and without telling us first. Because we credit every payment against your balance as it is received, paying ahead simply reduces what is left to pay.
+
+### 6. Missed and Failed Payments
+
+If an instalment is missed, or an automatic card payment fails, we will let you know and we will contact you to sort it out. **Talk to us.** A Payment Plan is a goodwill arrangement and we would much rather rearrange a schedule than fall out over it. We may reschedule remaining instalments, reduce the instalment amount, or pause a plan where you are having genuine difficulty.
+
+Where an instalment remains unpaid and you have not responded to us after we have made reasonable attempts to contact you using the details you provided, we may: pause any work not yet completed on the order; decline to release or dispatch goods we still hold, in accordance with clause 7; cancel the Payment Plan under clause 8; and treat the outstanding balance as a debt due and payable.
+
+**We do not report Payment Plans to credit reporting bodies.** A missed instalment under this policy is not listed as a credit default.
+
+### 7. Ownership of Goods
+
+Where goods are supplied to you before the Payment Plan is paid out, **title in those goods does not pass to you until we have received the full price in cleared funds.** Risk in the goods passes to you on delivery or collection, so you should insure them from that point. Until title passes you must not sell, encumber, or dispose of the goods.
+
+Where we still hold an item, including a device submitted for repair, we may decline to release it until all amounts owing in respect of that item have been paid. The storage provisions of our Repair Intake Terms continue to apply to a device awaiting collection.
+
+### 8. Cancelling a Plan
+
+**By you.** You may cancel a Payment Plan at any time by telling us in writing. The remaining balance then becomes payable, and we will agree a reasonable time and method for you to pay it.
+
+**By us.** We may cancel a Payment Plan where an instalment remains unpaid and you have not responded to us, where you have given us false information in connection with the plan, or where you ask us to. We will tell you in writing if we do, and we will tell you what remains owing.
+
+Cancelling a plan does not cancel your order or the amount you owe for it, and it does not forfeit any payment you have already made. Every payment you have made remains credited to your order.
+
+### 9. Cancellations, Returns, and Faulty Goods
+
+If your order is cancelled or returned while a Payment Plan is running, we will stop collecting instalments, apply any refund due against the outstanding balance, and refund you any amount you have paid beyond what you owe. Where you have a right to a refund under the Australian Consumer Law, that right applies in full regardless of how much of the plan you have paid.
+
+Being on a Payment Plan does not affect your consumer guarantees, your warranty rights, or your rights under our Return Policy.
+
+### 10. Your Information
+
+Where you choose automatic card payment, your card is stored by our payment provider, Stripe, and not by us. We hold the instalment schedule and the record of payments received against your order. We handle all of this in accordance with our Privacy Policy.
+
+### 11. Changes to This Policy
+
+We may update this policy from time to time. The version in force when your Payment Plan was agreed continues to apply to that plan, unless we agree a change with you in writing.
+
+### 12. Contact Us
+
+**Outback Electronics**
+
+- {{address}}, Australia
+- Phone: [{{phone}}](tel:{{phoneHref}})
+- Email: [{{email}}](mailto:{{email}})
+
+---
+
+**Questions?** Email [{{email}}](mailto:{{email}}), we'll get back to you as soon as we can.`;
+
 const POLICY_DEFAULTS = [
   // all
   { audience: 'all', slug: 'terms-of-engagement', title: 'General Terms of Engagement', updatedAt: '2026-08-20T00:00:00.000Z', body: BODY_GENERAL_ENGAGEMENT },
@@ -1689,6 +1781,7 @@ const POLICY_DEFAULTS = [
   { audience: 'all', slug: 'repair-intake-terms', title: 'Repair Intake Terms', updatedAt: '2026-08-20T00:00:00.000Z', body: BODY_REPAIR_INTAKE },
   { audience: 'all', slug: 'gift-cards-store-credit-rewards', title: 'Gift Cards, Store Credit & Rewards Terms', updatedAt: '2026-06-19T00:00:00.000Z', body: BODY_GIFT_CARDS },
   { audience: 'all', slug: 'sale-of-goods-to-us', title: 'Sale of Goods to Us', updatedAt: '2026-06-19T00:00:00.000Z', body: BODY_SALE_OF_GOODS },
+  { audience: 'all', slug: 'payment-plans', title: 'Payment Plans', updatedAt: '2026-08-21T00:00:00.000Z', body: BODY_PAYMENT_PLANS },
 
   // private
   { audience: 'private', slug: 'terms-and-conditions', title: 'Terms & Conditions', updatedAt: '2026-08-21T00:00:00.000Z', body: BODY_TERMS_PRIVATE },
@@ -1702,6 +1795,7 @@ const POLICY_DEFAULTS = [
   { audience: 'private', slug: 'repair-intake-terms', title: 'Repair Intake Terms', updatedAt: '2026-08-20T00:00:00.000Z', body: BODY_REPAIR_INTAKE },
   { audience: 'private', slug: 'gift-cards-store-credit-rewards', title: 'Gift Cards, Store Credit & Rewards Terms', updatedAt: '2026-06-19T00:00:00.000Z', body: BODY_GIFT_CARDS },
   { audience: 'private', slug: 'sale-of-goods-to-us', title: 'Sale of Goods to Us', updatedAt: '2026-06-19T00:00:00.000Z', body: BODY_SALE_OF_GOODS },
+  { audience: 'private', slug: 'payment-plans', title: 'Payment Plans', updatedAt: '2026-08-21T00:00:00.000Z', body: BODY_PAYMENT_PLANS },
 
   // commercial
   { audience: 'commercial', slug: 'terms-and-conditions', title: 'Terms & Conditions', updatedAt: '2026-08-21T00:00:00.000Z', body: BODY_TERMS_COMMERCIAL },
@@ -1715,6 +1809,7 @@ const POLICY_DEFAULTS = [
   { audience: 'commercial', slug: 'repair-intake-terms', title: 'Repair Intake Terms', updatedAt: '2026-08-20T00:00:00.000Z', body: BODY_REPAIR_INTAKE },
   { audience: 'commercial', slug: 'gift-cards-store-credit-rewards', title: 'Gift Cards, Store Credit & Rewards Terms', updatedAt: '2026-06-19T00:00:00.000Z', body: BODY_GIFT_CARDS },
   { audience: 'commercial', slug: 'sale-of-goods-to-us', title: 'Sale of Goods to Us', updatedAt: '2026-06-19T00:00:00.000Z', body: BODY_SALE_OF_GOODS },
+  { audience: 'commercial', slug: 'payment-plans', title: 'Payment Plans', updatedAt: '2026-08-21T00:00:00.000Z', body: BODY_PAYMENT_PLANS },
 
   // seller
   { audience: 'seller', slug: 'terms-and-conditions', title: 'OHD001 – Terms and Conditions for Sellers', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_SELLER_TERMS },
