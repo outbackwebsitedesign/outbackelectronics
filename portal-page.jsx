@@ -1211,7 +1211,7 @@ function QuotesTab({ user, onOrderCreated, highlightRef }) {
               ) : (() => {
                 const choice = planChoice[q.id] || { mode: 'full', frequency: 'fortnightly', installmentAmount: '', collectionMethod: 'manual' };
                 const setChoice = patch => setPlanChoice(pc => ({ ...pc, [q.id]: { ...choice, ...patch } }));
-                const eligible = quoteTotal >= planMinTotal;
+                const eligible = !!q.planOffered && quoteTotal >= planMinTotal;
                 return (
                   <div>
                     {eligible && (
@@ -2664,7 +2664,7 @@ function QuoteTokenView({ token, onAccepted }) {
                 <input className="input" type="password" placeholder="At least 8 characters" value={form.password} onChange={e => setForm(f => ({...f, password: e.target.value}))} required minLength={8} />
               </label>
 
-              {quoteTotal >= planMinTotal && (
+              {quote.planOffered && quoteTotal >= planMinTotal && (
                 <div style={{marginBottom:20}}>
                   <div className="tabs" style={{marginBottom:14}}>
                     <div role="button" tabIndex={0} className={`tab ${planChoice.mode === 'full' ? 'active' : ''}`} onClick={() => setPlanChoice(c => ({ ...c, mode: 'full' }))}>Pay in full</div>

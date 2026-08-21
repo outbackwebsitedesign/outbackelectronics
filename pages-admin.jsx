@@ -2235,7 +2235,11 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
                 )}
               </>
             );
-          })() : form.paymentPlan && form.paymentPlan.status === 'cancelled' ? (
+          })() : form.paymentPlan && form.paymentPlan.status === 'defaulted' ? (
+            <div style={{fontSize:12, color:'var(--rust)', fontWeight:600}}>
+              Payment plan defaulted{form.paymentPlan.defaultedOnDueDate ? ` (instalment due ${form.paymentPlan.defaultedOnDueDate})` : ''}. Balance is immediately payable and the account should be referred for collection.
+            </div>
+          ) : form.paymentPlan && form.paymentPlan.status === 'cancelled' ? (
             <div style={{fontSize:12, color:'var(--ink-3)'}}>Payment plan cancelled.</div>
           ) : canManagePlan ? (
             <>
@@ -3173,6 +3177,14 @@ function QuotePage({ edit, quotes, customers, services = [], onClose, onSave, on
         <div style={{fontSize:11, color:'var(--ink-3)', marginTop:4}}>Used for callout distance. Falls back to Shipping Address if left blank.</div>
       </label>
       <label className="field"><span className="label">Valid for (days)</span><input className="input" type="number" min="1" value={form.validDays||30} onChange={e=>setForm({...form,validDays:Number(e.target.value)})}/></label>
+
+      <label className="field" style={{display:'flex', gap:8, alignItems:'flex-start'}}>
+        <input type="checkbox" checked={!!form.planOffered} onChange={e=>setForm({...form,planOffered:e.target.checked})} style={{marginTop:3, flexShrink:0}}/>
+        <span>
+          <span className="label" style={{display:'block'}}>Offer a payment plan on this quote</span>
+          <span style={{fontSize:11, color:'var(--ink-3)'}}>Only tick this where the customer has asked to pay by instalments. Payment plans are by request only, so without this the customer cannot set one up when accepting.</span>
+        </span>
+      </label>
 
       <div className="field">
         <span className="label">Line items</span>

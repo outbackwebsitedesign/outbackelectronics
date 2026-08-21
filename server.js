@@ -682,6 +682,11 @@ function orderRemainingBalance(o) {
 }
 
 // ── Payment plans ─────────────────────────────────────────────────────────────
+// Days an instalment may sit unpaid before the plan defaults. On default the
+// plan is cancelled, the whole remaining balance falls due immediately, and the
+// account is referred for collection, per the Payment Plans policy.
+const PLAN_DEFAULT_GRACE_DAYS = 7;
+
 function addPlanFrequency(date, frequency) {
   const d = new Date(date);
   if (frequency === 'weekly') d.setDate(d.getDate() + 7);
@@ -3307,6 +3312,32 @@ function emailInstallmentFailed({ orderId, customerName, amount, dueDate }) {
       <p>We tried to charge your saved card <strong>${escHtml(amtStr)}</strong> for order ${escHtml(orderId)} but the payment didn't go through.</p>
       <p>Please update your card details in the customer portal, or get in touch so we can arrange another way to pay. We'll try again automatically, but it's best to sort this out as soon as you can.</p>
       <a class="btn" href="${getPortalUrl()}/orders">Update payment details →</a>
+    `),
+  };
+}
+
+function emailPlanDefaulted({ orderId, customerName, balance, dueDate }) {
+  const balStr = `$${Number(balance).toLocaleString('en-AU', { minimumFractionDigits: 2 })}`;
+  const dueStr = new Date(dueDate + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
+  return {
+    subject: `Payment plan cancelled, order ${orderId}`,
+    html: emailHtml('Your payment plan has been cancelled', `
+      <p>Hi ${escHtml(customerName || 'there')},</p>
+      <p>An instalment on order ${escHtml(orderId)} was due on ${escHtml(dueStr)} and is now more than ${PLAN_DEFAULT_GRACE_DAYS} days overdue, so the payment plan has been cancelled.</p>
+      <p>The remaining balance of <strong>${escHtml(balStr)}</strong> is now due immediately, and the account is being referred for collection. You remain liable for the costs of recovery.</p>
+      <p>If this is a mistake, or you are having difficulty, please contact us today and we will do what we can to sort it out.</p>
+    `),
+  };
+}
+
+function emailStaffPlanDefaulted({ orderId, name, email, balance, dueDate }) {
+  const balStr = `$${Number(balance).toLocaleString('en-AU', { minimumFractionDigits: 2 })}`;
+  return {
+    subject: `[PAYMENT PLAN] Defaulted, refer for collection - ${orderId}`,
+    html: emailHtml('Payment plan defaulted', `
+      <p><strong>${escHtml(name || 'Customer')}</strong> (${escHtml(email || 'no email')}) has defaulted on the plan for order ${escHtml(orderId)}.</p>
+      <p>Instalment due ${escHtml(dueDate)} is more than ${PLAN_DEFAULT_GRACE_DAYS} days overdue. The plan is cancelled and the balance of <strong>${escHtml(balStr)}</strong> is immediately payable.</p>
+      <p>Refer this account for collection.</p>
     `),
   };
 }
@@ -11608,6 +11639,7 @@ const portalServer = http.createServer(async (req, res) => {
         email: quote.email,
         status: quote.status,
         validDays: quote.validDays,
+        planOffered: !!quote.planOffered,
         lineItems: quote.lineItems || [],
         discountAmount: quote.discountAmount || 0,
         discountLabel: quote.discountLabel || '',
@@ -11640,6 +11672,9 @@ const portalServer = http.createServer(async (req, res) => {
     if (users.find(u => u.username && u.username.toLowerCase() === username.toLowerCase())) {
       return json(res, 409, { error: 'username_taken', message: 'That username is already taken.' });
     }
+    // Payment plans are by request only, staff tick "offer a payment plan" on
+    // the quote once the customer has asked for one.
+    if (planReq && !quote.planOffered) return json(res, 403, { error: 'plan_not_offered', message: 'This quote is not set up for a payment plan. Get in touch and we will arrange one for you.' });
     // A brand-new account can't possibly have a saved card yet, so auto-charge
     // can't be offered here, only manual or customer-initiated collection.
     if (planReq && !['weekly', 'fortnightly', 'monthly'].includes(planReq.frequency)) return json(res, 422, { error: 'invalid_frequency' });
@@ -11712,6 +11747,7 @@ const portalServer = http.createServer(async (req, res) => {
     const quote = quotes[qIdx];
     if (quote.status !== 'quoted') return json(res, 409, { error: 'quote_not_actionable', message: 'This quote has already been accepted or is not ready for acceptance.' });
     const planReq = body.paymentPlan;
+    if (planReq && !quote.planOffered) return json(res, 403, { error: 'plan_not_offered', message: 'This quote is not set up for a payment plan. Get in touch and we will arrange one for you.' });
     if (planReq && !['weekly', 'fortnightly', 'monthly'].includes(planReq.frequency)) return json(res, 422, { error: 'invalid_frequency' });
     if (planReq && !['manual', 'customer', 'auto'].includes(planReq.collectionMethod)) return json(res, 422, { error: 'invalid_collection_method' });
     if (planReq && !(Number(planReq.installmentAmount) > 0)) return json(res, 422, { error: 'invalid_amount', message: 'Instalment amount must be greater than zero.' });
@@ -12680,6 +12716,23 @@ async function runDuePaymentPlanCharges() {
       const progress = paymentPlanProgress(order);
       if (progress.completed || !progress.nextDue) continue;
       const dueDate = new Date(progress.nextDue.dueDate + 'T00:00:00');
+
+      // Default: an instalment unpaid more than the grace period. The plan is
+      // cancelled, the balance becomes immediately payable, and staff are told
+      // to refer it. No further charge or reminder is attempted after this.
+      const graceEnds = new Date(dueDate);
+      graceEnds.setDate(graceEnds.getDate() + PLAN_DEFAULT_GRACE_DAYS);
+      if (today > graceEnds) {
+        orders[i] = { ...order, paymentPlan: { ...plan, status: 'defaulted', defaultedAt: new Date().toISOString(), defaultedOnDueDate: progress.nextDue.dueDate } };
+        dirty = true;
+        if (order.email) {
+          sendEmail({ to: order.email, ...emailPlanDefaulted({ orderId: order.id, customerName: order.cust, balance: progress.remaining, dueDate: progress.nextDue.dueDate }) }).catch(() => {});
+        }
+        if (getNotifyEmail()) {
+          sendEmail({ to: getNotifyEmail(), ...emailStaffPlanDefaulted({ orderId: order.id, name: order.cust, email: order.email, balance: progress.remaining, dueDate: progress.nextDue.dueDate }) }).catch(() => {});
+        }
+        continue;
+      }
 
       if (plan.collectionMethod === 'auto') {
         if (today < dueDate) continue; // only charge on/after the due date, never early

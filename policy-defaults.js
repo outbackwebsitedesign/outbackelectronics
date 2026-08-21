@@ -450,7 +450,7 @@ We reserve the right to refuse any order, correct pricing errors, or cancel orde
 
 **Invoiced Work and Payment Terms.** Where we perform work that is not paid for through our checkout at the time of order (for example repair work, custom work, or on-site service), we will issue an invoice. Unless a different period is stated on the invoice or agreed with you in writing, payment is due within **14 days of the invoice date**. Where we have agreed a deposit, a part payment, or an instalment arrangement, the balance is due on the date agreed in writing, and any payment you make is applied first to the oldest amount owing on your account.
 
-**Overdue Amounts.** Where an invoiced amount remains unpaid after its due date, we may: (a) charge interest at **1.5% per month** (or part of a month) on the overdue balance, calculated from the due date until payment is received in full; (b) suspend further work for you, including work already in progress, until the account is clear; and (c) withhold any item of yours in our possession until all amounts owing in respect of that item are paid, in accordance with our Repair Intake Terms. We will give you written notice before we begin charging interest, and we may reduce or waive it at our discretion. **This clause does not apply to instalments falling due under an agreed Payment Plan**, which are interest-free and fee-free and are governed by our Payment Plans policy.
+**Overdue Amounts.** Where an invoiced amount remains unpaid after its due date, we may: (a) charge interest at **1.5% per month** (or part of a month) on the overdue balance, calculated from the due date until payment is received in full; (b) suspend further work for you, including work already in progress, until the account is clear; and (c) withhold any item of yours in our possession until all amounts owing in respect of that item are paid, in accordance with our Repair Intake Terms. We will give you written notice before we begin charging interest, and we may reduce or waive it at our discretion. **This clause does not apply to instalments falling due under an agreed Payment Plan**, which are interest-free and are governed by our Payment Plans policy, including its provisions on default and the costs of recovery.
 
 **Costs of Recovery.** Where an amount is overdue and we take steps to recover it, you are liable for the reasonable costs we actually incur in doing so, including debt collection agency or mercantile agent fees, court or tribunal filing fees, enforcement costs, and reasonable legal costs. We will claim only costs that are reasonable and that we have genuinely incurred, and we will tell you what those costs are before adding them to your account. Nothing in this clause requires you to pay an amount that a court or tribunal declines to allow, and nothing in this clause limits your rights under the Australian Consumer Law.
 
@@ -1045,7 +1045,7 @@ Title in goods does not pass to you until payment in full has been received by u
 
 **Application of Payments.** Any payment you make is applied first to recovery costs, then to accrued interest, then to the oldest outstanding invoice, regardless of any allocation you nominate.
 
-**Costs of Recovery.** You indemnify us against, and must pay on demand, all costs and expenses we incur in recovering or attempting to recover any overdue amount from you, including: debt collection agency and mercantile agent commissions and fees (including where charged as a percentage of the debt); field call, skip trace, and account investigation fees; credit reporting and default listing costs; court or tribunal filing, service, and enforcement costs; and legal costs on a full indemnity basis. These costs form part of the debt owing and accrue interest under this clause in the same way as the underlying amount. Where a debt is referred to a collection agency, that agency's commission is payable by you in addition to the principal debt and accrued interest. This clause and the interest provision above do not apply to instalments falling due under an agreed Payment Plan, which are interest-free and fee-free and are governed by our Payment Plans policy.
+**Costs of Recovery.** You indemnify us against, and must pay on demand, all costs and expenses we incur in recovering or attempting to recover any overdue amount from you, including: debt collection agency and mercantile agent commissions and fees (including where charged as a percentage of the debt); field call, skip trace, and account investigation fees; credit reporting and default listing costs; court or tribunal filing, service, and enforcement costs; and legal costs on a full indemnity basis. These costs form part of the debt owing and accrue interest under this clause in the same way as the underlying amount. Where a debt is referred to a collection agency, that agency's commission is payable by you in addition to the principal debt and accrued interest. The interest provision above does not apply to instalments falling due under an agreed Payment Plan, which are interest-free and are governed by our Payment Plans policy. This recovery-costs clause continues to apply to a Payment Plan debt once the plan has defaulted under that policy.
 
 **Default.** You are in default if any amount is unpaid after its due date, or if you become insolvent, enter administration, receivership, or liquidation, or cease or threaten to cease trading. On default we may, without limiting any other right: declare all amounts owing on the account immediately due and payable regardless of their stated terms; suspend or cancel undelivered orders; withdraw credit terms; retake possession of any goods in which title has not passed; and refer the debt for collection or commence recovery proceedings.
 
@@ -1691,7 +1691,7 @@ This policy applies where Outback Electronics ('we', 'us', or 'our') agrees to l
 
 A Payment Plan is an arrangement under which we agree to accept the price of an order in scheduled instalments instead of up front. It is offered as a goodwill accommodation to help spread the cost of a larger job, and is not a credit product, a loan, or a buy-now-pay-later facility.
 
-**No interest and no fees.** We charge **no interest, no establishment fee, no account-keeping fee, no instalment fee, and no late fee** on a Payment Plan. The total you pay across all instalments is exactly the price of the order, and it does not change because you paid over time rather than at once. Any provision of our Terms and Conditions that would otherwise apply interest or recovery costs to an overdue amount does **not** apply to instalments under an active Payment Plan.
+**No interest and no fees.** We charge **no interest, no establishment fee, no account-keeping fee, no instalment fee, and no late fee** on a Payment Plan. The total you pay across all instalments is exactly the price of the order, and it does not change because you paid over time rather than at once. Any provision of our Terms and Conditions that would otherwise apply interest to an overdue amount does **not** apply to instalments under an active Payment Plan. This is separate from the costs of recovering a defaulted debt, which are dealt with in clause 6.
 
 ### 2. Availability
 
@@ -1723,11 +1723,21 @@ We will agree one of the following with you when the plan is set up:
 
 You may pay an instalment early, pay more than the scheduled instalment, or pay the whole remaining balance out at any time, at no cost and without telling us first. Because we credit every payment against your balance as it is received, paying ahead simply reduces what is left to pay.
 
-### 6. Missed and Failed Payments
+### 6. Missed Payments and Default
 
-If an instalment is missed, or an automatic card payment fails, we will let you know and we will contact you to sort it out. **Talk to us.** A Payment Plan is a goodwill arrangement and we would much rather rearrange a schedule than fall out over it. We may reschedule remaining instalments, reduce the instalment amount, or pause a plan where you are having genuine difficulty.
+If an instalment is missed, or an automatic card payment fails, we will let you know. **Talk to us straight away.** A Payment Plan is a goodwill arrangement and we would much rather rearrange a schedule than fall out over it. Where you contact us before an instalment falls more than 7 days behind, we may reschedule the remaining instalments, reduce the instalment amount, or pause the plan while you get back on your feet. None of that costs you anything.
 
-Where an instalment remains unpaid and you have not responded to us after we have made reasonable attempts to contact you using the details you provided, we may: pause any work not yet completed on the order; decline to release or dispatch goods we still hold, in accordance with clause 7; cancel the Payment Plan under clause 8; and treat the outstanding balance as a debt due and payable.
+**The 7-day rule.** Where an instalment remains unpaid **more than 7 days after its due date**, the Payment Plan is automatically in default. On default, and without further notice to you:
+
+- the Payment Plan is **cancelled**;
+- the **entire remaining balance of the order becomes immediately due and payable**, not just the missed instalment; and
+- the debt is **referred to a debt collection agency straight away**.
+
+**You pay the cost of recovery.** Once an account is referred, you are liable for all costs and expenses we incur in recovering the debt, including debt collection agency and mercantile agent commissions and fees (including where charged as a percentage of the debt), field call and account investigation fees, court or tribunal filing and enforcement costs, and legal costs. These costs are in addition to the balance owing and form part of the debt. We will tell you what they are.
+
+We may also pause any work not yet completed on the order and decline to release or dispatch goods we still hold, in accordance with clause 7.
+
+**How to avoid all of this: contact us.** The 7 days exists so an account cannot drift indefinitely, not to catch anyone out. We will not refer an account where you have talked to us and we have agreed a way forward.
 
 **We do not report Payment Plans to credit reporting bodies.** A missed instalment under this policy is not listed as a credit default.
 
@@ -1741,7 +1751,7 @@ Where we still hold an item, including a device submitted for repair, we may dec
 
 **By you.** You may cancel a Payment Plan at any time by telling us in writing. The remaining balance then becomes payable, and we will agree a reasonable time and method for you to pay it.
 
-**By us.** We may cancel a Payment Plan where an instalment remains unpaid and you have not responded to us, where you have given us false information in connection with the plan, or where you ask us to. We will tell you in writing if we do, and we will tell you what remains owing.
+**By us.** A Payment Plan is cancelled automatically where an instalment falls more than 7 days overdue, as set out in clause 6. We may also cancel a plan where you have given us false information in connection with it, or where you ask us to. We will tell you in writing when a plan is cancelled, and we will tell you what remains owing.
 
 Cancelling a plan does not cancel your order or the amount you owe for it, and it does not forfeit any payment you have already made. Every payment you have made remains credited to your order.
 
