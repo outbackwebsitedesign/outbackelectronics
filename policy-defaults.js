@@ -448,6 +448,16 @@ We accept payment by credit or debit card and any other payment method made avai
 
 We reserve the right to refuse any order, correct pricing errors, or cancel orders placed by dealers or resellers. If we cancel an order for which payment has been received, we will issue a full refund via your original payment method.
 
+**Invoiced Work and Payment Terms.** Where we perform work that is not paid for through our checkout at the time of order (for example repair work, custom work, or on-site service), we will issue an invoice. Unless a different period is stated on the invoice or agreed with you in writing, payment is due within **7 days of the invoice date**. Where we have agreed a deposit, a part payment, or an instalment arrangement, the balance is due on the date agreed in writing, and any payment you make is applied first to the oldest amount owing on your account.
+
+**Overdue Amounts.** Where an invoiced amount remains unpaid after its due date, we may: (a) charge interest at **1.5% per month** (or part of a month) on the overdue balance, calculated from the due date until payment is received in full; (b) suspend further work for you, including work already in progress, until the account is clear; and (c) withhold any item of yours in our possession until all amounts owing in respect of that item are paid, in accordance with our Repair Intake Terms. We will give you written notice before we begin charging interest, and we may reduce or waive it at our discretion.
+
+**Costs of Recovery.** Where an amount is overdue and we take steps to recover it, you are liable for the reasonable costs we actually incur in doing so, including debt collection agency or mercantile agent fees, court or tribunal filing fees, enforcement costs, and reasonable legal costs. We will claim only costs that are reasonable and that we have genuinely incurred, and we will tell you what those costs are before adding them to your account. Nothing in this clause requires you to pay an amount that a court or tribunal declines to allow, and nothing in this clause limits your rights under the Australian Consumer Law.
+
+**Dishonoured and Reversed Payments.** Where a payment is dishonoured, reversed, or charged back other than in connection with a refund we have agreed or a right you have under the Australian Consumer Law, the amount is treated as unpaid from its original due date, and any fee our payment provider charges us in respect of that reversal is payable by you.
+
+**Disputed Amounts.** If you genuinely dispute part of an invoice, tell us in writing before the due date and identify the amount in dispute and why. Interest and recovery costs do not accrue on the disputed portion while we work with you in good faith to resolve it. The undisputed balance remains payable by the due date.
+
 ### 7. Subscriptions
 
 **Billing and Renewal:** Subscriptions auto-renew monthly unless cancelled.
@@ -1032,6 +1042,14 @@ The Australian Consumer Law ('ACL') consumer guarantees apply to goods and servi
 Trade accounts may be approved at our discretion. Where a credit account is approved, payment terms (e.g. 14 or 30 days from invoice) will be confirmed in writing at account setup. Invoices not paid by the due date may attract interest at 1.5% per month (or part thereof) on the overdue balance, and we may suspend supply on the account until overdue amounts are paid. We reserve the right to require security, a deposit, or payment in advance for any order, and to vary, suspend, or withdraw credit terms at any time on reasonable notice.
 
 Title in goods does not pass to you until payment in full has been received by us in cleared funds. Until title passes, you must store the goods separately, keep them identifiable as our property, and not encumber or sell them other than in the ordinary course of resupply.
+
+**Application of Payments.** Any payment you make is applied first to recovery costs, then to accrued interest, then to the oldest outstanding invoice, regardless of any allocation you nominate.
+
+**Costs of Recovery.** You indemnify us against, and must pay on demand, all costs and expenses we incur in recovering or attempting to recover any overdue amount from you, including: debt collection agency and mercantile agent commissions and fees (including where charged as a percentage of the debt); field call, skip trace, and account investigation fees; credit reporting and default listing costs; court or tribunal filing, service, and enforcement costs; and legal costs on a full indemnity basis. These costs form part of the debt owing and accrue interest under this clause in the same way as the underlying amount. Where a debt is referred to a collection agency, that agency's commission is payable by you in addition to the principal debt and accrued interest.
+
+**Default.** You are in default if any amount is unpaid after its due date, or if you become insolvent, enter administration, receivership, or liquidation, or cease or threaten to cease trading. On default we may, without limiting any other right: declare all amounts owing on the account immediately due and payable regardless of their stated terms; suspend or cancel undelivered orders; withdraw credit terms; retake possession of any goods in which title has not passed; and refer the debt for collection or commence recovery proceedings.
+
+**Credit Reporting.** Where an amount remains unpaid 60 days after its due date and we have given you written notice and a reasonable opportunity to pay, we may disclose the default to a credit reporting body or list it with a commercial credit bureau, to the extent permitted by the _Privacy Act 1988_ (Cth) and our Privacy Policy.
 
 ### 4. Pricing, Quotes, and Bulk Orders
 
@@ -1673,7 +1691,7 @@ const POLICY_DEFAULTS = [
   { audience: 'all', slug: 'sale-of-goods-to-us', title: 'Sale of Goods to Us', updatedAt: '2026-06-19T00:00:00.000Z', body: BODY_SALE_OF_GOODS },
 
   // private
-  { audience: 'private', slug: 'terms-and-conditions', title: 'Terms & Conditions', updatedAt: '2026-08-20T00:00:00.000Z', body: BODY_TERMS_PRIVATE },
+  { audience: 'private', slug: 'terms-and-conditions', title: 'Terms & Conditions', updatedAt: '2026-08-21T00:00:00.000Z', body: BODY_TERMS_PRIVATE },
   { audience: 'private', slug: 'privacy-policy', title: 'Privacy Policy', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_PRIVACY },
   { audience: 'private', slug: 'shipping-and-delivery', title: 'Shipping & Delivery', updatedAt: '2026-08-18T00:00:00.000Z', body: BODY_SHIPPING },
   { audience: 'private', slug: 'cookie-policy', title: 'Cookie Policy', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_COOKIE },
@@ -1686,7 +1704,7 @@ const POLICY_DEFAULTS = [
   { audience: 'private', slug: 'sale-of-goods-to-us', title: 'Sale of Goods to Us', updatedAt: '2026-06-19T00:00:00.000Z', body: BODY_SALE_OF_GOODS },
 
   // commercial
-  { audience: 'commercial', slug: 'terms-and-conditions', title: 'Terms & Conditions', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_TERMS_COMMERCIAL },
+  { audience: 'commercial', slug: 'terms-and-conditions', title: 'Terms & Conditions', updatedAt: '2026-08-21T00:00:00.000Z', body: BODY_TERMS_COMMERCIAL },
   { audience: 'commercial', slug: 'return-policy', title: 'Return Policy', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_RETURN_COMMERCIAL },
   { audience: 'commercial', slug: 'custom-work', title: 'Custom Work & Reverse Engineering', updatedAt: '2026-06-19T00:00:00.000Z', body: BODY_CUSTOM_WORK },
   { audience: 'commercial', slug: 'privacy-policy', title: 'Privacy Policy', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_PRIVACY },
