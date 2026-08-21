@@ -52,12 +52,18 @@ function fmtDate(iso) {
 }
 
 // Mirrors server.js's paymentPlanProgress(), progress is always derived from
-// actual payments received, never stored per-installment.
+// actual payments received, never stored per-installment. See the note there on
+// priorPaid: a plan set up on a part-paid order schedules only the remaining
+// balance, so the schedule is measured from payments received since it started.
 function paymentPlanProgress(order) {
   const plan = order.paymentPlan;
   if (!plan) return null;
-  const paidSoFar = (order.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
   const total = Number(order.total) || 0;
+  const cashReceived = Math.min(
+    Math.round((order.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0) * 100) / 100,
+    total);
+  const priorPaid = Math.round((Number(plan.priorPaid) || 0) * 100) / 100;
+  const paidSoFar = Math.round(Math.max(0, cashReceived - priorPaid) * 100) / 100;
   const today = new Date(); today.setHours(0, 0, 0, 0);
   let cumulative = 0;
   let nextDue = null;
@@ -71,9 +77,9 @@ function paymentPlanProgress(order) {
     if (status !== 'paid' && !nextDue) nextDue = { dueDate: entry.dueDate, amount: owed };
     return { dueDate: entry.dueDate, amount: amt, owed, status };
   });
-  const remaining = Math.max(0, Math.round((total - paidSoFar) * 100) / 100);
+  const remaining = Math.max(0, Math.round((total - cashReceived) * 100) / 100);
   const completed = remaining <= 0.005;
-  return { paidSoFar, remaining, completed, nextDue: completed ? null : nextDue, entries };
+  return { paidSoFar: cashReceived, remaining, completed, nextDue: completed ? null : nextDue, entries };
 }
 
 function StatusTag({ status, label }) {
@@ -730,19 +736,22 @@ function OrderDetail({ o, onPay, onPayInstallment, paying, onCollapse }) {
               ) : (
                 <>
                   <div style={{marginBottom:8}}>
-                    {progress.entries.filter(e => e.status === 'paid').length} of {progress.entries.length} instalments paid ·{' '}
-                    next <strong>${progress.nextDue.amount.toLocaleString('en-AU', {minimumFractionDigits:2})}</strong> due{' '}
-                    {new Date(progress.nextDue.dueDate + 'T00:00:00').toLocaleDateString('en-AU', {day:'2-digit', month:'short', year:'numeric'})}
+                    {progress.entries.filter(e => e.status === 'paid').length} of {progress.entries.length} instalments paid
+                    {progress.nextDue && <>{' · '}next <strong>${progress.nextDue.amount.toLocaleString('en-AU', {minimumFractionDigits:2})}</strong> due{' '}
+                    {new Date(progress.nextDue.dueDate + 'T00:00:00').toLocaleDateString('en-AU', {day:'2-digit', month:'short', year:'numeric'})}</>}
                   </div>
-                  {o.paymentPlan.collectionMethod === 'customer' && (
+                  {!progress.nextDue && (
+                    <span style={{color:'var(--ink-2)'}}>There is still ${progress.remaining.toLocaleString('en-AU', {minimumFractionDigits:2})} outstanding on this order. Please get in touch and we will sort out the rest.</span>
+                  )}
+                  {progress.nextDue && o.paymentPlan.collectionMethod === 'customer' && (
                     <button className="btn btn-rust btn-sm" onClick={() => onPayInstallment(o.id)} disabled={paying === o.id}>
                       {paying === o.id ? 'Redirecting…' : `Pay next instalment - $${progress.nextDue.amount.toLocaleString('en-AU', {minimumFractionDigits:2})} →`}
                     </button>
                   )}
-                  {o.paymentPlan.collectionMethod === 'auto' && (
+                  {progress.nextDue && o.paymentPlan.collectionMethod === 'auto' && (
                     <span style={{color:'var(--ink-2)'}}>Your saved card will be charged automatically on the due date.</span>
                   )}
-                  {o.paymentPlan.collectionMethod === 'manual' && (
+                  {progress.nextDue && o.paymentPlan.collectionMethod === 'manual' && (
                     <span style={{color:'var(--ink-2)'}}>We'll collect this instalment directly, get in touch if you'd like to pay another way.</span>
                   )}
                 </>

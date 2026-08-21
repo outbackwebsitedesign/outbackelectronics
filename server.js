@@ -722,10 +722,21 @@ function buildInstallmentSchedule({ total, installmentAmount, frequency, startDa
 // Progress is always derived from actual payments, never stored per-installment
 // this reconciles correctly whether money arrived via auto-charge, a customer's
 // own portal payment, a manual counter payment, or paying off early in one go.
+//
+// `priorPaid` is what the order had already received when the plan was created.
+// A plan set up on a part-paid order schedules only the REMAINING balance, so
+// crediting every payment ever received against that schedule would count the
+// earlier money twice and show the plan as paid the moment it was created.
+// Everything to do with the schedule therefore runs on payments received SINCE
+// the plan started, while `remaining` stays the whole order's outstanding
+// balance. Plans created before this field existed have no priorPaid, which
+// reads as 0, exactly the old behaviour and correct for an unpaid order.
 function paymentPlanProgress(order) {
   const plan = order.paymentPlan;
   if (!plan) return null;
-  const paidSoFar = orderCashReceived(order);
+  const cashReceived = orderCashReceived(order);
+  const priorPaid = Math.round((Number(plan.priorPaid) || 0) * 100) / 100;
+  const paidSoFar = Math.round(Math.max(0, cashReceived - priorPaid) * 100) / 100;
   const total = Number(order.total) || 0;
   const today = new Date(); today.setHours(0, 0, 0, 0);
   let cumulative = 0;
@@ -740,9 +751,9 @@ function paymentPlanProgress(order) {
     if (status !== 'paid' && !nextDue) nextDue = { dueDate: entry.dueDate, amount: owed };
     return { dueDate: entry.dueDate, amount: amt, owed, status };
   });
-  const remaining = Math.max(0, Math.round((total - paidSoFar) * 100) / 100);
+  const remaining = Math.max(0, Math.round((total - cashReceived) * 100) / 100);
   const completed = remaining <= 0.005;
-  return { paidSoFar, remaining, completed, nextDue: completed ? null : nextDue, entries };
+  return { paidSoFar: cashReceived, remaining, completed, nextDue: completed ? null : nextDue, entries };
 }
 
 function readOrders() {
@@ -8762,6 +8773,9 @@ const adminServer = http.createServer(async (req, res) => {
       collectionMethod,
       startDate: validStart,
       schedule,
+      // The schedule above covers `remaining`, not the order total, so record what
+      // had already been paid and measure the schedule from there.
+      priorPaid: orderCashReceived(order),
       reminderDaysBefore: 3,
       lastReminderSentFor: null,
       lastAutoAttempt: null,

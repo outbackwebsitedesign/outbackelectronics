@@ -2218,7 +2218,9 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
                 <div style={{fontSize:12, color:'var(--ink-2)', marginBottom:10}}>
                   {progress.completed
                     ? 'Fully paid off.'
-                    : <>{progress.entries.filter(e=>e.status==='paid').length} of {progress.entries.length} instalments paid · next <strong>${progress.nextDue.amount.toLocaleString('en-AU',{minimumFractionDigits:2})}</strong> due {new Date(progress.nextDue.dueDate+'T00:00:00').toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'})}</>}
+                    : progress.nextDue
+                    ? <>{progress.entries.filter(e=>e.status==='paid').length} of {progress.entries.length} instalments paid · next <strong>${progress.nextDue.amount.toLocaleString('en-AU',{minimumFractionDigits:2})}</strong> due {new Date(progress.nextDue.dueDate+'T00:00:00').toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'})}</>
+                    : <span style={{color:'var(--rust)'}}>Every instalment on this schedule is covered, but ${progress.remaining.toLocaleString('en-AU',{minimumFractionDigits:2})} is still outstanding on the order. Cancel this plan and set up a new one for the balance.</span>}
                   {' · '}{form.paymentPlan.frequency} · {{manual:'staff-collected', customer:'customer pays in portal', auto:'auto-charged'}[form.paymentPlan.collectionMethod]}
                 </div>
                 <div style={{border:'1px solid var(--line)', marginBottom:10}}>
@@ -2235,14 +2237,16 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
                 )}
               </>
             );
-          })() : form.paymentPlan && form.paymentPlan.status === 'defaulted' ? (
-            <div style={{fontSize:12, color:'var(--rust)', fontWeight:600}}>
-              Payment plan defaulted{form.paymentPlan.defaultedOnDueDate ? ` (instalment due ${form.paymentPlan.defaultedOnDueDate})` : ''}. Balance is immediately payable and the account should be referred for collection.
-            </div>
-          ) : form.paymentPlan && form.paymentPlan.status === 'cancelled' ? (
-            <div style={{fontSize:12, color:'var(--ink-3)'}}>Payment plan cancelled.</div>
-          ) : canManagePlan ? (
+          })() : canManagePlan ? (
             <>
+              {form.paymentPlan && form.paymentPlan.status === 'defaulted' && (
+                <div style={{fontSize:12, color:'var(--rust)', fontWeight:600, marginBottom:10}}>
+                  Payment plan defaulted{form.paymentPlan.defaultedOnDueDate ? ` (instalment due ${form.paymentPlan.defaultedOnDueDate})` : ''}. Balance is immediately payable and the account should be referred for collection. Setting up a new plan below replaces it.
+                </div>
+              )}
+              {form.paymentPlan && form.paymentPlan.status === 'cancelled' && (
+                <div style={{fontSize:12, color:'var(--ink-3)', marginBottom:10}}>Previous payment plan cancelled. Setting up a new plan below replaces it.</div>
+              )}
               <div style={{display:'grid', gridTemplateColumns:'110px 130px 170px 130px auto', gap:8, alignItems:'end', marginBottom:8}}>
                 <label className="field" style={{margin:0}}><span className="label">Instalment $</span>
                   <input className="input" type="number" min="0" step="0.01" placeholder="0.00" value={planForm.installmentAmount} onChange={e=>setPlanForm(v=>({...v,installmentAmount:nonNegInput(e.target.value)}))}/></label>
