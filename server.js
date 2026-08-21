@@ -1777,16 +1777,32 @@ function buildAdminMetrics() {
   const repeatRate = customers.length ? Math.round((repeatCustomers / customers.length) * 100) : 0;
   const outstandingSellerValue = sellers.reduce((sum, s) => sum + (Number(s.payoutDue) || 0), 0);
 
-  // 7-day overview stats - CLEAR only (fully settled), parsed server-side
-  const sevenDayCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  const recentPaidOrders = orders.filter(o => {
-    if (orderRemainingBalance(o) > 0) return false;
-    if (!(o.payments || []).length) return false; // exclude unpaid $0 orders
-    const d = parseAuDateStr(o.createdAt || o.date || '');
-    return d && d >= sevenDayCutoff;
-  });
-  const revenue7d  = recentPaidOrders.reduce((s, o) => s + (Number(o.total) || 0), 0);
-  const orders7d   = recentPaidOrders.length;
+  // 7-day overview stats, measured by WHEN THE MONEY ARRIVED, not when the order
+  // was raised and not whether it is fully settled. Work is invoiced on terms and
+  // paid off by instalments, so an order's creation date says nothing about when
+  // it earned: a month-old invoice settled today is income today, and one
+  // instalment of a plan is income on the day it lands. Every payment dated
+  // inside the window counts, refunds included, which are stored as negative
+  // amounts and so net off on their own.
+  //
+  // Payment dates are day-granular, so the window is the last 7 calendar days
+  // including today, not a rolling 168 hours.
+  const sevenDayCutoff = new Date(); sevenDayCutoff.setHours(0, 0, 0, 0);
+  sevenDayCutoff.setDate(sevenDayCutoff.getDate() - 6);
+  let revenue7dRaw = 0;
+  const orderIdsPaid7d = new Set();
+  for (const o of orders) {
+    for (const p of (o.payments || [])) {
+      const amt = Number(p.amount) || 0;
+      if (!amt) continue;
+      const d = parseAuDateStr(p.date || '');
+      if (!d || d < sevenDayCutoff) continue;
+      revenue7dRaw += amt;
+      if (amt > 0) orderIdsPaid7d.add(o.id);
+    }
+  }
+  const revenue7d  = Math.round(revenue7dRaw * 100) / 100;
+  const orders7d   = orderIdsPaid7d.size;
 
   return {
     overview: { revenue7d, orders7d, openRepairs, quotesAwaiting: awaitingQuotes },

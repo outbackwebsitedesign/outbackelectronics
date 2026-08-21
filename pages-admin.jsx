@@ -1001,8 +1001,8 @@ function AdminOverview({ go }) {
   return (
     <div style={{padding: 32, display:'grid', gap: 28}}>
       <div className="grid-4">
-        <StatTile label="REVENUE · 7D" value={revenue} />
-        <StatTile label="ORDERS · 7D" value={orderCount} />
+        <StatTile label="RECEIVED · 7D" value={revenue} />
+        <StatTile label="ORDERS PAID · 7D" value={orderCount} />
         <StatTile label="OPEN REPAIRS" value={openRepairs} tone="rust" />
         <StatTile label="QUOTES AWAITING" value={quotesAwaiting} tone="rust" />
       </div>
