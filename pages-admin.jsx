@@ -9220,6 +9220,46 @@ function MergeCustomerModal({ customers, onClose, onMerged }) {
   );
 }
 
+// ── PPSR helpers ─────────────────────────────────────────────────────────────
+// A retention-of-title clause is a security interest under the PPSA. It is
+// registered against the customer (the "grantor"), not against a product and
+// not against us, so one registration per customer covers everything we supply
+// them. Two things make a registration effective: identifying the grantor
+// exactly (DOB for an individual, ACN/ABN for a business, anything else risks
+// being "seriously misleading" and void), and claiming the PMSI inside the
+// deadline, which is 15 business days from when the customer takes possession
+// for ordinary goods, or before possession for goods they will resell.
+const PMSI_BUSINESS_DAYS = 15;
+
+function addBusinessDays(fromYmd, days) {
+  if (!fromYmd) return null;
+  const d = new Date(fromYmd + 'T00:00:00');
+  if (isNaN(d)) return null;
+  let left = days;
+  while (left > 0) {
+    d.setDate(d.getDate() + 1);
+    const wd = d.getDay();
+    if (wd !== 0 && wd !== 6) left--;
+  }
+  return d;
+}
+
+function daysUntil(date) {
+  if (!date) return null;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const target = typeof date === 'string' ? new Date(date + 'T00:00:00') : new Date(date);
+  if (isNaN(target)) return null;
+  target.setHours(0, 0, 0, 0);
+  return Math.round((target - today) / 86400000);
+}
+
+// Soft format check only. A real ABN/ACN check needs the ABR, this just catches
+// a mistyped or half-entered number before it goes onto a registration.
+function abnLooksValid(v) {
+  const digits = String(v || '').replace(/\s/g, '');
+  return digits.length === 11 || digits.length === 9;
+}
+
 function CustomerLinkedJobs({ customerId, email, manualLinks, onLinksChange }) {
   const [jobs, setJobs] = useState(null);
   const [allJobs, setAllJobs] = useState([]);
@@ -9430,6 +9470,86 @@ function AdminCustomers() {
         <label className="field"><span className="label">Email</span><input className="input" type="email" value={form.email||''} onChange={e=>setForm({...form,email:e.target.value})}/></label>
         <label className="field"><span className="label">Phone</span><input className="input" type="tel" value={form.phone||''} onChange={e=>setForm({...form,phone:e.target.value})}/></label>
         <label className="field"><span className="label">Tags (comma-separated)</span><input className="input" value={form.tagsStr||''} onChange={e=>setForm({...form,tagsStr:e.target.value})}/></label>
+
+        <hr className="thin" style={{margin:'18px 0 14px'}}/>
+        <div className="mono" style={{fontSize:10, color:'var(--ink-3)', letterSpacing:'.08em', marginBottom:4}}>IDENTITY &amp; PPSR</div>
+        <div style={{fontSize:11, color:'var(--ink-3)', marginBottom:12, lineHeight:1.5}}>
+          Only needed where goods leave before full payment (a payment plan, a trade account, a custom build). Our retention-of-title clause is a security interest, and it is registered against the customer, one registration covering everything we supply them. Getting the identity wrong voids the registration.
+        </div>
+
+        <label className="field"><span className="label">Grantor type</span>
+          <select className="select" value={form.grantorType||'individual'} onChange={e=>setForm({...form,grantorType:e.target.value})}>
+            <option value="individual">Individual</option>
+            <option value="company">Company (ACN)</option>
+            <option value="other">Other entity (ABN): trust, partnership, council, incorporated association</option>
+          </select>
+        </label>
+
+        {(form.grantorType||'individual') === 'individual' ? (
+          <label className="field"><span className="label">Date of birth</span>
+            <input className="input" type="date" value={form.dob||''} onChange={e=>setForm({...form,dob:e.target.value})}/>
+            <div style={{fontSize:11, color:'var(--ink-3)', marginTop:4}}>Must match their ID document exactly, along with the name above. A PPSR registration against an individual is not valid without it.</div>
+          </label>
+        ) : (
+          <label className="field"><span className="label">{form.grantorType === 'company' ? 'ACN' : 'ABN'}</span>
+            <input className="input" value={form.abn||''} onChange={e=>setForm({...form,abn:e.target.value})} placeholder={form.grantorType === 'company' ? '9 digits' : '11 digits'}/>
+            {form.abn && !abnLooksValid(form.abn) && (
+              <div style={{fontSize:11, color:'var(--rust)', marginTop:4}}>That does not look like a valid ACN (9 digits) or ABN (11 digits), check it before registering.</div>
+            )}
+          </label>
+        )}
+
+        <label className="field"><span className="label">Goods first supplied on</span>
+          <input className="input" type="date" value={form.goodsSuppliedOn||''} onChange={e=>setForm({...form,goodsSuppliedOn:e.target.value})}/>
+          <div style={{fontSize:11, color:'var(--ink-3)', marginTop:4}}>The date they took possession. Starts the PMSI clock.</div>
+        </label>
+
+        {form.goodsSuppliedOn && !form.ppsrRegistrationNumber && (() => {
+          const deadline = addBusinessDays(form.goodsSuppliedOn, PMSI_BUSINESS_DAYS);
+          const left = daysUntil(deadline);
+          if (left === null) return null;
+          const overdue = left < 0;
+          return (
+            <div style={{fontSize:12, padding:'8px 12px', marginBottom:12, border:'1px solid', borderColor: overdue ? 'var(--rust)' : '#f59e0b', color: overdue ? 'var(--rust)' : '#b45309', background: overdue ? '#fef2f2' : '#fffbeb'}}>
+              {overdue
+                ? `PMSI deadline passed ${Math.abs(left)} day${Math.abs(left) === 1 ? '' : 's'} ago (${deadline.toLocaleDateString('en-AU')}). You can still register, but the super-priority over an earlier secured creditor is gone.`
+                : `Not registered. PMSI deadline is ${deadline.toLocaleDateString('en-AU')}, ${left} day${left === 1 ? '' : 's'} away.`}
+            </div>
+          );
+        })()}
+
+        <label className="field"><span className="label">PPSR registration number</span>
+          <input className="input" value={form.ppsrRegistrationNumber||''} onChange={e=>setForm({...form,ppsrRegistrationNumber:e.target.value})} placeholder="Blank until registered"/>
+        </label>
+        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
+          <label className="field"><span className="label">Registered on</span>
+            <input className="input" type="date" value={form.ppsrRegisteredOn||''} onChange={e=>setForm({...form,ppsrRegisteredOn:e.target.value})}/></label>
+          <label className="field"><span className="label">Expires</span>
+            <input className="input" type="date" value={form.ppsrExpiresOn||''} onChange={e=>setForm({...form,ppsrExpiresOn:e.target.value})}/></label>
+        </div>
+        <label className="field" style={{flexDirection:'row', alignItems:'center', gap:10, cursor:'pointer'}}>
+          <input type="checkbox" checked={!!form.ppsrPmsi} onChange={e=>setForm({...form,ppsrPmsi:e.target.checked})}/>
+          <span className="label" style={{marginBottom:0}}>PMSI claimed on the registration</span>
+        </label>
+
+        {form.ppsrRegistrationNumber && (() => {
+          const warn = [];
+          if ((form.grantorType||'individual') === 'individual' && !form.dob) warn.push('registered against an individual with no date of birth on file');
+          if ((form.grantorType||'individual') !== 'individual' && !form.abn) warn.push('registered against a business with no ABN or ACN on file');
+          if (!form.ppsrPmsi) warn.push('PMSI not claimed, so it ranks behind an earlier secured creditor');
+          const left = daysUntil(form.ppsrExpiresOn);
+          if (left !== null && left < 0) warn.push(`expired ${Math.abs(left)} days ago`);
+          else if (left !== null && left <= 90) warn.push(`expires in ${left} days`);
+          if (!warn.length) return <div style={{fontSize:12, color:'#15803d', marginBottom:12}}>Registered{form.ppsrExpiresOn ? `, expires ${new Date(form.ppsrExpiresOn+'T00:00:00').toLocaleDateString('en-AU')}` : ''}.</div>;
+          return (
+            <div style={{fontSize:12, padding:'8px 12px', marginBottom:12, border:'1px solid var(--rust)', color:'var(--rust)', background:'#fef2f2'}}>
+              Check this registration: {warn.join('; ')}.
+            </div>
+          );
+        })()}
+
+        <label className="field"><span className="label">PPSR notes</span><textarea className="input" rows={2} style={{resize:'vertical'}} value={form.ppsrNotes||''} onChange={e=>setForm({...form,ppsrNotes:e.target.value})} placeholder="Collateral class, ID document sighted, anything worth recording."/></label>
+        <hr className="thin" style={{margin:'14px 0 18px'}}/>
 
         <label className="field"><span className="label">Testimonial quote</span><textarea className="input" rows={3} style={{resize:'vertical'}} value={form.testimonial||''} onChange={e=>setForm({...form,testimonial:e.target.value})} placeholder="In their own words…"/></label>
         <label className="field" style={{flexDirection:'row', alignItems:'center', gap:10, cursor:'pointer'}}>

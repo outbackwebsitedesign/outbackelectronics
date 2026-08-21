@@ -661,6 +661,8 @@ Questions or concerns? Contact us at [{{email}}](mailto:{{email}}).
 
 **Personal information you disclose to us.** We collect personal information that you voluntarily provide when you register, express an interest in our products or services, participate in activities, or contact us. This may include: names, phone numbers, email addresses, mailing addresses, usernames, passwords, contact preferences, and billing addresses.
 
+**Identity details for security registrations.** Where we supply goods to you before they are paid for in full, for example on a payment plan or a trade account, we may also collect your date of birth (if you are an individual) or your ACN or ABN (if you are a business). We collect these only to identify you correctly on a registration on the Personal Property Securities Register, as described in our Payment Plans policy and our Commercial Terms. We do not use a date of birth collected for this purpose for marketing, profiling, or age verification, and we hold it only while we have a registration or an unpaid balance in place.
+
 **Sensitive information.** We do not process sensitive information.
 
 **Payment data.** Payment data necessary to process purchases is handled and stored by Stripe. See Stripe's privacy notice at [stripe.com/au/privacy](https://stripe.com/au/privacy).
@@ -1042,6 +1044,8 @@ The Australian Consumer Law ('ACL') consumer guarantees apply to goods and servi
 Trade accounts may be approved at our discretion. Where a credit account is approved, payment terms (e.g. 14 or 30 days from invoice) will be confirmed in writing at account setup. Invoices not paid by the due date may attract interest at 1.5% per month (or part thereof) on the overdue balance, and we may suspend supply on the account until overdue amounts are paid. We reserve the right to require security, a deposit, or payment in advance for any order, and to vary, suspend, or withdraw credit terms at any time on reasonable notice.
 
 Title in goods does not pass to you until payment in full has been received by us in cleared funds. Until title passes, you must store the goods separately, keep them identifiable as our property, and not encumber or sell them other than in the ordinary course of resupply.
+
+**Security interest.** Where we retain title, our interest in the goods is a security interest under the _Personal Property Securities Act 2009_ (Cth), and we may register it on the Personal Property Securities Register. You agree to give us the information we reasonably need to register it, which is your full name as it appears on your identity document and your date of birth if you are an individual, or your ACN or ABN if you are a business, and to tell us if those details change. Registration does not give us a right to enter your property or take goods back without your agreement or a court order.
 
 **Application of Payments.** Any payment you make is applied first to recovery costs, then to accrued interest, then to the oldest outstanding invoice, regardless of any allocation you nominate.
 
@@ -1745,6 +1749,8 @@ We may also pause any work not yet completed on the order and decline to release
 
 Where goods are supplied to you before the Payment Plan is paid out, **title in those goods does not pass to you until we have received the full price in cleared funds.** Risk in the goods passes to you on delivery or collection, so you should insure them from that point. Until title passes you must not sell, encumber, or dispose of the goods.
 
+**Security interest.** Where we retain title, our interest in the goods is a security interest under the _Personal Property Securities Act 2009_ (Cth), and we may register it on the Personal Property Securities Register. You agree to give us the information we reasonably need to register it, which is your full name as it appears on your identity document and your date of birth if you are an individual, or your ACN or ABN if you are a business, and to tell us if those details change. Registration does not give us a right to enter your property or take goods back without your agreement or a court order.
+
 Where we still hold an item, including a device submitted for repair, we may decline to release it until all amounts owing in respect of that item have been paid. The storage provisions of our Repair Intake Terms continue to apply to a device awaiting collection.
 
 ### 8. Cancelling a Plan
@@ -1784,7 +1790,7 @@ We may update this policy from time to time. The version in force when your Paym
 const POLICY_DEFAULTS = [
   // all
   { audience: 'all', slug: 'terms-of-engagement', title: 'General Terms of Engagement', updatedAt: '2026-08-20T00:00:00.000Z', body: BODY_GENERAL_ENGAGEMENT },
-  { audience: 'all', slug: 'privacy-policy', title: 'Privacy Policy', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_PRIVACY },
+  { audience: 'all', slug: 'privacy-policy', title: 'Privacy Policy', updatedAt: '2026-08-21T00:00:00.000Z', body: BODY_PRIVACY },
   { audience: 'all', slug: 'cookie-policy', title: 'Cookie Policy', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_COOKIE },
   { audience: 'all', slug: 'acceptable-use', title: 'Acceptable Use Policy', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_ACCEPTABLE_USE },
   { audience: 'all', slug: 'disclaimer', title: 'Disclaimer', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_DISCLAIMER },
@@ -1795,7 +1801,7 @@ const POLICY_DEFAULTS = [
 
   // private
   { audience: 'private', slug: 'terms-and-conditions', title: 'Terms & Conditions', updatedAt: '2026-08-21T00:00:00.000Z', body: BODY_TERMS_PRIVATE },
-  { audience: 'private', slug: 'privacy-policy', title: 'Privacy Policy', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_PRIVACY },
+  { audience: 'private', slug: 'privacy-policy', title: 'Privacy Policy', updatedAt: '2026-08-21T00:00:00.000Z', body: BODY_PRIVACY },
   { audience: 'private', slug: 'shipping-and-delivery', title: 'Shipping & Delivery', updatedAt: '2026-08-18T00:00:00.000Z', body: BODY_SHIPPING },
   { audience: 'private', slug: 'cookie-policy', title: 'Cookie Policy', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_COOKIE },
   { audience: 'private', slug: 'return-policy', title: 'Return Policy', updatedAt: '2026-08-20T00:00:00.000Z', body: BODY_RETURN_PRIVATE },
@@ -1811,7 +1817,7 @@ const POLICY_DEFAULTS = [
   { audience: 'commercial', slug: 'terms-and-conditions', title: 'Terms & Conditions', updatedAt: '2026-08-21T00:00:00.000Z', body: BODY_TERMS_COMMERCIAL },
   { audience: 'commercial', slug: 'return-policy', title: 'Return Policy', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_RETURN_COMMERCIAL },
   { audience: 'commercial', slug: 'custom-work', title: 'Custom Work & Reverse Engineering', updatedAt: '2026-06-19T00:00:00.000Z', body: BODY_CUSTOM_WORK },
-  { audience: 'commercial', slug: 'privacy-policy', title: 'Privacy Policy', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_PRIVACY },
+  { audience: 'commercial', slug: 'privacy-policy', title: 'Privacy Policy', updatedAt: '2026-08-21T00:00:00.000Z', body: BODY_PRIVACY },
   { audience: 'commercial', slug: 'shipping-and-delivery', title: 'Shipping & Delivery', updatedAt: '2026-08-18T00:00:00.000Z', body: BODY_SHIPPING },
   { audience: 'commercial', slug: 'cookie-policy', title: 'Cookie Policy', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_COOKIE },
   { audience: 'commercial', slug: 'disclaimer', title: 'Disclaimer', updatedAt: '2026-06-06T00:00:00.000Z', body: BODY_DISCLAIMER },
