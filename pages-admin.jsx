@@ -1705,6 +1705,20 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
     localStorage.setItem('oe_lastPaymentMethod', payEntry.method);
     setPayEntry({ amount:'', method: payEntry.method, note:'', date: todayISODate() });
   };
+  // Logs a payment covering one scheduled instalment. Nothing is stored on the
+  // instalment itself: the schedule's status is derived from the order's
+  // payments, so marking one paid is just logging the payment it represents.
+  const markInstalmentPaid = (entry) => {
+    const raw = Number(entry.owed) > 0 ? Number(entry.owed) : Number(entry.amount);
+    const isCash = payEntry.method === 'Cash';
+    const amt = isCash ? cashRound(raw) : Math.round(raw * 100) / 100;
+    if (!(amt > 0)) return;
+    setForm(f => ({ ...f, payments: [...(f.payments || []), {
+      amount: amt, method: payEntry.method, note: `Instalment due ${entry.dueDate}`, date: todayOrderDate(),
+    }] }));
+    localStorage.setItem('oe_lastPaymentMethod', payEntry.method);
+    adminToast(`Logged $${amt.toFixed(2)} ${payEntry.method} against the instalment due ${entry.dueDate}. Save the order to keep it.`);
+  };
   const removePayment = async (i) => {
     const p = (form.payments || [])[i];
     const ok = await adminConfirm(`Delete the ${p ? `$${Number(p.amount).toFixed(2)} ${p.method} payment` : 'payment'} logged on ${p?.date || 'this order'}? This cannot be undone.`, { title: 'Delete payment', confirmLabel: 'Delete', danger: true });
@@ -2224,13 +2238,23 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
                   {' · '}{form.paymentPlan.frequency} · {{manual:'staff-collected', customer:'customer pays in portal', auto:'auto-charged'}[form.paymentPlan.collectionMethod]}
                 </div>
                 <div style={{border:'1px solid var(--line)', marginBottom:10}}>
-                  {progress.entries.map((e, i) => (
+                  {/* Payments are credited against the schedule in order, so only the
+                      next unpaid instalment can be marked off. Marking a later one
+                      would clear the earlier one instead, which reads as a bug. */}
+                  {(() => { const nextIdx = progress.entries.findIndex(x => x.status !== 'paid'); return progress.entries.map((e, i) => (
                     <div key={i} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'6px 10px', borderBottom: i < progress.entries.length-1 ? '1px solid var(--line)' : 'none', fontSize:12}}>
                       <span className="mono" style={{color:'var(--ink-3)'}}>{new Date(e.dueDate+'T00:00:00').toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'})}</span>
                       <span className="mono" style={{fontWeight:600}}>${e.amount.toLocaleString('en-AU',{minimumFractionDigits:2})}</span>
-                      <span className={`tag ${e.status==='paid'?'tag-green':e.status==='overdue'?'tag-red':'tag-outline'}`} style={{fontSize:10}}>{e.status.toUpperCase()}</span>
+                      <span className="row-flex" style={{gap:8, alignItems:'center'}}>
+                        <span className={`tag ${e.status==='paid'?'tag-green':e.status==='overdue'?'tag-red':'tag-outline'}`} style={{fontSize:10}}>{e.status.toUpperCase()}</span>
+                        {canManagePlan && i === nextIdx && (
+                          <button className="btn btn-ghost btn-sm" style={{fontSize:11, padding:'2px 8px'}}
+                            title={`Log a $${e.owed.toFixed(2)} ${payEntry.method} payment dated today against this instalment. Change the method in the payment row above first if it wasn't ${payEntry.method}.`}
+                            onClick={() => markInstalmentPaid(e)}>Mark paid</button>
+                        )}
+                      </span>
                     </div>
-                  ))}
+                  )); })()}
                 </div>
                 {canManagePlan && !progress.completed && (
                   <button className="btn btn-ghost btn-sm" style={{color:'var(--rust)'}} disabled={planBusy} onClick={cancelPlan}>Cancel plan</button>
