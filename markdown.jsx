@@ -6,6 +6,12 @@ import React from 'react';
 export function renderMarkdown(md) {
   if (!md) return null;
   const lines = md.split('\n');
+  // Every node is keyed by its position in `nodes`, never by the source line
+  // index. Line indices are NOT unique per node: a paragraph is pushed with the
+  // index of the line after it, which is the blank line that then gets pushed
+  // with the same index. Duplicate keys make React reuse the wrong children, so
+  // switching between two documents left paragraphs of the old one stranded
+  // among the new one's.
   const nodes = [];
   let i = 0;
 
@@ -56,17 +62,17 @@ export function renderMarkdown(md) {
       const codeLines = [];
       i++;
       while (i < lines.length && !lines[i].startsWith('```')) { codeLines.push(lines[i]); i++; }
-      nodes.push(<pre key={i} style={{background:'var(--bg-elev)', padding:'14px 18px', overflowX:'auto', fontSize:13, lineHeight:1.55, margin:'16px 0'}}><code>{codeLines.join('\n')}</code></pre>);
+      nodes.push(<pre key={nodes.length} style={{background:'var(--bg-elev)', padding:'14px 18px', overflowX:'auto', fontSize:13, lineHeight:1.55, margin:'16px 0'}}><code>{codeLines.join('\n')}</code></pre>);
     } else if (/^(-{3,}|_{3,}|\*{3,})\s*$/.test(line)) {
-      nodes.push(<hr key={i} style={{border:'none', borderTop:'1px solid var(--line)', margin:'28px 0'}} />);
+      nodes.push(<hr key={nodes.length} style={{border:'none', borderTop:'1px solid var(--line)', margin:'28px 0'}} />);
     } else if (line.startsWith('## ')) {
-      nodes.push(<h2 key={i} style={{fontFamily:'Instrument Serif, serif', fontSize:26, marginTop:28, marginBottom:6, lineHeight:1.15}}>{line.slice(3)}</h2>);
+      nodes.push(<h2 key={nodes.length} style={{fontFamily:'Instrument Serif, serif', fontSize:26, marginTop:28, marginBottom:6, lineHeight:1.15}}>{line.slice(3)}</h2>);
     } else if (line.startsWith('### ')) {
-      nodes.push(<h3 key={i} style={{fontFamily:'Instrument Serif, serif', fontSize:21, marginTop:22, marginBottom:4, lineHeight:1.2}}>{line.slice(4)}</h3>);
+      nodes.push(<h3 key={nodes.length} style={{fontFamily:'Instrument Serif, serif', fontSize:21, marginTop:22, marginBottom:4, lineHeight:1.2}}>{line.slice(4)}</h3>);
     } else if (/^[-*] /.test(line)) {
       const items = [];
       while (i < lines.length && /^[-*] /.test(lines[i])) { items.push(<li key={i}>{inlineRender(lines[i].slice(2))}</li>); i++; }
-      nodes.push(<ul key={`ul-${i}`} style={{paddingLeft:22, margin:'8px 0 14px'}}>{items}</ul>);
+      nodes.push(<ul key={nodes.length} style={{paddingLeft:22, margin:'8px 0 14px'}}>{items}</ul>);
       continue;
     } else if (/^\d+\. /.test(line)) {
       const items = [];
@@ -76,7 +82,7 @@ export function renderMarkdown(md) {
       // instead of letting a fresh list default back to 1 every time.
       const startNum = parseInt(line.match(/^(\d+)\./)[1], 10) || 1;
       while (i < lines.length && /^\d+\. /.test(lines[i])) { items.push(<li key={i}>{inlineRender(lines[i].replace(/^\d+\. /, ''))}</li>); i++; }
-      nodes.push(<ol key={`ol-${i}`} start={startNum} style={{paddingLeft:22, margin:'8px 0 14px'}}>{items}</ol>);
+      nodes.push(<ol key={nodes.length} start={startNum} style={{paddingLeft:22, margin:'8px 0 14px'}}>{items}</ol>);
       continue;
     } else if (/^\|.*\|\s*$/.test(line) && i + 1 < lines.length && /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/.test(lines[i+1])) {
       const splitRow = (row) => row.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
@@ -89,7 +95,7 @@ export function renderMarkdown(md) {
       const bodyRows = [];
       while (i < lines.length && /^\|.*\|\s*$/.test(lines[i])) { bodyRows.push(splitRow(lines[i])); i++; }
       nodes.push(
-        <div key={`table-${i}`} style={{overflowX:'auto', margin:'16px 0'}}>
+        <div key={nodes.length} style={{overflowX:'auto', margin:'16px 0'}}>
           <table style={{width:'100%', borderCollapse:'collapse', fontSize:14}}>
             <thead>
               <tr>
@@ -110,7 +116,7 @@ export function renderMarkdown(md) {
       );
       continue;
     } else if (line.trim() === '') {
-      nodes.push(<div key={i} style={{height:10}} />);
+      nodes.push(<div key={nodes.length} style={{height:10}} />);
     } else {
       // A paragraph is every consecutive non-blank line up to the next blank
       // line or block boundary, a single line break inside it is a soft wrap,
@@ -119,7 +125,7 @@ export function renderMarkdown(md) {
       const paraLines = [line];
       i++;
       while (i < lines.length && !isBlockStart(lines[i], lines[i+1])) { paraLines.push(lines[i]); i++; }
-      nodes.push(<p key={i} style={{margin:'0 0 10px', lineHeight:1.75}}>{inlineRender(paraLines.join(' '))}</p>);
+      nodes.push(<p key={nodes.length} style={{margin:'0 0 10px', lineHeight:1.75}}>{inlineRender(paraLines.join(' '))}</p>);
       continue;
     }
     i++;
