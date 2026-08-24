@@ -1472,6 +1472,48 @@ We may update any of our policies from time to time. Continuing to engage with u
 
 **Questions?** Email [{{email}}](mailto:{{email}}), we'll get back to you as soon as we can.`;
 
+const BODY_REFUSAL_OF_SERVICE = `_LEGAL · REFUSAL OF SERVICE POLICY_
+
+## Refusal of Service Policy
+
+Outback Electronics ('Company', 'we', 'us', or 'our') reserves the right to decline, discontinue, or refuse to provide a quote, repair, sale, callout, or any other service to any person or business, at our discretion, subject to the limits set out below.
+
+### Grounds on Which We May Refuse Service
+
+We may refuse or discontinue service for reasons including, but not limited to:
+
+- a history of late, disputed, or difficult payment;
+- abusive, threatening, harassing, or otherwise inappropriate conduct towards our staff, contractors, or other customers, including unwanted advances or comments of a sexual nature;
+- unsafe, hazardous, or unreasonably unsanitary conditions at a callout or drop-off location;
+- providing false or misleading information about a device, fault, or job;
+- repeated unreasonable demands, or conduct that is disproportionately costly or disruptive to service;
+- suspected fraud, misuse of warranty or return processes, or breach of our other policies; or
+- any other legitimate business reason.
+
+Where we refuse or discontinue service, we will where practicable give a brief, factual reason. We are not obliged to continue an ongoing relationship with any customer, and past service does not guarantee future service.
+
+### What We Will Not Do
+
+We will not refuse service on the basis of a protected attribute under the _Anti-Discrimination Act 1991_ (Qld) or the _Sex Discrimination Act 1984_ (Cth), including (without limitation) race, sex, sexual orientation, gender identity, relationship status, pregnancy, age, religion, or disability. A person's protected attribute is never, by itself, a reason for refusal.
+
+Where a customer's conduct is the reason for refusal, the refusal is based on that conduct, not on any attribute of the customer. We record the factual basis for any refusal at the time it is made.
+
+### Existing Orders and Obligations
+
+This policy does not affect our obligations under the Australian Consumer Law in respect of goods or services already supplied, or work already in progress that we have agreed to complete. Refusal of future service does not excuse us from honouring a warranty, return, or repair already accepted, except where the customer's own conduct (for example, fraud or safety risk) makes completion unreasonable.
+
+### Contact Us
+
+**Outback Electronics**
+
+- {{address}}, Australia
+- Phone: [{{phone}}](tel:{{phoneHref}})
+- Email: [{{email}}](mailto:{{email}})
+
+---
+
+**Questions?** Email [{{email}}](mailto:{{email}}), we'll get back to you as soon as we can.`;
+
 const BODY_GIFT_CARDS = `_LEGAL · GIFT CARDS, STORE CREDIT & REWARDS_
 
 ## Gift Cards, Store Credit & Rewards Terms
@@ -1814,6 +1856,7 @@ const POLICY_DEFAULTS = [
   { audience: 'all', slug: 'gift-cards-store-credit-rewards', title: 'Gift Cards, Store Credit & Rewards Terms', updatedAt: '2026-06-19T00:00:00.000Z', body: BODY_GIFT_CARDS },
   { audience: 'all', slug: 'sale-of-goods-to-us', title: 'Sale of Goods to Us', updatedAt: '2026-06-19T00:00:00.000Z', body: BODY_SALE_OF_GOODS },
   { audience: 'all', slug: 'payment-plans', title: 'Payment Plans', updatedAt: '2026-08-21T00:00:00.000Z', body: BODY_PAYMENT_PLANS },
+  { audience: 'all', slug: 'refusal-of-service', title: 'Refusal of Service Policy', updatedAt: '2026-08-24T00:00:00.000Z', body: BODY_REFUSAL_OF_SERVICE },
 
   // private
   { audience: 'private', slug: 'terms-and-conditions', title: 'Terms & Conditions', updatedAt: '2026-08-21T00:00:00.000Z', body: BODY_TERMS_PRIVATE },
