@@ -186,6 +186,7 @@ const SELLER_LEDGER_DB_PATH = path.join(__dirname, 'seller-ledger.db');
 const EXPENSES_DB_PATH    = path.join(__dirname, 'expenses.db');
 const VEHICLE_LOG_DB_PATH = path.join(__dirname, 'vehicle-log.db');
 const YEAREND_CHECKLIST_DB_PATH = path.join(__dirname, 'yearend-checklist.db');
+const TRADING_STOCK_DB_PATH = path.join(__dirname, 'trading-stock.db');
 const ADMIN_AUDIT_LOG_PATH   = path.join(__dirname, 'admin-audit.log');
 const SESSIONS_DB_PATH        = path.join(__dirname, 'sessions.db');
 const PORTAL_SESSIONS_DB_PATH = path.join(__dirname, 'portal-sessions.db');
@@ -1472,6 +1473,10 @@ function readYearEndChecklist() {
   try { const p = JSON.parse(cachedReadFile(YEAREND_CHECKLIST_DB_PATH)); return (p && typeof p.years === 'object') ? p.years : {}; } catch { return {}; }
 }
 function writeYearEndChecklist(years) { atomicWriteFile(YEAREND_CHECKLIST_DB_PATH, JSON.stringify({ years }, null, 2)); }
+function readTradingStock() {
+  try { const p = JSON.parse(cachedReadFile(TRADING_STOCK_DB_PATH)); return (p && typeof p.years === 'object') ? p.years : {}; } catch { return {}; }
+}
+function writeTradingStock(years) { atomicWriteFile(TRADING_STOCK_DB_PATH, JSON.stringify({ years }, null, 2)); }
 
 // Analytics, append-only event log. Kept in memory for fast aggregation;
 // flushed to disk on a 30-second timer and on each new event batch.
@@ -4494,7 +4499,26 @@ function buildTaxReportData(fromStr, toStr) {
   }
 
   const grossProfit   = totalRevenue - totalExpenses;
-  const taxEstimate   = estimateSoleTradeTax(grossProfit);
+
+  // Trading stock adjustment (ATO business schedule): stock bought but not yet sold
+  // at year-end isn't a real deduction yet, so an increase in stock on hand gets added
+  // back (and a decrease gets subtracted) to reconcile with what's actually lodged.
+  // Only meaningful, and only ever applied, when the report is exactly one financial year.
+  let stockAdjustment = null;
+  const fyMatch = fromStr.match(/^(\d{4})-07-01$/);
+  if (fyMatch && toStr === `${Number(fyMatch[1]) + 1}-06-30`) {
+    const fy = fyMatch[1];
+    const stock = readTradingStock()[fy];
+    if (stock && (Number(stock.opening) || Number(stock.closing))) {
+      const opening = Number(stock.opening) || 0;
+      const closing = Number(stock.closing) || 0;
+      stockAdjustment = { opening, closing, delta: closing - opening };
+    }
+  }
+  const adjustedGrossProfit = stockAdjustment ? grossProfit + stockAdjustment.delta : grossProfit;
+  // Tax is estimated on the ATO-adjusted figure (post trading-stock adjustment) when available,
+  // since that's the actual taxable income, not the raw cash-basis figure.
+  const taxEstimate = estimateSoleTradeTax(adjustedGrossProfit);
 
   const monthly = Object.entries(monthMap)
     .sort(([a],[b]) => a < b ? -1 : 1)
@@ -4504,6 +4528,7 @@ function buildTaxReportData(fromStr, toStr) {
     from: fromStr, to: toStr,
     orderRevenue, refundTotal, netOrderRevenue, repairRevenue,
     totalRevenue, totalExpenses, grossProfit,
+    stockAdjustment, adjustedGrossProfit,
     expByCat, expLines,
     taxEstimate,
     monthly,
@@ -5319,7 +5344,7 @@ function buildTaxReportPdf(data, shop) {
     // Expenses
     sectionHeader('EXPENSES');
     y += 4;
-    const catLabels = { tools:'Tools', equipment:'Equipment', parts:'Parts & Components', software:'Software', other:'Other' };
+    const catLabels = { tools:'Tools', equipment:'Equipment', parts:'Parts & Components', software:'Software', vehicle:'Vehicle (cents/km)', other:'Other' };
     const sortedExp = Object.entries(data.expByCat).sort(([,a],[,b]) => b - a);
     if (sortedExp.length === 0) {
       dataRow('No expenses recorded in this period', '');
@@ -5341,13 +5366,29 @@ function buildTaxReportPdf(data, shop) {
     doc.text(fmtMoney(Math.abs(data.grossProfit)), 0, y+2, { width: 540, align: 'right' });
     y += 42;
 
+    // Trading stock adjustment (ATO business schedule), only shown when opening/closing stock is on file
+    if (data.stockAdjustment) {
+      if (y > 620) { doc.addPage(); y = 50; }
+      sectionHeader('TRADING STOCK ADJUSTMENT');
+      y += 4;
+      dataRow(`Cash-basis ${data.grossProfit >= 0 ? 'profit' : 'loss'} (above)`, fmtMoney(data.grossProfit));
+      const delta = data.stockAdjustment.delta;
+      dataRow(`Closing stock ${fmtMoney(data.stockAdjustment.closing)} - Opening stock ${fmtMoney(data.stockAdjustment.opening)}`,
+        delta >= 0 ? fmtMoney(delta) : `(${fmtMoney(Math.abs(delta))})`);
+      divider();
+      const adjBg = data.adjustedGrossProfit >= 0 ? '#d8e7d0' : '#f3d5c5';
+      const adjFg = data.adjustedGrossProfit >= 0 ? '#2e7d32' : RUST;
+      highlight(`ATO-ADJUSTED ${data.adjustedGrossProfit >= 0 ? 'PROFIT' : 'LOSS'} (TAX RETURN / CENTRELINK)`, fmtMoney(Math.abs(data.adjustedGrossProfit)), adjBg, adjFg);
+      y += 8;
+    }
+
     // Income Tax Estimate (sole trader, 2025-26 rates)
     const tx = data.taxEstimate || {};
     y += 6;
     if (y > 580) { doc.addPage(); y = 50; }
     sectionHeader('INCOME TAX ESTIMATE (SOLE TRADER - 2025-26 RATES)');
     y += 4;
-    dataRow('Taxable income (net profit)', fmtMoney(data.grossProfit));
+    dataRow('Taxable income (net profit)', fmtMoney(data.adjustedGrossProfit));
     dataRow('Base income tax (brackets)', `(${fmtMoney(tx.baseTax || 0)})`);
     if ((tx.lito || 0) > 0) dataRow('Low Income Tax Offset (LITO)', fmtMoney(tx.lito));
     if ((tx.sbito || 0) > 0) dataRow('Small Business Income Tax Offset (SBITO)', fmtMoney(tx.sbito));
@@ -10840,6 +10881,25 @@ const adminServer = http.createServer(async (req, res) => {
     const years = readYearEndChecklist();
     years[fy] = body.checked;
     writeYearEndChecklist(years);
+    return json(res, 200, { ok: true });
+  }
+
+  // ── Admin: Trading stock (opening/closing, for the ATO stock-on-hand adjustment) ──
+  if (req.method === 'GET' && url.pathname === '/api/admin/trading-stock') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    const fy = url.searchParams.get('fy') || '';
+    const years = readTradingStock();
+    return json(res, 200, { stock: (fy && years[fy]) || { opening: 0, closing: 0 } });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/trading-stock/save') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const fy = String(body.fy || '');
+    if (!fy) return json(res, 422, { error: 'fy required' });
+    const years = readTradingStock();
+    years[fy] = { opening: Number(body.opening) || 0, closing: Number(body.closing) || 0 };
+    writeTradingStock(years);
     return json(res, 200, { ok: true });
   }
 

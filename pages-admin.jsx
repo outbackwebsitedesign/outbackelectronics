@@ -10562,6 +10562,8 @@ function PLView() {
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState(null);
   const [expandedCat, setExpandedCat] = useState(null);
+  const [stockForm, setStockForm] = useState({ opening:'', closing:'' });
+  const [stockSaving, setStockSaving] = useState(false);
 
   const applyPreset = idx => {
     setPreset(idx);
@@ -10578,6 +10580,30 @@ function PLView() {
   };
 
   useEffect(() => { loadReport(FY_PRESETS[0].from, FY_PRESETS[0].to); }, []);
+
+  const stockFy = data && /^(\d{4})-07-01$/.test(data.from) && data.to === `${Number(data.from.slice(0,4))+1}-06-30`
+    ? data.from.slice(0,4) : null;
+
+  useEffect(() => {
+    if (!stockFy) return;
+    fetch(`/api/admin/trading-stock?fy=${stockFy}`, { credentials:'include' })
+      .then(r => r.ok ? r.json() : { stock:{opening:0,closing:0} })
+      .then(d => setStockForm({ opening: d.stock.opening || '', closing: d.stock.closing || '' }))
+      .catch(()=>{});
+  }, [stockFy]);
+
+  const saveStock = async () => {
+    if (!stockFy) return;
+    setStockSaving(true);
+    const csrf = getCsrf();
+    await fetch('/api/admin/trading-stock/save', {
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json','X-CSRF-Token':csrf||''},
+      body: JSON.stringify({ fy: stockFy, opening: Number(stockForm.opening)||0, closing: Number(stockForm.closing)||0 }),
+    }).catch(()=>null);
+    setStockSaving(false);
+    loadReport();
+  };
 
   const exportPdf = () => window.open(`/api/admin/tax-report/pdf?from=${from}&to=${to}`, '_blank');
 
@@ -10718,6 +10744,55 @@ function PLView() {
           </table>
         </div>
 
+        {/* Trading stock adjustment (ATO business schedule) */}
+        {stockFy && (
+          <div className="card" style={{padding:'18px 22px', marginBottom:16}}>
+            <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--rust)', marginBottom:4, letterSpacing:1}}>TRADING STOCK ADJUSTMENT</div>
+            <div style={{fontSize:12, color:'var(--ink-3)', marginBottom:12}}>
+              Stock bought but not yet sold at year-end isn't deductible yet, this app expenses parts as they're
+              bought (cash basis), so enter the opening/closing stock value for FY {stockFy}–{String(Number(stockFy)+1).slice(2)}
+              to reconcile with the figure you lodge with the ATO.
+            </div>
+            <div style={{display:'flex', gap:12, flexWrap:'wrap', alignItems:'flex-end', marginBottom:12}}>
+              <label className="field" style={{margin:0}}>
+                <span className="label">Opening stock ($)</span>
+                <input className="input" type="number" step="0.01" style={{width:140}}
+                  value={stockForm.opening} onChange={e => setStockForm({...stockForm, opening: e.target.value})} />
+              </label>
+              <label className="field" style={{margin:0}}>
+                <span className="label">Closing stock ($)</span>
+                <input className="input" type="number" step="0.01" style={{width:140}}
+                  value={stockForm.closing} onChange={e => setStockForm({...stockForm, closing: e.target.value})} />
+              </label>
+              <button className="btn btn-rust" onClick={saveStock} disabled={stockSaving}>{stockSaving ? 'Saving…' : 'Save'}</button>
+            </div>
+            {data.stockAdjustment && (
+              <table style={{width:'100%', borderCollapse:'collapse', fontSize:13}}>
+                <tbody>
+                  <tr>
+                    <td style={{padding:'5px 0', color:'var(--ink-2)'}}>Cash-basis {data.grossProfit>=0?'profit':'loss'} (this dashboard)</td>
+                    <td style={{textAlign:'right', fontFamily:'monospace'}}>{fmtAUD(data.grossProfit)}</td>
+                  </tr>
+                  <tr>
+                    <td style={{padding:'5px 0', color:'var(--ink-2)'}}>
+                      Stock adjustment (closing {fmtAUD(data.stockAdjustment.closing)} − opening {fmtAUD(data.stockAdjustment.opening)})
+                    </td>
+                    <td style={{textAlign:'right', fontFamily:'monospace', color: data.stockAdjustment.delta>=0 ? '#345526' : 'var(--rust)'}}>
+                      {data.stockAdjustment.delta>=0 ? '' : '('}{fmtAUD(Math.abs(data.stockAdjustment.delta))}{data.stockAdjustment.delta>=0 ? '' : ')'}
+                    </td>
+                  </tr>
+                  <tr style={{borderTop:'1px solid var(--border)'}}>
+                    <td style={{padding:'8px 0', fontWeight:700}}>ATO-adjusted {data.adjustedGrossProfit>=0?'profit':'loss'} (for tax return / Centrelink)</td>
+                    <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:700, color:data.adjustedGrossProfit>=0?'#345526':'var(--rust)'}}>
+                      {fmtAUD(data.adjustedGrossProfit)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+
         {/* Income tax estimate */}
         {(() => {
           const tx = data.taxEstimate || {};
@@ -10728,7 +10803,7 @@ function PLView() {
                 <tbody>
                   <tr>
                     <td style={{padding:'5px 0', color:'var(--ink-2)'}}>Taxable income (net profit)</td>
-                    <td style={{textAlign:'right', fontFamily:'monospace'}}>{fmtAUD(data.grossProfit)}</td>
+                    <td style={{textAlign:'right', fontFamily:'monospace'}}>{fmtAUD(data.adjustedGrossProfit)}</td>
                   </tr>
                   <tr>
                     <td style={{padding:'5px 0', color:'var(--ink-2)'}}>Base income tax (brackets)</td>
