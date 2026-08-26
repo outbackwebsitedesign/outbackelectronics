@@ -5378,7 +5378,7 @@ function buildTaxReportPdf(data, shop) {
       divider();
       const adjBg = data.adjustedGrossProfit >= 0 ? '#d8e7d0' : '#f3d5c5';
       const adjFg = data.adjustedGrossProfit >= 0 ? '#2e7d32' : RUST;
-      highlight(`ATO-ADJUSTED ${data.adjustedGrossProfit >= 0 ? 'PROFIT' : 'LOSS'} (TAX RETURN / CENTRELINK)`, fmtMoney(Math.abs(data.adjustedGrossProfit)), adjBg, adjFg);
+      highlight(`ATO-ADJUSTED ${data.adjustedGrossProfit >= 0 ? 'PROFIT' : 'LOSS'}`, fmtMoney(Math.abs(data.adjustedGrossProfit)), adjBg, adjFg);
       y += 8;
     }
 

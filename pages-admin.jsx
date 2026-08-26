@@ -10782,7 +10782,7 @@ function PLView() {
                     </td>
                   </tr>
                   <tr style={{borderTop:'1px solid var(--border)'}}>
-                    <td style={{padding:'8px 0', fontWeight:700}}>ATO-adjusted {data.adjustedGrossProfit>=0?'profit':'loss'} (for tax return / Centrelink)</td>
+                    <td style={{padding:'8px 0', fontWeight:700}}>ATO-adjusted {data.adjustedGrossProfit>=0?'profit':'loss'}</td>
                     <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:700, color:data.adjustedGrossProfit>=0?'#345526':'var(--rust)'}}>
                       {fmtAUD(data.adjustedGrossProfit)}
                     </td>
