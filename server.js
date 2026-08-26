@@ -5312,6 +5312,9 @@ function buildTaxReportPdf(data, shop) {
     }
     y = 150;
 
+    const PAGE_BOTTOM = doc.page.height - doc.page.margins.bottom;
+    const ensureSpace = neededHeight => { if (y + neededHeight > PAGE_BOTTOM) { doc.addPage(); y = 50; } };
+
     const sectionHeader = label => {
       doc.rect(50, y, 495, 20).fill(OCHRE);
       doc.font('Helvetica-Bold').fontSize(10).fillColor('#fff').text(label, 56, y + 5);
@@ -5368,7 +5371,7 @@ function buildTaxReportPdf(data, shop) {
 
     // Trading stock adjustment (ATO business schedule), only shown when opening/closing stock is on file
     if (data.stockAdjustment) {
-      if (y > 620) { doc.addPage(); y = 50; }
+      ensureSpace(112);
       sectionHeader('TRADING STOCK ADJUSTMENT');
       y += 4;
       dataRow(`Cash-basis ${data.grossProfit >= 0 ? 'profit' : 'loss'} (above)`, fmtMoney(data.grossProfit));
@@ -5385,7 +5388,7 @@ function buildTaxReportPdf(data, shop) {
     // Income Tax Estimate (sole trader, 2025-26 rates)
     const tx = data.taxEstimate || {};
     y += 6;
-    if (y > 580) { doc.addPage(); y = 50; }
+    ensureSpace(226);
     sectionHeader('INCOME TAX ESTIMATE (SOLE TRADER - 2025-26 RATES)');
     y += 4;
     dataRow('Taxable income (net profit)', fmtMoney(data.adjustedGrossProfit));
@@ -5404,6 +5407,7 @@ function buildTaxReportPdf(data, shop) {
       y += 22;
     }
     y += 6;
+    ensureSpace(106);
     sectionHeader('SUPERANNUATION ESTIMATE');
     y += 4;
     dataRow(`Recommended contribution (12% of profit, capped $${(tx.concessionalCap||30000).toLocaleString()})`, fmtMoney(tx.recommendedSuper || 0));
@@ -5417,6 +5421,7 @@ function buildTaxReportPdf(data, shop) {
 
     // GST, not registered
     y += 4;
+    ensureSpace(26);
     doc.rect(50, y, 495, 20).fill('#e0e0e0');
     doc.font('Helvetica-Bold').fontSize(10).fillColor('#888').text('GST', 56, y + 5);
     doc.text('Not registered - N/A', 0, y + 5, { width: 540, align: 'right' });
@@ -5425,7 +5430,7 @@ function buildTaxReportPdf(data, shop) {
     // Monthly breakdown
     if (data.monthly.length > 0) {
       y += 4;
-      if (y > 660) { doc.addPage(); y = 50; }
+      ensureSpace(42 + data.monthly.length * 16);
       sectionHeader('MONTHLY BREAKDOWN');
       y += 4;
       const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -5452,7 +5457,7 @@ function buildTaxReportPdf(data, shop) {
     }
 
     // Footer
-    if (y > 720) { doc.addPage(); y = 50; }
+    ensureSpace(20);
     const genDate = new Date().toLocaleDateString('en-AU',{day:'2-digit',month:'long',year:'numeric'});
     doc.font('Helvetica').fontSize(8).fillColor('#aaa')
       .text(`Generated ${genDate} · ${shopName} · For internal reference only`, 50, y+16, { width:495, align:'center' });
