@@ -4370,6 +4370,44 @@ function parseRepairDateForReport(r) {
   return null;
 }
 
+// ATO cents-per-km method: cap is 5,000 business km per financial year, applied
+// across the whole FY regardless of what slice of it a report happens to cover.
+const VEHICLE_KM_RATES = { 2021:0.72, 2022:0.78, 2023:0.85, 2024:0.88, 2025:0.88 };
+const VEHICLE_KM_CAP   = 5000;
+function vehicleKmRate(fy) { return VEHICLE_KM_RATES[fy] || 0.88; }
+function vehicleFyForDate(d) { return d.getMonth() >= 6 ? d.getFullYear() : d.getFullYear() - 1; }
+
+// Walks every vehicle-log entry (not just those in range) so the per-FY 5,000km cap
+// is applied against the true FY total, then returns only the dollar lines whose date
+// falls in [from, to].
+function vehicleDeductionLinesInRange(from, to) {
+  const inRange = d => d && d >= from && d <= to;
+  const byFy = {};
+  for (const e of readVehicleLog()) {
+    const d = e.date ? new Date(e.date + 'T00:00:00') : null;
+    if (!d || isNaN(d)) continue;
+    const fy = vehicleFyForDate(d);
+    (byFy[fy] || (byFy[fy] = [])).push({ ...e, _date: d });
+  }
+  const lines = [];
+  for (const fy of Object.keys(byFy)) {
+    const rate = vehicleKmRate(Number(fy));
+    let remainingCap = VEHICLE_KM_CAP;
+    for (const e of byFy[fy].sort((a, b) => a._date - b._date)) {
+      const km = Math.min(Math.max(Number(e.km) || 0, 0), remainingCap);
+      remainingCap -= km;
+      if (!km || !inRange(e._date)) continue;
+      lines.push({
+        date: e.date || '',
+        description: `${e.from || 'Trip'} to ${e.to || ''}`.trim(),
+        notes: e.purpose || '',
+        amount: Math.round(km * rate * 100) / 100,
+      });
+    }
+  }
+  return lines;
+}
+
 function buildTaxReportData(fromStr, toStr) {
   const from = new Date(fromStr + 'T00:00:00');
   const to   = new Date(toStr   + 'T23:59:59');
@@ -4441,6 +4479,18 @@ function buildTaxReportData(fromStr, toStr) {
     const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
     ensureMonth(key);
     monthMap[key].expenses += amt;
+  }
+
+  // Vehicle log, ATO cents-per-km method (only trips logged within this report's own range)
+  for (const line of vehicleDeductionLinesInRange(from, to)) {
+    expByCat.vehicle = (expByCat.vehicle || 0) + line.amount;
+    (expLines.vehicle || (expLines.vehicle = [])).push(line);
+    totalExpenses += line.amount;
+    expenseCount++;
+    const d = new Date(line.date + 'T00:00:00');
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    ensureMonth(key);
+    monthMap[key].expenses += line.amount;
   }
 
   const grossProfit   = totalRevenue - totalExpenses;

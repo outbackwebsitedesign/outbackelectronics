@@ -10583,7 +10583,7 @@ function PLView() {
 
   const fmtAUD = n => `$${(Number(n)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
   const fmtDateLabel = s => s ? new Date(s+'T00:00:00').toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'}) : '';
-  const catLabels = { tools:'Tools', equipment:'Equipment', parts:'Parts & Components', software:'Software', other:'Other' };
+  const catLabels = { tools:'Tools', equipment:'Equipment', parts:'Parts & Components', software:'Software', vehicle:'Vehicle (cents/km)', other:'Other' };
   const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
   return (
