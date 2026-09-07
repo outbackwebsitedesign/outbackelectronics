@@ -13183,6 +13183,31 @@ function aiSystemPrompt() {
   return AI_SYSTEM_PROMPT_BASE + facts;
 }
 
+// Looks the visitor's current product page up directly in products.db (live, exact
+// match), not through the RAG embedding index, so "tell me about this" on a product
+// page always resolves to that exact product rather than a semantic guess.
+function productContextBlock(ctx) {
+  if (!ctx || typeof ctx !== 'object') return '';
+  const id = String(ctx.id ?? '').slice(0, 80);
+  const sku = String(ctx.sku ?? '').slice(0, 80);
+  const slug = String(ctx.slug ?? '').slice(0, 80);
+  if (!id && !sku && !slug) return '';
+  const p = readProducts().find(x =>
+    (id && String(x.id) === id) || (sku && x.sku === sku) || (slug && x.slug === slug)
+  );
+  if (!p || p.status !== 'published') return '';
+
+  const variants = Array.isArray(p.variants) ? p.variants : [];
+  const inStock = variants.length
+    ? variants.some(v => (Number(v.stock) || 0) > 0)
+    : (p.infiniteStock || (Number(p.stock) || 0) > 0);
+  const priceLine = variants.length
+    ? variants.map(v => `${v.name || 'Option'}: $${Number(v.price) || 0} AUD${(Number(v.stock) || 0) > 0 ? '' : ' (out of stock)'}`).join('; ')
+    : `$${p.priceAud ?? p.price ?? '?'} AUD`;
+
+  return `\n\nThe customer is currently looking at this exact product page, use these details when they ask about "this product" or similar:\nName: ${p.name}\nCategory: ${p.category || ''}\nBrand: ${p.brand || ''}\nCondition: ${p.cond || ''}\nPricing: ${priceLine}\nIn stock: ${inStock ? 'yes' : 'no'}\nDescription: ${String(p.description || '').slice(0, 800)}`;
+}
+
 // ── AI Gateway server ─────────────────────────────────────────────────────────
 const aiGatewayServer = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
@@ -13238,6 +13263,7 @@ const aiGatewayServer = http.createServer(async (req, res) => {
         const hits = await ragSearch(lastUser.content, 4);
         if (hits.length) contextBlock = '\n\nRelevant catalogue context:\n' + hits.map(h => `[${h.type.toUpperCase()}] ${h.title}: ${h.text.slice(0, 300)}`).join('\n\n');
       }
+      contextBlock += productContextBlock(body?.productContext);
 
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
       try {
@@ -13269,6 +13295,7 @@ const aiGatewayServer = http.createServer(async (req, res) => {
         const hits = await ragSearch(lastUser.content, 4);
         if (hits.length) contextBlock = '\n\nRelevant catalogue context:\n' + hits.map(h => `[${h.type.toUpperCase()}] ${h.title}: ${h.text.slice(0, 300)}`).join('\n\n');
       }
+      contextBlock += productContextBlock(body?.productContext);
 
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
       try {

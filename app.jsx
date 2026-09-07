@@ -879,9 +879,28 @@ function TweaksUI() {
   );
 }
 // ---------------- Chat widget (auto-answers via the on-prem AI, email handoff) ----------------
-function ChatWidget() {
+function ChatWidget({ product }) {
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState([{ role: 'assistant', content: "G'day! Ask me anything about our products, repairs or orders. If I can't help, I'll get your message to a human." }]);
+  const productKey = product ? (product.sku || product.slug || product.id) : null;
+  const [messages, setMessages] = useState(() => [{
+    role: 'assistant',
+    content: product
+      ? `G'day! I can see you're looking at ${product.name}. Ask me anything about it, or about our other products, repairs or orders.`
+      : "G'day! Ask me anything about our products, repairs or orders. If I can't help, I'll get your message to a human.",
+  }]);
+  // Reset the conversation when the visitor lands on a different product page,
+  // so an earlier product's chat doesn't bleed into the new one's context.
+  const lastProductKeyRef = useRef(productKey);
+  useEffect(() => {
+    if (lastProductKeyRef.current === productKey) return;
+    lastProductKeyRef.current = productKey;
+    setMessages([{
+      role: 'assistant',
+      content: product
+        ? `G'day! I can see you're looking at ${product.name}. Ask me anything about it, or about our other products, repairs or orders.`
+        : "G'day! Ask me anything about our products, repairs or orders. If I can't help, I'll get your message to a human.",
+    }]);
+  }, [productKey]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState('');
@@ -907,7 +926,10 @@ function ChatWidget() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ messages: history.map(m => ({ role: m.role, content: m.content })) }),
+        body: JSON.stringify({
+          messages: history.map(m => ({ role: m.role, content: m.content })),
+          productContext: product ? { id: product.id, sku: product.sku, slug: product.slug } : null,
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -968,7 +990,10 @@ function ChatWidget() {
       </button>
       {open && (
         <div style={{position:'fixed', bottom:92, right:24, zIndex:500, width:340, maxWidth:'calc(100vw - 32px)', height:460, maxHeight:'calc(100vh - 140px)', background:'var(--paper)', border:'1px solid var(--line)', boxShadow:'0 8px 32px rgba(0,0,0,.3)', display:'flex', flexDirection:'column'}}>
-          <div style={{padding:'12px 16px', background:'var(--ink)', color:'var(--paper)', fontSize:14, fontWeight:600}}>Chat with us</div>
+          <div style={{padding:'12px 16px', background:'var(--ink)', color:'var(--paper)'}}>
+            <div style={{fontSize:14, fontWeight:600}}>Chat with us</div>
+            {product && <div style={{fontSize:11, opacity:.75, marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>Chatting about: {product.name}</div>}
+          </div>
           <div ref={scrollRef} style={{flex:1, overflowY:'auto', padding:12, display:'flex', flexDirection:'column', gap:8}}>
             {messages.map((m, i) => (
               <div key={i} style={{alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', maxWidth:'85%', padding:'8px 12px', borderRadius:12, fontSize:13, lineHeight:1.4, background: m.role === 'user' ? 'var(--ink)' : 'var(--bg-2, #f0ece3)', color: m.role === 'user' ? 'var(--paper)' : 'var(--ink)', whiteSpace:'pre-wrap'}}>
@@ -1363,7 +1388,7 @@ function App() {
       </main>
       <Footer go={go} />
       <TweaksUI />
-      <ChatWidget />
+      <ChatWidget product={page === 'product' && pageParams && !pageParams._notFound ? pageParams : null} />
       {searchOpen && <SearchOverlay go={go} onClose={() => setSearchOpen(false)} />}
       {showBackTop && (
         <button
