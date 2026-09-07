@@ -13238,7 +13238,7 @@ async function ragSearch(query, topK = 4) {
 }
 
 // Kept short: prompt length is generation latency on a local model.
-const AI_SYSTEM_PROMPT_BASE = `You are the Outback Electronics AI assistant: a concise, practical electronics technician and advisor for a small Australian electronics repair and parts shop. Help with repair questions, troubleshooting, parts selection, soldering tips and general DIY electronics. Reply in 2-4 sentences unless the question needs steps. Reference catalogue products, services, tutorials and policies provided below by name when relevant. If asked about a product's colour, size, storage, condition or any other variant, check the "Available options" or "[options: ...]" list on that product below first, that is the actual list of what's available; only say you're not sure if no such list was given, never redirect the customer to the manufacturer for something this catalogue already answers. For any question about availability, price, stock, or "how many" of something, only answer from a "Live catalogue check" entry below if one is provided, that is the real, current answer; if it says no matching items, say so plainly rather than guessing from the other snippets, which are only a handful of possibly-relevant examples, never the full picture. Recommend booking a professional repair if it's beyond DIY. Only use the "Shop facts" below for hours, address, phone, email or policy; never invent them. For a specific policy detail (returns, warranty, shipping, payment plans, etc), only answer from a "Policy:" entry actually provided below; if none was provided for what's being asked, say you're not sure and point them to the Policies page on the site or offer the human handoff, never guess.
+const AI_SYSTEM_PROMPT_BASE = `You are the Outback Electronics AI assistant: a concise, practical electronics technician and advisor for a small Australian electronics repair and parts shop. Help with repair questions, troubleshooting, parts selection, soldering tips and general DIY electronics. Reply in 2-4 sentences unless the question needs steps. Reference catalogue products, services, tutorials and policies provided below by name when relevant. If asked about a product's colour, size, storage, condition or any other variant, check the "Available options" or "[options: ...]" list on that product below first, that is the actual list of what's available; only say you're not sure if no such list was given, never redirect the customer to the manufacturer for something this catalogue already answers. For any question about availability, price, stock, or "how many" of something, only answer from a "Live catalogue check" entry below if one is provided, that is the real, current answer; if it says no matching items, say so plainly rather than guessing from the other snippets, which are only a handful of possibly-relevant examples, never the full picture. "Out of stock" is not automatically the end of it: check whether that item's line also says backorder is available, and if so tell the customer they can still order it now (mentioning the wait time/ETA if given) instead of just saying no. Recommend booking a professional repair if it's beyond DIY. Only use the "Shop facts" below for hours, address, phone, email or policy; never invent them. For a specific policy detail (returns, warranty, shipping, payment plans, etc), only answer from a "Policy:" entry actually provided below; if none was provided for what's being asked, say you're not sure and point them to the Policies page on the site or offer the human handoff, never guess.
 
 You are a read-only chat assistant with no ability to take any action on this site: you cannot add items to a cart, place or process an order, take payment, book a repair, or check someone out, no matter what the customer asks or how the conversation goes. Never say or imply that something was added to a cart, purchased, checked out, or booked. But the website itself fully supports self-service: customers order products by adding to cart and checking out online, and book a repair or service through the site's own booking page, no phone call or email needed unless they'd rather. Always point them to doing it themselves on the site first (e.g. "use the Add to Cart button" / "book it on our Book a Repair page"); only mention phone or email as a fallback if they specifically ask for another way to reach you.`;
 
@@ -13292,7 +13292,7 @@ function productContextBlock(ctx) {
   if (!p || p.status !== 'published') return '';
 
   const variants = Array.isArray(p.variants) ? p.variants : [];
-  const inStock = variants.length
+  const hasStock = variants.length
     ? variants.some(v => (Number(v.stock) || 0) > 0)
     : (p.infiniteStock || (Number(p.stock) || 0) > 0);
   const priceLine = variants.length
@@ -13304,8 +13304,16 @@ function productContextBlock(ctx) {
   const optionsLine = variants.length
     ? `\nAvailable options for this product (colour, storage, condition or whatever these represent, this is the full list, nothing else exists): ${variants.map(v => v.name || 'Option').join(', ')}`
     : '\nThis product has no separate options/variants, only the one listing above.';
+  // Out of stock isn't the end of the story if backorders are enabled, that's
+  // still a real, current way to get it, not something to leave the model to
+  // infer from a bare "no".
+  const stockLine = hasStock
+    ? 'In stock: yes'
+    : p.allowBackorder
+      ? `In stock: no, but backorder is available (order it now, it ships once restocked${p.backorderWeeks ? `, approximately ${p.backorderWeeks} week${p.backorderWeeks === 1 ? '' : 's'}` : ''}${p.backorderEta ? `, ETA ${p.backorderEta}` : ''})`
+      : 'In stock: no, and backorder is not available for this product';
 
-  return `\n\nThe customer is currently looking at this exact product page, use these details when they ask about "this product" or similar:\nName: ${p.name}\nCategory: ${p.category || ''}\nBrand: ${p.brand || ''}\nCondition: ${p.cond || ''}\nPricing: ${priceLine}\nIn stock: ${inStock ? 'yes' : 'no'}${optionsLine}\nDescription: ${String(p.description || '').slice(0, 800)}`;
+  return `\n\nThe customer is currently looking at this exact product page, use these details when they ask about "this product" or similar:\nName: ${p.name}\nCategory: ${p.category || ''}\nBrand: ${p.brand || ''}\nCondition: ${p.cond || ''}\nPricing: ${priceLine}\n${stockLine}${optionsLine}\nDescription: ${String(p.description || '').slice(0, 800)}`;
 }
 
 // ── Live catalogue tool ───────────────────────────────────────────────────────
@@ -13359,7 +13367,13 @@ async function runCatalogueSearch(args) {
     if (!Number.isFinite(maxPrice) || price <= maxPrice) {
       seen.add(key);
       const variantNames = !isService && Array.isArray(rec.variants) ? rec.variants.map(v => v.name).filter(Boolean) : [];
-      items.push({ name: rec.name, price, category: rec.category || '', options: variantNames });
+      let stockNote = '';
+      if (!isService) {
+        const variants = Array.isArray(rec.variants) ? rec.variants : [];
+        const hasStock = variants.length ? variants.some(v => (Number(v.stock) || 0) > 0) : (rec.infiniteStock || (Number(rec.stock) || 0) > 0);
+        if (!hasStock) stockNote = rec.allowBackorder ? ' - out of stock, backorder available' : ' - out of stock, no backorder';
+      }
+      items.push({ name: rec.name, price, category: rec.category || '', options: variantNames, stockNote });
     }
   };
 
@@ -13400,7 +13414,7 @@ async function runCatalogueSearch(args) {
     items: items.slice(0, 8).map(i => {
       const priceStr = i.price ? ` ($${i.price} AUD)` : '';
       const optionsStr = i.options && i.options.length ? ` [options: ${i.options.join(', ')}]` : '';
-      return `${i.name}${priceStr}${optionsStr}`;
+      return `${i.name}${priceStr}${optionsStr}${i.stockNote || ''}`;
     }),
     truncated: items.length > 8,
   };
