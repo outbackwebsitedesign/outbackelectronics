@@ -13512,14 +13512,56 @@ function catalogueQueryFor(messages, lastUserContent) {
 }
 
 // Formats a live catalogue check as system-prompt context, run unconditionally
-// per message rather than waiting on the model to decide it's needed.
+// per message rather than waiting on the model to decide it's needed. Also
+// hands back the raw result so the reply can be checked against it after
+// generation, see generateVerifiedReply().
 async function catalogueCheckBlock(query) {
-  if (!query) return '';
+  if (!query) return { block: '', result: null };
   const result = await runCatalogueSearch({ query });
   const summary = result.count === 0
     ? 'No matching items found.'
     : `${result.count} matching item(s)${result.truncated ? ' (showing the first 8)' : ''}: ${result.items.join(', ')}.`;
-  return `\n\nLive catalogue check for this question (authoritative, current stock and pricing): ${summary}`;
+  return { block: `\n\nLive catalogue check for this question (authoritative, current stock and pricing): ${summary}`, result };
+}
+
+// Prompt instructions have repeatedly failed to stop the model inventing
+// specific facts (a colour, a whole product, a wrong stock claim) even when
+// told directly and repeatedly not to. Rather than accept that or write a
+// hand-picked reply in its place (never done, per rule), this checks the
+// model's own generated answer against the two concrete fabrication shapes
+// actually observed in testing, and if either fires, asks the SAME model to
+// try again with the mistake pointed out. The customer only ever sees
+// model-generated text, this is a self-correction pass, not a substitution.
+function looksFabricated(text, catalogueResult, tradingName) {
+  if (!text) return false;
+  // Claiming a concrete price/stock/backorder fact when the search behind it
+  // found literally nothing to base that on.
+  if (catalogueResult && catalogueResult.count === 0 && /\$\s?\d|in stock|backorder|available (for|to) (order|purchase)/i.test(text)) return true;
+  // A product invented in this shop's own branding style ("Outback
+  // Electronics <thing>"). Checked against every real listing seen in
+  // testing: none of this shop's actual product names are prefixed with its
+  // own trading name, so this construction is a strong, specific signal for
+  // the exact fabrication already observed, not a general-purpose guess.
+  if (tradingName) {
+    const escaped = tradingName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (new RegExp(`\\b${escaped}\\s+[a-z0-9]`, 'i').test(text)) return true;
+  }
+  return false;
+}
+
+async function generateVerifiedReply({ systemPrompt, history, options, catalogueResult }) {
+  const { chatModel } = getOllamaConfig();
+  const baseMessages = [{ role: 'system', content: systemPrompt }, ...history];
+  const first = await ollamaPost('/api/chat', { model: chatModel, messages: baseMessages, stream: false, options }, 60000);
+  if (!first.ok) throw new Error('chat_failed');
+  let text = first.body?.message?.content || '';
+  const tradingName = getBusinessIdentity().tradingName;
+  if (looksFabricated(text, catalogueResult, tradingName)) {
+    const correction = { role: 'system', content: `Your last answer was: "${text}" - that stated something not actually present in the catalogue data you were given, which is not allowed. Answer the customer's message again using only the real data in the system prompt above; if it genuinely doesn't answer the question, say so plainly instead of inventing anything.` };
+    const retry = await ollamaPost('/api/chat', { model: chatModel, messages: [...baseMessages, correction], stream: false, options }, 60000);
+    if (retry.ok && retry.body?.message?.content) text = retry.body.message.content;
+  }
+  return text;
 }
 
 
@@ -13582,23 +13624,26 @@ const aiGatewayServer = http.createServer(async (req, res) => {
       // exact-match lookup itself when there's no product context to look up.
       const productBlock = productContextBlock(body?.productContext);
       let contextBlock = '';
+      let catalogueResult = null;
       if (lastUser) {
         const hits = await ragSearch(lastUser.content, 6);
         if (hits.length) contextBlock = '\n\nRelevant catalogue context:\n' + hits.map(h => `[${h.type.toUpperCase()}] ${h.title}: ${h.text.slice(0, 220)}`).join('\n\n');
-        contextBlock += await catalogueCheckBlock(catalogueQueryFor(messages, lastUser.content));
+        const catalogueCheck = await catalogueCheckBlock(catalogueQueryFor(messages, lastUser.content));
+        contextBlock += catalogueCheck.block;
+        catalogueResult = catalogueCheck.result;
       }
       contextBlock += productBlock;
 
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
       try {
-        await enqueueAI(() => ollamaStream('/api/chat', {
-          model: getOllamaConfig().chatModel,
-          messages: [
-            { role: 'system', content: aiSystemPrompt() + contextBlock },
-            ...messages.slice(-6).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content).slice(0, 1200) })),
-          ],
+        const text = await enqueueAI(() => generateVerifiedReply({
+          systemPrompt: aiSystemPrompt() + contextBlock,
+          history: messages.slice(-6).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content).slice(0, 1200) })),
           options: { num_predict: 160, num_ctx: 2048, temperature: 0.2 },
-        }, res));
+          catalogueResult,
+        }));
+        if (text) res.write(`data: ${JSON.stringify({ token: text })}\n\n`);
+        res.write('data: [DONE]\n\n');
       } catch (e) { if (!res.writableEnded) res.write(`data: ${JSON.stringify({ error: e.message })}\n\n`); }
       if (!res.writableEnded) res.end();
       return;
@@ -13623,23 +13668,26 @@ const aiGatewayServer = http.createServer(async (req, res) => {
       // exact-match lookup itself when there's no product context to look up.
       const productBlock = productContextBlock(body?.productContext);
       let contextBlock = '';
+      let catalogueResult = null;
       if (lastUser) {
         const hits = await ragSearch(lastUser.content, 6);
         if (hits.length) contextBlock = '\n\nRelevant catalogue context:\n' + hits.map(h => `[${h.type.toUpperCase()}] ${h.title}: ${h.text.slice(0, 220)}`).join('\n\n');
-        contextBlock += await catalogueCheckBlock(catalogueQueryFor(messages, lastUser.content));
+        const catalogueCheck = await catalogueCheckBlock(catalogueQueryFor(messages, lastUser.content));
+        contextBlock += catalogueCheck.block;
+        catalogueResult = catalogueCheck.result;
       }
       contextBlock += productBlock;
 
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
       try {
-        await enqueueAI(() => ollamaStream('/api/chat', {
-          model: getOllamaConfig().chatModel,
-          messages: [
-            { role: 'system', content: aiSystemPrompt() + contextBlock },
-            ...messages.slice(-20).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content).slice(0, 4000) })),
-          ],
+        const text = await enqueueAI(() => generateVerifiedReply({
+          systemPrompt: aiSystemPrompt() + contextBlock,
+          history: messages.slice(-20).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content).slice(0, 4000) })),
           options: { num_predict: 300, num_ctx: 2048, temperature: 0.2 },
-        }, res));
+          catalogueResult,
+        }));
+        if (text) res.write(`data: ${JSON.stringify({ token: text })}\n\n`);
+        res.write('data: [DONE]\n\n');
       } catch (e) { if (!res.writableEnded) res.write(`data: ${JSON.stringify({ error: e.message })}\n\n`); }
       if (!res.writableEnded) res.end();
       return;
