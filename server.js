@@ -13513,6 +13513,21 @@ async function runCatalogueSearch(args) {
   };
 }
 
+// A short follow-up ("what ones do you have?", "any other colours?") carries
+// almost no meaningful search tokens of its own, it only makes sense next to
+// the turn before it that actually named the product/category. Each turn
+// otherwise gets searched in total isolation, so the topic from a prior
+// message is silently dropped and the search comes back empty even though
+// the conversation clearly has a subject. Only reaches back a turn when the
+// current message genuinely doesn't have enough to search on by itself, so a
+// clear, self-contained new question isn't diluted by stale context.
+function catalogueQueryFor(messages, lastUserContent) {
+  if (catalogueQueryTokens(lastUserContent).length >= 2) return lastUserContent;
+  const userMsgs = messages.filter(m => m.role === 'user');
+  const prev = userMsgs.length >= 2 ? userMsgs[userMsgs.length - 2].content : '';
+  return `${prev} ${lastUserContent}`.trim();
+}
+
 // Formats a live catalogue check as system-prompt context, run unconditionally
 // per message rather than waiting on the model to decide it's needed.
 async function catalogueCheckBlock(query) {
@@ -13594,7 +13609,7 @@ const aiGatewayServer = http.createServer(async (req, res) => {
       if (lastUser) {
         const hits = await ragSearch(lastUser.content, 6);
         if (hits.length) contextBlock = '\n\nRelevant catalogue context:\n' + hits.map(h => `[${h.type.toUpperCase()}] ${h.title}: ${h.text.slice(0, 220)}`).join('\n\n');
-        contextBlock += await catalogueCheckBlock(lastUser.content);
+        contextBlock += await catalogueCheckBlock(catalogueQueryFor(messages, lastUser.content));
       }
       contextBlock += productBlock;
 
@@ -13643,7 +13658,7 @@ const aiGatewayServer = http.createServer(async (req, res) => {
       if (lastUser) {
         const hits = await ragSearch(lastUser.content, 6);
         if (hits.length) contextBlock = '\n\nRelevant catalogue context:\n' + hits.map(h => `[${h.type.toUpperCase()}] ${h.title}: ${h.text.slice(0, 220)}`).join('\n\n');
-        contextBlock += await catalogueCheckBlock(lastUser.content);
+        contextBlock += await catalogueCheckBlock(catalogueQueryFor(messages, lastUser.content));
       }
       contextBlock += productBlock;
 
