@@ -1000,6 +1000,19 @@ function ChatWidget({ product }) {
                 {m.content || (streaming && i === messages.length - 1 ? '…' : '')}
               </div>
             ))}
+            {messages.length === 1 && !streaming && (
+              <div style={{display:'flex', flexWrap:'wrap', gap:6, marginTop:4}}>
+                {(product ? [`Is ${product.name} in stock?`, 'What are your hours?', 'How do I book a repair?'] : ['What are your hours?', 'Where are you located?', 'How do I book a repair?']).map(q => (
+                  <button
+                    key={q}
+                    onClick={() => send(q)}
+                    style={{fontSize:12, padding:'6px 10px', borderRadius:14, border:'1px solid var(--line)', background:'var(--paper)', color:'var(--ink)', cursor:'pointer'}}
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            )}
             {error && <div style={{fontSize:12, color:'var(--rust, #b5482a)'}}>{error}</div>}
             {!handoff ? (
               <button onClick={() => setHandoff('form')} style={{alignSelf:'flex-start', fontSize:12, textDecoration:'underline', background:'none', border:'none', cursor:'pointer', color:'var(--ink-2, #666)', padding:0, marginTop:4}}>
