@@ -13019,9 +13019,15 @@ async function runDuePaymentPlanCharges() {
 
 // ── AI Gateway ────────────────────────────────────────────────────────────────
 
-const AI_CHAT_MODEL   = 'qwen2.5:1.5b';
-const AI_VISION_MODEL = 'llava-phi3';
-const AI_EMBED_MODEL  = 'nomic-embed-text';
+// Ollama can run on this box (default) or on another machine on the network with
+// more RAM/a GPU - point OLLAMA_HOST/OLLAMA_PORT at it and pull the model names
+// below there too. Ollama has no built-in auth, so if it's not on this box, keep
+// it LAN-only or behind a VPN/Tailscale; never expose it directly to the internet.
+const OLLAMA_HOST      = process.env.OLLAMA_HOST      || '127.0.0.1';
+const OLLAMA_PORT      = Number(process.env.OLLAMA_PORT) || 11434;
+const AI_CHAT_MODEL   = process.env.AI_CHAT_MODEL   || 'qwen2.5:1.5b';
+const AI_VISION_MODEL = process.env.AI_VISION_MODEL || 'llava-phi3';
+const AI_EMBED_MODEL  = process.env.AI_EMBED_MODEL  || 'nomic-embed-text';
 const AI_RATE_WINDOW  = 5 * 60 * 1000; // 5 minutes
 const AI_RATE_MAX     = 15;
 
@@ -13059,7 +13065,7 @@ function checkAIRateLimit(userId) {
 // ── Ollama helpers ────────────────────────────────────────────────────────────
 function ollamaGet(path) {
   return new Promise((resolve, reject) => {
-    const req = http.request({ hostname: '127.0.0.1', port: 11434, path, method: 'GET', timeout: 8000 }, res => {
+    const req = http.request({ hostname: OLLAMA_HOST, port: OLLAMA_PORT, path, method: 'GET', timeout: 8000 }, res => {
       let d = ''; res.on('data', c => d += c); res.on('end', () => { try { resolve(JSON.parse(d)); } catch { resolve({}); } });
     });
     req.on('error', reject); req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); }); req.end();
@@ -13069,7 +13075,7 @@ function ollamaGet(path) {
 function ollamaPost(path, payload, timeoutMs = 30000) {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify(payload);
-    const req = http.request({ hostname: '127.0.0.1', port: 11434, path, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }, timeout: timeoutMs }, res => {
+    const req = http.request({ hostname: OLLAMA_HOST, port: OLLAMA_PORT, path, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }, timeout: timeoutMs }, res => {
       let d = ''; res.on('data', c => d += c); res.on('end', () => { try { resolve({ ok: res.statusCode === 200, body: JSON.parse(d) }); } catch { resolve({ ok: false, body: {} }); } });
     });
     req.on('error', reject); req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
@@ -13080,7 +13086,7 @@ function ollamaPost(path, payload, timeoutMs = 30000) {
 function ollamaStream(apiPath, payload, res) {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({ ...payload, stream: true });
-    const req = http.request({ hostname: '127.0.0.1', port: 11434, path: apiPath, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }, timeout: 120000 }, (ores) => {
+    const req = http.request({ hostname: OLLAMA_HOST, port: OLLAMA_PORT, path: apiPath, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }, timeout: 120000 }, (ores) => {
       if (ores.statusCode !== 200) { ores.resume(); return reject(new Error(`ollama:${ores.statusCode}`)); }
       let buf = '';
       ores.on('data', chunk => {

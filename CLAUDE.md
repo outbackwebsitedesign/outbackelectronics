@@ -127,7 +127,7 @@ Roughly 45 stores exist. The ones that come up most: `settings.db`, `products.db
 
 ### AI gateway
 
-Port 8091 proxies a local Ollama instance and adds retrieval: `buildRagIndex()` embeds published products and tutorials 5 seconds after startup, caching embeddings in `rag-cache.db`, and `ragSearch()` injects the top matches into the chat prompt. Requests are queued rather than run concurrently. Without Ollama reachable, the endpoints return 503 and nothing else breaks.
+Port 8091 proxies an Ollama instance and adds retrieval: `buildRagIndex()` embeds published products and tutorials 5 seconds after startup, caching embeddings in `rag-cache.db`, and `ragSearch()` injects the top matches into the chat prompt. Requests are queued rather than run concurrently. Without Ollama reachable, the endpoints return 503 and nothing else breaks. Ollama defaults to `127.0.0.1:11434` (same box) but `OLLAMA_HOST`/`OLLAMA_PORT` can point it at another machine on the network with more RAM/a GPU; `AI_CHAT_MODEL`/`AI_VISION_MODEL`/`AI_EMBED_MODEL` override the model names pulled there. Ollama has no built-in auth, so a remote instance must stay LAN-only or behind a VPN, never port-forwarded to the internet. The storefront chat widget (`/api/public-chat`, no login required) also has `faqAutoAnswer()`, which answers hours/location/contact questions from `readAvailability()`/`getBusinessIdentity()` directly rather than letting the model generate them, because small local models unreliably follow "don't invent this" instructions.
 
 ### PC builder data pipeline
 
