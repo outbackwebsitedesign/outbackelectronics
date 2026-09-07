@@ -13236,7 +13236,7 @@ async function ragSearch(query, topK = 4) {
 }
 
 // Kept short: prompt length is generation latency on a local model.
-const AI_SYSTEM_PROMPT_BASE = `You are the Outback Electronics AI assistant: a concise, practical electronics technician and advisor for a small Australian electronics repair and parts shop. Help with repair questions, troubleshooting, parts selection, soldering tips and general DIY electronics. Reply in 2-4 sentences unless the question needs steps. Reference catalogue products, services, tutorials and policies provided below by name when relevant. For any question about availability, price, stock, or "how many" of something, always call the search_catalogue tool rather than answering from the snippets below or guessing, the snippets are only a handful of possibly-relevant examples, never the full picture. Only say something isn't offered after search_catalogue actually returns zero results for it. Recommend booking a professional repair if it's beyond DIY. Only use the "Shop facts" below for hours, address, phone, email or policy; never invent them. For a specific policy detail (returns, warranty, shipping, payment plans, etc), only answer from a "Policy:" entry actually provided below; if none was provided for what's being asked, say you're not sure and point them to the Policies page on the site or offer the human handoff, never guess.
+const AI_SYSTEM_PROMPT_BASE = `You are the Outback Electronics AI assistant: a concise, practical electronics technician and advisor for a small Australian electronics repair and parts shop. Help with repair questions, troubleshooting, parts selection, soldering tips and general DIY electronics. Reply in 2-4 sentences unless the question needs steps. Reference catalogue products, services, tutorials and policies provided below by name when relevant. For any question about availability, price, stock, or "how many" of something, only answer from a "Live catalogue check" entry below if one is provided, that is the real, current answer; if it says no matching items, say so plainly rather than guessing from the other snippets, which are only a handful of possibly-relevant examples, never the full picture. Recommend booking a professional repair if it's beyond DIY. Only use the "Shop facts" below for hours, address, phone, email or policy; never invent them. For a specific policy detail (returns, warranty, shipping, payment plans, etc), only answer from a "Policy:" entry actually provided below; if none was provided for what's being asked, say you're not sure and point them to the Policies page on the site or offer the human handoff, never guess.
 
 You are a read-only chat assistant with no ability to take any action on this site: you cannot add items to a cart, place or process an order, take payment, book a repair, or check someone out, no matter what the customer asks or how the conversation goes. Never say or imply that something was added to a cart, purchased, checked out, or booked. But the website itself fully supports self-service: customers order products by adding to cart and checking out online, and book a repair or service through the site's own booking page, no phone call or email needed unless they'd rather. Always point them to doing it themselves on the site first (e.g. "use the Add to Cart button" / "book it on our Book a Repair page"); only mention phone or email as a fallback if they specifically ask for another way to reach you.`;
 
@@ -13306,22 +13306,15 @@ function productContextBlock(ctx) {
 // accurately. This lets a tool-capable model query products.db/services.db
 // directly (via Ollama's function-calling) and get a real, current count
 // instead of guessing from whatever happened to be in its context.
-const CATALOGUE_TOOL = {
-  type: 'function',
-  function: {
-    name: 'search_catalogue',
-    description: "Search the shop's live product and service catalogue. Use this for any question about availability, price, stock, or how many items match something, instead of guessing or relying on any snippets already given to you. Returns the real, current count and up to 8 matching items.",
-    parameters: {
-      type: 'object',
-      properties: {
-        query: { type: 'string', description: 'Keyword to match against name, category, brand or description, e.g. "phone", "solar panel", "battery". Leave blank to match everything.' },
-        maxPrice: { type: 'number', description: 'Only include items at or under this price in AUD.' },
-        type: { type: 'string', enum: ['product', 'service', 'any'], description: 'Restrict to products, services, or search both. Defaults to any.' },
-      },
-    },
-  },
-};
-
+//
+// This used to be exposed as an Ollama tool the model could choose to call,
+// but that was unreliable in practice: on a small model, whether it actually
+// invoked the tool for a given message was inconsistent (a fast reply meant it
+// skipped the tool and guessed from conversation context; only a slow reply
+// meant it actually checked), which is worse than useless for something like
+// stock accuracy. It's now always run server-side and injected into context,
+// the same guaranteed pattern as ragSearch()/productContextBlock(), rather
+// than left to the model's discretion.
 function priceOfCatalogueRecord(rec, isService) {
   if (isService) return Number(rec.priceAud) || 0;
   const variants = Array.isArray(rec.variants) ? rec.variants : [];
@@ -13400,49 +13393,15 @@ async function runCatalogueSearch(args) {
   };
 }
 
-// Runs one chat turn with catalogue-search tool access: a fast, non-streaming
-// decision call first (so tool_calls can actually be inspected, which a
-// streamed response makes awkward), then either streams that answer straight
-// through if no tool was needed, or executes the tool and streams a second,
-// grounded answer. Only the tool-call path costs a second model round trip.
-// Callers should run this inside enqueueAI so both phases stay one unit on
-// the shared Ollama queue.
-async function chatWithTools({ systemPrompt, history, res, options }) {
-  const { chatModel } = getOllamaConfig();
-  const baseMessages = [{ role: 'system', content: systemPrompt }, ...history];
-  let first;
-  try {
-    first = await ollamaPost('/api/chat', { model: chatModel, messages: baseMessages, tools: [CATALOGUE_TOOL], stream: false, options }, 60000);
-  } catch (e) {
-    if (!res.writableEnded) res.write(`data: ${JSON.stringify({ error: e.message })}\n\n`);
-    return res.end();
-  }
-  if (!first.ok) {
-    if (!res.writableEnded) res.write(`data: ${JSON.stringify({ error: 'chat_failed' })}\n\n`);
-    return res.end();
-  }
-
-  const msg = first.body?.message || {};
-  const toolCalls = Array.isArray(msg.tool_calls) ? msg.tool_calls : [];
-  if (!toolCalls.length) {
-    if (msg.content) res.write(`data: ${JSON.stringify({ token: msg.content })}\n\n`);
-    res.write('data: [DONE]\n\n');
-    return res.end();
-  }
-
-  const toolMessages = await Promise.all(toolCalls.map(async call => {
-    let args = call.function?.arguments;
-    if (typeof args === 'string') { try { args = JSON.parse(args); } catch { args = {}; } }
-    const result = call.function?.name === 'search_catalogue' ? await runCatalogueSearch(args) : { error: 'unknown_tool' };
-    return { role: 'tool', content: JSON.stringify(result) };
-  }));
-
-  try {
-    await ollamaStream('/api/chat', { model: chatModel, messages: [...baseMessages, msg, ...toolMessages], options }, res);
-  } catch (e) {
-    if (!res.writableEnded) res.write(`data: ${JSON.stringify({ error: e.message })}\n\n`);
-  }
-  if (!res.writableEnded) res.end();
+// Formats a live catalogue check as system-prompt context, run unconditionally
+// per message rather than waiting on the model to decide it's needed.
+async function catalogueCheckBlock(query) {
+  if (!query) return '';
+  const result = await runCatalogueSearch({ query });
+  const summary = result.count === 0
+    ? 'No matching items found.'
+    : `${result.count} matching item(s)${result.truncated ? ' (showing the first 8)' : ''}: ${result.items.join(', ')}.`;
+  return `\n\nLive catalogue check for this question (authoritative, current stock and pricing): ${summary}`;
 }
 
 // ── AI Gateway server ─────────────────────────────────────────────────────────
@@ -13496,24 +13455,28 @@ const aiGatewayServer = http.createServer(async (req, res) => {
 
       const lastUser = [...messages].reverse().find(m => m.role === 'user');
       // A product-page visitor already has an exact product match below, so the RAG
-      // embedding search (a second, slow model call) is redundant there; skip it to
-      // roughly halve the wait for the common "tell me about this" case.
+      // embedding search and catalogue check (both a second, slow model call) are
+      // redundant there; skip them to roughly halve the wait for the common "tell
+      // me about this" case.
       const productBlock = productContextBlock(body?.productContext);
       let contextBlock = '';
       if (lastUser && !productBlock) {
         const hits = await ragSearch(lastUser.content, 6);
         if (hits.length) contextBlock = '\n\nRelevant catalogue context:\n' + hits.map(h => `[${h.type.toUpperCase()}] ${h.title}: ${h.text.slice(0, 220)}`).join('\n\n');
+        contextBlock += await catalogueCheckBlock(lastUser.content);
       }
       contextBlock += productBlock;
 
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
       try {
-        await enqueueAI(() => chatWithTools({
-          systemPrompt: aiSystemPrompt() + contextBlock,
-          history: messages.slice(-6).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content).slice(0, 1200) })),
-          res,
+        await enqueueAI(() => ollamaStream('/api/chat', {
+          model: getOllamaConfig().chatModel,
+          messages: [
+            { role: 'system', content: aiSystemPrompt() + contextBlock },
+            ...messages.slice(-6).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content).slice(0, 1200) })),
+          ],
           options: { num_predict: 160, num_ctx: 2048, temperature: 0.2 },
-        }));
+        }, res));
       } catch (e) { if (!res.writableEnded) res.write(`data: ${JSON.stringify({ error: e.message })}\n\n`); }
       if (!res.writableEnded) res.end();
       return;
@@ -13530,24 +13493,28 @@ const aiGatewayServer = http.createServer(async (req, res) => {
 
       const lastUser = [...messages].reverse().find(m => m.role === 'user');
       // A product-page visitor already has an exact product match below, so the RAG
-      // embedding search (a second, slow model call) is redundant there; skip it to
-      // roughly halve the wait for the common "tell me about this" case.
+      // embedding search and catalogue check (both a second, slow model call) are
+      // redundant there; skip them to roughly halve the wait for the common "tell
+      // me about this" case.
       const productBlock = productContextBlock(body?.productContext);
       let contextBlock = '';
       if (lastUser && !productBlock) {
         const hits = await ragSearch(lastUser.content, 6);
         if (hits.length) contextBlock = '\n\nRelevant catalogue context:\n' + hits.map(h => `[${h.type.toUpperCase()}] ${h.title}: ${h.text.slice(0, 220)}`).join('\n\n');
+        contextBlock += await catalogueCheckBlock(lastUser.content);
       }
       contextBlock += productBlock;
 
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
       try {
-        await enqueueAI(() => chatWithTools({
-          systemPrompt: aiSystemPrompt() + contextBlock,
-          history: messages.slice(-20).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content).slice(0, 4000) })),
-          res,
+        await enqueueAI(() => ollamaStream('/api/chat', {
+          model: getOllamaConfig().chatModel,
+          messages: [
+            { role: 'system', content: aiSystemPrompt() + contextBlock },
+            ...messages.slice(-20).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content).slice(0, 4000) })),
+          ],
           options: { num_predict: 300, num_ctx: 2048, temperature: 0.2 },
-        }));
+        }, res));
       } catch (e) { if (!res.writableEnded) res.write(`data: ${JSON.stringify({ error: e.message })}\n\n`); }
       if (!res.writableEnded) res.end();
       return;
