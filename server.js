@@ -13289,19 +13289,47 @@ function bulkOfferNote(entry, basePrice) {
   return '';
 }
 
-// Looks the visitor's current product page up directly in products.db (live, exact
-// match), not through the RAG embedding index, so "tell me about this" on a product
-// page always resolves to that exact product rather than a semantic guess.
-function productContextBlock(ctx) {
-  if (!ctx || typeof ctx !== 'object') return '';
+// Looks the visitor's current product page up directly in products.db (live,
+// exact match), not through the RAG embedding index, so "tell me about this"
+// on a product page always resolves to that exact product rather than a
+// semantic guess. Shared by productContextBlock() (context for the model) and
+// variantAutoAnswer() (a deterministic answer that bypasses the model).
+function lookupContextProduct(ctx) {
+  if (!ctx || typeof ctx !== 'object') return null;
   const id = String(ctx.id ?? '').slice(0, 80);
   const sku = String(ctx.sku ?? '').slice(0, 80);
   const slug = String(ctx.slug ?? '').slice(0, 80);
-  if (!id && !sku && !slug) return '';
+  if (!id && !sku && !slug) return null;
   const p = readProducts().find(x =>
     (id && String(x.id) === id) || (sku && x.sku === sku) || (slug && x.slug === slug)
   );
-  if (!p || p.status !== 'published') return '';
+  return (p && p.status === 'published') ? p : null;
+}
+
+// The model has repeatedly invented plausible-sounding variant names (a
+// "Silver" option that was never actually listed) even when given the exact,
+// explicit options list to work from, the same failure mode already seen
+// inventing hours despite being told the real ones. Fabricating inventory
+// that doesn't exist is a worse class of error than a stilted-sounding
+// answer, so this specific question is answered straight from the real
+// variant list rather than left to the model to paraphrase.
+function variantAutoAnswer(p, text) {
+  if (!p) return null;
+  const q = String(text || '').toLowerCase();
+  if (!/\b(colou?rs?|sizes?|storage|capacit(y|ies)|variants?|options?)\b/.test(q)) return null;
+  const variants = Array.isArray(p.variants) ? p.variants : [];
+  if (!variants.length) return `${p.name} doesn't have separate options, there's just the one listing.`;
+  const list = variants.map(v => {
+    const outOfStock = (Number(v.stock) || 0) <= 0;
+    const tag = !outOfStock ? '' : (p.allowBackorder ? ' (out of stock, backorder available)' : ' (out of stock)');
+    return `${v.name || 'Option'}${tag}`;
+  }).join(', ');
+  return `${p.name} comes in: ${list}.`;
+}
+
+function productContextBlock(ctx) {
+  const p = lookupContextProduct(ctx);
+  if (!p) return '';
 
   const variants = Array.isArray(p.variants) ? p.variants : [];
   const hasStock = variants.length
@@ -13334,7 +13362,12 @@ function productContextBlock(ctx) {
       ? `In stock: no, but backorder is available (order it now, it ships once restocked${p.backorderWeeks ? `, approximately ${p.backorderWeeks} week${p.backorderWeeks === 1 ? '' : 's'}` : ''}${p.backorderEta ? `, ETA ${p.backorderEta}` : ''})`
       : 'In stock: no, and backorder is not available for this product';
 
-  return `\n\nThe customer is currently looking at this exact product page, use these details when they ask about "this product" or similar:\nName: ${p.name}\nCategory: ${p.category || ''}\nBrand: ${p.brand || ''}\nCondition: ${p.cond || ''}\nPricing: ${priceLine}\n${stockLine}${optionsLine}\nDescription: ${String(p.description || '').slice(0, 800)}`;
+  const productReviews = readReviews().filter(r => r.status === 'approved' && r.productId === p.id);
+  const reviewsLine = productReviews.length
+    ? `\nReviews: ${productReviews.length} approved review${productReviews.length === 1 ? '' : 's'}, average ${(productReviews.reduce((s, r) => s + (Number(r.rating) || 0), 0) / productReviews.length).toFixed(1)}/5 stars.`
+    : '\nReviews: none yet.';
+
+  return `\n\nThe customer is currently looking at this exact product page, use these details when they ask about "this product" or similar:\nName: ${p.name}\nCategory: ${p.category || ''}\nBrand: ${p.brand || ''}\nCondition: ${p.cond || ''}\nPricing: ${priceLine}\n${stockLine}${optionsLine}${reviewsLine}\nDescription: ${String(p.description || '').slice(0, 800)}`;
 }
 
 // ── Live catalogue tool ───────────────────────────────────────────────────────
@@ -13503,6 +13536,14 @@ const aiGatewayServer = http.createServer(async (req, res) => {
       if (!messages.length) return json(res, 422, { error: 'messages_required' });
 
       const lastUser = [...messages].reverse().find(m => m.role === 'user');
+      const contextProduct = lookupContextProduct(body?.productContext);
+      const variantAnswer = lastUser ? variantAutoAnswer(contextProduct, lastUser.content) : null;
+      if (variantAnswer) {
+        res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
+        res.write(`data: ${JSON.stringify({ token: variantAnswer })}\n\n`);
+        res.write('data: [DONE]\n\n');
+        return res.end();
+      }
       // A product-page visitor already has an exact product match below, so the RAG
       // embedding search and catalogue check (both a second, slow model call) are
       // redundant there; skip them to roughly halve the wait for the common "tell
@@ -13541,6 +13582,14 @@ const aiGatewayServer = http.createServer(async (req, res) => {
       if (!messages.length) return json(res, 422, { error: 'messages_required' });
 
       const lastUser = [...messages].reverse().find(m => m.role === 'user');
+      const contextProduct = lookupContextProduct(body?.productContext);
+      const variantAnswer = lastUser ? variantAutoAnswer(contextProduct, lastUser.content) : null;
+      if (variantAnswer) {
+        res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
+        res.write(`data: ${JSON.stringify({ token: variantAnswer })}\n\n`);
+        res.write('data: [DONE]\n\n');
+        return res.end();
+      }
       // A product-page visitor already has an exact product match below, so the RAG
       // embedding search and catalogue check (both a second, slow model call) are
       // redundant there; skip them to roughly halve the wait for the common "tell
