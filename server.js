@@ -13277,6 +13277,18 @@ function aiSystemPrompt() {
   return AI_SYSTEM_PROMPT_BASE + facts;
 }
 
+// Mirrors hasBulkPrice()/bulkOfferAvailable() in src/lib/pricing.js: a product
+// or variant carrying a bulkQty/bulkPrice pair offers a per-unit discount once
+// that many are bought. Describes the offer for the chat context; doesn't need
+// stock/qty since the chat isn't cart-aware, just whether the offer exists.
+function bulkOfferNote(entry, basePrice) {
+  const bulkQty = Math.floor(Number(entry?.bulkQty) || 0);
+  const bulkPrice = Number(entry?.bulkPrice) || 0;
+  const base = Number(basePrice) || 0;
+  if (bulkQty >= 2 && bulkPrice > 0 && bulkPrice < base) return ` (buy ${bulkQty}+ for $${bulkPrice} AUD each)`;
+  return '';
+}
+
 // Looks the visitor's current product page up directly in products.db (live, exact
 // match), not through the RAG embedding index, so "tell me about this" on a product
 // page always resolves to that exact product rather than a semantic guess.
@@ -13296,8 +13308,8 @@ function productContextBlock(ctx) {
     ? variants.some(v => (Number(v.stock) || 0) > 0)
     : (p.infiniteStock || (Number(p.stock) || 0) > 0);
   const priceLine = variants.length
-    ? variants.map(v => `${v.name || 'Option'}: $${Number(v.price) || 0} AUD${(Number(v.stock) || 0) > 0 ? '' : ' (out of stock)'}`).join('; ')
-    : `$${p.priceAud ?? p.price ?? '?'} AUD`;
+    ? variants.map(v => `${v.name || 'Option'}: $${Number(v.price) || 0} AUD${(Number(v.stock) || 0) > 0 ? '' : ' (out of stock)'}${bulkOfferNote(v, v.price)}`).join('; ')
+    : `$${p.priceAud ?? p.price ?? '?'} AUD${bulkOfferNote(p, p.priceAud ?? p.price)}`;
   // Variant names are free text a staff member typed in, e.g. "Black",
   // "128GB", "With Certificate" - whatever the seller listed as this
   // product's options, could be colour, storage, condition, a bundle, etc.
@@ -13366,14 +13378,15 @@ async function runCatalogueSearch(args) {
     const price = priceOfCatalogueRecord(rec, isService);
     if (!Number.isFinite(maxPrice) || price <= maxPrice) {
       seen.add(key);
-      const variantNames = !isService && Array.isArray(rec.variants) ? rec.variants.map(v => v.name).filter(Boolean) : [];
+      const variants = !isService && Array.isArray(rec.variants) ? rec.variants : [];
+      const variantNames = variants.map(v => v.name).filter(Boolean);
       let stockNote = '';
       if (!isService) {
-        const variants = Array.isArray(rec.variants) ? rec.variants : [];
         const hasStock = variants.length ? variants.some(v => (Number(v.stock) || 0) > 0) : (rec.infiniteStock || (Number(rec.stock) || 0) > 0);
         if (!hasStock) stockNote = rec.allowBackorder ? ' - out of stock, backorder available' : ' - out of stock, no backorder';
       }
-      items.push({ name: rec.name, price, category: rec.category || '', options: variantNames, stockNote });
+      const bulkNote = isService ? '' : (variants.length ? variants.map(v => bulkOfferNote(v, v.price)).find(Boolean) : bulkOfferNote(rec, rec.priceAud ?? rec.price)) || '';
+      items.push({ name: rec.name, price, category: rec.category || '', options: variantNames, stockNote, bulkNote });
     }
   };
 
@@ -13414,7 +13427,7 @@ async function runCatalogueSearch(args) {
     items: items.slice(0, 8).map(i => {
       const priceStr = i.price ? ` ($${i.price} AUD)` : '';
       const optionsStr = i.options && i.options.length ? ` [options: ${i.options.join(', ')}]` : '';
-      return `${i.name}${priceStr}${optionsStr}${i.stockNote || ''}`;
+      return `${i.name}${priceStr}${optionsStr}${i.bulkNote || ''}${i.stockNote || ''}`;
     }),
     truncated: items.length > 8,
   };
