@@ -13630,7 +13630,7 @@ const aiGatewayServer = http.createServer(async (req, res) => {
         const text = await enqueueAI(() => generateVerifiedReply({
           systemPrompt: aiSystemPrompt() + contextBlock,
           history: messages.slice(-6).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content).slice(0, 1200) })),
-          options: { num_predict: 160, num_ctx: 2048, temperature: 0.2 },
+          options: { num_predict: 350, num_ctx: 3072, temperature: 0.2 },
           question: lastUser?.content || '',
         }));
         if (text) res.write(`data: ${JSON.stringify({ token: text })}\n\n`);
@@ -13672,7 +13672,7 @@ const aiGatewayServer = http.createServer(async (req, res) => {
         const text = await enqueueAI(() => generateVerifiedReply({
           systemPrompt: aiSystemPrompt() + contextBlock,
           history: messages.slice(-20).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content).slice(0, 4000) })),
-          options: { num_predict: 300, num_ctx: 2048, temperature: 0.2 },
+          options: { num_predict: 450, num_ctx: 3072, temperature: 0.2 },
           question: lastUser?.content || '',
         }));
         if (text) res.write(`data: ${JSON.stringify({ token: text })}\n\n`);
