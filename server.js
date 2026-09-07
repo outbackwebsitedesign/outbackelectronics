@@ -12718,6 +12718,13 @@ function migrateEnvToSettings() {
     changed = true;
   }
 
+  if (!s.integrations.find(r => r[0] === 'Ollama')) {
+    s.integrations.push(['Ollama', process.env.OLLAMA_HOST || '127.0.0.1', true, {
+      host: '', port: '', chatModel: '', visionModel: '', embedModel: '',
+    }]);
+    changed = true;
+  }
+
   if (SITE_URL && !s.shop.siteUrl) {
     s.shop = { ...s.shop, siteUrl: SITE_URL };
     changed = true;
@@ -13020,16 +13027,35 @@ async function runDuePaymentPlanCharges() {
 // ── AI Gateway ────────────────────────────────────────────────────────────────
 
 // Ollama can run on this box (default) or on another machine on the network with
-// more RAM/a GPU - point OLLAMA_HOST/OLLAMA_PORT at it and pull the model names
-// below there too. Ollama has no built-in auth, so if it's not on this box, keep
-// it LAN-only or behind a VPN/Tailscale; never expose it directly to the internet.
-const OLLAMA_HOST      = process.env.OLLAMA_HOST      || '127.0.0.1';
-const OLLAMA_PORT      = Number(process.env.OLLAMA_PORT) || 11434;
-const AI_CHAT_MODEL   = process.env.AI_CHAT_MODEL   || 'qwen2.5:1.5b';
-const AI_VISION_MODEL = process.env.AI_VISION_MODEL || 'llava-phi3';
-const AI_EMBED_MODEL  = process.env.AI_EMBED_MODEL  || 'nomic-embed-text';
+// more RAM/a GPU. Host/port/model names are set from Settings, Integrations in the
+// admin (the "Ollama" row), same pattern as Stripe/Email/Icecat/AusPost; env vars
+// are only a fallback so an existing deployment keeps working with nothing set.
+// Ollama has no built-in auth, so a remote instance must stay LAN-only or behind a
+// VPN/Tailscale; never expose it directly to the internet.
+const OLLAMA_HOST_ENV      = process.env.OLLAMA_HOST      || '127.0.0.1';
+const OLLAMA_PORT_ENV      = Number(process.env.OLLAMA_PORT) || 11434;
+const AI_CHAT_MODEL_ENV   = process.env.AI_CHAT_MODEL   || 'qwen2.5:1.5b';
+const AI_VISION_MODEL_ENV = process.env.AI_VISION_MODEL || 'llava-phi3';
+const AI_EMBED_MODEL_ENV  = process.env.AI_EMBED_MODEL  || 'nomic-embed-text';
 const AI_RATE_WINDOW  = 5 * 60 * 1000; // 5 minutes
 const AI_RATE_MAX     = 15;
+
+function getOllamaConfig() {
+  try {
+    const s = readSettings();
+    const entry = s.integrations.find(r => r[0] === 'Ollama');
+    const cfg = entry?.[3] || {};
+    return {
+      host: cfg.host || OLLAMA_HOST_ENV,
+      port: Number(cfg.port) || OLLAMA_PORT_ENV,
+      chatModel: cfg.chatModel || AI_CHAT_MODEL_ENV,
+      visionModel: cfg.visionModel || AI_VISION_MODEL_ENV,
+      embedModel: cfg.embedModel || AI_EMBED_MODEL_ENV,
+    };
+  } catch {
+    return { host: OLLAMA_HOST_ENV, port: OLLAMA_PORT_ENV, chatModel: AI_CHAT_MODEL_ENV, visionModel: AI_VISION_MODEL_ENV, embedModel: AI_EMBED_MODEL_ENV };
+  }
+}
 
 // ── Request queue (serialise Ollama calls) ────────────────────────────────────
 let _aiQueueRunning = false;
@@ -13064,8 +13090,9 @@ function checkAIRateLimit(userId) {
 
 // ── Ollama helpers ────────────────────────────────────────────────────────────
 function ollamaGet(path) {
+  const { host, port } = getOllamaConfig();
   return new Promise((resolve, reject) => {
-    const req = http.request({ hostname: OLLAMA_HOST, port: OLLAMA_PORT, path, method: 'GET', timeout: 8000 }, res => {
+    const req = http.request({ hostname: host, port, path, method: 'GET', timeout: 8000 }, res => {
       let d = ''; res.on('data', c => d += c); res.on('end', () => { try { resolve(JSON.parse(d)); } catch { resolve({}); } });
     });
     req.on('error', reject); req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); }); req.end();
@@ -13073,9 +13100,10 @@ function ollamaGet(path) {
 }
 
 function ollamaPost(path, payload, timeoutMs = 30000) {
+  const { host, port } = getOllamaConfig();
   return new Promise((resolve, reject) => {
     const body = JSON.stringify(payload);
-    const req = http.request({ hostname: OLLAMA_HOST, port: OLLAMA_PORT, path, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }, timeout: timeoutMs }, res => {
+    const req = http.request({ hostname: host, port, path, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }, timeout: timeoutMs }, res => {
       let d = ''; res.on('data', c => d += c); res.on('end', () => { try { resolve({ ok: res.statusCode === 200, body: JSON.parse(d) }); } catch { resolve({ ok: false, body: {} }); } });
     });
     req.on('error', reject); req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
@@ -13084,9 +13112,10 @@ function ollamaPost(path, payload, timeoutMs = 30000) {
 }
 
 function ollamaStream(apiPath, payload, res) {
+  const { host, port } = getOllamaConfig();
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({ ...payload, stream: true });
-    const req = http.request({ hostname: OLLAMA_HOST, port: OLLAMA_PORT, path: apiPath, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }, timeout: 120000 }, (ores) => {
+    const req = http.request({ hostname: host, port, path: apiPath, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }, timeout: 120000 }, (ores) => {
       if (ores.statusCode !== 200) { ores.resume(); return reject(new Error(`ollama:${ores.statusCode}`)); }
       let buf = '';
       ores.on('data', chunk => {
@@ -13122,7 +13151,7 @@ function cosineSim(a, b) {
 }
 
 async function getEmbedding(text) {
-  const r = await ollamaPost('/api/embeddings', { model: AI_EMBED_MODEL, prompt: text.slice(0, 2000) }, 30000);
+  const r = await ollamaPost('/api/embeddings', { model: getOllamaConfig().embedModel, prompt: text.slice(0, 2000) }, 30000);
   if (!r.ok || !r.body.embedding) throw new Error('embed failed');
   return r.body.embedding;
 }
@@ -13334,7 +13363,7 @@ const aiGatewayServer = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
       try {
         await enqueueAI(() => ollamaStream('/api/chat', {
-          model: AI_CHAT_MODEL,
+          model: getOllamaConfig().chatModel,
           messages: [
             { role: 'system', content: aiSystemPrompt() + contextBlock },
             ...messages.slice(-6).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content).slice(0, 1200) })),
@@ -13377,7 +13406,7 @@ const aiGatewayServer = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
       try {
         await enqueueAI(() => ollamaStream('/api/chat', {
-          model: AI_CHAT_MODEL,
+          model: getOllamaConfig().chatModel,
           messages: [
             { role: 'system', content: aiSystemPrompt() + contextBlock },
             ...messages.slice(-20).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content).slice(0, 4000) })),
@@ -13403,7 +13432,7 @@ const aiGatewayServer = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
       try {
         await enqueueAI(() => ollamaStream('/api/generate', {
-          model: AI_VISION_MODEL,
+          model: getOllamaConfig().visionModel,
           system: 'You are an electronics repair technician. Respond only with plain text, no ASCII art, no diagrams, no decorative lines or symbols. Be concise and practical.',
           prompt: prompt || 'Analyse this electronics image. Identify the component or PCB. Describe any visible damage such as burnt components, failed capacitors, cracked traces, corrosion, or physical damage. Provide a diagnosis and recommended repair steps.',
           images: [b64],

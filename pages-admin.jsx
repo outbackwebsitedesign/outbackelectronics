@@ -12659,6 +12659,24 @@ function SettingsStaffTab({ staffMembers, staffForm, setStaffForm, staffBusy, on
 }
 SettingsStaffTab = React.memo(SettingsStaffTab);
 
+function OllamaIntegrationFields({ integrationForm, setIntegrationForm }) {
+  return <>
+    <label className="field"><span className="label">Host</span>
+      <input className="input" value={integrationForm.host || ''} onChange={e => setIntegrationForm({...integrationForm, host: e.target.value})} placeholder="127.0.0.1, or a LAN/Tailscale IP"/></label>
+    <label className="field"><span className="label">Port</span>
+      <input className="input" value={integrationForm.port || ''} onChange={e => setIntegrationForm({...integrationForm, port: e.target.value})} placeholder="11434"/></label>
+    <label className="field"><span className="label">Chat model</span>
+      <input className="input" value={integrationForm.chatModel || ''} onChange={e => setIntegrationForm({...integrationForm, chatModel: e.target.value})} placeholder="qwen2.5:1.5b"/></label>
+    <label className="field"><span className="label">Vision model</span>
+      <input className="input" value={integrationForm.visionModel || ''} onChange={e => setIntegrationForm({...integrationForm, visionModel: e.target.value})} placeholder="llava-phi3"/></label>
+    <label className="field"><span className="label">Embedding model</span>
+      <input className="input" value={integrationForm.embedModel || ''} onChange={e => setIntegrationForm({...integrationForm, embedModel: e.target.value})} placeholder="nomic-embed-text"/></label>
+    <p style={{fontSize:11, color:'var(--ink-3)', margin:'-4px 0 8px'}}>
+      Leave any field blank to use its default. If Ollama runs on another machine, that machine must expose the port to this server only (LAN firewall rule or a VPN like Tailscale) and have the model names above already pulled there — Ollama has no login of its own, so never forward this port to the internet.
+    </p>
+  </>;
+}
+
 function SettingsIntegrationsTab({ integrations, setIntegrations, savedIntegrations, integrationModal, setIntegrationModal, integrationForm, setIntegrationForm, integrationsDirty, sectionBusy, onSubmit, onOpenModal, onOpenAddModal, onSaveModal, onDisconnect, onRemove }) {
   useEffect(() => {
     if (!integrationModal) return;
@@ -12722,7 +12740,8 @@ function SettingsIntegrationsTab({ integrations, setIntegrations, savedIntegrati
                   Used by the PC Builder to fill in specs from a part number.
                 </p>
               </>}
-              {integrationForm.name !== 'Stripe' && integrationForm.name !== 'Email' && integrationForm.name !== 'Icecat' && <>
+              {integrationForm.name === 'Ollama' && <OllamaIntegrationFields integrationForm={integrationForm} setIntegrationForm={setIntegrationForm}/>}
+              {integrationForm.name !== 'Stripe' && integrationForm.name !== 'Email' && integrationForm.name !== 'Icecat' && integrationForm.name !== 'Ollama' && <>
                 <label className="field"><span className="label">Endpoint</span><input className="input" value={integrationForm.endpoint} onChange={e => setIntegrationForm({...integrationForm, endpoint: e.target.value})} placeholder="e.g. api.mailchimp.com"/></label>
                 <label className="field"><span className="label">API Key</span><input className="input" value={integrationForm.apiKey} onChange={e => setIntegrationForm({...integrationForm, apiKey: e.target.value})}/></label>
                 <label className="field"><span className="label">Notes</span><input className="input" value={integrationForm.notes} onChange={e => setIntegrationForm({...integrationForm, notes: e.target.value})}/></label>
@@ -12751,7 +12770,8 @@ function SettingsIntegrationsTab({ integrations, setIntegrations, savedIntegrati
                 The username alone covers Open Icecat brands; an app key is needed for the rest.
               </p>
             </>}
-            {integrationModal.mode === 'edit' && integrationForm.name !== 'Stripe' && integrationForm.name !== 'Email' && integrationForm.name !== 'Icecat' && <>
+            {integrationModal.mode === 'edit' && integrationForm.name === 'Ollama' && <OllamaIntegrationFields integrationForm={integrationForm} setIntegrationForm={setIntegrationForm}/>}
+            {integrationModal.mode === 'edit' && integrationForm.name !== 'Stripe' && integrationForm.name !== 'Email' && integrationForm.name !== 'Icecat' && integrationForm.name !== 'Ollama' && <>
               <label className="field"><span className="label">Endpoint</span><input className="input" value={integrationForm.endpoint} onChange={e => setIntegrationForm({...integrationForm, endpoint: e.target.value})}/></label>
               <label className="field"><span className="label">API Key</span><input className="input" value={integrationForm.apiKey} onChange={e => setIntegrationForm({...integrationForm, apiKey: e.target.value})}/></label>
               <label className="field"><span className="label">Notes</span><input className="input" value={integrationForm.notes} onChange={e => setIntegrationForm({...integrationForm, notes: e.target.value})}/></label>
@@ -13049,11 +13069,11 @@ function AdminSettingsFull({ sessionInfo = {} }) {
   const openIntegrationModal = (idx) => {
     const r = integrations[idx];
     const cfg = r[3] || {};
-    setIntegrationForm({ name: r[0], endpoint: r[1], secretKey: cfg.secretKey || '', publishableKey: cfg.publishableKey || '', webhookSecret: cfg.webhookSecret || '', host: cfg.host || '', port: cfg.port || '', user: cfg.user || '', pass: cfg.pass || '', notifyEmail: cfg.notifyEmail || '', apiKey: cfg.apiKey || '', username: cfg.username || '', notes: cfg.notes || '' });
+    setIntegrationForm({ name: r[0], endpoint: r[1], secretKey: cfg.secretKey || '', publishableKey: cfg.publishableKey || '', webhookSecret: cfg.webhookSecret || '', host: cfg.host || '', port: cfg.port || '', user: cfg.user || '', pass: cfg.pass || '', notifyEmail: cfg.notifyEmail || '', apiKey: cfg.apiKey || '', username: cfg.username || '', notes: cfg.notes || '', chatModel: cfg.chatModel || '', visionModel: cfg.visionModel || '', embedModel: cfg.embedModel || '' });
     setIntegrationModal({ mode: 'edit', idx });
   };
   const openAddIntegrationModal = () => {
-    setIntegrationForm({ name: '', endpoint: '', secretKey: '', webhookSecret: '', apiKey: '', username: '', notes: '' });
+    setIntegrationForm({ name: '', endpoint: '', secretKey: '', webhookSecret: '', apiKey: '', username: '', notes: '', host: '', port: '', chatModel: '', visionModel: '', embedModel: '' });
     setIntegrationModal({ mode: 'add', idx: null });
   };
   const saveIntegrationModal = () => {
@@ -13061,6 +13081,7 @@ function AdminSettingsFull({ sessionInfo = {} }) {
     const isStripe = integrationForm.name === 'Stripe';
     const isEmail = integrationForm.name === 'Email';
     const isIcecat = integrationForm.name === 'Icecat';
+    const isOllama = integrationForm.name === 'Ollama';
     const config = isStripe
       ? { secretKey: integrationForm.secretKey, publishableKey: integrationForm.publishableKey, webhookSecret: integrationForm.webhookSecret }
       : isEmail
@@ -13069,10 +13090,12 @@ function AdminSettingsFull({ sessionInfo = {} }) {
       // readable; the app key goes in apiKey, which is encrypted at rest.
       : isIcecat
       ? { username: integrationForm.username || '', apiKey: integrationForm.apiKey || '' }
+      : isOllama
+      ? { host: integrationForm.host || '', port: integrationForm.port || '', chatModel: integrationForm.chatModel || '', visionModel: integrationForm.visionModel || '', embedModel: integrationForm.embedModel || '' }
       : { apiKey: integrationForm.apiKey, notes: integrationForm.notes };
     if (mode === 'add') {
       if (!integrationForm.name.trim()) return;
-      const defaultEndpoints = { Stripe: 'api.stripe.com', Email: integrationForm.host || 'smtp.gmail.com', AusPost: 'digitalapi.auspost.com.au', Icecat: 'live.icecat.biz' };
+      const defaultEndpoints = { Stripe: 'api.stripe.com', Email: integrationForm.host || 'smtp.gmail.com', AusPost: 'digitalapi.auspost.com.au', Icecat: 'live.icecat.biz', Ollama: integrationForm.host || '127.0.0.1' };
       const endpoint = integrationForm.endpoint.trim() || defaultEndpoints[integrationForm.name] || '';
       setIntegrations([...integrations, [integrationForm.name.trim(), endpoint, true, config]]);
     } else {
