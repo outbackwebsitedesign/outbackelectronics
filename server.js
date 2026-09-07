@@ -13539,6 +13539,23 @@ async function catalogueCheckBlock(query) {
   return `\n\nLive catalogue check for this question (authoritative, current stock and pricing): ${summary}`;
 }
 
+// A "what/which ones do you have" style listing question kept getting a
+// hedge ("I'm not sure which are available") immediately followed by the
+// model naming the exact item it just said it wasn't sure about, in the same
+// sentence. The catalogue check found the right answer every time; the model
+// just couldn't phrase it coherently. Answered straight from the real search
+// results instead of trusted to the model to narrate.
+function asksForCatalogueList(text) {
+  const q = String(text || '').toLowerCase();
+  return /\b(what|which)\b/.test(q) && /\b(ones?|options?|models?|types?|kinds?|available|have|got|do you (have|sell|offer|stock))\b/.test(q);
+}
+async function catalogueListAutoAnswer(messages, lastUserContent) {
+  if (!asksForCatalogueList(lastUserContent)) return null;
+  const result = await runCatalogueSearch({ query: catalogueQueryFor(messages, lastUserContent) });
+  if (result.count === 0) return "We don't have anything matching that in the catalogue right now, sorry. Want me to check something else, or email a human?";
+  return `We have: ${result.items.join(', ')}.${result.truncated ? ' (There are more than shown here, ask about a specific one for details.)' : ''}`;
+}
+
 // ── AI Gateway server ─────────────────────────────────────────────────────────
 const aiGatewayServer = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
@@ -13591,9 +13608,10 @@ const aiGatewayServer = http.createServer(async (req, res) => {
       const lastUser = [...messages].reverse().find(m => m.role === 'user');
       const contextProduct = lookupContextProduct(body?.productContext);
       const variantAnswer = lastUser ? variantAutoAnswer(contextProduct, lastUser.content) : null;
-      if (variantAnswer) {
+      const listAnswer = !variantAnswer && lastUser ? await catalogueListAutoAnswer(messages, lastUser.content) : null;
+      if (variantAnswer || listAnswer) {
         res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
-        res.write(`data: ${JSON.stringify({ token: variantAnswer })}\n\n`);
+        res.write(`data: ${JSON.stringify({ token: variantAnswer || listAnswer })}\n\n`);
         res.write('data: [DONE]\n\n');
         return res.end();
       }
@@ -13640,9 +13658,10 @@ const aiGatewayServer = http.createServer(async (req, res) => {
       const lastUser = [...messages].reverse().find(m => m.role === 'user');
       const contextProduct = lookupContextProduct(body?.productContext);
       const variantAnswer = lastUser ? variantAutoAnswer(contextProduct, lastUser.content) : null;
-      if (variantAnswer) {
+      const listAnswer = !variantAnswer && lastUser ? await catalogueListAutoAnswer(messages, lastUser.content) : null;
+      if (variantAnswer || listAnswer) {
         res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
-        res.write(`data: ${JSON.stringify({ token: variantAnswer })}\n\n`);
+        res.write(`data: ${JSON.stringify({ token: variantAnswer || listAnswer })}\n\n`);
         res.write('data: [DONE]\n\n');
         return res.end();
       }
