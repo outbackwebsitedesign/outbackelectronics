@@ -13524,48 +13524,33 @@ async function catalogueCheckBlock(query) {
   return { block: `\n\nLive catalogue check for this question (authoritative, current stock and pricing): ${summary}`, result };
 }
 
-// Prompt instructions have repeatedly failed to stop the model inventing
-// specific facts (a colour, a whole product, a wrong stock claim) even when
-// told directly and repeatedly not to. Rather than accept that or write a
-// hand-picked reply in its place (never done, per rule), this checks the
-// model's own generated answer against the two concrete fabrication shapes
-// actually observed in testing, and if either fires, asks the SAME model to
-// try again with the mistake pointed out. The customer only ever sees
-// model-generated text, this is a self-correction pass, not a substitution.
-function looksFabricated(text, catalogueResult, tradingName) {
-  if (!text) return false;
-  // Stating a specific dollar price when the search behind it found
-  // literally nothing to base that on is a sharp, specific fabrication
-  // signal on its own. Deliberately not matching bare words like "in stock"
-  // or "backorder" here, those show up constantly in perfectly ordinary
-  // replies unrelated to a catalogue miss (general policy/service answers)
-  // and flagging on them alone was forcing a needless, quality-degrading
-  // regenerate on a huge share of normal replies.
-  if (catalogueResult && catalogueResult.count === 0 && /\$\s?\d/.test(text)) return true;
-  // A product invented in this shop's own branding style ("Outback
-  // Electronics PCI-E Wi-Fi Card"). Mentioning the shop's own name in an
-  // ordinary sentence ("Outback Electronics does not sell phones") is
-  // extremely common and correct, so this must NOT fire on that: it only
-  // matches when at least two consecutive capitalised/hyphenated words
-  // follow the name directly, the shape of an invented model/product name,
-  // never a verb, article or ordinary lowercase continuation.
-  if (tradingName) {
-    const escaped = tradingName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const re = new RegExp(`\\b${escaped}\\s+(?:[A-Z][\\w-]*\\s+){1,}[A-Z][\\w-]*`);
-    if (re.test(text)) return true;
-  }
-  return false;
+// Every reply is judged, not just ones matching a hand-picked pattern:
+// pattern-matching only catches failure shapes already seen once, and
+// (as just proven) is easy to get wrong in the other direction too. This
+// asks the model itself, as a separate check, the two questions that
+// actually matter for every single answer: does it relate to what was
+// asked, and is it actually backed by the source data it was given. A
+// judgement is more general than any regex; it still isn't perfect, but it
+// isn't hand-tuned to only catch what's already been observed to break.
+async function verifyReply({ chatModel, question, sourceData, reply }) {
+  const verifyMessages = [
+    { role: 'system', content: 'You are a strict fact-checker for a customer support reply. You will be shown the customer\'s question, the real source data available to answer it, and a draft reply. Reply with exactly one word, OK or BAD: OK only if the draft reply is relevant to the question AND every fact it states is directly backed by the source data (a plain "I\'m not sure" or "that isn\'t in our catalogue" is always OK, even with no matching source data, because it invents nothing). BAD if it answers something else, or states any product name, price, stock status, colour, date, or other specific fact that is not actually present in the source data.' },
+    { role: 'user', content: `Customer's question: ${question}\n\nSource data:\n${sourceData || '(none provided)'}\n\nDraft reply: ${reply}\n\nOK or BAD?` },
+  ];
+  const res = await ollamaPost('/api/chat', { model: chatModel, messages: verifyMessages, stream: false, options: { temperature: 0, num_predict: 5 } }, 30000);
+  if (!res.ok) return true; // fail open on an infra error, don't block every reply over a network hiccup
+  return /^\s*ok\b/i.test(res.body?.message?.content || '');
 }
 
-async function generateVerifiedReply({ systemPrompt, history, options, catalogueResult }) {
+async function generateVerifiedReply({ systemPrompt, history, options, question }) {
   const { chatModel } = getOllamaConfig();
   const baseMessages = [{ role: 'system', content: systemPrompt }, ...history];
   const first = await ollamaPost('/api/chat', { model: chatModel, messages: baseMessages, stream: false, options }, 60000);
   if (!first.ok) throw new Error('chat_failed');
   let text = first.body?.message?.content || '';
-  const tradingName = getBusinessIdentity().tradingName;
-  if (looksFabricated(text, catalogueResult, tradingName)) {
-    const correction = { role: 'system', content: `Your last answer was: "${text}" - that stated something not actually present in the catalogue data you were given, which is not allowed. Answer the customer's message again using only the real data in the system prompt above; if it genuinely doesn't answer the question, say so plainly instead of inventing anything.` };
+  const ok = await verifyReply({ chatModel, question, sourceData: systemPrompt, reply: text });
+  if (!ok) {
+    const correction = { role: 'system', content: `Your last answer was: "${text}" - a check found it either doesn't answer the customer's actual question or states something not actually present in the source data above. Answer again using only that real data; if it genuinely doesn't answer the question, say so plainly instead of inventing anything.` };
     const retry = await ollamaPost('/api/chat', { model: chatModel, messages: [...baseMessages, correction], stream: false, options }, 60000);
     if (retry.ok && retry.body?.message?.content) text = retry.body.message.content;
   }
@@ -13632,13 +13617,11 @@ const aiGatewayServer = http.createServer(async (req, res) => {
       // exact-match lookup itself when there's no product context to look up.
       const productBlock = productContextBlock(body?.productContext);
       let contextBlock = '';
-      let catalogueResult = null;
       if (lastUser) {
         const hits = await ragSearch(lastUser.content, 6);
         if (hits.length) contextBlock = '\n\nRelevant catalogue context:\n' + hits.map(h => `[${h.type.toUpperCase()}] ${h.title}: ${h.text.slice(0, 220)}`).join('\n\n');
         const catalogueCheck = await catalogueCheckBlock(catalogueQueryFor(messages, lastUser.content));
         contextBlock += catalogueCheck.block;
-        catalogueResult = catalogueCheck.result;
       }
       contextBlock += productBlock;
 
@@ -13648,7 +13631,7 @@ const aiGatewayServer = http.createServer(async (req, res) => {
           systemPrompt: aiSystemPrompt() + contextBlock,
           history: messages.slice(-6).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content).slice(0, 1200) })),
           options: { num_predict: 160, num_ctx: 2048, temperature: 0.2 },
-          catalogueResult,
+          question: lastUser?.content || '',
         }));
         if (text) res.write(`data: ${JSON.stringify({ token: text })}\n\n`);
         res.write('data: [DONE]\n\n');
@@ -13676,13 +13659,11 @@ const aiGatewayServer = http.createServer(async (req, res) => {
       // exact-match lookup itself when there's no product context to look up.
       const productBlock = productContextBlock(body?.productContext);
       let contextBlock = '';
-      let catalogueResult = null;
       if (lastUser) {
         const hits = await ragSearch(lastUser.content, 6);
         if (hits.length) contextBlock = '\n\nRelevant catalogue context:\n' + hits.map(h => `[${h.type.toUpperCase()}] ${h.title}: ${h.text.slice(0, 220)}`).join('\n\n');
         const catalogueCheck = await catalogueCheckBlock(catalogueQueryFor(messages, lastUser.content));
         contextBlock += catalogueCheck.block;
-        catalogueResult = catalogueCheck.result;
       }
       contextBlock += productBlock;
 
@@ -13692,7 +13673,7 @@ const aiGatewayServer = http.createServer(async (req, res) => {
           systemPrompt: aiSystemPrompt() + contextBlock,
           history: messages.slice(-20).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content).slice(0, 4000) })),
           options: { num_predict: 300, num_ctx: 2048, temperature: 0.2 },
-          catalogueResult,
+          question: lastUser?.content || '',
         }));
         if (text) res.write(`data: ${JSON.stringify({ token: text })}\n\n`);
         res.write('data: [DONE]\n\n');
