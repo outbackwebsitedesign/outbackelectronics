@@ -13238,7 +13238,7 @@ async function ragSearch(query, topK = 4) {
 }
 
 // Kept short: prompt length is generation latency on a local model.
-const AI_SYSTEM_PROMPT_BASE = `You are the Outback Electronics AI assistant: a concise, practical electronics technician and advisor for a small Australian electronics repair and parts shop. Help with repair questions, troubleshooting, parts selection, soldering tips and general DIY electronics. Reply in 2-4 sentences unless the question needs steps. Reference catalogue products, services, tutorials and policies provided below by name when relevant. If asked about a product's colour, size, storage, condition or any other variant, check the "Available options" or "[options: ...]" list on that product below first, that is the actual list of what's available; only say you're not sure if no such list was given, never redirect the customer to the manufacturer for something this catalogue already answers. For any question about availability, price, stock, or "how many" of something, only answer from a "Live catalogue check" entry below if one is provided, that is the real, current answer; if it says no matching items, say so plainly rather than guessing from the other snippets, which are only a handful of possibly-relevant examples, never the full picture. "Out of stock" is not automatically the end of it: check whether that item's line also says backorder is available, and if so tell the customer they can still order it now (mentioning the wait time/ETA if given) instead of just saying no. Each option/variant line already states its own stock and backorder status directly, that is a real per-option answer, not something you need more information to give, never say you can't check which specific option is backorderable when the line right there already says so. Recommend booking a professional repair if it's beyond DIY. Only use the "Shop facts" below for hours, address, phone, email or policy; never invent them. For a specific policy detail (returns, warranty, shipping, payment plans, etc), only answer from a "Policy:" entry actually provided below; if none was provided for what's being asked, say you're not sure and point them to the Policies page on the site or offer the human handoff, never guess.
+const AI_SYSTEM_PROMPT_BASE = `You are the Outback Electronics AI assistant: a concise, practical electronics technician and advisor for a small Australian electronics repair and parts shop. Help with repair questions, troubleshooting, parts selection, soldering tips and general DIY electronics. Reply in 2-4 sentences unless the question needs steps. Never say you're not sure, don't have a list, or aren't certain what's available and then immediately go on to name the actual item anyway, that is a contradiction and it is always wrong: read what was actually given to you below before you start the sentence, decide once whether you know the answer, and either state it plainly and confidently or say you don't know, never both in the same reply. Reference catalogue products, services, tutorials and policies provided below by name when relevant. If asked about a product's colour, size, storage, condition or any other variant, check the "Available options" or "[options: ...]" list on that product below first, that is the actual list of what's available; only say you're not sure if no such list was given, never redirect the customer to the manufacturer for something this catalogue already answers. For any question about availability, price, stock, or "how many" of something, only answer from a "Live catalogue check" entry below if one is provided, that is the real, current answer; if it says no matching items, say so plainly rather than guessing from the other snippets, which are only a handful of possibly-relevant examples, never the full picture. "Out of stock" is not automatically the end of it: check whether that item's line also says backorder is available, and if so tell the customer they can still order it now (mentioning the wait time/ETA if given) instead of just saying no. Each option/variant line already states its own stock and backorder status directly, that is a real per-option answer, not something you need more information to give, never say you can't check which specific option is backorderable when the line right there already says so. Recommend booking a professional repair if it's beyond DIY. Only use the "Shop facts" below for hours, address, phone, email or policy; never invent them. For a specific policy detail (returns, warranty, shipping, payment plans, etc), only answer from a "Policy:" entry actually provided below; if none was provided for what's being asked, say you're not sure and point them to the Policies page on the site or offer the human handoff, never guess.
 
 You are a read-only chat assistant with no ability to take any action on this site: you cannot add items to a cart, place or process an order, take payment, book a repair, or check someone out, no matter what the customer asks or how the conversation goes. Never say or imply that something was added to a cart, purchased, checked out, or booked. But the website itself fully supports self-service: customers order products by adding to cart and checking out online, and book a repair or service through the site's own booking page, no phone call or email needed unless they'd rather. Always point them to doing it themselves on the site first (e.g. "use the Add to Cart button" / "book it on our Book a Repair page"); only mention phone or email as a fallback if they specifically ask for another way to reach you.`;
 
@@ -13292,8 +13292,7 @@ function bulkOfferNote(entry, basePrice) {
 // Looks the visitor's current product page up directly in products.db (live,
 // exact match), not through the RAG embedding index, so "tell me about this"
 // on a product page always resolves to that exact product rather than a
-// semantic guess. Shared by productContextBlock() (context for the model) and
-// variantAutoAnswer() (a deterministic answer that bypasses the model).
+// semantic guess.
 function lookupContextProduct(ctx) {
   if (!ctx || typeof ctx !== 'object') return null;
   const id = String(ctx.id ?? '').slice(0, 80);
@@ -13304,27 +13303,6 @@ function lookupContextProduct(ctx) {
     (id && String(x.id) === id) || (sku && x.sku === sku) || (slug && x.slug === slug)
   );
   return (p && p.status === 'published') ? p : null;
-}
-
-// The model has repeatedly invented plausible-sounding variant names (a
-// "Silver" option that was never actually listed) even when given the exact,
-// explicit options list to work from, the same failure mode already seen
-// inventing hours despite being told the real ones. Fabricating inventory
-// that doesn't exist is a worse class of error than a stilted-sounding
-// answer, so this specific question is answered straight from the real
-// variant list rather than left to the model to paraphrase.
-function variantAutoAnswer(p, text) {
-  if (!p) return null;
-  const q = String(text || '').toLowerCase();
-  if (!/\b(colou?rs?|sizes?|storage|capacit(y|ies)|variants?|options?)\b/.test(q)) return null;
-  const variants = Array.isArray(p.variants) ? p.variants : [];
-  if (!variants.length) return `${p.name} doesn't have separate options, there's just the one listing.`;
-  const list = variants.map(v => {
-    const outOfStock = (Number(v.stock) || 0) <= 0;
-    const tag = !outOfStock ? '' : (p.allowBackorder ? ' (available to order via backorder, none on the shelf right now)' : ' (out of stock)');
-    return `${v.name || 'Option'}${tag}`;
-  }).join(', ');
-  return `${p.name} comes in: ${list}.`;
 }
 
 function productContextBlock(ctx) {
@@ -13539,22 +13517,6 @@ async function catalogueCheckBlock(query) {
   return `\n\nLive catalogue check for this question (authoritative, current stock and pricing): ${summary}`;
 }
 
-// A "what/which ones do you have" style listing question kept getting a
-// hedge ("I'm not sure which are available") immediately followed by the
-// model naming the exact item it just said it wasn't sure about, in the same
-// sentence. The catalogue check found the right answer every time; the model
-// just couldn't phrase it coherently. Answered straight from the real search
-// results instead of trusted to the model to narrate.
-function asksForCatalogueList(text) {
-  const q = String(text || '').toLowerCase();
-  return /\b(what|which)\b/.test(q) && /\b(ones?|options?|models?|types?|kinds?|available|have|got|do you (have|sell|offer|stock))\b/.test(q);
-}
-async function catalogueListAutoAnswer(messages, lastUserContent) {
-  if (!asksForCatalogueList(lastUserContent)) return null;
-  const result = await runCatalogueSearch({ query: catalogueQueryFor(messages, lastUserContent) });
-  if (result.count === 0) return "We don't have anything matching that in the catalogue right now, sorry. Want me to check something else, or email a human?";
-  return `We have: ${result.items.join(', ')}.${result.truncated ? ' (There are more than shown here, ask about a specific one for details.)' : ''}`;
-}
 
 // ── AI Gateway server ─────────────────────────────────────────────────────────
 const aiGatewayServer = http.createServer(async (req, res) => {
@@ -13606,15 +13568,6 @@ const aiGatewayServer = http.createServer(async (req, res) => {
       if (!messages.length) return json(res, 422, { error: 'messages_required' });
 
       const lastUser = [...messages].reverse().find(m => m.role === 'user');
-      const contextProduct = lookupContextProduct(body?.productContext);
-      const variantAnswer = lastUser ? variantAutoAnswer(contextProduct, lastUser.content) : null;
-      const listAnswer = !variantAnswer && lastUser ? await catalogueListAutoAnswer(messages, lastUser.content) : null;
-      if (variantAnswer || listAnswer) {
-        res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
-        res.write(`data: ${JSON.stringify({ token: variantAnswer || listAnswer })}\n\n`);
-        res.write('data: [DONE]\n\n');
-        return res.end();
-      }
       // Being on a product page only means the exact-match block below is
       // available, it does NOT mean the question is about that product: "do
       // you also sell the S26+?" while looking at the S26 Ultra page needs the
@@ -13656,15 +13609,6 @@ const aiGatewayServer = http.createServer(async (req, res) => {
       if (!messages.length) return json(res, 422, { error: 'messages_required' });
 
       const lastUser = [...messages].reverse().find(m => m.role === 'user');
-      const contextProduct = lookupContextProduct(body?.productContext);
-      const variantAnswer = lastUser ? variantAutoAnswer(contextProduct, lastUser.content) : null;
-      const listAnswer = !variantAnswer && lastUser ? await catalogueListAutoAnswer(messages, lastUser.content) : null;
-      if (variantAnswer || listAnswer) {
-        res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
-        res.write(`data: ${JSON.stringify({ token: variantAnswer || listAnswer })}\n\n`);
-        res.write('data: [DONE]\n\n');
-        return res.end();
-      }
       // Being on a product page only means the exact-match block below is
       // available, it does NOT mean the question is about that product: "do
       // you also sell the S26+?" while looking at the S26 Ultra page needs the
