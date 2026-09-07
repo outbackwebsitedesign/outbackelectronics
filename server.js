@@ -13184,6 +13184,31 @@ async function buildRagIndex() {
     docs.push({ id: t.id, type: 'tutorial', title: t.title, text, emb });
   }
 
+  const services = readServices().filter(s => s.status === 'published');
+  for (const s of services) {
+    const text = `Service: ${s.name}. Category: ${s.category || ''}. Price: $${s.priceAud || '?'} AUD. ${stripHtml(s.description || '')}`.slice(0, 1500);
+    const key = `svc-${s.id}`;
+    let emb = cache[key];
+    if (!emb) { try { emb = await getEmbedding(text); cache[key] = emb; } catch { continue; } }
+    docs.push({ id: s.id, type: 'service', title: s.name, text, emb });
+  }
+
+  // Policies are indexed per audience (private/commercial/seller/all) since the
+  // same slug can carry a different body per audience; placeholders are filled
+  // server-side (the live site fills them client-side) so the indexed text and
+  // any snippet quoted back to a customer reads as real contact details, not
+  // literal {{email}}/{{phone}} tokens.
+  const b = getBusinessIdentity();
+  const policies = getEffectivePolicies().filter(p => p.status === 'published');
+  for (const p of policies) {
+    const body = fillSiteContentPlaceholders(stripHtml(p.body || '').replace(/[#*_`]/g, ''), b).slice(0, 900);
+    const text = `Policy: ${p.title} (${p.audience} customers). ${body}`.slice(0, 1500);
+    const key = `pol-${p.audience}-${p.slug}`;
+    let emb = cache[key];
+    if (!emb) { try { emb = await getEmbedding(text); cache[key] = emb; } catch { continue; } }
+    docs.push({ id: key, type: 'policy', title: `${p.title} (${p.audience})`, text, emb });
+  }
+
   try { atomicWriteFile(RAG_CACHE_DB_PATH, JSON.stringify(cache)); } catch { }
   _ragDocs = docs;
   _ragReady = true;
@@ -13191,19 +13216,24 @@ async function buildRagIndex() {
   console.log(`[ai] RAG index ready - ${docs.length} documents`);
 }
 
+// A weak match is worse than no match: injecting a barely-related product as
+// "context" for something we don't actually stock risks the model reading it
+// as confirmation and answering yes instead of correctly saying no.
+const RAG_MIN_SCORE = 0.35;
 async function ragSearch(query, topK = 4) {
   if (!_ragReady || !_ragDocs.length) return [];
   try {
     const qEmb = await getEmbedding(query);
     return _ragDocs
       .map(d => ({ ...d, score: cosineSim(qEmb, d.emb) }))
+      .filter(d => d.score >= RAG_MIN_SCORE)
       .sort((a, b) => b.score - a.score)
       .slice(0, topK);
   } catch { return []; }
 }
 
 // Kept short: prompt length is generation latency on a local model.
-const AI_SYSTEM_PROMPT_BASE = `You are the Outback Electronics AI assistant: a concise, practical electronics technician and advisor for a small Australian electronics repair and parts shop. Help with repair questions, troubleshooting, parts selection, soldering tips and general DIY electronics. Reply in 2-4 sentences unless the question needs steps. Reference catalogue products/tutorials below by name when relevant. Recommend booking a professional repair if it's beyond DIY. Only use the "Shop facts" below for hours, address, phone, email or policy; never invent them.
+const AI_SYSTEM_PROMPT_BASE = `You are the Outback Electronics AI assistant: a concise, practical electronics technician and advisor for a small Australian electronics repair and parts shop. Help with repair questions, troubleshooting, parts selection, soldering tips and general DIY electronics. Reply in 2-4 sentences unless the question needs steps. Reference catalogue products, services, tutorials and policies provided below by name when relevant. If someone asks whether you sell or offer something and no matching "Product:" or "Service:" entry was provided below, say you don't believe that's something the shop currently offers, don't guess or assume it might be. Recommend booking a professional repair if it's beyond DIY. Only use the "Shop facts" below for hours, address, phone, email or policy; never invent them. For a specific policy detail (returns, warranty, shipping, payment plans, etc), only answer from a "Policy:" entry actually provided below; if none was provided for what's being asked, say you're not sure and point them to the Policies page on the site or offer the human handoff, never guess.
 
 You are a read-only chat assistant with no ability to take any action on this site: you cannot add items to a cart, place or process an order, take payment, book a repair, or check someone out, no matter what the customer asks or how the conversation goes. Never say or imply that something was added to a cart, purchased, checked out, or booked. But the website itself fully supports self-service: customers order products by adding to cart and checking out online, and book a repair or service through the site's own booking page, no phone call or email needed unless they'd rather. Always point them to doing it themselves on the site first (e.g. "use the Add to Cart button" / "book it on our Book a Repair page"); only mention phone or email as a fallback if they specifically ask for another way to reach you.`;
 
