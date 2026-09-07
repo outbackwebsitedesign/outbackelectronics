@@ -13166,7 +13166,9 @@ async function buildRagIndex() {
 
   const products = readProducts().filter(p => p.status === 'published');
   for (const p of products) {
-    const text = `Product: ${p.name}. Category: ${p.category || ''}. Brand: ${p.brand || ''}. Condition: ${p.cond || ''}. Price: $${p.priceAud || '?'} AUD. ${p.description || ''}`.slice(0, 1500);
+    const variantNames = Array.isArray(p.variants) ? p.variants.map(v => v.name).filter(Boolean) : [];
+    const optionsText = variantNames.length ? ` Available options: ${variantNames.join(', ')}.` : '';
+    const text = `Product: ${p.name}. Category: ${p.category || ''}. Brand: ${p.brand || ''}. Condition: ${p.cond || ''}. Price: $${p.priceAud || '?'} AUD.${optionsText} ${p.description || ''}`.slice(0, 1500);
     const key = `prod-${p.id}`;
     let emb = cache[key];
     if (!emb) { try { emb = await getEmbedding(text); cache[key] = emb; } catch { continue; } }
@@ -13236,7 +13238,7 @@ async function ragSearch(query, topK = 4) {
 }
 
 // Kept short: prompt length is generation latency on a local model.
-const AI_SYSTEM_PROMPT_BASE = `You are the Outback Electronics AI assistant: a concise, practical electronics technician and advisor for a small Australian electronics repair and parts shop. Help with repair questions, troubleshooting, parts selection, soldering tips and general DIY electronics. Reply in 2-4 sentences unless the question needs steps. Reference catalogue products, services, tutorials and policies provided below by name when relevant. For any question about availability, price, stock, or "how many" of something, only answer from a "Live catalogue check" entry below if one is provided, that is the real, current answer; if it says no matching items, say so plainly rather than guessing from the other snippets, which are only a handful of possibly-relevant examples, never the full picture. Recommend booking a professional repair if it's beyond DIY. Only use the "Shop facts" below for hours, address, phone, email or policy; never invent them. For a specific policy detail (returns, warranty, shipping, payment plans, etc), only answer from a "Policy:" entry actually provided below; if none was provided for what's being asked, say you're not sure and point them to the Policies page on the site or offer the human handoff, never guess.
+const AI_SYSTEM_PROMPT_BASE = `You are the Outback Electronics AI assistant: a concise, practical electronics technician and advisor for a small Australian electronics repair and parts shop. Help with repair questions, troubleshooting, parts selection, soldering tips and general DIY electronics. Reply in 2-4 sentences unless the question needs steps. Reference catalogue products, services, tutorials and policies provided below by name when relevant. If asked about a product's colour, size, storage, condition or any other variant, check the "Available options" or "[options: ...]" list on that product below first, that is the actual list of what's available; only say you're not sure if no such list was given, never redirect the customer to the manufacturer for something this catalogue already answers. For any question about availability, price, stock, or "how many" of something, only answer from a "Live catalogue check" entry below if one is provided, that is the real, current answer; if it says no matching items, say so plainly rather than guessing from the other snippets, which are only a handful of possibly-relevant examples, never the full picture. Recommend booking a professional repair if it's beyond DIY. Only use the "Shop facts" below for hours, address, phone, email or policy; never invent them. For a specific policy detail (returns, warranty, shipping, payment plans, etc), only answer from a "Policy:" entry actually provided below; if none was provided for what's being asked, say you're not sure and point them to the Policies page on the site or offer the human handoff, never guess.
 
 You are a read-only chat assistant with no ability to take any action on this site: you cannot add items to a cart, place or process an order, take payment, book a repair, or check someone out, no matter what the customer asks or how the conversation goes. Never say or imply that something was added to a cart, purchased, checked out, or booked. But the website itself fully supports self-service: customers order products by adding to cart and checking out online, and book a repair or service through the site's own booking page, no phone call or email needed unless they'd rather. Always point them to doing it themselves on the site first (e.g. "use the Add to Cart button" / "book it on our Book a Repair page"); only mention phone or email as a fallback if they specifically ask for another way to reach you.`;
 
@@ -13296,8 +13298,14 @@ function productContextBlock(ctx) {
   const priceLine = variants.length
     ? variants.map(v => `${v.name || 'Option'}: $${Number(v.price) || 0} AUD${(Number(v.stock) || 0) > 0 ? '' : ' (out of stock)'}`).join('; ')
     : `$${p.priceAud ?? p.price ?? '?'} AUD`;
+  // Variant names are free text a staff member typed in, e.g. "Black",
+  // "128GB", "With Certificate" - whatever the seller listed as this
+  // product's options, could be colour, storage, condition, a bundle, etc.
+  const optionsLine = variants.length
+    ? `\nAvailable options for this product (colour, storage, condition or whatever these represent, this is the full list, nothing else exists): ${variants.map(v => v.name || 'Option').join(', ')}`
+    : '\nThis product has no separate options/variants, only the one listing above.';
 
-  return `\n\nThe customer is currently looking at this exact product page, use these details when they ask about "this product" or similar:\nName: ${p.name}\nCategory: ${p.category || ''}\nBrand: ${p.brand || ''}\nCondition: ${p.cond || ''}\nPricing: ${priceLine}\nIn stock: ${inStock ? 'yes' : 'no'}\nDescription: ${String(p.description || '').slice(0, 800)}`;
+  return `\n\nThe customer is currently looking at this exact product page, use these details when they ask about "this product" or similar:\nName: ${p.name}\nCategory: ${p.category || ''}\nBrand: ${p.brand || ''}\nCondition: ${p.cond || ''}\nPricing: ${priceLine}\nIn stock: ${inStock ? 'yes' : 'no'}${optionsLine}\nDescription: ${String(p.description || '').slice(0, 800)}`;
 }
 
 // ── Live catalogue tool ───────────────────────────────────────────────────────
@@ -13350,7 +13358,8 @@ async function runCatalogueSearch(args) {
     const price = priceOfCatalogueRecord(rec, isService);
     if (!Number.isFinite(maxPrice) || price <= maxPrice) {
       seen.add(key);
-      items.push({ name: rec.name, price, category: rec.category || '' });
+      const variantNames = !isService && Array.isArray(rec.variants) ? rec.variants.map(v => v.name).filter(Boolean) : [];
+      items.push({ name: rec.name, price, category: rec.category || '', options: variantNames });
     }
   };
 
@@ -13388,7 +13397,11 @@ async function runCatalogueSearch(args) {
 
   return {
     count: items.length,
-    items: items.slice(0, 8).map(i => i.price ? `${i.name} ($${i.price} AUD)` : i.name),
+    items: items.slice(0, 8).map(i => {
+      const priceStr = i.price ? ` ($${i.price} AUD)` : '';
+      const optionsStr = i.options && i.options.length ? ` [options: ${i.options.join(', ')}]` : '';
+      return `${i.name}${priceStr}${optionsStr}`;
+    }),
     truncated: items.length > 8,
   };
 }
