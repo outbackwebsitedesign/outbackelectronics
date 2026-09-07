@@ -13185,6 +13185,26 @@ function aiSystemPrompt() {
   return AI_SYSTEM_PROMPT_BASE + facts;
 }
 
+// The on-prem model is small enough that it reliably mangles hours/address/contact
+// facts no matter how the prompt is worded (inventing Sunday hours, calling the
+// mail-in address a walk-in shop). For these specific questions, answer from the
+// real data directly instead of letting the model generate the sentence at all.
+function faqAutoAnswer(text) {
+  const q = String(text || '').toLowerCase();
+  const asksHours = /\b(hours?|open|close[ds]?|opening|closing)\b/.test(q);
+  const asksLocation = /\b(address|location|shop\s*front|shopfront|walk[\s-]?in)\b/.test(q)
+    || (/\bwhere\b/.test(q) && /\b(shop|store|located|based)\b/.test(q));
+  const asksContact = /\b(phone|call|number|email|contact)\b/.test(q);
+  if (!asksHours && !asksLocation && !asksContact) return null;
+
+  const b = getBusinessIdentity();
+  const parts = [];
+  if (asksHours) parts.push(formatOperatingHours());
+  if (asksLocation) parts.push(`There's no public shopfront and no walk-in browsing. "${b.address}" is a mail-in and booked-dropoff address only, by appointment.`);
+  if (asksContact) parts.push(`You can reach us on ${b.phone} or ${b.email}.`);
+  return parts.join(' ');
+}
+
 // Looks the visitor's current product page up directly in products.db (live, exact
 // match), not through the RAG embedding index, so "tell me about this" on a product
 // page always resolves to that exact product rather than a semantic guess.
@@ -13260,6 +13280,13 @@ const aiGatewayServer = http.createServer(async (req, res) => {
       if (!messages.length) return json(res, 422, { error: 'messages_required' });
 
       const lastUser = [...messages].reverse().find(m => m.role === 'user');
+      const faqAnswer = lastUser ? faqAutoAnswer(lastUser.content) : null;
+      if (faqAnswer) {
+        res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
+        res.write(`data: ${JSON.stringify({ token: faqAnswer })}\n\n`);
+        res.write('data: [DONE]\n\n');
+        return res.end();
+      }
       let contextBlock = '';
       if (lastUser) {
         const hits = await ragSearch(lastUser.content, 4);
@@ -13292,6 +13319,13 @@ const aiGatewayServer = http.createServer(async (req, res) => {
       if (!messages.length) return json(res, 422, { error: 'messages_required' });
 
       const lastUser = [...messages].reverse().find(m => m.role === 'user');
+      const faqAnswer = lastUser ? faqAutoAnswer(lastUser.content) : null;
+      if (faqAnswer) {
+        res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
+        res.write(`data: ${JSON.stringify({ token: faqAnswer })}\n\n`);
+        res.write('data: [DONE]\n\n');
+        return res.end();
+      }
       let contextBlock = '';
       if (lastUser) {
         const hits = await ragSearch(lastUser.content, 4);
