@@ -13202,9 +13202,7 @@ async function ragSearch(query, topK = 4) {
   } catch { return []; }
 }
 
-// Hours/location/contact questions are intercepted by faqAutoAnswer() before this
-// prompt is ever used, so it doesn't need to carry instructions for those anymore.
-// Kept short: on this small a model, prompt length is generation latency.
+// Kept short: prompt length is generation latency on a local model.
 const AI_SYSTEM_PROMPT_BASE = `You are the Outback Electronics AI assistant: a concise, practical electronics technician and advisor for a small Australian electronics repair and parts shop. Help with repair questions, troubleshooting, parts selection, soldering tips and general DIY electronics. Reply in 2-4 sentences unless the question needs steps. Reference catalogue products/tutorials below by name when relevant. Recommend booking a professional repair if it's beyond DIY. Only use the "Shop facts" below for hours, address, phone, email or policy; never invent them.
 
 You are a read-only chat assistant with no ability to take any action on this site: you cannot add items to a cart, place or process an order, take payment, or check someone out, no matter what the customer asks or how the conversation goes. Never say or imply that something was added to a cart, purchased, checked out, or otherwise actioned. If someone wants to buy something or add it to their cart, tell them to use the "Add to Cart" or "Buy" button on the product page themselves; you can only describe products and answer questions, never perform the action for them.`;
@@ -13242,46 +13240,6 @@ function aiSystemPrompt() {
   const b = getBusinessIdentity();
   const facts = `\n\nShop facts (authoritative, copy these exactly, do not add or remove anything):\nTrading name: ${b.tradingName}\nPhone: ${b.phone}\nEmail: ${b.email}\nHours: ${formatOperatingHours()}\nThere is no public shopfront and no walk-in browsing. "${b.address}" is a mail-in and booked-dropoff address only, by appointment, not a store customers can visit or browse. Never call it "the shop" or invite someone to walk in.`;
   return AI_SYSTEM_PROMPT_BASE + facts;
-}
-
-// The on-prem model is small enough that it reliably mangles hours/address/contact
-// facts no matter how the prompt is worded (inventing Sunday hours, calling the
-// mail-in address a walk-in shop). For these specific questions, answer from the
-// real data directly instead of letting the model generate the sentence at all.
-function faqAutoAnswer(text) {
-  const q = String(text || '').toLowerCase();
-  // The model has no cart/checkout/order tools at all, but a small local model will
-  // still cheerfully claim it added something to the cart or completed a purchase
-  // if asked to. That's a trust problem, not just a quality one, so it's checked
-  // first and answered deterministically rather than trusted to the model.
-  const wantsAction = /\b(add (it |this )?to (my |the )?cart|buy (it|this)|purchase (it|this)|check ?out|place (an |my )?order|order (it|this)|complete (my |the )?(purchase|order))\b/.test(q);
-  if (wantsAction) {
-    // "how do I buy this" is a genuine how-to question and deserves a real answer;
-    // "can you buy this for me" is asking the bot to act, which it can't. Same
-    // deterministic source either way (never let the model claim it acted), but
-    // the phrasing shouldn't repeat itself verbatim if someone asks a follow-up.
-    const isHowTo = /\bhow\b/.test(q);
-    return isHowTo
-      ? `Click "Add to Cart" on the product page, then go to your cart and follow the checkout steps to pay. I can't do that step for you, but happy to answer anything about the product first.`
-      : `Yep, just use the "Add to Cart" or "Buy" button on this page, I can't do that step for you. Happy to answer anything about the product first if that helps.`;
-  }
-  // "phone", "open", "call" etc are also ordinary words in product questions
-  // ("tell me about this phone", "is this an open box item"), so these require
-  // contact/hours-specific phrasing, not just the bare word.
-  const asksHours = /\bhours?\b/.test(q) || (/\b(open|close[ds]?|opening|closing)\b/.test(q) && /\b(you|your|store|shop|today|us)\b/.test(q));
-  const asksLocation = /\b(address|location|shop\s*front|shopfront|walk[\s-]?in)\b/.test(q)
-    || (/\bwhere\b/.test(q) && /\b(shop|store|located|based)\b/.test(q));
-  const asksContact = /\b(contact|email)\b/.test(q)
-    || /\b(your|the)\s+(phone|number)\b/.test(q)
-    || (/\b(phone|call)\b/.test(q) && /\b(you|us|number)\b/.test(q));
-  if (!asksHours && !asksLocation && !asksContact) return null;
-
-  const b = getBusinessIdentity();
-  const parts = [];
-  if (asksHours) parts.push(`We're open ${formatOperatingHours()}.`);
-  if (asksLocation) parts.push(`We don't have a public shopfront, so there's no walk-in browsing, sorry. ${b.address} is our mail-in and booked drop-off address, by appointment only.`);
-  if (asksContact) parts.push(`You can reach us on ${b.phone} or at ${b.email}.`);
-  return parts.join(' ');
 }
 
 // Looks the visitor's current product page up directly in products.db (live, exact
@@ -13359,13 +13317,6 @@ const aiGatewayServer = http.createServer(async (req, res) => {
       if (!messages.length) return json(res, 422, { error: 'messages_required' });
 
       const lastUser = [...messages].reverse().find(m => m.role === 'user');
-      const faqAnswer = lastUser ? faqAutoAnswer(lastUser.content) : null;
-      if (faqAnswer) {
-        res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
-        res.write(`data: ${JSON.stringify({ token: faqAnswer })}\n\n`);
-        res.write('data: [DONE]\n\n');
-        return res.end();
-      }
       // A product-page visitor already has an exact product match below, so the RAG
       // embedding search (a second, slow model call) is redundant there; skip it to
       // roughly halve the wait for the common "tell me about this" case.
@@ -13402,13 +13353,6 @@ const aiGatewayServer = http.createServer(async (req, res) => {
       if (!messages.length) return json(res, 422, { error: 'messages_required' });
 
       const lastUser = [...messages].reverse().find(m => m.role === 'user');
-      const faqAnswer = lastUser ? faqAutoAnswer(lastUser.content) : null;
-      if (faqAnswer) {
-        res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
-        res.write(`data: ${JSON.stringify({ token: faqAnswer })}\n\n`);
-        res.write('data: [DONE]\n\n');
-        return res.end();
-      }
       // A product-page visitor already has an exact product match below, so the RAG
       // embedding search (a second, slow model call) is redundant there; skip it to
       // roughly halve the wait for the common "tell me about this" case.
