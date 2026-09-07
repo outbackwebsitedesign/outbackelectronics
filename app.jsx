@@ -948,10 +948,16 @@ function ChatWidget({ product }) {
           const data = line.slice(6);
           if (data === '[DONE]') break;
           try {
-            const { token } = JSON.parse(data);
+            const parsed = JSON.parse(data);
+            if (parsed.error) {
+              setError("The assistant hit a problem answering that. You can email us below instead.");
+              setMessages(prev => prev.slice(0, -1));
+              return;
+            }
+            if (typeof parsed.token !== 'string') continue;
             setMessages(prev => {
               const next = [...prev];
-              next[next.length - 1] = { role: 'assistant', content: next[next.length - 1].content + token };
+              next[next.length - 1] = { role: 'assistant', content: next[next.length - 1].content + parsed.token };
               return next;
             });
           } catch { }
