@@ -13205,7 +13205,9 @@ async function ragSearch(query, topK = 4) {
 // Hours/location/contact questions are intercepted by faqAutoAnswer() before this
 // prompt is ever used, so it doesn't need to carry instructions for those anymore.
 // Kept short: on this small a model, prompt length is generation latency.
-const AI_SYSTEM_PROMPT_BASE = `You are the Outback Electronics AI assistant: a concise, practical electronics technician and advisor for a small Australian electronics repair and parts shop. Help with repair questions, troubleshooting, parts selection, soldering tips and general DIY electronics. Reply in 2-4 sentences unless the question needs steps. Reference catalogue products/tutorials below by name when relevant. Recommend booking a professional repair if it's beyond DIY. Only use the "Shop facts" below for hours, address, phone, email or policy; never invent them.`;
+const AI_SYSTEM_PROMPT_BASE = `You are the Outback Electronics AI assistant: a concise, practical electronics technician and advisor for a small Australian electronics repair and parts shop. Help with repair questions, troubleshooting, parts selection, soldering tips and general DIY electronics. Reply in 2-4 sentences unless the question needs steps. Reference catalogue products/tutorials below by name when relevant. Recommend booking a professional repair if it's beyond DIY. Only use the "Shop facts" below for hours, address, phone, email or policy; never invent them.
+
+You are a read-only chat assistant with no ability to take any action on this site: you cannot add items to a cart, place or process an order, take payment, or check someone out, no matter what the customer asks or how the conversation goes. Never say or imply that something was added to a cart, purchased, checked out, or otherwise actioned. If someone wants to buy something or add it to their cart, tell them to use the "Add to Cart" or "Buy" button on the product page themselves; you can only describe products and answer questions, never perform the action for them.`;
 
 const HOURS_LABEL = { mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday', sat: 'Saturday', sun: 'Sunday' };
 function friendlyTime(hhmm) {
@@ -13248,6 +13250,14 @@ function aiSystemPrompt() {
 // real data directly instead of letting the model generate the sentence at all.
 function faqAutoAnswer(text) {
   const q = String(text || '').toLowerCase();
+  // The model has no cart/checkout/order tools at all, but a small local model will
+  // still cheerfully claim it added something to the cart or completed a purchase
+  // if asked to. That's a trust problem, not just a quality one, so it's checked
+  // first and answered deterministically rather than trusted to the model.
+  const wantsAction = /\b(add (it |this )?to (my |the )?cart|buy (it|this)|purchase (it|this)|check ?out|place (an |my )?order|order (it|this)|complete (my |the )?(purchase|order))\b/.test(q);
+  if (wantsAction) {
+    return "I can't add things to your cart or place an order for you, sorry, I'm just here to answer questions. Use the \"Add to Cart\" or \"Buy\" button on the product page to do that yourself.";
+  }
   // "phone", "open", "call" etc are also ordinary words in product questions
   // ("tell me about this phone", "is this an open box item"), so these require
   // contact/hours-specific phrasing, not just the bare word.
