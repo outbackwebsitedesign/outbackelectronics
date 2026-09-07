@@ -13213,10 +13213,15 @@ function aiSystemPrompt() {
 // real data directly instead of letting the model generate the sentence at all.
 function faqAutoAnswer(text) {
   const q = String(text || '').toLowerCase();
-  const asksHours = /\b(hours?|open|close[ds]?|opening|closing)\b/.test(q);
+  // "phone", "open", "call" etc are also ordinary words in product questions
+  // ("tell me about this phone", "is this an open box item"), so these require
+  // contact/hours-specific phrasing, not just the bare word.
+  const asksHours = /\bhours?\b/.test(q) || (/\b(open|close[ds]?|opening|closing)\b/.test(q) && /\b(you|your|store|shop|today|us)\b/.test(q));
   const asksLocation = /\b(address|location|shop\s*front|shopfront|walk[\s-]?in)\b/.test(q)
     || (/\bwhere\b/.test(q) && /\b(shop|store|located|based)\b/.test(q));
-  const asksContact = /\b(phone|call|number|email|contact)\b/.test(q);
+  const asksContact = /\b(contact|email)\b/.test(q)
+    || /\b(your|the)\s+(phone|number)\b/.test(q)
+    || (/\b(phone|call)\b/.test(q) && /\b(you|us|number)\b/.test(q));
   if (!asksHours && !asksLocation && !asksContact) return null;
 
   const b = getBusinessIdentity();
