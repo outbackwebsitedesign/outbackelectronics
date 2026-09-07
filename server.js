@@ -13534,17 +13534,25 @@ async function catalogueCheckBlock(query) {
 // model-generated text, this is a self-correction pass, not a substitution.
 function looksFabricated(text, catalogueResult, tradingName) {
   if (!text) return false;
-  // Claiming a concrete price/stock/backorder fact when the search behind it
-  // found literally nothing to base that on.
-  if (catalogueResult && catalogueResult.count === 0 && /\$\s?\d|in stock|backorder|available (for|to) (order|purchase)/i.test(text)) return true;
+  // Stating a specific dollar price when the search behind it found
+  // literally nothing to base that on is a sharp, specific fabrication
+  // signal on its own. Deliberately not matching bare words like "in stock"
+  // or "backorder" here, those show up constantly in perfectly ordinary
+  // replies unrelated to a catalogue miss (general policy/service answers)
+  // and flagging on them alone was forcing a needless, quality-degrading
+  // regenerate on a huge share of normal replies.
+  if (catalogueResult && catalogueResult.count === 0 && /\$\s?\d/.test(text)) return true;
   // A product invented in this shop's own branding style ("Outback
-  // Electronics <thing>"). Checked against every real listing seen in
-  // testing: none of this shop's actual product names are prefixed with its
-  // own trading name, so this construction is a strong, specific signal for
-  // the exact fabrication already observed, not a general-purpose guess.
+  // Electronics PCI-E Wi-Fi Card"). Mentioning the shop's own name in an
+  // ordinary sentence ("Outback Electronics does not sell phones") is
+  // extremely common and correct, so this must NOT fire on that: it only
+  // matches when at least two consecutive capitalised/hyphenated words
+  // follow the name directly, the shape of an invented model/product name,
+  // never a verb, article or ordinary lowercase continuation.
   if (tradingName) {
     const escaped = tradingName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    if (new RegExp(`\\b${escaped}\\s+[a-z0-9]`, 'i').test(text)) return true;
+    const re = new RegExp(`\\b${escaped}\\s+(?:[A-Z][\\w-]*\\s+){1,}[A-Z][\\w-]*`);
+    if (re.test(text)) return true;
   }
   return false;
 }
