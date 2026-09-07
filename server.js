@@ -13544,13 +13544,16 @@ const aiGatewayServer = http.createServer(async (req, res) => {
         res.write('data: [DONE]\n\n');
         return res.end();
       }
-      // A product-page visitor already has an exact product match below, so the RAG
-      // embedding search and catalogue check (both a second, slow model call) are
-      // redundant there; skip them to roughly halve the wait for the common "tell
-      // me about this" case.
+      // Being on a product page only means the exact-match block below is
+      // available, it does NOT mean the question is about that product: "do
+      // you also sell the S26+?" while looking at the S26 Ultra page needs the
+      // general search to actually run, or the model gets nothing to answer
+      // from at all and (correctly, given no data) says it has no idea. So
+      // these always run regardless of product-page context; only skip the
+      // exact-match lookup itself when there's no product context to look up.
       const productBlock = productContextBlock(body?.productContext);
       let contextBlock = '';
-      if (lastUser && !productBlock) {
+      if (lastUser) {
         const hits = await ragSearch(lastUser.content, 6);
         if (hits.length) contextBlock = '\n\nRelevant catalogue context:\n' + hits.map(h => `[${h.type.toUpperCase()}] ${h.title}: ${h.text.slice(0, 220)}`).join('\n\n');
         contextBlock += await catalogueCheckBlock(lastUser.content);
@@ -13590,13 +13593,16 @@ const aiGatewayServer = http.createServer(async (req, res) => {
         res.write('data: [DONE]\n\n');
         return res.end();
       }
-      // A product-page visitor already has an exact product match below, so the RAG
-      // embedding search and catalogue check (both a second, slow model call) are
-      // redundant there; skip them to roughly halve the wait for the common "tell
-      // me about this" case.
+      // Being on a product page only means the exact-match block below is
+      // available, it does NOT mean the question is about that product: "do
+      // you also sell the S26+?" while looking at the S26 Ultra page needs the
+      // general search to actually run, or the model gets nothing to answer
+      // from at all and (correctly, given no data) says it has no idea. So
+      // these always run regardless of product-page context; only skip the
+      // exact-match lookup itself when there's no product context to look up.
       const productBlock = productContextBlock(body?.productContext);
       let contextBlock = '';
-      if (lastUser && !productBlock) {
+      if (lastUser) {
         const hits = await ragSearch(lastUser.content, 6);
         if (hits.length) contextBlock = '\n\nRelevant catalogue context:\n' + hits.map(h => `[${h.type.toUpperCase()}] ${h.title}: ${h.text.slice(0, 220)}`).join('\n\n');
         contextBlock += await catalogueCheckBlock(lastUser.content);
