@@ -13342,41 +13342,54 @@ async function runCatalogueSearch(args) {
   const products = readProducts().filter(x => x.status === 'published');
   const services = readServices().filter(x => x.status === 'published');
 
-  let items = [];
-  let qEmb = null;
+  // Semantic matching catches "phone" when nothing is literally named that, but
+  // it can under-score a short, specific query like a model number ("S26+")
+  // against a longer product description. A plain substring check catches the
+  // opposite case (the exact text is right there in the name). Neither alone is
+  // reliable, so both run and their results are unioned rather than one being a
+  // fallback for the other, so an exact literal match is never lost to a
+  // similarity score that happened to land under a threshold.
+  const seen = new Set();
+  const items = [];
+  const addRec = (rec, isService) => {
+    const key = `${isService ? 'svc' : 'prod'}-${rec.id}`;
+    if (seen.has(key)) return;
+    const price = priceOfCatalogueRecord(rec, isService);
+    if (!Number.isFinite(maxPrice) || price <= maxPrice) {
+      seen.add(key);
+      items.push({ name: rec.name, price, category: rec.category || '' });
+    }
+  };
+
   if (q && _ragReady && _ragDocs.length) {
+    let qEmb = null;
     try { qEmb = await getEmbedding(q); } catch { qEmb = null; }
+    if (qEmb) {
+      const candidates = _ragDocs
+        .filter(d => (type === 'any' ? (d.type === 'product' || d.type === 'service') : d.type === type))
+        .map(d => ({ ...d, score: cosineSim(qEmb, d.emb) }))
+        .filter(d => d.score >= RAG_MIN_SCORE)
+        .sort((a, b) => b.score - a.score);
+      for (const c of candidates) {
+        const isService = c.type === 'service';
+        const rec = isService ? services.find(s => s.id === c.id) : products.find(p => p.id === c.id);
+        if (rec) addRec(rec, isService);
+      }
+    }
   }
 
-  if (qEmb) {
-    const candidates = _ragDocs
-      .filter(d => (type === 'any' ? (d.type === 'product' || d.type === 'service') : d.type === type))
-      .map(d => ({ ...d, score: cosineSim(qEmb, d.emb) }))
-      .filter(d => d.score >= 0.2)
-      .sort((a, b) => b.score - a.score);
-    for (const c of candidates) {
-      const isService = c.type === 'service';
-      const rec = isService ? services.find(s => s.id === c.id) : products.find(p => p.id === c.id);
-      if (!rec) continue;
-      const price = priceOfCatalogueRecord(rec, isService);
-      if (!Number.isFinite(maxPrice) || price <= maxPrice) items.push({ name: rec.name, price, category: rec.category || '' });
+  const ql = q.toLowerCase();
+  const matches = (hay) => !ql || hay.toLowerCase().includes(ql);
+  if (type !== 'service') {
+    for (const p of products) {
+      const hay = [p.name, p.category, p.brand, p.description].filter(Boolean).join(' ');
+      if (matches(hay)) addRec(p, false);
     }
-  } else {
-    const ql = q.toLowerCase();
-    const matches = (hay) => !ql || hay.toLowerCase().includes(ql);
-    if (type !== 'service') {
-      for (const p of products) {
-        const hay = [p.name, p.category, p.brand, p.description].filter(Boolean).join(' ');
-        const price = priceOfCatalogueRecord(p, false);
-        if (matches(hay) && (!Number.isFinite(maxPrice) || price <= maxPrice)) items.push({ name: p.name, price, category: p.category || '' });
-      }
-    }
-    if (type !== 'product') {
-      for (const s of services) {
-        const hay = [s.name, s.category, s.description].filter(Boolean).join(' ');
-        const price = priceOfCatalogueRecord(s, true);
-        if (matches(hay) && (!Number.isFinite(maxPrice) || price <= maxPrice)) items.push({ name: s.name, price, category: s.category || '' });
-      }
+  }
+  if (type !== 'product') {
+    for (const s of services) {
+      const hay = [s.name, s.category, s.description].filter(Boolean).join(' ');
+      if (matches(hay)) addRec(s, true);
     }
   }
 
