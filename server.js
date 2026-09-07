@@ -95,7 +95,7 @@ const PUBLIC_CSP = "default-src 'self'; " +
 const HSTS_VALUE = 'max-age=31536000; includeSubDomains';
 const PERMISSIONS_POLICY = 'camera=(), microphone=(), geolocation=(), payment=(), usb=()';
 const PUBLIC_RATE_WINDOW_MS = 1000 * 60 * 10;
-const PUBLIC_RATE_LIMITS = { analytics: 120, checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10, 'forgot-password': 5, 'reset-password': 10, 'gift-card/apply': 10, 'gift-card/balance': 5, 'warranty/order-lookup': 10, 'cart/get': 20, 'cart/validate': 60, 'cart/activity': 60, 'weather_register': 3, 'stock-notify': 5, 'membership': 10, 'order-token': 30, 'bookings/request': 10, 'tutorials/view': 60, 'review/submit': 8, 'review/upload-photo': 20 };
+const PUBLIC_RATE_LIMITS = { analytics: 120, checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10, 'forgot-password': 5, 'reset-password': 10, 'gift-card/apply': 10, 'gift-card/balance': 5, 'warranty/order-lookup': 10, 'cart/get': 20, 'cart/validate': 60, 'cart/activity': 60, 'weather_register': 3, 'stock-notify': 5, 'membership': 10, 'order-token': 30, 'bookings/request': 10, 'tutorials/view': 60, 'review/submit': 8, 'review/upload-photo': 20, 'public-chat': 20 };
 
 fs.mkdirSync(path.join(__dirname, 'assets/uploads'), { recursive: true });
 fs.mkdirSync(path.join(__dirname, 'assets/uploads/software'), { recursive: true });
@@ -7996,7 +7996,7 @@ const mainServer = http.createServer(async (req, res) => {
       let b = ''; req.on('data', c => b += c); req.on('end', () => resolve(b)); req.on('error', reject);
     });
     await new Promise((resolve) => {
-      const proxyReq = http.request({ hostname: '127.0.0.1', port: AI_GATEWAY_PORT, path: '/api/chat', method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(rawBody), 'Cookie': req.headers.cookie || '' }, timeout: 120000 }, (proxyRes) => {
+      const proxyReq = http.request({ hostname: '127.0.0.1', port: AI_GATEWAY_PORT, path: '/api/public-chat', method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(rawBody), 'X-Forwarded-For': getIp(req) }, timeout: 120000 }, (proxyRes) => {
         res.writeHead(proxyRes.statusCode, proxyRes.headers);
         proxyRes.pipe(res);
         proxyRes.on('end', resolve);
@@ -13208,6 +13208,35 @@ const aiGatewayServer = http.createServer(async (req, res) => {
       if (!session) return json(res, 401, { error: 'login_required' });
       buildRagIndex().catch(e => console.error('[ai] RAG rebuild error:', e));
       return json(res, 202, { ok: true, message: 'RAG rebuild started' });
+    }
+
+    // Public chat (text), for the anonymous storefront widget. No login required,
+    // rate-limited by IP instead of account, and never sees vision/RAG-rebuild routes.
+    if (req.method === 'POST' && url.pathname === '/api/public-chat') {
+      if (publicRateLimited(getIp(req), 'public-chat')) return json(res, 429, { error: 'too_many_requests', message: 'Too many messages. Please wait a few minutes.' });
+      let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+      const messages = Array.isArray(body?.messages) ? body.messages : [];
+      if (!messages.length) return json(res, 422, { error: 'messages_required' });
+
+      const lastUser = [...messages].reverse().find(m => m.role === 'user');
+      let contextBlock = '';
+      if (lastUser) {
+        const hits = await ragSearch(lastUser.content, 4);
+        if (hits.length) contextBlock = '\n\nRelevant catalogue context:\n' + hits.map(h => `[${h.type.toUpperCase()}] ${h.title}: ${h.text.slice(0, 300)}`).join('\n\n');
+      }
+
+      res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
+      try {
+        await enqueueAI(() => ollamaStream('/api/chat', {
+          model: AI_CHAT_MODEL,
+          messages: [
+            { role: 'system', content: AI_SYSTEM_PROMPT + contextBlock },
+            ...messages.slice(-10).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content).slice(0, 2000) })),
+          ],
+        }, res));
+      } catch (e) { if (!res.writableEnded) res.write(`data: ${JSON.stringify({ error: e.message })}\n\n`); }
+      if (!res.writableEnded) res.end();
+      return;
     }
 
     // Chat (text)
