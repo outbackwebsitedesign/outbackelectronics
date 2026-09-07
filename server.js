@@ -13167,7 +13167,21 @@ async function ragSearch(query, topK = 4) {
   } catch { return []; }
 }
 
-const AI_SYSTEM_PROMPT = `You are the Outback Electronics AI assistant, a helpful, knowledgeable electronics technician and advisor. You help customers with repair questions, troubleshooting, parts selection, soldering tips, circuit theory, and general DIY electronics. Outback Electronics is a small Australian electronics repair and parts shop. Be concise and practical. When relevant products or tutorials from the catalogue are provided below, reference them by name. If a repair is beyond DIY, recommend booking a professional service through Outback Electronics.`;
+const AI_SYSTEM_PROMPT_BASE = `You are the Outback Electronics AI assistant, a helpful, knowledgeable electronics technician and advisor. You help customers with repair questions, troubleshooting, parts selection, soldering tips, circuit theory, and general DIY electronics. Outback Electronics is a small Australian electronics repair and parts shop. Be concise and practical: 2-4 sentences unless the question needs a step-by-step. When relevant products or tutorials from the catalogue are provided below, reference them by name. If a repair is beyond DIY, recommend booking a professional service through Outback Electronics. Only state hours, address, phone, email or policies from the "Shop facts" block below, never guess them; if something isn't in the facts, say you're not sure and offer the human handoff.`;
+
+const HOURS_LABEL = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
+function formatOperatingHours() {
+  const { operatingHours } = readAvailability();
+  return WEEKDAY_KEYS.filter(k => k !== 'sun').concat('sun').map(day => {
+    const h = operatingHours[day];
+    return `${HOURS_LABEL[day]}: ${h && !h.closed ? `${h.open}-${h.close}` : 'closed'}`;
+  }).join(', ');
+}
+function aiSystemPrompt() {
+  const b = getBusinessIdentity();
+  const facts = `\n\nShop facts (authoritative, use these exact values):\nName: ${b.tradingName}\nAddress: ${b.address}\nPhone: ${b.phone}\nEmail: ${b.email}\nHours: ${formatOperatingHours()}`;
+  return AI_SYSTEM_PROMPT_BASE + facts;
+}
 
 // ── AI Gateway server ─────────────────────────────────────────────────────────
 const aiGatewayServer = http.createServer(async (req, res) => {
@@ -13230,9 +13244,10 @@ const aiGatewayServer = http.createServer(async (req, res) => {
         await enqueueAI(() => ollamaStream('/api/chat', {
           model: AI_CHAT_MODEL,
           messages: [
-            { role: 'system', content: AI_SYSTEM_PROMPT + contextBlock },
+            { role: 'system', content: aiSystemPrompt() + contextBlock },
             ...messages.slice(-10).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content).slice(0, 2000) })),
           ],
+          options: { num_predict: 220, num_ctx: 2048, temperature: 0.4 },
         }, res));
       } catch (e) { if (!res.writableEnded) res.write(`data: ${JSON.stringify({ error: e.message })}\n\n`); }
       if (!res.writableEnded) res.end();
@@ -13260,9 +13275,10 @@ const aiGatewayServer = http.createServer(async (req, res) => {
         await enqueueAI(() => ollamaStream('/api/chat', {
           model: AI_CHAT_MODEL,
           messages: [
-            { role: 'system', content: AI_SYSTEM_PROMPT + contextBlock },
+            { role: 'system', content: aiSystemPrompt() + contextBlock },
             ...messages.slice(-20).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content).slice(0, 4000) })),
           ],
+          options: { num_predict: 300, num_ctx: 2048, temperature: 0.4 },
         }, res));
       } catch (e) { if (!res.writableEnded) res.write(`data: ${JSON.stringify({ error: e.message })}\n\n`); }
       if (!res.writableEnded) res.end();
