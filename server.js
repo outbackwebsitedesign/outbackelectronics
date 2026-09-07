@@ -13256,7 +13256,14 @@ function faqAutoAnswer(text) {
   // first and answered deterministically rather than trusted to the model.
   const wantsAction = /\b(add (it |this )?to (my |the )?cart|buy (it|this)|purchase (it|this)|check ?out|place (an |my )?order|order (it|this)|complete (my |the )?(purchase|order))\b/.test(q);
   if (wantsAction) {
-    return "I can't add things to your cart or place an order for you, sorry, I'm just here to answer questions. Use the \"Add to Cart\" or \"Buy\" button on the product page to do that yourself.";
+    // "how do I buy this" is a genuine how-to question and deserves a real answer;
+    // "can you buy this for me" is asking the bot to act, which it can't. Same
+    // deterministic source either way (never let the model claim it acted), but
+    // the phrasing shouldn't repeat itself verbatim if someone asks a follow-up.
+    const isHowTo = /\bhow\b/.test(q);
+    return isHowTo
+      ? `Click "Add to Cart" on the product page, then go to your cart and follow the checkout steps to pay. I can't do that step for you, but happy to answer anything about the product first.`
+      : `Yep, just use the "Add to Cart" or "Buy" button on this page, I can't do that step for you. Happy to answer anything about the product first if that helps.`;
   }
   // "phone", "open", "call" etc are also ordinary words in product questions
   // ("tell me about this phone", "is this an open box item"), so these require
