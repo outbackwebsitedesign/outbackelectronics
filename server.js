@@ -13172,16 +13172,37 @@ const AI_SYSTEM_PROMPT_BASE = `You are the Outback Electronics AI assistant, a h
 You must only state hours, address, phone, email or policies from the "Shop facts" block below, copied exactly as written there, never invented, estimated or rounded. If something is not in the facts, say you're not sure and offer to email a human instead. Never state an opening time for a day the facts list as closed. Never contradict yourself: say each fact once, in the words given.`;
 
 const HOURS_LABEL = { mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday', sat: 'Saturday', sun: 'Sunday' };
+function friendlyTime(hhmm) {
+  const [h, m] = String(hhmm || '').split(':').map(Number);
+  if (!Number.isFinite(h)) return hhmm;
+  const period = h < 12 ? 'am' : 'pm';
+  const h12 = h % 12 || 12;
+  return m ? `${h12}:${String(m).padStart(2, '0')}${period}` : `${h12}${period}`;
+}
+// Groups consecutive days that share the same hours into one range ("Mon-Sat: 9am-5pm")
+// instead of a robotic day-by-day list, so it reads like a person wrote it.
 function formatOperatingHours() {
   const { operatingHours } = readAvailability();
-  return WEEKDAY_KEYS.filter(k => k !== 'sun').concat('sun').map(day => {
+  const order = WEEKDAY_KEYS.filter(k => k !== 'sun').concat('sun');
+  const dayLine = day => {
     const h = operatingHours[day];
-    return (h && !h.closed) ? `${HOURS_LABEL[day]} is open ${h.open} to ${h.close}` : `${HOURS_LABEL[day]} is closed`;
-  }).join('. ') + '.';
+    return (h && !h.closed) ? `${friendlyTime(h.open)}-${friendlyTime(h.close)}` : 'closed';
+  };
+  const groups = [];
+  for (const day of order) {
+    const line = dayLine(day);
+    const last = groups[groups.length - 1];
+    if (last && last.line === line) last.days.push(day);
+    else groups.push({ line, days: [day] });
+  }
+  return groups.map(g => {
+    const label = g.days.length > 1 ? `${HOURS_LABEL[g.days[0]]}-${HOURS_LABEL[g.days[g.days.length - 1]]}` : HOURS_LABEL[g.days[0]];
+    return g.line === 'closed' ? `closed ${label}` : `${label} ${g.line}`;
+  }).join(', ');
 }
 function aiSystemPrompt() {
   const b = getBusinessIdentity();
-  const facts = `\n\nShop facts (authoritative, copy these exactly, do not add or remove anything):\nTrading name: ${b.tradingName}\nPhone: ${b.phone}\nEmail: ${b.email}\nHours, one sentence per day, state only the days asked about: ${formatOperatingHours()}\nThere is no public shopfront and no walk-in browsing. "${b.address}" is a mail-in and booked-dropoff address only, by appointment, not a store customers can visit or browse. Never call it "the shop" or invite someone to walk in.`;
+  const facts = `\n\nShop facts (authoritative, copy these exactly, do not add or remove anything):\nTrading name: ${b.tradingName}\nPhone: ${b.phone}\nEmail: ${b.email}\nHours: ${formatOperatingHours()}\nThere is no public shopfront and no walk-in browsing. "${b.address}" is a mail-in and booked-dropoff address only, by appointment, not a store customers can visit or browse. Never call it "the shop" or invite someone to walk in.`;
   return AI_SYSTEM_PROMPT_BASE + facts;
 }
 
@@ -13199,9 +13220,9 @@ function faqAutoAnswer(text) {
 
   const b = getBusinessIdentity();
   const parts = [];
-  if (asksHours) parts.push(formatOperatingHours());
-  if (asksLocation) parts.push(`There's no public shopfront and no walk-in browsing. "${b.address}" is a mail-in and booked-dropoff address only, by appointment.`);
-  if (asksContact) parts.push(`You can reach us on ${b.phone} or ${b.email}.`);
+  if (asksHours) parts.push(`We're open ${formatOperatingHours()}.`);
+  if (asksLocation) parts.push(`We don't have a public shopfront, so there's no walk-in browsing, sorry. ${b.address} is our mail-in and booked drop-off address, by appointment only.`);
+  if (asksContact) parts.push(`You can reach us on ${b.phone} or at ${b.email}.`);
   return parts.join(' ');
 }
 
