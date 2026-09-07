@@ -13321,7 +13321,7 @@ function variantAutoAnswer(p, text) {
   if (!variants.length) return `${p.name} doesn't have separate options, there's just the one listing.`;
   const list = variants.map(v => {
     const outOfStock = (Number(v.stock) || 0) <= 0;
-    const tag = !outOfStock ? '' : (p.allowBackorder ? ' (out of stock, backorder available)' : ' (out of stock)');
+    const tag = !outOfStock ? '' : (p.allowBackorder ? ' (available to order via backorder, none on the shelf right now)' : ' (out of stock)');
     return `${v.name || 'Option'}${tag}`;
   }).join(', ');
   return `${p.name} comes in: ${list}.`;
@@ -13343,7 +13343,7 @@ function productContextBlock(ctx) {
   const priceLine = variants.length
     ? variants.map(v => {
         const outOfStock = (Number(v.stock) || 0) <= 0;
-        const stockTag = !outOfStock ? '' : (p.allowBackorder ? ' (out of stock, backorder available)' : ' (out of stock, no backorder)');
+        const stockTag = !outOfStock ? '' : (p.allowBackorder ? ' (available to order via backorder, none on the shelf right now)' : ' (out of stock, no backorder)');
         return `${v.name || 'Option'}: $${Number(v.price) || 0} AUD${stockTag}${bulkOfferNote(v, v.price)}`;
       }).join('; ')
     : `$${p.priceAud ?? p.price ?? '?'} AUD${bulkOfferNote(p, p.priceAud ?? p.price)}`;
@@ -13398,8 +13398,26 @@ function priceOfCatalogueRecord(rec, isService) {
 // against the same embeddings ragSearch() already built instead, and only
 // falls back to a literal substring when there's no query text to embed
 // meaningfully against, or the RAG index isn't ready yet.
+// Chat messages are full sentences ("do you sell the S26+?"), not extracted
+// search terms, that extraction used to be the model's own job via tool-
+// calling before this became deterministic. A listing's text will essentially
+// never contain a full question verbatim, and diluting a short, specific
+// term like a model number with "do you sell the" around it also weakens its
+// embedding signal. Strips common question scaffolding first, and matches
+// substring hits per meaningful word rather than requiring the whole phrase.
+const QUERY_STOPWORDS = new Set(['do', 'you', 'does', 'is', 'are', 'the', 'a', 'an', 'any', 'for', 'of', 'to', 'me', 'i', 'have', 'has', 'sell', 'sells', 'selling', 'offer', 'offers', 'stock', 'stocks', 'carry', 'carries', 'get', 'buy', 'want', 'with', 'and', 'or', 'what', 'which', 'about', 'tell', 'there', 'it', 'this', 'that', 'please', 'can', 'could', 'would', 'in']);
+function catalogueQueryTokens(text) {
+  return String(text || '')
+    .toLowerCase()
+    .replace(/[?!.,]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length >= 2 && !QUERY_STOPWORDS.has(w));
+}
+
 async function runCatalogueSearch(args) {
   const q = String(args?.query || '').trim();
+  const queryTokens = catalogueQueryTokens(q);
+  const cleanedQuery = queryTokens.join(' ');
   const maxPrice = Number(args?.maxPrice);
   const type = ['product', 'service'].includes(args?.type) ? args.type : 'any';
   const products = readProducts().filter(x => x.status === 'published');
@@ -13421,20 +13439,55 @@ async function runCatalogueSearch(args) {
     if (!Number.isFinite(maxPrice) || price <= maxPrice) {
       seen.add(key);
       const variants = !isService && Array.isArray(rec.variants) ? rec.variants : [];
-      const variantNames = variants.map(v => v.name).filter(Boolean);
+      // Every option needs its own stock/backorder status stated, not just the
+      // product overall, the same lesson already learned once: a bare "out of
+      // stock" summary leaves "which specific colour" unanswerable.
+      const backorderWait = rec.backorderWeeks ? `, approx ${rec.backorderWeeks} week${rec.backorderWeeks === 1 ? '' : 's'}` : (rec.backorderEta ? `, ETA ${rec.backorderEta}` : '');
+      const variantTag = (v) => {
+        const outOfStock = (Number(v.stock) || 0) <= 0;
+        if (!outOfStock) return '';
+        return rec.allowBackorder ? ` (backorder available${backorderWait})` : ' (out of stock, no backorder)';
+      };
+      const options = variants.filter(v => v.name).map(v => `${v.name}${variantTag(v)}`);
       let stockNote = '';
-      if (!isService) {
-        const hasStock = variants.length ? variants.some(v => (Number(v.stock) || 0) > 0) : (rec.infiniteStock || (Number(rec.stock) || 0) > 0);
-        if (!hasStock) stockNote = rec.allowBackorder ? ' - out of stock, backorder available' : ' - out of stock, no backorder';
+      if (!isService && !variants.length) {
+        const hasStock = rec.infiniteStock || (Number(rec.stock) || 0) > 0;
+        if (!hasStock) stockNote = rec.allowBackorder ? ` - available to order via backorder, none on the shelf right now${backorderWait}` : ' - out of stock, no backorder';
       }
       const bulkNote = isService ? '' : (variants.length ? variants.map(v => bulkOfferNote(v, v.price)).find(Boolean) : bulkOfferNote(rec, rec.priceAud ?? rec.price)) || '';
-      items.push({ name: rec.name, price, category: rec.category || '', options: variantNames, stockNote, bulkNote });
+      items.push({ name: rec.name, price, category: rec.category || '', options, stockNote, bulkNote });
     }
   };
 
-  if (q && _ragReady && _ragDocs.length) {
+  // Substring runs first and, if it finds anything, is trusted exclusively:
+  // an embedding model can't reliably tell "S26+" and "S26 Ultra" apart (both
+  // are topically almost the same phone to it), so adding semantic near-misses
+  // on top of a real exact match risks the model picking the wrong one out of
+  // several similar-sounding candidates it was never asked about. Semantic
+  // search only runs as a fallback when nothing literally matched, which is
+  // exactly the case it's actually needed for ("phone" matching a listing that
+  // never uses that word).
+  const matches = (hay) => {
+    if (!queryTokens.length) return true;
+    const hayLower = hay.toLowerCase();
+    return queryTokens.some(t => hayLower.includes(t));
+  };
+  if (type !== 'service') {
+    for (const p of products) {
+      const hay = [p.name, p.category, p.brand, p.description].filter(Boolean).join(' ');
+      if (matches(hay)) addRec(p, false);
+    }
+  }
+  if (type !== 'product') {
+    for (const s of services) {
+      const hay = [s.name, s.category, s.description].filter(Boolean).join(' ');
+      if (matches(hay)) addRec(s, true);
+    }
+  }
+
+  if (!items.length && cleanedQuery && _ragReady && _ragDocs.length) {
     let qEmb = null;
-    try { qEmb = await getEmbedding(q); } catch { qEmb = null; }
+    try { qEmb = await getEmbedding(cleanedQuery); } catch { qEmb = null; }
     if (qEmb) {
       const candidates = _ragDocs
         .filter(d => (type === 'any' ? (d.type === 'product' || d.type === 'service') : d.type === type))
@@ -13446,21 +13499,6 @@ async function runCatalogueSearch(args) {
         const rec = isService ? services.find(s => s.id === c.id) : products.find(p => p.id === c.id);
         if (rec) addRec(rec, isService);
       }
-    }
-  }
-
-  const ql = q.toLowerCase();
-  const matches = (hay) => !ql || hay.toLowerCase().includes(ql);
-  if (type !== 'service') {
-    for (const p of products) {
-      const hay = [p.name, p.category, p.brand, p.description].filter(Boolean).join(' ');
-      if (matches(hay)) addRec(p, false);
-    }
-  }
-  if (type !== 'product') {
-    for (const s of services) {
-      const hay = [s.name, s.category, s.description].filter(Boolean).join(' ');
-      if (matches(hay)) addRec(s, true);
     }
   }
 
