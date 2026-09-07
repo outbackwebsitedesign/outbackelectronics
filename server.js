@@ -13167,9 +13167,10 @@ async function ragSearch(query, topK = 4) {
   } catch { return []; }
 }
 
-const AI_SYSTEM_PROMPT_BASE = `You are the Outback Electronics AI assistant, a helpful, knowledgeable electronics technician and advisor. You help customers with repair questions, troubleshooting, parts selection, soldering tips, circuit theory, and general DIY electronics. Outback Electronics is a small Australian electronics repair and parts shop. Be concise and practical: 2-4 sentences unless the question needs a step-by-step. When relevant products or tutorials from the catalogue are provided below, reference them by name. If a repair is beyond DIY, recommend booking a professional service through Outback Electronics.
-
-You must only state hours, address, phone, email or policies from the "Shop facts" block below, copied exactly as written there, never invented, estimated or rounded. If something is not in the facts, say you're not sure and offer to email a human instead. Never state an opening time for a day the facts list as closed. Never contradict yourself: say each fact once, in the words given.`;
+// Hours/location/contact questions are intercepted by faqAutoAnswer() before this
+// prompt is ever used, so it doesn't need to carry instructions for those anymore.
+// Kept short: on this small a model, prompt length is generation latency.
+const AI_SYSTEM_PROMPT_BASE = `You are the Outback Electronics AI assistant: a concise, practical electronics technician and advisor for a small Australian electronics repair and parts shop. Help with repair questions, troubleshooting, parts selection, soldering tips and general DIY electronics. Reply in 2-4 sentences unless the question needs steps. Reference catalogue products/tutorials below by name when relevant. Recommend booking a professional repair if it's beyond DIY. Only use the "Shop facts" below for hours, address, phone, email or policy; never invent them.`;
 
 const HOURS_LABEL = { mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday', sat: 'Saturday', sun: 'Sunday' };
 function friendlyTime(hhmm) {
@@ -13308,12 +13309,16 @@ const aiGatewayServer = http.createServer(async (req, res) => {
         res.write('data: [DONE]\n\n');
         return res.end();
       }
+      // A product-page visitor already has an exact product match below, so the RAG
+      // embedding search (a second, slow model call) is redundant there; skip it to
+      // roughly halve the wait for the common "tell me about this" case.
+      const productBlock = productContextBlock(body?.productContext);
       let contextBlock = '';
-      if (lastUser) {
-        const hits = await ragSearch(lastUser.content, 4);
-        if (hits.length) contextBlock = '\n\nRelevant catalogue context:\n' + hits.map(h => `[${h.type.toUpperCase()}] ${h.title}: ${h.text.slice(0, 300)}`).join('\n\n');
+      if (lastUser && !productBlock) {
+        const hits = await ragSearch(lastUser.content, 3);
+        if (hits.length) contextBlock = '\n\nRelevant catalogue context:\n' + hits.map(h => `[${h.type.toUpperCase()}] ${h.title}: ${h.text.slice(0, 220)}`).join('\n\n');
       }
-      contextBlock += productContextBlock(body?.productContext);
+      contextBlock += productBlock;
 
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
       try {
@@ -13321,9 +13326,9 @@ const aiGatewayServer = http.createServer(async (req, res) => {
           model: AI_CHAT_MODEL,
           messages: [
             { role: 'system', content: aiSystemPrompt() + contextBlock },
-            ...messages.slice(-10).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content).slice(0, 2000) })),
+            ...messages.slice(-6).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content).slice(0, 1200) })),
           ],
-          options: { num_predict: 220, num_ctx: 2048, temperature: 0.2 },
+          options: { num_predict: 160, num_ctx: 1536, temperature: 0.2 },
         }, res));
       } catch (e) { if (!res.writableEnded) res.write(`data: ${JSON.stringify({ error: e.message })}\n\n`); }
       if (!res.writableEnded) res.end();
@@ -13347,12 +13352,16 @@ const aiGatewayServer = http.createServer(async (req, res) => {
         res.write('data: [DONE]\n\n');
         return res.end();
       }
+      // A product-page visitor already has an exact product match below, so the RAG
+      // embedding search (a second, slow model call) is redundant there; skip it to
+      // roughly halve the wait for the common "tell me about this" case.
+      const productBlock = productContextBlock(body?.productContext);
       let contextBlock = '';
-      if (lastUser) {
-        const hits = await ragSearch(lastUser.content, 4);
-        if (hits.length) contextBlock = '\n\nRelevant catalogue context:\n' + hits.map(h => `[${h.type.toUpperCase()}] ${h.title}: ${h.text.slice(0, 300)}`).join('\n\n');
+      if (lastUser && !productBlock) {
+        const hits = await ragSearch(lastUser.content, 3);
+        if (hits.length) contextBlock = '\n\nRelevant catalogue context:\n' + hits.map(h => `[${h.type.toUpperCase()}] ${h.title}: ${h.text.slice(0, 220)}`).join('\n\n');
       }
-      contextBlock += productContextBlock(body?.productContext);
+      contextBlock += productBlock;
 
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
       try {
