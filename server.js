@@ -13167,19 +13167,21 @@ async function ragSearch(query, topK = 4) {
   } catch { return []; }
 }
 
-const AI_SYSTEM_PROMPT_BASE = `You are the Outback Electronics AI assistant, a helpful, knowledgeable electronics technician and advisor. You help customers with repair questions, troubleshooting, parts selection, soldering tips, circuit theory, and general DIY electronics. Outback Electronics is a small Australian electronics repair and parts shop. Be concise and practical: 2-4 sentences unless the question needs a step-by-step. When relevant products or tutorials from the catalogue are provided below, reference them by name. If a repair is beyond DIY, recommend booking a professional service through Outback Electronics. Only state hours, address, phone, email or policies from the "Shop facts" block below, never guess them; if something isn't in the facts, say you're not sure and offer the human handoff.`;
+const AI_SYSTEM_PROMPT_BASE = `You are the Outback Electronics AI assistant, a helpful, knowledgeable electronics technician and advisor. You help customers with repair questions, troubleshooting, parts selection, soldering tips, circuit theory, and general DIY electronics. Outback Electronics is a small Australian electronics repair and parts shop. Be concise and practical: 2-4 sentences unless the question needs a step-by-step. When relevant products or tutorials from the catalogue are provided below, reference them by name. If a repair is beyond DIY, recommend booking a professional service through Outback Electronics.
 
-const HOURS_LABEL = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
+You must only state hours, address, phone, email or policies from the "Shop facts" block below, copied exactly as written there, never invented, estimated or rounded. If something is not in the facts, say you're not sure and offer to email a human instead. Never state an opening time for a day the facts list as closed. Never contradict yourself: say each fact once, in the words given.`;
+
+const HOURS_LABEL = { mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday', sat: 'Saturday', sun: 'Sunday' };
 function formatOperatingHours() {
   const { operatingHours } = readAvailability();
   return WEEKDAY_KEYS.filter(k => k !== 'sun').concat('sun').map(day => {
     const h = operatingHours[day];
-    return `${HOURS_LABEL[day]}: ${h && !h.closed ? `${h.open}-${h.close}` : 'closed'}`;
-  }).join(', ');
+    return (h && !h.closed) ? `${HOURS_LABEL[day]} is open ${h.open} to ${h.close}` : `${HOURS_LABEL[day]} is closed`;
+  }).join('. ') + '.';
 }
 function aiSystemPrompt() {
   const b = getBusinessIdentity();
-  const facts = `\n\nShop facts (authoritative, use these exact values):\nName: ${b.tradingName}\nAddress: ${b.address}\nPhone: ${b.phone}\nEmail: ${b.email}\nHours: ${formatOperatingHours()}`;
+  const facts = `\n\nShop facts (authoritative, copy these exactly, do not add or remove anything):\nTrading name: ${b.tradingName}\nPhone: ${b.phone}\nEmail: ${b.email}\nHours, one sentence per day, state only the days asked about: ${formatOperatingHours()}\nThere is no public shopfront and no walk-in browsing. "${b.address}" is a mail-in and booked-dropoff address only, by appointment, not a store customers can visit or browse. Never call it "the shop" or invite someone to walk in.`;
   return AI_SYSTEM_PROMPT_BASE + facts;
 }
 
@@ -13273,7 +13275,7 @@ const aiGatewayServer = http.createServer(async (req, res) => {
             { role: 'system', content: aiSystemPrompt() + contextBlock },
             ...messages.slice(-10).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content).slice(0, 2000) })),
           ],
-          options: { num_predict: 220, num_ctx: 2048, temperature: 0.4 },
+          options: { num_predict: 220, num_ctx: 2048, temperature: 0.2 },
         }, res));
       } catch (e) { if (!res.writableEnded) res.write(`data: ${JSON.stringify({ error: e.message })}\n\n`); }
       if (!res.writableEnded) res.end();
@@ -13305,7 +13307,7 @@ const aiGatewayServer = http.createServer(async (req, res) => {
             { role: 'system', content: aiSystemPrompt() + contextBlock },
             ...messages.slice(-20).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content).slice(0, 4000) })),
           ],
-          options: { num_predict: 300, num_ctx: 2048, temperature: 0.4 },
+          options: { num_predict: 300, num_ctx: 2048, temperature: 0.2 },
         }, res));
       } catch (e) { if (!res.writableEnded) res.write(`data: ${JSON.stringify({ error: e.message })}\n\n`); }
       if (!res.writableEnded) res.end();
