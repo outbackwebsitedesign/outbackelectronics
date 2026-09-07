@@ -13216,10 +13216,13 @@ async function buildRagIndex() {
   console.log(`[ai] RAG index ready - ${docs.length} documents`);
 }
 
-// A weak match is worse than no match: injecting a barely-related product as
-// "context" for something we don't actually stock risks the model reading it
-// as confirmation and answering yes instead of correctly saying no.
-const RAG_MIN_SCORE = 0.35;
+// A real, unstocked-item threshold caused a worse bug than the one it was meant
+// to prevent: a genuine "do you sell phones?" scored below 0.35 against actual
+// phone listings and got zero results back, so the model correctly-per-instructions
+// said no to real inventory. This is a much lower sanity floor (screen out true
+// noise only) rather than a relevance filter; "don't claim what isn't listed
+// below" in the system prompt is what actually guards against false positives.
+const RAG_MIN_SCORE = 0.12;
 async function ragSearch(query, topK = 4) {
   if (!_ragReady || !_ragDocs.length) return [];
   try {
@@ -13353,7 +13356,7 @@ const aiGatewayServer = http.createServer(async (req, res) => {
       const productBlock = productContextBlock(body?.productContext);
       let contextBlock = '';
       if (lastUser && !productBlock) {
-        const hits = await ragSearch(lastUser.content, 3);
+        const hits = await ragSearch(lastUser.content, 6);
         if (hits.length) contextBlock = '\n\nRelevant catalogue context:\n' + hits.map(h => `[${h.type.toUpperCase()}] ${h.title}: ${h.text.slice(0, 220)}`).join('\n\n');
       }
       contextBlock += productBlock;
@@ -13366,7 +13369,7 @@ const aiGatewayServer = http.createServer(async (req, res) => {
             { role: 'system', content: aiSystemPrompt() + contextBlock },
             ...messages.slice(-6).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content).slice(0, 1200) })),
           ],
-          options: { num_predict: 160, num_ctx: 1536, temperature: 0.2 },
+          options: { num_predict: 160, num_ctx: 2048, temperature: 0.2 },
         }, res));
       } catch (e) { if (!res.writableEnded) res.write(`data: ${JSON.stringify({ error: e.message })}\n\n`); }
       if (!res.writableEnded) res.end();
@@ -13389,7 +13392,7 @@ const aiGatewayServer = http.createServer(async (req, res) => {
       const productBlock = productContextBlock(body?.productContext);
       let contextBlock = '';
       if (lastUser && !productBlock) {
-        const hits = await ragSearch(lastUser.content, 3);
+        const hits = await ragSearch(lastUser.content, 6);
         if (hits.length) contextBlock = '\n\nRelevant catalogue context:\n' + hits.map(h => `[${h.type.toUpperCase()}] ${h.title}: ${h.text.slice(0, 220)}`).join('\n\n');
       }
       contextBlock += productBlock;
