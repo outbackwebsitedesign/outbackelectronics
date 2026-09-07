@@ -878,6 +878,151 @@ function TweaksUI() {
     </>
   );
 }
+// ---------------- Chat widget (auto-answers via the on-prem AI, email handoff) ----------------
+function ChatWidget() {
+  const [open, setOpen] = useState(false);
+  const [messages, setMessages] = useState([{ role: 'assistant', content: "G'day! Ask me anything about our products, repairs or orders. If I can't help, I'll get your message to a human." }]);
+  const [input, setInput] = useState('');
+  const [streaming, setStreaming] = useState(false);
+  const [error, setError] = useState('');
+  const [handoff, setHandoff] = useState(null); // { name, email } once sent
+  const scrollRef = useRef(null);
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages, open]);
+
+  async function send(text) {
+    if (!text.trim() || streaming) return;
+    setError('');
+    const history = [...messagesRef.current, { role: 'user', content: text }];
+    setMessages([...history, { role: 'assistant', content: '' }]);
+    setInput('');
+    setStreaming(true);
+    try {
+      const res = await fetch('/api/ai-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ messages: history.map(m => ({ role: m.role, content: m.content })) }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'AI service error');
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n'); buf = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6);
+          if (data === '[DONE]') break;
+          try {
+            const { token } = JSON.parse(data);
+            setMessages(prev => {
+              const next = [...prev];
+              next[next.length - 1] = { role: 'assistant', content: next[next.length - 1].content + token };
+              return next;
+            });
+          } catch { }
+        }
+      }
+    } catch (e) {
+      setError(e.message || "Couldn't reach the assistant. You can email us below instead.");
+      setMessages(prev => prev.slice(0, -1));
+    } finally {
+      setStreaming(false);
+    }
+  }
+
+  async function emailHandoff(name, email) {
+    const transcript = messagesRef.current.filter(m => m.content).map(m => `${m.role === 'user' ? 'Customer' : 'Assistant'}: ${m.content}`).join('\n\n');
+    await ensureCsrf();
+    await fetch('/api/contact/quick-message', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() },
+      credentials: 'include',
+      body: JSON.stringify({ name, email, msg: `Chat widget handoff:\n\n${transcript}` }),
+    });
+    setHandoff({ name, email });
+  }
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(o => !o)}
+        aria-label={open ? 'Close chat' : 'Open chat'}
+        style={{position:'fixed', bottom:24, right:24, zIndex:500, width:56, height:56, borderRadius:'50%', background:'var(--ink)', color:'var(--paper)', border:'none', cursor:'pointer', display:'grid', placeItems:'center', boxShadow:'0 4px 16px rgba(0,0,0,.3)'}}
+      >
+        {open
+          ? <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          : <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>}
+      </button>
+      {open && (
+        <div style={{position:'fixed', bottom:92, right:24, zIndex:500, width:340, maxWidth:'calc(100vw - 32px)', height:460, maxHeight:'calc(100vh - 140px)', background:'var(--paper)', border:'1px solid var(--line)', boxShadow:'0 8px 32px rgba(0,0,0,.3)', display:'flex', flexDirection:'column'}}>
+          <div style={{padding:'12px 16px', background:'var(--ink)', color:'var(--paper)', fontSize:14, fontWeight:600}}>Chat with us</div>
+          <div ref={scrollRef} style={{flex:1, overflowY:'auto', padding:12, display:'flex', flexDirection:'column', gap:8}}>
+            {messages.map((m, i) => (
+              <div key={i} style={{alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', maxWidth:'85%', padding:'8px 12px', borderRadius:12, fontSize:13, lineHeight:1.4, background: m.role === 'user' ? 'var(--ink)' : 'var(--bg-2, #f0ece3)', color: m.role === 'user' ? 'var(--paper)' : 'var(--ink)', whiteSpace:'pre-wrap'}}>
+                {m.content || (streaming && i === messages.length - 1 ? '…' : '')}
+              </div>
+            ))}
+            {error && <div style={{fontSize:12, color:'var(--rust, #b5482a)'}}>{error}</div>}
+            {!handoff ? (
+              <button onClick={() => setHandoff('form')} style={{alignSelf:'flex-start', fontSize:12, textDecoration:'underline', background:'none', border:'none', cursor:'pointer', color:'var(--ink-2, #666)', padding:0, marginTop:4}}>
+                Not what you needed? Email this to a human →
+              </button>
+            ) : handoff === 'form' ? (
+              <HandoffForm onSubmit={emailHandoff} onCancel={() => setHandoff(null)} />
+            ) : (
+              <div style={{fontSize:12, color:'var(--ink-2, #666)'}}>Thanks {handoff.name}, we'll reply to {handoff.email} shortly.</div>
+            )}
+          </div>
+          <form onSubmit={e => { e.preventDefault(); send(input); }} style={{display:'flex', borderTop:'1px solid var(--line)'}}>
+            <input
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              placeholder="Type your question…"
+              disabled={streaming}
+              style={{flex:1, border:'none', padding:'10px 12px', fontSize:13, outline:'none', background:'transparent', color:'var(--ink)'}}
+            />
+            <button type="submit" disabled={streaming || !input.trim()} style={{border:'none', background:'transparent', color:'var(--ink)', padding:'0 14px', cursor:'pointer'}} aria-label="Send">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+            </button>
+          </form>
+        </div>
+      )}
+    </>
+  );
+}
+
+function HandoffForm({ onSubmit, onCancel }) {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [sending, setSending] = useState(false);
+  return (
+    <form
+      onSubmit={async e => { e.preventDefault(); setSending(true); await onSubmit(name, email); setSending(false); }}
+      style={{display:'flex', flexDirection:'column', gap:6, background:'var(--bg-2, #f0ece3)', padding:10, borderRadius:8}}
+    >
+      <input required value={name} onChange={e => setName(e.target.value)} placeholder="Your name" style={{fontSize:12, padding:'6px 8px', border:'1px solid var(--line)'}} />
+      <input required type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Your email" style={{fontSize:12, padding:'6px 8px', border:'1px solid var(--line)'}} />
+      <div style={{display:'flex', gap:6}}>
+        <button type="submit" disabled={sending} style={{fontSize:12, padding:'6px 10px', background:'var(--ink)', color:'var(--paper)', border:'none', cursor:'pointer'}}>{sending ? 'Sending…' : 'Send to a human'}</button>
+        <button type="button" onClick={onCancel} style={{fontSize:12, padding:'6px 10px', background:'none', border:'1px solid var(--line)', cursor:'pointer'}}>Cancel</button>
+      </div>
+    </form>
+  );
+}
+
 // ---------------- Router ----------------
 const KNOWN_PAGES = [...PRIMARY_PAGES, ...UTILITY_PAGES, ...ACCOUNT_PAGES, {id:'cart'}, {id:'order-success'}, {id:'order-cancelled'}, {id:'register'}, {id:'about'}, {id:'repairs'}, {id:'humanly-ai'}, {id:'capability-statement'}, {id:'review'}, {id:'reviews'}].map(p => p.id);
 
@@ -1218,6 +1363,7 @@ function App() {
       </main>
       <Footer go={go} />
       <TweaksUI />
+      <ChatWidget />
       {searchOpen && <SearchOverlay go={go} onClose={() => setSearchOpen(false)} />}
       {showBackTop && (
         <button
