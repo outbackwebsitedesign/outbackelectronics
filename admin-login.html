@@ -124,6 +124,11 @@
       50% { opacity: 0.4; }
     }
     .admin-req::after { content: ' *'; color: var(--rust); }
+    /* Grid children default to min-width:auto, so a column holding a wide table
+       refuses to shrink and pushes the whole page sideways instead of letting
+       .admin-table-scroll scroll inside itself. */
+    .admin-split > * { min-width: 0; }
+    .admin-table-scroll { max-width: 100%; }
   </style>
   <link rel="stylesheet" href="/mobile.css">
 </head>

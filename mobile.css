@@ -131,8 +131,12 @@
   footer .grid > div:first-child { grid-column: 1 / -1; }
   footer .baseline { flex-direction: column; gap: 8px; font-size: 10px; }
 
-  /* Portal tab bar scrolls horizontally */
-  .tabs-row { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; flex-wrap: nowrap !important; }
+  /* Portal tab bar scrolls horizontally.
+     min-width:0 is what makes overflow-x actually engage: a flex or grid child
+     defaults to min-width:auto, which refuses to shrink below its content, so
+     the bar grows to the full width of its tabs and drags the page sideways
+     instead of scrolling inside itself. */
+  .tabs-row { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; flex-wrap: nowrap !important; min-width: 0; max-width: 100%; }
   .tabs-row::-webkit-scrollbar { display: none; }
   .tab-btn { white-space: nowrap; flex-shrink: 0; }
 
@@ -191,9 +195,9 @@
   /* Group cards stack */
   .group-card { flex-direction: column; gap: 10px; }
 
-  /* Tabs scroll horizontally */
-  .tabs { overflow-x: auto; flex-wrap: nowrap; }
-  .tab { white-space: nowrap; }
+  /* Tabs scroll horizontally (see .tabs-row above for why min-width matters) */
+  .tabs { overflow-x: auto; flex-wrap: nowrap; min-width: 0; max-width: 100%; }
+  .tab { white-space: nowrap; flex-shrink: 0; }
 
   /* Buttons full-width in stacked contexts */
   .stack > .btn { width: 100%; justify-content: center; }
@@ -250,10 +254,17 @@
   }
 
   /* Section body wrapper: tighter padding + smaller grid gap on mobile.
-     !important overrides the inline padding:32 set on each section's root div. */
+     !important overrides the inline padding:32 set on each section's root div.
+     Most section roots are display:grid with no column definition, so their
+     implicit track sizes to max-content and a single wide panel stretches the
+     whole section past the screen. minmax(0,1fr) pins the track to the
+     container and lets the panels below shrink or scroll instead. Sections that
+     set their own gridTemplateColumns inline still win, since this is not
+     !important. */
   .admin-section-root > div {
     padding: 16px !important;
     gap: 16px !important;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   /* Two-column admin splits collapse to single column */
@@ -267,6 +278,34 @@
     grid-template-columns: 1fr !important;
     min-width: unset !important;
     gap: 24px !important;
+  }
+
+  /* Keep admin panels inside the screen. Flex and grid children default to
+     min-width:auto, so any one of these that is wider than the phone refuses to
+     shrink and drags the whole page sideways rather than wrapping or scrolling
+     within itself. Capping the width here rather than on a blanket selector
+     keeps it to the admin layout containers that actually overflow. */
+  .admin-section-root .row-flex,
+  .admin-section-root .tabs,
+  .admin-section-root .tabs-row,
+  .admin-section-root .grid-2,
+  .admin-section-root .grid-3,
+  .admin-section-root .grid-4,
+  .admin-section-root .card,
+  .admin-section-root .card-paper,
+  .admin-section-root .admin-split {
+    min-width: 0;
+    max-width: 100%;
+  }
+  /* Panels inside a card are laid out in unclassed flex rows, and those flex
+     items keep min-width:auto, so a wide child (a tab strip, a long field row)
+     holds the row open at its full width. Letting them shrink hands the
+     overflow back to the scroll container that is meant to handle it. */
+  .admin-section-root .card > div,
+  .admin-section-root .card > div > div,
+  .admin-section-root .card-paper > div,
+  .admin-section-root .card-paper > div > div {
+    min-width: 0;
   }
 }
 

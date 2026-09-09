@@ -789,7 +789,7 @@ function Table({ columns, rows, onRowClick, emptyMessage, loading, defaultSort }
     <div style={{background:'var(--paper)', border:'1px solid var(--line-strong)'}}>
       <div className="admin-table-scroll" style={{overflowX:'auto'}}>
         <div style={{minWidth:560}}>
-          <div role="row" style={{display:'grid', gridTemplateColumns:tpl, padding:'10px 18px', background:'var(--bg-elev)', borderBottom:'2px solid var(--ink)', fontFamily:'JetBrains Mono, monospace', fontSize:10, letterSpacing:'.1em', color:'var(--ink-2)'}}>
+          <div role="row" style={{display:'grid', gridTemplateColumns:tpl, gap:12, padding:'10px 18px', background:'var(--bg-elev)', borderBottom:'2px solid var(--ink)', fontFamily:'JetBrains Mono, monospace', fontSize:10, letterSpacing:'.1em', color:'var(--ink-2)'}}>
             {columns.map((c,i) => {
               const key = c.key || c.label;
               const active = sort && sort.key === key;
@@ -826,7 +826,7 @@ function Table({ columns, rows, onRowClick, emptyMessage, loading, defaultSort }
               tabIndex={onRowClick ? 0 : undefined}
               onClick={() => onRowClick && onRowClick(r,i)}
               onKeyDown={e => { if (onRowClick && (e.key==='Enter'||e.key===' ')) { e.preventDefault(); onRowClick(r,i); } }}
-              style={{display:'grid', gridTemplateColumns:tpl, padding:'14px 18px', borderTop:'1px solid var(--line)', fontSize:13, alignItems:'center', cursor: onRowClick?'pointer':'default'}}
+              style={{display:'grid', gridTemplateColumns:tpl, gap:12, padding:'14px 18px', borderTop:'1px solid var(--line)', fontSize:13, alignItems:'center', cursor: onRowClick?'pointer':'default'}}
               onMouseEnter={e => { if (onRowClick) e.currentTarget.style.background='var(--bg-elev)'; }}
               onMouseLeave={e => { e.currentTarget.style.background='transparent'; }}>
               {columns.map((c,j) => <div key={j} style={{minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{c.render ? c.render(r) : r[c.key]}</div>)}
@@ -2538,7 +2538,7 @@ const DEFAULT_REPAIR_COLS = [
   { id:'done',       label:'Done',       cards:[] },
 ];
 
-function RepairJobDrawer({ card, expenses, customers, staff, onSave, onDelete, onExpensesChange, onCustomerCreated, onClose }) {
+function RepairJobDrawer({ card, columns = [], colId, onMove, expenses, customers, staff, onSave, onDelete, onExpensesChange, onCustomerCreated, onClose }) {
   const PARTS_MARGIN = 0.20;
   const [form, setForm] = useState(() => ({
     t:           card.t || '',
@@ -2718,6 +2718,16 @@ function RepairJobDrawer({ card, expenses, customers, staff, onSave, onDelete, o
 
       {/* ── Job ── */}
       <div className="eyebrow" style={S.mt20}>Job</div>
+      {/* Dragging a card is the other way to change stage, but touch devices do
+          not fire HTML5 drag events and a keyboard cannot start one, so this
+          select is the only route to the board on a phone or without a mouse. */}
+      {columns.length > 0 && onMove && (
+        <label className="field" style={S.mb12}><span className="label">Stage</span>
+          <select className="select" value={colId || ''} onChange={e => onMove(card.id, colId, e.target.value)}>
+            {columns.map(c => <option key={c.id} value={c.id}>{c.label || c.id}</option>)}
+          </select>
+        </label>
+      )}
       <label className="field" style={S.mb12}><span className="label">Description / fault reported<ReqMark/></span>
         <input className="input" value={form.t} onChange={e=>set('t',e.target.value)} placeholder="e.g. Toughbook 55, keyboard ribbon fault" /></label>
       <div className="grid-2" style={S.mb12}>
@@ -2932,6 +2942,9 @@ function AdminRepairs() {
     return (
       <RepairJobDrawer
         card={editCard.card}
+        columns={cols}
+        colId={editCard.colId}
+        onMove={moveCard}
         expenses={expenses}
         customers={customers}
         staff={staff}
@@ -2950,6 +2963,11 @@ function AdminRepairs() {
         <div className="mono" style={{fontSize:12,color:'var(--ink-2)'}}>{openCount} OPEN</div>
         <button className="btn btn-rust btn-sm" onClick={() => newCard((cols[0]||{}).id)}>+ New job</button>
       </div>
+      {/* The board is 1200px at its narrowest, wider than the content area on a
+          1366px laptop, so it scrolls inside this wrapper instead of dragging
+          the whole page sideways. Below 768px the grid stacks and minWidth is
+          dropped in mobile.css, so there is nothing to scroll. */}
+      <div className="admin-kanban-scroll" style={{overflowX:'auto'}}>
       <div className="admin-kanban-grid" style={{display:'grid',gridTemplateColumns:'repeat(5,minmax(240px,1fr))',gap:16,minWidth:1200}}>
         {cols.map(c => (
           <div key={c.id}
@@ -2990,6 +3008,7 @@ function AdminRepairs() {
             </div>
           </div>
         ))}
+      </div>
       </div>
     </div>
   );
@@ -6150,9 +6169,11 @@ function AdminAvailability() {
                 Open
               </label>
               <input type="time" className="input" style={{width:120}} disabled={hoursForm[k].closed} value={hoursForm[k].open}
+                aria-label={`${l} opening time`}
                 onChange={e => setHoursForm(f => ({ ...f, [k]: { ...f[k], open: e.target.value } }))} />
               <span style={{color:'var(--ink-3)'}}>to</span>
               <input type="time" className="input" style={{width:120}} disabled={hoursForm[k].closed} value={hoursForm[k].close}
+                aria-label={`${l} closing time`}
                 onChange={e => setHoursForm(f => ({ ...f, [k]: { ...f[k], close: e.target.value } }))} />
             </div>
           ))}
@@ -6391,7 +6412,7 @@ function AdminEwaste() {
               { key:'tier', label:'Condition', w:'110px', render:r => <span className="tag tag-outline" style={{textTransform:'capitalize'}}>{r.tier||'-'}</span> },
               { key:'disposition', label:'Disposition', w:'130px', render:r => <span className="tag tag-outline" style={{textTransform:'capitalize'}}>{r.disposition||'-'}</span> },
               { key:'payout', label:'Payout', w:'140px', render:r => <span style={{fontWeight:600}}>{r.payout}</span> },
-              { key:'date', label:'When', w:'90px', render:r => <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{r.date.toUpperCase()}</span>},
+              { key:'date', label:'When', w:'90px', render:r => <span className="mono" style={{fontSize:11, color:'var(--ink-2)'}}>{(r.date || '-').toUpperCase()}</span>},
               { key:'orderId', label:'Order', w:'120px', render:r => r.orderId ? <span className="mono" style={{fontSize:11, color:'var(--rust)', cursor:'pointer'}} onClick={e=>{e.stopPropagation(); window.location.hash='orders';}}>{r.orderId}</span> : <span style={{color:'var(--ink-3)'}}>-</span> },
             ]}
             rows={intakes}
@@ -10659,7 +10680,9 @@ function PLView() {
 
       {data && <>
         {/* Summary tiles */}
-        <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))', gap:14, marginBottom:24}}>
+        {/* min() keeps the 180px track floor from overflowing a phone: without
+            it the track stays 180px wide even when the card is narrower. */}
+        <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(min(180px, 100%), 1fr))', gap:14, marginBottom:24}}>
           {[
             { label:'TOTAL REVENUE',     value: fmtAUD(data.totalRevenue),                                    color:'#345526' },
             { label:'TOTAL EXPENSES',    value: `(${fmtAUD(data.totalExpenses)})`,                            color:'var(--rust)' },
@@ -13768,6 +13791,36 @@ function AdminSafetyNotices({ sessionInfo = {} }) {
   );
 }
 
+// One bad record used to blank the whole dashboard: a render error anywhere in
+// a section unmounted the entire app, sidebar included, leaving a white page
+// with no way back. Catching per section keeps the nav usable so staff can move
+// to another section, and names the section that failed.
+class AdminSectionBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error, info) { console.error('Admin section crashed:', error, info); }
+  componentDidUpdate(prev) { if (prev.section !== this.props.section && this.state.error) this.setState({ error: null }); }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div style={{padding:32}}>
+        <div className="card-paper" style={{padding:24, maxWidth:640}}>
+          <span className="eyebrow" style={{color:'var(--rust)'}}>SECTION FAILED TO LOAD</span>
+          <p style={{marginTop:10, fontSize:14, color:'var(--ink-2)', lineHeight:1.6}}>
+            Something in this section could not be displayed, usually a record missing a
+            field the table expects. The rest of the dashboard still works, so you can
+            pick another section from the menu.
+          </p>
+          <pre style={{marginTop:12, padding:'10px 12px', background:'var(--bg-deep)', border:'1px solid var(--line)', fontSize:11, whiteSpace:'pre-wrap', color:'var(--ink-2)'}}>
+            {String(this.state.error && this.state.error.message || this.state.error)}
+          </pre>
+          <button className="btn btn-sm" style={{marginTop:12}} onClick={() => this.setState({ error: null })}>Try again</button>
+        </div>
+      </div>
+    );
+  }
+}
+
 const ADMIN_VIEWS = {
   overview:   { c: AdminOverview,   t:'Overview',         staticSubtitle:'shop heartbeat · today' },
   orders:     { c: AdminOrders,     t:'Orders' },
@@ -13899,7 +13952,9 @@ function AdminPage({ go }) {
           }
         />
         <div className="admin-section-root">
-          <Body sessionInfo={sessionInfo} search={search} siteUrl={siteUrl} />
+          <AdminSectionBoundary section={effectiveSection}>
+            <Body sessionInfo={sessionInfo} search={search} siteUrl={siteUrl} />
+          </AdminSectionBoundary>
         </div>
       </div>
     </div>
