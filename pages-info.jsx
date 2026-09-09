@@ -953,6 +953,7 @@ function PoliciesPage({ go, pageParams }) {
           <aside className="policy-nav" aria-label="Policy documents">
             <div className="eyebrow" style={{padding:'0 0 8px 0', marginBottom:4}}>VIEWING AS</div>
             <select
+              aria-label="Viewing policies as"
               value={audience}
               onChange={(e) => onAudienceChange(e.target.value)}
               style={{width:'100%', padding:'10px 12px', marginBottom:20, border:'1px solid var(--line)', borderRadius:6, fontSize:14, background:'var(--bg)', color:'var(--ink)'}}

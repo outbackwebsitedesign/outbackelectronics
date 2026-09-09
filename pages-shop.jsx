@@ -2203,6 +2203,7 @@ function GiftCardsPage({ go, addToCart }) {
           <div style={{display:'flex', flexDirection:'column', gap:8}}>
             <input
               className="input"
+              aria-label="Gift card code"
               placeholder="OBE-XXXX-XXXX-XXXX"
               value={balanceCode}
               onChange={e => { setBalanceCode(e.target.value.toUpperCase()); setBalanceResult(null); setBalanceError(null); }}
@@ -2213,6 +2214,7 @@ function GiftCardsPage({ go, addToCart }) {
               <input
                 className="input"
                 type="email"
+                aria-label="Email the gift card was sent to"
                 placeholder="Email the card was sent to"
                 value={balanceEmail}
                 onChange={e => { setBalanceEmail(e.target.value); setBalanceResult(null); setBalanceError(null); }}

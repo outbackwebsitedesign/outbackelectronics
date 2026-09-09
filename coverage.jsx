@@ -56,6 +56,7 @@ export default function CoverageApp() {
   return (
     <>
       <TopNav current="coverage" />
+      <h1 className="sr-only">Mobile coverage</h1>
       <div className="cov-wrap">
         <div className="cov-bar">
           <span className="cov-bar-label">Show</span>

@@ -117,4 +117,8 @@ select.input, .select { appearance: none; background-image: linear-gradient(45de
 .fld { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
 .fld > span { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); font-family: 'JetBrains Mono', monospace; }
 .fld-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* Visually hidden, still read by screen readers. Used for the page title on
+   full-bleed map apps that have no room for a visible heading. */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 @media (max-width: 600px){ .container { padding: 0 18px; } .svc-main { padding: 24px 0 48px; } }

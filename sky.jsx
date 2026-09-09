@@ -428,6 +428,7 @@ export default function SkyApp() {
             <input
               className="input sky-loc-search"
               type="text"
+              aria-label="Search for a location"
               placeholder="Search location…"
               value={search}
               onChange={e => setSearch(e.target.value)}

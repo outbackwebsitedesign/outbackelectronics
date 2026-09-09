@@ -99,11 +99,12 @@ export default function MapsApp() {
   return (
     <>
       <TopNav current="maps" />
+      <h1 className="sr-only">Maps</h1>
       <div className="maps-wrap">
         <aside className="maps-side">
           <h2>Find a place</h2>
           <form className="maps-search" onSubmit={search}>
-            <input className="input" placeholder="Town, park, address…" value={q} onChange={e => setQ(e.target.value)} />
+            <input className="input" aria-label="Search for a place" placeholder="Town, park, address…" value={q} onChange={e => setQ(e.target.value)} />
             <button className="btn btn-sm" type="submit">Go</button>
           </form>
           <div className="cat-toggle">

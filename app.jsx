@@ -95,6 +95,26 @@ function useFocusTrap(containerRef, onClose) {
 }
 window.useFocusTrap = useFocusTrap;
 
+// ---------------- Body Scroll Lock ----------------
+// Freezes the page behind a full-screen overlay (nav drawer, search) so a swipe
+// or wheel that reaches the overlay's scroll boundary does not scroll the page
+// underneath it. Pads for the scrollbar it removes so the layout does not jump.
+function useBodyScrollLock() {
+  useEffect(() => {
+    const body = document.body;
+    const prevOverflow = body.style.overflow;
+    const prevPadding = body.style.paddingRight;
+    const barWidth = window.innerWidth - document.documentElement.clientWidth;
+    body.style.overflow = 'hidden';
+    if (barWidth > 0) body.style.paddingRight = `${barWidth}px`;
+    return () => {
+      body.style.overflow = prevOverflow;
+      body.style.paddingRight = prevPadding;
+    };
+  }, []);
+}
+window.useBodyScrollLock = useBodyScrollLock;
+
 // ---------------- Search Overlay ----------------
 function SearchOverlay({ go, onClose }) {
   const [q, setQ] = useState('');
@@ -105,6 +125,7 @@ function SearchOverlay({ go, onClose }) {
   const panelRef = useRef(null);
   useEffect(() => { inputRef.current && inputRef.current.focus(); }, []);
   useFocusTrap(panelRef, onClose);
+  useBodyScrollLock();
 
   useEffect(() => {
     fetch('/api/catalog/products')
@@ -446,6 +467,7 @@ function MobileNavDrawer({ page, go, onClose, handleNavClick }) {
   const shop = useShop();
   const drawerRef = useRef(null);
   useFocusTrap(drawerRef, onClose);
+  useBodyScrollLock();
   const isNavActive = (id) => page === id || NAV_PAGE_ALIASES[page] === id;
   return (
     <div ref={drawerRef} id="mobile-nav" className="mobile-nav" role="dialog" aria-modal="true" aria-label="Navigation menu">
@@ -1413,7 +1435,7 @@ function App() {
         <button
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
           aria-label="Back to top"
-          style={{position:'fixed', bottom:24, right:24, zIndex:400, width:44, height:44, background:'var(--ink)', color:'var(--paper)', border:'none', cursor:'pointer', display:'grid', placeItems:'center', boxShadow:'0 4px 16px rgba(0,0,0,.25)', transition:'opacity 120ms'}}
+          style={{position:'fixed', bottom:92, right:30, zIndex:400, width:44, height:44, background:'var(--ink)', color:'var(--paper)', border:'none', cursor:'pointer', display:'grid', placeItems:'center', boxShadow:'0 4px 16px rgba(0,0,0,.25)', transition:'opacity 120ms'}}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
         </button>

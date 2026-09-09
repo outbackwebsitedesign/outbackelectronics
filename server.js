@@ -68,13 +68,7 @@ const PUBLIC_CSP = "default-src 'self'; " +
   "script-src 'self' 'unsafe-inline' " +
     "https://*.tawk.to https://embed.tawk.to " +
     "https://static.cloudflareinsights.com " +
-    "https://cdn.jsdelivr.net " +
-    "https://pagead2.googlesyndication.com https://*.googlesyndication.com " +
-    "https://securepubads.g.doubleclick.net https://*.doubleclick.net " +
-    "https://partner.googleadservices.com https://*.googleadservices.com " +
-    "https://*.googletagservices.com " +
-    "https://adservice.google.com https://adservice.google.com.au " +
-    "https://*.adtrafficquality.google; " +
+    "https://cdn.jsdelivr.net; " +
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.tawk.to https://cdn.jsdelivr.net; " +
   "img-src 'self' data: https:; " +
   "font-src 'self' data: https://fonts.gstatic.com https://*.tawk.to; " +
@@ -83,14 +77,9 @@ const PUBLIC_CSP = "default-src 'self'; " +
     "https://nominatim.openstreetmap.org " +
     "https://overpass-api.de " +
     "wss://*.tawk.to https://*.tawk.to https://va.tawk.to " +
-    "https://cloudflareinsights.com " +
-    "https://*.googlesyndication.com https://*.doubleclick.net https://securepubads.g.doubleclick.net " +
-    "https://adservice.google.com https://adservice.google.com.au " +
-    "https://*.adtrafficquality.google; " +
+    "https://cloudflareinsights.com; " +
   "frame-src 'self' https://www.openstreetmap.org https://*.tawk.to " +
-    "https://pagead2.googlesyndication.com https://*.googlesyndication.com " +
-    "https://googleads.g.doubleclick.net https://tpc.googlesyndication.com " +
-    "https://www.google.com https://maps.google.com https://ep2.adtrafficquality.google; " +
+    "https://www.google.com https://maps.google.com; " +
   "frame-ancestors 'none';";
 const HSTS_VALUE = 'max-age=31536000; includeSubDomains';
 const PERMISSIONS_POLICY = 'camera=(), microphone=(), geolocation=(), payment=(), usb=()';
@@ -2238,7 +2227,7 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null, cspOverride 
       'Strict-Transport-Security': HSTS_VALUE,
       'Permissions-Policy': PERMISSIONS_POLICY,
       'Content-Security-Policy': isEmbeddable
-        ? "default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://nominatim.openstreetmap.org; frame-src https://www.openstreetmap.org; frame-ancestors 'self';"
+        ? "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://nominatim.openstreetmap.org; frame-src https://www.openstreetmap.org; frame-ancestors 'self';"
         : (cspOverride || PUBLIC_CSP),
     } : { 'X-Content-Type-Options': 'nosniff', 'Strict-Transport-Security': HSTS_VALUE };
     const isPdf = ext === '.pdf';

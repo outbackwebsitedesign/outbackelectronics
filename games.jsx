@@ -2270,9 +2270,9 @@ function App() {
           <span style={css.siteName}>Outback Electronics</span>
         </a>
         <div style={{ flex:1 }} />
-        <span style={{ fontFamily:"'Instrument Serif', serif", fontSize:20, color:T.ink }}>
+        <h1 style={{ fontFamily:"'Instrument Serif', serif", fontSize:20, fontWeight:400, color:T.ink }}>
           {active ? active.name : 'Games'}
-        </span>
+        </h1>
         {portalUser === undefined ? null : portalUser ? (
           <div style={{ display:'flex', alignItems:'center', gap:10, fontSize:13, color:T.ink2 }}>
             <span style={{ maxWidth:140, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{portalUser.displayName || portalUser.username}</span>
