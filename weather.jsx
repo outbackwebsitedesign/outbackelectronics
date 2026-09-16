@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, createContext, useContext, useCallback } from 'react';
-import { makePortalHelpers } from './src/lib/api.js';
 
 // ── Weather data ───────────────────────────────────────────────────────────────
 
@@ -538,43 +537,16 @@ function StationStatus({ latest, rtcTime, stationId }) {
 // Ported verbatim from tools.jsx so this standalone page renders the EXACT same
 // header and footer as every other page on outbackelectronics.com.au.
 
-const ShopContext = createContext({});
-const useShop = () => useContext(ShopContext);
-
-let _PORTAL_URL = 'https://portal.outbackelectronics.com.au';
-let _GAMES_URL  = 'https://games.outbackelectronics.com.au';
-let _TOOLS_URL  = 'https://tools.outbackelectronics.com.au';
-function getPortalUrl() { return _PORTAL_URL; }
-function getGamesUrl()  { return _GAMES_URL; }
-function getToolsUrl()  { return _TOOLS_URL; }
-
-const PRIMARY_PAGES = [
-  { id: 'home', label: 'Home' },
-  { id: 'shop', label: 'Shop' },
-  { id: 'services', label: 'Services' },
-  { id: 'memberships', label: 'Memberships' },
-  { id: 'software', label: 'Software' },
-  { id: 'ewaste', label: 'eWaste' },
-  { id: 'ai', label: 'AI' },
-  { id: 'tutorials', label: 'Tutorials' },
-  { id: 'tools-link', label: 'Tools' },
-  { id: 'games-link', label: 'Games' },
-  { id: 'groups', label: 'Groups' },
-];
-const EXTERNAL_LINKS = {
-  'games-link': getGamesUrl,
-  'tools-link': getToolsUrl,
-};
-const isExternalLink = (id) => Object.prototype.hasOwnProperty.call(EXTERNAL_LINKS, id);
-const externalHref = (id) => EXTERNAL_LINKS[id] ? EXTERNAL_LINKS[id]() : null;
-const UTILITY_PAGES = [
-  { id: 'quote', label: 'Request a Quote' },
-  { id: 'gift-cards', label: 'Gift Cards' },
-  { id: 'sellers', label: 'Info for Sellers' },
-  { id: 'sell-gear', label: 'Sell Your Gear' },
-  { id: 'contact', label: 'Contact' },
-  { id: 'policies', label: 'Policies' },
-];
+// Header, footer and nav config are shared with the main site (app.jsx) and
+// Tools, so all three present identical chrome from their own subdomains.
+import {
+  ShopContext, useShop, useShopInfo, useAnnouncement,
+  PRIMARY_PAGES, UTILITY_PAGES,
+  isExternalLink, externalHref, setSiteRoot,
+  getPortalUrl, getGamesUrl, getToolsUrl, getForumUrl,
+  portalApi, usePortalUser,
+  SiteTopNav as TopNav, SiteFooter as Footer,
+} from './site-chrome.jsx';
 
 function getSiteRoot() {
   try {
@@ -585,6 +557,8 @@ function getSiteRoot() {
   } catch { return '/'; }
 }
 
+setSiteRoot(getSiteRoot);
+
 function go(id, params = null) {
   if (id === 'home') { window.location.href = getSiteRoot(); return; }
   if (isExternalLink(id)) { window.location.href = externalHref(id); return; }
@@ -593,7 +567,6 @@ function go(id, params = null) {
   window.location.href = getSiteRoot() + id;
 }
 
-const { portalApi, usePortalUser } = makePortalHelpers(getPortalUrl);
 
 function SearchOverlay({ onClose }) {
   const [q, setQ] = useState('');
@@ -713,115 +686,6 @@ function SearchOverlay({ onClose }) {
   );
 }
 
-function AccountDropdown({ onClose, user }) {
-  const ref = useRef(null);
-  const portal = (path = '') => { window.location.href = getPortalUrl() + path; };
-  const goPage = (id) => { go(id); onClose(); };
-  useEffect(() => {
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [onClose]);
-
-  const dropdownStyle = {position:'absolute', top:'calc(100% + 8px)', right:0, width:220, background:'var(--bg)', border:'1px solid var(--line)', boxShadow:'0 8px 24px rgba(0,0,0,.15)', zIndex:300};
-  const btnStyle = (last) => ({width:'100%', textAlign:'left', padding:'12px 16px', cursor:'pointer', fontSize:14, border:'none', borderBottom: last ? 'none' : '1px solid var(--line)', background:'transparent', color:'var(--ink)'});
-  const hoverOn = e => { e.currentTarget.style.background = 'var(--bg-elev)'; };
-  const hoverOff = e => { e.currentTarget.style.background = 'transparent'; };
-
-  if (!user) {
-    return (
-      <div ref={ref} style={dropdownStyle}>
-        <div style={{padding:'16px 16px 12px', borderBottom:'1px solid var(--line)'}}>
-          <div className="mono" style={{fontSize:10, color:'var(--ink-3)', marginBottom:6}}>ACCOUNT</div>
-          <p style={{fontSize:13, color:'var(--ink-2)', lineHeight:1.5, margin:0}}>
-            Sign in to track orders, book repairs, and access your account.
-          </p>
-        </div>
-        <button style={{...btnStyle(false), fontWeight:600, color:'var(--rust)'}}
-          onMouseEnter={hoverOn} onMouseLeave={hoverOff}
-          onClick={() => { portal('/'); onClose(); }}>
-          Sign In →
-        </button>
-        <button style={btnStyle(true)}
-          onMouseEnter={hoverOn} onMouseLeave={hoverOff}
-          onClick={() => { portal('/?tab=register'); onClose(); }}>
-          Create an Account
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div ref={ref} style={dropdownStyle}>
-      {user.displayName && (
-        <div style={{padding:'12px 16px', borderBottom:'1px solid var(--line)'}}>
-          <div className="mono" style={{fontSize:10, color:'var(--ink-3)'}}>SIGNED IN AS</div>
-          <div style={{fontSize:14, marginTop:3, fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{user.displayName}</div>
-        </div>
-      )}
-      {[
-        { label:'Profile',           action: () => portal('/#account') },
-        { label:'My Subscriptions',  action: () => portal('/#memberships') },
-        { label:'My Rewards',        action: () => portal('/#rewards') },
-        { label:'My Wallet',         action: () => portal('/#wallet') },
-        { label:'My Groups',         action: () => { go('groups'); onClose(); } },
-        { label:'My Orders',         action: () => portal('/orders') },
-        { label:'My Addresses',      action: () => portal('/addresses') },
-        { label:'My Bookings',       action: () => portal('/bookings') },
-        { label:'My Account',        action: () => portal('/account') },
-        { label:'Log Out',           action: () => { portalApi('/api/portal/auth/logout', { method: 'POST' }).then(() => window.location.reload()); onClose(); } },
-      ].map((item, i, arr) => (
-        <button key={item.label} onClick={() => { item.action(); onClose(); }}
-          style={btnStyle(i === arr.length - 1)}
-          onMouseEnter={hoverOn} onMouseLeave={hoverOff}>
-          {item.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function Logo({ onClick }) {
-  return (
-    <div className="logo" onClick={onClick}>
-      <div className="logo-mark">
-        <img src="/assets/logo.webp" alt="Outback Electronics" width="55" height="40" />
-      </div>
-      <div className="logo-text">
-        <div className="sub">Est. 2023 · Appointment only</div>
-      </div>
-    </div>
-  );
-}
-
-function UtilityBar() {
-  const shop = useShop();
-  return (
-    <div className="utility-bar">
-      <div className="container">
-        <div className="links"></div>
-        <div className="links">
-          {UTILITY_PAGES.map(p => (
-            <a key={p.id} href={getSiteRoot() + p.id} onClick={(e) => { e.preventDefault(); go(p.id); }}>{p.label}</a>
-          ))}
-          {shop.phone && <span style={{color:'var(--ochre)'}}>{shop.phone}</span>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function useAnnouncement() {
-  const [text, setText] = useState('');
-  useEffect(() => {
-    fetch('/api/announcement')
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d && d.active && d.text) setText(d.text); })
-      .catch(() => {});
-  }, []);
-  return text;
-}
-
 function useCartCount() {
   const [count, setCount] = useState(0);
   useEffect(() => {
@@ -838,213 +702,6 @@ function useCartCount() {
   return count;
 }
 
-function TopNav({ page, onSearchOpen, accountOpen, setAccountOpen, portalUser, cart }) {
-  const announcement = useAnnouncement();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const signedOut = portalUser === null;
-  const [scrolled, setScrolled] = useState(false);
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-
-  const handleNavClick = (id) => {
-    setMobileMenuOpen(false);
-    if (isExternalLink(id)) window.location.href = externalHref(id);
-    else go(id);
-  };
-
-  return (
-    <header>
-      {announcement && <div className="announce">{announcement}</div>}
-      <UtilityBar />
-      <div className={scrolled ? 'topnav scrolled' : 'topnav'}>
-        <div className="container row">
-          <Logo onClick={() => go('home')} />
-          <nav className="mainlinks">
-            {PRIMARY_PAGES.map(p => (
-              <a
-                key={p.id}
-                href={isExternalLink(p.id) ? externalHref(p.id) : getSiteRoot() + p.id}
-                className={page === p.id ? 'active' : ''}
-                onClick={isExternalLink(p.id) ? undefined : (e) => { e.preventDefault(); go(p.id); }}
-                {...((p.id === 'forum-link' || p.id === 'games-link') ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-              >
-                {p.label}
-              </a>
-            ))}
-          </nav>
-          <div className="topnav-actions">
-            <button className="icon-btn" title="Search" aria-label="Search" onClick={onSearchOpen}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-            </button>
-            <div style={{position:'relative'}}>
-              <button
-                className="icon-btn"
-                title={signedOut ? 'Sign In / Create Account' : 'Account'}
-                aria-label={signedOut ? 'Sign In / Create Account' : 'Account'}
-                onClick={() => setAccountOpen(o => !o)}
-                style={signedOut ? {color:'var(--rust)', borderColor:'var(--rust)'} : {}}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>
-              </button>
-              {accountOpen && <AccountDropdown onClose={() => setAccountOpen(false)} user={portalUser} />}
-            </div>
-            <button className="icon-btn" title="Cart" aria-label={cart > 0 ? `Cart, ${cart} item${cart === 1 ? '' : 's'}` : 'Cart'} onClick={() => go('cart')}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M3 4h2l2.5 12h11l2-9H6"/><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/></svg>
-              {cart > 0 && <span className="cart-count" aria-hidden="true">{cart}</span>}
-            </button>
-            <button className="icon-btn hamburger" style={{display:'none'}} title="Menu" aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'} aria-expanded={mobileMenuOpen} aria-controls="mobile-nav" onClick={() => setMobileMenuOpen(o => !o)}>
-              {mobileMenuOpen
-                ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
-              }
-            </button>
-          </div>
-        </div>
-      </div>
-      {mobileMenuOpen && (
-        <div id="mobile-nav" className="mobile-nav" role="dialog" aria-modal="true" aria-label="Navigation menu">
-          <div className="mobile-nav-header">
-            <Logo onClick={() => { go('home'); setMobileMenuOpen(false); }} />
-            <button className="icon-btn" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
-            </button>
-          </div>
-          {PRIMARY_PAGES.map(p => (
-            <a key={p.id}
-              href={isExternalLink(p.id) ? externalHref(p.id) : getSiteRoot() + p.id}
-              className={page === p.id ? 'active' : ''}
-              onClick={isExternalLink(p.id) ? undefined : (e) => { e.preventDefault(); handleNavClick(p.id); }}
-              {...((p.id === 'forum-link' || p.id === 'games-link') ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>
-              {p.label}
-            </a>
-          ))}
-          <div style={{borderTop:'2px solid var(--line)', marginTop:8}}>
-            {UTILITY_PAGES.map(p => (
-              <a key={p.id} href={getSiteRoot() + p.id} className={page === p.id ? 'active' : ''}
-                onClick={(e) => { e.preventDefault(); handleNavClick(p.id); }}
-                style={{fontSize:14, color:'var(--ink-2)'}}>
-                {p.label}
-              </a>
-            ))}
-          </div>
-        </div>
-      )}
-    </header>
-  );
-}
-
-function Footer() {
-  const shop = useShop();
-  const [topCategories, setTopCategories] = useState([]);
-  const [footerServices, setFooterServices] = useState([]);
-
-  useEffect(() => {
-    fetch('/api/catalog/products')
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then(d => {
-        const counts = {};
-        (d.items || []).forEach(p => {
-          if (p.status === 'published' && p.category) {
-            counts[p.category] = (counts[p.category] || 0) + 1;
-          }
-        });
-        const sorted = Object.entries(counts)
-          .sort(([, a], [, b]) => b - a)
-          .slice(0, 5)
-          .map(([cat]) => cat);
-        setTopCategories(sorted);
-      })
-      .catch(() => {});
-
-    fetch('/api/catalog/services')
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then(d => {
-        setFooterServices((d.items || []).slice(0, 5));
-      })
-      .catch(() => {});
-  }, []);
-
-  return (
-    <footer>
-      <div className="container">
-        <div className="grid">
-          <div>
-            <div className="logo">
-              <div className="logo-mark sm" style={{background:'#000'}}>
-                <img src="/assets/logo.webp" alt="Outback Electronics" width="40" height="29" />
-              </div>
-              <div className="logo-text">
-                <div className="sub" style={{color:'var(--ochre)'}}>{shop.tagline}</div>
-              </div>
-            </div>
-            <p style={{marginTop: 18, fontSize: 13, color: 'var(--ink-on-dark-muted)', maxWidth: 360, lineHeight: 1.6}}>
-              {shop.description}
-            </p>
-          </div>
-          <div>
-            <h3>Shop</h3>
-            <ul>
-              {topCategories.map((cat) => (
-                <li key={cat}><a href="/shop" onClick={(e) => { e.preventDefault(); go('shop', { initialCat: cat }); }}>{cat}</a></li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <h3>Services</h3>
-            <ul>
-              {footerServices.map((svc) => (
-                <li key={svc.id}><a href={`/service/${svc.slug || svc.id}`} onClick={(e) => { e.preventDefault(); go('service', svc); }}>{svc.name}</a></li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <h3>Community</h3>
-            <ul>
-              <li><a href="/tutorials" onClick={(e) => { e.preventDefault(); go('tutorials'); }}>Tutorials</a></li>
-              <li><a href="/groups" onClick={(e) => { e.preventDefault(); go('groups'); }}>Groups</a></li>
-              <li><a href="/memberships" onClick={(e) => { e.preventDefault(); go('memberships'); }}>Memberships</a></li>
-              <li><a href="/sellers" onClick={(e) => { e.preventDefault(); go('sellers'); }}>Info for Sellers</a></li>
-              <li><a href="/sell-gear" onClick={(e) => { e.preventDefault(); go('sell-gear'); }}>Sell Your Gear</a></li>
-            </ul>
-          </div>
-          <div>
-            <h3>Visit</h3>
-            <ul style={{color:'var(--ink-on-dark-muted)'}}>
-              <li>{[shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ')}<br/>No public access, arrive by appointment only.</li>
-              {shop.phone && <li>{shop.phone}</li>}
-              <li><a href="/contact" onClick={(e) => { e.preventDefault(); go('contact'); }} style={{color:'var(--ochre)'}}>Get directions →</a></li>
-            </ul>
-          </div>
-        </div>
-        <div className="baseline">
-          <span>© 2023–{new Date().getFullYear()} {shop.tradingName}{shop.abn ? ` · ABN ${shop.abn}` : ''}</span>
-          {(shop.acknowledgmentPeople || shop.acknowledgmentCountry) && <span>ACKNOWLEDGES THE {(shop.acknowledgmentPeople || '').toUpperCase()} AS TRADITIONAL CUSTODIANS OF {(shop.acknowledgmentCountry || '').toUpperCase()}</span>}
-        </div>
-      </div>
-    </footer>
-  );
-}
-
-function useShopInfo() {
-  const [info, setInfo] = useState({ shop: {} });
-  useEffect(() => {
-    fetch('/api/shop-info')
-      .then(r => r.ok ? r.json() : null)
-      .then(d => {
-        if (!d) return;
-        if (d.portalUrl) _PORTAL_URL = d.portalUrl;
-        if (d.gamesUrl)  _GAMES_URL  = d.gamesUrl;
-        if (d.toolsUrl)  _TOOLS_URL  = d.toolsUrl;
-        setInfo({ shop: d.shop || {} });
-      })
-      .catch(() => {});
-  }, []);
-  return info;
-}
 
 // ── App ───────────────────────────────────────────────────────────────────────
 

@@ -1,6 +1,9 @@
 // games.jsx - Outback Electronics Games Hub
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { makePortalHelpers } from './src/lib/api.js';
+// The suite footer every other service subdomain renders. Games is a Field
+// Network tile, so it wears the same one rather than shipping with none.
+import { Footer } from './app-shell.jsx';
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const T = {
@@ -2262,8 +2265,14 @@ function App() {
     _portalCsrfPromise = null;
   }
 
+  // A running game owns the whole viewport; the lobby is a normal scrolling
+  // page so the shared footer sits under it.
+  const inGame = !!GameComponent;
+
   return (
-    <div style={{ display:'flex', flexDirection:'column', height:'100vh', overflow:'hidden' }}>
+    <div style={inGame
+      ? { display:'flex', flexDirection:'column', height:'100vh', overflow:'hidden' }
+      : { display:'flex', flexDirection:'column', minHeight:'100vh' }}>
       <header style={css.header}>
         <a href="https://outbackelectronics.com.au" style={css.logoLink} title="Back to Outback Electronics">
           <img src="/assets/logo.webp" alt="" style={css.logoImg} onError={e=>{e.target.style.display='none';}} />
@@ -2282,9 +2291,10 @@ function App() {
           <button onClick={() => setAuthOpen(true)} style={{ ...css.btn, ...css.btnSecondary, padding:'5px 14px', fontSize:13 }}>Sign In</button>
         )}
       </header>
-      {GameComponent
+      {inGame
         ? <GameComponent key={activeId} onBack={backToLobby} />
         : <Lobby onPlay={playGame} />}
+      {!inGame && <Footer />}
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onLogin={u => { setPortalUser(u); }} />}
     </div>
   );

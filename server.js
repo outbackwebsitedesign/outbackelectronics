@@ -12226,6 +12226,14 @@ const gamesServer = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'GET'  && url.pathname === '/api/config')        return json(res, 200, { portalUrl: PORTAL_URL });
+
+  // Games renders the shared suite footer, which reads the service URLs and
+  // shop name from here, same as every createServiceServer() app.
+  if (req.method === 'GET' && url.pathname === '/api/shop-info') {
+    const { shop, flags } = readSettings();
+    return json(res, 200, { shop, flags: flags || {}, ...serviceUrls() });
+  }
+
   if (req.method === 'GET'  && url.pathname === '/api/auth/me')       return handleCustomerMe(req, res);
   if (req.method === 'POST' && url.pathname === '/api/auth/register') return handleCustomerRegister(req, res);
   if (req.method === 'POST' && url.pathname === '/api/auth/login')    return handleCustomerLogin(req, res);
@@ -13562,6 +13570,13 @@ const aiGatewayServer = http.createServer(async (req, res) => {
       const session = getPortalSession(req);
       if (!session) return json(res, 401, { error: 'not_logged_in' });
       return json(res, 200, { id: session.id, username: session.username, displayName: session.displayName });
+    }
+
+    // Service URLs and shop name for the shared chrome, so the AI page does not
+    // hard-code cross-service URLs (same contract as every other service).
+    if (req.method === 'GET' && url.pathname === '/api/shop-info') {
+      const { shop, flags } = readSettings();
+      return json(res, 200, { shop, flags: flags || {}, ...serviceUrls() });
     }
 
     // Health / status

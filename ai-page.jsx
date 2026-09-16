@@ -1,12 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-
-const SITE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? 'http://localhost:8080'
-  : `https://outbackelectronics.com.au`;
-
-const PORTAL_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? 'http://localhost:8083'
-  : `https://portal.outbackelectronics.com.au`;
+// Shared suite chrome, so the AI page has the same nav (and the launcher, which
+// is the only way off this page) and the same footer as every other service.
+import { TopNav, Footer, useShopInfo } from './app-shell.jsx';
 
 // ── Markdown renderer ─────────────────────────────────────────────────────────
 
@@ -85,6 +80,8 @@ function renderMd(text) {
 const GREETING = "G'day! I'm the Outback Electronics AI assistant, running locally on our own hardware, no cloud involved. Ask me anything about electronics repair, troubleshooting, components, or soldering. You can also upload a photo of a board for diagnosis.";
 
 function ChatView({ session }) {
+  const shopInfo = useShopInfo();
+  const siteUrl = (shopInfo && shopInfo.siteUrl) || '';
   const [messages, setMessages] = useState([{ role: 'assistant', content: GREETING }]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
@@ -270,7 +267,7 @@ function ChatView({ session }) {
             </div>
           </div>
           <p style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 6 }}>
-            AI responses may not always be accurate. For complex repairs, <a href={SITE_URL + '/services'} style={{ color: 'var(--rust)' }}>book a service</a>.
+            AI responses may not always be accurate. For complex repairs, <a href={(siteUrl || '') + '/services'} style={{ color: 'var(--rust)' }}>book a service</a>.
           </p>
         </div>
       </div>
@@ -279,6 +276,8 @@ function ChatView({ session }) {
 }
 
 function LoginPrompt() {
+  const info = useShopInfo();
+  const portalUrl = (info && info.portalUrl) || '';
   return (
     <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <div style={{ maxWidth: 400, width: '100%', background: 'var(--paper)', border: '1px solid var(--line)', padding: 40, boxShadow: 'var(--shadow)' }}>
@@ -288,8 +287,8 @@ function LoginPrompt() {
           <p style={{ marginTop: 12, color: 'var(--ink-2)', fontSize: 14 }}>A free portal account gives you access to the AI assistant, order tracking, repair status, and more.</p>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <a href={PORTAL_URL} className="btn btn-rust" style={{ justifyContent: 'center' }}>Sign in to Portal →</a>
-          <a href={PORTAL_URL + '?tab=register'} className="btn btn-ghost" style={{ justifyContent: 'center' }}>Create free account</a>
+          <a href={portalUrl} className="btn btn-rust" style={{ justifyContent: 'center' }}>Sign in to Portal →</a>
+          <a href={portalUrl + '?tab=register'} className="btn btn-ghost" style={{ justifyContent: 'center' }}>Create free account</a>
         </div>
       </div>
     </div>
@@ -297,28 +296,6 @@ function LoginPrompt() {
 }
 
 // ── Top nav ───────────────────────────────────────────────────────────────────
-
-function TopNav({ session }) {
-  return (
-    <nav className="topnav">
-      <div className="container inner">
-        <a href={SITE_URL} className="logo">
-          <div className="logo-mark"><img src="/favicon.png" alt="OE" /></div>
-          <div className="logo-text">
-            <div className="name">Outback Electronics</div>
-            <div className="sub">AI Assistant</div>
-          </div>
-        </a>
-        <div className="nav-right">
-          <span className="ai-badge">ON-PREM AI</span>
-          {session
-            ? <span style={{ fontSize: 13 }}>Hi, {session.displayName || session.username}</span>
-            : <a href={PORTAL_URL} style={{ color: 'var(--sand-dim)', fontSize: 13 }}>Sign in →</a>}
-        </div>
-      </div>
-    </nav>
-  );
-}
 
 // ── App ───────────────────────────────────────────────────────────────────────
 
@@ -336,20 +313,11 @@ export default function AIApp() {
 
   return (
     <>
-      <TopNav session={session} />
+      <TopNav current="ai" />
       {loading
         ? <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-2)' }}>Loading…</div>
         : session ? <ChatView session={session} /> : <LoginPrompt />}
-      <footer className="footer">
-        <div className="container inner">
-          <span>© {new Date().getFullYear()} Outback Electronics</span>
-          <div style={{ display: 'flex', gap: 20 }}>
-            <a href={SITE_URL}>Main site</a>
-            <a href={PORTAL_URL}>Portal</a>
-            <a href={SITE_URL + '/contact'}>Contact</a>
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </>
   );
 }
