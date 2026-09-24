@@ -13902,6 +13902,38 @@ function AdminPage({ go }) {
     return () => { mounted = false; };
   }, []);
 
+  // The admin session has a fixed lifetime, so a dashboard left open (or a
+  // laptop woken from sleep) can outlive it. Without this every section's
+  // fetch just fails with 401 and renders as empty lists. Any 401 from an
+  // admin API, or a failed re-check when the tab regains focus, drops back
+  // to the login screen instead; signing in again remounts every section, so
+  // the data reloads.
+  useEffect(() => {
+    if (!sessionInfo.authed) return;
+    const expire = () => setSessionInfo({ authed: false, role: null, username: null, staffId: null });
+    const origFetch = window.fetch;
+    window.fetch = async (...args) => {
+      const res = await origFetch(...args);
+      const target = typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url) || '';
+      const path = target.replace(/^https?:\/\/[^/]+/, '');
+      if (res.status === 401 && path.startsWith('/api/admin/') && !path.startsWith('/api/admin/login')) expire();
+      return res;
+    };
+    const recheck = () => {
+      if (document.visibilityState !== 'visible') return;
+      origFetch('/api/admin/session', { credentials: 'include' })
+        .then(r => { if (r.status === 401) expire(); })
+        .catch(() => {});
+    };
+    document.addEventListener('visibilitychange', recheck);
+    window.addEventListener('focus', recheck);
+    return () => {
+      window.fetch = origFetch;
+      document.removeEventListener('visibilitychange', recheck);
+      window.removeEventListener('focus', recheck);
+    };
+  }, [sessionInfo.authed]);
+
   useEffect(() => {
     const target = '/' + section;
     if (window.location.pathname !== target) window.history.pushState({}, '', target);
