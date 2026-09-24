@@ -3175,17 +3175,23 @@ function emailQuoteFormal({ quoteRef, quoteId, quoteToken, customerName, validDa
     .toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
 
   const rowItems = (lineItems || []).filter(i => i.description).map(i => {
-    const qty = parseInt(i.qty) || 1;
-    return { label: i.description + (qty > 1 ? ` × ${qty}` : ''), amount: (Number(i.amount) || 0) * qty };
+    const qty = Number(i.qty) || 1;
+    const unit = Number(i.amount) || 0;
+    return { label: i.description, qty, unit, amount: Math.round(unit * qty * 100) / 100 };
   });
   if (Number(discountAmount) > 0) {
     const base = discountLabel || 'Discount';
-    rowItems.push({ label: discountType === 'fixed' ? base : `${base} (${Number(discountValue) || 0}%)`, amount: -Number(discountAmount) });
+    rowItems.push({ label: discountType === 'fixed' ? base : `${base} (${Number(discountValue) || 0}%)`, qty: null, unit: null, amount: -Number(discountAmount) });
   }
 
+  const money = n => `${n < 0 ? '-' : ''}$${Math.abs(n).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+  const td = 'padding:8px 12px;border-bottom:1px solid #d8cdb6;font-size:13px;';
+  const tdNum = td + 'text-align:right;font-family:monospace;';
   const rows = rowItems.map(item =>
-    `<tr><td style="padding:8px 12px;border-bottom:1px solid #d8cdb6;font-size:13px;">${escHtml(item.label)}</td>` +
-    `<td style="padding:8px 12px;border-bottom:1px solid #d8cdb6;font-size:13px;text-align:right;font-family:monospace;font-weight:600;">$${item.amount.toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr>`
+    `<tr><td style="${td}">${escHtml(item.label)}</td>` +
+    `<td style="${tdNum}">${item.qty != null ? item.qty : ''}</td>` +
+    `<td style="${tdNum}">${item.unit != null ? money(item.unit) : ''}</td>` +
+    `<td style="${tdNum}font-weight:600;">${money(item.amount)}</td></tr>`
   ).join('');
 
   return {
@@ -3200,12 +3206,14 @@ function emailQuoteFormal({ quoteRef, quoteId, quoteToken, customerName, validDa
       <table style="width:100%;border-collapse:collapse;margin:16px 0;border:1px solid #d8cdb6;">
         <thead><tr style="background:#1f1a14;">
           <th style="padding:10px 12px;text-align:left;font-family:monospace;font-size:10px;letter-spacing:.1em;color:#d39a37;font-weight:400;">ITEM</th>
+          <th style="padding:10px 12px;text-align:right;font-family:monospace;font-size:10px;letter-spacing:.1em;color:#d39a37;font-weight:400;">QTY</th>
+          <th style="padding:10px 12px;text-align:right;font-family:monospace;font-size:10px;letter-spacing:.1em;color:#d39a37;font-weight:400;">UNIT</th>
           <th style="padding:10px 12px;text-align:right;font-family:monospace;font-size:10px;letter-spacing:.1em;color:#d39a37;font-weight:400;">AMOUNT (AUD)</th>
         </tr></thead>
         <tbody>
           ${rows}
           <tr style="background:#1f1a14;">
-            <td style="padding:12px;font-weight:700;color:#fbf7ed;font-size:14px;">Total (AUD)</td>
+            <td colspan="3" style="padding:12px;font-weight:700;color:#fbf7ed;font-size:14px;">Total (AUD)</td>
             <td style="padding:12px;text-align:right;font-weight:700;color:#d39a37;font-family:monospace;font-size:16px;">$${(total||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
           </tr>
         </tbody>
@@ -4045,6 +4053,54 @@ function orderFromQuote(quote, { paymentPlan } = {}) {
   };
 }
 
+// Itemised line-item rows shared by the invoice and quote PDFs: every line shows
+// its quantity and per-unit price as well as the line total, so a parts-heavy
+// job reads as a list of parts rather than one lump sum.
+function pdfLineItemRows(lineItems, fallback) {
+  const rows = (lineItems && lineItems.length)
+    ? lineItems.map(li => {
+        const qty = Number(li.qty) || 1;
+        const unit = Number(li.amount) || 0;
+        return { description: li.description || '', qty, unit, amount: Math.round(unit * qty * 100) / 100 };
+      })
+    : [{ description: fallback.description, qty: null, unit: null, amount: fallback.amount }];
+  return rows;
+}
+
+function drawPdfLineItemTable(doc, rows, { fmtMoney, headerFill }) {
+  const qtyX = 330, unitX = 380, amountX = 460;
+  const descWidth = qtyX - 56 - 8;
+  const drawHeader = (top) => {
+    doc.rect(50, top, 495, 22).fill(headerFill);
+    doc.font('Helvetica-Bold').fontSize(10).fillColor('#fff');
+    doc.text('Description', 56, top + 6, { width: descWidth });
+    doc.text('Qty', qtyX, top + 6, { width: 40, align: 'right' });
+    doc.text('Unit price', unitX, top + 6, { width: 75, align: 'right' });
+    doc.text('Amount', amountX, top + 6, { width: 79, align: 'right' });
+    return top + 22 + 8;
+  };
+  let y = drawHeader(doc.y);
+  doc.font('Helvetica').fontSize(10);
+  rows.forEach((row, i) => {
+    const h = Math.max(20, doc.heightOfString(row.description || ' ', { width: descWidth }) + 6);
+    if (y + h > doc.page.height - 60) {
+      doc.addPage();
+      y = drawHeader(50);
+      doc.font('Helvetica').fontSize(10);
+    }
+    if (i % 2 === 1) doc.rect(50, y - 5, 495, h).fill('#f7f1e8');
+    doc.fillColor('#222').text(row.description, 56, y, { width: descWidth });
+    if (row.qty != null) {
+      doc.text(String(row.qty), qtyX, y, { width: 40, align: 'right' });
+      doc.text(fmtMoney(row.unit), unitX, y, { width: 75, align: 'right' });
+    }
+    doc.text(fmtMoney(row.amount), amountX, y, { width: 79, align: 'right' });
+    y += h;
+  });
+  doc.moveTo(50, y + 4).lineTo(545, y + 4).strokeColor('#ccc').stroke();
+  return y + 14;
+}
+
 function buildInvoicePdf(order, shop) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 50 });
@@ -4091,31 +4147,15 @@ function buildInvoicePdf(order, shop) {
       .text(order.shippingAddress || order.loc || '');
     doc.moveDown(1.5);
 
-    const lineItems = (order.lineItems && order.lineItems.length)
-      ? order.lineItems.map(li => { const qty = parseInt(li.qty) || 1; return { description: (li.description || '') + (qty > 1 ? ` × ${qty}` : ''), amount: (Number(li.amount) || 0) * qty }; })
-      : [{ description: order.items || 'Goods / services', amount: Number(order.total) || 0 }];
+    const lineItems = pdfLineItemRows(order.lineItems, { description: order.items || 'Goods / services', amount: Number(order.total) || 0 });
     if (Number(order.discountAmount) > 0) {
       const base = order.discountLabel || 'Discount';
       const label = order.discountType === 'fixed' ? base : `${base} (${Number(order.discountValue) || 0}%)`;
-      lineItems.push({ description: label, amount: -Number(order.discountAmount) });
+      lineItems.push({ description: label, qty: null, unit: null, amount: -Number(order.discountAmount) });
     }
 
-    const tableTop = doc.y;
     const colDescX = 50, colAmountX = 460, colWidth = 500;
-    doc.rect(50, tableTop, 495, 22).fill(OCHRE);
-    doc.font('Helvetica-Bold').fontSize(10).fillColor('#fff');
-    doc.text('Description', colDescX + 6, tableTop + 6);
-    doc.text('Amount', colAmountX, tableTop + 6, { width: 79, align: 'right' });
-    let y = tableTop + 22 + 8;
-    doc.font('Helvetica').fontSize(10);
-    lineItems.forEach((li, i) => {
-      if (i % 2 === 1) doc.rect(50, y - 5, 495, 20).fill('#f7f1e8');
-      doc.fillColor('#222').text(li.description, colDescX + 6, y, { width: colWidth - 95 - 6 });
-      doc.text(fmtMoney(li.amount), colAmountX, y, { width: 79, align: 'right' });
-      y += 20;
-    });
-    doc.moveTo(50, y + 4).lineTo(545, y + 4).strokeColor('#ccc').stroke();
-    y += 14;
+    let y = drawPdfLineItemTable(doc, lineItems, { fmtMoney, headerFill: OCHRE });
 
     const paid = (order.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
     const balance = (Number(order.total) || 0) - paid;
@@ -4199,31 +4239,15 @@ function buildQuotePdf(quote, shop) {
       .text(quote.shippingAddress || quote.loc || '');
     doc.moveDown(1.5);
 
-    const lineItems = (quote.lineItems && quote.lineItems.length)
-      ? quote.lineItems.map(li => { const qty = parseInt(li.qty) || 1; return { description: (li.description || '') + (qty > 1 ? ` × ${qty}` : ''), amount: (Number(li.amount) || 0) * qty }; })
-      : [{ description: quote.summary || quote.description || 'Goods / services', amount: Number(quote.total ?? quote.grandTotal) || 0 }];
+    const lineItems = pdfLineItemRows(quote.lineItems, { description: quote.summary || quote.description || 'Goods / services', amount: Number(quote.total ?? quote.grandTotal) || 0 });
     if (Number(quote.discountAmount) > 0) {
       const base = quote.discountLabel || 'Discount';
       const label = quote.discountType === 'fixed' ? base : `${base} (${Number(quote.discountValue) || 0}%)`;
-      lineItems.push({ description: label, amount: -Number(quote.discountAmount) });
+      lineItems.push({ description: label, qty: null, unit: null, amount: -Number(quote.discountAmount) });
     }
 
-    const tableTop = doc.y;
     const colDescX = 50, colAmountX = 460, colWidth = 500;
-    doc.rect(50, tableTop, 495, 22).fill(OCHRE);
-    doc.font('Helvetica-Bold').fontSize(10).fillColor('#fff');
-    doc.text('Description', colDescX + 6, tableTop + 6);
-    doc.text('Amount', colAmountX, tableTop + 6, { width: 79, align: 'right' });
-    let y = tableTop + 22 + 8;
-    doc.font('Helvetica').fontSize(10);
-    lineItems.forEach((li, i) => {
-      if (i % 2 === 1) doc.rect(50, y - 5, 495, 20).fill('#f7f1e8');
-      doc.fillColor('#222').text(li.description, colDescX + 6, y, { width: colWidth - 95 - 6 });
-      doc.text(fmtMoney(li.amount), colAmountX, y, { width: 79, align: 'right' });
-      y += 20;
-    });
-    doc.moveTo(50, y + 4).lineTo(545, y + 4).strokeColor('#ccc').stroke();
-    y += 14;
+    let y = drawPdfLineItemTable(doc, lineItems, { fmtMoney, headerFill: OCHRE });
 
     doc.rect(50, y - 6, 495, 28).fill('#eaf3ea');
     doc.font('Helvetica-Bold').fontSize(12).fillColor('#2e7d32').text('Total (AUD)', colDescX + 6, y, { width: colWidth - 95 - 6 });

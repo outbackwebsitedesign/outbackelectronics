@@ -1227,7 +1227,7 @@ async function buildServiceLineItems(svc, customerLoc) {
   if (hourlyMatch) {
     // Labour is billed per hour (qty = hours worked). Parts are a real cost, not
     // a line item pulled from thin air, they go through the expense tracker so
-    // the parts-auto line item (cost + margin) is what actually gets billed,
+    // the auto part line items (cost + margin) are what actually get billed,
     // instead of a naked customer-facing number nothing backs.
     return [mk(`${svc.name}, labour (set qty to hours worked)`, Number(hourlyMatch[1]), { kind: 'hourly' })];
   }
@@ -1247,6 +1247,32 @@ function discountAmountFor(subtotal, type, value) {
   return Math.round(Math.max(0, Math.min(subtotal, raw)) * 100) / 100;
 }
 function expTotal(e) { return (Number(e.amount) || 0) * (Number(e.quantity) || 1); }
+// Parts are billed one line per part, with its quantity and per-unit price at
+// cost + PARTS_MARGIN, never rolled up into a single "Parts" line, so quotes,
+// orders and invoices show the customer exactly what they are paying for.
+// `autoPart` lines are generated from the linked (or planned) expenses and are
+// regenerated rather than hand-edited. 'parts-auto' is the old rolled-up line,
+// still recognised so records saved before itemising get replaced cleanly.
+const PARTS_MARGIN = 0.20;
+function isAutoPartLine(li) { return !!li && (li.autoPart || li.id === 'parts-auto'); }
+function partLineItems(parts) {
+  return (parts || [])
+    .filter(p => p.partStatus !== 'returned' && (Number(p.amount) || 0) > 0)
+    .map((p, i) => ({
+      id: 'part-' + (p.id || i),
+      autoPart: true,
+      description: String(p.description || '').trim() || 'Part',
+      qty: Number(p.quantity) || 1,
+      amount: Math.round((Number(p.amount) || 0) * (1 + PARTS_MARGIN) * 100) / 100,
+    }));
+}
+function withPartLines(lineItems, parts) {
+  return [...(lineItems || []).filter(li => !isAutoPartLine(li)), ...partLineItems(parts)];
+}
+function partLinesDiffer(lineItems, parts) {
+  const strip = li => ({ description: li.description, qty: Number(li.qty) || 1, amount: Number(li.amount) || 0 });
+  return JSON.stringify((lineItems || []).filter(isAutoPartLine).map(strip)) !== JSON.stringify(partLineItems(parts).map(strip));
+}
 function orderAmountPaid(f) {
   return Math.round((f.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0) * 100) / 100;
 }
@@ -1651,17 +1677,12 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
     }
   };
 
-  const PARTS_MARGIN = 0.20;
   const blankExpense = (jobId) => ({ description:'', category:'parts', amount:'', quantity:1, date: new Date().toLocaleDateString('en-AU', {day:'2-digit',month:'2-digit',year:'numeric'}), receipt:null, jobId: jobId||'', notes:'', isSecondHand:false, partStatus:'' });
 
   const recalcTotal = (expList) => {
-    const cost = expList.filter(e => e.jobId && e.jobId === form.id).reduce((s, e) => s + (e.partStatus === 'returned' ? 0 : expTotal(e)), 0);
-    const partsCharge = Math.round(cost * (1 + PARTS_MARGIN) * 100) / 100;
+    const linked = expList.filter(e => e.jobId && e.jobId === form.id);
     setForm(f => {
-      const others = (f.lineItems || []).filter(li => li.id !== 'parts-auto');
-      const lineItems = partsCharge > 0
-        ? [...others, { id: 'parts-auto', description: 'Parts', amount: partsCharge }]
-        : others;
+      const lineItems = withPartLines(f.lineItems, linked);
       const subtotal = Math.round(lineItems.reduce((s, i) => s + liTotal(i), 0) * 100) / 100;
       const discountAmount = discountAmountFor(subtotal, f.discountType, f.discountValue);
       const newTotal = Math.round((subtotal - discountAmount) * 100) / 100;
@@ -1736,14 +1757,12 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
   const linkedExpenses = expenses.filter(e => e.jobId && e.jobId === form.id);
   const partsCost = linkedExpenses.reduce((s, e) => s + (e.partStatus === 'returned' ? 0 : expTotal(e)), 0);
 
-  // Self-heal orders saved before parts-margin auto line items existed: if the
-  // linked expenses imply a different parts charge than what's on the order,
-  // bring it into sync once on open rather than leaving it stale forever.
+  // Self-heal orders whose part lines don't match their linked expenses (saved
+  // before parts were itemised, or edited elsewhere): bring them into sync once
+  // on open rather than leaving them stale forever.
   React.useEffect(() => {
     if (!edit.id) return;
-    const expectedCharge = Math.round(partsCost * (1 + PARTS_MARGIN) * 100) / 100;
-    const existingCharge = Number((form.lineItems || []).find(li => li.id === 'parts-auto')?.amount) || 0;
-    if (expectedCharge !== existingCharge) recalcTotal(expenses);
+    if (partLinesDiffer(form.lineItems, linkedExpenses)) recalcTotal(expenses);
   }, [form.id]);
   const returnedCost = linkedExpenses.reduce((s, e) => s + (e.partStatus === 'returned' ? expTotal(e) : 0), 0);
   const amountPaid = orderAmountPaid(form);
@@ -1807,7 +1826,7 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
             if (form.email && !isValidEmail(form.email)) { adminToast('Customer email looks invalid, please check it.'); return; }
             if (form.phone && !isValidPhone(form.phone)) { adminToast('Phone number looks invalid, please check it.'); return; }
             if (Number(form.total) < 0) { adminToast('Order total cannot be negative.'); return; }
-            const blankLineItem = (form.lineItems || []).find(li => li.id !== 'parts-auto' && li.description && (li.amount === '' || li.amount === null || li.amount === undefined || Number.isNaN(Number(li.amount))));
+            const blankLineItem = (form.lineItems || []).find(li => !isAutoPartLine(li) && li.description && (li.amount === '' || li.amount === null || li.amount === undefined || Number.isNaN(Number(li.amount))));
             if (blankLineItem) { adminToast(`"${blankLineItem.description}" has no price set, confirm it before saving, or it'll bill as $0.`); return; }
             const payload = { ...form, _originalId: edit.id || form.id, _isNew: !edit.id };
             const r = await fetch('/api/admin/orders/save', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify(payload) }).catch(()=>null);
@@ -1898,11 +1917,11 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
           return (
           <div key={li.id} style={{display:'grid', gridTemplateColumns: needsRecalc ? '1fr 60px 110px 28px 28px' : '1fr 60px 110px 28px', gap:8, marginBottom:8}}>
             <input className="input" placeholder="e.g. Custom software development" value={li.description}
-              onChange={e => setForm(f => ({...f, lineItems: f.lineItems.map(x => x.id === li.id ? {...x, description: e.target.value} : x)}))}/>
+              onChange={e => setForm(f => ({...f, lineItems: f.lineItems.map(x => x.id === li.id ? {...x, description: e.target.value} : x)}))} disabled={isAutoPartLine(li)}/>
             <input className="input" type="number" min="1" step="1" placeholder={isHourly ? 'Hrs' : 'Qty'} value={li.qty||1}
-              onChange={e => setForm(f => ({...f, lineItems: f.lineItems.map(x => x.id === li.id ? {...x, qty: Math.max(1, parseInt(e.target.value)||1)} : x)}))}/>
+              onChange={e => setForm(f => ({...f, lineItems: f.lineItems.map(x => x.id === li.id ? {...x, qty: Math.max(1, parseInt(e.target.value)||1)} : x)}))} disabled={isAutoPartLine(li)}/>
             <input className="input" type="number" min="0" step="0.01" placeholder="Price ea." value={li.amount}
-              onChange={e => setForm(f => ({...f, lineItems: f.lineItems.map(x => x.id === li.id ? {...x, amount: nonNegInput(e.target.value)} : x)}))}/>
+              onChange={e => setForm(f => ({...f, lineItems: f.lineItems.map(x => x.id === li.id ? {...x, amount: nonNegInput(e.target.value)} : x)}))} disabled={isAutoPartLine(li)}/>
             {needsRecalc && (
               <button className="btn btn-ghost btn-sm" style={{padding:0}} title="Recalculate distance from the order's Location (or Shipping Address if Location is blank)"
                 onClick={async () => {
@@ -1922,8 +1941,10 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
                   } catch { adminToast('Distance lookup failed, try again.'); }
                 }}><Icon name="refresh" size={12}/></button>
             )}
-            <button className="btn btn-ghost btn-sm" style={{padding:0, color:'var(--rust)'}}
-              onClick={() => setForm(f => ({...f, lineItems: f.lineItems.filter(x => x.id !== li.id)}))}><Icon name="x" size={12}/></button>
+            {isAutoPartLine(li)
+              ? <span style={{fontSize:10, color:'var(--ink-3)', textAlign:'center', alignSelf:'center'}} title="Generated from a linked part, edit or remove the part instead">auto</span>
+              : <button className="btn btn-ghost btn-sm" style={{padding:0, color:'var(--rust)'}}
+                  onClick={() => setForm(f => ({...f, lineItems: f.lineItems.filter(x => x.id !== li.id)}))}><Icon name="x" size={12}/></button>}
           </div>
           );
         })}
@@ -2539,7 +2560,6 @@ const DEFAULT_REPAIR_COLS = [
 ];
 
 function RepairJobDrawer({ card, columns = [], colId, onMove, expenses, customers, staff, onSave, onDelete, onExpensesChange, onCustomerCreated, onClose }) {
-  const PARTS_MARGIN = 0.20;
   const [form, setForm] = useState(() => ({
     t:           card.t || '',
     who:         card.who || '',
@@ -2591,22 +2611,12 @@ function RepairJobDrawer({ card, columns = [], colId, onMove, expenses, customer
   const partsCost = linkedExpenses.reduce((s, e) => s + (e.partStatus === 'returned' ? 0 : expTotal(e)), 0);
 
   const recalcTotal = (expList) => {
-    const cost = (expList || []).filter(e => e.jobId && e.jobId === card.id)
-      .reduce((s, e) => s + (e.partStatus === 'returned' ? 0 : expTotal(e)), 0);
-    const partsCharge = Math.round(cost * (1 + PARTS_MARGIN) * 100) / 100;
-    setForm(f => {
-      const others = (f.lineItems || []).filter(li => li.id !== 'parts-auto');
-      const lineItems = partsCharge > 0
-        ? [...others, { id: 'parts-auto', description: 'Parts & materials', amount: partsCharge }]
-        : others;
-      return { ...f, lineItems };
-    });
+    const linked = (expList || []).filter(e => e.jobId && e.jobId === card.id);
+    setForm(f => ({ ...f, lineItems: withPartLines(f.lineItems, linked) }));
   };
 
   React.useEffect(() => {
-    const expectedCharge = Math.round(partsCost * (1 + PARTS_MARGIN) * 100) / 100;
-    const existingCharge = Number((form.lineItems || []).find(li => li.id === 'parts-auto')?.amount) || 0;
-    if (expectedCharge !== existingCharge) recalcTotal(expenses);
+    if (partLinesDiffer(form.lineItems, linkedExpenses)) recalcTotal(expenses);
   }, [card.id]);
 
   const lineTotal = Math.round((form.lineItems || []).reduce((s, li) => s + liTotal(li), 0) * 100) / 100;
@@ -2785,14 +2795,14 @@ function RepairJobDrawer({ card, columns = [], colId, onMove, expenses, customer
         <div key={li.id} style={{display:'grid',gridTemplateColumns:'1fr 56px 90px 28px',gap:8,marginBottom:8,alignItems:'center'}}>
           <input className="input" placeholder="e.g. Labour - 2hr diagnostic" value={li.description}
             onChange={e=>setForm(f=>({...f,lineItems:f.lineItems.map(x=>x.id===li.id?{...x,description:e.target.value}:x)}))}
-            style={{fontSize:12}} disabled={li.id==='parts-auto'} />
+            style={{fontSize:12}} disabled={isAutoPartLine(li)} />
           <input className="input" type="number" min="1" step="1" placeholder="Qty" value={li.qty||1}
             onChange={e=>setForm(f=>({...f,lineItems:f.lineItems.map(x=>x.id===li.id?{...x,qty:Math.max(1,parseInt(e.target.value)||1)}:x)}))}
-            style={{fontSize:12}} disabled={li.id==='parts-auto'} />
+            style={{fontSize:12}} disabled={isAutoPartLine(li)} />
           <input className="input" type="number" min="0" step="0.01" placeholder="Price" value={li.amount}
             onChange={e=>setForm(f=>({...f,lineItems:f.lineItems.map(x=>x.id===li.id?{...x,amount:nonNegInput(e.target.value)}:x)}))}
-            style={{fontSize:12}} disabled={li.id==='parts-auto'} />
-          {li.id==='parts-auto'
+            style={{fontSize:12}} disabled={isAutoPartLine(li)} />
+          {isAutoPartLine(li)
             ? <span style={{fontSize:10,color:'var(--ink-3)',textAlign:'center'}}>auto</span>
             : <button className="btn btn-ghost btn-sm" style={{padding:0,color:'var(--rust)'}}
                 onClick={()=>setForm(f=>({...f,lineItems:f.lineItems.filter(x=>x.id!==li.id)}))}><Icon name="x" size={12}/></button>}
@@ -3069,16 +3079,12 @@ function QuotePage({ edit, quotes, customers, services = [], onClose, onSave, on
 
   // Planned expenses (parts staff intend to buy but haven't yet, nothing's
   // purchased, so there's no real expenses.db entry) get the same cost+20%
-  // margin treatment as Orders' linked-expenses auto line item, kept in sync
-  // under the same 'parts-auto' id so it becomes a real expense cleanly once
-  // this quote converts to an order.
-  const PARTS_MARGIN = 0.20;
+  // margin treatment as Orders' linked expenses: one auto line per part, so
+  // they carry over itemised and become real expenses once this quote
+  // converts to an order.
   React.useEffect(() => {
-    const cost = (form.plannedExpenses || []).reduce((s, e) => s + (Number(e.amount) || 0) * (Number(e.quantity) || 1), 0);
-    const partsCharge = Math.round(cost * (1 + PARTS_MARGIN) * 100) / 100;
     setForm(f => {
-      const others = (f.lineItems || []).filter(li => li.id !== 'parts-auto');
-      const lineItems = partsCharge > 0 ? [...others, { id: 'parts-auto', description: 'Parts', amount: partsCharge, qty: 1 }] : others;
+      const lineItems = withPartLines(f.lineItems, f.plannedExpenses);
       if (JSON.stringify(lineItems) === JSON.stringify(f.lineItems || [])) return f;
       return { ...f, lineItems };
     });
@@ -3241,11 +3247,11 @@ function QuotePage({ edit, quotes, customers, services = [], onClose, onSave, on
           return (
           <div key={li.id} style={{display:'grid', gridTemplateColumns: needsRecalc ? '1fr 60px 110px 28px 28px' : '1fr 60px 110px 28px', gap:8, marginBottom:8}}>
             <input className="input" placeholder="e.g. Custom software development" value={li.description}
-              onChange={e => setForm(f => ({...f, lineItems: f.lineItems.map(x => x.id === li.id ? {...x, description: e.target.value} : x)}))}/>
+              onChange={e => setForm(f => ({...f, lineItems: f.lineItems.map(x => x.id === li.id ? {...x, description: e.target.value} : x)}))} disabled={isAutoPartLine(li)}/>
             <input className="input" type="number" min="1" step="1" placeholder={isHourly ? 'Hrs' : 'Qty'} value={li.qty||1}
-              onChange={e => setForm(f => ({...f, lineItems: f.lineItems.map(x => x.id === li.id ? {...x, qty: Math.max(1, parseInt(e.target.value)||1)} : x)}))}/>
+              onChange={e => setForm(f => ({...f, lineItems: f.lineItems.map(x => x.id === li.id ? {...x, qty: Math.max(1, parseInt(e.target.value)||1)} : x)}))} disabled={isAutoPartLine(li)}/>
             <input className="input" type="number" min="0" step="0.01" placeholder="Price ea." value={li.amount}
-              onChange={e => setForm(f => ({...f, lineItems: f.lineItems.map(x => x.id === li.id ? {...x, amount: nonNegInput(e.target.value)} : x)}))}/>
+              onChange={e => setForm(f => ({...f, lineItems: f.lineItems.map(x => x.id === li.id ? {...x, amount: nonNegInput(e.target.value)} : x)}))} disabled={isAutoPartLine(li)}/>
             {needsRecalc && (
               <button className="btn btn-ghost btn-sm" style={{padding:0}} title="Recalculate distance from the quote's Location (or Shipping Address if Location is blank)"
                 onClick={async () => {
@@ -3265,8 +3271,10 @@ function QuotePage({ edit, quotes, customers, services = [], onClose, onSave, on
                   } catch { adminToast('Distance lookup failed, try again.'); }
                 }}><Icon name="refresh" size={12}/></button>
             )}
-            <button className="btn btn-ghost btn-sm" style={{padding:0, color:'var(--rust)'}}
-              onClick={() => setForm(f => ({...f, lineItems: f.lineItems.filter(x => x.id !== li.id)}))}><Icon name="x" size={12}/></button>
+            {isAutoPartLine(li)
+              ? <span style={{fontSize:10, color:'var(--ink-3)', textAlign:'center', alignSelf:'center'}} title="Generated from a linked part, edit or remove the part instead">auto</span>
+              : <button className="btn btn-ghost btn-sm" style={{padding:0, color:'var(--rust)'}}
+                  onClick={() => setForm(f => ({...f, lineItems: f.lineItems.filter(x => x.id !== li.id)}))}><Icon name="x" size={12}/></button>}
           </div>
           );
         })}
@@ -3323,7 +3331,7 @@ function QuotePage({ edit, quotes, customers, services = [], onClose, onSave, on
       </label>
 
       <div className="field">
-        <span className="label">Parts (your cost, {PARTS_MARGIN*100}% margin auto-added to the "Parts" line item above)</span>
+        <span className="label">Parts (your cost, {PARTS_MARGIN*100}% margin auto-added, each part becomes its own line item above)</span>
         {(form.plannedExpenses||[]).map((pe, i) => (
           <div key={i} style={{display:'grid', gridTemplateColumns:'2fr 60px 130px 28px', gap:8, marginBottom:8, alignItems:'center'}}>
             <input className="input" placeholder="e.g. Ryzen 7 5800X CPU" value={pe.description||''}
@@ -3342,7 +3350,7 @@ function QuotePage({ edit, quotes, customers, services = [], onClose, onSave, on
         <button className="btn btn-ghost btn-sm" onClick={() => setForm(f => ({...f, plannedExpenses: [...(f.plannedExpenses||[]), { description:'', quantity:1, amount:'', category:'parts' }]}))}>+ Add part</button>
         {(form.plannedExpenses||[]).length > 0 && (
           <div style={{marginTop:8, fontSize:12, color:'var(--ink-3)'}}>
-            Cost: <strong>${(form.plannedExpenses||[]).reduce((s,e)=>s+(Number(e.amount)||0)*(Number(e.quantity)||1),0).toFixed(2)}</strong> → charged at cost+{PARTS_MARGIN*100}%: <strong>${Math.round((form.plannedExpenses||[]).reduce((s,e)=>s+(Number(e.amount)||0)*(Number(e.quantity)||1),0)*(1+PARTS_MARGIN)*100)/100}</strong>. Not a real expense yet, becomes one automatically if this quote converts to an order.
+            Cost: <strong>${(form.plannedExpenses||[]).reduce((s,e)=>s+(Number(e.amount)||0)*(Number(e.quantity)||1),0).toFixed(2)}</strong> → charged at cost+{PARTS_MARGIN*100}%: <strong>${partLineItems(form.plannedExpenses).reduce((s,li)=>s+liTotal(li),0).toFixed(2)}</strong>. Not a real expense yet, becomes one automatically if this quote converts to an order.
           </div>
         )}
       </div>

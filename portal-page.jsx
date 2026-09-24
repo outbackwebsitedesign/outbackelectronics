@@ -608,12 +608,32 @@ const UPDATE_TYPE_COLOR = {
   dispatched: 'var(--ink)',
 };
 
+// Quote and order lines are itemised: each shows its quantity and per-unit
+// price under the description, not just a lump line total.
+function lineItemRow(li) {
+  const qty = Number(li.qty) || 1;
+  const unit = Number(li.amount) || 0;
+  return { label: li.description || '', qty, unit, amount: Math.round(unit * qty * 100) / 100 };
+}
+function LineItemLabel({ item }) {
+  return (
+    <span style={{minWidth:0, paddingRight:12}}>
+      {item.label}
+      {item.unit != null && (
+        <span className="mono" style={{display:'block', fontSize:11.5, color:'var(--ink-3)', marginTop:2}}>
+          {item.qty} × ${item.unit.toLocaleString('en-AU',{minimumFractionDigits:2})}
+        </span>
+      )}
+    </span>
+  );
+}
+
 function OrderDetail({ o, onPay, onPayInstallment, paying, onCollapse }) {
   // Orders carry their own lineItems directly now. draftQuote-derived items
   // are legacy-only, for orders placed before this existed.
   const dq = o.draftQuote || {};
   const lineItems = (o.lineItems && o.lineItems.length)
-    ? o.lineItems.map(li => { const qty = parseInt(li.qty) || 1; return { label: (li.description || '') + (qty > 1 ? ` × ${qty}` : ''), amount: (Number(li.amount) || 0) * qty }; })
+    ? o.lineItems.map(lineItemRow)
     : [
         ...(dq.hardwareItems || []).filter(i => i.name).map(i => {
           const qty = parseInt(i.qty) || 1;
@@ -710,7 +730,7 @@ function OrderDetail({ o, onPay, onPayInstallment, paying, onCollapse }) {
           <div style={{border:'1px solid var(--line)'}}>
             {lineItems.map((item, i) => (
               <div key={i} style={{display:'flex', justifyContent:'space-between', padding:'9px 14px', borderBottom: i < lineItems.length - 1 ? '1px solid var(--line)' : 'none', fontSize:14}}>
-                <span>{item.label}</span>
+                <LineItemLabel item={item}/>
                 <span className="mono" style={{fontWeight:600}}>${item.amount.toLocaleString('en-AU',{minimumFractionDigits:2})}</span>
               </div>
             ))}
@@ -1162,7 +1182,7 @@ function QuotesTab({ user, onOrderCreated, highlightRef }) {
           const dq = q.draftQuote || {};
           const accepted = acceptedOrders[q.id];
           const lineItems = (q.lineItems && q.lineItems.length)
-            ? q.lineItems.map(li => { const qty = parseInt(li.qty) || 1; return { label: (li.description || '') + (qty > 1 ? ` × ${qty}` : ''), amount: (Number(li.amount) || 0) * qty }; })
+            ? q.lineItems.map(lineItemRow)
             : [
                 ...(dq.hardwareItems || []).filter(i => i.name).map(i => {
                   const qty = parseInt(i.qty) || 1;
@@ -1193,7 +1213,7 @@ function QuotesTab({ user, onOrderCreated, highlightRef }) {
                 <div style={{border:'1px solid var(--line)', marginBottom:16}}>
                   {lineItems.map((item, i) => (
                     <div key={i} style={{display:'flex', justifyContent:'space-between', padding:'10px 14px', borderBottom: i < lineItems.length - 1 ? '1px solid var(--line)' : 'none', fontSize:14}}>
-                      <span>{item.label}</span>
+                      <LineItemLabel item={item}/>
                       <span className="mono" style={{fontWeight:600}}>${item.amount.toLocaleString('en-AU',{minimumFractionDigits:2})}</span>
                     </div>
                   ))}
@@ -2549,10 +2569,7 @@ function QuoteTokenView({ token, onAccepted }) {
     }).catch(() => {});
   }, [token]);
 
-  const lineItems = quote ? (quote.lineItems || []).map(li => {
-    const qty = parseInt(li.qty) || 1;
-    return { label: (li.description || '') + (qty > 1 ? ` × ${qty}` : ''), amount: (Number(li.amount) || 0) * qty };
-  }) : [];
+  const lineItems = quote ? (quote.lineItems || []).map(lineItemRow) : [];
   const quoteTotal = quote ? Number(quote.total) || 0 : 0;
 
   const validUntil = quote?.validDays
@@ -2629,7 +2646,7 @@ function QuoteTokenView({ token, onAccepted }) {
             <div style={{border:'1px solid var(--line)', marginBottom:quote.notes ? 16 : 0}}>
               {lineItems.map((item, i) => (
                 <div key={i} style={{display:'flex', justifyContent:'space-between', padding:'10px 14px', borderBottom: i < lineItems.length - 1 ? '1px solid var(--line)' : 'none', fontSize:14}}>
-                  <span>{item.label}</span>
+                  <LineItemLabel item={item}/>
                   <span className="mono" style={{fontWeight:600}}>${item.amount.toLocaleString('en-AU',{minimumFractionDigits:2})}</span>
                 </div>
               ))}
