@@ -357,6 +357,10 @@ const CRUMB_PAGE_IDS = {
   'Contact': 'contact', 'Policies': 'policies', 'Quote': 'quote', 'Sellers': 'sellers',
 };
 function PageHead({ crumbs, title, lead, kicker }) {
+  // The first crumb, 'Outback', is the home link: it shows the business name
+  // from Settings, Shop (or "Home" until one is set).
+  const shop = useShop();
+  const crumbLabel = (c, i) => (i === 0 && c === 'Outback') ? (shop?.tradingName || 'Home') : c;
   const goCrumb = (e, id) => {
     e.preventDefault();
     if (typeof window.__OE_GO__ === 'function') window.__OE_GO__(id);
@@ -371,8 +375,8 @@ function PageHead({ crumbs, title, lead, kicker }) {
             return (
               <React.Fragment key={i}>
                 {pageId
-                  ? <a href={`/${pageId === 'home' ? '' : pageId}`} onClick={(e) => goCrumb(e, pageId)}>{c}</a>
-                  : <span aria-current={isLast ? 'page' : undefined}>{c}</span>}
+                  ? <a href={`/${pageId === 'home' ? '' : pageId}`} onClick={(e) => goCrumb(e, pageId)}>{crumbLabel(c, i)}</a>
+                  : <span aria-current={isLast ? 'page' : undefined}>{crumbLabel(c, i)}</span>}
                 {!isLast && <span style={{color:'var(--ink-3)'}} aria-hidden="true">/</span>}
               </React.Fragment>
             );
@@ -762,46 +766,54 @@ function App() {
     forum: forumUrl || getForumUrl(),
   }), [portalUrl, forumUrl]);
 
-  const DEFAULT_META_DESCRIPTION = 'Outback Electronics - Arduino & microcontroller builds, PC & phone repairs, software and AI solutions, and off-grid electronics. Serving remote Australia by appointment.';
+  // The site-wide description is Settings, Shop, Description. Page descriptions
+  // below say {name} where the business name goes, filled from the same place.
+  const DEFAULT_META_DESCRIPTION = shop?.description || '';
   const PAGE_DESCRIPTIONS = {
     shop:         'Browse new, refurbished and field-tested electronics - Arduino gear, PC & phone parts, and off-grid kit. Every refurb passes our 38-point bench check.',
     services:     'Repairs and services for PCs, phones, and remote-area electronics - bench, ute, or in the field. Fixed-price quotes within 24 hours.',
-    memberships:  'Outback Electronics memberships, member-only groups, exclusive content, and workshop perks. Cancel any time.',
-    software:     'Software tools from Outback Electronics, mostly open source, mostly Linux, built for remote-area work.',
+    memberships:  '{name} memberships, member-only groups, exclusive content, and workshop perks. Cancel any time.',
+    software:     'Software tools from {name}, mostly open source, mostly Linux, built for remote-area work.',
     ewaste:       'Free e-waste drop-off and trade-in tiers, we sort, salvage, refurbish, or properly recycle, and pay you for what is worth saving.',
     ai:           'Custom AI built to your problem, chatbots, integrations, fine-tuned models, and edge deployments for remote Australia.',
-    tutorials:    'Tutorials from the Outback Electronics workshop, repairs, builds, and troubleshooting guides.',
-    tutorial:     'A tutorial from the Outback Electronics workshop.',
-    'tutorial-series': 'A multi-part tutorial series from the Outback Electronics workshop.',
-    groups:       'Community groups at Outback Electronics, meet other remote-area tinkerers.',
-    quote:        'Request a quote from Outback Electronics, tell us the use case in plain English, our techs will spec it, price it, and ship it.',
-    book:         'Book a repair drop-off, in-store appointment, or on-site callout with Outback Electronics.',
-    'gift-cards': 'Outback Electronics gift cards, redeemable on products and services, sent by email instantly, never expire.',
-    contact:      'Contact Outback Electronics, appointment-only workshop serving remote NT, SA and WA.',
-    cart:         'Your Outback Electronics cart, review items, get a shipping quote, and check out securely via Stripe.',
-    reviews:      'Real customer reviews of Outback Electronics, orders, custom PC builds, and repairs, rated by the people we built them for.',
+    tutorials:    'Tutorials from the {name} workshop, repairs, builds, and troubleshooting guides.',
+    tutorial:     'A tutorial from the {name} workshop.',
+    'tutorial-series': 'A multi-part tutorial series from the {name} workshop.',
+    groups:       'Community groups at {name}, meet other remote-area tinkerers.',
+    quote:        'Request a quote from {name}, tell us the use case in plain English, our techs will spec it, price it, and ship it.',
+    book:         'Book a repair drop-off, in-store appointment, or on-site callout with {name}.',
+    'gift-cards': '{name} gift cards, redeemable on products and services, sent by email instantly, never expire.',
+    contact:      'Contact {name}, appointment-only workshop serving remote NT, SA and WA.',
+    cart:         'Your {name} cart, review items, get a shipping quote, and check out securely via Stripe.',
+    reviews:      'Real customer reviews of {name}, orders, custom PC builds, and repairs, rated by the people we built them for.',
   };
+  // Page part of each tab title; the business name (and, on the home page, the
+  // tagline) come from Settings, Shop. See pageTitle() below.
   const PAGE_TITLES = {
-    home:         'Outback Electronics - Built for where the signal ends',
-    shop:         'Shop - Outback Electronics',
-    services:     'Services - Outback Electronics',
-    memberships:  'Memberships - Outback Electronics',
-    software:     'Software Library - Outback Electronics',
-    ewaste:       'eWaste Take-Back - Outback Electronics',
-    ai:           'Edge AI - Outback Electronics',
-    tutorials:    'Tutorials - Outback Electronics',
-    tutorial:     'Tutorial - Outback Electronics',
-    'tutorial-series': 'Tutorial Series - Outback Electronics',
-    groups:       'Community Groups - Outback Electronics',
-    quote:        'Request a Quote - Outback Electronics',
-    'gift-cards': 'Gift Cards - Outback Electronics',
-    sellers:      'Info for Sellers - Outback Electronics',
-    contact:      'Contact - Outback Electronics',
-    policies:     'Policies - Outback Electronics',
-    about:        'About - Outback Electronics',
-    repairs:      'Repairs - Outback Electronics',
-    cart:         'Cart - Outback Electronics',
-    reviews:      'Customer Reviews - Outback Electronics',
+    home:         '',
+    shop:         'Shop',
+    services:     'Services',
+    memberships:  'Memberships',
+    software:     'Software Library',
+    ewaste:       'eWaste Take-Back',
+    ai:           'Edge AI',
+    tutorials:    'Tutorials',
+    tutorial:     'Tutorial',
+    'tutorial-series': 'Tutorial Series',
+    groups:       'Community Groups',
+    quote:        'Request a Quote',
+    'gift-cards': 'Gift Cards',
+    sellers:      'Info for Sellers',
+    contact:      'Contact',
+    policies:     'Policies',
+    about:        'About',
+    repairs:      'Repairs',
+    cart:         'Cart',
+    reviews:      'Customer Reviews',
+    book:         'Book a Repair',
+    'sell-gear':  'Sell Your Gear',
+    'capability-statement': 'Capability Statement',
+    sponsorship:  'Sponsorship',
   };
 
   useEffect(() => {
@@ -828,33 +840,39 @@ function App() {
     }
     if (location.pathname !== target) window.history.pushState({}, '', target);
     window.scrollTo({top:0, behavior:'smooth'});
-    // Update the browser tab title on every SPA navigation
-    let title = PAGE_TITLES[page] || 'Outback Electronics';
-    if (page === 'product' && pageParams?.name) title = `${pageParams.name} - Outback Electronics`;
-    else if (page === 'service' && pageParams?.name) title = `${pageParams.name} - Outback Electronics`;
-    else if (page === 'software' && pageParams?.name) title = `${pageParams.name} - Outback Electronics`;
-    else if (page === 'tutorial' && pageParams?.title) title = `${pageParams.title} - Outback Electronics`;
-    else if (page === 'tutorial-series' && pageParams?.seriesName) title = `${pageParams.seriesName} - Outback Electronics`;
-    document.title = title;
+    // Observe newly mounted reveal elements after a short delay (wait for render)
+    const t = setTimeout(observeReveal, 80);
+    return () => clearTimeout(t);
+  }, [page, pageParams]);
+
+  // Tab title and meta description, re-applied when shop info (Settings, Shop)
+  // arrives as well as on every navigation.
+  useEffect(() => {
+    const shopNm = shop?.tradingName || '';
+    let label = PAGE_TITLES[page] || '';
+    if (page === 'product' && pageParams?.name) label = pageParams.name;
+    else if (page === 'service' && pageParams?.name) label = pageParams.name;
+    else if (page === 'software' && pageParams?.name) label = pageParams.name;
+    else if (page === 'tutorial' && pageParams?.title) label = pageParams.title;
+    else if (page === 'tutorial-series' && pageParams?.seriesName) label = pageParams.seriesName;
+    document.title = (label ? [label, shopNm] : [shopNm, shop?.tagline]).filter(Boolean).join(' - ');
     // Keep the meta description in sync so deep-linked shares don't all show the homepage blurb
     let description = PAGE_DESCRIPTIONS[page] || DEFAULT_META_DESCRIPTION;
     if ((page === 'product' || page === 'service') && pageParams?.name) {
       description = pageParams.description
         ? String(pageParams.description).slice(0, 160)
-        : `${pageParams.name}, available from Outback Electronics.`;
+        : `${pageParams.name}, available from {name}.`;
     } else if (page === 'tutorial' && pageParams?.title) {
       description = pageParams.description
         ? String(pageParams.description).slice(0, 160)
-        : `${pageParams.title}, a tutorial from Outback Electronics.`;
+        : `${pageParams.title}, a tutorial from {name}.`;
     } else if (page === 'tutorial-series' && pageParams?.seriesName) {
-      description = `A ${(pageParams.parts||[]).length}-part tutorial series from Outback Electronics.`;
+      description = `A ${(pageParams.parts||[]).length}-part tutorial series from {name}.`;
     }
+    description = description.replace(/\{name\}/g, shopNm).replace(/ {2,}/g, ' ').replace(/ ([,.])/g, '$1');
     const metaDesc = document.querySelector('meta[name="description"]');
     if (metaDesc) metaDesc.setAttribute('content', description);
-    // Observe newly mounted reveal elements after a short delay (wait for render)
-    const t = setTimeout(observeReveal, 80);
-    return () => clearTimeout(t);
-  }, [page, pageParams]);
+  }, [page, pageParams, shop]);
 
   useEffect(() => {
     const onPop = () => {

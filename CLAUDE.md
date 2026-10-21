@@ -113,7 +113,7 @@ No database server. Every store is a flat JSON file in the repo root with a `.db
 
 Roughly 45 stores exist. The ones that come up most: `settings.db`, `products.db`, `orders.db`, `customers.db`, `users.db`, `repairs.db`, `quotes.db`, `services.db`, `staff.db`, `sellers.db`, `memberships.db`, `gift-cards.db`, `software.db`, `tutorials.db`, `carts.db`, `pc-builder.db`, `policies.db`, `reviews.db`, `analytics.db`. Sessions are files too: `sessions.db` (admin) and `portal-sessions.db` (customer).
 
-`settings.db` is the single source of truth for all settings. `readSettings()` fills missing keys from inline code fallbacks. **There is no `settings.defaults.json`, and one must never be created.**
+`settings.db` is the single source of truth for all settings, and `readSettings()` returns it as stored. **There is no `settings.defaults.json`, and one must never be created.** **Never hard-code or fall back to business details** (trading name, ABN, address, phone, email, tagline, Country, map location) anywhere: read them from Settings, Shop (`getBusinessIdentity()` / `shopName()` on the server, `shop.tradingName` etc. in the SPA, `{{tradingName}}` in static HTML, which the server fills). A blank field stays blank and is left off the page; the admin Overview lists missing fields.
 
 **Seed-in-code pattern.** Because `.db` files are gitignored, a fresh deploy starts empty, so content that must exist on day one ships as JS instead: `policy-defaults.js` (public policy text, overridden per row by `policies.db`) and `pc-parts-seed.js` (built-in PC component catalog). Editing through the admin UI writes an override row, it never edits these files.
 

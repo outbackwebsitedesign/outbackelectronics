@@ -90,10 +90,10 @@ export function acknowledgementOfCountry(shop) {
   const people = String(shop?.acknowledgmentPeople || '').trim().replace(/\s+peoples?$/i, '');
   const country = String(shop?.acknowledgmentCountry || '').trim().replace(/\s+country$/i, '') || people;
   if (!people && !country) return null;
-  const business = shop?.tradingName || shop?.name || 'Outback Electronics';
+  const business = String(shop?.tradingName || '').trim();
   const place = [shop?.suburb, shop?.state].map(v => String(v || '').trim()).filter(Boolean).join(', ');
   return {
-    respect: `${business} acknowledges the ${people || country} people as the Traditional Custodians of the Country on which we operate. We pay our respects to Elders past and present, and extend that respect to all Aboriginal and Torres Strait Islander peoples.`,
+    respect: `${business ? `${business} acknowledges` : 'We acknowledge'} the ${people || country} people as the Traditional Custodians of the Country on which we operate. We pay our respects to Elders past and present, and extend that respect to all Aboriginal and Torres Strait Islander peoples.`,
     based: `Proudly based on ${country} Country${place ? `, ${place}` : ''}.`,
   };
 }
@@ -188,10 +188,11 @@ export function useAnnouncement() {
 
 // ---------------- Brand Mark ----------------
 export function Logo({ onClick }) {
+  const shop = useShop();
   return (
     <div className="logo" onClick={onClick}>
       <div className="logo-mark">
-        <img src="/assets/logo.webp" alt="Outback Electronics" width="55" height="40" />
+        <img src="/assets/logo.webp" alt={shop?.tradingName || 'Home'} width="55" height="40" />
       </div>
       <div className="logo-text">
         <div className="sub">Est. 2023 · Appointment only</div>
@@ -470,7 +471,7 @@ export function SiteFooter({ go }) {
           <div>
             <div className="logo">
               <div className="logo-mark sm" style={{background:'#000'}}>
-                <img src="/assets/logo.webp" alt="Outback Electronics" width="40" height="29" />
+                <img src="/assets/logo.webp" alt={shop?.tradingName || 'Home'} width="40" height="29" />
               </div>
               <div className="logo-text">
                 <div className="sub" style={{color:'var(--ochre)'}}>{shop.tagline}</div>

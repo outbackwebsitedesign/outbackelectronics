@@ -54,7 +54,7 @@ function QuotePage({ go, pageParams }) {
         if (geoData[0]) {
           const feeRes = await fetch(`/api/callout-fee?lat=${encodeURIComponent(geoData[0].lat)}&lng=${encodeURIComponent(geoData[0].lon)}`);
           const info = await feeRes.json();
-          setCalloutInfo(info);
+          setCalloutInfo(feeRes.ok ? info : { error: info.message || "Travel distance can't be worked out right now. Please call or email us." });
         } else {
           setCalloutInfo(null);
         }
@@ -174,7 +174,8 @@ function QuotePage({ go, pageParams }) {
             </div>
             <label className="field"><span className="label">Location / nearest town</span><input className="input" value={form.loc} onChange={e => update('loc', e.target.value)} placeholder="Newman, WA" /></label>
             {locGeocoding && <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:4, marginBottom:4}}>Checking distance…</div>}
-            {!locGeocoding && calloutInfo !== null && (() => {
+            {!locGeocoding && calloutInfo?.error && <div style={{marginTop:4, marginBottom:4, padding:'8px 12px', fontSize:13, border:'1px solid var(--line)', background:'var(--bg-elev)'}}>{calloutInfo.error}</div>}
+            {!locGeocoding && calloutInfo !== null && !calloutInfo.error && (() => {
               const { distKm, fee, days, localCapKm, hiValThreshold, dailyRate } = calloutInfo;
               const isHiVal = pageParams && Number(pageParams.priceAud) >= hiValThreshold;
               const capExceeded = distKm > localCapKm && !isHiVal;
@@ -289,6 +290,7 @@ function BookingPage({ go, pageParams }) {
     fetch(`/api/availability/slots?${params.toString()}`)
       .then(r => r.json())
       .then(d => {
+        if (!Array.isArray(d.slots)) d = { closed: true, slots: [], reason: d.message };
         setSlotInfo(d);
         if (d.closed || !d.slots.includes(form.preferredTime)) update('preferredTime', '');
       })
@@ -311,7 +313,7 @@ function BookingPage({ go, pageParams }) {
           update('lng', parseFloat(geoData[0].lon));
           const feeRes = await fetch(`/api/callout-fee?lat=${encodeURIComponent(geoData[0].lat)}&lng=${encodeURIComponent(geoData[0].lon)}`);
           const info = await feeRes.json();
-          setCalloutInfo(info);
+          setCalloutInfo(feeRes.ok ? info : { error: info.message || "Travel distance can't be worked out right now. Please call or email us." });
         } else {
           setCalloutInfo(null);
           update('lat', null);
@@ -368,12 +370,12 @@ function BookingPage({ go, pageParams }) {
               headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() },
               body: JSON.stringify({ ...form, intakeTermsAccepted: true }),
             });
-            if (!res.ok) throw new Error('server_error');
             const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.message || '');
             setBookingId(data.id || null);
             setSubmitted(true);
-          } catch {
-            setSubmitError('Something went wrong, please try again or call us directly.');
+          } catch (err) {
+            setSubmitError(err.message || 'Something went wrong, please try again or call us directly.');
           } finally {
             setSubmitting(false);
           }
@@ -424,7 +426,7 @@ function BookingPage({ go, pageParams }) {
             </label>
             {form.preferredDate && !slotsLoading && slotInfo && slotInfo.closed && (
               <div style={{marginTop:4, marginBottom:4, padding:'8px 12px', fontSize:13, border:'1px solid var(--rust)', background:'var(--bg-elev)', color:'var(--rust)'}}>
-                We're not taking online bookings on that date. Please call us to arrange a time.
+                {slotInfo.reason || "We're not taking online bookings on that date. Please call us to arrange a time."}
               </div>
             )}
 
@@ -432,7 +434,8 @@ function BookingPage({ go, pageParams }) {
               <>
                 <label className="field"><span className="label">Address</span><input required className="input" value={form.address} onChange={e => update('address', e.target.value)} placeholder="Street, town" /></label>
                 {addrGeocoding && <div className="mono" style={{fontSize:11, color:'var(--ink-2)', marginTop:4, marginBottom:4}}>Checking distance…</div>}
-                {!addrGeocoding && calloutInfo !== null && (() => {
+                {!addrGeocoding && calloutInfo?.error && <div style={{marginTop:4, marginBottom:4, padding:'8px 12px', fontSize:13, border:'1px solid var(--line)', background:'var(--bg-elev)'}}>{calloutInfo.error}</div>}
+                {!addrGeocoding && calloutInfo !== null && !calloutInfo.error && (() => {
                   const { distKm, fee, days, localCapKm, dailyRate } = calloutInfo;
                   const capExceeded = distKm > localCapKm;
                   return (
@@ -516,7 +519,7 @@ function ContactPage({ go }) {
       if (!res.ok) throw new Error('server error');
       setQmSent(true);
     } catch {
-      setQmError(`Message could not be sent. Please email us directly at ${shop.email || 'our support address'}.`);
+      setQmError(`Message could not be sent.${shop.email ? ` Please email us directly at ${shop.email}.` : ' Please try again shortly.'}`);
     } finally {
       setQmSending(false);
     }
@@ -861,7 +864,7 @@ function findPolicyAudience(slug, items) {
 // setting change without a redeploy, fill them in with live values just before render.
 function interpolatePolicyBody(body, shop) {
   const phone = shop.phone || '';
-  const accountUrl = `${shop._portalUrl || 'https://portal.outbackelectronics.com.au'}/account`;
+  const accountUrl = `${shop._portalUrl || ''}/account`;
   // Markdown link syntax like [{{email}}](mailto:{{email}}) requires non-empty
   // link text to render at all, an empty substitution leaves the raw [](...)
   // syntax visible to every visitor, so fall back to plain-English text (matching
@@ -1231,15 +1234,18 @@ function WarrantyRegisterPage({ go }) {
 
 function AboutPage({ go }) {
   const shop = window.__ShopContext__ ? React.useContext(window.__ShopContext__) : {};
+  // Workshop blurb is Settings, Site Content; name and description are Settings, Shop.
+  const siteContent = (typeof window !== 'undefined' && window.__SITE_CONTENT__) || {};
+  const name = shop?.tradingName || '';
   return (
     <>
-      <PageHead crumbs={['Outback', 'About']} title="About Outback Electronics"
-        lead={shop?.workshopBlurb || 'A one-person workshop covering Arduino and microcontroller builds, PC and phone repairs, software, AI and off-grid electronics. We travel to jobs and ship worldwide.'} />
+      <PageHead crumbs={['Outback', 'About']} title={name ? `About ${name}` : 'About'}
+        lead={siteContent.workshopBlurb || shop?.description || ''} />
       <section className="container" style={{ paddingTop: 32, paddingBottom: 64 }}>
         <div style={{ maxWidth: 720 }}>
           <h2 className="serif" style={{ fontSize: 28, marginBottom: 16 }}>The workshop</h2>
           <p style={{ color: 'var(--ink-2)', lineHeight: 1.8, marginBottom: 24 }}>
-            Outback Electronics is an independent electronics outpost{(() => {
+            {name} is an independent electronics outpost{(() => {
               const addr = [shop?.suburb, shop?.state, shop?.postcode].filter(Boolean).join(' ');
               return addr ? ` based at ${addr}` : '';
             })()}.
@@ -1296,15 +1302,20 @@ function CapabilityStatementTable({ rows }) {
 
 function CapabilityStatementPage({ go }) {
   const shop = window.__ShopContext__ ? React.useContext(window.__ShopContext__) : {};
-  const phone = shop?.phone || '0497 522 768';
-  const email = shop?.email || 'outbackhutelectronics@gmail.com';
-  const abn = shop?.abn || '99 496 591 295';
-  const address = '137B Thistle Street, Blackall QLD 4472';
+  // Every business detail on this page comes from Settings, Shop.
+  const name = shop?.tradingName || '';
+  const phone = shop?.phone || '';
+  const email = shop?.email || '';
+  const abn = shop?.abn || '';
+  const town = shop?.suburb || '';
+  const place = [shop?.suburb, shop?.state].filter(Boolean).join(', ');
+  const address = [shop?.streetAddress, [shop?.suburb, shop?.state, shop?.postcode].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  const website = String(shop?.siteUrl || '').replace(/^https?:\/\//i, '').replace(/\/+$/, '');
 
   return (
     <>
       <PageHead crumbs={['Outback', 'Capability Statement']} title="Capability Statement"
-        lead="Full-Service Electronics & Technology Provider - Blackall, QLD. By appointment only." />
+        lead={`Full-Service Electronics & Technology Provider${place ? ` - ${place}` : ''}. By appointment only.`} />
       <section className="container" style={{ paddingTop: 32, paddingBottom: 64 }}>
         <div style={{ maxWidth: 880, margin: '0 auto' }}>
 
@@ -1325,10 +1336,10 @@ function CapabilityStatementPage({ go }) {
 
           <h2 className="serif" style={{ fontSize: 24, marginBottom: 14 }}>Business Overview</h2>
           <p style={{ color: 'var(--ink-2)', lineHeight: 1.8, marginBottom: 16 }}>
-            Outback Electronics is a full-service electronics and technology provider based in Blackall, Queensland. The business covers the complete spectrum, consumer device repair, custom embedded hardware, PCB design, SCADA and industrial control, software development, web hosting, cybersecurity, digital forensics, and technical consulting. If it involves electronics, hardware, or software, Outback Electronics can handle it.
+            {name} is a full-service electronics and technology provider based in {place}. The business covers the complete spectrum, consumer device repair, custom embedded hardware, PCB design, SCADA and industrial control, software development, web hosting, cybersecurity, digital forensics, and technical consulting. If it involves electronics, hardware, or software, {name} can handle it.
           </p>
           <p style={{ color: 'var(--ink-2)', lineHeight: 1.8, marginBottom: 32 }}>
-            Commercial, agricultural, and research clients can engage Outback Electronics for end-to-end project delivery: from initial requirements through circuit design, PCB layout, firmware, software, and documentation. Mobile and FIFO field service is available across the Central West region.
+            Commercial, agricultural, and research clients can engage {name} for end-to-end project delivery: from initial requirements through circuit design, PCB layout, firmware, software, and documentation. Mobile and FIFO field service is available across the Central West region.
           </p>
 
           <h2 className="serif" style={{ fontSize: 24, marginBottom: 14 }}>Hardware, Repair &amp; Installation</h2>
@@ -1349,7 +1360,7 @@ function CapabilityStatementPage({ go }) {
           <h2 className="serif" style={{ fontSize: 24, marginBottom: 14 }}>Custom Development &amp; Engineering</h2>
           <CapabilityStatementTable rows={[
             ['Custom Embedded Systems', 'End-to-end embedded hardware development: requirements through to finished product. AVR, ARM, ESP32, and custom silicon. Suitable for agricultural, industrial, medical, and research applications.'],
-            ['Custom PCB Design', 'Schematic capture and PCB layout (KiCad) for client-specified end goals. Client provides the problem; Outback Electronics designs the circuit.'],
+            ['Custom PCB Design', `Schematic capture and PCB layout (KiCad) for client-specified end goals. Client provides the problem; ${name} designs the circuit.`],
             ['Hardware-Software Integration', 'Software development that interfaces directly with external hardware, instruments, sensors, controllers, and industrial devices. Examples include viscometer interfaces, data loggers, and custom instrument front-ends.'],
             ['Digital Forensics', 'Data recovery and forensic analysis from computers, phones, storage media, and embedded devices. Deleted file recovery, fault diagnosis, and evidence-grade documentation where required.'],
             ['Reverse Engineering', 'Hardware and firmware reverse engineering for compatibility, repair, legacy system support, or security assessment purposes.'],
@@ -1378,7 +1389,7 @@ function CapabilityStatementPage({ go }) {
             ['Technical Consulting', 'Expert advice on electronics, software, infrastructure, and technology strategy for businesses, farms, and organisations operating in remote and regional settings.'],
             ['Equipment Sourcing & Procurement', 'Specification and sourcing of electronics components, IT hardware, and specialised equipment. Supplier identification and procurement support.'],
             ['Documentation & Technical Writing', 'User manuals, technical specifications, wiring diagrams, system documentation, and compliance documentation for hardware and software products.'],
-            ['Remote & Field Service', 'Mobile pickup and drop-off across the Blackall region. On-site assessment and FIFO/remote site visits by arrangement for commercial and pastoral clients.'],
+            ['Remote & Field Service', `Mobile pickup and drop-off across the ${town} region. On-site assessment and FIFO/remote site visits by arrangement for commercial and pastoral clients.`],
           ]} />
 
           <h2 className="serif" style={{ fontSize: 24, marginBottom: 14 }}>Key Differentiators</h2>
@@ -1386,18 +1397,18 @@ function CapabilityStatementPage({ go }) {
             ['Full-Spectrum Capability', 'One provider from consumer device repair through to custom embedded hardware, SCADA systems, software development, and web hosting. No need to source multiple specialists.'],
             ['Component-Level Repair', 'Full SMD rework capability. Diagnoses and repairs at component level rather than defaulting to board or unit replacement, reducing cost significantly.'],
             ['Hardware + Software', 'Rare combination of deep hardware engineering and full-stack software development. Able to build complete systems end-to-end including the physical circuit, firmware, and user-facing software.'],
-            ['Regional Availability', 'Based in Blackall - delivering specialist capability to the Central West and surrounding regions where these services are otherwise absent locally.'],
+            ['Regional Availability', `Based in ${town} - delivering specialist capability to the Central West and surrounding regions where these services are otherwise absent locally.`],
             ['Flexible Engagement', 'Appointment-based with mobile pickup/drop-off. FIFO and remote site visits available for commercial and pastoral clients. Work quoted promptly and transparently.'],
           ]} />
 
           <div className="card-paper" style={{ padding: 24, marginTop: 8, background: 'var(--dark)', color: 'var(--paper)', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
             <div>
               <div style={{ fontWeight: 700, fontSize: 16 }}>OUTBACK ELECTRONICS</div>
-              <div style={{ color: 'var(--ink-3)', fontSize: 13, marginTop: 4 }}>outbackelectronics.com.au | {phone}</div>
+              <div style={{ color: 'var(--ink-3)', fontSize: 13, marginTop: 4 }}>{[website, phone].filter(Boolean).join(' | ')}</div>
             </div>
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontSize: 13 }}>{address}</div>
-              <div style={{ color: 'var(--ink-3)', fontSize: 13, marginTop: 4 }}>ABN: {abn}</div>
+              {abn && <div style={{ color: 'var(--ink-3)', fontSize: 13, marginTop: 4 }}>ABN: {abn}</div>}
             </div>
           </div>
 
@@ -1935,7 +1946,7 @@ function SponsorshipEnquiryForm({ items, initialItemId = '', lockItem = false, o
       if (!res.ok) throw new Error(d.message || '');
       setSentFor(d.itemName || '');
     } catch (err) {
-      setError(err.message || `Your enquiry could not be sent. Please email us directly at ${shop.email || 'our support address'}.`);
+      setError(err.message || `Your enquiry could not be sent.${shop.email ? ` Please email us directly at ${shop.email}.` : ' Please try again shortly.'}`);
     } finally {
       setSending(false);
     }
@@ -2074,6 +2085,9 @@ function SponsorshipOpportunityCard({ it, onEnquire }) {
 }
 
 function SponsorshipPage({ go }) {
+  const shop = useShop();
+  const name = shop.tradingName || '';
+  const us = name || 'us';
   const [data, setData] = useState(null);
   const [loadError, setLoadError] = useState(false);
   const [enquireItem, setEnquireItem] = useState(null);
@@ -2092,7 +2106,7 @@ function SponsorshipPage({ go }) {
     <>
       <style>{SPONSOR_CSS}</style>
       <PageHead crumbs={['Outback', 'Sponsorship']} title="Sponsorship"
-        lead="The businesses and people who help keep Outback Electronics equipped, and the gear you can sponsor next." />
+        lead={`The businesses and people who help keep ${name || 'us'} equipped, and the gear you can sponsor next.`} />
 
       {/* 1. Sponsorship Wall */}
       <section className="container" style={{ paddingTop: 40 }} aria-labelledby="sp-wall-h">
@@ -2118,13 +2132,13 @@ function SponsorshipPage({ go }) {
             <span className="eyebrow">HOW IT WORKS</span>
             <h2 id="sp-about-h" className="serif" style={{ fontSize: 40, marginTop: 8, lineHeight: 1.05 }}>About Our Sponsorship Program</h2>
             <p style={{ marginTop: 16, color: 'var(--ink-2)', lineHeight: 1.8 }}>
-              Businesses and individuals can support Outback Electronics by sponsoring specific equipment, tools, networking infrastructure, server upgrades or repair stock.
+              Businesses and individuals can support {us} by sponsoring specific equipment, tools, networking infrastructure, server upgrades or repair stock.
             </p>
             <p style={{ marginTop: 12, color: 'var(--ink-2)', lineHeight: 1.8 }}>
               In exchange, sponsors receive benefits depending on the equipment sponsored. Each opportunity below lists exactly what you receive for sponsoring it.
             </p>
             <p style={{ marginTop: 12, color: 'var(--ink-2)', lineHeight: 1.8 }}>
-              All sponsorships are arranged personally with Outback Electronics.
+              All sponsorships are arranged personally with {us}.
             </p>
           </div>
           <div className="card-paper" style={{ padding: 28 }}>
@@ -2132,7 +2146,7 @@ function SponsorshipPage({ go }) {
             <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 12, fontSize: 14.5, lineHeight: 1.6 }}>
               {[
                 'Labour-only service credits worth more than the sponsorship contribution.',
-                'Recognition on the Outback Electronics Sponsorship Wall.',
+                `Recognition on the ${name ? `${name} ` : ''}Sponsorship Wall.`,
                 'Distribution of sponsor-supplied business cards with customer orders.',
                 'For major sponsorships, a professional dinner, equipment presentation, photographs and a dedicated sponsorship announcement.',
               ].map((b, i) => (
@@ -2143,7 +2157,7 @@ function SponsorshipPage({ go }) {
             </ul>
             <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--line)', display: 'grid', gap: 8, fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
               <p>Labour credits cannot be redeemed against parts, hardware or physical products.</p>
-              <p>Sponsorship does not grant ownership, equity or financial returns in Outback Electronics.</p>
+              <p>Sponsorship does not grant ownership, equity or financial returns in {name || 'the business'}.</p>
             </div>
           </div>
         </div>

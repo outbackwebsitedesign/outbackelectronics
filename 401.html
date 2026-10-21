@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>401 Sign In Required - Outback Electronics</title>
+<title>401 Sign In Required - {{tradingName}}</title>
 <link rel="icon" type="image/png" href="/favicon.png"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
@@ -78,7 +78,7 @@ footer .ack{margin-top:40px;padding-top:20px;border-top:1px solid #3a3127;font-s
   <div class="container">
     <div class="row">
       <a href="/" class="logo">
-        <div class="logo-mark"><img src="/logo.webp" alt="Outback Electronics"/></div>
+        <div class="logo-mark"><img src="/logo.webp" alt="{{tradingName}}"/></div>
         <div class="logo-text"><div class="sub">Est. 2023 · Appointment only</div></div>
       </a>
       <nav class="mainlinks">
@@ -106,7 +106,7 @@ footer .ack{margin-top:40px;padding-top:20px;border-top:1px solid #3a3127;font-s
 </div>
 <div id="mobile-nav" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:var(--bg);z-index:200;flex-direction:column;overflow-y:auto;padding-top:60px">
   <div style="position:fixed;top:0;left:0;right:0;height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;background:var(--bg);border-bottom:1px solid var(--line);z-index:201">
-    <a href="/" class="logo"><div class="logo-mark" style="height:40px"><img src="/logo.webp" alt="Outback Electronics" style="height:30px"/></div></a>
+    <a href="/" class="logo"><div class="logo-mark" style="height:40px"><img src="/logo.webp" alt="{{tradingName}}" style="height:30px"/></div></a>
     <button onclick="document.getElementById('mobile-nav').style.display='none'" style="width:36px;height:36px;display:grid;place-items:center;border:1px solid var(--line-strong);background:var(--bg-elev)" aria-label="Close">✕</button>
   </div>
   <a href="/" style="display:block;padding:16px 20px;font-size:16px;font-weight:500;border-bottom:1px solid var(--line)">Home</a>
@@ -139,7 +139,7 @@ footer .ack{margin-top:40px;padding-top:20px;border-top:1px solid #3a3127;font-s
     <div class="grid">
       <div>
         <div class="logo">
-          <div class="logo-mark sm" style="background:#000"><img src="/logo.webp" alt="Outback Electronics"/></div>
+          <div class="logo-mark sm" style="background:#000"><img src="/logo.webp" alt="{{tradingName}}"/></div>
           <div class="logo-text"><div class="sub" style="color:var(--ochre)">Built for where the signal ends</div></div>
         </div>
         <p style="margin-top:18px;font-size:13px;color:var(--ink-3);max-width:360px;line-height:1.6">An independent electronics outpost serving remote Australia since 2023. Arduino &amp; microcontroller builds, PC &amp; phone repairs, software and AI solutions, and off-grid electronics.</p>
@@ -176,17 +176,17 @@ footer .ack{margin-top:40px;padding-top:20px;border-top:1px solid #3a3127;font-s
       <div>
         <h5>Visit</h5>
         <ul style="color:var(--ink-3)">
-          <li><!--SHOP_LOCATION-->Central Queensland, Australia<br/>No public access - appointment only.</li>
+          <li><!--SHOP_LOCATION--><br/>No public access - appointment only.</li>
           <li><a href="/contact" style="color:var(--ochre)">Get directions →</a></li>
         </ul>
       </div>
     </div>
     <div class="ack">
-      <p><!--SHOP_ACK_RESPECT-->Outback Electronics acknowledges the Bidjara people as the Traditional Custodians of the Country on which we operate. We pay our respects to Elders past and present, and extend that respect to all Aboriginal and Torres Strait Islander peoples.</p>
-      <p><!--SHOP_ACK_BASED-->Proudly based on Bidjara Country, Blackall, QLD.</p>
+      <p><!--SHOP_ACK_RESPECT--></p>
+      <p><!--SHOP_ACK_BASED--></p>
     </div>
     <div class="baseline">
-      <span><!--SHOP_COPYRIGHT-->© 2023–2026 Outback Electronics Pty Ltd · ABN 41 552 008 991</span>
+      <span><!--SHOP_COPYRIGHT--></span>
     </div>
   </div>
 </footer>

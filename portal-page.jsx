@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getCsrf, ensureCsrf } from './src/lib/api.js';
 
-// Cross-site URLs, populated from /api/shop-info at startup, with a sensible
-// fallback derived from the current host so links are never empty during load.
+// Cross-site URLs and the business name, populated from /api/shop-info (i.e.
+// Settings, Shop) at startup. The site URL is derived from the current host
+// until then so links are never empty during load.
 let _SITE_URL  = '';
+let _SHOP_NAME = '';
+function shopName() { return _SHOP_NAME; }
 function getSiteUrl()  {
   if (_SITE_URL) return _SITE_URL;
   try {
@@ -11,7 +14,7 @@ function getSiteUrl()  {
     if (hostname.startsWith('portal.')) return `${protocol}//${hostname.slice('portal.'.length)}`;
     if (hostname === 'localhost' || hostname === '127.0.0.1') return `${protocol}//${hostname}:8080`;
   } catch { /* fall through */ }
-  return 'https://outbackelectronics.com.au';
+  return '';
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -123,10 +126,10 @@ function LoginPage({ onLogin }) {
       <div className="login-box">
         <div className="login-logo">
           <div className="login-logo-mark">
-            <img src="/assets/logo.webp" alt="Outback Electronics" />
+            <img src="/assets/logo.webp" alt={shopName()} />
           </div>
           <div>
-            <div style={{fontWeight:700, fontSize:15, color:'var(--ink)'}}>Outback Electronics</div>
+            <div style={{fontWeight:700, fontSize:15, color:'var(--ink)'}}>{shopName()}</div>
             <div className="eyebrow" style={{marginTop:3}}>Customer Portal</div>
           </div>
         </div>
@@ -356,7 +359,7 @@ function ResetPasswordForm({ token, onDone }) {
   if (msg) return (
     <div className="login-wrap">
       <div className="login-box">
-        <div className="login-logo"><div className="login-logo-mark"><img src="/assets/logo.webp" alt="Outback Electronics" /></div><div><div style={{fontWeight:700, fontSize:15, color:'var(--ink)'}}>Outback Electronics</div><div className="eyebrow" style={{marginTop:3}}>Customer Portal</div></div></div>
+        <div className="login-logo"><div className="login-logo-mark"><img src="/assets/logo.webp" alt={shopName()} /></div><div><div style={{fontWeight:700, fontSize:15, color:'var(--ink)'}}>{shopName()}</div><div className="eyebrow" style={{marginTop:3}}>Customer Portal</div></div></div>
         <div className="alert alert-success" style={{marginBottom:16}}>{msg}</div>
         <button className="btn btn-rust" onClick={onDone} style={{width:'100%', justifyContent:'center'}}>Sign in →</button>
       </div>
@@ -366,7 +369,7 @@ function ResetPasswordForm({ token, onDone }) {
   return (
     <div className="login-wrap">
       <div className="login-box">
-        <div className="login-logo"><div className="login-logo-mark"><img src="/assets/logo.webp" alt="Outback Electronics" /></div><div><div style={{fontWeight:700, fontSize:15, color:'var(--ink)'}}>Outback Electronics</div><div className="eyebrow" style={{marginTop:3}}>Customer Portal</div></div></div>
+        <div className="login-logo"><div className="login-logo-mark"><img src="/assets/logo.webp" alt={shopName()} /></div><div><div style={{fontWeight:700, fontSize:15, color:'var(--ink)'}}>{shopName()}</div><div className="eyebrow" style={{marginTop:3}}>Customer Portal</div></div></div>
         <h2 style={{fontFamily:'Instrument Serif, serif', fontWeight:400, fontSize:28, marginBottom:20}}>Choose new password</h2>
         {error && <div className="alert alert-error">{error}</div>}
         <form onSubmit={handleSubmit}>
@@ -452,10 +455,10 @@ function PortalNav({ user, tab, setTab, onLogout }) {
         <div className="container row">
           <a href={getSiteUrl()} className="logo">
             <div className="logo-mark">
-              <img src="/assets/logo.webp" alt="Outback Electronics" />
+              <img src="/assets/logo.webp" alt={shopName()} />
             </div>
             <div className="logo-text">
-              <div className="name">Outback Electronics</div>
+              <div className="name">{shopName()}</div>
               <div className="sub">Customer Portal</div>
             </div>
           </a>
@@ -544,7 +547,7 @@ function OverviewTab({ user, setTab }) {
       <div className="container">
         <SectionHead
           title={`${greeting()}, ${data ? (user.displayName || user.username) : '…'}`}
-          desc="Welcome to your Outback Electronics customer portal."
+          desc={`Welcome to your ${shopName()} customer portal.`.replace(/ {2,}/g, ' ')}
           onRefresh={() => load(true)}
         />
 
@@ -907,7 +910,7 @@ function OrdersTab({ highlightId }) {
   return (
     <div className="page-section">
       <div className="container">
-        <SectionHead title="Orders" desc="Your order history with Outback Electronics." onRefresh={() => load(true)} />
+        <SectionHead title="Orders" desc={shopName() ? `Your order history with ${shopName()}.` : 'Your order history.'} onRefresh={() => load(true)} />
         {paidOrderId && <div className="alert alert-success" role="status" style={{marginBottom:20}}>Payment received, thank you! Your order is being processed.</div>}
         {payErr && <div className="alert alert-error" role="alert" style={{marginBottom:20}}>{payErr}</div>}
         {items.length > 0 && (
@@ -1263,7 +1266,7 @@ function QuotesTab({ user, onOrderCreated, highlightRef }) {
                         <label className="field" style={{gridColumn:'1 / -1'}}><span className="label">How you'll pay each instalment</span>
                           <select className="select" value={choice.collectionMethod} onChange={e => setChoice({ collectionMethod: e.target.value })}>
                             <option value="customer">I'll pay each one myself in the portal</option>
-                            <option value="manual">Outback Electronics will contact me to collect it</option>
+                            <option value="manual">{shopName() ? `${shopName()} will contact me to collect it` : 'Contact me to arrange collection'}</option>
                           </select>
                         </label>
                       </div>
@@ -1377,7 +1380,7 @@ function MembershipsTab() {
   return (
     <div className="page-section">
       <div className="container">
-        <SectionHead title="Membership" desc="Your Outback Electronics membership plan." onRefresh={() => load(true)} />
+        <SectionHead title="Membership" desc={`Your ${shopName()} membership plan.`.replace(/ {2,}/g, ' ')} onRefresh={() => load(true)} />
         {msg && <div className={'alert ' + (msg.ok ? 'alert-success' : 'alert-error')} role={msg.ok ? 'status' : 'alert'} style={{marginBottom:16}}>{msg.text}</div>}
 
         {activeTier && (
@@ -2372,7 +2375,7 @@ function Dashboard({ user, setUser, onLogout }) {
       <footer className="portal-footer">
         <div className="container">
           <div className="row-flex">
-            <span>© {new Date().getFullYear()} Outback Electronics</span>
+            <span>© {new Date().getFullYear()} {shopName()}</span>
             <div style={{display:'flex', gap:20}}>
               <a href={getSiteUrl()}>Main site</a>
               <a href="https://forum.outbackelectronics.com.au" target="_blank" rel="noopener noreferrer">Forum</a>
@@ -2710,7 +2713,7 @@ function QuoteTokenView({ token, onAccepted }) {
                       <label className="field" style={{gridColumn:'1 / -1'}}><span className="label">How you'll pay each instalment</span>
                         <select className="select" value={planChoice.collectionMethod} onChange={e => setPlanChoice(c => ({ ...c, collectionMethod: e.target.value }))}>
                           <option value="customer">I'll pay each one myself in the portal</option>
-                          <option value="manual">Outback Electronics will contact me to collect it</option>
+                          <option value="manual">{shopName() ? `${shopName()} will contact me to collect it` : 'Contact me to arrange collection'}</option>
                         </select>
                       </label>
                     </div>
@@ -2761,6 +2764,7 @@ function PortalApp() {
         fetch('/api/shop-info').then(r => r.json()).catch(() => ({})),
       ]).then(([d, shopInfo]) => {
         if (shopInfo.shop?.siteUrl) _SITE_URL  = shopInfo.shop.siteUrl;
+        _SHOP_NAME = String(shopInfo.shop?.tradingName || '').trim();
         setUser(d.user || null);
         setLoading(false);
       }).catch(() => setLoading(false))

@@ -50,7 +50,7 @@ export default function HubApp() {
           <div>
             <p className="eyebrow">Field Network</p>
             <h1 className="serif hub-title">{greeting}</h1>
-            <p className="hub-sub">Everything Outback Electronics runs, your files, the airwaves, the sky, the weather and the bush - in one place.</p>
+            <p className="hub-sub">Everything {(info && info.shop && info.shop.tradingName) || 'we'} run{(info && info.shop && info.shop.tradingName) ? 's' : ''}, your files, the airwaves, the sky, the weather and the bush - in one place.</p>
           </div>
           <div className="hub-hero-side">
             {wx ? (

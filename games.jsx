@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { makePortalHelpers } from './src/lib/api.js';
 // The suite footer every other service subdomain renders. Games is a Field
 // Network tile, so it wears the same one rather than shipping with none.
-import { Footer } from './app-shell.jsx';
+import { Footer, useShopInfo } from './app-shell.jsx';
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const T = {
@@ -1871,6 +1871,8 @@ function NKActCard({ act, onContinue }) {
 
 // ── Title screen ──────────────────────────────────────────────────────────────
 function NKTitle({ onStart }) {
+  const shopInfo = useShopInfo();
+  const shopNm = (shopInfo && shopInfo.shop && shopInfo.shop.tradingName) || '';
   const canvasRef = useRef(null);
   const tRef = useRef(0);
   useEffect(() => {
@@ -1914,7 +1916,7 @@ function NKTitle({ onStart }) {
     <div style={{ position: 'absolute', inset: 0 }}>
       <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
       <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#806040', letterSpacing: 5, textTransform: 'uppercase', marginBottom: 18 }}>Outback Electronics Presents</div>
+        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#806040', letterSpacing: 5, textTransform: 'uppercase', marginBottom: 18 }}>{shopNm ? `${shopNm} Presents` : 'Presenting'}</div>
         <div style={{ fontFamily: "'Instrument Serif', serif", fontSize: 68, color: '#f0e0c0', lineHeight: 1, marginBottom: 8, textShadow: '0 2px 40px rgba(200,120,40,0.45)' }}>Ned Kelly</div>
         <div style={{ fontFamily: "'Instrument Serif', serif", fontSize: 22, color: '#c0a060', marginBottom: 52, letterSpacing: 4 }}>The Legend</div>
         <div style={{ fontFamily: "'Archivo', sans-serif", fontSize: 13, color: '#706040', textAlign: 'center', lineHeight: 1.8, maxWidth: 360, marginBottom: 8 }}>
@@ -2237,6 +2239,9 @@ function gameIdFromPath() {
 }
 
 function App() {
+  const shopInfo = useShopInfo();
+  const shopNm = (shopInfo && shopInfo.shop && shopInfo.shop.tradingName) || '';
+  const siteHref = (shopInfo && (shopInfo.siteUrl || (shopInfo.shop && shopInfo.shop.siteUrl))) || '/';
   const [activeId, setActiveId] = useState(gameIdFromPath);
   const [authOpen, setAuthOpen] = useState(false);
   const [portalUser, setPortalUser] = usePortalUser();
@@ -2274,9 +2279,9 @@ function App() {
       ? { display:'flex', flexDirection:'column', height:'100vh', overflow:'hidden' }
       : { display:'flex', flexDirection:'column', minHeight:'100vh' }}>
       <header style={css.header}>
-        <a href="https://outbackelectronics.com.au" style={css.logoLink} title="Back to Outback Electronics">
+        <a href={siteHref} style={css.logoLink} title={shopNm ? `Back to ${shopNm}` : 'Back to the main site'}>
           <img src="/assets/logo.webp" alt="" style={css.logoImg} onError={e=>{e.target.style.display='none';}} />
-          <span style={css.siteName}>Outback Electronics</span>
+          <span style={css.siteName}>{shopNm}</span>
         </a>
         <div style={{ flex:1 }} />
         <h1 style={{ fontFamily:"'Instrument Serif', serif", fontSize:20, fontWeight:400, color:T.ink }}>

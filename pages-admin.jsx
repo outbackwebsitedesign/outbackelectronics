@@ -978,9 +978,10 @@ function AdminOverview({ go }) {
   const [repairs, setRepairs] = useState(null);
   const [quotes, setQuotes] = useState(null);
   const [catalog, setCatalog] = useState(null);
+  const [missingShop, setMissingShop] = useState([]);
   useEffect(() => {
     fetch('/api/admin/metrics', { credentials:'include' })
-      .then(r => r.ok ? r.json() : Promise.reject()).then(d => setOverview(d.overview || null)).catch(() => setOverview(null));
+      .then(r => r.ok ? r.json() : Promise.reject()).then(d => { setOverview(d.overview || null); setMissingShop(d.missingShopFields || []); }).catch(() => setOverview(null));
     fetch('/api/admin/orders', { credentials:'include' })
       .then(r => r.ok ? r.json() : Promise.reject()).then(d => setOrders(d.items || [])).catch(() => setOrders([]));
     fetch('/api/admin/repairs', { credentials:'include' })
@@ -1004,6 +1005,17 @@ function AdminOverview({ go }) {
 
   return (
     <div style={{padding: 32, display:'grid', gap: 28}}>
+      {missingShop.length > 0 && (
+        // Shop details are read only from Settings, nothing in the code fills a
+        // gap, so a blank field is simply missing from the site until it's set.
+        <div role="alert" style={{padding:'14px 16px', border:'1px solid var(--rust)', background:'var(--bg-elev)'}}>
+          <div style={{fontWeight:600, fontSize:14, color:'var(--rust)'}}>Shop details incomplete</div>
+          <div style={{fontSize:13, color:'var(--ink-2)', marginTop:4, lineHeight:1.6}}>
+            These are blank in Settings, so they're missing everywhere they'd appear (pages, invoices, quotes, emails): <strong>{missingShop.map(f => f.label).join(', ')}</strong>.
+          </div>
+          <a className="btn btn-sm" href="/settings" style={{marginTop:10, textDecoration:'none', display:'inline-flex'}}>Open Settings</a>
+        </div>
+      )}
       <div className="grid-4">
         <StatTile label="RECEIVED · 7D" value={revenue} />
         <StatTile label="ORDERS PAID · 7D" value={orderCount} />
@@ -7555,7 +7567,7 @@ function AdminMessages({ sessionInfo }) {
             </select>
           </label>
           <label className="field"><span className="label">Staff notes</span><textarea className="textarea" value={f.staffNotes || ''} onChange={e => setF('staffNotes', e.target.value)} /></label>
-          <a className="btn btn-ghost btn-sm" style={{ textDecoration: 'none' }} href={`mailto:${f.email}?subject=${encodeURIComponent('Re: your message to Outback Electronics')}`}><Icon name="mail" size={13} /> Reply by email</a>
+          <a className="btn btn-ghost btn-sm" style={{ textDecoration: 'none' }} href={`mailto:${f.email}?subject=${encodeURIComponent(`Re: your message${adminShopName() ? ` to ${adminShopName()}` : ''}`)}`}><Icon name="mail" size={13} /> Reply by email</a>
         </Drawer>
       )}
     </div>
@@ -7604,7 +7616,7 @@ function AdminSponsorship({ siteUrl }) {
   const byOrder = list => [...list].sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0));
 
   const blank = {
-    items: () => ({ name: '', description: '', imageUrl: '', imageAlt: '', amountAud: '', labourCreditAud: '', rewards: ['Recognition on the Outback Electronics Sponsorship Wall'], status: 'available', order: data.items.length }),
+    items: () => ({ name: '', description: '', imageUrl: '', imageAlt: '', amountAud: '', labourCreditAud: '', rewards: [`Recognition on the ${adminShopName() ? `${adminShopName()} ` : ''}Sponsorship Wall`], status: 'available', order: data.items.length }),
     sponsors: () => ({ businessName: '', logoUrl: '', logoAlt: '', url: '', itemId: '', sponsoredLabel: '', photoUrl: '', photoAlt: '', acknowledgement: '', contactName: '', email: '', phone: '', notes: '', order: data.sponsors.length, active: true }),
   };
   const open = (kind, row, extra = {}) => {
@@ -7762,7 +7774,7 @@ function AdminSponsorship({ siteUrl }) {
             </label>
             <label className="field"><span className="label">Staff notes (never shown publicly)</span><textarea className="textarea" value={f.staffNotes || ''} onChange={e => setF('staffNotes', e.target.value)} placeholder="e.g. called 21 Oct, invoice sent" /></label>
             <div className="row-flex" style={{ gap: 8, flexWrap: 'wrap' }}>
-              <a className="btn btn-ghost btn-sm" style={{ textDecoration: 'none' }} href={`mailto:${f.email}?subject=${encodeURIComponent('Sponsoring Outback Electronics' + (f.itemName ? ` - ${f.itemName}` : ''))}`}><Icon name="mail" size={13} /> Reply by email</a>
+              <a className="btn btn-ghost btn-sm" style={{ textDecoration: 'none' }} href={`mailto:${f.email}?subject=${encodeURIComponent(`Sponsoring ${adminShopName() || 'us'}` + (f.itemName ? ` - ${f.itemName}` : ''))}`}><Icon name="mail" size={13} /> Reply by email</a>
               {f.sponsorId
                 ? <button className="btn btn-ghost btn-sm" onClick={() => { const sp = data.sponsors.find(s => s.id === f.sponsorId); if (sp) { setTab('sponsors'); open('sponsors', sp); } }}>Open wall entry</button>
                 : <button className="btn btn-ghost btn-sm" onClick={() => sponsorFromEnquiry(f)}>Add to Sponsorship Wall →</button>}
@@ -7819,7 +7831,7 @@ function AdminSponsorship({ siteUrl }) {
               <div className="notice" style={{ fontSize: 12.5, marginBottom: 12 }}>The program promises labour credits worth more than the contribution. This credit is not more than the amount.</div>
             )}
             <label className="field"><span className="label">Other rewards (one per line)</span>
-              <textarea className="textarea" rows={5} placeholder={'Recognition on the Outback Electronics Sponsorship Wall\nYour business cards included with customer orders for 12 months'}
+              <textarea className="textarea" rows={5} placeholder={'Recognition on the Sponsorship Wall\nYour business cards included with customer orders for 12 months'}
                 value={(f.rewards || []).join('\n')} onChange={e => setF('rewards', e.target.value.split('\n'))} />
               <span style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 4 }}>The labour credit is listed automatically as the first reward.</span>
             </label>
@@ -14169,7 +14181,7 @@ function AdminSafetyNotices({ sessionInfo = {} }) {
             </label>
 
             <div style={{fontSize:12, color:'var(--ink-2)', lineHeight:1.6, padding:'12px 14px', background:'var(--bg-elev)', border:'1px solid var(--line)'}}>
-              The notice is signed by {sessionInfo.username || 'the logged-in staff member'} for Outback Electronics.
+              The notice is signed by {sessionInfo.username || 'the logged-in staff member'} for {adminShopName() || 'the business'}.
               Your saved signature is used if you have uploaded one in Settings, otherwise the printed form leaves a blank
               line for you to sign by hand. The customer signs the printed copy.
             </div>
@@ -14259,6 +14271,11 @@ function adminSectionFromPath() {
   return ADMIN_ALL_IDS.has(seg) ? seg : 'overview';
 }
 
+// The business name from Settings, Shop, loaded with /api/shop-info when the
+// dashboard opens; used where admin text or email subjects name the business.
+let _adminShopName = '';
+const adminShopName = () => _adminShopName;
+
 function AdminPage({ go }) {
   const [sessionInfo, setSessionInfo] = useState({ authed: false, role: null, username: null, staffId: null });
   const [checking, setChecking] = useState(true);
@@ -14279,6 +14296,7 @@ function AdminPage({ go }) {
     ensureCsrf();
     fetchSession(mounted).finally(() => { if (mounted) setChecking(false); });
     fetch('/api/shop-info').then(r => r.json()).then(d => {
+      _adminShopName = String(d.shop?.tradingName || '').trim();
       const url = d.siteUrl || d.shop?.siteUrl;
       if (mounted && url) setSiteUrl(url);
     }).catch(() => {});

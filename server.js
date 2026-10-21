@@ -95,7 +95,6 @@ const STRIPE_WEBHOOK_SECRET   = process.env.STRIPE_WEBHOOK_SECRET   || '';
 const STRIPE_PUBLISHABLE_KEY  = process.env.STRIPE_PUBLISHABLE_KEY  || '';
 const AUSPOST_API_KEY         = process.env.AUSPOST_API_KEY         || '';
 const ORS_API_KEY            = process.env.ORS_API_KEY            || '';
-const SHOP_LAT = -24.4235, SHOP_LNG = 145.4693;
 const SITE_URL              = process.env.SITE_URL              || 'http://localhost:8080';
 const ADMIN_URL             = process.env.ADMIN_URL             || (/^https?:\/\/(localhost|127\.|0\.0\.0\.0)(:\d+)?/.test(SITE_URL) ? SITE_URL.replace(/(:\d+)?(\/|$)/, ':8082$2') : SITE_URL.replace(/^(https?:\/\/)/, '$1admin.'));
 
@@ -104,7 +103,6 @@ const SMTP_PORT    = parseInt(process.env.SMTP_PORT || '587', 10);
 const SMTP_USER    = process.env.SMTP_USER    || '';
 const SMTP_PASS    = process.env.SMTP_PASS    || '';
 const NOTIFY_EMAIL = process.env.NOTIFY_EMAIL || SMTP_USER;
-const FROM_ADDRESS = `Outback Electronics <${SMTP_USER || 'noreply@outbackelectronics.com.au'}>`;
 
 const ROLE_LEVELS = { owner: 4, manager: 3, technician: 2, staff: 1, seller: 1, pending: 0 };
 
@@ -428,7 +426,7 @@ function notifyRestocked(before, after) {
       to: req.email,
       productName: nextProd.name,
       variantName: variant ? variant.name : '',
-      url: `${OG_BASE_URL}/product/${encodeURIComponent(nextProd.sku || nextProd.id)}`,
+      url: `${ogBaseUrl()}/product/${encodeURIComponent(nextProd.sku || nextProd.id)}`,
     });
   }
   if (toSend.length === 0) return;
@@ -2334,7 +2332,7 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null, cspOverride 
 
     fs.readFile(filePath, (err, data) => {
       if (err) return tryRead(paths, idx + 1);
-      if (ext === '.html' && data.includes('<!--SHOP_COPYRIGHT-->')) {
+      if (ext === '.html' && (data.includes('<!--SHOP_COPYRIGHT-->') || data.includes('{{tradingName}}'))) {
         data = Buffer.from(applyShopTemplate(data.toString('utf8')), 'utf8');
       }
       // SPA routes that have no per-route OG entry are served straight from
@@ -2379,34 +2377,37 @@ function serveStatic(req, res, urlPath, rootFile, spaRoutes = null, cspOverride 
 
 // ── OG tag injection for social crawlers ─────────────────────────────────────
 
-const OG_BASE_URL = 'https://outbackelectronics.com.au';
+// Page titles and descriptions below use {{tradingName}}, {{tagline}} and
+// {{location}} placeholders, filled from Settings, Shop when the page is served
+// (see resolveOgTags), so the business name is never written into the code.
+function ogBaseUrl() { return String(getSiteUrl() || '').replace(/\/+$/, ''); }
 
 const STATIC_OG = {
-  '/':          { title: 'Outback Electronics - Built for where the signal ends', description: 'Arduino & microcontroller builds, PC & phone repairs, software and AI solutions, and off-grid electronics - serving remote Australia by appointment.', image: '/assets/og-image.webp' },
-  '/home':      { title: 'Outback Electronics - Built for where the signal ends', description: 'Arduino & microcontroller builds, PC & phone repairs, software and AI solutions, and off-grid electronics - serving remote Australia by appointment.', image: '/assets/og-image.webp' },
-  '/shop':        { title: 'Shop - Outback Electronics',           description: 'Browse rugged laptops, solar gear, satellite comms, UHF radios and off-grid tools built for remote Australia.',           image: '/assets/og-image.webp' },
-  '/services':    { title: 'Services - Outback Electronics',       description: 'Expert repairs, field service and bench diagnostics for rugged devices. Book a repair or drop in.',                       image: '/assets/og-image.webp' },
-  '/groups':      { title: 'Community Groups - Outback Electronics', description: 'Connect with community chapters across remote Australia. Find your local Outback Electronics group.',                  image: '/assets/og-image.webp' },
-  '/memberships': { title: 'Memberships - Outback Electronics',    description: 'Join the Outback Electronics community. Member discounts, priority repairs and exclusive access.',                       image: '/assets/og-image.webp' },
-  '/tutorials':   { title: 'Tutorials - Outback Electronics',      description: 'Field guides, how-to videos and repair tutorials for off-grid gear and rugged electronics.',                            image: '/assets/og-image.webp' },
-  '/software':    { title: 'Software Library - Outback Electronics', description: 'Download firmware, drivers and utilities for rugged devices and off-grid hardware.',                                  image: '/assets/og-image.webp' },
-  '/ai':          { title: 'Edge AI - Outback Electronics',        description: 'Offline-capable AI models and inference hardware for remote deployments. No cloud required.',                           image: '/assets/og-image.webp' },
-  '/ewaste':      { title: 'eWaste Take-Back - Outback Electronics', description: 'Responsible eWaste recycling and take-back for old electronics. Drop in or arrange a pickup.',                        image: '/assets/og-image.webp' },
-  '/contact':     { title: 'Contact - Outback Electronics',        description: null, image: '/assets/og-image.webp' },
-  '/quote':       { title: 'Request a Quote - Outback Electronics', description: 'Need a custom kit or bulk order? Request a quote from Outback Electronics.',                                          image: '/assets/og-image.webp' },
-  '/about':       { title: 'About - Outback Electronics',           description: 'Learn about Outback Electronics, our mission, team, and commitment to remote Australia.',                           image: '/assets/og-image.webp' },
-  '/repairs':     { title: 'Repairs - Outback Electronics',         description: 'Expert device repairs for rugged electronics, laptops, phones and off-grid gear. Drop in or book online.',          image: '/assets/og-image.webp' },
-  '/policies':    { title: 'Policies - Outback Electronics',        description: 'Shipping, returns, warranty and privacy policies for Outback Electronics.',                                          image: '/assets/og-image.webp' },
-  '/sellers':     { title: 'Info for Sellers - Outback Electronics', description: 'Sell your surplus electronics through Outback Electronics. Consignment and trade-in options available.',           image: '/assets/og-image.webp' },
-  '/gift-cards':  { title: 'Gift Cards - Outback Electronics',      description: 'Give the gift of rugged gear. Outback Electronics gift cards, perfect for the remote tech enthusiast.',            image: '/assets/og-image.webp' },
-  '/capability-statement': { title: 'Capability Statement - Outback Electronics', description: 'Full-service electronics and technology provider in Blackall QLD. Repair, custom hardware, PCB design, SCADA, software, hosting and cybersecurity.', image: '/assets/og-image.webp' },
-  '/sponsorship': { title: 'Sponsorship - Outback Electronics', description: 'Sponsor specific Outback Electronics equipment and receive labour-only service credits, a place on our Sponsorship Wall and more.', image: '/assets/og-image.webp' },
-  '/reviews':     { title: 'Customer Reviews - Outback Electronics', description: 'What customers across remote Australia say about Outback Electronics repairs, builds and service.',                  image: '/assets/og-image.webp' },
+  '/':          { title: '{{tradingName}} - {{tagline}}', description: 'Arduino & microcontroller builds, PC & phone repairs, software and AI solutions, and off-grid electronics - serving remote Australia by appointment.', image: '/assets/og-image.webp' },
+  '/home':      { title: '{{tradingName}} - {{tagline}}', description: 'Arduino & microcontroller builds, PC & phone repairs, software and AI solutions, and off-grid electronics - serving remote Australia by appointment.', image: '/assets/og-image.webp' },
+  '/shop':        { title: 'Shop - {{tradingName}}',           description: 'Browse rugged laptops, solar gear, satellite comms, UHF radios and off-grid tools built for remote Australia.',           image: '/assets/og-image.webp' },
+  '/services':    { title: 'Services - {{tradingName}}',       description: 'Expert repairs, field service and bench diagnostics for rugged devices. Book a repair or drop in.',                       image: '/assets/og-image.webp' },
+  '/groups':      { title: 'Community Groups - {{tradingName}}', description: 'Connect with community chapters across remote Australia. Find your local {{tradingName}} group.',                  image: '/assets/og-image.webp' },
+  '/memberships': { title: 'Memberships - {{tradingName}}',    description: 'Join the {{tradingName}} community. Member discounts, priority repairs and exclusive access.',                       image: '/assets/og-image.webp' },
+  '/tutorials':   { title: 'Tutorials - {{tradingName}}',      description: 'Field guides, how-to videos and repair tutorials for off-grid gear and rugged electronics.',                            image: '/assets/og-image.webp' },
+  '/software':    { title: 'Software Library - {{tradingName}}', description: 'Download firmware, drivers and utilities for rugged devices and off-grid hardware.',                                  image: '/assets/og-image.webp' },
+  '/ai':          { title: 'Edge AI - {{tradingName}}',        description: 'Offline-capable AI models and inference hardware for remote deployments. No cloud required.',                           image: '/assets/og-image.webp' },
+  '/ewaste':      { title: 'eWaste Take-Back - {{tradingName}}', description: 'Responsible eWaste recycling and take-back for old electronics. Drop in or arrange a pickup.',                        image: '/assets/og-image.webp' },
+  '/contact':     { title: 'Contact - {{tradingName}}',        description: null, image: '/assets/og-image.webp' },
+  '/quote':       { title: 'Request a Quote - {{tradingName}}', description: 'Need a custom kit or bulk order? Request a quote from {{tradingName}}.',                                          image: '/assets/og-image.webp' },
+  '/about':       { title: 'About - {{tradingName}}',           description: 'Learn about {{tradingName}}, our mission, team, and commitment to remote Australia.',                           image: '/assets/og-image.webp' },
+  '/repairs':     { title: 'Repairs - {{tradingName}}',         description: 'Expert device repairs for rugged electronics, laptops, phones and off-grid gear. Drop in or book online.',          image: '/assets/og-image.webp' },
+  '/policies':    { title: 'Policies - {{tradingName}}',        description: 'Shipping, returns, warranty and privacy policies for {{tradingName}}.',                                          image: '/assets/og-image.webp' },
+  '/sellers':     { title: 'Info for Sellers - {{tradingName}}', description: 'Sell your surplus electronics through {{tradingName}}. Consignment and trade-in options available.',           image: '/assets/og-image.webp' },
+  '/gift-cards':  { title: 'Gift Cards - {{tradingName}}',      description: 'Give the gift of rugged gear. {{tradingName}} gift cards, perfect for the remote tech enthusiast.',            image: '/assets/og-image.webp' },
+  '/capability-statement': { title: 'Capability Statement - {{tradingName}}', description: 'Full-service electronics and technology provider in {{location}}. Repair, custom hardware, PCB design, SCADA, software, hosting and cybersecurity.', image: '/assets/og-image.webp' },
+  '/sponsorship': { title: 'Sponsorship - {{tradingName}}', description: 'Sponsor specific {{tradingName}} equipment and receive labour-only service credits, a place on our Sponsorship Wall and more.', image: '/assets/og-image.webp' },
+  '/reviews':     { title: 'Customer Reviews - {{tradingName}}', description: 'What customers across remote Australia say about {{tradingName}} repairs, builds and service.',                  image: '/assets/og-image.webp' },
 };
 
 function stripHtml(s) { return String(s || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim(); }
 
-function resolveOgTags(pathname) {
+function resolveOgTagsRaw(pathname) {
   // Static routes
   if (STATIC_OG[pathname]) {
     const s = STATIC_OG[pathname];
@@ -2416,10 +2417,10 @@ function resolveOgTags(pathname) {
       try {
         const { shop } = readSettings();
         const loc = [shop.suburb, shop.state].filter(Boolean).join(' ');
-        description = `Get in touch with the Outback Electronics team.${loc ? ` Based in ${loc},` : ''} Serving remote Australia by appointment.`;
-      } catch { description = 'Get in touch with the Outback Electronics team. Serving remote Australia by appointment.'; }
+        description = `Get in touch with the {{tradingName}} team.${loc ? ` Based in ${loc},` : ''} Serving remote Australia by appointment.`;
+      } catch { description = 'Get in touch with the {{tradingName}} team. Serving remote Australia by appointment.'; }
     }
-    return { title: s.title, description, image: s.image, url: OG_BASE_URL + pathname };
+    return { title: s.title, description, image: s.image, url: ogBaseUrl() + pathname };
   }
   // Product deep link: /product/<sku-or-id>
   if (pathname.startsWith('/product/')) {
@@ -2430,18 +2431,18 @@ function resolveOgTags(pathname) {
       if (p) {
         const price = p.price != null ? ` - $${Number(p.price).toLocaleString('en-AU', { minimumFractionDigits: 2 })}` : '';
         const body = p.description || p.desc;
-        const desc = body ? stripHtml(body).slice(0, 160) : `${p.name}. Available at Outback Electronics, rugged gear for remote Australia.`;
+        const desc = body ? stripHtml(body).slice(0, 160) : `${p.name}. Available at {{tradingName}}, rugged gear for remote Australia.`;
         return {
-          title: `${p.name}${price} - Outback Electronics`,
+          title: `${p.name}${price} - {{tradingName}}`,
           description: desc,
           image: (p.images && p.images[0]) || '/assets/og-image.webp',
-          url: `${OG_BASE_URL}/product/${encodeURIComponent(id)}`,
+          url: `${ogBaseUrl()}/product/${encodeURIComponent(id)}`,
           type: 'product',
         };
       }
     }
     // Unknown product SKU, still serve index.html so React can handle it
-    return { title: 'Outback Electronics', description: 'Rugged gear, solar kits, comms and tools built for remote Australia.', image: '/assets/og-image.webp', url: OG_BASE_URL + pathname };
+    return { title: '{{tradingName}}', description: 'Rugged gear, solar kits, comms and tools built for remote Australia.', image: '/assets/og-image.webp', url: ogBaseUrl() + pathname };
   }
   // Service deep link: /service/<id>
   if (pathname.startsWith('/service/')) {
@@ -2450,16 +2451,16 @@ function resolveOgTags(pathname) {
       const services = readServices();
       const s = services.find(x => String(x.id) === id || (x.slug && x.slug === id));
       if (s) {
-        const desc = s.description ? stripHtml(s.description).slice(0, 160) : `${s.name}. Expert service from Outback Electronics.`;
+        const desc = s.description ? stripHtml(s.description).slice(0, 160) : `${s.name}. Expert service from {{tradingName}}.`;
         return {
-          title: `${s.name} - Outback Electronics Services`,
+          title: `${s.name} - {{tradingName}} Services`,
           description: desc,
           image: (s.images && s.images[0]) || '/assets/og-image.webp',
-          url: `${OG_BASE_URL}/service/${encodeURIComponent(id)}`,
+          url: `${ogBaseUrl()}/service/${encodeURIComponent(id)}`,
         };
       }
     }
-    return { title: 'Services - Outback Electronics', description: 'Expert repairs and field service for rugged electronics.', image: '/assets/og-image.webp', url: OG_BASE_URL + pathname };
+    return { title: 'Services - {{tradingName}}', description: 'Expert repairs and field service for rugged electronics.', image: '/assets/og-image.webp', url: ogBaseUrl() + pathname };
   }
   // Tutorial series landing page: /tutorials/series/<slug>
   if (pathname.startsWith('/tutorials/series/')) {
@@ -2469,14 +2470,14 @@ function resolveOgTags(pathname) {
       if (parts.length) {
         const first = parts.slice().sort((a,b) => (Number(a.seriesOrder)||0) - (Number(b.seriesOrder)||0))[0];
         return {
-          title: `${first.series} - Outback Electronics`,
-          description: `A ${parts.length}-part tutorial series from Outback Electronics.`,
+          title: `${first.series} - {{tradingName}}`,
+          description: `A ${parts.length}-part tutorial series from {{tradingName}}.`,
           image: first.coverImage || '/assets/og-image.webp',
-          url: `${OG_BASE_URL}${pathname}`,
+          url: `${ogBaseUrl()}${pathname}`,
         };
       }
     }
-    return { title: 'Tutorials - Outback Electronics', description: 'Field guides, how-to videos and repair tutorials for off-grid gear and rugged electronics.', image: '/assets/og-image.webp', url: OG_BASE_URL + pathname };
+    return { title: 'Tutorials - {{tradingName}}', description: 'Field guides, how-to videos and repair tutorials for off-grid gear and rugged electronics.', image: '/assets/og-image.webp', url: ogBaseUrl() + pathname };
   }
   // Tutorial deep link: /tutorial/<slug-or-id>
   if (pathname.startsWith('/tutorial/')) {
@@ -2484,19 +2485,32 @@ function resolveOgTags(pathname) {
     if (id) {
       const t = readTutorials().find(x => x.status === 'Published' && (x.slug === id || String(x.id) === id));
       if (t) {
-        const desc = t.description ? stripHtml(t.description).slice(0, 160) : `${t.title} - a tutorial from Outback Electronics.`;
+        const desc = t.description ? stripHtml(t.description).slice(0, 160) : `${t.title} - a tutorial from {{tradingName}}.`;
         return {
-          title: `${t.title} - Outback Electronics`,
+          title: `${t.title} - {{tradingName}}`,
           description: desc,
           image: t.coverImage || '/assets/og-image.webp',
-          url: `${OG_BASE_URL}/tutorial/${encodeURIComponent(id)}`,
+          url: `${ogBaseUrl()}/tutorial/${encodeURIComponent(id)}`,
           type: 'article',
         };
       }
     }
-    return { title: 'Tutorials - Outback Electronics', description: 'Field guides, how-to videos and repair tutorials for off-grid gear and rugged electronics.', image: '/assets/og-image.webp', url: OG_BASE_URL + pathname };
+    return { title: 'Tutorials - {{tradingName}}', description: 'Field guides, how-to videos and repair tutorials for off-grid gear and rugged electronics.', image: '/assets/og-image.webp', url: ogBaseUrl() + pathname };
   }
   return null;
+}
+
+// Removes a separator left dangling when a placeholder resolved to nothing,
+// e.g. "Shop - " when the trading name has not been set yet.
+function fillOgText(text, b) {
+  if (typeof text !== 'string') return text;
+  return fillSiteContentPlaceholders(text, b).replace(/^\s*-(\s+|$)|(^|\s+)-\s*$/g, '').trim();
+}
+function resolveOgTags(pathname) {
+  const og = resolveOgTagsRaw(pathname);
+  if (!og) return og;
+  const b = getBusinessIdentity();
+  return { ...og, title: fillOgText(og.title, b), description: fillOgText(og.description, b) };
 }
 
 const ESC_HTML_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
@@ -2575,14 +2589,14 @@ function buildJsonLd(og, pathname) {
       ...((p.description || p.desc) ? { description: stripHtml(p.description || p.desc).slice(0, 500) } : {}),
       ...(p.sku ? { sku: p.sku } : {}),
       ...(p.brand ? { brand: { '@type': 'Brand', name: p.brand } } : {}),
-      ...(p.images && p.images.length > 0 ? { image: p.images.map(u => (u.startsWith('http') ? u : OG_BASE_URL + u)) } : {}),
+      ...(p.images && p.images.length > 0 ? { image: p.images.map(u => (u.startsWith('http') ? u : ogBaseUrl() + u)) } : {}),
       ...(specs.length > 0 ? { additionalProperty: specs } : {}),
       ...(price > 0 ? { offers: {
         '@type': 'Offer',
         price: price.toFixed(2),
         priceCurrency: 'AUD',
         availability: inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
-        url: `${OG_BASE_URL}/product/${encodeURIComponent(id)}`,
+        url: `${ogBaseUrl()}/product/${encodeURIComponent(id)}`,
       } } : {}),
     };
     return `<script type="application/ld+json">${JSON.stringify(ldProduct)}</script>`;
@@ -2603,9 +2617,9 @@ function buildJsonLd(og, pathname) {
     '@type': 'LocalBusiness',
     name: b.tradingName,
     legalName: b.tradingName,
-    url: OG_BASE_URL,
-    logo: `${OG_BASE_URL}/assets/logo.webp`,
-    image: `${OG_BASE_URL}/assets/og-image.webp`,
+    url: ogBaseUrl(),
+    logo: `${ogBaseUrl()}/assets/logo.webp`,
+    image: `${ogBaseUrl()}/assets/og-image.webp`,
     description: og.description,
     address,
     // ABN, published so business-verification and scam-checker crawlers can
@@ -2634,28 +2648,14 @@ function buildJsonLd(og, pathname) {
 //
 // The marker replaced here is <!--SSR_CONTENT--> inside #root in index.html.
 
-// Used when settings.db has no value for a field (fresh install, unreadable
-// file). These are the real registered details, so the raw HTML is never wrong.
-const BUSINESS_FALLBACK = {
-  tradingName: 'Outback Electronics',
-  abn: '99 496 591 295',
-  streetAddress: '137B Thistle Street',
-  suburb: 'Blackall',
-  state: 'QLD',
-  postcode: '4472',
-  phone: '0497 522 768',
-  email: 'outbackhutelectronics@gmail.com',
-  tagline: 'Built for where the signal ends',
-  description: 'An independent electronics outpost serving remote Australia. Arduino and microcontroller builds, PC and phone repairs, software and AI work, and off-grid power and comms gear.',
-};
-
+// The business's own details (name, ABN, address, phone, email, tagline,
+// description) come only from settings.db, edited in admin under Settings,
+// Shop. There are deliberately no defaults in code: a field left blank stays
+// blank and is left off the page, and the admin Overview lists what's missing.
 function getBusinessIdentity() {
   let shop = {};
   try { shop = readSettings().shop || {}; } catch {}
-  const pick = (key) => {
-    const v = shop[key];
-    return (typeof v === 'string' && v.trim()) ? v.trim() : BUSINESS_FALLBACK[key];
-  };
+  const pick = (key) => (typeof shop[key] === 'string' ? shop[key].trim() : '');
   const b = {
     tradingName: pick('tradingName'),
     abn: pick('abn'),
@@ -2667,26 +2667,29 @@ function getBusinessIdentity() {
     email: pick('email'),
     tagline: pick('tagline'),
     description: pick('description'),
+    siteUrl: pick('siteUrl'),
   };
   b.locality = [b.suburb, b.state, b.postcode].filter(Boolean).join(' ');
   b.address = [b.streetAddress, b.locality].filter(Boolean).join(', ');
   b.phoneHref = b.phone.replace(/[^\d+]/g, '');
+  b.website = b.siteUrl.replace(/^https?:\/\//i, '').replace(/\/+$/, '');
   return b;
 }
+function shopName() { return getBusinessIdentity().tradingName; }
 
-// Home-page hero copy. Editable in admin under Settings, Site Content. These
-// are the values used when a field has not been set there.
-//
-// Defined once, here. The server-rendered shell reads them directly and the SPA
-// receives the resolved values (injected as window.__SITE_CONTENT__ and served
-// by GET /api/settings), so the hero copy cannot drift between what a crawler
-// sees and what a browser renders.
-const HERO_DEFAULTS = {
-  heroEyebrow: 'EST. 2023 · APPOINTMENT ONLY · REMOTE ELECTRONICS SUPPORT',
-  // Last line renders italic in the accent colour, same convention as aiHeading.
-  heroHeadline: 'Built for where\nthe signal ends.',
-  heroSub: 'We sell and repair electronics for people living a long way from a city. Arduino and microcontroller gear, PC and phone parts, software tools, and off-grid equipment, serving remote Australia from {{location}} by appointment only.',
-};
+// Shop details the site shows publicly, for the admin Overview's "incomplete"
+// warning. Nothing fills these in automatically, so a gap must be visible.
+const REQUIRED_SHOP_FIELDS = [
+  ['tradingName', 'Trading name'], ['abn', 'ABN'], ['streetAddress', 'Street address'], ['suburb', 'Suburb / town'],
+  ['state', 'State'], ['postcode', 'Postcode'], ['phone', 'Phone'], ['email', 'Email'], ['siteUrl', 'Site URL'],
+  ['tagline', 'Tagline'], ['description', 'Description'], ['acknowledgmentPeople', 'Acknowledgment, People'],
+  ['acknowledgmentCountry', 'Acknowledgment, Country'],
+];
+function missingShopFields() {
+  let shop = {};
+  try { shop = readSettings().shop || {}; } catch {}
+  return REQUIRED_SHOP_FIELDS.filter(([k]) => !String(shop[k] || '').trim()).map(([key, label]) => ({ key, label }));
+}
 
 // Site content may reference live business details with the same {{...}}
 // placeholder convention the policy documents use, so copy never hardcodes an
@@ -2696,6 +2699,7 @@ function fillSiteContentPlaceholders(text, b) {
   const values = {
     location: [b.suburb, b.state].filter(Boolean).join(', '),
     tradingName: b.tradingName,
+    tagline: b.tagline,
     abn: b.abn,
     phone: b.phone,
     email: b.email,
@@ -2713,12 +2717,8 @@ function getSiteContent() {
   let stored = {};
   try { stored = readSettings().siteContent || {}; } catch {}
   const b = getBusinessIdentity();
-  const out = { ...stored };
-  for (const [key, fallback] of Object.entries(HERO_DEFAULTS)) {
-    const v = stored[key];
-    out[key] = (typeof v === 'string' && v.trim()) ? v.trim() : fallback;
-  }
-  for (const key of Object.keys(out)) out[key] = fillSiteContentPlaceholders(out[key], b);
+  const out = {};
+  for (const [key, v] of Object.entries(stored)) out[key] = fillSiteContentPlaceholders(typeof v === 'string' ? v.trim() : v, b);
   return out;
 }
 
@@ -2746,15 +2746,18 @@ function ssrPrice(p) {
 // The identity block. Repeated on every page because a crawler may land on any
 // URL, and a scam checker looking for an ABN should find it wherever it looks.
 function ssrIdentityBlock(b) {
+  const rows = [
+    ['Registered business name', b.tradingName && escHtml(b.tradingName)],
+    ['ABN', b.abn && escHtml(b.abn)],
+    ['Address', b.address && `${escHtml(b.address)}, Australia`],
+    ['Phone', b.phone && `<a href="tel:${escHtml(b.phoneHref)}">${escHtml(b.phone)}</a>`],
+    ['Email', b.email && `<a href="mailto:${escHtml(b.email)}">${escHtml(b.email)}</a>`],
+    ['Website', b.website && escHtml(b.website)],
+  ].filter(([, v]) => v);
   return `<section aria-labelledby="ssr-business-details" style="border:1px solid var(--line);background:var(--paper);padding:20px;margin:32px 0;">
 <h2 id="ssr-business-details" style="font-size:18px;margin-bottom:12px;">Business details</h2>
 <dl style="margin:0;font-size:14px;line-height:1.9;">
-<dt style="font-weight:600;">Registered business name</dt><dd style="margin:0 0 8px;">${escHtml(b.tradingName)}</dd>
-<dt style="font-weight:600;">ABN</dt><dd style="margin:0 0 8px;">${escHtml(b.abn)}</dd>
-<dt style="font-weight:600;">Address</dt><dd style="margin:0 0 8px;">${escHtml(b.address)}, Australia</dd>
-<dt style="font-weight:600;">Phone</dt><dd style="margin:0 0 8px;"><a href="tel:${escHtml(b.phoneHref)}">${escHtml(b.phone)}</a></dd>
-<dt style="font-weight:600;">Email</dt><dd style="margin:0 0 8px;"><a href="mailto:${escHtml(b.email)}">${escHtml(b.email)}</a></dd>
-<dt style="font-weight:600;">Website</dt><dd style="margin:0 0 8px;">outbackelectronics.com.au</dd>
+${rows.map(([k, v]) => `<dt style="font-weight:600;">${k}</dt><dd style="margin:0 0 8px;">${v}</dd>`).join('\n')}
 <dt style="font-weight:600;">Access</dt><dd style="margin:0;">By appointment only. There is no public shopfront. Mail-in repairs and returns accepted at the address above.</dd>
 </dl>
 </section>`;
@@ -2762,12 +2765,17 @@ function ssrIdentityBlock(b) {
 
 function ssrHeader(b) {
   const nav = SSR_NAV.map(([href, label]) => `<a href="${href}" style="padding:8px 12px;font-size:13px;">${escHtml(label)}</a>`).join('');
+  const contact = [
+    b.abn && `<span>ABN ${escHtml(b.abn)}</span>`,
+    b.phone && `<span><a href="tel:${escHtml(b.phoneHref)}">${escHtml(b.phone)}</a></span>`,
+    b.email && `<span><a href="mailto:${escHtml(b.email)}">${escHtml(b.email)}</a></span>`,
+  ].filter(Boolean).join('');
   return `<div class="utility-bar"><div class="container">
-<div class="links"><span>ABN ${escHtml(b.abn)}</span><span><a href="tel:${escHtml(b.phoneHref)}">${escHtml(b.phone)}</a></span><span><a href="mailto:${escHtml(b.email)}">${escHtml(b.email)}</a></span></div>
-<div class="links"><span>${escHtml(b.address)}</span><span>By appointment only</span></div>
+<div class="links">${contact}</div>
+<div class="links">${b.address ? `<span>${escHtml(b.address)}</span>` : ''}<span>By appointment only</span></div>
 </div></div>
 <header class="topnav"><div class="container"><div class="row">
-<a class="logo" href="/"><span class="logo-text"><strong style="font-size:18px;">${escHtml(b.tradingName)}</strong><span class="sub">${escHtml(b.tagline)}</span></span></a>
+<a class="logo" href="/"><span class="logo-text"><strong style="font-size:18px;">${escHtml(b.tradingName)}</strong>${b.tagline ? `<span class="sub">${escHtml(b.tagline)}</span>` : ''}</span></a>
 <nav class="mainlinks" aria-label="Main">${nav}</nav>
 </div></div></header>`;
 }
@@ -2775,21 +2783,22 @@ function ssrHeader(b) {
 function ssrFooter(b) {
   const links = SSR_NAV.concat([['/policies', 'Policies'], ['/quote', 'Request a quote'], ['/gift-cards', 'Gift cards'], ['/memberships', 'Memberships']])
     .map(([href, label]) => `<li><a href="${href}">${escHtml(label)}</a></li>`).join('');
+  const contact = [
+    b.address && `${escHtml(b.address)}, Australia`,
+    b.phone && `Phone <a href="tel:${escHtml(b.phoneHref)}">${escHtml(b.phone)}</a>`,
+    b.email && `Email <a href="mailto:${escHtml(b.email)}">${escHtml(b.email)}</a>`,
+    b.abn && `ABN ${escHtml(b.abn)}`,
+  ].filter(Boolean).join('<br />\n');
   return `<footer><div class="container">
 <div style="display:grid;grid-template-columns:2fr 1fr;gap:32px;">
 <div>
 <div style="font-size:16px;font-weight:700;">${escHtml(b.tradingName)}</div>
-<p style="margin-top:12px;font-size:13px;max-width:420px;line-height:1.6;">${escHtml(b.description)}</p>
-<p style="margin-top:12px;font-size:13px;line-height:1.9;">
-${escHtml(b.address)}, Australia<br />
-Phone <a href="tel:${escHtml(b.phoneHref)}">${escHtml(b.phone)}</a><br />
-Email <a href="mailto:${escHtml(b.email)}">${escHtml(b.email)}</a><br />
-ABN ${escHtml(b.abn)}
-</p>
+${b.description ? `<p style="margin-top:12px;font-size:13px;max-width:420px;line-height:1.6;">${escHtml(b.description)}</p>` : ''}
+${contact ? `<p style="margin-top:12px;font-size:13px;line-height:1.9;">\n${contact}\n</p>` : ''}
 </div>
 <div><h3>Site</h3><ul>${links}</ul></div>
 </div>
-<div class="baseline"><span>&copy; 2023-${new Date().getFullYear()} ${escHtml(b.tradingName)} &middot; ABN ${escHtml(b.abn)}</span></div>
+<div class="baseline"><span>&copy; 2023-${new Date().getFullYear()} ${escHtml(b.tradingName)}${b.abn ? ` &middot; ABN ${escHtml(b.abn)}` : ''}</span></div>
 </div></footer>`;
 }
 
@@ -2807,15 +2816,7 @@ function ssrHomeBody(b) {
         const desc = s.description ? ` - ${escHtml(stripHtml(s.description).slice(0, 140))}` : '';
         return `<li><a href="${href}">${escHtml(s.name || 'Service')}</a>${desc}</li>`;
       }).join('')}</ul>`
-    : `<ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.8;">
-<li>Electronics and PCB repair, component-level SMD rework</li>
-<li>PC, laptop, phone, tablet and console repair</li>
-<li>Custom embedded hardware, PCB design and firmware</li>
-<li>Software, web and app development</li>
-<li>Solar, 12V and off-grid power systems</li>
-<li>Networking, CCTV and security systems</li>
-<li>Data recovery, digital forensics and cybersecurity</li>
-</ul>`;
+    : '';
 
   const productHtml = products.length
     ? `<ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.8;">${products.map(p => {
@@ -2828,40 +2829,47 @@ function ssrHomeBody(b) {
   const sc = getSiteContent();
   // Matches the SPA: every line but the last is a plain line, the last renders
   // italic in the accent colour.
-  const headline = String(sc.heroHeadline).split('\n').map((line, i, arr) =>
+  const headline = String(sc.heroHeadline || '').split('\n').map((line, i, arr) =>
     i < arr.length - 1
       ? `${escHtml(line)}<br />`
       : `<span class="italic" style="color:var(--rust);">${escHtml(line)}</span>`
   ).join('');
 
   return `<section class="hero-section"><div class="container" style="padding:48px 0;">
-<p class="eyebrow">${escHtml(sc.heroEyebrow)}</p>
-<h1 class="serif" style="font-size:56px;margin-top:12px;line-height:1.05;">${headline}</h1>
-<p style="margin-top:18px;font-size:17px;max-width:640px;line-height:1.6;">${escHtml(sc.heroSub)}</p>
-<p style="margin-top:14px;font-size:15px;">
-Call <a href="tel:${escHtml(b.phoneHref)}">${escHtml(b.phone)}</a> or email <a href="mailto:${escHtml(b.email)}">${escHtml(b.email)}</a> &middot; ABN ${escHtml(b.abn)}
-</p>
+${sc.heroEyebrow ? `<p class="eyebrow">${escHtml(sc.heroEyebrow)}</p>` : ''}
+<h1 class="serif" style="font-size:56px;margin-top:12px;line-height:1.05;">${headline || escHtml(b.tradingName)}</h1>
+${sc.heroSub ? `<p style="margin-top:18px;font-size:17px;max-width:640px;line-height:1.6;">${escHtml(sc.heroSub)}</p>` : ''}
+${ssrContactLine(b, false)}
 </div></section>
 <div class="container">
 ${ssrIdentityBlock(b)}
-<section style="margin:32px 0;"><h2 style="font-size:22px;margin-bottom:12px;">What we do</h2>${serviceHtml}</section>
+${serviceHtml ? `<section style="margin:32px 0;"><h2 style="font-size:22px;margin-bottom:12px;">What we do</h2>${serviceHtml}</section>` : ''}
 ${productHtml ? `<section style="margin:32px 0;"><h2 style="font-size:22px;margin-bottom:12px;">From the shop</h2>${productHtml}<p style="margin-top:10px;font-size:14px;"><a href="/shop">Browse the full shop</a></p></section>` : ''}
 </div>`;
 }
 
 // Every other main-site route: real heading and description from the same
 // metadata the OG tags use, plus the identity block.
+function ssrContactLine(b, withName) {
+  const parts = [
+    withName && b.tradingName && escHtml(b.tradingName),
+    b.abn && `ABN ${escHtml(b.abn)}`,
+    withName && b.address && escHtml(b.address),
+    b.phone && `<a href="tel:${escHtml(b.phoneHref)}">${escHtml(b.phone)}</a>`,
+    b.email && `<a href="mailto:${escHtml(b.email)}">${escHtml(b.email)}</a>`,
+  ].filter(Boolean);
+  return parts.length ? `<p style="margin-top:14px;font-size:15px;">\n${parts.join(' &middot;\n')}\n</p>` : '';
+}
+
 function ssrPageBody(b, og, pathname) {
-  const heading = String(og && og.title || 'Outback Electronics').replace(/\s+-\s+Outback Electronics.*$/, '').trim() || 'Outback Electronics';
-  const lead = String(og && og.description || b.description);
+  // og.title is "<page> - <trading name>", the heading is just the page part.
+  const title = String(og && og.title || '');
+  const heading = (b.tradingName && title.endsWith(` - ${b.tradingName}`) ? title.slice(0, -(` - ${b.tradingName}`).length) : title).trim() || b.tradingName;
+  const lead = String(og && og.description || b.description || '');
   return `<div class="container" style="padding-top:40px;">
 <h1 class="serif" style="font-size:44px;line-height:1.1;">${escHtml(heading)}</h1>
 <p style="margin-top:16px;font-size:16px;max-width:680px;line-height:1.6;">${escHtml(lead)}</p>
-<p style="margin-top:14px;font-size:15px;">
-${escHtml(b.tradingName)} &middot; ABN ${escHtml(b.abn)} &middot; ${escHtml(b.address)} &middot;
-<a href="tel:${escHtml(b.phoneHref)}">${escHtml(b.phone)}</a> &middot;
-<a href="mailto:${escHtml(b.email)}">${escHtml(b.email)}</a>
-</p>
+${ssrContactLine(b, true)}
 ${ssrIdentityBlock(b)}
 </div>`;
 }
@@ -2904,8 +2912,26 @@ function siteContentScript() {
   return `<script>window.__SITE_CONTENT__=${payload};</script>`;
 }
 
+// index.html ships with an empty <title> and empty site-level meta; these are
+// the site-wide values from Settings, Shop. Page-specific tags are applied on
+// top by serveIndexWithOg.
+function applySiteHead(html, b) {
+  const title = [b.tradingName, b.tagline].filter(Boolean).join(' - ');
+  const url = ogBaseUrl();
+  return html
+    .replace(/<title>[^<]*<\/title>/, `<title>${escOg(title)}</title>`)
+    .replace(/<meta name="description" content=""\s*\/?>/, `<meta name="description" content="${escOg(b.description)}" />`)
+    .replace(/<meta property="og:title" content=""\s*\/?>/, `<meta property="og:title" content="${escOg(title)}" />`)
+    .replace(/<meta property="og:description" content=""\s*\/?>/, `<meta property="og:description" content="${escOg(b.description)}" />`)
+    .replace(/<meta property="og:site_name"[^>]*\/?>/, `<meta property="og:site_name" content="${escOg(b.tradingName)}" />`)
+    .replace(/<meta property="og:url" content=""\s*\/?>/, `<meta property="og:url" content="${escOg(url)}" />`)
+    .replace(/<meta name="twitter:title" content=""\s*\/?>/, `<meta name="twitter:title" content="${escOg(title)}" />`)
+    .replace(/<meta name="twitter:description" content=""\s*\/?>/, `<meta name="twitter:description" content="${escOg(b.description)}" />`);
+}
+
 function injectBusinessMeta(html) {
   try {
+    html = applySiteHead(html, getBusinessIdentity());
     const meta = ssrBusinessMeta(getBusinessIdentity()) + '\n' + siteContentScript();
     if (html.includes('<!--BUSINESS_META-->')) {
       return html.replace(/<!--BUSINESS_META-->[\s\S]*?<!--\/BUSINESS_META-->/, `<!--BUSINESS_META-->\n${meta}\n<!--/BUSINESS_META-->`);
@@ -2919,19 +2945,13 @@ function injectBusinessMeta(html) {
 
 function ssrBusinessMeta(b) {
   return [
-    `<meta name="abn" content="${escOg(b.abn)}" />`,
-    `<meta name="business:abn" content="${escOg(b.abn)}" />`,
-    `<meta name="business:legal_name" content="${escOg(b.tradingName)}" />`,
-    `<meta name="business:contact_data:street_address" content="${escOg(b.streetAddress)}" />`,
-    `<meta name="business:contact_data:locality" content="${escOg(b.suburb)}" />`,
-    `<meta name="business:contact_data:region" content="${escOg(b.state)}" />`,
-    `<meta name="business:contact_data:postal_code" content="${escOg(b.postcode)}" />`,
-    `<meta name="business:contact_data:country_name" content="Australia" />`,
-    `<meta name="business:contact_data:phone_number" content="${escOg(b.phone)}" />`,
-    `<meta name="business:contact_data:email" content="${escOg(b.email)}" />`,
-    `<meta name="geo.region" content="AU-${escOg(b.state)}" />`,
-    `<meta name="geo.placename" content="${escOg(b.suburb)}" />`,
-  ].join('\n');
+    ['abn', b.abn], ['business:abn', b.abn], ['business:legal_name', b.tradingName],
+    ['business:contact_data:street_address', b.streetAddress], ['business:contact_data:locality', b.suburb],
+    ['business:contact_data:region', b.state], ['business:contact_data:postal_code', b.postcode],
+    ['business:contact_data:country_name', (b.suburb || b.state) ? 'Australia' : ''],
+    ['business:contact_data:phone_number', b.phone], ['business:contact_data:email', b.email],
+    ['geo.region', b.state && `AU-${b.state}`], ['geo.placename', b.suburb],
+  ].filter(([, v]) => v).map(([name, v]) => `<meta name="${name}" content="${escOg(v)}" />`).join('\n');
 }
 
 function serveIndexWithOg(req, res, og, pathname) {
@@ -2941,7 +2961,7 @@ function serveIndexWithOg(req, res, og, pathname) {
     const ogType = og.type === 'product' ? 'product' : (og.type === 'article' ? 'article' : 'website');
     const isHome = pathname === '/' || pathname === '/home';
     const heroPreload = isHome ? getHeroImagePreload() : '';
-    const absoluteImage = og.image && og.image.startsWith('/') ? OG_BASE_URL + og.image : og.image;
+    const absoluteImage = og.image && og.image.startsWith('/') ? ogBaseUrl() + og.image : og.image;
     const jsonLd = buildJsonLd(og, pathname);
     const extraHead = [heroPreload, jsonLd].filter(Boolean).join('\n');
     const html = injectBusinessMeta(injectSsrShell(template, pathname, og))
@@ -2994,36 +3014,47 @@ const OFFLINE_HTML   = loadErrorPage('offline.html');
 // templates when they're served directly as static files (e.g. /offline.html
 // via the service worker, or a direct request for /401.html).
 // Same wording as acknowledgementOfCountry() in site-chrome.jsx, for the static
-// error/offline pages, which don't run React.
+// error/offline pages, which don't run React. Business name, People and Country
+// all come from Settings, Shop.
 function acknowledgementOfCountry(shop) {
   const people = String(shop?.acknowledgmentPeople || '').trim().replace(/\s+peoples?$/i, '');
   const country = String(shop?.acknowledgmentCountry || '').trim().replace(/\s+country$/i, '') || people;
   if (!people && !country) return null;
-  const business = shop?.tradingName || shop?.name || 'Outback Electronics';
+  const business = String(shop?.tradingName || '').trim();
   const place = [shop?.suburb, shop?.state].map(v => String(v || '').trim()).filter(Boolean).join(', ');
   return {
-    respect: `${business} acknowledges the ${people || country} people as the Traditional Custodians of the Country on which we operate. We pay our respects to Elders past and present, and extend that respect to all Aboriginal and Torres Strait Islander peoples.`,
+    respect: `${business ? `${business} acknowledges` : 'We acknowledge'} the ${people || country} people as the Traditional Custodians of the Country on which we operate. We pay our respects to Elders past and present, and extend that respect to all Aboriginal and Torres Strait Islander peoples.`,
     based: `Proudly based on ${country} Country${place ? `, ${place}` : ''}.`,
   };
 }
 
+// Fills the static template pages (error pages, offline page) from Settings,
+// Shop: {{tradingName}} anywhere in the page, and the <!--SHOP_...--> markers,
+// which hold no text of their own. Used both for pages sent through
+// sendErrorPage() and when the same files are served directly (e.g.
+// /offline.html via the service worker).
 function applyShopTemplate(html) {
   let body = html;
-  try {
-    const { shop } = readSettings();
-    const loc = [shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ') || 'Central Queensland, Australia';
-    body = body.replace(/<!--SHOP_LOCATION-->[^<]*/g, `<!--SHOP_LOCATION-->${loc}`);
-    const name = shop.tradingName || shop.name || 'Outback Electronics Pty Ltd';
-    const copyright = `© 2023–${new Date().getFullYear()} ${name}${shop.abn ? ` · ABN ${shop.abn}` : ''}`;
-    body = body.replace(/<!--SHOP_COPYRIGHT-->[^<]*/g, `<!--SHOP_COPYRIGHT-->${copyright}`);
-    const ack = acknowledgementOfCountry(shop);
-    if (ack) {
-      body = body.replace(/<!--SHOP_ACK_RESPECT-->[^<]*/g, `<!--SHOP_ACK_RESPECT-->${escHtml(ack.respect)}`);
-      body = body.replace(/<!--SHOP_ACK_BASED-->[^<]*/g, `<!--SHOP_ACK_BASED-->${escHtml(ack.based)}`);
-    } else {
-      body = body.replace(/<div class="ack">[\s\S]*?<\/div>/g, '');
-    }
-  } catch {}
+  let shop = {};
+  try { shop = readSettings().shop || {}; } catch {}
+  const name = String(shop.tradingName || '').trim();
+  if (!name) {
+    // Drop the separator a title like "Drive - {{tradingName}}" would leave behind.
+    body = body.replace(/ - \{\{tradingName\}\}/g, '').replace(/\{\{tradingName\}\} - /g, '');
+  }
+  body = body.replace(/\{\{tradingName\}\}/g, escHtml(name)).replace(/(content="[^"]*?) {2,}/g, '$1 ');
+  const loc = [shop.suburb, shop.state, shop.postcode].map(v => String(v || '').trim()).filter(Boolean).join(' ');
+  body = body.replace(/<!--SHOP_LOCATION-->[^<]*/g, `<!--SHOP_LOCATION-->${escHtml(loc)}`);
+  const abn = String(shop.abn || '').trim();
+  const copyright = `© 2023–${new Date().getFullYear()}${name ? ` ${name}` : ''}${abn ? ` · ABN ${abn}` : ''}`;
+  body = body.replace(/<!--SHOP_COPYRIGHT-->[^<]*/g, `<!--SHOP_COPYRIGHT-->${escHtml(copyright)}`);
+  const ack = acknowledgementOfCountry(shop);
+  if (ack) {
+    body = body.replace(/<!--SHOP_ACK_RESPECT-->[^<]*/g, `<!--SHOP_ACK_RESPECT-->${escHtml(ack.respect)}`);
+    body = body.replace(/<!--SHOP_ACK_BASED-->[^<]*/g, `<!--SHOP_ACK_BASED-->${escHtml(ack.based)}`);
+  } else {
+    body = body.replace(/<div class="ack">[\s\S]*?<\/div>/g, '');
+  }
   return body;
 }
 
@@ -3046,7 +3077,7 @@ function sendMaintenance(req, res) {
   const emailHtml = email
     ? `<p class="note">Need help? Shoot us an email at <a href="mailto:${email}">${email}</a>!</p>`
     : '';
-  const html = MAINTENANCE_HTML.replace(/\{\{CONTACT_EMAIL\}\}/g, emailHtml);
+  const html = applyShopTemplate(MAINTENANCE_HTML.replace(/\{\{CONTACT_EMAIL\}\}/g, emailHtml));
   gzipSend(req, res, 503, {
     'Content-Type': 'text/html; charset=utf-8',
     'Cache-Control': 'no-cache, must-revalidate',
@@ -3142,7 +3173,8 @@ async function sendEmail({ to, subject, html, replyTo, attachments }) {
   const transport = getMailer();
   if (!transport) { console.error('[email] not sent, SMTP is not configured →', to, '|', subject); return false; }
   const smtp = getSmtpConfig();
-  const fromAddress = `Outback Electronics <${smtp.user || 'noreply@outbackelectronics.com.au'}>`;
+  const name = shopName().replace(/["<>\r\n]/g, '');
+  const fromAddress = name ? `"${name}" <${smtp.user}>` : smtp.user;
   const text = html.replace(/<[^>]+>/g, '').replace(/\n{3,}/g, '\n\n').trim();
   const msg = { from: fromAddress, to, subject, html, text };
   if (replyTo) msg.replyTo = replyTo;
@@ -3164,7 +3196,8 @@ function escHtml(str) {
 // Shared HTML wrapper
 function emailHtml(title, bodyHtml) {
   const { shop } = readSettings();
-  const address = shop.address || '';
+  const b = getBusinessIdentity();
+  const footer = [b.address, 'Appointment only', b.website].filter(Boolean).map(escHtml).join(' · ');
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
 <style>
   body{margin:0;padding:0;background:#f4ede1;font-family:Arial,sans-serif;color:#1f1a14}
@@ -3182,12 +3215,12 @@ function emailHtml(title, bodyHtml) {
   .ftr{padding:16px 32px;border-top:1px solid #d8cdb6;font-size:11px;color:#8b7e69;font-family:monospace}
 </style></head><body>
 <div class="wrap">
-  <div class="hdr"><div class="hdr-title">OUTBACK · ELECTRONICS</div></div>
+  <div class="hdr"><div class="hdr-title">${escHtml(b.tradingName.toUpperCase())}</div></div>
   <div class="body">
     <h1>${title}</h1>
     ${bodyHtml}
   </div>
-  <div class="ftr">${address} · Appointment only · outbackelectronics.com.au</div>
+  <div class="ftr">${footer}</div>
 </div></body></html>`;
 }
 
@@ -3286,7 +3319,7 @@ function emailQuoteFormal({ quoteRef, quoteId, quoteToken, customerName, validDa
     subject: `Your quote - ${quoteRef}`,
     html: emailHtml(`Quote - ${quoteRef}`, `
       <p>Hi${customerName ? ` ${escHtml(customerName.split(' ')[0])}` : ''},</p>
-      <p>Thank you for your enquiry. Please find your quote from Outback Electronics below.</p>
+      <p>Thank you for your enquiry. Please find your quote from ${escHtml(shopName())} below.</p>
       <div class="detail">
         <dt>REFERENCE</dt><dd>${escHtml(quoteRef)}</dd>
         <dt>VALID UNTIL</dt><dd>${validUntil}</dd>
@@ -3561,7 +3594,7 @@ function emailBackInStock({ productName, variantName, url }) {
   return {
     subject: `Back in stock: ${label}`,
     html: emailHtml('Back in stock', `
-      <p>Good news, <strong>${escHtml(label)}</strong> is back in stock at Outback Electronics.</p>
+      <p>Good news, <strong>${escHtml(label)}</strong> is back in stock at ${escHtml(shopName())}.</p>
       <p>Stock on these is limited and we can't hold it, so it is first in, first served.</p>
       <a class="btn" href="${escHtml(url)}">View the product &rarr;</a>
       <p style="margin-top:24px;font-size:12px;color:#8b7e69">You asked to be told when this came back in. This is a one-off message, you are not subscribed to anything.</p>
@@ -3574,7 +3607,7 @@ function emailMembershipWelcome({ customerName, tierName }) {
     subject: `Welcome to ${tierName} membership`,
     html: emailHtml(`Welcome to ${escHtml(tierName)}!`, `
       <p>Hi${customerName ? ` ${escHtml(customerName.split(' ')[0])}` : ''},</p>
-      <p>You're now a <strong>${escHtml(tierName)}</strong> member of Outback Electronics. Thanks for your support!</p>
+      <p>You're now a <strong>${escHtml(tierName)}</strong> member of ${escHtml(shopName())}. Thanks for your support!</p>
       <p>Your membership benefits are active immediately. Log in to the portal to see what's available to you.</p>
       <a class="btn" href="${getSiteUrl()}/portal">Go to portal →</a>
     `),
@@ -3595,10 +3628,10 @@ function emailMembershipCancelled({ customerName, tierName }) {
 
 function emailPortalWelcome({ username, displayName }) {
   return {
-    subject: 'Welcome to Outback Electronics',
+    subject: `Welcome to ${shopName()}`.trim(),
     html: emailHtml('Welcome!', `
       <p>Hi ${escHtml(displayName || username)},</p>
-      <p>Your Outback Electronics account is ready. You can now track repairs, request quotes, and manage your membership from the portal.</p>
+      <p>Your ${escHtml(shopName())} account is ready. You can now track repairs, request quotes, and manage your membership from the portal.</p>
       <a class="btn" href="${getSiteUrl()}/portal">Go to your portal →</a>
     `),
   };
@@ -3619,10 +3652,10 @@ function emailOrderTracking({ customerName, orderId, trackingToken }) {
 
 function emailPasswordReset({ displayName, resetUrl }) {
   return {
-    subject: 'Reset your password - Outback Electronics',
+    subject: `Reset your password${shopName() ? ` - ${shopName()}` : ''}`,
     html: emailHtml('Reset your password', `
       <p>Hi ${escHtml(displayName)},</p>
-      <p>We received a request to reset your Outback Electronics password. Click the button below to choose a new one. This link expires in 1 hour.</p>
+      <p>We received a request to reset your ${escHtml(shopName())} password. Click the button below to choose a new one. This link expires in 1 hour.</p>
       <a class="btn" href="${resetUrl}">Reset password →</a>
       <p style="margin-top:20px;font-size:12px;color:#8b7e69;">If you didn't request a password reset, you can safely ignore this email.</p>
     `),
@@ -3741,7 +3774,7 @@ function emailWarrantyConfirmation({ regId, customerName, orderId, receivedDate,
   return {
     subject: `[WARRANTY] Custom PC registration confirmed - ${regId}`,
     html: emailHtml('Your build is registered.', `
-      <p>Hi ${escHtml(firstName)}, thanks for registering your custom PC build with Outback Electronics.</p>
+      <p>Hi ${escHtml(firstName)}, thanks for registering your custom PC build with ${escHtml(shopName())}.</p>
       <div class="detail">
         <dt>REGISTRATION ID</dt><dd>${escHtml(regId)}</dd>
         <dt>ORDER ID</dt><dd>${escHtml(orderId)}</dd>
@@ -3783,9 +3816,9 @@ function emailStaffWarrantyRegistration({ regId, name, email, orderId, receivedD
 function emailGiftCard({ code, balance, customerName }) {
   const name = customerName ? `, ${customerName.split(' ')[0]}` : '';
   return {
-    subject: `Your $${balance} Outback Electronics Gift Card`,
+    subject: `Your $${balance} ${shopName()} Gift Card`.replace(/ {2,}/g, ' '),
     html: emailHtml('Your Gift Card is here!', `
-      <p>Thanks${name}! Your Outback Electronics gift card is ready to use.</p>
+      <p>Thanks${name}! Your ${escHtml(shopName())} gift card is ready to use.</p>
       <div class="detail" style="text-align:center">
         <dt>YOUR GIFT CARD CODE</dt>
         <dd style="font-family:monospace;font-size:22px;letter-spacing:.15em;color:#1f1a14;margin-top:6px">${code}</dd>
@@ -3866,21 +3899,24 @@ function geocodeAddress(address) {
 }
 
 let _shopCoordsCache = { address: '', coords: null };
-// Resolves the shop's lat/lng from its address in settings.db, geocoding (and caching)
-// on first use or whenever the saved address changes. Falls back to a fixed Blackall
-// coordinate if no address is set or geocoding fails.
+// The shop's lat/lng, from Settings, Shop only: the Map latitude/longitude
+// fields when set, otherwise the saved street address geocoded (and cached
+// until it changes). Returns null when neither is set or the address can't be
+// found; there is no built-in location to fall back to.
 async function getShopCoords() {
-  const settings = readSettings();
-  const address = String(settings?.shop?.address || '').trim();
-  if (!address) return { lat: SHOP_LAT, lng: SHOP_LNG };
+  const shop = readSettings()?.shop || {};
+  const lat = parseFloat(shop.mapLat), lng = parseFloat(shop.mapLng);
+  if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+  const b = getBusinessIdentity();
+  const address = (b.address ? `${b.address}, Australia` : String(shop.address || '').trim());
+  if (!address) return null;
   if (_shopCoordsCache.address === address && _shopCoordsCache.coords) return _shopCoordsCache.coords;
   const coords = await geocodeAddress(address);
-  if (coords) {
-    _shopCoordsCache = { address, coords };
-    return coords;
-  }
-  return { lat: SHOP_LAT, lng: SHOP_LNG };
+  if (!coords) return null;
+  _shopCoordsCache = { address, coords };
+  return coords;
 }
+const SHOP_LOCATION_UNSET = { error: 'shop_location_unset', message: "Travel distance can't be worked out right now. Please call or email us to arrange this." };
 
 function haversineKm(lat1, lng1, lat2, lng2) {
   const R = 6371;
@@ -4223,7 +4259,7 @@ function buildInvoicePdf(order, shop) {
     const RUST = '#b5451b';
     const OCHRE = '#d39a37';
     const fmtMoney = n => { const v = Number(n) || 0; return `${v < 0 ? '-' : ''}$${Math.abs(v).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; };
-    const shopName = shop.tradingName || shop.name || 'Outback Electronics';
+    const shopName = String(shop.tradingName || '').trim();
     const shopAddress = shop.address || [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ');
     const logoPath = path.join(__dirname, 'assets', 'logo.png');
     const hasLogo = fs.existsSync(logoPath);
@@ -4310,7 +4346,7 @@ function buildQuotePdf(quote, shop) {
     const RUST = '#b5451b';
     const OCHRE = '#d39a37';
     const fmtMoney = n => { const v = Number(n) || 0; return `${v < 0 ? '-' : ''}$${Math.abs(v).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; };
-    const shopName = shop.tradingName || shop.name || 'Outback Electronics';
+    const shopName = String(shop.tradingName || '').trim();
     const shopAddress = shop.address || [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ');
     const logoPath = path.join(__dirname, 'assets', 'logo.png');
     const hasLogo = fs.existsSync(logoPath);
@@ -4863,7 +4899,7 @@ function buildHddReportPdf(report, shop) {
       failing:  { bg: '#fbe9e4', fg: RUST,      label: 'FAILING' },
     };
     const pageBottom = doc.page.height - 50; // matches the bottom margin
-    const shopName = shop.tradingName || shop.name || 'Outback Electronics';
+    const shopName = String(shop.tradingName || '').trim();
     const shopAddress = shop.address || [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ');
     const logoPath = path.join(__dirname, 'assets', 'logo.png');
     const hasLogo = fs.existsSync(logoPath);
@@ -5037,7 +5073,7 @@ function buildSafetyNoticePdf(notice, shop) {
 
     const RUST = '#b5451b';
     const pageBottom = doc.page.height - 50;
-    const shopName = shop.tradingName || shop.name || 'Outback Electronics';
+    const shopName = String(shop.tradingName || '').trim();
     const shopAddress = shop.address || [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ');
     const logoPath = path.join(__dirname, 'assets', 'logo.png');
     const hasLogo = fs.existsSync(logoPath);
@@ -5114,11 +5150,11 @@ function buildSafetyNoticePdf(notice, shop) {
     y = sectionTitle('Customer Declaration and Assumption of Risk', y);
     y = para('I acknowledge and declare that:', y, { gap: 4 });
     const decls = [
-      'Outback Electronics has advised me that the device described above has been found to have a severe electrical fault and has warned me that it is unsafe to operate.',
+      `${shopName} has advised me that the device described above has been found to have a severe electrical fault and has warned me that it is unsafe to operate.`,
       // Default on. The usual case is a fault that arrived with the device, and the
       // notice is materially weaker if it does not say so on its face.
       notice.faultPreExisting === false ? null
-        : 'I understand that the fault was identified during assessment, that it was present in the device when it was submitted, and that it was not caused by Outback Electronics. No repair to the faulty components has been carried out.',
+        : `I understand that the fault was identified during assessment, that it was present in the device when it was submitted, and that it was not caused by ${shopName}. No repair to the faulty components has been carried out.`,
       notice.repairDeclined === false ? null
         : 'I have been quoted for the parts and work required to make the device serviceable, and I have declined that repair. I have asked for the device to be returned to me unrepaired.',
       // Mains-connected by default: a desktop PC is the common case, and the
@@ -5128,7 +5164,7 @@ function buildSafetyNoticePdf(notice, shop) {
         : 'I have been advised not to use, power on, or connect the device. Because this device draws power from the mains supply, I have been advised that a licensed electrician should be consulted before it is connected to mains power again.',
       'I am taking possession of the device against that advice, of my own free choice, and with full knowledge of the risk.',
       'I accept full responsibility for the device from the moment it is released to me, and for any loss, damage to property, fire, personal injury, or death that may result from its possession, use, storage, charging, or disposal.',
-      'I release Outback Electronics from liability for any such loss, damage, injury, or death arising from my use or possession of the device after its release to me, and I accept that Outback Electronics has not repaired, made safe, or certified this device as fit for use.',
+      `I release ${shopName} from liability for any such loss, damage, injury, or death arising from my use or possession of the device after its release to me, and I accept that ${shopName} has not repaired, made safe, or certified this device as fit for use.`,
     ].filter(Boolean);
     doc.font('Helvetica').fontSize(9).fillColor('#222');
     for (const line of decls) {
@@ -5172,7 +5208,7 @@ function buildSafetyNoticePdf(notice, shop) {
     const sigTop = y + SIG_TOP_OFF;
 
     doc.font('Helvetica-Bold').fontSize(9).fillColor('#222').text('Customer', 50, y);
-    doc.font('Helvetica-Bold').fontSize(9).fillColor('#222').text('For Outback Electronics', rightX, y);
+    doc.font('Helvetica-Bold').fontSize(9).fillColor('#222').text(`For ${shopName}`, rightX, y);
 
     // Company signature: use the signer's stored e-signature where one exists,
     // otherwise leave a blank rule to sign by hand on the printed copy.
@@ -5239,7 +5275,7 @@ function buildBASPdf(data, shop) {
     const OCHRE = '#d39a37';
     const ATO_BLUE = '#003087';
     const fmtMoney = n => `$${(Number(n)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
-    const shopName    = shop.tradingName || shop.name || 'Outback Electronics';
+    const shopName    = String(shop.tradingName || '').trim();
     const shopAddress = shop.address || [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ');
     const logoPath    = path.join(__dirname, 'assets', 'logo.png');
     const hasLogo     = fs.existsSync(logoPath);
@@ -5397,7 +5433,7 @@ function buildTaxReportPdf(data, shop) {
     const RUST  = '#b5451b';
     const OCHRE = '#d39a37';
     const fmtMoney = n => `$${(Number(n)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
-    const shopName    = shop.tradingName || shop.name || 'Outback Electronics';
+    const shopName    = String(shop.tradingName || '').trim();
     const shopAddress = shop.address || [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ');
     const logoPath    = path.join(__dirname, 'assets', 'logo.png');
     const hasLogo     = fs.existsSync(logoPath);
@@ -5659,7 +5695,7 @@ function buildReceivablesPdf(data, shop) {
     const RUST  = '#b5451b';
     const OCHRE = '#d39a37';
     const fmtMoney = n => `$${(Number(n)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
-    const shopName    = shop.tradingName || shop.name || 'Outback Electronics';
+    const shopName    = String(shop.tradingName || '').trim();
     const shopAddress = shop.address || [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ');
     const logoPath    = path.join(__dirname, 'assets', 'logo.png');
     const hasLogo     = fs.existsSync(logoPath);
@@ -5808,7 +5844,7 @@ function buildTradingStockPdf(data, shop) {
     const RUST  = '#b5451b';
     const OCHRE = '#d39a37';
     const fmtMoney = n => `$${(Number(n)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
-    const shopName    = shop.tradingName || shop.name || 'Outback Electronics';
+    const shopName    = String(shop.tradingName || '').trim();
     const shopAddress = shop.address || [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ');
     const logoPath    = path.join(__dirname, 'assets', 'logo.png');
     const hasLogo     = fs.existsSync(logoPath);
@@ -5968,7 +6004,7 @@ function buildVehicleLogPdf(entries, fyYear, shop) {
     const RUST = '#b5451b', OCHRE = '#d39a37';
     const rate = ATO_KM_RATES[fyYear] || 0.88;
     const fmtMoney = n => `$${(Number(n)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
-    const shopName    = shop.tradingName || shop.name || 'Outback Electronics';
+    const shopName    = String(shop.tradingName || '').trim();
     const shopAddress = shop.address || [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ');
     const logoPath = path.join(__dirname, 'assets', 'logo.png');
     const hasLogo  = fs.existsSync(logoPath);
@@ -6299,7 +6335,7 @@ const mainServer = http.createServer(async (req, res) => {
       'Disallow: /assets/uploads/',
       '',
       ...aiCrawlers.flatMap(ua => [`User-agent: ${ua}`, 'Disallow: /']),
-      `Sitemap: ${OG_BASE_URL}/sitemap.xml`,
+      `Sitemap: ${ogBaseUrl()}/sitemap.xml`,
     ].join('\n') + '\n';
     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600', 'Expires': new Date(Date.now() + 3600 * 1000).toUTCString() });
     return res.end(txt);
@@ -6318,14 +6354,14 @@ const mainServer = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && url.pathname === '/sitemap.xml') {
     const now = new Date().toISOString().slice(0, 10);
-    const staticUrls = Object.keys(STATIC_OG).map(p => `  <url><loc>${escOg(OG_BASE_URL + p)}</loc><lastmod>${now}</lastmod><changefreq>weekly</changefreq><priority>${p === '/' || p === '/home' ? '1.0' : '0.8'}</priority></url>`);
+    const staticUrls = Object.keys(STATIC_OG).map(p => `  <url><loc>${escOg(ogBaseUrl() + p)}</loc><lastmod>${now}</lastmod><changefreq>weekly</changefreq><priority>${p === '/' || p === '/home' ? '1.0' : '0.8'}</priority></url>`);
     let productUrls = [];
     try {
       productUrls = readProducts()
         .filter(p => p.status === 'published' && (p.sku || p.id))
         .map(p => {
           const id = encodeURIComponent(p.sku || p.id);
-          return `  <url><loc>${escOg(OG_BASE_URL + '/product/' + id)}</loc><lastmod>${now}</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>`;
+          return `  <url><loc>${escOg(ogBaseUrl() + '/product/' + id)}</loc><lastmod>${now}</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>`;
         });
     } catch {}
     const xml = [
@@ -7057,7 +7093,7 @@ const mainServer = http.createServer(async (req, res) => {
       const rewardsCents = Math.round(rewardsDiscount * 100);
       const netCents = Math.max(50, productCents + shippingCents - Math.round(gcDiscount * 100) - memberDiscountCents - rewardsCents); // Stripe min 50c
       const nonDiscountItems = lineItems.filter(li => !li._isMemberDiscount);
-      finalLineItems = [{ name: 'Outback Electronics Order', priceAud: netCents / 100, quantity: 1, productId: nonDiscountItems.length === 1 ? (nonDiscountItems[0].productId || '') : '' }];
+      finalLineItems = [{ name: `${shopName()} Order`.trim(), priceAud: netCents / 100, quantity: 1, productId: nonDiscountItems.length === 1 ? (nonDiscountItems[0].productId || '') : '' }];
     }
 
     finalLineItems.forEach((li, idx) => {
@@ -7882,6 +7918,7 @@ const mainServer = http.createServer(async (req, res) => {
     const lng = parseFloat(url.searchParams.get('lng'));
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return json(res, 422, { error: 'invalid_coords' });
     const shop = await getShopCoords();
+    if (!shop) return json(res, 503, SHOP_LOCATION_UNSET);
     const distKm = Math.round(haversineKm(shop.lat, shop.lng, lat, lng));
     const fuel = distKm > FREE_KM ? distKm * FUEL_RATE : 0;
     const days = distKm > DAILY_THRESHOLD_KM ? Math.ceil(distKm / KM_PER_DAY) : 0;
@@ -7929,6 +7966,7 @@ const mainServer = http.createServer(async (req, res) => {
     let travelMinutesEach = 0;
     if (Number.isFinite(lat) && Number.isFinite(lng)) {
       const shop = await getShopCoords();
+      if (!shop) return json(res, 503, SHOP_LOCATION_UNSET);
       travelMinutesEach = await getDrivingMinutes(shop.lat, shop.lng, lat, lng);
     }
     const result = computeSlotsForDate(dateParam, { durationMinutes, travelMinutesEach });
@@ -7952,6 +7990,7 @@ const mainServer = http.createServer(async (req, res) => {
     if (type === 'callout') {
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) return json(res, 422, { error: 'missing_coords', message: 'Could not pin down your address on the map, please re-enter it.' });
       const shop = await getShopCoords();
+      if (!shop) return json(res, 503, SHOP_LOCATION_UNSET);
       travelMinutesEach = await getDrivingMinutes(shop.lat, shop.lng, lat, lng);
     }
     const dateStr = String(preferredDate).trim();
@@ -8465,7 +8504,7 @@ const adminServer = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && url.pathname === '/api/admin/metrics') {
     const session = requireRole(req, res, 'staff'); if (!session) return;
-    return json(res, 200, buildAdminMetrics());
+    return json(res, 200, { ...buildAdminMetrics(), missingShopFields: missingShopFields() });
   }
   if (req.method === 'GET' && url.pathname === '/api/admin/customers') {
     const session = requireRole(req, res, 'staff'); if (!session) return;
@@ -10482,7 +10521,7 @@ const adminServer = http.createServer(async (req, res) => {
     const session = requireRole(req, res, 'technician'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     // An unsaved draft carries no session-derived signer, so stamp one for the
-    // preview rather than printing a blank "For Outback Electronics" name.
+    // preview rather than printing a blank signer name.
     const notice = { ...body, signedBy: body.signedBy || session.username, signedByStaffId: body.signedByStaffId || session.staffId || null };
     const { shop } = readSettings();
     const buffer = await buildSafetyNoticePdf(notice, shop);
@@ -10983,6 +11022,7 @@ const adminServer = http.createServer(async (req, res) => {
     const coords = await geocodeAddress(address);
     if (!coords) return json(res, 404, { error: 'not_found', message: 'Could not locate that address.' });
     const shop = await getShopCoords();
+    if (!shop) return json(res, 503, { error: 'shop_location_unset', message: 'Set the shop address (or map latitude/longitude) in Settings, Shop first.' });
     const distKm = Math.round(haversineKm(shop.lat, shop.lng, coords.lat, coords.lng));
     return json(res, 200, { distKm });
   }
@@ -11808,7 +11848,7 @@ const portalServer = http.createServer(async (req, res) => {
         subject: 'Your account email address was changed',
         html: emailHtml('Email address changed', `
           <p>G'day ${escHtml(user.displayName || user.username)},</p>
-          <p>The email address on your Outback Electronics account was just changed to <strong>${escHtml(maskEmail(user.email))}</strong>.</p>
+          <p>The email address on your ${escHtml(shopName())} account was just changed to <strong>${escHtml(maskEmail(user.email))}</strong>.</p>
           <p>If this wasn't you, contact us immediately so we can secure your account.</p>
         `),
       });
@@ -13031,7 +13071,7 @@ async function runMonthlyListingFees() {
         payment_method: seller.stripePaymentMethodId,
         confirm: 'true',
         off_session: 'true',
-        description: `Outback Electronics listing fee - ${count} listings`,
+        description: `${shopName()} listing fee - ${count} listings`.trim(),
       });
       if (resp.status === 200 && resp.body.id) {
         chargeId = resp.body.id;
@@ -13190,7 +13230,7 @@ async function runDuePaymentPlanCharges() {
             payment_method: custUser.stripePaymentMethodId,
             confirm: 'true',
             off_session: 'true',
-            description: `Outback Electronics, instalment for order ${order.id}`,
+            description: `${shopName() ? `${shopName()}, i` : 'I'}nstalment for order ${order.id}`,
           }, idempotencyKey);
           if (resp && resp.status === 200 && resp.body && resp.body.id) ok = true;
           else errMsg = (resp && resp.body && resp.body.error && resp.body.error.message) || 'stripe_error';
@@ -13488,7 +13528,7 @@ async function ragSearch(query, topK = 4) {
 }
 
 // Kept short: prompt length is generation latency on a local model.
-const AI_SYSTEM_PROMPT_BASE = `You are the Outback Electronics AI assistant: a concise, practical electronics technician and advisor for a small Australian electronics repair and parts shop. Help with repair questions, troubleshooting, parts selection, soldering tips and general DIY electronics. Reply in 2-4 sentences unless the question needs steps. Never say you're not sure, don't have a list, or aren't certain what's available and then immediately go on to name the actual item anyway, that is a contradiction and it is always wrong: read what was actually given to you below before you start the sentence, decide once whether you know the answer, and either state it plainly and confidently or say you don't know, never both in the same reply. The catalogue data provided below (Live catalogue check, Available options, product page details) is ground truth: it is a live, real-time read of what this shop actually has. Nothing exists and nothing is true about products, services, stock, price or options beyond exactly what is listed there; never answer from general knowledge of what a shop "would probably" sell or a brand "usually" offers, and never substitute or invent an item that sounds close to what was asked, including a plausible-sounding name in this shop's own style (do not make up a product starting with "Outback Electronics" or any other brand-shaped name): if its exact name does not appear character-for-character below, it does not exist and you must say so. A "Live catalogue check" list may mix [Product] entries (things sold as an item) with [Service] entries (work the shop does), read each one's label: answer "yes we sell it" only from a [Product] match, "yes we offer it" from a [Service] match, and if only a [Service] matches a "do you sell" question, say plainly that it isn't sold as a product but is offered as a service, don't blur the two together or answer about a [Service] as if it answered a product question. The "[Product]"/"[Service]" tags and any other bracketed labels below are for you to read, not to repeat, never copy that literal bracket text into your reply, just use plain natural language ("we sell the...", "we offer a...") when talking to the customer. Reference catalogue products, services, tutorials and policies provided below by name when relevant. If asked about a product's colour, size, storage, condition or any other variant, check the "Available options" or "[options: ...]" list on that product below first, that is the actual list of what's available; only say you're not sure if no such list was given, never redirect the customer to the manufacturer for something this catalogue already answers. For any question about availability, price, stock, or "how many" of something, only answer from a "Live catalogue check" entry below if one is provided, that is the real, current answer; if it says no matching items, say so plainly rather than guessing from the other snippets, which are only a handful of possibly-relevant examples, never the full picture. "Out of stock" is not automatically the end of it: check whether that item's line also says backorder is available, and if so tell the customer they can still order it now (mentioning the wait time/ETA if given) instead of just saying no. Each option/variant line already states its own stock and backorder status directly, that is a real per-option answer, not something you need more information to give, never say you can't check which specific option is backorderable when the line right there already says so. Recommend booking a professional repair if it's beyond DIY. Only use the "Shop facts" below for hours, address, phone, email or policy; never invent them. For a specific policy detail (returns, warranty, shipping, payment plans, etc), only answer from a "Policy:" entry actually provided below; if none was provided for what's being asked, say you're not sure and point them to the Policies page on the site or offer the human handoff, never guess.
+const AI_SYSTEM_PROMPT_BASE = `You are the {{tradingName}} AI assistant: a concise, practical electronics technician and advisor for a small Australian electronics repair and parts shop. Help with repair questions, troubleshooting, parts selection, soldering tips and general DIY electronics. Reply in 2-4 sentences unless the question needs steps. Never say you're not sure, don't have a list, or aren't certain what's available and then immediately go on to name the actual item anyway, that is a contradiction and it is always wrong: read what was actually given to you below before you start the sentence, decide once whether you know the answer, and either state it plainly and confidently or say you don't know, never both in the same reply. The catalogue data provided below (Live catalogue check, Available options, product page details) is ground truth: it is a live, real-time read of what this shop actually has. Nothing exists and nothing is true about products, services, stock, price or options beyond exactly what is listed there; never answer from general knowledge of what a shop "would probably" sell or a brand "usually" offers, and never substitute or invent an item that sounds close to what was asked, including a plausible-sounding name in this shop's own style (do not make up a product starting with the shop's own name or any other brand-shaped name): if its exact name does not appear character-for-character below, it does not exist and you must say so. A "Live catalogue check" list may mix [Product] entries (things sold as an item) with [Service] entries (work the shop does), read each one's label: answer "yes we sell it" only from a [Product] match, "yes we offer it" from a [Service] match, and if only a [Service] matches a "do you sell" question, say plainly that it isn't sold as a product but is offered as a service, don't blur the two together or answer about a [Service] as if it answered a product question. The "[Product]"/"[Service]" tags and any other bracketed labels below are for you to read, not to repeat, never copy that literal bracket text into your reply, just use plain natural language ("we sell the...", "we offer a...") when talking to the customer. Reference catalogue products, services, tutorials and policies provided below by name when relevant. If asked about a product's colour, size, storage, condition or any other variant, check the "Available options" or "[options: ...]" list on that product below first, that is the actual list of what's available; only say you're not sure if no such list was given, never redirect the customer to the manufacturer for something this catalogue already answers. For any question about availability, price, stock, or "how many" of something, only answer from a "Live catalogue check" entry below if one is provided, that is the real, current answer; if it says no matching items, say so plainly rather than guessing from the other snippets, which are only a handful of possibly-relevant examples, never the full picture. "Out of stock" is not automatically the end of it: check whether that item's line also says backorder is available, and if so tell the customer they can still order it now (mentioning the wait time/ETA if given) instead of just saying no. Each option/variant line already states its own stock and backorder status directly, that is a real per-option answer, not something you need more information to give, never say you can't check which specific option is backorderable when the line right there already says so. Recommend booking a professional repair if it's beyond DIY. Only use the "Shop facts" below for hours, address, phone, email or policy; never invent them. For a specific policy detail (returns, warranty, shipping, payment plans, etc), only answer from a "Policy:" entry actually provided below; if none was provided for what's being asked, say you're not sure and point them to the Policies page on the site or offer the human handoff, never guess.
 
 You are a read-only chat assistant with no ability to take any action on this site: you cannot add items to a cart, place or process an order, take payment, book a repair, or check someone out, no matter what the customer asks or how the conversation goes. Never say or imply that something was added to a cart, purchased, checked out, or booked. But the website itself fully supports self-service: customers order products by adding to cart and checking out online, and book a repair or service through the site's own booking page, no phone call or email needed unless they'd rather. Always point them to doing it themselves on the site first (e.g. "use the Add to Cart button" / "book it on our Book a Repair page"); only mention phone or email as a fallback if they specifically ask for another way to reach you.`;
 
@@ -13524,7 +13564,9 @@ function formatOperatingHours() {
 function aiSystemPrompt() {
   const b = getBusinessIdentity();
   const facts = `\n\nShop facts (authoritative, copy these exactly, do not add or remove anything):\nTrading name: ${b.tradingName}\nPhone: ${b.phone}\nEmail: ${b.email}\nHours: ${formatOperatingHours()}\nThere is no public shopfront and no walk-in browsing. "${b.address}" is a mail-in and booked-dropoff address only, by appointment, not a store customers can visit or browse. Never call it "the shop" or invite someone to walk in.`;
-  return AI_SYSTEM_PROMPT_BASE + facts;
+  // The shop's name comes from Settings, Shop, like every other shop fact.
+  const name = shopName();
+  return AI_SYSTEM_PROMPT_BASE.replace('the {{tradingName}} AI assistant', name ? `the ${name} AI assistant` : 'the shop\'s AI assistant') + facts;
 }
 
 // Mirrors hasBulkPrice()/bulkOfferAvailable() in src/lib/pricing.js: a product
@@ -15098,7 +15140,7 @@ setInterval(() => {
       if (now > dueAt && (!b.alertedAt || b.alertedAt < b.lastCheckIn)) {
         if (b.contactEmail) {
           const hoursLate = Math.round((now - dueAt) / 3600000);
-          sendEmail({ to: b.contactEmail, subject: `Missed check-in from ${b.userName || 'a traveller'}`, html: `<p>Hi ${beaconEsc(b.contactName || 'there')},</p><p><b>${beaconEsc(b.userName || 'A traveller')}</b> set up an Outback Electronics safety beacon and has missed a scheduled check-in, it was due ${new Date(dueAt).toLocaleString('en-AU')} (about ${hoursLate}h ago).</p>${b.message ? `<p>Their note: "${beaconEsc(b.message)}"</p>` : ''}<p>This is an automated safety alert. Please try to reach them, and contact emergency services (000) if you're concerned.</p>` }).catch(() => {});
+          sendEmail({ to: b.contactEmail, subject: `Missed check-in from ${b.userName || 'a traveller'}`, html: `<p>Hi ${beaconEsc(b.contactName || 'there')},</p><p><b>${beaconEsc(b.userName || 'A traveller')}</b> set up an ${escHtml(shopName())} safety beacon and has missed a scheduled check-in, it was due ${new Date(dueAt).toLocaleString('en-AU')} (about ${hoursLate}h ago).</p>${b.message ? `<p>Their note: "${beaconEsc(b.message)}"</p>` : ''}<p>This is an automated safety alert. Please try to reach them, and contact emergency services (000) if you're concerned.</p>` }).catch(() => {});
         }
         b.alertedAt = now; changed = true;
       }

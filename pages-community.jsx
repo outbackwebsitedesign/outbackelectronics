@@ -346,6 +346,7 @@ function TutorialPage({ go, pageParams }) {
 // { seriesName, slug, parts } (resolved by app.jsx's deep-link handling, or
 // passed pre-resolved by a card/series-box link) or { _notFound: true }.
 function SeriesPage({ go, pageParams }) {
+  const shop = window.__ShopContext__ ? React.useContext(window.__ShopContext__) : {};
   const series = pageParams;
 
   if (!series) {
@@ -378,7 +379,7 @@ function SeriesPage({ go, pageParams }) {
   return (
     <>
       <PageHead crumbs={['Outback','Tutorials', series.seriesName]} title={series.seriesName}
-        lead={`A ${parts.length}-part series from the Outback Electronics workshop.`} />
+        lead={`A ${parts.length}-part series from the ${shop?.tradingName || ''} workshop.`.replace(/ {2,}/g, ' ')} />
       <section className="container" style={{paddingTop:32, paddingBottom:64}}>
         <div style={{maxWidth:760, margin:'0 auto'}}>
           <ol style={{listStyle:'none', margin:0, padding:0, display:'grid', gap:12}}>

@@ -6,6 +6,8 @@ import { TopNav, Footer, useAuth, useShopInfo, apiPost } from './app-shell.jsx';
 export default function PhotosApp() {
   const { user } = useAuth();
   const info = useShopInfo();
+  const shopNm = (info && info.shop && info.shop.tradingName) || '';
+  const serverLabel = shopNm ? `the ${shopNm} server` : 'our own server';
   const [photos, setPhotos] = useState(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
@@ -41,7 +43,7 @@ export default function PhotosApp() {
         <header className="svc-head">
           <p className="eyebrow">Photos</p>
           <h1 className="serif svc-title">Your photos</h1>
-          <p className="svc-sub">Back up the farm, the trip, the build - on the Outback Electronics server, not someone else's cloud. Sign in to start.</p>
+          <p className="svc-sub">Back up the farm, the trip, the build - on {serverLabel}, not someone else's cloud. Sign in to start.</p>
         </header>
         {info && info.portalUrl ? <a className="btn btn-rust" href={info.portalUrl}>Sign in / Register</a> : null}
       </main><Footer /></>
@@ -53,7 +55,7 @@ export default function PhotosApp() {
         <header className="svc-head">
           <p className="eyebrow">Photos</p>
           <h1 className="serif svc-title">Your photos</h1>
-          <p className="svc-sub">Backed up on the Outback Electronics server. Up to 15 MB each.</p>
+          <p className="svc-sub">Backed up on {serverLabel}. Up to 15 MB each.</p>
         </header>
         <div className="ph-actions">
           <button className="btn btn-rust" onClick={() => inputRef.current && inputRef.current.click()} disabled={busy}>{busy ? 'Uploading…' : 'Upload photos'}</button>

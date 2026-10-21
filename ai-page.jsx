@@ -77,12 +77,18 @@ function renderMd(text) {
 
 // ── Chat ──────────────────────────────────────────────────────────────────────
 
-const GREETING = "G'day! I'm the Outback Electronics AI assistant, running locally on our own hardware, no cloud involved. Ask me anything about electronics repair, troubleshooting, components, or soldering. You can also upload a photo of a board for diagnosis.";
+// The business name comes from Settings, Shop (via /api/shop-info).
+const greeting = (name) => `G'day! I'm the ${name ? `${name} ` : ''}AI assistant, running locally on our own hardware, no cloud involved. Ask me anything about electronics repair, troubleshooting, components, or soldering. You can also upload a photo of a board for diagnosis.`;
 
 function ChatView({ session }) {
   const shopInfo = useShopInfo();
   const siteUrl = (shopInfo && shopInfo.siteUrl) || '';
-  const [messages, setMessages] = useState([{ role: 'assistant', content: GREETING }]);
+  const shopNm = (shopInfo && shopInfo.shop && shopInfo.shop.tradingName) || '';
+  const [messages, setMessages] = useState([{ role: 'assistant', content: greeting(shopNm) }]);
+  // Shop info usually arrives after the first render; update the untouched greeting.
+  useEffect(() => {
+    setMessages(m => (m.length === 1 && m[0].role === 'assistant' ? [{ role: 'assistant', content: greeting(shopNm) }] : m));
+  }, [shopNm]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState('');
@@ -196,7 +202,7 @@ function ChatView({ session }) {
   }
 
   function clearChat() {
-    setMessages([{ role: 'assistant', content: GREETING }]);
+    setMessages([{ role: 'assistant', content: greeting(shopNm) }]);
     setInput(''); setError(''); setImage(null); setImagePreview(null); setQueue([]);
   }
 

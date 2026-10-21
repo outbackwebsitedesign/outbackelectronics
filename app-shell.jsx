@@ -125,7 +125,7 @@ export function TopNav({ current }) {
   const [open, setOpen] = useState(false);
   const scrolled = useScrolled();
   const urls = info || {};
-  const shopName = (info && info.shop && info.shop.name) || 'Outback Electronics';
+  const shopName = (info && info.shop && info.shop.tradingName) || '';
   const hubHref = urls.hubUrl || urls.siteUrl || '/';
   return (
     <header className={scrolled ? 'topnav scrolled' : 'topnav'}>
@@ -155,7 +155,7 @@ export function TopNav({ current }) {
 
 export function Footer() {
   const info = useShopInfo();
-  const name = (info && info.shop && info.shop.name) || 'Outback Electronics';
+  const name = (info && info.shop && info.shop.tradingName) || '';
   const hubHref = (info && info.hubUrl) || '/';
   const year = new Date().getFullYear();
   return (

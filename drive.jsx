@@ -9,6 +9,8 @@ const fmtSize = (n) => n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1)
 export default function DriveApp() {
   const { user } = useAuth();
   const info = useShopInfo();
+  const shopNm = (info && info.shop && info.shop.tradingName) || '';
+  const serverLabel = shopNm ? `the ${shopNm} server` : 'our own server';
   const [files, setFiles] = useState(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
@@ -46,7 +48,7 @@ export default function DriveApp() {
         <header className="svc-head">
           <p className="eyebrow">Drive</p>
           <h1 className="serif svc-title">Your files</h1>
-          <p className="svc-sub">Store and grab your files anywhere, backed up on the Outback Electronics server, not big tech's cloud. Sign in to get started.</p>
+          <p className="svc-sub">Store and grab your files anywhere, backed up on {serverLabel}, not big tech's cloud. Sign in to get started.</p>
         </header>
         {info && info.portalUrl ? <a className="btn btn-rust" href={info.portalUrl}>Sign in / Register</a> : null}
       </main><Footer /></>
@@ -58,7 +60,7 @@ export default function DriveApp() {
         <header className="svc-head">
           <p className="eyebrow">Drive</p>
           <h1 className="serif svc-title">Your files</h1>
-          <p className="svc-sub">Stored on the Outback Electronics server. Up to 20 MB per file.</p>
+          <p className="svc-sub">Stored on {serverLabel}. Up to 20 MB per file.</p>
         </header>
         <div className={'drive-drop' + (busy ? ' busy' : '')} onClick={() => inputRef.current && inputRef.current.click()}
           onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); upload(e.dataTransfer.files); }}>
