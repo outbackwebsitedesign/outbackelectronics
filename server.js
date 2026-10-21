@@ -2993,6 +2993,20 @@ const OFFLINE_HTML   = loadErrorPage('offline.html');
 // pages. Used both for pages sent through sendErrorPage() and for the same
 // templates when they're served directly as static files (e.g. /offline.html
 // via the service worker, or a direct request for /401.html).
+// Same wording as acknowledgementOfCountry() in site-chrome.jsx, for the static
+// error/offline pages, which don't run React.
+function acknowledgementOfCountry(shop) {
+  const people = String(shop?.acknowledgmentPeople || '').trim().replace(/\s+peoples?$/i, '');
+  const country = String(shop?.acknowledgmentCountry || '').trim().replace(/\s+country$/i, '') || people;
+  if (!people && !country) return null;
+  const business = shop?.tradingName || shop?.name || 'Outback Electronics';
+  const place = [shop?.suburb, shop?.state].map(v => String(v || '').trim()).filter(Boolean).join(', ');
+  return {
+    respect: `${business} acknowledges the ${people || country} people as the Traditional Custodians of the Country on which we operate. We pay our respects to Elders past and present, and extend that respect to all Aboriginal and Torres Strait Islander peoples.`,
+    based: `Proudly based on ${country} Country${place ? `, ${place}` : ''}.`,
+  };
+}
+
 function applyShopTemplate(html) {
   let body = html;
   try {
@@ -3002,6 +3016,13 @@ function applyShopTemplate(html) {
     const name = shop.tradingName || shop.name || 'Outback Electronics Pty Ltd';
     const copyright = `© 2023–${new Date().getFullYear()} ${name}${shop.abn ? ` · ABN ${shop.abn}` : ''}`;
     body = body.replace(/<!--SHOP_COPYRIGHT-->[^<]*/g, `<!--SHOP_COPYRIGHT-->${copyright}`);
+    const ack = acknowledgementOfCountry(shop);
+    if (ack) {
+      body = body.replace(/<!--SHOP_ACK_RESPECT-->[^<]*/g, `<!--SHOP_ACK_RESPECT-->${escHtml(ack.respect)}`);
+      body = body.replace(/<!--SHOP_ACK_BASED-->[^<]*/g, `<!--SHOP_ACK_BASED-->${escHtml(ack.based)}`);
+    } else {
+      body = body.replace(/<div class="ack">[\s\S]*?<\/div>/g, '');
+    }
   } catch {}
   return body;
 }

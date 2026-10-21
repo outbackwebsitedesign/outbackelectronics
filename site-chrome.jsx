@@ -82,6 +82,22 @@ export const UTILITY_PAGES = [
 // so the active nav state always resets visibly on navigation (incl. logo clicks).
 export const NAV_PAGE_ALIASES = { product: 'shop', service: 'services', repairs: 'services' };
 
+// Acknowledgement of Country for the footer, worded by the owner. Settings hold
+// the names as entered (e.g. "Bidjara People", "Bidjara Country"), so the
+// trailing "People"/"Country" is dropped before they go into the sentence.
+// Mirrored in server.js (acknowledgementOfCountry) for the static error pages.
+export function acknowledgementOfCountry(shop) {
+  const people = String(shop?.acknowledgmentPeople || '').trim().replace(/\s+peoples?$/i, '');
+  const country = String(shop?.acknowledgmentCountry || '').trim().replace(/\s+country$/i, '') || people;
+  if (!people && !country) return null;
+  const business = shop?.tradingName || shop?.name || 'Outback Electronics';
+  const place = [shop?.suburb, shop?.state].map(v => String(v || '').trim()).filter(Boolean).join(', ');
+  return {
+    respect: `${business} acknowledges the ${people || country} people as the Traditional Custodians of the Country on which we operate. We pay our respects to Elders past and present, and extend that respect to all Aboriginal and Torres Strait Islander peoples.`,
+    based: `Proudly based on ${country} Country${place ? `, ${place}` : ''}.`,
+  };
+}
+
 // ---------------- Shared hooks ----------------
 export function useFocusTrap(containerRef, onClose) {
   useEffect(() => {
@@ -408,6 +424,7 @@ export function SiteTopNav({ page, go, cart, onSearchOpen, accountOpen, setAccou
 // ---------------- Footer ----------------
 export function SiteFooter({ go }) {
   const shop = useShop();
+  const ack = acknowledgementOfCountry(shop);
   const [topCategories, setTopCategories] = useState([]);
   const [footerServices, setFooterServices] = useState([]);
   const [footerLoading, setFooterLoading] = useState(true);
@@ -501,9 +518,14 @@ export function SiteFooter({ go }) {
             </ul>
           </div>
         </div>
+        {ack && (
+          <div style={{marginTop:40, paddingTop:20, borderTop:'1px solid rgba(244,237,225,0.14)', fontSize:13, lineHeight:1.7, color:'var(--ink-on-dark-muted)'}}>
+            <p style={{margin:0, maxWidth:780}}>{ack.respect}</p>
+            <p style={{margin:'8px 0 0'}}>{ack.based}</p>
+          </div>
+        )}
         <div className="baseline">
           <span>© 2023–{new Date().getFullYear()} {shop.tradingName}{shop.abn ? ` · ABN ${shop.abn}` : ''}</span>
-          {(shop.acknowledgmentPeople || shop.acknowledgmentCountry) && <span>ACKNOWLEDGES THE {(shop.acknowledgmentPeople || '').toUpperCase()} AS TRADITIONAL CUSTODIANS OF {(shop.acknowledgmentCountry || '').toUpperCase()}</span>}
         </div>
       </div>
     </footer>
