@@ -2067,6 +2067,11 @@ function SponsorshipOpportunityCard({ it, onEnquire }) {
                 </li>
               ))}
             </ul>
+            {it.labourCreditAud > 0 && (
+              <p style={{ marginTop: 10, fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.6 }}>
+                Labour credits exclude parts and travel, are subject to availability, and are redeemed under written terms. <a href="#sp-credit-terms" style={{ color: 'var(--rust)' }}>Labour credit terms</a>
+              </p>
+            )}
           </div>
         )}
       </div>
@@ -2145,7 +2150,7 @@ function SponsorshipPage({ go }) {
             <div className="mono" style={{ fontSize: 10, color: 'var(--ink-3)', letterSpacing: '.08em', marginBottom: 12 }}>BENEFITS MAY INCLUDE</div>
             <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 12, fontSize: 14.5, lineHeight: 1.6 }}>
               {[
-                'Labour-only service credits worth more than the sponsorship contribution.',
+                'Labour-only service credits worth more than the sponsorship contribution (see the labour credit terms below).',
                 `Recognition on the ${name ? `${name} ` : ''}Sponsorship Wall.`,
                 'Distribution of sponsor-supplied business cards with customer orders.',
                 'For major sponsorships, a professional dinner, equipment presentation, photographs and a dedicated sponsorship announcement.',
@@ -2155,9 +2160,14 @@ function SponsorshipPage({ go }) {
                 </li>
               ))}
             </ul>
-            <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--line)', display: 'grid', gap: 8, fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
-              <p>Labour credits cannot be redeemed against parts, hardware or physical products.</p>
-              <p>Sponsorship does not grant ownership, equity or financial returns in {name || 'the business'}.</p>
+            <div id="sp-credit-terms" style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--line)', fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
+              <div className="mono" style={{ fontSize: 10, color: 'var(--ink-3)', letterSpacing: '.08em', marginBottom: 10 }}>LABOUR CREDIT TERMS</div>
+              <ul style={{ margin: 0, paddingLeft: 18, display: 'grid', gap: 8 }}>
+                <li><strong>Labour only.</strong> Credits cover labour and nothing else. They exclude parts, hardware, physical products and travel, including callout and travel fees, which are charged separately.</li>
+                <li><strong>Subject to availability.</strong> Work paid for with credits is booked in like any other job, at a time that suits both of us. Credits don't guarantee a particular date or turnaround.</li>
+                <li><strong>Written redemption terms.</strong> Every sponsorship comes with written redemption terms, agreed with you before the sponsorship is finalised, setting out how and when the credits can be used.</li>
+              </ul>
+              <p style={{ marginTop: 12 }}>Sponsorship does not grant ownership, equity or financial returns in {name || 'the business'}.</p>
             </div>
           </div>
         </div>
