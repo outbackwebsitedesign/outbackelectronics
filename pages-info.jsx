@@ -1870,6 +1870,238 @@ function AllReviewsPage() {
   );
 }
 
+// ============================================================
+// SPONSORSHIP
+// ============================================================
+const SPONSOR_PERIOD_LABEL = { year: '/ year', month: '/ month', once: 'one-off' };
+function sponsorPrice(n) {
+  const v = Number(n) || 0;
+  return '$' + v.toLocaleString('en-AU', { minimumFractionDigits: v % 1 ? 2 : 0, maximumFractionDigits: 2 });
+}
+
+function SponsorLogo({ sp, size = 44 }) {
+  const inner = sp.logoUrl
+    ? <img src={sp.logoUrl} alt={sp.logoAlt || sp.businessName} style={{ height: size, maxWidth: size * 3, objectFit: 'contain', display: 'block' }} />
+    : <span style={{ fontWeight: 600, fontSize: 14 }}>{sp.businessName}</span>;
+  return sp.url
+    ? <a href={sp.url} target="_blank" rel="noopener noreferrer sponsored" title={sp.businessName} style={{ color: 'inherit', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>{inner}</a>
+    : <span title={sp.businessName} style={{ display: 'inline-flex', alignItems: 'center' }}>{inner}</span>;
+}
+
+function SponsorshipPage({ go }) {
+  const shop = useShop();
+  const [data, setData] = useState(null);
+  const [loadError, setLoadError] = useState(false);
+  const [form, setForm] = useState({ businessName: '', contactName: '', email: '', phone: '', website: '', itemId: '', tierId: '', message: '' });
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState(null);
+  const formRef = React.useRef(null);
+
+  useEffect(() => {
+    fetch('/api/sponsorship')
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(setData)
+      .catch(() => { setLoadError(true); setData({ tiers: [], items: [], sponsors: [] }); });
+  }, []);
+
+  const tiers = data?.tiers || [];
+  const items = data?.items || [];
+  const sponsors = data?.sponsors || [];
+  const tierById = Object.fromEntries(tiers.map(t => [t.id, t]));
+  const openItems = items.filter(i => i.open);
+  const selectedItem = items.find(i => i.id === form.itemId);
+  const tierOptions = selectedItem ? selectedItem.prices.map(p => ({ ...tierById[p.tierId], priceAud: p.priceAud })).filter(t => t.id) : tiers;
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const startEnquiry = (itemId, tierId = '') => {
+    setForm(f => ({ ...f, itemId, tierId }));
+    setSent(false);
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!form.businessName.trim() || !form.email.trim()) return;
+    setSending(true); setError(null);
+    try {
+      const res = await fetch('/api/sponsorship/enquire', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() },
+        body: JSON.stringify(form),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.message || '');
+      setSent(true);
+    } catch (err) {
+      setError(err.message || `Your enquiry could not be sent. Please email us directly at ${shop.email || 'our support address'}.`);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <>
+      <PageHead crumbs={['Outback', 'Sponsorship']} title="Sponsor our gear"
+        lead="Put your business name on the equipment that keeps remote Australia connected. Pick a piece of gear, choose a reward tier, and we'll do the rest." />
+
+      <section className="container" style={{ paddingTop: 40 }}>
+        <div className="grid-3" style={{ gap: 24 }}>
+          {[
+            { n: '01', t: 'Pick the gear', d: 'Choose a specific piece of equipment you want your name on, from the list below.' },
+            { n: '02', t: 'Choose a tier', d: 'Each tier comes with its own rewards. Higher tiers get more visibility.' },
+            { n: '03', t: 'We sort the details', d: 'Send an enquiry. We get in touch, agree the terms with you, and nothing is charged before that.' },
+          ].map(c => (
+            <div key={c.n} className="card-paper" style={{ padding: 28 }}>
+              <span className="serif" style={{ fontSize: 48, color: 'var(--rust)', lineHeight: 0.9 }}>{c.n}</span>
+              <h3 className="serif" style={{ fontSize: 28, marginTop: 14, lineHeight: 1.1 }}>{c.t}</h3>
+              <p style={{ marginTop: 10, fontSize: 14, color: 'var(--ink-2)' }}>{c.d}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {tiers.length > 0 && (
+        <section className="container" style={{ paddingTop: 56 }}>
+          <span className="eyebrow">REWARD TIERS</span>
+          <h2 className="serif" style={{ fontSize: 40, marginTop: 8, lineHeight: 1.05 }}>What sponsors get.</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 20, marginTop: 24 }}>
+            {tiers.map(t => (
+              <div key={t.id} className="card-paper" style={{ padding: 26, borderTop: `4px solid ${t.color || 'var(--ochre)'}`, display: 'flex', flexDirection: 'column' }}>
+                <h3 className="serif" style={{ fontSize: 30, lineHeight: 1.05 }}>{t.name}</h3>
+                <div style={{ marginTop: 8 }}>
+                  <span className="serif" style={{ fontSize: 34, color: 'var(--rust)' }}>{sponsorPrice(t.priceAud)}</span>
+                  <span className="mono" style={{ fontSize: 12, color: 'var(--ink-2)', marginLeft: 6 }}>{SPONSOR_PERIOD_LABEL[t.period] || ''}</span>
+                </div>
+                {t.rewards.length > 0 && (
+                  <ul style={{ listStyle: 'none', padding: 0, margin: '16px 0 0', display: 'grid', gap: 8, fontSize: 14, color: 'var(--ink-2)' }}>
+                    {t.rewards.map((r, i) => (
+                      <li key={i} style={{ display: 'grid', gridTemplateColumns: '18px 1fr', gap: 6 }}>
+                        <span style={{ color: 'var(--eucalyptus)', fontWeight: 700 }}>✓</span><span>{r}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
+          </div>
+          <p className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 12 }}>BASE PRICES. SOME EQUIPMENT IS PRICED DIFFERENTLY, SHOWN ON EACH ITEM BELOW.</p>
+        </section>
+      )}
+
+      <section className="container" style={{ paddingTop: 56 }}>
+        <span className="eyebrow">THE EQUIPMENT</span>
+        <h2 className="serif" style={{ fontSize: 40, marginTop: 8, lineHeight: 1.05 }}>Gear you can sponsor.</h2>
+        {data === null ? (
+          <p style={{ marginTop: 18, color: 'var(--ink-2)' }}>Loading…</p>
+        ) : items.length === 0 ? (
+          <div className="card-paper" style={{ padding: 28, marginTop: 24, maxWidth: 640 }}>
+            <p style={{ color: 'var(--ink-2)', lineHeight: 1.7 }}>
+              {loadError
+                ? 'The equipment list could not be loaded right now. You can still send an enquiry below.'
+                : "We're putting together the list of equipment open for sponsorship. Send an enquiry below and we'll let you know what's available."}
+            </p>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 24, marginTop: 24 }}>
+            {items.map(it => (
+              <div key={it.id} className="card-paper" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                {it.imageUrl && <img src={it.imageUrl} alt={it.imageAlt || it.name} loading="lazy" style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', display: 'block' }} />}
+                <div style={{ padding: 22, display: 'flex', flexDirection: 'column', flex: 1 }}>
+                  <div className="row-flex" style={{ justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                    <h3 className="serif" style={{ fontSize: 26, lineHeight: 1.1 }}>{it.name}</h3>
+                    <span className={`tag ${it.open ? 'tag-ochre' : 'tag-outline'}`} style={{ flexShrink: 0 }}>{it.open ? 'OPEN' : 'FULLY SPONSORED'}</span>
+                  </div>
+                  {it.description && <p style={{ marginTop: 10, fontSize: 14, color: 'var(--ink-2)', lineHeight: 1.6 }}>{it.description}</p>}
+                  {it.open && it.prices.length > 0 && (
+                    <div style={{ marginTop: 14, borderTop: '1px solid var(--line)' }}>
+                      {it.prices.map(p => tierById[p.tierId] && (
+                        <div key={p.tierId} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid var(--line)', fontSize: 13 }}>
+                          <span>{tierById[p.tierId].name}</span>
+                          <span className="mono">{sponsorPrice(p.priceAud)} <span style={{ color: 'var(--ink-3)' }}>{SPONSOR_PERIOD_LABEL[tierById[p.tierId].period] || ''}</span></span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {it.sponsors.length > 0 && (
+                    <div style={{ marginTop: 14 }}>
+                      <div className="mono" style={{ fontSize: 10, color: 'var(--ink-3)', letterSpacing: '.08em', marginBottom: 8 }}>SPONSORED BY</div>
+                      <div className="row-flex" style={{ gap: 14, flexWrap: 'wrap' }}>{it.sponsors.map(sp => <SponsorLogo key={sp.id} sp={sp} size={32} />)}</div>
+                    </div>
+                  )}
+                  <div style={{ flex: 1 }} />
+                  {it.open && (
+                    <button className="btn btn-rust" style={{ marginTop: 18, justifyContent: 'center' }} onClick={() => startEnquiry(it.id)}>Sponsor this →</button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {sponsors.length > 0 && (
+        <section className="container" style={{ paddingTop: 56 }}>
+          <div className="card-paper" style={{ padding: 28 }}>
+            <span className="eyebrow">THANK YOU TO OUR SPONSORS</span>
+            <div className="row-flex" style={{ gap: 28, flexWrap: 'wrap', alignItems: 'center', marginTop: 18 }}>
+              {sponsors.map(sp => <SponsorLogo key={sp.id} sp={sp} />)}
+            </div>
+          </div>
+        </section>
+      )}
+
+      <section className="container" style={{ paddingTop: 56, paddingBottom: 64 }} ref={formRef}>
+        <div className="grid-2" style={{ gap: 36, alignItems: 'start' }}>
+          <div>
+            <span className="eyebrow">GET IN TOUCH</span>
+            <h2 className="serif" style={{ fontSize: 40, marginTop: 8, lineHeight: 1.05 }}>Sponsorship enquiry.</h2>
+            <p style={{ marginTop: 14, color: 'var(--ink-2)', lineHeight: 1.7, maxWidth: 480 }}>
+              Tell us which gear and tier you're interested in, or leave them as "not sure" and we'll talk it through. We reply to every enquiry, and nothing is charged until we've both agreed on the details.
+            </p>
+          </div>
+          <div className="card" style={{ padding: 24 }}>
+            {sent ? (
+              <div>
+                <div className="mono" style={{ fontSize: 12, color: 'var(--eucalyptus)', marginBottom: 6 }}>✓ ENQUIRY SENT</div>
+                <p style={{ fontSize: 14, color: 'var(--ink-2)' }}>Thanks, we'll be in touch soon. A copy has been sent to {form.email}.</p>
+                <button className="btn btn-ghost btn-sm" style={{ marginTop: 12 }} onClick={() => { setSent(false); setForm(f => ({ ...f, itemId: '', tierId: '', message: '' })); }}>Send another</button>
+              </div>
+            ) : (
+              <form onSubmit={submit}>
+                <label className="field"><span className="label">Business name</span><input className="input" value={form.businessName} onChange={e => set('businessName', e.target.value)} required maxLength={120} /></label>
+                <div className="grid-2" style={{ gap: 12 }}>
+                  <label className="field"><span className="label">Your name</span><input className="input" value={form.contactName} onChange={e => set('contactName', e.target.value)} maxLength={120} autoComplete="name" /></label>
+                  <label className="field"><span className="label">Phone</span><input className="input" type="tel" value={form.phone} onChange={e => set('phone', e.target.value)} maxLength={40} autoComplete="tel" /></label>
+                </div>
+                <label className="field"><span className="label">Email</span><input className="input" type="email" value={form.email} onChange={e => set('email', e.target.value)} required maxLength={200} autoComplete="email" /></label>
+                <label className="field"><span className="label">Business website (optional)</span><input className="input" type="url" placeholder="https://…" value={form.website} onChange={e => set('website', e.target.value)} maxLength={200} /></label>
+                <div className="grid-2" style={{ gap: 12 }}>
+                  <label className="field"><span className="label">Equipment</span>
+                    <select className="select" value={form.itemId} onChange={e => setForm(f => ({ ...f, itemId: e.target.value, tierId: '' }))}>
+                      <option value="">Not sure yet</option>
+                      {openItems.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+                    </select>
+                  </label>
+                  <label className="field"><span className="label">Tier</span>
+                    <select className="select" value={form.tierId} onChange={e => set('tierId', e.target.value)}>
+                      <option value="">Not sure yet</option>
+                      {tierOptions.map(t => <option key={t.id} value={t.id}>{t.name} ({sponsorPrice(t.priceAud)} {SPONSOR_PERIOD_LABEL[t.period] || ''})</option>)}
+                    </select>
+                  </label>
+                </div>
+                <label className="field"><span className="label">Anything else? (optional)</span><textarea className="textarea" value={form.message} onChange={e => set('message', e.target.value)} maxLength={3000} placeholder="e.g. we'd like our logo on the weather station page" /></label>
+                <ErrorText inline style={{ marginTop: 0, marginBottom: 8 }}>{error}</ErrorText>
+                <button className="btn btn-rust" style={{ width: '100%', justifyContent: 'center' }} type="submit" disabled={sending}>{sending ? 'Sending…' : 'Send enquiry →'}</button>
+              </form>
+            )}
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
+
 window.OE_PAGES = Object.assign(window.OE_PAGES || {}, {
   quote: QuotePage,
   book: BookingPage,
@@ -1883,6 +2115,7 @@ window.OE_PAGES = Object.assign(window.OE_PAGES || {}, {
   about: AboutPage,
   'capability-statement': CapabilityStatementPage,
   'humanly-ai': HumanlyAIPage,
+  sponsorship: SponsorshipPage,
   repairs: null, // resolved dynamically - alias to services
 });
 window.dispatchEvent(new Event('oe:pages-updated'));

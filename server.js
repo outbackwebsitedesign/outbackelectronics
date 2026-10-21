@@ -84,7 +84,7 @@ const PUBLIC_CSP = "default-src 'self'; " +
 const HSTS_VALUE = 'max-age=31536000; includeSubDomains';
 const PERMISSIONS_POLICY = 'camera=(), microphone=(), geolocation=(), payment=(), usb=()';
 const PUBLIC_RATE_WINDOW_MS = 1000 * 60 * 10;
-const PUBLIC_RATE_LIMITS = { analytics: 120, checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10, 'forgot-password': 5, 'reset-password': 10, 'gift-card/apply': 10, 'gift-card/balance': 5, 'warranty/order-lookup': 10, 'cart/get': 20, 'cart/validate': 60, 'cart/activity': 60, 'weather_register': 3, 'stock-notify': 5, 'membership': 10, 'order-token': 30, 'bookings/request': 10, 'tutorials/view': 60, 'review/submit': 8, 'review/upload-photo': 20, 'public-chat': 20 };
+const PUBLIC_RATE_LIMITS = { analytics: 120, checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10, 'forgot-password': 5, 'reset-password': 10, 'gift-card/apply': 10, 'gift-card/balance': 5, 'warranty/order-lookup': 10, 'cart/get': 20, 'cart/validate': 60, 'cart/activity': 60, 'weather_register': 3, 'stock-notify': 5, 'membership': 10, 'order-token': 30, 'bookings/request': 10, 'tutorials/view': 60, 'review/submit': 8, 'review/upload-photo': 20, 'public-chat': 20, 'sponsorship/enquire': 5 };
 
 fs.mkdirSync(path.join(__dirname, 'assets/uploads'), { recursive: true });
 fs.mkdirSync(path.join(__dirname, 'assets/uploads/software'), { recursive: true });
@@ -155,6 +155,7 @@ const REVIEWS_DB_PATH   = path.join(__dirname, 'reviews.db');
 const EWASTE_DB_PATH    = path.join(__dirname, 'ewaste.db');
 const SELLERS_DB_PATH   = path.join(__dirname, 'sellers.db');
 const CLIENTS_DB_PATH   = path.join(__dirname, 'clients.db');
+const SPONSORSHIP_DB_PATH = path.join(__dirname, 'sponsorship.db');
 const GROUPS_DB_PATH    = path.join(__dirname, 'groups.db');
 const USERS_DB_PATH     = path.join(__dirname, 'users.db');
 const SOFTWARE_DB_PATH  = path.join(__dirname, 'software.db');
@@ -1328,6 +1329,56 @@ function readClients() {
 }
 function writeClients(clients) { atomicWriteFile(CLIENTS_DB_PATH, JSON.stringify({ clients }, null, 2)); }
 
+// Equipment sponsorship: businesses sponsor a specific piece of shop equipment
+// at a reward tier. Tiers carry a default price and the rewards a sponsor
+// gets; an equipment item can override the price per tier. Enquiries come in
+// from the public /sponsorship form and become sponsors once staff agree terms.
+const SPONSORSHIP_KINDS = ['tiers', 'items', 'sponsors', 'enquiries'];
+const SPONSORSHIP_LOCK = 'sponsorship';
+function readSponsorship() {
+  try {
+    const p = JSON.parse(cachedReadFile(SPONSORSHIP_DB_PATH));
+    const out = {};
+    for (const k of SPONSORSHIP_KINDS) out[k] = Array.isArray(p[k]) ? p[k] : [];
+    return out;
+  } catch { return { tiers: [], items: [], sponsors: [], enquiries: [] }; }
+}
+function writeSponsorship(data) { atomicWriteFile(SPONSORSHIP_DB_PATH, JSON.stringify(data, null, 2)); }
+function sponsorIsCurrent(sp, today = new Date().toISOString().slice(0, 10)) {
+  if (sp.active === false) return false;
+  if (sp.startDate && sp.startDate > today) return false;
+  if (sp.endDate && sp.endDate < today) return false;
+  return true;
+}
+function sponsorshipTierPrice(item, tier) {
+  const override = item && item.prices ? item.prices[tier.id] : undefined;
+  const n = Number(override);
+  return override !== undefined && override !== '' && Number.isFinite(n) ? n : (Number(tier.priceAud) || 0);
+}
+// Public view: hidden tiers/items, inactive or expired sponsors, staff notes and
+// enquiries never leave the server.
+function publicSponsorship() {
+  const data = readSponsorship();
+  const byOrder = (a, b) => (Number(a.order) || 0) - (Number(b.order) || 0);
+  const tiers = data.tiers.filter(t => t.active !== false && t.name).sort(byOrder);
+  const sponsors = data.sponsors.filter(sp => sp.businessName && sponsorIsCurrent(sp));
+  const pubSponsor = sp => ({ id: sp.id, businessName: sp.businessName, url: sp.url || '', logoUrl: sp.logoUrl || '', logoAlt: sp.logoAlt || '', tierId: sp.tierId || '', itemId: sp.itemId || '' });
+  const items = data.items.filter(it => it.name && it.status !== 'hidden').sort(byOrder).map(it => {
+    const allowed = Array.isArray(it.tierIds) && it.tierIds.length ? tiers.filter(t => it.tierIds.includes(t.id)) : tiers;
+    return {
+      id: it.id, name: it.name, description: it.description || '', imageUrl: it.imageUrl || '', imageAlt: it.imageAlt || '',
+      open: it.status !== 'closed',
+      prices: allowed.map(t => ({ tierId: t.id, priceAud: sponsorshipTierPrice(it, t) })),
+      sponsors: sponsors.filter(sp => sp.itemId === it.id).map(pubSponsor),
+    };
+  });
+  return {
+    tiers: tiers.map(t => ({ id: t.id, name: t.name, priceAud: Number(t.priceAud) || 0, period: t.period || 'year', rewards: (Array.isArray(t.rewards) ? t.rewards : []).filter(Boolean), color: t.color || '' })),
+    items,
+    sponsors: sponsors.map(pubSponsor),
+  };
+}
+
 function readSellerLedger() {
   try { const d = JSON.parse(cachedReadFile(SELLER_LEDGER_DB_PATH)); return d.transactions || []; } catch { return []; }
 }
@@ -2338,6 +2389,7 @@ const STATIC_OG = {
   '/sellers':     { title: 'Info for Sellers - Outback Electronics', description: 'Sell your surplus electronics through Outback Electronics. Consignment and trade-in options available.',           image: '/assets/og-image.webp' },
   '/gift-cards':  { title: 'Gift Cards - Outback Electronics',      description: 'Give the gift of rugged gear. Outback Electronics gift cards, perfect for the remote tech enthusiast.',            image: '/assets/og-image.webp' },
   '/capability-statement': { title: 'Capability Statement - Outback Electronics', description: 'Full-service electronics and technology provider in Blackall QLD. Repair, custom hardware, PCB design, SCADA, software, hosting and cybersecurity.', image: '/assets/og-image.webp' },
+  '/sponsorship': { title: 'Sponsorship - Outback Electronics', description: 'Sponsor a piece of Outback Electronics equipment and get your business seen across remote Australia. Pick the gear and a reward tier.', image: '/assets/og-image.webp' },
   '/reviews':     { title: 'Customer Reviews - Outback Electronics', description: 'What customers across remote Australia say about Outback Electronics repairs, builds and service.',                  image: '/assets/og-image.webp' },
 };
 
@@ -3035,7 +3087,7 @@ const MAIN_SPA_ROUTES = new Set([
   'cart',
   'register',
   'about', 'repairs', 'humanly-ai', 'capability-statement',
-  'review', 'reviews',
+  'review', 'reviews', 'sponsorship',
 ]);
 
 // ── Email ─────────────────────────────────────────────────────────────────────
@@ -3595,6 +3647,39 @@ function emailStaffNewEwaste({ intakeId, name, email, description }) {
         ${description ? `<dt>ITEMS</dt><dd>${escHtml(description)}</dd>` : ''}
       </div>
       <a class="btn" href="${getAdminUrl()}/admin#ewaste">View in admin →</a>
+    `),
+  };
+}
+
+function emailStaffSponsorshipEnquiry(enq) {
+  return {
+    subject: `[SPONSORSHIP] ${String(enq.businessName).replace(/[\r\n]+/g, ' ')}${enq.itemName ? ` - ${String(enq.itemName).replace(/[\r\n]+/g, ' ')}` : ''}`,
+    html: emailHtml('New sponsorship enquiry', `
+      <div class="detail">
+        <dt>BUSINESS</dt><dd>${escHtml(enq.businessName)}</dd>
+        <dt>CONTACT</dt><dd>${escHtml(enq.contactName || '-')} &lt;${escHtml(enq.email)}&gt;${enq.phone ? `, ${escHtml(enq.phone)}` : ''}</dd>
+        ${enq.website ? `<dt>WEBSITE</dt><dd>${escHtml(enq.website)}</dd>` : ''}
+        <dt>EQUIPMENT</dt><dd>${escHtml(enq.itemName || 'Not sure yet')}</dd>
+        <dt>TIER</dt><dd>${escHtml(enq.tierName || 'Not sure yet')}</dd>
+        ${enq.message ? `<dt>MESSAGE</dt><dd>${escHtml(enq.message).replace(/\n/g, '<br>')}</dd>` : ''}
+      </div>
+      <p>Reply directly to this email to respond.</p>
+      <a class="btn" href="${getAdminUrl()}/sponsorship">View in admin →</a>
+    `),
+  };
+}
+
+function emailSponsorshipEnquiryReceived(enq) {
+  const first = String(enq.contactName || '').trim().split(' ')[0];
+  return {
+    subject: 'We got your sponsorship enquiry',
+    html: emailHtml('Thanks for your interest in sponsoring.', `
+      <p>Hi${first ? ` ${escHtml(first)}` : ''}, thanks for offering to sponsor Outback Electronics on behalf of ${escHtml(enq.businessName)}.</p>
+      <div class="detail">
+        <dt>EQUIPMENT</dt><dd>${escHtml(enq.itemName || 'Not sure yet')}</dd>
+        <dt>TIER</dt><dd>${escHtml(enq.tierName || 'Not sure yet')}</dd>
+      </div>
+      <p>We'll be in touch to talk through the details. Nothing is charged until we've both agreed on the sponsorship.</p>
     `),
   };
 }
@@ -6260,6 +6345,39 @@ const mainServer = http.createServer(async (req, res) => {
     return json(res, 200, { testimonials: out.slice(0, 12) });
   }
 
+  if (req.method === 'GET' && url.pathname === '/api/sponsorship') {
+    return json(res, 200, publicSponsorship());
+  }
+  if (req.method === 'POST' && url.pathname === '/api/sponsorship/enquire') {
+    if (publicRateLimited(getIp(req), 'sponsorship/enquire')) return json(res, 429, { error: 'too_many_requests' });
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const str = (v, max) => String(v ?? '').trim().slice(0, max);
+    const enq = {
+      businessName: str(body.businessName, 120), contactName: str(body.contactName, 120),
+      email: str(body.email, 200), phone: str(body.phone, 40), website: str(body.website, 200),
+      itemId: str(body.itemId, 80), tierId: str(body.tierId, 80), message: str(body.message, 3000),
+    };
+    if (!enq.businessName || !enq.email) return json(res, 422, { error: 'missing_fields', message: 'Business name and email are required.' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(enq.email)) return json(res, 422, { error: 'invalid_email', message: 'Email address is invalid.' });
+    const saved = await withFileLock(SPONSORSHIP_LOCK, async () => {
+      const data = readSponsorship();
+      const item = data.items.find(i => i.id === enq.itemId && i.status !== 'hidden');
+      const tier = data.tiers.find(t => t.id === enq.tierId && t.active !== false);
+      const rec = {
+        ...enq, itemId: item ? item.id : '', tierId: tier ? tier.id : '',
+        itemName: item ? item.name : '', tierName: tier ? tier.name : '',
+        id: 'spe-' + Date.now() + '-' + crypto.randomBytes(3).toString('hex'),
+        status: 'new', createdAt: new Date().toISOString(),
+      };
+      data.enquiries.push(rec);
+      writeSponsorship(data);
+      return rec;
+    });
+    sendEmail({ to: getNotifyEmail(), replyTo: saved.email, ...emailStaffSponsorshipEnquiry(saved) });
+    sendEmail({ to: saved.email, ...emailSponsorshipEnquiryReceived(saved) });
+    return json(res, 200, { ok: true });
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/clients') {
     const items = readClients()
       .filter(c => c.active !== false && c.name)
@@ -8710,6 +8828,45 @@ const adminServer = http.createServer(async (req, res) => {
     const session = requireRole(req, res, 'manager'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     writeServices(readServices().filter(s => s.id !== body.id));
+    return json(res, 200, { ok: true });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/admin/sponsorship') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    return json(res, 200, readSponsorship());
+  }
+  // One save/delete pair for all four lists, keyed by `kind`, since they live
+  // in one file and are edited from one admin section.
+  if (req.method === 'POST' && url.pathname === '/api/admin/sponsorship/save') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const kind = body.kind;
+    const item = body.item && typeof body.item === 'object' ? { ...body.item } : null;
+    if (!SPONSORSHIP_KINDS.includes(kind) || !item) return json(res, 400, { error: 'invalid_request' });
+    const nameKey = { tiers: 'name', items: 'name', sponsors: 'businessName', enquiries: 'businessName' }[kind];
+    if (!String(item[nameKey] || '').trim()) return json(res, 422, { error: 'name_required' });
+    const saved = await withFileLock(SPONSORSHIP_LOCK, async () => {
+      const data = readSponsorship();
+      const list = data[kind];
+      const idx = item.id ? list.findIndex(x => x.id === item.id) : -1;
+      if (idx >= 0) list[idx] = { ...list[idx], ...item, updatedAt: new Date().toISOString() };
+      else list.push({ ...item, id: 'sp' + kind[0] + '-' + Date.now() + '-' + crypto.randomBytes(3).toString('hex'), createdAt: new Date().toISOString() });
+      writeSponsorship(data);
+      return idx >= 0 ? list[idx] : list[list.length - 1];
+    });
+    auditAdminAction({ req, session, action: `sponsorship.${kind}.save`, result: { status: 'ok', changed: { id: saved.id, name: saved[nameKey] } } });
+    return json(res, 200, { ok: true, item: saved });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/sponsorship/delete') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    if (!SPONSORSHIP_KINDS.includes(body.kind) || !body.id) return json(res, 400, { error: 'invalid_request' });
+    await withFileLock(SPONSORSHIP_LOCK, async () => {
+      const data = readSponsorship();
+      data[body.kind] = data[body.kind].filter(x => x.id !== body.id);
+      writeSponsorship(data);
+    });
+    auditAdminAction({ req, session, action: `sponsorship.${body.kind}.delete`, result: { status: 'ok', changed: { id: body.id } } });
     return json(res, 200, { ok: true });
   }
 

@@ -636,7 +636,7 @@ function HandoffForm({ onSubmit, onCancel }) {
 }
 
 // ---------------- Router ----------------
-const KNOWN_PAGES = [...PRIMARY_PAGES, ...UTILITY_PAGES, ...ACCOUNT_PAGES, {id:'cart'}, {id:'order-success'}, {id:'order-cancelled'}, {id:'register'}, {id:'about'}, {id:'repairs'}, {id:'humanly-ai'}, {id:'capability-statement'}, {id:'review'}, {id:'reviews'}].map(p => p.id);
+const KNOWN_PAGES = [...PRIMARY_PAGES, ...UTILITY_PAGES, ...ACCOUNT_PAGES, {id:'cart'}, {id:'order-success'}, {id:'order-cancelled'}, {id:'register'}, {id:'about'}, {id:'repairs'}, {id:'humanly-ai'}, {id:'capability-statement'}, {id:'review'}, {id:'reviews'}, {id:'sponsorship'}].map(p => p.id);
 
 function App() {
   useEffect(() => { ensureCsrf(); }, []);

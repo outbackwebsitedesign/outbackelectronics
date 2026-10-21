@@ -489,6 +489,7 @@ export function SiteFooter({ go }) {
               {link('about', 'About')}
               {link('sellers', 'Info for Sellers')}
               {link('sell-gear', 'Sell Your Gear')}
+              {link('sponsorship', 'Sponsorship')}
             </ul>
           </div>
           <div>
