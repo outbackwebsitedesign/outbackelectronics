@@ -156,6 +156,7 @@ const EWASTE_DB_PATH    = path.join(__dirname, 'ewaste.db');
 const SELLERS_DB_PATH   = path.join(__dirname, 'sellers.db');
 const CLIENTS_DB_PATH   = path.join(__dirname, 'clients.db');
 const SPONSORSHIP_DB_PATH = path.join(__dirname, 'sponsorship.db');
+const CONTACT_MESSAGES_DB_PATH = path.join(__dirname, 'contact-messages.db');
 const GROUPS_DB_PATH    = path.join(__dirname, 'groups.db');
 const USERS_DB_PATH     = path.join(__dirname, 'users.db');
 const SOFTWARE_DB_PATH  = path.join(__dirname, 'software.db');
@@ -1364,6 +1365,29 @@ function publicSponsorship() {
     sponsored: String(sp.sponsoredLabel || '').trim() || itemName(sp.itemId),
   }));
   return { items, sponsors };
+}
+
+// Messages from the contact page and the chat widget's "send to a human".
+// Saved before the staff email goes out, so a failed or lost email never loses
+// the message: it is always in the admin Messages section.
+const CONTACT_MESSAGES_LOCK = 'contact-messages';
+function readContactMessages() {
+  try { const p = JSON.parse(cachedReadFile(CONTACT_MESSAGES_DB_PATH)); return Array.isArray(p.messages) ? p.messages : []; } catch { return []; }
+}
+function writeContactMessages(messages) { atomicWriteFile(CONTACT_MESSAGES_DB_PATH, JSON.stringify({ messages }, null, 2)); }
+
+// Records whether the staff notification for a saved enquiry actually went out,
+// so the dashboard can flag the ones whose email failed.
+function recordEmailOutcome(lockKey, read, write, id, ok) {
+  return withFileLock(lockKey, async () => {
+    const data = read();
+    const list = Array.isArray(data) ? data : data.enquiries;
+    const rec = list.find(x => x.id === id);
+    if (!rec) return;
+    rec.emailStatus = ok ? 'sent' : 'failed';
+    rec.emailAttemptedAt = new Date().toISOString();
+    write(data);
+  }).catch(err => console.error('[email] could not record outcome →', id, err && err.message));
 }
 
 function readSellerLedger() {
@@ -3090,10 +3114,12 @@ function getMailer() {
   });
 }
 
+// Resolves true once the SMTP server accepts the message, false when it could
+// not be sent (no recipient, SMTP not configured, or a send error). Never throws.
 async function sendEmail({ to, subject, html, replyTo, attachments }) {
-  if (!to) return;
+  if (!to) return false;
   const transport = getMailer();
-  if (!transport) return;
+  if (!transport) { console.error('[email] not sent, SMTP is not configured →', to, '|', subject); return false; }
   const smtp = getSmtpConfig();
   const fromAddress = `Outback Electronics <${smtp.user || 'noreply@outbackelectronics.com.au'}>`;
   const text = html.replace(/<[^>]+>/g, '').replace(/\n{3,}/g, '\n\n').trim();
@@ -3102,8 +3128,10 @@ async function sendEmail({ to, subject, html, replyTo, attachments }) {
   if (attachments && attachments.length) msg.attachments = attachments;
   try {
     await transport.sendMail(msg);
+    return true;
   } catch (err) {
     console.error('[email] failed →', to, '|', err.message);
+    return false;
   }
 }
 
@@ -6345,13 +6373,14 @@ const mainServer = http.createServer(async (req, res) => {
         ...enq, itemId: item ? item.id : '', itemName: item ? item.name : '',
         itemAmountAud: item ? Number(item.amountAud) || 0 : 0, itemStatus: item ? item.status || 'available' : '',
         id: 'spe-' + Date.now() + '-' + crypto.randomBytes(3).toString('hex'),
-        status: 'new', createdAt: new Date().toISOString(),
+        status: 'new', createdAt: new Date().toISOString(), emailStatus: 'pending',
       };
       data.enquiries.push(rec);
       writeSponsorship(data);
       return rec;
     });
-    sendEmail({ to: getNotifyEmail(), replyTo: saved.email, ...emailStaffSponsorshipEnquiry(saved) });
+    sendEmail({ to: getNotifyEmail(), replyTo: saved.email, ...emailStaffSponsorshipEnquiry(saved) })
+      .then(ok => recordEmailOutcome(SPONSORSHIP_LOCK, readSponsorship, writeSponsorship, saved.id, ok));
     return json(res, 200, { ok: true, itemName: saved.itemName });
   }
 
@@ -7988,11 +8017,24 @@ const mainServer = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/contact/quick-message') {
     if (publicRateLimited(getIp(req), 'contact/quick-message')) return json(res, 429, { error: 'too_many_requests' });
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
-    const { name, email, msg } = body || {};
+    const name = String(body?.name ?? '').trim().slice(0, 120);
+    const email = String(body?.email ?? '').trim().slice(0, 200);
+    const msg = String(body?.msg ?? '').trim().slice(0, 20000);
     if (!name || !email || !msg) return json(res, 422, { error: 'missing_fields' });
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())) return json(res, 422, { error: 'invalid_email', message: 'Email address is invalid.' });
-    const tmpl = emailStaffContactMessage({ name, email, msg });
-    sendEmail({ to: getNotifyEmail(), replyTo: email, ...tmpl });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json(res, 422, { error: 'invalid_email', message: 'Email address is invalid.' });
+    const saved = await withFileLock(CONTACT_MESSAGES_LOCK, async () => {
+      const messages = readContactMessages();
+      const rec = {
+        id: 'msg-' + Date.now() + '-' + crypto.randomBytes(3).toString('hex'),
+        name, email, msg, source: body?.source === 'chat' ? 'chat' : 'contact',
+        status: 'new', createdAt: new Date().toISOString(), emailStatus: 'pending',
+      };
+      messages.push(rec);
+      writeContactMessages(messages);
+      return rec;
+    });
+    sendEmail({ to: getNotifyEmail(), replyTo: email, ...emailStaffContactMessage({ name, email, msg }) })
+      .then(ok => recordEmailOutcome(CONTACT_MESSAGES_LOCK, readContactMessages, writeContactMessages, saved.id, ok));
     return json(res, 200, { ok: true });
   }
 
@@ -8808,6 +8850,35 @@ const adminServer = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true });
   }
 
+  if (req.method === 'GET' && url.pathname === '/api/admin/messages') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    return json(res, 200, { items: readContactMessages() });
+  }
+  // Only the staff-side fields change: the customer's message is never rewritten.
+  if (req.method === 'POST' && url.pathname === '/api/admin/messages/save') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const saved = await withFileLock(CONTACT_MESSAGES_LOCK, async () => {
+      const messages = readContactMessages();
+      const rec = messages.find(m => m.id === body.id);
+      if (!rec) return null;
+      if (['new', 'replied', 'closed'].includes(body.status)) rec.status = body.status;
+      if (typeof body.staffNotes === 'string') rec.staffNotes = body.staffNotes.slice(0, 5000);
+      rec.updatedAt = new Date().toISOString();
+      writeContactMessages(messages);
+      return rec;
+    });
+    if (!saved) return json(res, 404, { error: 'not_found' });
+    return json(res, 200, { ok: true, item: saved });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/messages/delete') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    await withFileLock(CONTACT_MESSAGES_LOCK, async () => writeContactMessages(readContactMessages().filter(m => m.id !== body.id)));
+    auditAdminAction({ req, session, action: 'message.delete', result: { status: 'ok', changed: { id: body.id } } });
+    return json(res, 200, { ok: true });
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/admin/sponsorship') {
     const session = requireRole(req, res, 'manager'); if (!session) return;
     return json(res, 200, readSponsorship());
@@ -8822,6 +8893,9 @@ const adminServer = http.createServer(async (req, res) => {
     if (!SPONSORSHIP_KINDS.includes(kind) || !item) return json(res, 400, { error: 'invalid_request' });
     const nameKey = { items: 'name', sponsors: 'businessName', enquiries: 'fullName' }[kind];
     if (!String(item[nameKey] || '').trim()) return json(res, 422, { error: 'name_required' });
+    // The email outcome is recorded by the server only, a stale copy from an
+    // open admin drawer must not overwrite it.
+    delete item.emailStatus; delete item.emailAttemptedAt;
     const saved = await withFileLock(SPONSORSHIP_LOCK, async () => {
       const data = readSponsorship();
       const list = data[kind];

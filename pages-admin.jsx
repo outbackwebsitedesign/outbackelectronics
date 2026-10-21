@@ -471,6 +471,7 @@ const NAV_ICONS = {
   repairs:      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>,
   'safety-notices': <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
   'hdd-reports': <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="2" y="7" width="20" height="10" rx="2"/><line x1="6" y1="12" x2="6.01" y2="12"/><line x1="10" y1="12" x2="18" y2="12"/><path d="M6 17v3M18 17v3"/></svg>,
+  messages:     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>,
   quotes:       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>,
   'pc-builder': <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="6" y="2" width="12" height="20" rx="1"/><line x1="9" y1="6" x2="15" y2="6"/><line x1="9" y1="9" x2="15" y2="9"/><circle cx="12" cy="16" r="2.5"/></svg>,
   reviews:      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
@@ -509,6 +510,7 @@ const ADMIN_SECTIONS = [
     { id:'hdd-reports', label:'HDD Condition Reports', minRole:'staff', excludeRoles:['seller'] },
     { id:'safety-notices', label:'Dangerous Device Notices', minRole:'staff', excludeRoles:['seller'] },
     { id:'quotes',    label:'Quotes',  minRole:'staff', excludeRoles:['seller'] },
+    { id:'messages',  label:'Messages', minRole:'technician' },
     { id:'pc-builder', label:'PC Builder', minRole:'technician' },
     { id:'reviews',   label:'Reviews',       minRole:'staff', excludeRoles:['seller'] },
     { id:'ewaste',    label:'eWaste Intake', minRole:'technician' },
@@ -7460,6 +7462,107 @@ function AdminClients() {
 }
 
 // ============================================================
+// MESSAGES (contact page and chat widget)
+// ============================================================
+// Every quick message from the contact page, and every chat widget "send to a
+// human" handoff, is saved here before the staff email is sent, so nothing is
+// lost when an email fails or goes missing.
+const MESSAGE_STATUSES = [['new', 'New', 'tag-rust'], ['replied', 'Replied', 'tag-euc'], ['closed', 'Closed', 'tag-outline']];
+
+function AdminMessages({ sessionInfo }) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('open');
+  const [edit, setEdit] = useState(null); // { form, snap }
+  const [busy, setBusy] = useState(false);
+  const canDelete = (ROLE_LEVELS[sessionInfo?.role] ?? 0) >= ROLE_LEVELS.manager;
+
+  useEffect(() => {
+    fetch('/api/admin/messages', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setRows(d.items || []))
+      .catch(() => adminToast('Could not load messages.'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const open = (row) => setEdit({ form: { ...row }, snap: JSON.stringify(row) });
+  const f = edit?.form || {};
+  const setF = (k, v) => setEdit(e => ({ ...e, form: { ...e.form, [k]: v } }));
+  const dirty = !!edit && JSON.stringify(f) !== edit.snap;
+
+  const save = async () => {
+    setBusy(true);
+    const r = await fetch('/api/admin/messages/save', { method: 'POST', headers: postHeaders(), credentials: 'include', body: JSON.stringify({ id: f.id, status: f.status, staffNotes: f.staffNotes || '' }) }).catch(() => null);
+    setBusy(false);
+    if (!r || !r.ok) { adminToast('Save failed, please try again.'); return; }
+    const d = await r.json();
+    setRows(rs => rs.map(x => x.id === d.item.id ? d.item : x));
+    setEdit(null);
+  };
+  const remove = async () => {
+    if (!(await adminConfirm(`Delete the message from ${f.name}? This cannot be undone.`, { title: 'Delete message', confirmLabel: 'Delete', danger: true }))) return;
+    const r = await fetch('/api/admin/messages/delete', { method: 'POST', headers: postHeaders(), credentials: 'include', body: JSON.stringify({ id: f.id }) }).catch(() => null);
+    if (!r || !r.ok) { adminToast('Delete failed.'); return; }
+    setRows(rs => rs.filter(x => x.id !== f.id));
+    setEdit(null);
+  };
+
+  const counts = {
+    open: rows.filter(r => r.status !== 'closed').length,
+    failed: rows.filter(r => r.emailStatus === 'failed').length,
+    all: rows.length,
+  };
+  const visible = rows.filter(r => filter === 'all' ? true : filter === 'failed' ? r.emailStatus === 'failed' : r.status !== 'closed');
+
+  return (
+    <div style={{ padding: 32 }}>
+      <div className="tabs" style={{ marginBottom: 14 }}>
+        {[['open', `Open (${counts.open})`], ['failed', `Email failed (${counts.failed})`], ['all', `All (${counts.all})`]].map(([k, label]) => (
+          <div key={k} role="button" tabIndex={0} className={`tab ${filter === k ? 'active' : ''}`} style={{ cursor: 'pointer' }}
+            onClick={() => setFilter(k)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setFilter(k); } }}>{label}</div>
+        ))}
+      </div>
+      <p style={{ fontSize: 13, color: 'var(--ink-2)', maxWidth: 700, marginBottom: 18 }}>Every contact-page message and chat "send to a human" request is saved here as well as emailed to you, so nothing is lost if an email fails.</p>
+      <Table loading={loading} emptyMessage="No messages here."
+        defaultSort={{ key: 'date', dir: 'desc' }}
+        columns={[
+          { key: 'date', label: 'Received', w: '130px', sort: r => r.createdAt || '', render: r => <span className="mono" style={{ fontSize: 12 }}>{r.createdAt ? new Date(r.createdAt).toLocaleString('en-AU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-'}</span> },
+          { key: 'name', label: 'From', w: '1.3fr', sort: true, render: r => <><div style={{ fontWeight: 600 }}>{r.name}</div><div style={{ fontSize: 12, color: 'var(--ink-2)' }}>{r.email}</div></> },
+          { key: 'source', label: 'Via', w: '90px', render: r => <span className="mono" style={{ fontSize: 11 }}>{r.source === 'chat' ? 'CHAT' : 'CONTACT'}</span> },
+          { key: 'msg', label: 'Message', w: '2.5fr', render: r => <span style={{ fontSize: 13, color: 'var(--ink-2)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{r.source === 'chat' ? String(r.msg || '').replace(/^Chat widget handoff:\s*/, '') : r.msg}</span> },
+          { key: 'status', label: 'Status', w: '140px', sort: r => r.status || 'new', render: r => <div style={{ display: 'grid', gap: 4, justifyItems: 'start' }}>{statusTag(MESSAGE_STATUSES, r.status || 'new')}<EmailStatusBadge status={r.emailStatus} /></div> },
+        ]}
+        rows={visible} onRowClick={r => open(r)} />
+
+      {edit && (
+        <Drawer open={true} onClose={() => setEdit(null)} dirty={dirty} title={`Message from ${f.name}`}
+          footer={<div className="row-flex" style={{ justifyContent: 'space-between' }}>
+            {canDelete && <button className="btn btn-ghost btn-sm" style={{ color: 'var(--rust)' }} onClick={remove}>Delete</button>}
+            <div className="row-flex" style={{ gap: 8, marginLeft: 'auto' }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setEdit(null)}>Cancel</button>
+              <button className="btn btn-sm" disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save'}</button>
+            </div>
+          </div>}>
+          <div className="card-paper" style={{ padding: 16, marginBottom: 16, fontSize: 13.5, lineHeight: 1.7 }}>
+            <div><strong>{f.name}</strong> · <a href={`mailto:${f.email}`}>{f.email}</a></div>
+            <div className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 4 }}>{f.source === 'chat' ? 'CHAT WIDGET HANDOFF' : 'CONTACT PAGE'} · RECEIVED {f.createdAt ? new Date(f.createdAt).toLocaleString('en-AU') : '-'}</div>
+            <div style={{ marginTop: 12, whiteSpace: 'pre-wrap', maxHeight: 420, overflowY: 'auto' }}>{f.msg}</div>
+            {f.emailStatus === 'failed' && <div className="notice" style={{ marginTop: 10, fontSize: 12.5 }}>The notification email for this message could not be sent, so this record is the only copy. Check Settings, Integrations, Email.</div>}
+          </div>
+          <label className="field"><span className="label">Status</span>
+            <select className="select" value={f.status || 'new'} onChange={e => setF('status', e.target.value)}>
+              {MESSAGE_STATUSES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </label>
+          <label className="field"><span className="label">Staff notes</span><textarea className="textarea" value={f.staffNotes || ''} onChange={e => setF('staffNotes', e.target.value)} /></label>
+          <a className="btn btn-ghost btn-sm" style={{ textDecoration: 'none' }} href={`mailto:${f.email}?subject=${encodeURIComponent('Re: your message to Outback Electronics')}`}><Icon name="mail" size={13} /> Reply by email</a>
+        </Drawer>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
 // SPONSORSHIP
 // ============================================================
 // Equipment sponsorship for the public /sponsorship page: opportunities (each
@@ -7470,6 +7573,13 @@ function AdminClients() {
 const SPONSOR_ITEM_STATUSES = [['available', 'Available', 'tag-euc'], ['discussion', 'Under Discussion', 'tag-ochre'], ['sponsored', 'Sponsored', 'tag-outline']];
 const SPONSOR_ENQUIRY_STATUSES = [['new', 'New', 'tag-rust'], ['contacted', 'Contacted', 'tag-ochre'], ['arranged', 'Arranged', 'tag-euc'], ['closed', 'Closed', 'tag-outline']];
 const sponsorMoney = n => '$' + (Number(n) || 0).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// Shown on enquiries saved before their staff email was sent, so one whose
+// email failed (or never went, e.g. SMTP not set up) still stands out.
+function EmailStatusBadge({ status }) {
+  if (status === 'failed') return <span className="tag tag-rust" title="The notification email could not be sent. This record is the only copy.">EMAIL FAILED</span>;
+  if (status === 'pending') return <span className="tag tag-outline" title="The notification email had not been confirmed as sent.">EMAIL PENDING</span>;
+  return null;
+}
 function statusTag(list, value) {
   const s = list.find(x => x[0] === value) || list[0];
   return <span className={`tag ${s[2]}`}>{s[1].toUpperCase()}</span>;
@@ -7589,7 +7699,7 @@ function AdminSponsorship({ siteUrl }) {
             { key: 'fullName', label: 'Name', w: '1.3fr', sort: true, render: r => <><div style={{ fontWeight: 600 }}>{r.fullName}</div>{r.businessName && <div style={{ fontSize: 12, color: 'var(--ink-2)' }}>{r.businessName}</div>}</> },
             { key: 'contact', label: 'Contact', w: '1.5fr', render: r => <span style={{ fontSize: 13 }}>{r.email}{r.phone ? <><br />{r.phone}</> : null}</span> },
             { key: 'item', label: 'Equipment', w: '1.3fr', render: r => itemName(r.itemId) || r.itemName || <span style={{ color: 'var(--ink-3)' }}>General enquiry</span> },
-            { key: 'status', label: 'Status', w: '120px', sort: r => r.status || 'new', render: r => statusTag(SPONSOR_ENQUIRY_STATUSES, r.status || 'new') },
+            { key: 'status', label: 'Status', w: '140px', sort: r => r.status || 'new', render: r => <div style={{ display: 'grid', gap: 4, justifyItems: 'start' }}>{statusTag(SPONSOR_ENQUIRY_STATUSES, r.status || 'new')}<EmailStatusBadge status={r.emailStatus} /></div> },
           ]}
           rows={data.enquiries} onRowClick={r => open('enquiries', r)} />
       </>)}
@@ -7643,6 +7753,7 @@ function AdminSponsorship({ siteUrl }) {
               <div style={{ marginTop: 8 }}><span style={{ color: 'var(--ink-3)' }}>Equipment:</span> {itemName(f.itemId) || f.itemName || 'General enquiry'}{f.itemAmountAud ? ` (${sponsorMoney(f.itemAmountAud)})` : ''}</div>
               {f.message && <div style={{ marginTop: 8, whiteSpace: 'pre-wrap' }}>{f.message}</div>}
               <div className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 8 }}>RECEIVED {f.createdAt ? new Date(f.createdAt).toLocaleString('en-AU') : '-'}</div>
+              {f.emailStatus === 'failed' && <div className="notice" style={{ marginTop: 10, fontSize: 12.5 }}>The notification email for this enquiry could not be sent, so this record is the only copy. Check Settings, Integrations, Email.</div>}
             </div>
             <label className="field"><span className="label">Status</span>
               <select className="select" value={f.status || 'new'} onChange={e => setF('status', e.target.value)}>
@@ -14107,6 +14218,7 @@ const ADMIN_VIEWS = {
   'hdd-reports': { c: AdminHddReports, t:'HDD Condition Reports', staticSubtitle:'S.M.A.R.T. summary · condition notes · printable PDF' },
   'safety-notices': { c: AdminSafetyNotices, t:'Dangerous Device Notices', staticSubtitle:'severe electrical fault · customer acknowledgement · printable PDF' },
   quotes:     { c: AdminQuotes,     t:'Quotes' },
+  messages:   { c: AdminMessages,   t:'Messages', staticSubtitle:'contact page · chat handoffs · saved even if the email fails' },
   'pc-builder': { c: AdminPcBuilder, t:'PC Builder', staticSubtitle:'pick parts · check fit and compatibility · quote it' },
   reviews:    { c: AdminReviews,    t:'Reviews',           staticSubtitle:'pending · approved · rejected' },
   ewaste:     { c: AdminEwaste,     t:'eWaste Intake' },
@@ -14136,7 +14248,7 @@ const ADMIN_VIEWS = {
 };
 
 const ADMIN_ALL_IDS = new Set([
-  'overview','orders','payment-plans','repairs','hdd-reports','safety-notices','quotes','pc-builder','reviews','ewaste','bookings','availability',
+  'overview','orders','payment-plans','repairs','hdd-reports','safety-notices','quotes','messages','pc-builder','reviews','ewaste','bookings','availability',
   'products','services','software','tutorials','ai',
   'groups','customers','sellers','clients','sponsorship',
   'memberships','gift-cards','rewards','expenses','tax-reports','policies','seller-billing','settings','audit-log',

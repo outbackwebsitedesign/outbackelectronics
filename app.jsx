@@ -546,7 +546,7 @@ function ChatWidget({ product }) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() },
       credentials: 'include',
-      body: JSON.stringify({ name, email, msg: `Chat widget handoff:\n\n${transcript}` }),
+      body: JSON.stringify({ name, email, msg: `Chat widget handoff:\n\n${transcript}`, source: 'chat' }),
     });
     setHandoff({ name, email });
   }
