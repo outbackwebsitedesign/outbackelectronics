@@ -7462,28 +7462,21 @@ function AdminClients() {
 // ============================================================
 // SPONSORSHIP
 // ============================================================
-// Businesses sponsor a specific piece of equipment at a reward tier. Tiers hold
-// the default price and the rewards; equipment can override the price per tier.
-// Enquiries arrive from the public /sponsorship form and become sponsors once
-// terms are agreed. Everything lives in sponsorship.db, saved per list `kind`.
-const SPONSOR_PERIODS = [['year', 'Per year'], ['month', 'Per month'], ['once', 'One-off']];
-const SPONSOR_ENQUIRY_STATUSES = [['new', 'New', 'tag-rust'], ['contacted', 'Contacted', 'tag-ochre'], ['accepted', 'Accepted', 'tag-euc'], ['declined', 'Declined', 'tag-outline']];
-const SPONSOR_ITEM_STATUSES = [['open', 'Open for sponsors', 'tag-ochre'], ['closed', 'Fully sponsored', 'tag-euc'], ['hidden', 'Hidden', 'tag-outline']];
+// Equipment sponsorship for the public /sponsorship page: opportunities (each
+// with an exact amount, labour-credit value and its own rewards), the
+// Sponsorship Wall, and enquiries from the public form. Enquiries are
+// expressions of interest only, payment and approval are always arranged by
+// hand. Everything lives in sponsorship.db and is saved per list `kind`.
+const SPONSOR_ITEM_STATUSES = [['available', 'Available', 'tag-euc'], ['discussion', 'Under Discussion', 'tag-ochre'], ['sponsored', 'Sponsored', 'tag-outline']];
+const SPONSOR_ENQUIRY_STATUSES = [['new', 'New', 'tag-rust'], ['contacted', 'Contacted', 'tag-ochre'], ['arranged', 'Arranged', 'tag-euc'], ['closed', 'Closed', 'tag-outline']];
 const sponsorMoney = n => '$' + (Number(n) || 0).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-function sponsorStatus(sp) {
-  const today = new Date().toISOString().slice(0, 10);
-  if (sp.active === false) return ['HIDDEN', 'tag-outline'];
-  if (sp.startDate && sp.startDate > today) return ['SCHEDULED', 'tag-ochre'];
-  if (sp.endDate && sp.endDate < today) return ['ENDED', 'tag-outline'];
-  return ['CURRENT', 'tag-euc'];
-}
 function statusTag(list, value) {
   const s = list.find(x => x[0] === value) || list[0];
   return <span className={`tag ${s[2]}`}>{s[1].toUpperCase()}</span>;
 }
 
 function AdminSponsorship({ siteUrl }) {
-  const [data, setData] = useState({ tiers: [], items: [], sponsors: [], enquiries: [] });
+  const [data, setData] = useState({ items: [], sponsors: [], enquiries: [] });
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('enquiries');
   const [edit, setEdit] = useState(null); // { kind, form, snap, fromEnquiryId? }
@@ -7492,19 +7485,17 @@ function AdminSponsorship({ siteUrl }) {
   useEffect(() => {
     fetch('/api/admin/sponsorship', { credentials: 'include' })
       .then(r => r.ok ? r.json() : Promise.reject())
-      .then(d => setData({ tiers: d.tiers || [], items: d.items || [], sponsors: d.sponsors || [], enquiries: d.enquiries || [] }))
+      .then(d => setData({ items: d.items || [], sponsors: d.sponsors || [], enquiries: d.enquiries || [] }))
       .catch(() => adminToast('Could not load sponsorship data.'))
       .finally(() => setLoading(false));
   }, []);
 
-  const tierName = id => data.tiers.find(t => t.id === id)?.name || '';
   const itemName = id => data.items.find(i => i.id === id)?.name || '';
   const byOrder = list => [...list].sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0));
 
   const blank = {
-    tiers: () => ({ name: '', priceAud: '', period: 'year', rewards: [], color: '#d39a37', order: data.tiers.length, active: true }),
-    items: () => ({ name: '', description: '', imageUrl: '', imageAlt: '', status: 'open', tierIds: [], prices: {}, order: data.items.length }),
-    sponsors: () => ({ businessName: '', logoUrl: '', logoAlt: '', url: '', itemId: '', tierId: '', startDate: todayISODate(), endDate: '', agreedPriceAud: '', contactName: '', email: '', phone: '', notes: '', active: true }),
+    items: () => ({ name: '', description: '', imageUrl: '', imageAlt: '', amountAud: '', labourCreditAud: '', rewards: ['Recognition on the Outback Electronics Sponsorship Wall'], status: 'available', order: data.items.length }),
+    sponsors: () => ({ businessName: '', logoUrl: '', logoAlt: '', url: '', itemId: '', sponsoredLabel: '', photoUrl: '', photoAlt: '', acknowledgement: '', contactName: '', email: '', phone: '', notes: '', order: data.sponsors.length, active: true }),
   };
   const open = (kind, row, extra = {}) => {
     const form = row ? { ...row } : blank[kind]();
@@ -7526,21 +7517,18 @@ function AdminSponsorship({ siteUrl }) {
 
   const save = async () => {
     const { kind, form, fromEnquiryId } = edit;
-    let item = { ...form };
-    if (kind === 'tiers') {
-      item.rewards = (item.rewards || []).map(r => r.trim()).filter(Boolean);
-      item.priceAud = Number(item.priceAud) || 0;
-    }
+    const item = { ...form };
     if (kind === 'items') {
-      const prices = {};
-      for (const [k, v] of Object.entries(item.prices || {})) if (v !== '' && v != null && Number.isFinite(Number(v))) prices[k] = Number(v);
-      item.prices = prices;
+      if (!(Number(item.amountAud) > 0)) { adminToast('Set the exact sponsorship amount.'); return; }
+      item.amountAud = Math.round(Number(item.amountAud) * 100) / 100;
+      item.labourCreditAud = Math.round((Number(item.labourCreditAud) || 0) * 100) / 100;
+      item.rewards = (item.rewards || []).map(r => r.trim()).filter(Boolean);
     }
     setBusy(true);
     const saved = await persist(kind, item);
     if (saved && kind === 'sponsors' && fromEnquiryId) {
       const enq = data.enquiries.find(e => e.id === fromEnquiryId);
-      if (enq) await persist('enquiries', { ...enq, status: 'accepted', sponsorId: saved.id });
+      if (enq) await persist('enquiries', { ...enq, status: 'arranged', sponsorId: saved.id });
     }
     setBusy(false);
     if (saved) { setEdit(null); adminToast('Saved.', 'success'); }
@@ -7548,10 +7536,9 @@ function AdminSponsorship({ siteUrl }) {
 
   const remove = async () => {
     const { kind, form } = edit;
-    const label = form.name || form.businessName || 'this entry';
-    const inUse = kind === 'tiers' ? data.sponsors.filter(s => s.tierId === form.id).length
-      : kind === 'items' ? data.sponsors.filter(s => s.itemId === form.id).length : 0;
-    const msg = `Delete ${label}? This cannot be undone.` + (inUse ? `\n${inUse} sponsor record${inUse === 1 ? ' still points' : 's still point'} at it and will show without it.` : '');
+    const label = form.name || form.businessName || form.fullName || 'this entry';
+    const inUse = kind === 'items' ? data.sponsors.filter(s => s.itemId === form.id).length : 0;
+    const msg = `Delete ${label}? This cannot be undone.` + (inUse ? `\n${inUse} Sponsorship Wall ${inUse === 1 ? 'entry names' : 'entries name'} this item, give ${inUse === 1 ? 'it' : 'them'} a "Sponsored" label so the wall still says what they sponsored.` : '');
     if (!(await adminConfirm(msg, { title: 'Delete', confirmLabel: 'Delete', danger: true }))) return;
     const r = await fetch('/api/admin/sponsorship/delete', { method: 'POST', headers: postHeaders(), credentials: 'include', body: JSON.stringify({ kind, id: form.id }) }).catch(() => null);
     if (!r || !r.ok) { adminToast('Delete failed.'); return; }
@@ -7560,26 +7547,23 @@ function AdminSponsorship({ siteUrl }) {
   };
 
   const sponsorFromEnquiry = (enq) => {
-    open('sponsors', null, { fromEnquiryId: enq.id });
-    setEdit(e => {
-      const form = { ...e.form, businessName: enq.businessName, url: enq.website || '', itemId: enq.itemId || '', tierId: enq.tierId || '', contactName: enq.contactName || '', email: enq.email || '', phone: enq.phone || '' };
-      return { ...e, form, snap: '' };
-    });
+    const form = { ...blank.sponsors(), businessName: enq.businessName || enq.fullName, itemId: enq.itemId || '', contactName: enq.fullName || '', email: enq.email || '', phone: enq.phone || '' };
+    setTab('sponsors');
+    setEdit({ kind: 'sponsors', form, snap: '', fromEnquiryId: enq.id });
   };
 
   const newCount = data.enquiries.filter(e => (e.status || 'new') === 'new').length;
   const tabs = [
-    ['enquiries', `Enquiries${newCount ? ` (${newCount} new)` : ''}`],
-    ['sponsors', `Sponsors (${data.sponsors.length})`],
-    ['items', `Equipment (${data.items.length})`],
-    ['tiers', `Tiers (${data.tiers.length})`],
+    ['enquiries', `Enquiries${newCount ? ` (${newCount} new)` : ` (${data.enquiries.length})`}`],
+    ['sponsors', `Sponsorship Wall (${data.sponsors.length})`],
+    ['items', `Opportunities (${data.items.length})`],
   ];
-  const addLabel = { sponsors: '+ New sponsor', items: '+ New equipment', tiers: '+ New tier' }[tab];
+  const addLabel = { sponsors: '+ Add sponsor', items: '+ New opportunity' }[tab];
 
   const f = edit?.form || {};
   const dirty = !!edit && JSON.stringify(f) !== edit.snap;
-  const drawerTitle = !edit ? '' : edit.kind === 'enquiries' ? `Enquiry from ${f.businessName}`
-    : f.id ? (f.name || f.businessName) : { tiers: 'New tier', items: 'New equipment', sponsors: 'New sponsor' }[edit.kind];
+  const drawerTitle = !edit ? '' : edit.kind === 'enquiries' ? `Enquiry from ${f.fullName}`
+    : f.id ? (f.name || f.businessName) : { items: 'New opportunity', sponsors: 'Add to Sponsorship Wall' }[edit.kind];
 
   return (
     <div style={{ padding: 32 }}>
@@ -7597,63 +7581,49 @@ function AdminSponsorship({ siteUrl }) {
       </div>
 
       {tab === 'enquiries' && (<>
-        <p style={{ fontSize: 13, color: 'var(--ink-2)', maxWidth: 680, marginBottom: 18 }}>Sent from the public Sponsorship page. Open one to update its status, or turn it into a sponsor once you've agreed terms.</p>
+        <p style={{ fontSize: 13, color: 'var(--ink-2)', maxWidth: 700, marginBottom: 18 }}>Expressions of interest sent from the public Sponsorship page. Nothing is paid or approved automatically: contact them, arrange it personally, then add them to the Sponsorship Wall.</p>
         <Table loading={loading} emptyMessage="No enquiries yet."
           defaultSort={{ key: 'date', dir: 'desc' }}
           columns={[
             { key: 'date', label: 'Received', w: '120px', sort: r => r.createdAt || '', render: r => <span className="mono" style={{ fontSize: 12 }}>{r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}</span> },
-            { key: 'businessName', label: 'Business', w: '1.5fr', sort: true, render: r => <span style={{ fontWeight: 600 }}>{r.businessName}</span> },
-            { key: 'contact', label: 'Contact', w: '1.5fr', render: r => <span style={{ fontSize: 13 }}>{r.contactName ? `${r.contactName}, ` : ''}{r.email}</span> },
-            { key: 'item', label: 'Equipment', w: '1.2fr', render: r => itemName(r.itemId) || r.itemName || <span style={{ color: 'var(--ink-3)' }}>Not sure</span> },
-            { key: 'tier', label: 'Tier', w: '100px', render: r => tierName(r.tierId) || r.tierName || <span style={{ color: 'var(--ink-3)' }}>-</span> },
+            { key: 'fullName', label: 'Name', w: '1.3fr', sort: true, render: r => <><div style={{ fontWeight: 600 }}>{r.fullName}</div>{r.businessName && <div style={{ fontSize: 12, color: 'var(--ink-2)' }}>{r.businessName}</div>}</> },
+            { key: 'contact', label: 'Contact', w: '1.5fr', render: r => <span style={{ fontSize: 13 }}>{r.email}{r.phone ? <><br />{r.phone}</> : null}</span> },
+            { key: 'item', label: 'Equipment', w: '1.3fr', render: r => itemName(r.itemId) || r.itemName || <span style={{ color: 'var(--ink-3)' }}>General enquiry</span> },
             { key: 'status', label: 'Status', w: '120px', sort: r => r.status || 'new', render: r => statusTag(SPONSOR_ENQUIRY_STATUSES, r.status || 'new') },
           ]}
           rows={data.enquiries} onRowClick={r => open('enquiries', r)} />
       </>)}
 
       {tab === 'sponsors' && (<>
-        <p style={{ fontSize: 13, color: 'var(--ink-2)', maxWidth: 680, marginBottom: 18 }}>Current sponsors show on the public page (logo, name and link) against the equipment they sponsor. They drop off automatically after their end date.</p>
-        <Table loading={loading} emptyMessage="No sponsors yet."
+        <p style={{ fontSize: 13, color: 'var(--ink-2)', maxWidth: 700, marginBottom: 18 }}>The Sponsorship Wall at the top of the public page. Each entry shows the sponsor's name, logo, link, what they sponsored, and an optional photo and acknowledgement.</p>
+        <Table loading={loading} emptyMessage="No sponsors on the wall yet."
           columns={[
             { key: 'logo', label: '', w: '52px', render: r => r.logoUrl
-              ? <img src={r.logoUrl} alt="" style={{ width: 36, height: 36, objectFit: 'contain', background: 'var(--bg-deep)', border: '1px solid var(--line)', borderRadius: 4, padding: 3 }} />
+              ? <img src={r.logoUrl} alt="" style={{ width: 36, height: 36, objectFit: 'contain', background: '#fff', border: '1px solid var(--line)', borderRadius: 4, padding: 3 }} />
               : <div style={{ width: 36, height: 36, background: 'var(--bg-deep)', border: '1px dashed var(--line)', borderRadius: 4 }} /> },
             { key: 'businessName', label: 'Sponsor', w: '1.5fr', sort: true, render: r => <span style={{ fontWeight: 600 }}>{r.businessName}</span> },
-            { key: 'item', label: 'Equipment', w: '1.3fr', sort: r => itemName(r.itemId), render: r => itemName(r.itemId) || <span style={{ color: 'var(--ink-3)' }}>General</span> },
-            { key: 'tier', label: 'Tier', w: '100px', sort: r => tierName(r.tierId), render: r => tierName(r.tierId) || '-' },
-            { key: 'dates', label: 'Runs', w: '1.2fr', sort: r => r.endDate || '9999', render: r => <span className="mono" style={{ fontSize: 12 }}>{r.startDate || '…'} → {r.endDate || 'ongoing'}</span> },
-            { key: 'status', label: 'Status', w: '110px', render: r => { const [l, c] = sponsorStatus(r); return <span className={`tag ${c}`}>{l}</span>; } },
+            { key: 'what', label: 'Sponsored', w: '1.5fr', render: r => r.sponsoredLabel || itemName(r.itemId) || <span style={{ color: 'var(--ink-3)' }}>-</span> },
+            { key: 'photo', label: 'Photo', w: '70px', render: r => r.photoUrl ? '✓' : '' },
+            { key: 'order', label: 'Order', w: '70px', sort: true },
+            { key: 'active', label: 'Status', w: '100px', render: r => <span className={`tag ${r.active !== false ? 'tag-euc' : 'tag-outline'}`}>{r.active !== false ? 'SHOWN' : 'HIDDEN'}</span> },
           ]}
-          rows={data.sponsors} onRowClick={r => open('sponsors', r)} />
+          rows={byOrder(data.sponsors)} onRowClick={r => open('sponsors', r)} />
       </>)}
 
       {tab === 'items' && (<>
-        <p style={{ fontSize: 13, color: 'var(--ink-2)', maxWidth: 680, marginBottom: 18 }}>The equipment businesses can sponsor. Each item uses the tier prices unless you override them for that item.</p>
-        <Table loading={loading} emptyMessage="No equipment yet. Add the first piece of gear businesses can sponsor."
+        <p style={{ fontSize: 13, color: 'var(--ink-2)', maxWidth: 700, marginBottom: 18 }}>Equipment open for sponsorship. Each card on the public page shows the photo, description, exact amount, rewards (with the labour-credit value first) and status.</p>
+        <Table loading={loading} emptyMessage="No opportunities yet. Add the first piece of equipment you'd like sponsored."
           columns={[
             { key: 'img', label: '', w: '64px', render: r => r.imageUrl
               ? <img src={r.imageUrl} alt="" style={{ width: 48, height: 36, objectFit: 'cover', border: '1px solid var(--line)', borderRadius: 4 }} />
               : <div style={{ width: 48, height: 36, background: 'var(--bg-deep)', border: '1px dashed var(--line)', borderRadius: 4 }} /> },
             { key: 'name', label: 'Equipment', w: '2fr', sort: true, render: r => <span style={{ fontWeight: 600 }}>{r.name}</span> },
-            { key: 'sponsors', label: 'Current sponsors', w: '140px', render: r => data.sponsors.filter(s => s.itemId === r.id && sponsorStatus(s)[0] === 'CURRENT').length },
+            { key: 'amount', label: 'Amount', w: '120px', sort: r => Number(r.amountAud) || 0, render: r => <span className="mono">{sponsorMoney(r.amountAud)}</span> },
+            { key: 'credit', label: 'Labour credit', w: '120px', sort: r => Number(r.labourCreditAud) || 0, render: r => <span className="mono">{Number(r.labourCreditAud) > 0 ? sponsorMoney(r.labourCreditAud) : '-'}</span> },
             { key: 'order', label: 'Order', w: '70px', sort: true },
-            { key: 'status', label: 'Status', w: '160px', render: r => statusTag(SPONSOR_ITEM_STATUSES, r.status || 'open') },
+            { key: 'status', label: 'Status', w: '170px', render: r => statusTag(SPONSOR_ITEM_STATUSES, r.status || 'available') },
           ]}
           rows={byOrder(data.items)} onRowClick={r => open('items', r)} />
-      </>)}
-
-      {tab === 'tiers' && (<>
-        <p style={{ fontSize: 13, color: 'var(--ink-2)', maxWidth: 680, marginBottom: 18 }}>Reward tiers, e.g. Bronze, Silver, Gold. The price here is the default; equipment can override it.</p>
-        <Table loading={loading} emptyMessage="No tiers yet. Add your first reward tier."
-          columns={[
-            { key: 'swatch', label: '', w: '28px', render: r => <span style={{ display: 'inline-block', width: 14, height: 14, borderRadius: 3, background: r.color || 'var(--ochre)' }} /> },
-            { key: 'name', label: 'Tier', w: '1.2fr', sort: true, render: r => <span style={{ fontWeight: 600 }}>{r.name}</span> },
-            { key: 'price', label: 'Default price', w: '160px', sort: r => Number(r.priceAud) || 0, render: r => <span className="mono">{sponsorMoney(r.priceAud)} <span style={{ color: 'var(--ink-3)', fontSize: 11 }}>{(SPONSOR_PERIODS.find(p => p[0] === r.period) || SPONSOR_PERIODS[0])[1].toLowerCase()}</span></span> },
-            { key: 'rewards', label: 'Rewards', w: '2fr', render: r => <span style={{ fontSize: 12.5, color: 'var(--ink-2)' }}>{(r.rewards || []).join(' · ') || '-'}</span> },
-            { key: 'order', label: 'Order', w: '70px', sort: true },
-            { key: 'active', label: 'Status', w: '100px', render: r => <span className={`tag ${r.active !== false ? 'tag-euc' : 'tag-outline'}`}>{r.active !== false ? 'SHOWN' : 'HIDDEN'}</span> },
-          ]}
-          rows={byOrder(data.tiers)} onRowClick={r => open('tiers', r)} />
       </>)}
 
       {edit && (
@@ -7667,11 +7637,10 @@ function AdminSponsorship({ siteUrl }) {
           </div>}>
 
           {edit.kind === 'enquiries' && (<>
-            <div className="card-paper" style={{ padding: 16, marginBottom: 16, fontSize: 13.5, lineHeight: 1.7 }}>
-              <div><strong>{f.businessName}</strong>{f.website && <> · <a href={/^https?:\/\//i.test(f.website) ? f.website : 'https://' + f.website} target="_blank" rel="noreferrer noopener">{f.website}</a></>}</div>
-              <div>{f.contactName || 'No name given'} · <a href={`mailto:${f.email}`}>{f.email}</a>{f.phone && <> · <a href={`tel:${f.phone.replace(/\s/g, '')}`}>{f.phone}</a></>}</div>
-              <div style={{ marginTop: 8 }}><span style={{ color: 'var(--ink-3)' }}>Equipment:</span> {itemName(f.itemId) || f.itemName || 'Not sure yet'}</div>
-              <div><span style={{ color: 'var(--ink-3)' }}>Tier:</span> {tierName(f.tierId) || f.tierName || 'Not sure yet'}</div>
+            <div className="card-paper" style={{ padding: 16, marginBottom: 16, fontSize: 13.5, lineHeight: 1.75 }}>
+              <div><strong>{f.fullName}</strong>{f.businessName && <> · {f.businessName}</>}</div>
+              <div><a href={`mailto:${f.email}`}>{f.email}</a>{f.phone && <> · <a href={`tel:${f.phone.replace(/\s/g, '')}`}>{f.phone}</a></>}</div>
+              <div style={{ marginTop: 8 }}><span style={{ color: 'var(--ink-3)' }}>Equipment:</span> {itemName(f.itemId) || f.itemName || 'General enquiry'}{f.itemAmountAud ? ` (${sponsorMoney(f.itemAmountAud)})` : ''}</div>
               {f.message && <div style={{ marginTop: 8, whiteSpace: 'pre-wrap' }}>{f.message}</div>}
               <div className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 8 }}>RECEIVED {f.createdAt ? new Date(f.createdAt).toLocaleString('en-AU') : '-'}</div>
             </div>
@@ -7680,106 +7649,77 @@ function AdminSponsorship({ siteUrl }) {
                 {SPONSOR_ENQUIRY_STATUSES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
             </label>
-            <label className="field"><span className="label">Staff notes (never shown publicly)</span><textarea className="textarea" value={f.staffNotes || ''} onChange={e => setF('staffNotes', e.target.value)} /></label>
+            <label className="field"><span className="label">Staff notes (never shown publicly)</span><textarea className="textarea" value={f.staffNotes || ''} onChange={e => setF('staffNotes', e.target.value)} placeholder="e.g. called 21 Oct, invoice sent" /></label>
             <div className="row-flex" style={{ gap: 8, flexWrap: 'wrap' }}>
-              <a className="btn btn-ghost btn-sm" style={{ textDecoration: 'none' }} href={`mailto:${f.email}?subject=${encodeURIComponent('Sponsorship with Outback Electronics')}`}><Icon name="mail" size={13} /> Reply by email</a>
+              <a className="btn btn-ghost btn-sm" style={{ textDecoration: 'none' }} href={`mailto:${f.email}?subject=${encodeURIComponent('Sponsoring Outback Electronics' + (f.itemName ? ` - ${f.itemName}` : ''))}`}><Icon name="mail" size={13} /> Reply by email</a>
               {f.sponsorId
-                ? <button className="btn btn-ghost btn-sm" onClick={() => { const sp = data.sponsors.find(s => s.id === f.sponsorId); if (sp) { setTab('sponsors'); open('sponsors', sp); } }}>Open sponsor record</button>
-                : <button className="btn btn-ghost btn-sm" onClick={() => sponsorFromEnquiry(f)}>Create sponsor from this →</button>}
+                ? <button className="btn btn-ghost btn-sm" onClick={() => { const sp = data.sponsors.find(s => s.id === f.sponsorId); if (sp) { setTab('sponsors'); open('sponsors', sp); } }}>Open wall entry</button>
+                : <button className="btn btn-ghost btn-sm" onClick={() => sponsorFromEnquiry(f)}>Add to Sponsorship Wall →</button>}
             </div>
           </>)}
 
           {edit.kind === 'sponsors' && (<>
-            {edit.fromEnquiryId && <div className="notice" style={{ marginBottom: 14, fontSize: 13 }}>Filled in from the enquiry. Saving marks the enquiry as accepted.</div>}
+            {edit.fromEnquiryId && <div className="notice" style={{ marginBottom: 14, fontSize: 13 }}>Filled in from the enquiry. Saving marks the enquiry as arranged.</div>}
             <label className="field"><span className="label">Business name<ReqMark /></span><input className="input" value={f.businessName || ''} onChange={e => setF('businessName', e.target.value)} /></label>
             <label className="field"><span className="label">Logo</span>
               <ImageUploadSlot value={f.logoUrl} onChange={v => setF('logoUrl', v)} aspect="3/2" label="DROP LOGO, OR CLICK" alt={f.logoAlt} onAltChange={v => setF('logoAlt', v)} />
             </label>
-            <label className="field"><span className="label">Their website (linked from their logo)</span><input className="input" placeholder="https://…" value={f.url || ''} onChange={e => setF('url', e.target.value)} /></label>
+            <label className="field"><span className="label">Website or social media page (optional)</span><input className="input" placeholder="https://…" value={f.url || ''} onChange={e => setF('url', e.target.value)} /></label>
             <div className="grid-2" style={{ gap: 14 }}>
-              <label className="field"><span className="label">Equipment</span>
+              <label className="field"><span className="label">Equipment sponsored</span>
                 <select className="select" value={f.itemId || ''} onChange={e => setF('itemId', e.target.value)}>
-                  <option value="">General (no specific gear)</option>
+                  <option value="">None / other project</option>
                   {byOrder(data.items).map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
                 </select>
               </label>
-              <label className="field"><span className="label">Tier</span>
-                <select className="select" value={f.tierId || ''} onChange={e => setF('tierId', e.target.value)}>
-                  <option value="">None</option>
-                  {byOrder(data.tiers).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select>
+              <label className="field"><span className="label">Or describe the project</span><input className="input" placeholder="Overrides the equipment name" value={f.sponsoredLabel || ''} onChange={e => setF('sponsoredLabel', e.target.value)} /></label>
+            </div>
+            <label className="field"><span className="label">Photo of the sponsor with the equipment (optional)</span>
+              <ImageUploadSlot value={f.photoUrl} onChange={v => setF('photoUrl', v)} aspect="3/2" label="DROP PHOTO, OR CLICK" alt={f.photoAlt} onAltChange={v => setF('photoAlt', v)} />
+            </label>
+            <label className="field"><span className="label">Acknowledgement (optional, shown publicly)</span><textarea className="textarea" maxLength={400} placeholder="e.g. Thanks to Blackall Hardware, our repair bench now has a proper fume extractor." value={f.acknowledgement || ''} onChange={e => setF('acknowledgement', e.target.value)} /></label>
+            <div className="grid-2" style={{ gap: 14 }}>
+              <label className="field"><span className="label">Display order</span><input className="input" type="number" value={f.order ?? 0} onChange={e => setF('order', parseInt(e.target.value, 10) || 0)} /></label>
+              <label className="field" style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 22 }}>
+                <input type="checkbox" checked={f.active !== false} onChange={e => setF('active', e.target.checked)} />
+                <span className="label" style={{ marginBottom: 0 }}>Shown on the wall</span>
               </label>
             </div>
+            <div className="eyebrow" style={{ marginTop: 18, marginBottom: 8 }}>Contact and notes (internal only)</div>
             <div className="grid-2" style={{ gap: 14 }}>
-              <label className="field"><span className="label">Starts</span><input className="input" type="date" value={f.startDate || ''} onChange={e => setF('startDate', e.target.value)} /></label>
-              <label className="field"><span className="label">Ends (blank = ongoing)</span><input className="input" type="date" value={f.endDate || ''} onChange={e => setF('endDate', e.target.value)} /></label>
-            </div>
-            <label className="field"><span className="label">Agreed price (AUD, internal)</span><input className="input" type="number" min="0" step="0.01" value={f.agreedPriceAud ?? ''} onChange={e => setF('agreedPriceAud', e.target.value)} /></label>
-            <div className="eyebrow" style={{ marginTop: 18, marginBottom: 8 }}>Contact (internal)</div>
-            <div className="grid-2" style={{ gap: 14 }}>
-              <label className="field"><span className="label">Name</span><input className="input" value={f.contactName || ''} onChange={e => setF('contactName', e.target.value)} /></label>
+              <label className="field"><span className="label">Contact name</span><input className="input" value={f.contactName || ''} onChange={e => setF('contactName', e.target.value)} /></label>
               <label className="field"><span className="label">Phone</span><input className="input" value={f.phone || ''} onChange={e => setF('phone', e.target.value)} /></label>
             </div>
             <label className="field"><span className="label">Email</span><input className="input" type="email" value={f.email || ''} onChange={e => setF('email', e.target.value)} /></label>
-            <label className="field"><span className="label">Notes (internal)</span><textarea className="textarea" value={f.notes || ''} onChange={e => setF('notes', e.target.value)} placeholder="e.g. rewards delivered, invoice number" /></label>
-            <label className="field" style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <input type="checkbox" checked={f.active !== false} onChange={e => setF('active', e.target.checked)} />
-              <span className="label" style={{ marginBottom: 0 }}>Show on the public page while it's running</span>
-            </label>
+            <label className="field"><span className="label">Notes</span><textarea className="textarea" value={f.notes || ''} onChange={e => setF('notes', e.target.value)} placeholder="e.g. amount paid, credits issued, business cards received" /></label>
           </>)}
 
           {edit.kind === 'items' && (<>
-            <label className="field"><span className="label">Equipment name<ReqMark /></span><input className="input" placeholder="e.g. Weather station" value={f.name || ''} onChange={e => setF('name', e.target.value)} /></label>
-            <label className="field"><span className="label">Photo</span>
+            <label className="field"><span className="label">Equipment name<ReqMark /></span><input className="input" placeholder="e.g. Hot air rework station" value={f.name || ''} onChange={e => setF('name', e.target.value)} /></label>
+            <label className="field"><span className="label">Photo of the actual equipment</span>
               <ImageUploadSlot value={f.imageUrl} onChange={v => setF('imageUrl', v)} aspect="4/3" alt={f.imageAlt} onAltChange={v => setF('imageAlt', v)} />
             </label>
-            <label className="field"><span className="label">Description</span><textarea className="textarea" placeholder="What it is, what it does, who it helps" value={f.description || ''} onChange={e => setF('description', e.target.value)} /></label>
-            <label className="field"><span className="label">Status</span>
-              <select className="select" value={f.status || 'open'} onChange={e => setF('status', e.target.value)}>
-                {SPONSOR_ITEM_STATUSES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-              </select>
-            </label>
-            <div className="eyebrow" style={{ marginTop: 18, marginBottom: 6 }}>Tiers offered and prices</div>
-            <p style={{ fontSize: 12, color: 'var(--ink-3)', marginBottom: 10 }}>Untick all to offer every tier. Leave a price blank to use the tier's default.</p>
-            {data.tiers.length === 0 && <p style={{ fontSize: 13, color: 'var(--ink-2)' }}>Add tiers in the Tiers tab first.</p>}
-            {byOrder(data.tiers).map(t => {
-              const ticked = (f.tierIds || []).includes(t.id);
-              return (
-                <div key={t.id} style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: 10, alignItems: 'center', marginBottom: 8 }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5 }}>
-                    <input type="checkbox" checked={ticked} onChange={e => setF('tierIds', e.target.checked ? [...(f.tierIds || []), t.id] : (f.tierIds || []).filter(x => x !== t.id))} />
-                    {t.name}
-                  </label>
-                  <input className="input" type="number" min="0" step="0.01" placeholder={String(Number(t.priceAud) || 0)}
-                    value={(f.prices || {})[t.id] ?? ''} onChange={e => setF('prices', { ...(f.prices || {}), [t.id]: e.target.value })} />
-                </div>
-              );
-            })}
-            <label className="field" style={{ marginTop: 10 }}><span className="label">Display order</span><input className="input" type="number" value={f.order ?? 0} onChange={e => setF('order', parseInt(e.target.value, 10) || 0)} /></label>
-          </>)}
-
-          {edit.kind === 'tiers' && (<>
-            <label className="field"><span className="label">Tier name<ReqMark /></span><input className="input" placeholder="e.g. Gold" value={f.name || ''} onChange={e => setF('name', e.target.value)} /></label>
+            <label className="field"><span className="label">Description</span><textarea className="textarea" rows={5} placeholder="What the equipment does, and why Outback Electronics needs it" value={f.description || ''} onChange={e => setF('description', e.target.value)} /></label>
             <div className="grid-2" style={{ gap: 14 }}>
-              <label className="field"><span className="label">Default price (AUD)</span><input className="input" type="number" min="0" step="0.01" value={f.priceAud ?? ''} onChange={e => setF('priceAud', e.target.value)} /></label>
-              <label className="field"><span className="label">Billed</span>
-                <select className="select" value={f.period || 'year'} onChange={e => setF('period', e.target.value)}>
-                  {SPONSOR_PERIODS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              <label className="field"><span className="label">Sponsorship amount (AUD)<ReqMark /></span><input className="input" type="number" min="0" step="0.01" value={f.amountAud ?? ''} onChange={e => setF('amountAud', e.target.value)} /></label>
+              <label className="field"><span className="label">Labour-only credit value (AUD)</span><input className="input" type="number" min="0" step="0.01" value={f.labourCreditAud ?? ''} onChange={e => setF('labourCreditAud', e.target.value)} /></label>
+            </div>
+            {Number(f.labourCreditAud) > 0 && Number(f.amountAud) > 0 && Number(f.labourCreditAud) <= Number(f.amountAud) && (
+              <div className="notice" style={{ fontSize: 12.5, marginBottom: 12 }}>The program promises labour credits worth more than the contribution. This credit is not more than the amount.</div>
+            )}
+            <label className="field"><span className="label">Other rewards (one per line)</span>
+              <textarea className="textarea" rows={5} placeholder={'Recognition on the Outback Electronics Sponsorship Wall\nYour business cards included with customer orders for 12 months'}
+                value={(f.rewards || []).join('\n')} onChange={e => setF('rewards', e.target.value.split('\n'))} />
+              <span style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 4 }}>The labour credit is listed automatically as the first reward.</span>
+            </label>
+            <div className="grid-2" style={{ gap: 14 }}>
+              <label className="field"><span className="label">Status</span>
+                <select className="select" value={f.status || 'available'} onChange={e => setF('status', e.target.value)}>
+                  {SPONSOR_ITEM_STATUSES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                 </select>
               </label>
-            </div>
-            <label className="field"><span className="label">Rewards (one per line)</span>
-              <textarea className="textarea" rows={6} placeholder={'Logo on the equipment page\nShout-out on social media\nSticker on the gear itself'}
-                value={(f.rewards || []).join('\n')} onChange={e => setF('rewards', e.target.value.split('\n'))} />
-            </label>
-            <div className="grid-2" style={{ gap: 14 }}>
-              <label className="field"><span className="label">Accent colour</span><input className="input" type="color" style={{ height: 38, padding: 4 }} value={f.color || '#d39a37'} onChange={e => setF('color', e.target.value)} /></label>
               <label className="field"><span className="label">Display order</span><input className="input" type="number" value={f.order ?? 0} onChange={e => setF('order', parseInt(e.target.value, 10) || 0)} /></label>
             </div>
-            <label className="field" style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <input type="checkbox" checked={f.active !== false} onChange={e => setF('active', e.target.checked)} />
-              <span className="label" style={{ marginBottom: 0 }}>Shown on the public page</span>
-            </label>
           </>)}
         </Drawer>
       )}
@@ -14182,7 +14122,7 @@ const ADMIN_VIEWS = {
   customers:  { c: AdminCustomers,  t:'Customers' },
   sellers:    { c: AdminSellers,    t:'Sellers' },
   clients:    { c: AdminClients,    t:'Clients',          staticSubtitle:'named on the public site with permission' },
-  sponsorship: { c: AdminSponsorship, t:'Sponsorship', staticSubtitle:'equipment · reward tiers · sponsors · enquiries' },
+  sponsorship: { c: AdminSponsorship, t:'Sponsorship', staticSubtitle:'enquiries · sponsorship wall · equipment opportunities' },
   memberships: { c: AdminMemberships, t:'Memberships', staticSubtitle:'tiers · subscriptions · activation' },
   'gift-cards': { c: AdminGiftCards, t:'Gift Cards',        staticSubtitle:'issued codes · balances · manual issuance' },
   'rewards':    { c: AdminRewards,   t:'Rewards',           staticSubtitle:'points balances · history · manual adjustments' },

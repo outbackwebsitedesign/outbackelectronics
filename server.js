@@ -1329,54 +1329,41 @@ function readClients() {
 }
 function writeClients(clients) { atomicWriteFile(CLIENTS_DB_PATH, JSON.stringify({ clients }, null, 2)); }
 
-// Equipment sponsorship: businesses sponsor a specific piece of shop equipment
-// at a reward tier. Tiers carry a default price and the rewards a sponsor
-// gets; an equipment item can override the price per tier. Enquiries come in
-// from the public /sponsorship form and become sponsors once staff agree terms.
-const SPONSORSHIP_KINDS = ['tiers', 'items', 'sponsors', 'enquiries'];
+// Equipment sponsorship. Businesses and individuals sponsor a specific piece
+// of equipment (tools, networking, server upgrades, repair stock) for an exact
+// amount, and get that item's own rewards in return (labour-only service
+// credit, a place on the Sponsorship Wall, and so on). Enquiries from the
+// public /sponsorship page are expressions of interest only: there is no
+// payment or automatic approval, everything is arranged personally.
+const SPONSORSHIP_KINDS = ['items', 'sponsors', 'enquiries'];
 const SPONSORSHIP_LOCK = 'sponsorship';
+const SPONSORSHIP_STATUSES = { available: 'Available', discussion: 'Under Discussion', sponsored: 'Sponsored' };
 function readSponsorship() {
   try {
     const p = JSON.parse(cachedReadFile(SPONSORSHIP_DB_PATH));
     const out = {};
     for (const k of SPONSORSHIP_KINDS) out[k] = Array.isArray(p[k]) ? p[k] : [];
     return out;
-  } catch { return { tiers: [], items: [], sponsors: [], enquiries: [] }; }
+  } catch { return { items: [], sponsors: [], enquiries: [] }; }
 }
 function writeSponsorship(data) { atomicWriteFile(SPONSORSHIP_DB_PATH, JSON.stringify(data, null, 2)); }
-function sponsorIsCurrent(sp, today = new Date().toISOString().slice(0, 10)) {
-  if (sp.active === false) return false;
-  if (sp.startDate && sp.startDate > today) return false;
-  if (sp.endDate && sp.endDate < today) return false;
-  return true;
-}
-function sponsorshipTierPrice(item, tier) {
-  const override = item && item.prices ? item.prices[tier.id] : undefined;
-  const n = Number(override);
-  return override !== undefined && override !== '' && Number.isFinite(n) ? n : (Number(tier.priceAud) || 0);
-}
-// Public view: hidden tiers/items, inactive or expired sponsors, staff notes and
-// enquiries never leave the server.
+// Public view: hidden wall entries, staff notes and enquiries never leave the server.
 function publicSponsorship() {
   const data = readSponsorship();
   const byOrder = (a, b) => (Number(a.order) || 0) - (Number(b.order) || 0);
-  const tiers = data.tiers.filter(t => t.active !== false && t.name).sort(byOrder);
-  const sponsors = data.sponsors.filter(sp => sp.businessName && sponsorIsCurrent(sp));
-  const pubSponsor = sp => ({ id: sp.id, businessName: sp.businessName, url: sp.url || '', logoUrl: sp.logoUrl || '', logoAlt: sp.logoAlt || '', tierId: sp.tierId || '', itemId: sp.itemId || '' });
-  const items = data.items.filter(it => it.name && it.status !== 'hidden').sort(byOrder).map(it => {
-    const allowed = Array.isArray(it.tierIds) && it.tierIds.length ? tiers.filter(t => it.tierIds.includes(t.id)) : tiers;
-    return {
-      id: it.id, name: it.name, description: it.description || '', imageUrl: it.imageUrl || '', imageAlt: it.imageAlt || '',
-      open: it.status !== 'closed',
-      prices: allowed.map(t => ({ tierId: t.id, priceAud: sponsorshipTierPrice(it, t) })),
-      sponsors: sponsors.filter(sp => sp.itemId === it.id).map(pubSponsor),
-    };
-  });
-  return {
-    tiers: tiers.map(t => ({ id: t.id, name: t.name, priceAud: Number(t.priceAud) || 0, period: t.period || 'year', rewards: (Array.isArray(t.rewards) ? t.rewards : []).filter(Boolean), color: t.color || '' })),
-    items,
-    sponsors: sponsors.map(pubSponsor),
-  };
+  const items = data.items.filter(it => it.name).sort(byOrder).map(it => ({
+    id: it.id, name: it.name, description: it.description || '', imageUrl: it.imageUrl || '', imageAlt: it.imageAlt || '',
+    amountAud: Number(it.amountAud) || 0, labourCreditAud: Number(it.labourCreditAud) || 0,
+    rewards: (Array.isArray(it.rewards) ? it.rewards : []).map(r => String(r).trim()).filter(Boolean),
+    status: SPONSORSHIP_STATUSES[it.status] ? it.status : 'available',
+  }));
+  const itemName = id => (data.items.find(i => i.id === id) || {}).name || '';
+  const sponsors = data.sponsors.filter(sp => sp.businessName && sp.active !== false).sort(byOrder).map(sp => ({
+    id: sp.id, businessName: sp.businessName, url: sp.url || '', logoUrl: sp.logoUrl || '', logoAlt: sp.logoAlt || '',
+    photoUrl: sp.photoUrl || '', photoAlt: sp.photoAlt || '', acknowledgement: sp.acknowledgement || '',
+    sponsored: String(sp.sponsoredLabel || '').trim() || itemName(sp.itemId),
+  }));
+  return { items, sponsors };
 }
 
 function readSellerLedger() {
@@ -2389,7 +2376,7 @@ const STATIC_OG = {
   '/sellers':     { title: 'Info for Sellers - Outback Electronics', description: 'Sell your surplus electronics through Outback Electronics. Consignment and trade-in options available.',           image: '/assets/og-image.webp' },
   '/gift-cards':  { title: 'Gift Cards - Outback Electronics',      description: 'Give the gift of rugged gear. Outback Electronics gift cards, perfect for the remote tech enthusiast.',            image: '/assets/og-image.webp' },
   '/capability-statement': { title: 'Capability Statement - Outback Electronics', description: 'Full-service electronics and technology provider in Blackall QLD. Repair, custom hardware, PCB design, SCADA, software, hosting and cybersecurity.', image: '/assets/og-image.webp' },
-  '/sponsorship': { title: 'Sponsorship - Outback Electronics', description: 'Sponsor a piece of Outback Electronics equipment and get your business seen across remote Australia. Pick the gear and a reward tier.', image: '/assets/og-image.webp' },
+  '/sponsorship': { title: 'Sponsorship - Outback Electronics', description: 'Sponsor specific Outback Electronics equipment and receive labour-only service credits, a place on our Sponsorship Wall and more.', image: '/assets/og-image.webp' },
   '/reviews':     { title: 'Customer Reviews - Outback Electronics', description: 'What customers across remote Australia say about Outback Electronics repairs, builds and service.',                  image: '/assets/og-image.webp' },
 };
 
@@ -3652,34 +3639,24 @@ function emailStaffNewEwaste({ intakeId, name, email, description }) {
 }
 
 function emailStaffSponsorshipEnquiry(enq) {
+  const oneLine = v => String(v || '').replace(/[\r\n]+/g, ' ');
+  const money = n => `$${(Number(n) || 0).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   return {
-    subject: `[SPONSORSHIP] ${String(enq.businessName).replace(/[\r\n]+/g, ' ')}${enq.itemName ? ` - ${String(enq.itemName).replace(/[\r\n]+/g, ' ')}` : ''}`,
+    subject: `[SPONSORSHIP] ${oneLine(enq.fullName)}${enq.businessName ? ` (${oneLine(enq.businessName)})` : ''} - ${oneLine(enq.itemName || 'General enquiry')}`,
     html: emailHtml('New sponsorship enquiry', `
+      <p>This is an expression of interest only. Nothing has been paid or approved.</p>
       <div class="detail">
-        <dt>BUSINESS</dt><dd>${escHtml(enq.businessName)}</dd>
-        <dt>CONTACT</dt><dd>${escHtml(enq.contactName || '-')} &lt;${escHtml(enq.email)}&gt;${enq.phone ? `, ${escHtml(enq.phone)}` : ''}</dd>
-        ${enq.website ? `<dt>WEBSITE</dt><dd>${escHtml(enq.website)}</dd>` : ''}
-        <dt>EQUIPMENT</dt><dd>${escHtml(enq.itemName || 'Not sure yet')}</dd>
-        <dt>TIER</dt><dd>${escHtml(enq.tierName || 'Not sure yet')}</dd>
-        ${enq.message ? `<dt>MESSAGE</dt><dd>${escHtml(enq.message).replace(/\n/g, '<br>')}</dd>` : ''}
+        <dt>EQUIPMENT</dt><dd>${escHtml(enq.itemName || 'General enquiry, no specific item')}</dd>
+        ${enq.itemName ? `<dt>SPONSORSHIP AMOUNT</dt><dd>${money(enq.itemAmountAud)}</dd><dt>STATUS WHEN ENQUIRED</dt><dd>${escHtml(SPONSORSHIP_STATUSES[enq.itemStatus] || 'Available')}</dd>` : ''}
+        <dt>NAME</dt><dd>${escHtml(enq.fullName)}</dd>
+        ${enq.businessName ? `<dt>BUSINESS / ORGANISATION</dt><dd>${escHtml(enq.businessName)}</dd>` : ''}
+        <dt>EMAIL</dt><dd>${escHtml(enq.email)}</dd>
+        <dt>PHONE</dt><dd>${escHtml(enq.phone)}</dd>
+        <dt>MESSAGE</dt><dd>${enq.message ? escHtml(enq.message).replace(/\n/g, '<br>') : '-'}</dd>
+        <dt>RECEIVED</dt><dd>${escHtml(new Date(enq.createdAt).toLocaleString('en-AU', { timeZone: 'Australia/Brisbane' }))}</dd>
       </div>
-      <p>Reply directly to this email to respond.</p>
+      <p>Reply directly to this email to contact them.</p>
       <a class="btn" href="${getAdminUrl()}/sponsorship">View in admin →</a>
-    `),
-  };
-}
-
-function emailSponsorshipEnquiryReceived(enq) {
-  const first = String(enq.contactName || '').trim().split(' ')[0];
-  return {
-    subject: 'We got your sponsorship enquiry',
-    html: emailHtml('Thanks for your interest in sponsoring.', `
-      <p>Hi${first ? ` ${escHtml(first)}` : ''}, thanks for offering to sponsor Outback Electronics on behalf of ${escHtml(enq.businessName)}.</p>
-      <div class="detail">
-        <dt>EQUIPMENT</dt><dd>${escHtml(enq.itemName || 'Not sure yet')}</dd>
-        <dt>TIER</dt><dd>${escHtml(enq.tierName || 'Not sure yet')}</dd>
-      </div>
-      <p>We'll be in touch to talk through the details. Nothing is charged until we've both agreed on the sponsorship.</p>
     `),
   };
 }
@@ -6349,23 +6326,24 @@ const mainServer = http.createServer(async (req, res) => {
     return json(res, 200, publicSponsorship());
   }
   if (req.method === 'POST' && url.pathname === '/api/sponsorship/enquire') {
-    if (publicRateLimited(getIp(req), 'sponsorship/enquire')) return json(res, 429, { error: 'too_many_requests' });
+    if (publicRateLimited(getIp(req), 'sponsorship/enquire')) return json(res, 429, { error: 'too_many_requests', message: 'Too many enquiries, please try again later.' });
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
     const str = (v, max) => String(v ?? '').trim().slice(0, max);
     const enq = {
-      businessName: str(body.businessName, 120), contactName: str(body.contactName, 120),
-      email: str(body.email, 200), phone: str(body.phone, 40), website: str(body.website, 200),
-      itemId: str(body.itemId, 80), tierId: str(body.tierId, 80), message: str(body.message, 3000),
+      fullName: str(body.fullName, 120), businessName: str(body.businessName, 120),
+      email: str(body.email, 200), phone: str(body.phone, 40),
+      itemId: str(body.itemId, 80), message: str(body.message, 3000),
     };
-    if (!enq.businessName || !enq.email) return json(res, 422, { error: 'missing_fields', message: 'Business name and email are required.' });
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(enq.email)) return json(res, 422, { error: 'invalid_email', message: 'Email address is invalid.' });
+    const missing = [!enq.fullName && 'full name', !enq.email && 'email address', !enq.phone && 'contact phone number'].filter(Boolean);
+    if (missing.length) return json(res, 422, { error: 'missing_fields', message: `Please enter your ${missing.join(', ')}.` });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(enq.email)) return json(res, 422, { error: 'invalid_email', message: 'That email address doesn\'t look right.' });
+    if (enq.phone.replace(/\D/g, '').length < 8) return json(res, 422, { error: 'invalid_phone', message: 'Please enter a phone number we can reach you on.' });
     const saved = await withFileLock(SPONSORSHIP_LOCK, async () => {
       const data = readSponsorship();
-      const item = data.items.find(i => i.id === enq.itemId && i.status !== 'hidden');
-      const tier = data.tiers.find(t => t.id === enq.tierId && t.active !== false);
+      const item = data.items.find(i => i.id === enq.itemId);
       const rec = {
-        ...enq, itemId: item ? item.id : '', tierId: tier ? tier.id : '',
-        itemName: item ? item.name : '', tierName: tier ? tier.name : '',
+        ...enq, itemId: item ? item.id : '', itemName: item ? item.name : '',
+        itemAmountAud: item ? Number(item.amountAud) || 0 : 0, itemStatus: item ? item.status || 'available' : '',
         id: 'spe-' + Date.now() + '-' + crypto.randomBytes(3).toString('hex'),
         status: 'new', createdAt: new Date().toISOString(),
       };
@@ -6374,8 +6352,7 @@ const mainServer = http.createServer(async (req, res) => {
       return rec;
     });
     sendEmail({ to: getNotifyEmail(), replyTo: saved.email, ...emailStaffSponsorshipEnquiry(saved) });
-    sendEmail({ to: saved.email, ...emailSponsorshipEnquiryReceived(saved) });
-    return json(res, 200, { ok: true });
+    return json(res, 200, { ok: true, itemName: saved.itemName });
   }
 
   if (req.method === 'GET' && url.pathname === '/api/clients') {
@@ -8843,7 +8820,7 @@ const adminServer = http.createServer(async (req, res) => {
     const kind = body.kind;
     const item = body.item && typeof body.item === 'object' ? { ...body.item } : null;
     if (!SPONSORSHIP_KINDS.includes(kind) || !item) return json(res, 400, { error: 'invalid_request' });
-    const nameKey = { tiers: 'name', items: 'name', sponsors: 'businessName', enquiries: 'businessName' }[kind];
+    const nameKey = { items: 'name', sponsors: 'businessName', enquiries: 'fullName' }[kind];
     if (!String(item[nameKey] || '').trim()) return json(res, 422, { error: 'name_required' });
     const saved = await withFileLock(SPONSORSHIP_LOCK, async () => {
       const data = readSponsorship();
