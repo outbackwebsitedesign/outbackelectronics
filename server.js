@@ -135,6 +135,7 @@ const REPAIRS_DB_PATH   = path.join(__dirname, 'repairs.db');
 const QUOTES_DB_PATH    = path.join(__dirname, 'quotes.db');
 const HDD_REPORTS_DB_PATH = path.join(__dirname, 'hdd-reports.db');
 const SAFETY_NOTICES_DB_PATH = path.join(__dirname, 'safety-notices.db');
+const DEVICE_LOANS_DB_PATH = path.join(__dirname, 'device-loans.db');
 // PC builder: the parts library and saved builds share one file, they are only
 // ever read and written together by the admin PC Builder section.
 const PC_BUILDER_DB_PATH = path.join(__dirname, 'pc-builder.db');
@@ -1248,6 +1249,27 @@ function writeSafetyNotices(notices) { atomicWriteFile(SAFETY_NOTICES_DB_PATH, J
 function nextSafetyNoticeId(notices) {
   const maxN = notices.reduce((max, r) => { const m = String(r.id || '').match(/^DDN-(\d+)$/); return m ? Math.max(max, parseInt(m[1])) : max; }, 0);
   return `DDN-${String(maxN + 1).padStart(4, '0')}`;
+}
+
+// Courtesy loan devices lent while a customer's own device is in for repair.
+// `loans` are the signed agreements (LN-0001...), `devices` the shop's loaner
+// phones, so a loan can be filled in from a device and show which one is out.
+const DEVICE_LOANS_LOCK = 'device-loans';
+function readDeviceLoans() {
+  try {
+    const p = JSON.parse(cachedReadFile(DEVICE_LOANS_DB_PATH));
+    return { loans: Array.isArray(p.loans) ? p.loans : [], devices: Array.isArray(p.devices) ? p.devices : [] };
+  } catch { return { loans: [], devices: [] }; }
+}
+function writeDeviceLoans(data) { atomicWriteFile(DEVICE_LOANS_DB_PATH, JSON.stringify(data, null, 2)); }
+function nextDeviceLoanId(loans) {
+  const maxN = loans.reduce((max, r) => { const m = String(r.id || '').match(/^LN-(\d+)$/); return m ? Math.max(max, parseInt(m[1])) : max; }, 0);
+  return `LN-${String(maxN + 1).padStart(4, '0')}`;
+}
+function staffSignaturePath(staffId) {
+  if (!staffId || !/^[A-Za-z0-9_-]+$/.test(String(staffId))) return null;
+  const p = path.join(__dirname, 'assets/signatures', `${staffId}.png`);
+  return fs.existsSync(p) ? p : null;
 }
 
 function readReviews() {
@@ -5263,6 +5285,190 @@ function buildSafetyNoticePdf(notice, shop) {
   });
 }
 
+// A loan phone's accessories, each with its own replacement value, as stored
+// on the device: [{ name, value }].
+function cleanLoanAccessories(list) {
+  return (Array.isArray(list) ? list : [])
+    .map(a => ({ name: String(a && a.name || '').trim().slice(0, 80), value: a && a.value !== '' && a.value != null ? Math.round((Number(a.value) || 0) * 100) / 100 : '' }))
+    .filter(a => a.name);
+}
+// Everything a loan makes the customer liable for: the device, then each
+// accessory supplied, with its replacement value.
+function loanLiabilityItems(loan) {
+  return [{ name: loan.loanDevice || 'Loan device', value: loan.loanDeviceValue }, ...cleanLoanAccessories(loan.accessoriesSupplied)];
+}
+
+// The courtesy loan agreement. One page in the normal case: details, terms,
+// signatures, and a return box filled in by hand when the device comes back.
+function buildDeviceLoanPdf(loan, shop, signaturePath) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: 'A4', margin: 50, bufferPages: true });
+    const chunks = [];
+    doc.on('data', c => chunks.push(c));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const RUST = '#b5451b';
+    const pageBottom = doc.page.height - 50;
+    const shopName = String(shop.tradingName || '').trim();
+    const us = shopName || 'the business';
+    const shopAddress = [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ');
+    const logoPath = path.join(__dirname, 'assets', 'logo.png');
+    const hasLogo = fs.existsSync(logoPath);
+    const fmtDate = (v) => new Date(v).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
+    const money = (n) => `$${(Number(n) || 0).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    doc.rect(0, 0, doc.page.width, 100).fill(RUST);
+    if (hasLogo) { try { doc.image(logoPath, 50, 22, { width: 66 }); } catch {} }
+    doc.fillColor('#fff').font('Helvetica-Bold').fontSize(18).text(shopName, hasLogo ? 130 : 50, 26, { width: 220 });
+    doc.font('Helvetica').fontSize(9).fillColor('#fde6d6')
+      .text(shopAddress, hasLogo ? 130 : 50, 50, { width: 220 })
+      .text([shop.phone, shop.email].filter(Boolean).join('  ·  '), hasLogo ? 130 : 50, 64, { width: 220 });
+    doc.font('Helvetica-Bold').fontSize(16).fillColor('#fff').text('LOAN DEVICE AGREEMENT', 0, 26, { width: 545, align: 'right' });
+    doc.font('Helvetica-Bold').fontSize(10).fillColor('#fde6d6').text('COURTESY DEVICE DURING REPAIR', 0, 48, { width: 545, align: 'right' });
+    doc.font('Helvetica').fontSize(9).fillColor('#fde6d6')
+      .text(`Loan #: ${loan.id || 'DRAFT'}`, 0, 66, { width: 545, align: 'right' })
+      .text(`Date of loan: ${fmtDate(loan.loanDate || loan.createdAt || Date.now())}`, 0, 80, { width: 545, align: 'right' });
+
+    let y = 114;
+    const sectionTitle = (label, yy) => {
+      doc.font('Helvetica-Bold').fontSize(11).fillColor(RUST).text(label, 50, yy);
+      return yy + 14;
+    };
+    const rowsBlock = (rows, yy) => {
+      doc.font('Helvetica').fontSize(9.5);
+      for (const [label, val, bold] of rows.filter(r => r[1])) {
+        doc.font('Helvetica').fillColor('#888').text(label, 50, yy, { width: 130 });
+        doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fillColor('#222').text(val, 185, yy, { width: 360 });
+        yy = Math.max(doc.y, yy + 11);
+      }
+      return yy + 4;
+    };
+
+    y = sectionTitle('Customer', y);
+    y = rowsBlock([
+      ['Name', loan.customerName || ''],
+      ['Contact', [loan.customerPhone, loan.customerEmail].filter(Boolean).join('  ·  ')],
+      ['ID sighted', loan.idSighted || ''],
+    ], y);
+
+    y = sectionTitle('Customer\'s Device (held for repair)', y);
+    y = rowsBlock([
+      ['Device', loan.ownDevice || ''],
+      ['Serial / IMEI', loan.ownDeviceSerial || ''],
+      ['Repair job', loan.repairJobId || ''],
+    ], y);
+
+    y = sectionTitle('Loan Device', y);
+    y = rowsBlock([
+      ['Device', loan.loanDevice || ''],
+      ['Serial / IMEI', loan.loanDeviceSerial || ''],
+      ['Condition when lent', loan.conditionOut || ''],
+      ['Expected return', loan.expectedReturn ? fmtDate(loan.expectedReturn) : 'When the customer\'s device is collected'],
+    ], y);
+
+    // What the customer is taking, each item at its replacement value.
+    const items = loanLiabilityItems(loan);
+    const total = items.reduce((t, it) => t + (Number(it.value) || 0), 0);
+    y -= 2;
+    doc.rect(50, y, 495, 18).fill('#f6f3ee');
+    doc.font('Helvetica-Bold').fontSize(8.5).fillColor('#5c5348')
+      .text('ITEM SUPPLIED', 58, y + 5, { width: 320 })
+      .text('REPLACEMENT VALUE', 380, y + 5, { width: 157, align: 'right' });
+    y += 22;
+    for (const it of items) {
+      doc.font('Helvetica').fontSize(9.5).fillColor('#222').text(it.name, 58, y, { width: 320 });
+      doc.text(money(it.value), 380, y, { width: 157, align: 'right' });
+      y = Math.max(doc.y, y + 12);
+    }
+    doc.moveTo(50, y).lineTo(545, y).strokeColor('#ccc').lineWidth(0.6).stroke();
+    y += 4;
+    doc.font('Helvetica-Bold').fontSize(9.5).fillColor('#222').text('Total', 58, y, { width: 320 });
+    doc.text(money(total), 380, y, { width: 157, align: 'right' });
+    y += 18;
+
+    if (y > pageBottom - 330) { doc.addPage(); y = 50; }
+    y = sectionTitle('Loan Terms', y);
+    doc.font('Helvetica').fontSize(9).fillColor('#222').text('I agree that:', 50, y); y = doc.y + 4;
+    const terms = [
+      `The loan device is lent free of charge, as a courtesy, so I can make calls and send text messages while my own device is being repaired. It remains the property of ${us}.`,
+      `If the loan device or any item supplied with it (such as a charger or cable) is lost, stolen or damaged while it is with me, I am liable for the cost of replacing that item, at the replacement value listed for it above.`,
+      `My own device will be released to me only when the loan device and every item supplied with it has been returned, or any missing or damaged item has been paid for.`,
+      `The loan device is a basic, low-cost device. ${us} does not guarantee that it matches my own device in features, performance, storage, camera, battery life or anything else.`,
+      `${us} is not liable for any problem I experience while using the loan device, including scam, spam or nuisance calls and messages that my own device would normally block, the reliability or compatibility of apps, missed calls or messages, network coverage, or loss of data. I will not rely on it as my only way to reach emergency services.`,
+      `I may use my own SIM card in the loan device and will remove it before returning the device. Any call, text or data charges are billed to me by my own provider.`,
+      `I will use the loan device lawfully, will not lend it to anyone else, and will not modify, root or unlock it.`,
+      `The loan device will be wiped (factory reset) when it is returned. I am responsible for signing out of my accounts and removing anything I want to keep. ${us} is not responsible for any information I leave on it.`,
+    ];
+    for (const line of terms) {
+      if (y > pageBottom - 40) { doc.addPage(); y = 50; }
+      doc.circle(56, y + 4.2, 1.7).fill('#222');
+      doc.font('Helvetica').fontSize(9).fillColor('#222').text(line, 66, y, { width: 479, align: 'justify', lineGap: 0.8 });
+      y = doc.y + 2;
+    }
+    y += 2;
+
+    // Carve-out, signatures and the return box stay together on one sheet.
+    const CARVE_H = 30, SIG_TITLE_H = 14, SIG_TOP_OFF = 40, NAME_OFF = 26, DATE_OFF = 26, DATE_LABEL_H = 16, RETURN_H = 70;
+    if (y > pageBottom - (CARVE_H + SIG_TITLE_H + SIG_TOP_OFF + NAME_OFF + DATE_OFF + DATE_LABEL_H + RETURN_H)) { doc.addPage(); y = 50; }
+
+    doc.rect(50, y, 495, 24).fill('#f6f3ee');
+    doc.font('Helvetica').fontSize(8).fillColor('#5c5348')
+      .text('Nothing in this agreement excludes, restricts, or modifies any guarantee, right, or remedy you have under the Australian Consumer Law that cannot lawfully be excluded.', 60, y + 7, { width: 475, align: 'justify' });
+    y += CARVE_H;
+
+    doc.font('Helvetica-Bold').fontSize(11).fillColor(RUST).text('Signatures', 50, y);
+    y += SIG_TITLE_H;
+    const colW = 232, rightX = 50 + colW + 31, sigTop = y + SIG_TOP_OFF;
+    const sigLine = (label, x, yy) => {
+      doc.moveTo(x, yy).lineTo(x + colW, yy).strokeColor('#999').lineWidth(0.8).stroke();
+      doc.font('Helvetica').fontSize(8).fillColor('#888').text(label, x, yy + 5, { width: colW });
+    };
+    doc.font('Helvetica-Bold').fontSize(9).fillColor('#222').text('Customer', 50, y);
+    doc.font('Helvetica-Bold').fontSize(9).fillColor('#222').text(shopName ? `For ${shopName}` : 'For the business', rightX, y);
+    // Our side is always the signer's saved signature; the route refuses to
+    // print without one, so there is no hand-sign fallback here.
+    if (signaturePath) { try { doc.image(signaturePath, rightX, sigTop - 34, { fit: [150, 32] }); } catch {} }
+    sigLine('Signature', 50, sigTop);
+    sigLine('Signature', rightX, sigTop);
+    const nameY = sigTop + NAME_OFF;
+    doc.font('Helvetica').fontSize(9).fillColor('#222').text(loan.customerName || '', 50, nameY - 12, { width: colW });
+    doc.font('Helvetica').fontSize(9).fillColor('#222').text(loan.signedBy || '', rightX, nameY - 12, { width: colW });
+    sigLine('Print name', 50, nameY);
+    sigLine('Print name', rightX, nameY);
+    const dateY = nameY + DATE_OFF;
+    doc.font('Helvetica').fontSize(9).fillColor('#222').text(fmtDate(loan.signedAt || loan.createdAt || Date.now()), rightX, dateY - 12, { width: colW });
+    sigLine('Date', 50, dateY);
+    sigLine('Date', rightX, dateY);
+    y = dateY + DATE_LABEL_H;
+
+    // Filled in by hand at handback, so the paper copy records the return too.
+    doc.rect(50, y, 495, RETURN_H - 10).strokeColor('#ccc').lineWidth(0.8).stroke();
+    doc.font('Helvetica-Bold').fontSize(9).fillColor(RUST).text('ON RETURN (office use)', 60, y + 8);
+    const rl = (label, x, yy, w) => {
+      doc.font('Helvetica').fontSize(8).fillColor('#888').text(label, x, yy - 9, { width: w });
+      doc.moveTo(x, yy + 6).lineTo(x + w, yy + 6).strokeColor('#bbb').lineWidth(0.6).stroke();
+    };
+    rl('Date returned', 60, y + 30, 120);
+    rl('Everything supplied returned (Y/N)', 195, y + 30, 160);
+    rl('Received by', 370, y + 30, 165);
+    rl('Condition on return / damage noted', 60, y + 50, 475);
+
+    const range = doc.bufferedPageRange();
+    for (let i = 0; i < range.count; i++) {
+      doc.switchToPage(range.start + i);
+      const keepBottom = doc.page.margins.bottom;
+      doc.page.margins.bottom = 0;
+      doc.font('Helvetica').fontSize(7.5).fillColor('#999')
+        .text(`${shopName ? `${shopName}  ·  ` : ''}Loan Device Agreement ${loan.id || 'DRAFT'}`, 50, pageBottom + 16, { width: 300, lineBreak: false })
+        .text(`Page ${i + 1} of ${range.count}`, 245, pageBottom + 16, { width: 300, align: 'right', lineBreak: false });
+      doc.page.margins.bottom = keepBottom;
+    }
+    doc.flushPages();
+    doc.end();
+  });
+}
+
 function buildBASPdf(data, shop) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 50 });
@@ -8551,6 +8757,13 @@ const adminServer = http.createServer(async (req, res) => {
     const session = requireRole(req, res, 'staff'); if (!session) return;
     return json(res, 200, { items: readSafetyNotices() });
   }
+  if (req.method === 'GET' && url.pathname === '/api/admin/device-loans') {
+    const session = requireRole(req, res, 'staff'); if (!session) return;
+    const data = readDeviceLoans();
+    // Whether the person viewing has a saved signature, since a loan agreement
+    // only prints with one.
+    return json(res, 200, { ...data, signatureOnFile: !!staffSignaturePath(session.staffId) });
+  }
   if (req.method === 'GET' && url.pathname === '/api/admin/safety-notices/next-id') {
     const session = requireRole(req, res, 'technician'); if (!session) return;
     return json(res, 200, { id: nextSafetyNoticeId(readSafetyNotices()) });
@@ -10534,6 +10747,142 @@ const adminServer = http.createServer(async (req, res) => {
     });
     res.end(buffer);
     return;
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/device-loans/save') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const missing = [
+      !String(body.customerName || '').trim() && 'customer name',
+      !String(body.customerPhone || '').trim() && 'customer phone',
+      !String(body.ownDevice || '').trim() && "the customer's device",
+      !body.deviceId && 'the loan device',
+    ].filter(Boolean);
+    if (missing.length) return json(res, 422, { error: 'missing_fields', message: `Fill in ${missing.join(', ')}.` });
+    const result = await withFileLock(DEVICE_LOANS_LOCK, async () => {
+      const data = readDeviceLoans();
+      const existing = body.id ? data.loans.find(l => l.id === body.id) : null;
+      const device = data.devices.find(d => d.id === body.deviceId);
+      if (!device && !(existing && existing.deviceId === body.deviceId)) return { error: 'That loan device no longer exists. Pick another one.' };
+      if (body.deviceId && !body.returnedAt) {
+        const clash = data.loans.find(l => l.deviceId === body.deviceId && !l.returnedAt && l.id !== body.id);
+        if (clash) return { error: `That loan device is already out on ${clash.id} (${clash.customerName}). Mark it returned first.` };
+      }
+      const loan = {
+        ...body,
+        damageCharge: body.damageCharge === '' || body.damageCharge == null ? '' : Math.round((Number(body.damageCharge) || 0) * 100) / 100,
+      };
+      // The loan device's name, serial and value come from its record in the
+      // device list, never from the request. They are copied onto the loan when
+      // it is created (or the device is changed) so a signed agreement keeps the
+      // value it was printed with; a value still blank is picked up once set.
+      const prior = existing && existing.deviceId === body.deviceId ? existing : null;
+      loan.loanDevice = prior ? prior.loanDevice : device.name;
+      loan.loanDeviceSerial = prior ? prior.loanDeviceSerial : (device.serial || '');
+      loan.loanDeviceValue = prior && Number(prior.loanDeviceValue) > 0 ? prior.loanDeviceValue : (device && Number(device.value) > 0 ? device.value : '');
+      // Accessories handed over, named in the request, priced from the device
+      // record. An item already on this loan keeps the value it was given.
+      const chosen = new Set((Array.isArray(body.accessoriesSupplied) ? body.accessoriesSupplied : []).map(a => String(a && a.name || a || '').trim()).filter(Boolean));
+      const priorAcc = new Map(cleanLoanAccessories(prior && prior.accessoriesSupplied).map(a => [a.name, a]));
+      const deviceAcc = cleanLoanAccessories(device ? device.accessories : []);
+      loan.accessoriesSupplied = [...chosen].map(name => {
+        const old = priorAcc.get(name);
+        if (old && Number(old.value) > 0) return old;
+        const fromDevice = deviceAcc.find(a => a.name === name);
+        return { name, value: fromDevice ? fromDevice.value : (old ? old.value : '') };
+      });
+      // The agreement is signed by whoever created it, taken from the session
+      // and never from the request, and stays theirs when the loan is updated.
+      if (existing) {
+        loan.signedBy = existing.signedBy; loan.signedByStaffId = existing.signedByStaffId; loan.signedAt = existing.signedAt;
+        loan.createdAt = existing.createdAt;
+      } else {
+        loan.id = nextDeviceLoanId(data.loans);
+        loan.createdAt = new Date().toISOString();
+        loan.signedBy = session.username; loan.signedByStaffId = session.staffId || null; loan.signedAt = loan.createdAt;
+      }
+      if (loan.returnedAt && !(existing && existing.returnedAt)) loan.returnedBy = session.username;
+      if (!loan.returnedAt) { delete loan.returnedBy; }
+      if (existing) data.loans[data.loans.indexOf(existing)] = loan; else data.loans.push(loan);
+      writeDeviceLoans(data);
+      return { loan };
+    });
+    if (result.error) return json(res, 409, { error: 'device_on_loan', message: result.error });
+    return json(res, 200, { ok: true, item: result.loan });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/device-loans/pdf') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    // A saved loan prints exactly as stored, with its creator's signature. An
+    // unsaved preview takes the device details from the device list and your
+    // signature.
+    const data = readDeviceLoans();
+    const saved = body.id ? data.loans.find(l => l.id === body.id) : null;
+    let loan;
+    if (saved) loan = saved;
+    else {
+      const device = data.devices.find(d => d.id === body.deviceId);
+      if (!device) return json(res, 422, { error: 'device_required', message: 'Pick the loan device first.' });
+      loan = { ...body, loanDevice: device.name, loanDeviceSerial: device.serial || '', loanDeviceValue: device.value, signedBy: session.username, signedByStaffId: session.staffId || null };
+    }
+    if (!saved) {
+      const device = data.devices.find(d => d.id === body.deviceId);
+      const names = new Set((Array.isArray(body.accessoriesSupplied) ? body.accessoriesSupplied : []).map(a => String(a && a.name || a || '').trim()));
+      loan.accessoriesSupplied = cleanLoanAccessories(device.accessories).filter(a => names.has(a.name));
+    }
+    const unpriced = loanLiabilityItems(loan).filter(it => !(Number(it.value) > 0)).map(it => it.name);
+    if (unpriced.length) return json(res, 422, { error: 'value_required', message: `Set a replacement value for ${unpriced.join(', ')} in Loan devices before printing.` });
+    const sig = staffSignaturePath(loan.signedByStaffId);
+    if (!sig) {
+      const who = loan.signedBy && loan.signedBy !== session.username ? `${loan.signedBy} has` : 'You have';
+      return json(res, 422, { error: 'signature_required', message: `${who} no saved signature. Add one in Settings (your staff profile) before printing a loan agreement.` });
+    }
+    const { shop } = readSettings();
+    const buffer = await buildDeviceLoanPdf(loan, shop, sig);
+    const safeRef = String(body.id || 'draft').replace(/[^a-zA-Z0-9_-]+/g, '-');
+    res.writeHead(200, {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="loan-agreement-${safeRef}.pdf"`,
+      'Content-Length': buffer.length,
+      'X-Content-Type-Options': 'nosniff',
+    });
+    res.end(buffer);
+    return;
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/device-loans/delete') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    await withFileLock(DEVICE_LOANS_LOCK, async () => {
+      const data = readDeviceLoans();
+      data.loans = data.loans.filter(l => l.id !== body.id);
+      writeDeviceLoans(data);
+    });
+    auditAdminAction({ req, session, action: 'device-loan.delete', result: { status: 'ok', changed: { id: body.id } } });
+    return json(res, 200, { ok: true });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/device-loans/devices/save') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    if (!String(body.name || '').trim()) return json(res, 422, { error: 'name_required', message: 'Give the device a name, e.g. its make and model.' });
+    const saved = await withFileLock(DEVICE_LOANS_LOCK, async () => {
+      const data = readDeviceLoans();
+      const dev = { ...body, value: body.value === '' || body.value == null ? '' : Math.round((Number(body.value) || 0) * 100) / 100, accessories: cleanLoanAccessories(body.accessories) };
+      const idx = dev.id ? data.devices.findIndex(d => d.id === dev.id) : -1;
+      if (idx >= 0) data.devices[idx] = dev;
+      else { dev.id = 'ld-' + Date.now() + '-' + crypto.randomBytes(3).toString('hex'); data.devices.push(dev); }
+      writeDeviceLoans(data);
+      return dev;
+    });
+    return json(res, 200, { ok: true, item: saved });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/device-loans/devices/delete') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    await withFileLock(DEVICE_LOANS_LOCK, async () => {
+      const data = readDeviceLoans();
+      data.devices = data.devices.filter(d => d.id !== body.id);
+      writeDeviceLoans(data);
+    });
+    return json(res, 200, { ok: true });
   }
   if (req.method === 'POST' && url.pathname === '/api/admin/safety-notices/delete') {
     const session = requireRole(req, res, 'manager'); if (!session) return;

@@ -470,6 +470,7 @@ const NAV_ICONS = {
   'payment-plans': <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="13" x2="12" y2="19"/><path d="M14 14.5c0-.83-.9-1.5-2-1.5s-2 .67-2 1.5.9 1.5 2 1.5 2 .67 2 1.5-.9 1.5-2 1.5-2-.67-2-1.5"/></svg>,
   repairs:      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>,
   'safety-notices': <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
+  'device-loans': <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="6" y="2" width="12" height="20" rx="2"/><line x1="11" y1="18" x2="13" y2="18"/><path d="M2 9l2 2 2-2M4 11V7a3 3 0 013-3"/></svg>,
   'hdd-reports': <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="2" y="7" width="20" height="10" rx="2"/><line x1="6" y1="12" x2="6.01" y2="12"/><line x1="10" y1="12" x2="18" y2="12"/><path d="M6 17v3M18 17v3"/></svg>,
   messages:     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>,
   quotes:       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>,
@@ -509,6 +510,7 @@ const ADMIN_SECTIONS = [
     { id:'repairs',   label:'Repair Jobs',   minRole:'staff', excludeRoles:['seller'] },
     { id:'hdd-reports', label:'HDD Condition Reports', minRole:'staff', excludeRoles:['seller'] },
     { id:'safety-notices', label:'Dangerous Device Notices', minRole:'staff', excludeRoles:['seller'] },
+    { id:'device-loans', label:'Device Loans', minRole:'staff', excludeRoles:['seller'] },
     { id:'quotes',    label:'Quotes',  minRole:'staff', excludeRoles:['seller'] },
     { id:'messages',  label:'Messages', minRole:'technician' },
     { id:'pc-builder', label:'PC Builder', minRole:'technician' },
@@ -13950,6 +13952,344 @@ function AdminAuditLog() {
 // Dangerous device notice. Printed and signed by hand when an unsafe device goes
 // back to the customer, usually because they declined the quoted repair. Clause 7
 // of the Repair Intake Terms reserves the right to require this before release.
+// ============================================================
+// DEVICE LOANS
+// ============================================================
+// Courtesy phones lent while a customer's own device is in for repair. Each
+// loan phone is set up once under "Loan devices" with its replacement value and
+// its accessories, each priced; a loan picks a phone, ticks what was handed
+// over, and prints an agreement signed with the creator's saved signature.
+const loanMoney = n => '$' + (Number(n) || 0).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const loanToday = () => new Date().toISOString().slice(0, 10);
+function loanStatus(l) {
+  if (l.returnedAt) return Number(l.damageCharge) > 0 ? ['RETURNED · CHARGED', 'tag-ochre'] : ['RETURNED', 'tag-outline'];
+  if (l.expectedReturn && l.expectedReturn < loanToday()) return ['OVERDUE', 'tag-rust'];
+  return ['OUT', 'tag-euc'];
+}
+const loanItemsTotal = l => (Number(l.loanDeviceValue) || 0) + (l.accessoriesSupplied || []).reduce((t, a) => t + (Number(a.value) || 0), 0);
+
+function AdminDeviceLoans({ sessionInfo = {} }) {
+  const [loans, setLoans] = useState([]);
+  const [devices, setDevices] = useState([]);
+  const [signatureOnFile, setSignatureOnFile] = useState(true);
+  const [repairJobs, setRepairJobs] = useState([]);
+  const [tab, setTab] = useState('out');
+  const [search, setSearch] = useState('');
+  const [edit, setEdit] = useState(null);      // loan form
+  const [devEdit, setDevEdit] = useState(null); // device form
+  const [saving, setSaving] = useState(false);
+  const snapRef = React.useRef('');
+  const devSnapRef = React.useRef('');
+  const canDelete = (ROLE_LEVELS[sessionInfo.role] ?? 0) >= ROLE_LEVELS.manager;
+
+  const reload = () => fetch('/api/admin/device-loans', { credentials: 'include' })
+    .then(r => r.ok ? r.json() : Promise.reject())
+    .then(d => { setLoans(d.loans || []); setDevices(d.devices || []); setSignatureOnFile(!!d.signatureOnFile); })
+    .catch(() => adminToast('Could not load device loans.'));
+  useEffect(() => {
+    reload();
+    fetch('/api/admin/repairs', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => { const board = d.columns || []; setRepairJobs(Array.isArray(board) ? board.flatMap(c => c.cards || []) : []); })
+      .catch(() => setRepairJobs([]));
+  }, []);
+
+  const activeLoanFor = deviceId => loans.find(l => l.deviceId === deviceId && !l.returnedAt);
+  const counts = {
+    out: loans.filter(l => !l.returnedAt).length,
+    overdue: loans.filter(l => loanStatus(l)[0] === 'OVERDUE').length,
+    returned: loans.filter(l => l.returnedAt).length,
+  };
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return loans
+      .filter(l => tab === 'all' ? true : tab === 'out' ? !l.returnedAt : tab === 'overdue' ? loanStatus(l)[0] === 'OVERDUE' : !!l.returnedAt)
+      .filter(l => !q || [l.id, l.customerName, l.customerPhone, l.loanDevice, l.loanDeviceSerial, l.ownDevice, l.repairJobId].some(v => String(v || '').toLowerCase().includes(q)));
+  }, [loans, tab, search]);
+
+  // ---- loan form ----
+  const f = edit || {};
+  const set = (k, v) => setEdit(e => ({ ...e, [k]: v }));
+  const openLoan = (loan) => {
+    const form = loan ? { ...loan, accessoriesSupplied: (loan.accessoriesSupplied || []).map(a => a.name) } : {
+      customerName: '', customerPhone: '', customerEmail: '', idSighted: '', repairJobId: '',
+      ownDevice: '', ownDeviceSerial: '', deviceId: '', accessoriesSupplied: [], conditionOut: '',
+      loanDate: loanToday(), expectedReturn: '', returnedAt: '', returnComplete: true, returnCondition: '', damageCharge: '', notes: '',
+    };
+    snapRef.current = JSON.stringify(form);
+    setEdit(form);
+  };
+  const dirty = !!edit && JSON.stringify(edit) !== snapRef.current;
+  const pickDevice = (deviceId) => {
+    const d = devices.find(x => x.id === deviceId);
+    setEdit(e => ({ ...e, deviceId, accessoriesSupplied: d ? (d.accessories || []).map(a => a.name) : [], conditionOut: e.conditionOut || (d && d.condition) || '' }));
+  };
+  const applyJob = (jobId) => {
+    const j = repairJobs.find(x => x.id === jobId);
+    setEdit(e => ({ ...e, repairJobId: jobId, ...(j ? {
+      customerName: j.customer || j.name || e.customerName, customerPhone: j.phone || e.customerPhone,
+      customerEmail: j.email || e.customerEmail, ownDevice: e.ownDevice || j.device || j.t || '',
+    } : {}) }));
+  };
+  const selDevice = devices.find(d => d.id === f.deviceId);
+  // What will be priced on the agreement: a saved loan's own copy, or the
+  // chosen device's current prices for a loan not yet saved.
+  const pricedItems = (() => {
+    if (!f.deviceId) return [];
+    const savedSame = f.id && loans.find(l => l.id === f.id && l.deviceId === f.deviceId);
+    const devAcc = (selDevice && selDevice.accessories) || [];
+    const oldAcc = new Map(((savedSame && savedSame.accessoriesSupplied) || []).map(a => [a.name, a.value]));
+    return [
+      { name: savedSame ? savedSame.loanDevice : (selDevice ? selDevice.name : ''), value: savedSame && Number(savedSame.loanDeviceValue) > 0 ? savedSame.loanDeviceValue : (selDevice ? selDevice.value : '') },
+      ...(f.accessoriesSupplied || []).map(n => ({ name: n, value: Number(oldAcc.get(n)) > 0 ? oldAcc.get(n) : (devAcc.find(a => a.name === n) || {}).value })),
+    ];
+  })();
+  const unpriced = pricedItems.filter(it => !(Number(it.value) > 0)).map(it => it.name);
+  const printBlock = !f.deviceId ? 'Pick the loan device first.'
+    : unpriced.length ? `Set a replacement value for ${unpriced.join(', ')} in Loan devices.`
+    : (!f.id && !signatureOnFile) ? 'Add your saved signature in Settings first.' : '';
+
+  const saveLoan = async () => {
+    setSaving(true);
+    const r = await fetch('/api/admin/device-loans/save', { method: 'POST', headers: postHeaders(), credentials: 'include',
+      body: JSON.stringify({ ...f, accessoriesSupplied: (f.accessoriesSupplied || []).map(name => ({ name })) }) }).catch(() => null);
+    setSaving(false);
+    const d = r ? await r.json().catch(() => ({})) : {};
+    if (!r || !r.ok) { adminToast(d.message || 'Failed to save the loan.'); return null; }
+    setLoans(ls => ls.some(x => x.id === d.item.id) ? ls.map(x => x.id === d.item.id ? d.item : x) : [...ls, d.item]);
+    const form = { ...d.item, accessoriesSupplied: (d.item.accessoriesSupplied || []).map(a => a.name) };
+    snapRef.current = JSON.stringify(form);
+    setEdit(form);
+    return d.item;
+  };
+  const printLoan = async (payload) => {
+    const r = await fetch('/api/admin/device-loans/pdf', { method: 'POST', headers: postHeaders(), credentials: 'include', body: JSON.stringify(payload) }).catch(() => null);
+    if (!r || !r.ok) { const d = r ? await r.json().catch(() => ({})) : {}; adminToast(d.message || 'Failed to generate the agreement.'); return; }
+    window.open(URL.createObjectURL(await r.blob()), '_blank');
+  };
+  const saveAndPrint = async () => { const saved = await saveLoan(); if (saved) printLoan({ id: saved.id }); };
+  const deleteLoan = async () => {
+    if (!(await adminConfirm(`Delete loan ${f.id}? This cannot be undone.`, { title: 'Delete loan', confirmLabel: 'Delete', danger: true }))) return;
+    const r = await fetch('/api/admin/device-loans/delete', { method: 'POST', headers: postHeaders(), credentials: 'include', body: JSON.stringify({ id: f.id }) }).catch(() => null);
+    if (!r || !r.ok) { adminToast('Failed to delete the loan.'); return; }
+    setLoans(ls => ls.filter(x => x.id !== f.id));
+    setEdit(null);
+  };
+
+  // ---- device form ----
+  const df = devEdit || {};
+  const setD = (k, v) => setDevEdit(e => ({ ...e, [k]: v }));
+  const openDevice = (dev) => {
+    const form = dev ? { ...dev, accessories: (dev.accessories || []).map(a => ({ ...a })) }
+      : { name: '', serial: '', value: '', condition: '', notes: '', accessories: [{ name: 'Charger', value: '' }, { name: 'USB cable', value: '' }] };
+    devSnapRef.current = JSON.stringify(form);
+    setDevEdit(form);
+  };
+  const devDirty = !!devEdit && JSON.stringify(devEdit) !== devSnapRef.current;
+  const setAcc = (i, k, v) => setDevEdit(e => ({ ...e, accessories: e.accessories.map((a, j) => j === i ? { ...a, [k]: v } : a) }));
+  const saveDevice = async () => {
+    const r = await fetch('/api/admin/device-loans/devices/save', { method: 'POST', headers: postHeaders(), credentials: 'include', body: JSON.stringify(df) }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : {};
+    if (!r || !r.ok) { adminToast(d.message || 'Failed to save the device.'); return; }
+    setDevices(ds => ds.some(x => x.id === d.item.id) ? ds.map(x => x.id === d.item.id ? d.item : x) : [...ds, d.item]);
+    setDevEdit(null);
+  };
+  const deleteDevice = async () => {
+    if (activeLoanFor(df.id)) { adminToast('This device is out on loan. Mark that loan returned first.'); return; }
+    if (!(await adminConfirm(`Delete ${df.name} from loan devices? Past loans keep their own record of it.`, { title: 'Delete device', confirmLabel: 'Delete', danger: true }))) return;
+    const r = await fetch('/api/admin/device-loans/devices/delete', { method: 'POST', headers: postHeaders(), credentials: 'include', body: JSON.stringify({ id: df.id }) }).catch(() => null);
+    if (!r || !r.ok) { adminToast('Failed to delete the device.'); return; }
+    setDevices(ds => ds.filter(x => x.id !== df.id));
+    setDevEdit(null);
+  };
+
+  const tabs = [['out', `Out (${counts.out})`], ['overdue', `Overdue (${counts.overdue})`], ['returned', `Returned (${counts.returned})`], ['all', `All (${loans.length})`], ['devices', `Loan devices (${devices.length})`]];
+  const check = { display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13, lineHeight: 1.5, cursor: 'pointer' };
+
+  return (
+    <div style={{ padding: 32, display: 'grid', gap: 20 }}>
+      <div style={{ padding: 16, background: 'var(--paper)', border: '1px solid var(--line)', borderLeft: '3px solid var(--rust)', fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
+        A courtesy phone for calls and texts while the customer's own device is in for repair. Pick a loan device, tick what you're handing over,
+        then print the agreement and have the customer sign it. Their device is only released when everything on the agreement comes back, or is paid for.
+      </div>
+      {!signatureOnFile && (
+        <div role="alert" style={{ padding: '12px 14px', border: '1px solid var(--rust)', background: 'var(--bg-elev)', fontSize: 13 }}>
+          <strong style={{ color: 'var(--rust)' }}>No saved signature.</strong> Loan agreements are signed with your saved signature, so you can't print one until you add it in Settings.
+        </div>
+      )}
+
+      <div className="row-flex" style={{ justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 10 }}>
+        <div className="tabs" style={{ margin: 0 }}>
+          {tabs.map(([k, label]) => (
+            <div key={k} role="button" tabIndex={0} className={`tab ${tab === k ? 'active' : ''}`} style={{ cursor: 'pointer' }}
+              onClick={() => setTab(k)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setTab(k); } }}>{label}</div>
+          ))}
+        </div>
+        <div className="row-flex" style={{ gap: 8 }}>
+          {tab !== 'devices' && <input className="input" style={{ maxWidth: 240 }} placeholder="Search loans…" value={search} onChange={e => setSearch(e.target.value)} />}
+          {tab === 'devices'
+            ? <button className="btn btn-rust btn-sm" onClick={() => openDevice(null)}>+ Add loan device</button>
+            : <button className="btn btn-rust btn-sm" disabled={devices.length === 0} title={devices.length === 0 ? 'Add a loan device first' : ''} onClick={() => openLoan(null)}>+ New loan</button>}
+        </div>
+      </div>
+
+      {tab === 'devices' ? (
+        <Table emptyMessage="No loan devices yet. Add each loaner phone with its replacement value and the accessories that go with it."
+          columns={[
+            { key: 'name', label: 'Device', w: '1.6fr', render: r => <span style={{ fontWeight: 600 }}>{r.name}</span> },
+            { key: 'serial', label: 'Serial / IMEI', w: '1.2fr', render: r => <span className="mono" style={{ fontSize: 12 }}>{r.serial || '-'}</span> },
+            { key: 'acc', label: 'Accessories', w: '1.6fr', render: r => <span style={{ fontSize: 12.5, color: 'var(--ink-2)' }}>{(r.accessories || []).map(a => `${a.name} ${Number(a.value) > 0 ? loanMoney(a.value) : '(no value)'}`).join(' · ') || '-'}</span> },
+            { key: 'value', label: 'Device value', w: '120px', render: r => Number(r.value) > 0 ? <span className="mono">{loanMoney(r.value)}</span> : <span className="tag tag-rust">NO VALUE</span> },
+            { key: 'status', label: 'Status', w: '150px', render: r => { const l = activeLoanFor(r.id); return l ? <span className="tag tag-ochre">OUT · {l.id}</span> : <span className="tag tag-euc">AVAILABLE</span>; } },
+          ]}
+          rows={devices} onRowClick={r => openDevice(r)} />
+      ) : (
+        <Table emptyMessage={loans.length === 0 ? 'No loans yet.' : 'No loans here.'}
+          columns={[
+            { key: 'id', label: '#', w: '90px', render: r => <span className="mono" style={{ fontSize: 11, color: 'var(--rust)' }}>{r.id}</span> },
+            { key: 'customerName', label: 'Customer', w: '1.3fr', render: r => <><div style={{ fontWeight: 600 }}>{r.customerName}</div><div style={{ fontSize: 12, color: 'var(--ink-2)' }}>{r.customerPhone}</div></> },
+            { key: 'loanDevice', label: 'Loan device', w: '1.3fr', render: r => <span style={{ fontSize: 13 }}>{r.loanDevice}</span> },
+            { key: 'ownDevice', label: 'Their device', w: '1.3fr', render: r => <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>{r.ownDevice}{r.repairJobId ? ` (${r.repairJobId})` : ''}</span> },
+            { key: 'dates', label: 'Lent / due', w: '150px', render: r => <span className="mono" style={{ fontSize: 11 }}>{r.loanDate || '-'}<br />{r.returnedAt ? `back ${r.returnedAt}` : (r.expectedReturn ? `due ${r.expectedReturn}` : 'at collection')}</span> },
+            { key: 'status', label: 'Status', w: '150px', render: r => { const [t, c] = loanStatus(r); return <span className={`tag ${c}`}>{t}</span>; } },
+            { key: 'print', label: '', w: '80px', render: r => <button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); printLoan({ id: r.id }); }}>Print</button> },
+          ]}
+          rows={visible} onRowClick={r => openLoan(r)} />
+      )}
+
+      {edit && (
+        <Drawer open={true} onClose={() => setEdit(null)} dirty={dirty} title={f.id ? `Loan ${f.id}` : 'New device loan'}
+          footer={<div className="row-flex" style={{ justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+            {f.id && canDelete ? <button className="btn btn-ghost btn-sm" style={{ color: 'var(--rust)' }} onClick={deleteLoan}>Delete</button> : <span />}
+            <div className="row-flex" style={{ gap: 8 }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setEdit(null)}>Close</button>
+              <button className="btn btn-ghost btn-sm" disabled={saving} onClick={saveLoan}>{saving ? 'Saving…' : 'Save'}</button>
+              <button className="btn btn-sm" disabled={saving || !!printBlock} title={printBlock} onClick={saveAndPrint}>Save & print</button>
+            </div>
+          </div>}>
+          <div style={{ display: 'grid', gap: 14 }}>
+            {printBlock && <div className="notice" style={{ fontSize: 12.5 }}>Can't print yet: {printBlock}</div>}
+
+            <label className="field"><span className="label">Repair job (fills the customer in)</span>
+              <select className="select" value={f.repairJobId || ''} onChange={e => applyJob(e.target.value)}>
+                <option value="">None</option>
+                {repairJobs.map(j => <option key={j.id} value={j.id}>{j.id}{j.customer ? ` - ${j.customer}` : ''}</option>)}
+              </select>
+            </label>
+            <div className="grid-2" style={{ gap: 12 }}>
+              <label className="field"><span className="label">Customer name<ReqMark /></span><input className="input" value={f.customerName || ''} onChange={e => set('customerName', e.target.value)} /></label>
+              <label className="field"><span className="label">Phone<ReqMark /></span><input className="input" value={f.customerPhone || ''} onChange={e => set('customerPhone', e.target.value)} placeholder="A number other than the phone being repaired, if they have one" /></label>
+            </div>
+            <div className="grid-2" style={{ gap: 12 }}>
+              <label className="field"><span className="label">Email</span><input className="input" value={f.customerEmail || ''} onChange={e => set('customerEmail', e.target.value)} /></label>
+              <label className="field"><span className="label">ID sighted (optional)</span><input className="input" value={f.idSighted || ''} onChange={e => set('idSighted', e.target.value)} placeholder="e.g. QLD driver licence" /></label>
+            </div>
+
+            <div className="eyebrow" style={{ marginTop: 6 }}>Their device (held for repair)</div>
+            <div className="grid-2" style={{ gap: 12 }}>
+              <label className="field"><span className="label">Device<ReqMark /></span><input className="input" value={f.ownDevice || ''} onChange={e => set('ownDevice', e.target.value)} placeholder="e.g. Samsung Galaxy S22, cracked screen" /></label>
+              <label className="field"><span className="label">Serial / IMEI</span><input className="input" value={f.ownDeviceSerial || ''} onChange={e => set('ownDeviceSerial', e.target.value)} /></label>
+            </div>
+
+            <div className="eyebrow" style={{ marginTop: 6 }}>Loan device</div>
+            <label className="field"><span className="label">Device<ReqMark /></span>
+              <select className="select" value={f.deviceId || ''} onChange={e => pickDevice(e.target.value)}>
+                <option value="">Pick a loan device…</option>
+                {devices.map(d => { const busy = activeLoanFor(d.id); const mine = busy && busy.id === f.id;
+                  return <option key={d.id} value={d.id} disabled={!!busy && !mine}>{d.name}{d.serial ? ` (${d.serial})` : ''}{busy && !mine ? ` - out on ${busy.id}` : ''}</option>; })}
+              </select>
+            </label>
+            {f.deviceId && (
+              <div style={{ border: '1px solid var(--line)', background: 'var(--paper)', padding: '10px 12px' }}>
+                <div style={{ fontSize: 12, color: 'var(--ink-3)', marginBottom: 6 }}>Handed over, at the replacement value printed on the agreement:</div>
+                {pricedItems.map((it, i) => {
+                  const isDevice = i === 0;
+                  return (
+                    <div key={it.name + i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', fontSize: 13 }}>
+                      <span>{isDevice ? <strong>{it.name}</strong> : it.name}</span>
+                      <span className="mono">{Number(it.value) > 0 ? loanMoney(it.value) : <span style={{ color: 'var(--rust)' }}>no value set</span>}</span>
+                    </div>
+                  );
+                })}
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--line)', marginTop: 4, paddingTop: 6, fontSize: 13, fontWeight: 600 }}>
+                  <span>Total</span><span className="mono">{loanMoney(pricedItems.reduce((t, it) => t + (Number(it.value) || 0), 0))}</span>
+                </div>
+                {selDevice && (selDevice.accessories || []).length > 0 && (
+                  <div style={{ marginTop: 10, display: 'grid', gap: 6 }}>
+                    <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>Accessories handed over:</div>
+                    {(selDevice.accessories || []).map(a => (
+                      <label key={a.name} style={check}>
+                        <input type="checkbox" checked={(f.accessoriesSupplied || []).includes(a.name)}
+                          onChange={e => set('accessoriesSupplied', e.target.checked ? [...(f.accessoriesSupplied || []), a.name] : (f.accessoriesSupplied || []).filter(n => n !== a.name))} />
+                        <span>{a.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 8 }}>Values come from the device's record. <a href="#" onClick={e => { e.preventDefault(); setEdit(null); setTab('devices'); }}>Edit in Loan devices</a></div>
+              </div>
+            )}
+            <label className="field"><span className="label">Condition when lent</span><textarea className="textarea" rows={2} value={f.conditionOut || ''} onChange={e => set('conditionOut', e.target.value)} placeholder="e.g. Working, factory reset, small scratch on the back" /></label>
+            <div className="grid-2" style={{ gap: 12 }}>
+              <label className="field"><span className="label">Date of loan</span><input className="input" type="date" value={f.loanDate || ''} onChange={e => set('loanDate', e.target.value)} /></label>
+              <label className="field"><span className="label">Expected return (optional)</span><input className="input" type="date" value={f.expectedReturn || ''} onChange={e => set('expectedReturn', e.target.value)} /></label>
+            </div>
+
+            {f.id && (<>
+              <div className="eyebrow" style={{ marginTop: 6 }}>Return</div>
+              {!f.returnedAt
+                ? <button className="btn btn-ghost btn-sm" style={{ justifySelf: 'start' }} onClick={() => set('returnedAt', loanToday())}>Mark returned today</button>
+                : (<>
+                  <div className="grid-2" style={{ gap: 12 }}>
+                    <label className="field"><span className="label">Date returned</span><input className="input" type="date" value={f.returnedAt || ''} onChange={e => set('returnedAt', e.target.value)} /></label>
+                    <label className="field"><span className="label">Charged for loss / damage (AUD)</span><input className="input" type="number" min="0" step="0.01" value={f.damageCharge ?? ''} onChange={e => set('damageCharge', e.target.value)} placeholder="0.00" /></label>
+                  </div>
+                  <label style={check}><input type="checkbox" checked={f.returnComplete !== false} onChange={e => set('returnComplete', e.target.checked)} /><span>Everything listed above came back</span></label>
+                  <label className="field"><span className="label">Condition on return / damage noted</span><textarea className="textarea" rows={2} value={f.returnCondition || ''} onChange={e => set('returnCondition', e.target.value)} /></label>
+                  <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>Remember to factory reset the device before it goes out again.{f.returnedBy ? ` Recorded by ${f.returnedBy}.` : ''} <a href="#" onClick={e => { e.preventDefault(); set('returnedAt', ''); }}>Undo return</a></div>
+                </>)}
+            </>)}
+            <label className="field"><span className="label">Notes (internal)</span><textarea className="textarea" rows={2} value={f.notes || ''} onChange={e => set('notes', e.target.value)} /></label>
+            {f.id && <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>Agreement signed by {f.signedBy || 'staff'} on {f.signedAt ? new Date(f.signedAt).toLocaleDateString('en-AU') : '-'}, using their saved signature.</div>}
+          </div>
+        </Drawer>
+      )}
+
+      {devEdit && (
+        <Drawer open={true} onClose={() => setDevEdit(null)} dirty={devDirty} title={df.id ? df.name : 'New loan device'}
+          footer={<div className="row-flex" style={{ justifyContent: 'space-between' }}>
+            {df.id && canDelete ? <button className="btn btn-ghost btn-sm" style={{ color: 'var(--rust)' }} onClick={deleteDevice}>Delete</button> : <span />}
+            <div className="row-flex" style={{ gap: 8 }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setDevEdit(null)}>Cancel</button>
+              <button className="btn btn-sm" onClick={saveDevice}>Save</button>
+            </div>
+          </div>}>
+          <div style={{ display: 'grid', gap: 14 }}>
+            <label className="field"><span className="label">Make and model<ReqMark /></span><input className="input" value={df.name || ''} onChange={e => setD('name', e.target.value)} placeholder="e.g. Samsung Galaxy A05" /></label>
+            <div className="grid-2" style={{ gap: 12 }}>
+              <label className="field"><span className="label">Serial / IMEI</span><input className="input" value={df.serial || ''} onChange={e => setD('serial', e.target.value)} /></label>
+              <label className="field"><span className="label">Replacement value (AUD)<ReqMark /></span><input className="input" type="number" min="0" step="0.01" value={df.value ?? ''} onChange={e => setD('value', e.target.value)} /></label>
+            </div>
+            <div className="eyebrow" style={{ marginTop: 6 }}>Accessories that go with it</div>
+            <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>Each is priced on its own, so a lost or damaged charger or cable is replaced at its own value.</div>
+            {(df.accessories || []).map((a, i) => (
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 130px 28px', gap: 8 }}>
+                <input className="input" value={a.name} placeholder="e.g. Charger" onChange={e => setAcc(i, 'name', e.target.value)} />
+                <input className="input" type="number" min="0" step="0.01" placeholder="Value" value={a.value ?? ''} onChange={e => setAcc(i, 'value', e.target.value)} />
+                <button className="btn btn-ghost btn-sm" style={{ padding: 0, color: 'var(--rust)' }} aria-label={`Remove ${a.name || 'accessory'}`} onClick={() => setDevEdit(e => ({ ...e, accessories: e.accessories.filter((_, j) => j !== i) }))}><Icon name="x" size={12} /></button>
+              </div>
+            ))}
+            <button className="btn btn-ghost btn-sm" style={{ justifySelf: 'start' }} onClick={() => setDevEdit(e => ({ ...e, accessories: [...(e.accessories || []), { name: '', value: '' }] }))}>+ Add accessory</button>
+            <label className="field"><span className="label">Usual condition (fills new loans in)</span><input className="input" value={df.condition || ''} onChange={e => setD('condition', e.target.value)} placeholder="e.g. Working, minor scuffs" /></label>
+            <label className="field"><span className="label">Notes (internal)</span><textarea className="textarea" rows={2} value={df.notes || ''} onChange={e => setD('notes', e.target.value)} /></label>
+            {df.id && activeLoanFor(df.id) && <div className="notice" style={{ fontSize: 12.5 }}>Out on loan {activeLoanFor(df.id).id} with {activeLoanFor(df.id).customerName}. Value changes apply to new loans; that agreement keeps the values it was given.</div>}
+          </div>
+        </Drawer>
+      )}
+    </div>
+  );
+}
+
 function AdminSafetyNotices({ sessionInfo = {} }) {
   const [notices, setNotices] = useState([]);
   const [edit, setEdit] = useState(null);
@@ -14229,6 +14569,7 @@ const ADMIN_VIEWS = {
   repairs:    { c: AdminRepairs,    t:'Repair Jobs' },
   'hdd-reports': { c: AdminHddReports, t:'HDD Condition Reports', staticSubtitle:'S.M.A.R.T. summary · condition notes · printable PDF' },
   'safety-notices': { c: AdminSafetyNotices, t:'Dangerous Device Notices', staticSubtitle:'severe electrical fault · customer acknowledgement · printable PDF' },
+  'device-loans': { c: AdminDeviceLoans, t:'Device Loans', staticSubtitle:'courtesy phones during repair · signed agreement · returns' },
   quotes:     { c: AdminQuotes,     t:'Quotes' },
   messages:   { c: AdminMessages,   t:'Messages', staticSubtitle:'contact page · chat handoffs · saved even if the email fails' },
   'pc-builder': { c: AdminPcBuilder, t:'PC Builder', staticSubtitle:'pick parts · check fit and compatibility · quote it' },
@@ -14260,7 +14601,7 @@ const ADMIN_VIEWS = {
 };
 
 const ADMIN_ALL_IDS = new Set([
-  'overview','orders','payment-plans','repairs','hdd-reports','safety-notices','quotes','messages','pc-builder','reviews','ewaste','bookings','availability',
+  'overview','orders','payment-plans','repairs','hdd-reports','safety-notices','device-loans','quotes','messages','pc-builder','reviews','ewaste','bookings','availability',
   'products','services','software','tutorials','ai',
   'groups','customers','sellers','clients','sponsorship',
   'memberships','gift-cards','rewards','expenses','tax-reports','policies','seller-billing','settings','audit-log',
