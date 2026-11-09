@@ -5418,6 +5418,11 @@ function buildDeviceLoanPdf(loan, shop, sigImage) {
     doc.font('Helvetica').fontSize(7.5).fillColor('#888').text('Customer initials', 435, y + ackH - 9, { width: 102 });
     y += ackH + 8;
 
+    const CARVE_H = 6, SIG_TITLE_H = 0, SIG_TOP_OFF = 34, NAME_OFF = 26, DATE_OFF = 0, DATE_LABEL_H = 16, RETURN_H = 44;
+    // Height of everything under the terms, drawn exactly as below: gap,
+    // signature space, print-name row, and the return box (RETURN_H - 10 tall).
+    const SIGN_BLOCK_H = CARVE_H + SIG_TITLE_H + SIG_TOP_OFF + NAME_OFF + DATE_OFF + DATE_LABEL_H + 4 + RETURN_H - 10;
+
     y = sectionTitle('Loan Terms', y);
     doc.font('Helvetica').fontSize(9).fillColor('#222').text('I agree that:', 50, y);
     y = doc.y + 3;
@@ -5434,19 +5439,28 @@ function buildDeviceLoanPdf(loan, shop, sigImage) {
       `I understand that the loan device will be factory reset after its return. I am responsible for backing up any information I wish to retain and signing out of my accounts. ${us} will take reasonable care when handling the device and its data but is not responsible for data loss to the extent permitted by law.`,
       `Nothing in this agreement excludes, restricts or modifies any guarantee, right or remedy under the Australian Consumer Law or any other applicable law that cannot lawfully be excluded, restricted or modified.`,
     ];
+    // A loan with a lot of detail above (long notes, many accessories) would
+    // otherwise push the signatures onto a second page and leave page one
+    // half empty. Measure the terms and step their text size down just enough
+    // to keep the whole agreement on one sheet; normal loans keep 8.3pt.
+    const termOpts = { width: 477, align: 'justify', lineGap: 0 };
+    const termsHeight = (size) => {
+      doc.font('Helvetica').fontSize(size);
+      return terms.reduce((h, line) => h + doc.heightOfString(line, termOpts) + 2.5, 0);
+    };
+    const room = pageBottom - y - 2 - SIGN_BLOCK_H;
+    let termSize = 8.3;
+    while (termSize > 6.6 && termsHeight(termSize) > room) termSize = Math.round((termSize - 0.1) * 10) / 10;
     terms.forEach((line, n) => {
       if (y > pageBottom - 40) { doc.addPage(); y = 50; }
-      doc.font('Helvetica-Bold').fontSize(8.3).fillColor('#222').text(`${n + 1}.`, 50, y, { width: 14, align: 'right' });
-      doc.font('Helvetica').fontSize(8.3).fillColor('#222').text(line, 68, y, { width: 477, align: 'justify', lineGap: 0 });
+      doc.font('Helvetica-Bold').fontSize(termSize).fillColor('#222').text(`${n + 1}.`, 50, y, { width: 14, align: 'right' });
+      doc.font('Helvetica').fontSize(termSize).fillColor('#222').text(line, 68, y, termOpts);
       y = doc.y + 2.5;
     });
     y += 2;
 
     // Signatures and the return box stay together on one sheet.
-    const CARVE_H = 6, SIG_TITLE_H = 0, SIG_TOP_OFF = 34, NAME_OFF = 26, DATE_OFF = 0, DATE_LABEL_H = 16, RETURN_H = 44;
-    // Exactly the height drawn below: gap, signature space, print-name row,
-    // and the return box (drawn RETURN_H - 10 tall).
-    if (y > pageBottom - (CARVE_H + SIG_TITLE_H + SIG_TOP_OFF + NAME_OFF + DATE_OFF + DATE_LABEL_H + 4 + RETURN_H - 10)) { doc.addPage(); y = 50; }
+    if (y > pageBottom - SIGN_BLOCK_H) { doc.addPage(); y = 50; }
 
     y += CARVE_H;
 
