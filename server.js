@@ -5085,7 +5085,21 @@ function buildHddReportPdf(report, shop) {
 // Dangerous-device release notice. Printed, signed by hand at collection, and kept
 // as the written acknowledgment clause 7 of the Repair Intake Terms reserves the
 // right to require before an unsafe device goes back into service.
-function buildSafetyNoticePdf(notice, shop) {
+// A staff member's saved signature, ready to place on a PDF: the transparent
+// margin the signature pad leaves around the strokes is trimmed off, so the
+// ink can be sat directly on the signature line. Null when there is none.
+async function signatureForPdf(sigPath) {
+  if (!sigPath) return null;
+  try { return await sharp(sigPath).trim({ threshold: 10 }).png().toBuffer(); }
+  catch { try { return fs.readFileSync(sigPath); } catch { return null; } }
+}
+// Draws a trimmed signature so its bottom edge rests just above the rule at
+// lineY, scaled to fit the space above it.
+function drawSignatureOnLine(doc, img, x, lineY) {
+  doc.image(img, x, lineY - 31, { fit: [160, 29], align: 'left', valign: 'bottom' });
+}
+
+function buildSafetyNoticePdf(notice, shop, sigImage) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 50, bufferPages: true });
     const chunks = [];
@@ -5235,13 +5249,8 @@ function buildSafetyNoticePdf(notice, shop) {
     // Company signature: use the signer's stored e-signature where one exists,
     // otherwise leave a blank rule to sign by hand on the printed copy.
     let companySigDrawn = false;
-    if (notice.signedByStaffId) {
-      const candidate = path.join(__dirname, 'assets/signatures', `${notice.signedByStaffId}.png`);
-      if (fs.existsSync(candidate)) {
-        // Anchored to the rule, not the label: the box runs from just under
-        // the heading down to the signature line.
-        try { doc.image(candidate, rightX, sigTop - 34, { fit: [150, 32] }); companySigDrawn = true; } catch {}
-      }
+    if (sigImage) {
+      try { drawSignatureOnLine(doc, sigImage, rightX, sigTop); companySigDrawn = true; } catch {}
     }
     if (!companySigDrawn && notice.signedBy) {
       doc.font('Helvetica-Oblique').fontSize(16).fillColor('#222').text(notice.signedBy, rightX, sigTop - 26, { width: colW });
@@ -5300,7 +5309,7 @@ function loanLiabilityItems(loan) {
 
 // The courtesy loan agreement. One page in the normal case: details, terms,
 // signatures, and a return box filled in by hand when the device comes back.
-function buildDeviceLoanPdf(loan, shop, signaturePath) {
+function buildDeviceLoanPdf(loan, shop, sigImage) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 50, bufferPages: true });
     const chunks = [];
@@ -5436,13 +5445,13 @@ function buildDeviceLoanPdf(loan, shop, signaturePath) {
       doc.moveTo(x, yy).lineTo(x + colW, yy).strokeColor('#999').lineWidth(0.8).stroke();
       doc.font('Helvetica').fontSize(8).fillColor('#888').text(label, x, yy + 5, { width: colW });
     };
-    doc.font('Helvetica-Bold').fontSize(9).fillColor('#222').text('Customer', 50, y);
-    doc.font('Helvetica-Bold').fontSize(9).fillColor('#222').text(shopName ? `For ${shopName}` : 'For the business', rightX, y);
+    // Who signs where is said under each line, which leaves the whole gap
+    // above the line free for the signature itself.
     // Our side is always the signer's saved signature; the route refuses to
     // print without one, so there is no hand-sign fallback here.
-    if (signaturePath) { try { doc.image(signaturePath, rightX, sigTop - 34, { fit: [150, 32] }); } catch {} }
-    sigLine('Signature', 50, sigTop);
-    sigLine('Signature', rightX, sigTop);
+    if (sigImage) { try { drawSignatureOnLine(doc, sigImage, rightX, sigTop); } catch {} }
+    sigLine('Customer signature', 50, sigTop);
+    sigLine(shopName ? `Signed for ${shopName}` : 'Signed for the business', rightX, sigTop);
     // Print name and date share one line on each side.
     const nameY = sigTop + NAME_OFF;
     const nameW = 150, dateX = (x) => x + nameW + 12, dateW = colW - nameW - 12;
@@ -10754,7 +10763,7 @@ const adminServer = http.createServer(async (req, res) => {
     // preview rather than printing a blank signer name.
     const notice = { ...body, signedBy: body.signedBy || session.username, signedByStaffId: body.signedByStaffId || session.staffId || null };
     const { shop } = readSettings();
-    const buffer = await buildSafetyNoticePdf(notice, shop);
+    const buffer = await buildSafetyNoticePdf(notice, shop, await signatureForPdf(staffSignaturePath(notice.signedByStaffId)));
     const safeRef = String(body.id || 'draft').replace(/[^a-zA-Z0-9_-]+/g, '-');
     res.writeHead(200, {
       'Content-Type': 'application/pdf',
@@ -10854,7 +10863,7 @@ const adminServer = http.createServer(async (req, res) => {
       return json(res, 422, { error: 'signature_required', message: `${who} no saved signature. Add one in Settings (your staff profile) before printing a loan agreement.` });
     }
     const { shop } = readSettings();
-    const buffer = await buildDeviceLoanPdf(loan, shop, sig);
+    const buffer = await buildDeviceLoanPdf(loan, shop, await signatureForPdf(sig));
     const safeRef = String(body.id || 'draft').replace(/[^a-zA-Z0-9_-]+/g, '-');
     res.writeHead(200, {
       'Content-Type': 'application/pdf',
