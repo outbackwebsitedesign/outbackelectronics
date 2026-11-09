@@ -13973,6 +13973,8 @@ function AdminDeviceLoans({ sessionInfo = {} }) {
   const [devices, setDevices] = useState([]);
   const [signatureOnFile, setSignatureOnFile] = useState(true);
   const [repairJobs, setRepairJobs] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [linkType, setLinkType] = useState('repair');
   const [tab, setTab] = useState('out');
   const [search, setSearch] = useState('');
   const [edit, setEdit] = useState(null);      // loan form
@@ -13992,6 +13994,10 @@ function AdminDeviceLoans({ sessionInfo = {} }) {
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(d => { const board = d.columns || []; setRepairJobs(Array.isArray(board) ? board.flatMap(c => c.cards || []) : []); })
       .catch(() => setRepairJobs([]));
+    fetch('/api/admin/orders', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setOrders(d.items || []))
+      .catch(() => setOrders([]));
   }, []);
 
   const activeLoanFor = deviceId => loans.find(l => l.deviceId === deviceId && !l.returnedAt);
@@ -14004,7 +14010,7 @@ function AdminDeviceLoans({ sessionInfo = {} }) {
     const q = search.trim().toLowerCase();
     return loans
       .filter(l => tab === 'all' ? true : tab === 'out' ? !l.returnedAt : tab === 'overdue' ? loanStatus(l)[0] === 'OVERDUE' : !!l.returnedAt)
-      .filter(l => !q || [l.id, l.customerName, l.customerPhone, l.loanDevice, l.loanDeviceSerial, l.ownDevice, l.repairJobId].some(v => String(v || '').toLowerCase().includes(q)));
+      .filter(l => !q || [l.id, l.customerName, l.customerPhone, l.loanDevice, l.loanDeviceSerial, l.ownDevice, l.repairJobId, l.orderId].some(v => String(v || '').toLowerCase().includes(q)));
   }, [loans, tab, search]);
 
   // ---- loan form ----
@@ -14012,11 +14018,12 @@ function AdminDeviceLoans({ sessionInfo = {} }) {
   const set = (k, v) => setEdit(e => ({ ...e, [k]: v }));
   const openLoan = (loan) => {
     const form = loan ? { ...loan, accessoriesSupplied: (loan.accessoriesSupplied || []).map(a => a.name) } : {
-      customerName: '', customerPhone: '', customerEmail: '', idSighted: '', repairJobId: '',
+      customerName: '', customerPhone: '', customerEmail: '', idSighted: '', repairJobId: '', orderId: '',
       ownDevice: '', ownDeviceSerial: '', deviceId: '', accessoriesSupplied: [], conditionOut: '',
       loanDate: loanToday(), expectedReturn: '', returnedAt: '', returnComplete: true, returnCondition: '', damageCharge: '', notes: '',
     };
     snapRef.current = JSON.stringify(form);
+    setLinkType(loan ? (loan.orderId ? 'order' : loan.repairJobId ? 'repair' : 'none') : 'repair');
     setEdit(form);
   };
   const dirty = !!edit && JSON.stringify(edit) !== snapRef.current;
@@ -14026,9 +14033,16 @@ function AdminDeviceLoans({ sessionInfo = {} }) {
   };
   const applyJob = (jobId) => {
     const j = repairJobs.find(x => x.id === jobId);
-    setEdit(e => ({ ...e, repairJobId: jobId, ...(j ? {
+    setEdit(e => ({ ...e, repairJobId: jobId, orderId: '', ...(j ? {
       customerName: j.customer || j.name || e.customerName, customerPhone: j.phone || e.customerPhone,
       customerEmail: j.email || e.customerEmail, ownDevice: e.ownDevice || j.device || j.t || '',
+    } : {}) }));
+  };
+  const applyOrder = (orderId) => {
+    const o = orders.find(x => x.id === orderId);
+    setEdit(e => ({ ...e, orderId, repairJobId: '', ...(o ? {
+      customerName: o.cust || e.customerName, customerPhone: o.phone || e.customerPhone,
+      customerEmail: o.email || e.customerEmail, ownDevice: e.ownDevice || (typeof o.items === 'string' ? o.items : ''),
     } : {}) }));
   };
   const selDevice = devices.find(d => d.id === f.deviceId);
@@ -14149,7 +14163,7 @@ function AdminDeviceLoans({ sessionInfo = {} }) {
             { key: 'id', label: '#', w: '90px', render: r => <span className="mono" style={{ fontSize: 11, color: 'var(--rust)' }}>{r.id}</span> },
             { key: 'customerName', label: 'Customer', w: '1.3fr', render: r => <><div style={{ fontWeight: 600 }}>{r.customerName}</div><div style={{ fontSize: 12, color: 'var(--ink-2)' }}>{r.customerPhone}</div></> },
             { key: 'loanDevice', label: 'Loan device', w: '1.3fr', render: r => <span style={{ fontSize: 13 }}>{r.loanDevice}</span> },
-            { key: 'ownDevice', label: 'Their device', w: '1.3fr', render: r => <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>{r.ownDevice}{r.repairJobId ? ` (${r.repairJobId})` : ''}</span> },
+            { key: 'ownDevice', label: 'Their device', w: '1.3fr', render: r => <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>{r.ownDevice}{(r.repairJobId || r.orderId) ? ` (${r.repairJobId || r.orderId})` : ''}</span> },
             { key: 'dates', label: 'Lent / due', w: '150px', render: r => <span className="mono" style={{ fontSize: 11 }}>{r.loanDate || '-'}<br />{r.returnedAt ? `back ${r.returnedAt}` : (r.expectedReturn ? `due ${r.expectedReturn}` : 'at collection')}</span> },
             { key: 'status', label: 'Status', w: '150px', render: r => { const [t, c] = loanStatus(r); return <span className={`tag ${c}`}>{t}</span>; } },
             { key: 'print', label: '', w: '80px', render: r => <button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); printLoan({ id: r.id }); }}>Print</button> },
@@ -14170,12 +14184,31 @@ function AdminDeviceLoans({ sessionInfo = {} }) {
           <div style={{ display: 'grid', gap: 14 }}>
             {printBlock && <div className="notice" style={{ fontSize: 12.5 }}>Can't print yet: {printBlock}</div>}
 
-            <label className="field"><span className="label">Repair job (fills the customer in)</span>
-              <select className="select" value={f.repairJobId || ''} onChange={e => applyJob(e.target.value)}>
-                <option value="">None</option>
-                {repairJobs.map(j => <option key={j.id} value={j.id}>{j.id}{j.customer ? ` - ${j.customer}` : ''}</option>)}
-              </select>
-            </label>
+            <div className="grid-2" style={{ gap: 12 }}>
+              <label className="field"><span className="label">Link to</span>
+                <select className="select" value={linkType} onChange={e => { setLinkType(e.target.value); setEdit(x => ({ ...x, repairJobId: '', orderId: '' })); }}>
+                  <option value="repair">Repair job</option>
+                  <option value="order">Order</option>
+                  <option value="none">Nothing</option>
+                </select>
+              </label>
+              {linkType === 'repair' && (
+                <label className="field"><span className="label">Repair job (fills the customer in)</span>
+                  <select className="select" value={f.repairJobId || ''} onChange={e => applyJob(e.target.value)}>
+                    <option value="">Select a job…</option>
+                    {repairJobs.map(j => <option key={j.id} value={j.id}>{j.id}{j.customer ? ` - ${j.customer}` : ''}</option>)}
+                  </select>
+                </label>
+              )}
+              {linkType === 'order' && (
+                <label className="field"><span className="label">Order (fills the customer in)</span>
+                  <select className="select" value={f.orderId || ''} onChange={e => applyOrder(e.target.value)}>
+                    <option value="">Select an order…</option>
+                    {orders.map(o => <option key={o.id} value={o.id}>{o.id}{o.cust ? ` - ${o.cust}` : ''}</option>)}
+                  </select>
+                </label>
+              )}
+            </div>
             <div className="grid-2" style={{ gap: 12 }}>
               <label className="field"><span className="label">Customer name<ReqMark /></span><input className="input" value={f.customerName || ''} onChange={e => set('customerName', e.target.value)} /></label>
               <label className="field"><span className="label">Phone<ReqMark /></span><input className="input" value={f.customerPhone || ''} onChange={e => set('customerPhone', e.target.value)} placeholder="A number other than the phone being repaired, if they have one" /></label>

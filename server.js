@@ -5357,6 +5357,7 @@ function buildDeviceLoanPdf(loan, shop, signaturePath) {
       ['Device', loan.ownDevice || ''],
       ['Serial / IMEI', loan.ownDeviceSerial || ''],
       ['Repair job', loan.repairJobId || ''],
+      ['Order', loan.orderId || ''],
     ], y);
 
     y = sectionTitle('Loan Device', y);
