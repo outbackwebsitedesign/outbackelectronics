@@ -5318,7 +5318,7 @@ function buildDeviceLoanPdf(loan, shop, signaturePath) {
     const fmtDate = (v) => new Date(v).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
     const money = (n) => `$${(Number(n) || 0).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-    doc.rect(0, 0, doc.page.width, 96).fill(RUST);
+    doc.rect(0, 0, doc.page.width, 92).fill(RUST);
     if (hasLogo) { try { doc.image(logoPath, 50, 22, { width: 66 }); } catch {} }
     doc.fillColor('#fff').font('Helvetica-Bold').fontSize(18).text(shopName, hasLogo ? 130 : 50, 26, { width: 220 });
     doc.font('Helvetica').fontSize(9).fillColor('#fde6d6')
@@ -5330,7 +5330,7 @@ function buildDeviceLoanPdf(loan, shop, signaturePath) {
       .text(`Loan #: ${loan.id || 'DRAFT'}   ·   Date of loan: ${fmtDate(loan.loanDate || loan.createdAt || Date.now())}`, 0, 64, { width: 545, align: 'right' })
       .text(`Return: ${loan.expectedReturn ? `by ${fmtDate(loan.expectedReturn)}` : 'when collecting own device'}`, 0, 77, { width: 545, align: 'right' });
 
-    let y = 108;
+    let y = 104;
     const sectionTitle = (label, yy) => {
       doc.font('Helvetica-Bold').fontSize(11).fillColor(RUST).text(label, 50, yy);
       return yy + 14;
@@ -5399,9 +5399,9 @@ function buildDeviceLoanPdf(loan, shop, signaturePath) {
     doc.text(money(total), 380, y, { width: 157, align: 'right' });
     y += 18;
 
-    doc.font('Helvetica-Bold').fontSize(11).fillColor(RUST).text('Loan Terms', 50, y, { continued: true })
-      .font('Helvetica').fontSize(9).fillColor('#222').text('   I agree that:');
-    y = doc.y + 4;
+    y = sectionTitle('Loan Terms', y);
+    doc.font('Helvetica').fontSize(9).fillColor('#222').text('I agree that:', 50, y);
+    y = doc.y + 3;
     // Worded by the owner. The business name comes from Settings, Shop.
     const terms = [
       `The loan device is provided free of charge, as a courtesy, so I can make calls and send text messages while my own device is being repaired. It remains the property of ${us}.`,
@@ -5418,13 +5418,13 @@ function buildDeviceLoanPdf(loan, shop, signaturePath) {
     terms.forEach((line, n) => {
       if (y > pageBottom - 40) { doc.addPage(); y = 50; }
       doc.font('Helvetica-Bold').fontSize(8.5).fillColor('#222').text(`${n + 1}.`, 50, y, { width: 14, align: 'right' });
-      doc.font('Helvetica').fontSize(8.5).fillColor('#222').text(line, 68, y, { width: 477, align: 'justify', lineGap: 0.3 });
+      doc.font('Helvetica').fontSize(8.5).fillColor('#222').text(line, 68, y, { width: 477, align: 'justify', lineGap: 0.1 });
       y = doc.y + 2.5;
     });
     y += 2;
 
     // Signatures and the return box stay together on one sheet.
-    const CARVE_H = 6, SIG_TITLE_H = 14, SIG_TOP_OFF = 38, NAME_OFF = 26, DATE_OFF = 0, DATE_LABEL_H = 16, RETURN_H = 56;
+    const CARVE_H = 6, SIG_TITLE_H = 14, SIG_TOP_OFF = 34, NAME_OFF = 26, DATE_OFF = 0, DATE_LABEL_H = 16, RETURN_H = 56;
     if (y > pageBottom - (CARVE_H + SIG_TITLE_H + SIG_TOP_OFF + NAME_OFF + DATE_OFF + DATE_LABEL_H + RETURN_H)) { doc.addPage(); y = 50; }
 
     y += CARVE_H;
