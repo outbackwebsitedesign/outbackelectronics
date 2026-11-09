@@ -5383,8 +5383,7 @@ function buildDeviceLoanPdf(loan, shop, sigImage) {
 
     y = sectionTitle('Loan Device', y);
     y = rowsBlock([
-      ['Device', loan.loanDevice || ''],
-      ['Serial / IMEI', loan.loanDeviceSerial || ''],
+      ['Device', [loan.loanDevice, loan.loanDeviceSerial && `Serial / IMEI ${loan.loanDeviceSerial}`].filter(Boolean).join('   ·   ')],
       ['Condition when lent', loan.conditionOut || ''],
     ], y);
 
@@ -5406,7 +5405,18 @@ function buildDeviceLoanPdf(loan, shop, sigImage) {
     y += 4;
     doc.font('Helvetica-Bold').fontSize(9.5).fillColor('#222').text('Total', 58, y, { width: 320 });
     doc.text(money(total), 380, y, { width: 157, align: 'right' });
-    y += 18;
+    y += 16;
+
+    // The customer initials the condition right where the items are listed,
+    // as evidence if pre-existing damage is disputed later.
+    const ackText = 'Customer acknowledgement of device condition: I confirm that I have received the device and accessories listed above, have inspected their condition, and acknowledge the condition recorded in this agreement.';
+    doc.font('Helvetica').fontSize(8.5);
+    const ackH = doc.heightOfString(ackText, { width: 360 }) + 12;
+    doc.rect(50, y, 495, ackH).strokeColor('#ccc').lineWidth(0.8).stroke();
+    doc.font('Helvetica').fontSize(8.5).fillColor('#222').text(ackText, 58, y + 6, { width: 360, lineGap: 0.2 });
+    doc.moveTo(435, y + ackH - 12).lineTo(537, y + ackH - 12).strokeColor('#999').lineWidth(0.8).stroke();
+    doc.font('Helvetica').fontSize(7.5).fillColor('#888').text('Customer initials', 435, y + ackH - 9, { width: 102 });
+    y += ackH + 8;
 
     y = sectionTitle('Loan Terms', y);
     doc.font('Helvetica').fontSize(9).fillColor('#222').text('I agree that:', 50, y);
@@ -5426,19 +5436,21 @@ function buildDeviceLoanPdf(loan, shop, sigImage) {
     ];
     terms.forEach((line, n) => {
       if (y > pageBottom - 40) { doc.addPage(); y = 50; }
-      doc.font('Helvetica-Bold').fontSize(8.5).fillColor('#222').text(`${n + 1}.`, 50, y, { width: 14, align: 'right' });
-      doc.font('Helvetica').fontSize(8.5).fillColor('#222').text(line, 68, y, { width: 477, align: 'justify', lineGap: 0.1 });
+      doc.font('Helvetica-Bold').fontSize(8.3).fillColor('#222').text(`${n + 1}.`, 50, y, { width: 14, align: 'right' });
+      doc.font('Helvetica').fontSize(8.3).fillColor('#222').text(line, 68, y, { width: 477, align: 'justify', lineGap: 0 });
       y = doc.y + 2.5;
     });
     y += 2;
 
     // Signatures and the return box stay together on one sheet.
-    const CARVE_H = 6, SIG_TITLE_H = 14, SIG_TOP_OFF = 34, NAME_OFF = 26, DATE_OFF = 0, DATE_LABEL_H = 16, RETURN_H = 56;
-    if (y > pageBottom - (CARVE_H + SIG_TITLE_H + SIG_TOP_OFF + NAME_OFF + DATE_OFF + DATE_LABEL_H + RETURN_H)) { doc.addPage(); y = 50; }
+    const CARVE_H = 6, SIG_TITLE_H = 0, SIG_TOP_OFF = 34, NAME_OFF = 26, DATE_OFF = 0, DATE_LABEL_H = 16, RETURN_H = 44;
+    // Exactly the height drawn below: gap, signature space, print-name row,
+    // and the return box (drawn RETURN_H - 10 tall).
+    if (y > pageBottom - (CARVE_H + SIG_TITLE_H + SIG_TOP_OFF + NAME_OFF + DATE_OFF + DATE_LABEL_H + 4 + RETURN_H - 10)) { doc.addPage(); y = 50; }
 
     y += CARVE_H;
 
-    doc.font('Helvetica-Bold').fontSize(11).fillColor(RUST).text('Signatures', 50, y);
+    // No "Signatures" heading: each line is labelled underneath.
     y += SIG_TITLE_H;
     const colW = 232, rightX = 50 + colW + 31, sigTop = y + SIG_TOP_OFF;
     const sigLine = (label, x, yy) => {
@@ -5475,10 +5487,10 @@ function buildDeviceLoanPdf(loan, shop, sigImage) {
       doc.font('Helvetica').fontSize(8).fillColor('#888').text(label, x, yy - 9, { width: w });
       doc.moveTo(x, yy + 6).lineTo(x + w, yy + 6).strokeColor('#bbb').lineWidth(0.6).stroke();
     };
-    rl('Date returned', 60, y + 26, 120);
-    rl('Everything supplied returned (Y/N)', 195, y + 26, 160);
-    rl('Received by', 370, y + 26, 165);
-    rl('Condition on return / damage noted', 60, y + 42, 475);
+    rl('Date returned', 60, y + 27, 80);
+    rl('All items back (Y/N)', 150, y + 27, 85);
+    rl('Received by', 245, y + 27, 90);
+    rl('Condition on return / damage noted', 345, y + 27, 190);
 
     const range = doc.bufferedPageRange();
     for (let i = 0; i < range.count; i++) {
