@@ -10824,12 +10824,14 @@ const adminServer = http.createServer(async (req, res) => {
         damageCharge: body.damageCharge === '' || body.damageCharge == null ? '' : Math.round((Number(body.damageCharge) || 0) * 100) / 100,
       };
       // The loan device's name, serial and value come from its record in the
-      // device list, never from the request. They are copied onto the loan when
-      // it is created (or the device is changed) so a signed agreement keeps the
-      // value it was printed with; a value still blank is picked up once set.
+      // device list, never from the request. Name and serial are identifiers,
+      // so they follow the device record (e.g. an IMEI added later). The value
+      // is copied onto the loan when it is created (or the device is changed)
+      // so a signed agreement keeps the value it was printed with; a value
+      // still blank is picked up once set.
       const prior = existing && existing.deviceId === body.deviceId ? existing : null;
-      loan.loanDevice = prior ? prior.loanDevice : device.name;
-      loan.loanDeviceSerial = prior ? prior.loanDeviceSerial : (device.serial || '');
+      loan.loanDevice = device ? device.name : prior.loanDevice;
+      loan.loanDeviceSerial = device ? (device.serial || '') : prior.loanDeviceSerial;
       loan.loanDeviceValue = prior && Number(prior.loanDeviceValue) > 0 ? prior.loanDeviceValue : (device && Number(device.value) > 0 ? device.value : '');
       // Accessories handed over, named in the request, priced from the device
       // record. An item already on this loan keeps the value it was given.
@@ -10870,7 +10872,11 @@ const adminServer = http.createServer(async (req, res) => {
     const data = readDeviceLoans();
     const saved = body.id ? data.loans.find(l => l.id === body.id) : null;
     let loan;
-    if (saved) loan = saved;
+    if (saved) {
+      // Identifiers come from the current device record, as on save.
+      const device = data.devices.find(d => d.id === saved.deviceId);
+      loan = device ? { ...saved, loanDevice: device.name, loanDeviceSerial: device.serial || '' } : saved;
+    }
     else {
       const device = data.devices.find(d => d.id === body.deviceId);
       if (!device) return json(res, 422, { error: 'device_required', message: 'Pick the loan device first.' });
