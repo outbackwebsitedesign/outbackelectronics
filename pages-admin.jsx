@@ -14125,7 +14125,7 @@ function AdminDeviceLoans({ sessionInfo = {} }) {
   return (
     <div style={{ padding: 32, display: 'grid', gap: 20 }}>
       <div style={{ padding: 16, background: 'var(--paper)', border: '1px solid var(--line)', borderLeft: '3px solid var(--rust)', fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
-        A courtesy phone for calls and texts while the customer's own device is in for repair. Pick a loan device, tick what you're handing over,
+        A courtesy phone for calls and texts while the customer's own device is in for repair. No SIM card is supplied: the customer must use their own. Pick a loan device, tick what you're handing over,
         then print the agreement and have the customer sign it. They return everything when they collect their own device; any missing or damaged item is charged at its reasonable repair or replacement cost, never more than its listed value.
       </div>
       {!signatureOnFile && (
