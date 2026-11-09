@@ -5318,7 +5318,7 @@ function buildDeviceLoanPdf(loan, shop, signaturePath) {
     const fmtDate = (v) => new Date(v).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
     const money = (n) => `$${(Number(n) || 0).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-    doc.rect(0, 0, doc.page.width, 100).fill(RUST);
+    doc.rect(0, 0, doc.page.width, 96).fill(RUST);
     if (hasLogo) { try { doc.image(logoPath, 50, 22, { width: 66 }); } catch {} }
     doc.fillColor('#fff').font('Helvetica-Bold').fontSize(18).text(shopName, hasLogo ? 130 : 50, 26, { width: 220 });
     doc.font('Helvetica').fontSize(9).fillColor('#fde6d6')
@@ -5327,13 +5327,23 @@ function buildDeviceLoanPdf(loan, shop, signaturePath) {
     doc.font('Helvetica-Bold').fontSize(16).fillColor('#fff').text('LOAN DEVICE AGREEMENT', 0, 26, { width: 545, align: 'right' });
     doc.font('Helvetica-Bold').fontSize(10).fillColor('#fde6d6').text('COURTESY DEVICE DURING REPAIR', 0, 48, { width: 545, align: 'right' });
     doc.font('Helvetica').fontSize(9).fillColor('#fde6d6')
-      .text(`Loan #: ${loan.id || 'DRAFT'}`, 0, 66, { width: 545, align: 'right' })
-      .text(`Date of loan: ${fmtDate(loan.loanDate || loan.createdAt || Date.now())}`, 0, 80, { width: 545, align: 'right' });
+      .text(`Loan #: ${loan.id || 'DRAFT'}   ·   Date of loan: ${fmtDate(loan.loanDate || loan.createdAt || Date.now())}`, 0, 64, { width: 545, align: 'right' })
+      .text(`Return: ${loan.expectedReturn ? `by ${fmtDate(loan.expectedReturn)}` : 'when collecting own device'}`, 0, 77, { width: 545, align: 'right' });
 
-    let y = 114;
+    let y = 108;
     const sectionTitle = (label, yy) => {
       doc.font('Helvetica-Bold').fontSize(11).fillColor(RUST).text(label, 50, yy);
       return yy + 14;
+    };
+    // Label/value rows in a column starting at x, so two short blocks can sit
+    // side by side and keep the agreement on one page.
+    const rowsAt = (rows, yy, x, labelW, valW) => {
+      for (const [label, val] of rows.filter(r => r[1])) {
+        doc.font('Helvetica').fontSize(9.5).fillColor('#888').text(label, x, yy, { width: labelW });
+        doc.font('Helvetica').fillColor('#222').text(val, x + labelW, yy, { width: valW });
+        yy = Math.max(doc.y, yy + 11);
+      }
+      return yy;
     };
     const rowsBlock = (rows, yy) => {
       doc.font('Helvetica').fontSize(9.5);
@@ -5345,27 +5355,28 @@ function buildDeviceLoanPdf(loan, shop, signaturePath) {
       return yy + 4;
     };
 
-    y = sectionTitle('Customer', y);
-    y = rowsBlock([
+    const leftX = 50, rightColX = 305;
+    sectionTitle('Customer', y);
+    doc.font('Helvetica-Bold').fontSize(11).fillColor(RUST).text('Customer\'s Device (in for repair)', rightColX, y);
+    const yLeft = rowsAt([
       ['Name', loan.customerName || ''],
-      ['Contact', [loan.customerPhone, loan.customerEmail].filter(Boolean).join('  ·  ')],
+      ['Phone', loan.customerPhone || ''],
+      ['Email', loan.customerEmail || ''],
       ['ID sighted', loan.idSighted || ''],
-    ], y);
-
-    y = sectionTitle('Customer\'s Device (held for repair)', y);
-    y = rowsBlock([
+    ], y + 14, leftX, 62, 180);
+    const yRight = rowsAt([
       ['Device', loan.ownDevice || ''],
       ['Serial / IMEI', loan.ownDeviceSerial || ''],
       ['Repair job', loan.repairJobId || ''],
       ['Order', loan.orderId || ''],
-    ], y);
+    ], y + 14, rightColX, 70, 170);
+    y = Math.max(yLeft, yRight) + 6;
 
     y = sectionTitle('Loan Device', y);
     y = rowsBlock([
       ['Device', loan.loanDevice || ''],
       ['Serial / IMEI', loan.loanDeviceSerial || ''],
       ['Condition when lent', loan.conditionOut || ''],
-      ['Expected return', loan.expectedReturn ? fmtDate(loan.expectedReturn) : 'When the customer\'s device is collected'],
     ], y);
 
     // What the customer is taking, each item at its replacement value.
@@ -5375,12 +5386,12 @@ function buildDeviceLoanPdf(loan, shop, signaturePath) {
     doc.rect(50, y, 495, 18).fill('#f6f3ee');
     doc.font('Helvetica-Bold').fontSize(8.5).fillColor('#5c5348')
       .text('ITEM SUPPLIED', 58, y + 5, { width: 320 })
-      .text('REPLACEMENT VALUE', 380, y + 5, { width: 157, align: 'right' });
+      .text('REPLACEMENT VALUE (MAXIMUM CHARGE)', 300, y + 5, { width: 237, align: 'right' });
     y += 22;
     for (const it of items) {
       doc.font('Helvetica').fontSize(9.5).fillColor('#222').text(it.name, 58, y, { width: 320 });
       doc.text(money(it.value), 380, y, { width: 157, align: 'right' });
-      y = Math.max(doc.y, y + 12);
+      y = Math.max(doc.y, y + 11);
     }
     doc.moveTo(50, y).lineTo(545, y).strokeColor('#ccc').lineWidth(0.6).stroke();
     y += 4;
@@ -5388,34 +5399,34 @@ function buildDeviceLoanPdf(loan, shop, signaturePath) {
     doc.text(money(total), 380, y, { width: 157, align: 'right' });
     y += 18;
 
-    if (y > pageBottom - 330) { doc.addPage(); y = 50; }
-    y = sectionTitle('Loan Terms', y);
-    doc.font('Helvetica').fontSize(9).fillColor('#222').text('I agree that:', 50, y); y = doc.y + 4;
+    doc.font('Helvetica-Bold').fontSize(11).fillColor(RUST).text('Loan Terms', 50, y, { continued: true })
+      .font('Helvetica').fontSize(9).fillColor('#222').text('   I agree that:');
+    y = doc.y + 4;
+    // Worded by the owner. The business name comes from Settings, Shop.
     const terms = [
-      `The loan device is lent free of charge, as a courtesy, so I can make calls and send text messages while my own device is being repaired. It remains the property of ${us}.`,
-      `If the loan device or any item supplied with it (such as a charger or cable) is lost, stolen or damaged while it is with me, I am liable for the cost of replacing that item, at the replacement value listed for it above.`,
-      `My own device will be released to me only when the loan device and every item supplied with it has been returned, or any missing or damaged item has been paid for.`,
-      `The loan device is a basic, low-cost device. ${us} does not guarantee that it matches my own device in features, performance, storage, camera, battery life or anything else.`,
-      `${us} is not liable for any problem I experience while using the loan device, including scam, spam or nuisance calls and messages that my own device would normally block, the reliability or compatibility of apps, missed calls or messages, network coverage, or loss of data. I will not rely on it as my only way to reach emergency services.`,
-      `I may use my own SIM card in the loan device and will remove it before returning the device. Any call, text or data charges are billed to me by my own provider.`,
-      `I will use the loan device lawfully, will not lend it to anyone else, and will not modify, root or unlock it.`,
-      `The loan device will be wiped (factory reset) when it is returned. I am responsible for signing out of my accounts and removing anything I want to keep. ${us} is not responsible for any information I leave on it.`,
+      `The loan device is provided free of charge, as a courtesy, so I can make calls and send text messages while my own device is being repaired. It remains the property of ${us}.`,
+      `I will take reasonable care of the loan device and all supplied accessories. I am responsible for loss, theft or damage while the items are in my care, except where the loss or damage is attributable to a pre-existing defect, ordinary wear and tear, an inherent fault, or an act or omission of ${us}.`,
+      `If an item is damaged, I may be required to pay the reasonable cost of repairing that damage. If an item is lost, destroyed or damaged beyond economical repair, I may be required to pay the reasonable cost of an equivalent replacement. Either way, the amount for an item will not exceed the replacement value listed for it above, and will reflect the actual circumstances and reasonable loss.`,
+      `I agree to return the loan device and all supplied accessories when collecting my own device, or by another return date agreed with ${us}. Any outstanding liability for missing or damaged items may be pursued separately.`,
+      `The loan device is a basic, low-cost device. ${us} does not guarantee that it matches my own device in features, performance, storage, camera quality, battery life or other specifications.`,
+      `I understand that the loan device may not provide the same scam, spam or nuisance-call filtering, app compatibility, network performance or other functionality as my own device. ${us} does not guarantee uninterrupted operation, network coverage, delivery of calls or messages, or compatibility with particular applications. I should maintain an alternative means of contacting emergency services where practicable.`,
+      `I may use my own SIM card in the loan device and will remove it before returning the device. Any call, text or data charges incurred through my SIM card remain my responsibility.`,
+      `I will use the loan device lawfully, will not lend or transfer it to another person, and will not root, modify, network-unlock or otherwise alter its software or hardware without written permission from ${us}.`,
+      `I understand that the loan device will be factory reset after its return. I am responsible for backing up any information I wish to retain and signing out of my accounts. ${us} will take reasonable care when handling the device and its data but is not responsible for data loss to the extent permitted by law.`,
+      `Nothing in this agreement excludes, restricts or modifies any guarantee, right or remedy under the Australian Consumer Law or any other applicable law that cannot lawfully be excluded, restricted or modified.`,
     ];
-    for (const line of terms) {
+    terms.forEach((line, n) => {
       if (y > pageBottom - 40) { doc.addPage(); y = 50; }
-      doc.circle(56, y + 4.2, 1.7).fill('#222');
-      doc.font('Helvetica').fontSize(9).fillColor('#222').text(line, 66, y, { width: 479, align: 'justify', lineGap: 0.8 });
-      y = doc.y + 2;
-    }
+      doc.font('Helvetica-Bold').fontSize(8.5).fillColor('#222').text(`${n + 1}.`, 50, y, { width: 14, align: 'right' });
+      doc.font('Helvetica').fontSize(8.5).fillColor('#222').text(line, 68, y, { width: 477, align: 'justify', lineGap: 0.3 });
+      y = doc.y + 2.5;
+    });
     y += 2;
 
-    // Carve-out, signatures and the return box stay together on one sheet.
-    const CARVE_H = 30, SIG_TITLE_H = 14, SIG_TOP_OFF = 40, NAME_OFF = 26, DATE_OFF = 26, DATE_LABEL_H = 16, RETURN_H = 70;
+    // Signatures and the return box stay together on one sheet.
+    const CARVE_H = 6, SIG_TITLE_H = 14, SIG_TOP_OFF = 38, NAME_OFF = 26, DATE_OFF = 0, DATE_LABEL_H = 16, RETURN_H = 56;
     if (y > pageBottom - (CARVE_H + SIG_TITLE_H + SIG_TOP_OFF + NAME_OFF + DATE_OFF + DATE_LABEL_H + RETURN_H)) { doc.addPage(); y = 50; }
 
-    doc.rect(50, y, 495, 24).fill('#f6f3ee');
-    doc.font('Helvetica').fontSize(8).fillColor('#5c5348')
-      .text('Nothing in this agreement excludes, restricts, or modifies any guarantee, right, or remedy you have under the Australian Consumer Law that cannot lawfully be excluded.', 60, y + 7, { width: 475, align: 'justify' });
     y += CARVE_H;
 
     doc.font('Helvetica-Bold').fontSize(11).fillColor(RUST).text('Signatures', 50, y);
@@ -5432,28 +5443,33 @@ function buildDeviceLoanPdf(loan, shop, signaturePath) {
     if (signaturePath) { try { doc.image(signaturePath, rightX, sigTop - 34, { fit: [150, 32] }); } catch {} }
     sigLine('Signature', 50, sigTop);
     sigLine('Signature', rightX, sigTop);
+    // Print name and date share one line on each side.
     const nameY = sigTop + NAME_OFF;
-    doc.font('Helvetica').fontSize(9).fillColor('#222').text(loan.customerName || '', 50, nameY - 12, { width: colW });
-    doc.font('Helvetica').fontSize(9).fillColor('#222').text(loan.signedBy || '', rightX, nameY - 12, { width: colW });
-    sigLine('Print name', 50, nameY);
-    sigLine('Print name', rightX, nameY);
-    const dateY = nameY + DATE_OFF;
-    doc.font('Helvetica').fontSize(9).fillColor('#222').text(fmtDate(loan.signedAt || loan.createdAt || Date.now()), rightX, dateY - 12, { width: colW });
-    sigLine('Date', 50, dateY);
-    sigLine('Date', rightX, dateY);
-    y = dateY + DATE_LABEL_H;
+    const nameW = 150, dateX = (x) => x + nameW + 12, dateW = colW - nameW - 12;
+    const shortLine = (label, x, yy, w) => {
+      doc.moveTo(x, yy).lineTo(x + w, yy).strokeColor('#999').lineWidth(0.8).stroke();
+      doc.font('Helvetica').fontSize(8).fillColor('#888').text(label, x, yy + 5, { width: w });
+    };
+    doc.font('Helvetica').fontSize(9).fillColor('#222').text(loan.customerName || '', 50, nameY - 12, { width: nameW });
+    doc.font('Helvetica').fontSize(9).fillColor('#222').text(loan.signedBy || '', rightX, nameY - 12, { width: nameW });
+    doc.font('Helvetica').fontSize(9).fillColor('#222').text(fmtDate(loan.signedAt || loan.createdAt || Date.now()), dateX(rightX), nameY - 12, { width: dateW });
+    shortLine('Print name', 50, nameY, nameW);
+    shortLine('Date', dateX(50), nameY, dateW);
+    shortLine('Print name', rightX, nameY, nameW);
+    shortLine('Date', dateX(rightX), nameY, dateW);
+    y = nameY + DATE_LABEL_H + 4;
 
     // Filled in by hand at handback, so the paper copy records the return too.
     doc.rect(50, y, 495, RETURN_H - 10).strokeColor('#ccc').lineWidth(0.8).stroke();
-    doc.font('Helvetica-Bold').fontSize(9).fillColor(RUST).text('ON RETURN (office use)', 60, y + 8);
+    doc.font('Helvetica-Bold').fontSize(9).fillColor(RUST).text('ON RETURN (office use)', 60, y + 6);
     const rl = (label, x, yy, w) => {
       doc.font('Helvetica').fontSize(8).fillColor('#888').text(label, x, yy - 9, { width: w });
       doc.moveTo(x, yy + 6).lineTo(x + w, yy + 6).strokeColor('#bbb').lineWidth(0.6).stroke();
     };
-    rl('Date returned', 60, y + 30, 120);
-    rl('Everything supplied returned (Y/N)', 195, y + 30, 160);
-    rl('Received by', 370, y + 30, 165);
-    rl('Condition on return / damage noted', 60, y + 50, 475);
+    rl('Date returned', 60, y + 26, 120);
+    rl('Everything supplied returned (Y/N)', 195, y + 26, 160);
+    rl('Received by', 370, y + 26, 165);
+    rl('Condition on return / damage noted', 60, y + 42, 475);
 
     const range = doc.bufferedPageRange();
     for (let i = 0; i < range.count; i++) {

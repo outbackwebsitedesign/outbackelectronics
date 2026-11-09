@@ -14126,7 +14126,7 @@ function AdminDeviceLoans({ sessionInfo = {} }) {
     <div style={{ padding: 32, display: 'grid', gap: 20 }}>
       <div style={{ padding: 16, background: 'var(--paper)', border: '1px solid var(--line)', borderLeft: '3px solid var(--rust)', fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
         A courtesy phone for calls and texts while the customer's own device is in for repair. Pick a loan device, tick what you're handing over,
-        then print the agreement and have the customer sign it. Their device is only released when everything on the agreement comes back, or is paid for.
+        then print the agreement and have the customer sign it. They return everything when they collect their own device; any missing or damaged item is charged at its reasonable repair or replacement cost, never more than its listed value.
       </div>
       {!signatureOnFile && (
         <div role="alert" style={{ padding: '12px 14px', border: '1px solid var(--rust)', background: 'var(--bg-elev)', fontSize: 13 }}>
@@ -14236,7 +14236,7 @@ function AdminDeviceLoans({ sessionInfo = {} }) {
             </label>
             {f.deviceId && (
               <div style={{ border: '1px solid var(--line)', background: 'var(--paper)', padding: '10px 12px' }}>
-                <div style={{ fontSize: 12, color: 'var(--ink-3)', marginBottom: 6 }}>Handed over, at the replacement value printed on the agreement:</div>
+                <div style={{ fontSize: 12, color: 'var(--ink-3)', marginBottom: 6 }}>Handed over, with the replacement value printed on the agreement (the most the customer can be charged for that item):</div>
                 {pricedItems.map((it, i) => {
                   const isDevice = i === 0;
                   return (
