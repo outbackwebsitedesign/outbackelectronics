@@ -14042,7 +14042,9 @@ function AdminDeviceLoans({ sessionInfo = {} }) {
     const o = orders.find(x => x.id === orderId);
     setEdit(e => ({ ...e, orderId, repairJobId: '', ...(o ? {
       customerName: o.cust || e.customerName, customerPhone: o.phone || e.customerPhone,
-      customerEmail: o.email || e.customerEmail, ownDevice: e.ownDevice || (typeof o.items === 'string' ? o.items : ''),
+      customerEmail: o.email || e.customerEmail,
+      // An order's items are what was billed (labour, parts), not the customer's
+      // own device, so "Their device" is left for staff to fill in.
     } : {}) }));
   };
   const selDevice = devices.find(d => d.id === f.deviceId);
