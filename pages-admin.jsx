@@ -749,31 +749,53 @@ function StatTile({ label, value, delta, tone }) {
 
 const TABLE_PAGE_SIZE = 50;
 
-// Flexible ("fr") columns get a real minimum width. Without one, the header
-// row and every data row each size the column from their own content (a
-// header label versus an ellipsised cell that can shrink to nothing), so on a
-// narrow screen the cells drift out from under their headings. With fixed
-// minimums every row resolves the same widths, and the table scrolls
-// sideways instead of squeezing.
+// The one admin data table: a real <table>, so every cell sits under its
+// heading by construction. Column widths keep the existing `w` vocabulary:
+// "120px" is fixed, "2fr" takes a share of whatever the fixed columns leave,
+// never less than 90px per fr. The table measures its own width to share that
+// space out (a plain fixed-layout table can't express fr), and scrolls
+// sideways rather than squeezing when the screen is too narrow.
+//
+// columns: [{ key, label, w, align: 'right'|'center', sort: true | fn, render }]
+// footer:  optional totals row, one cell per column (node, or null for blank)
+// pageSize: rows per page (default 50); 0 shows every row
+// expand:  optional r => node; when it returns something, a full-width row
+//          holding it is shown under that row (e.g. a history panel)
 const TABLE_FR_MIN_PX = 90;
-const TABLE_GAP_PX = 12;
-function tableTrack(w) {
-  const m = String(w).match(/^([\d.]+)fr$/);
-  return m ? `minmax(${Math.round(TABLE_FR_MIN_PX * Number(m[1]))}px, ${w})` : w;
-}
-function tableMinWidth(widths) {
-  const sum = widths.reduce((t, w) => {
+const TABLE_CELL_PAD_X = 6;   // each side of a cell; edge cells get TABLE_EDGE_PAD_X
+const TABLE_EDGE_PAD_X = 18;
+function tableColumnWidths(widths, boxW) {
+  const parsed = widths.map(w => {
     const fr = String(w).match(/^([\d.]+)fr$/);
     const px = String(w).match(/^([\d.]+)px$/);
-    return t + (fr ? Math.round(TABLE_FR_MIN_PX * Number(fr[1])) : px ? Number(px[1]) : TABLE_FR_MIN_PX);
-  }, 0);
-  return sum + TABLE_GAP_PX * Math.max(0, widths.length - 1) + 36;
+    return fr ? { fr: Number(fr[1]) } : { px: px ? Number(px[1]) : TABLE_FR_MIN_PX };
+  });
+  const n = parsed.length;
+  const pad = i => (i === 0 ? TABLE_EDGE_PAD_X : TABLE_CELL_PAD_X) + (i === n - 1 ? TABLE_EDGE_PAD_X : TABLE_CELL_PAD_X);
+  const fixed = parsed.reduce((t, c, i) => t + (c.px != null ? c.px + pad(i) : 0), 0);
+  const frTotal = parsed.reduce((t, c) => t + (c.fr || 0), 0);
+  const frPad = parsed.reduce((t, c, i) => t + (c.fr ? pad(i) : 0), 0);
+  const spare = Math.max(0, (boxW || 0) - fixed - frPad);
+  return parsed.map((c, i) => Math.floor(c.px != null
+    ? c.px + pad(i)
+    : Math.max(TABLE_FR_MIN_PX * c.fr, frTotal ? spare * c.fr / frTotal : 0) + pad(i)));
 }
 
-function Table({ columns, rows, onRowClick, emptyMessage, loading, defaultSort }) {
-  const widths = columns.map(c => c.w || '1fr');
-  const tpl = widths.map(tableTrack).join(' ');
-  const minW = Math.max(560, tableMinWidth(widths));
+function Table({ columns, rows, onRowClick, emptyMessage, loading, defaultSort, footer, expand, pageSize = TABLE_PAGE_SIZE }) {
+  const boxRef = React.useRef(null);
+  const [boxW, setBoxW] = useState(0);
+  React.useLayoutEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const measure = () => setBoxW(el.clientWidth);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const colPx = tableColumnWidths(columns.map(c => c.w || '1fr'), boxW);
+  const tableW = colPx.reduce((t, w) => t + w, 0);
   const [sort, setSort] = useState(defaultSort || null); // { key, dir: 'asc' | 'desc' }
   const [page, setPage] = useState(0);
   const safeRows = rows || [];
@@ -800,10 +822,11 @@ function Table({ columns, rows, onRowClick, emptyMessage, loading, defaultSort }
 
   useEffect(() => { setPage(0); }, [safeRows.length, sort]);
 
-  const paged = sorted.length > TABLE_PAGE_SIZE;
-  const pageCount = Math.max(1, Math.ceil(sorted.length / TABLE_PAGE_SIZE));
+  const size = pageSize > 0 ? pageSize : Infinity;
+  const paged = sorted.length > size;
+  const pageCount = paged ? Math.ceil(sorted.length / size) : 1;
   const curPage = Math.min(page, pageCount - 1);
-  const visible = paged ? sorted.slice(curPage * TABLE_PAGE_SIZE, (curPage + 1) * TABLE_PAGE_SIZE) : sorted;
+  const visible = paged ? sorted.slice(curPage * size, (curPage + 1) * size) : sorted;
 
   const toggleSort = (col) => {
     const key = col.key || col.label;
@@ -814,54 +837,75 @@ function Table({ columns, rows, onRowClick, emptyMessage, loading, defaultSort }
     });
   };
 
+  const n = columns.length;
+  const cellPad = (i, y) => `${y}px ${i === n - 1 ? TABLE_EDGE_PAD_X : TABLE_CELL_PAD_X}px ${y}px ${i === 0 ? TABLE_EDGE_PAD_X : TABLE_CELL_PAD_X}px`;
+  const cellStyle = (c, i) => ({ padding: cellPad(i, 14), textAlign: c.align || 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'middle' });
+
   return (
     <div style={{background:'var(--paper)', border:'1px solid var(--line-strong)'}}>
-      <div className="admin-table-scroll" style={{overflowX:'auto'}}>
-        <div style={{minWidth:minW}}>
-          <div role="row" style={{display:'grid', gridTemplateColumns:tpl, gap:12, padding:'10px 18px', background:'var(--bg-elev)', borderBottom:'2px solid var(--ink)', fontFamily:'JetBrains Mono, monospace', fontSize:10, letterSpacing:'.1em', color:'var(--ink-2)'}}>
-            {columns.map((c,i) => {
-              const key = c.key || c.label;
-              const active = sort && sort.key === key;
-              if (!c.sort) return <div key={i} role="columnheader">{c.label.toUpperCase()}</div>;
-              return (
-                <div key={i} role="columnheader" aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
-                  <button type="button" onClick={() => toggleSort(c)}
-                    title={`Sort by ${c.label}`}
-                    style={{font:'inherit', letterSpacing:'inherit', color: active ? 'var(--rust)' : 'inherit', background:'none', border:'none', padding:0, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:4}}>
-                    {c.label.toUpperCase()}
-                    <span aria-hidden="true" style={{display:'inline-flex', opacity: active ? 1 : 0.4}}>
-                      {active ? <Icon name={sort.dir === 'asc' ? 'chevronUp' : 'chevronDown'} size={8} strokeWidth={3}/> : <Icon name="chevronsUpDown" size={8} strokeWidth={3}/>}
-                    </span>
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-          {loading ? (
-            [...Array(5)].map((_, i) => (
-              <div key={i} aria-hidden="true" style={{display:'grid', gridTemplateColumns:tpl, padding:'14px 18px', borderTop:'1px solid var(--line)', gap:12}}>
-                {columns.map((_, j) => <div key={j} className="admin-skel" style={{height:14, maxWidth: j === 0 ? 80 : 140}}/>)}
-              </div>
-            ))
-          ) : sorted.length === 0 ? (
-            <div style={{padding:'32px 24px', textAlign:'center', color:'var(--ink-2)'}}>
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{margin:'0 auto 12px', display:'block', opacity:.35}}><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
-              <div style={{fontSize:13, fontWeight:500}}>{emptyMessage || 'Nothing here yet.'}</div>
-              {onRowClick && <div style={{fontSize:12, color:'var(--ink-3)', marginTop:4}}>Use the button above to add your first record.</div>}
-            </div>
-          ) : visible.map(({ r, i }) => (
-            <div key={i}
-              role={onRowClick ? 'button' : undefined}
-              tabIndex={onRowClick ? 0 : undefined}
-              onClick={() => onRowClick && onRowClick(r,i)}
-              onKeyDown={e => { if (onRowClick && (e.key==='Enter'||e.key===' ')) { e.preventDefault(); onRowClick(r,i); } }}
-              style={{display:'grid', gridTemplateColumns:tpl, gap:12, padding:'14px 18px', borderTop:'1px solid var(--line)', fontSize:13, alignItems:'center', cursor: onRowClick?'pointer':'default'}}
-              onMouseEnter={e => { if (onRowClick) e.currentTarget.style.background='var(--bg-elev)'; }}
-              onMouseLeave={e => { e.currentTarget.style.background='transparent'; }}>
-              {columns.map((c,j) => <div key={j} style={{minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{c.render ? c.render(r) : r[c.key]}</div>)}
-            </div>
-          ))}
-        </div>
+      <div ref={boxRef} className="admin-table-scroll" style={{overflowX:'auto'}}>
+        <table style={{tableLayout:'fixed', width:tableW, borderCollapse:'collapse', fontSize:13}}>
+          <colgroup>{colPx.map((w, i) => <col key={i} style={{width:w}}/>)}</colgroup>
+          <thead>
+            <tr style={{background:'var(--bg-elev)', borderBottom:'2px solid var(--ink)'}}>
+              {columns.map((c,i) => {
+                const key = c.key || c.label;
+                const active = sort && sort.key === key;
+                const thStyle = {padding:cellPad(i, 10), textAlign:c.align || 'left', fontFamily:'JetBrains Mono, monospace', fontSize:10, fontWeight:400, letterSpacing:'.1em', color:'var(--ink-2)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'};
+                if (!c.sort) return <th key={i} scope="col" style={thStyle}>{c.label.toUpperCase()}</th>;
+                return (
+                  <th key={i} scope="col" style={thStyle} aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                    <button type="button" onClick={() => toggleSort(c)}
+                      title={`Sort by ${c.label}`}
+                      style={{font:'inherit', letterSpacing:'inherit', color: active ? 'var(--rust)' : 'inherit', background:'none', border:'none', padding:0, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:4}}>
+                      {c.label.toUpperCase()}
+                      <span aria-hidden="true" style={{display:'inline-flex', opacity: active ? 1 : 0.4}}>
+                        {active ? <Icon name={sort.dir === 'asc' ? 'chevronUp' : 'chevronDown'} size={8} strokeWidth={3}/> : <Icon name="chevronsUpDown" size={8} strokeWidth={3}/>}
+                      </span>
+                    </button>
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              [...Array(5)].map((_, r) => (
+                <tr key={r} aria-hidden="true" style={{borderTop:'1px solid var(--line)'}}>
+                  {columns.map((c, j) => <td key={j} style={cellStyle(c, j)}><div className="admin-skel" style={{height:14, maxWidth: j === 0 ? 80 : 140}}/></td>)}
+                </tr>
+              ))
+            ) : sorted.length === 0 ? (
+              <tr>
+                <td colSpan={n} style={{padding:'32px 24px', textAlign:'center', color:'var(--ink-2)', whiteSpace:'normal'}}>
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{margin:'0 auto 12px', display:'block', opacity:.35}}><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+                  <div style={{fontSize:13, fontWeight:500}}>{emptyMessage || 'Nothing here yet.'}</div>
+                  {onRowClick && <div style={{fontSize:12, color:'var(--ink-3)', marginTop:4}}>Use the button above to add your first record.</div>}
+                </td>
+              </tr>
+            ) : visible.map(({ r, i }) => { const extra = expand ? expand(r) : null; return (
+              <React.Fragment key={i}>
+              <tr
+                tabIndex={onRowClick ? 0 : undefined}
+                onClick={() => onRowClick && onRowClick(r,i)}
+                onKeyDown={e => { if (onRowClick && (e.key==='Enter'||e.key===' ')) { e.preventDefault(); onRowClick(r,i); } }}
+                style={{borderTop:'1px solid var(--line)', cursor: onRowClick?'pointer':'default'}}
+                onMouseEnter={e => { if (onRowClick) e.currentTarget.style.background='var(--bg-elev)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background='transparent'; }}>
+                {columns.map((c,j) => <td key={j} style={cellStyle(c, j)}>{c.render ? c.render(r) : r[c.key]}</td>)}
+              </tr>
+              {extra && <tr><td colSpan={n} style={{padding:'0 0 12px', background:'var(--bg-elev)', whiteSpace:'normal'}}>{extra}</td></tr>}
+              </React.Fragment>
+            ); })}
+          </tbody>
+          {footer && !loading && sorted.length > 0 && (
+            <tfoot>
+              <tr style={{borderTop:'2px solid var(--ink)', background:'var(--bg-elev)', fontWeight:700}}>
+                {columns.map((c, j) => <td key={j} style={{...cellStyle(c, j), padding: cellPad(j, 10)}}>{footer[j] ?? ''}</td>)}
+              </tr>
+            </tfoot>
+          )}
+        </table>
       </div>
       {!loading && paged && (
         <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, padding:'10px 18px', borderTop:'1px solid var(--line)', background:'var(--bg-elev)', flexWrap:'wrap'}}>
@@ -875,7 +919,6 @@ function Table({ columns, rows, onRowClick, emptyMessage, loading, defaultSort }
     </div>
   );
 }
-
 // Icons paired with status colors so state is never conveyed by colour alone (WCAG 1.4.1).
 const STATUS_GLYPHS = {
   paid:'check', 'part-paid':'halfCircle', unpaid:'x',
@@ -4398,22 +4441,10 @@ function PcFeedImport({ supplier, onClose, onImported }) {
             <>
               <h4 style={{margin:'20px 0 8px', fontSize:13}}>First rows as mapped</h4>
               <div style={{overflowX:'auto', border:'1px solid var(--line)'}}>
-                <table style={{borderCollapse:'collapse', width:'100%', fontSize:12}}>
-                  <thead><tr>
-                    {FIELD_LABELS.filter(([k]) => map[k]).map(([k, l]) => (
-                      <th key={k} style={{textAlign:'left', padding:'6px 8px', borderBottom:'1px solid var(--line)', whiteSpace:'nowrap', color:'var(--ink-2)', fontWeight:500}}>{l}</th>
-                    ))}
-                  </tr></thead>
-                  <tbody>
-                    {preview.sample.map((row, i) => (
-                      <tr key={i}>
-                        {FIELD_LABELS.filter(([k]) => map[k]).map(([k]) => (
-                          <td key={k} style={{padding:'6px 8px', borderBottom:'1px solid var(--line)', maxWidth:220, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{row[map[k]]}</td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <Table pageSize={0}
+                  columns={FIELD_LABELS.filter(([k]) => map[k]).map(([k, l]) => ({ key:k, label:l, w:'1fr', render:row => row[map[k]] }))}
+                  rows={preview.sample}
+                />
               </div>
             </>
           )}
@@ -11344,32 +11375,15 @@ function PLView() {
         {data.monthly.length > 0 && (
           <div className="card" style={{padding:'18px 22px', marginBottom:16}}>
             <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--rust)', marginBottom:12, letterSpacing:1}}>MONTHLY BREAKDOWN</div>
-            <table style={{width:'100%', borderCollapse:'collapse', fontSize:13}}>
-              <thead>
-                <tr style={{borderBottom:'2px solid var(--border)'}}>
-                  <th style={{textAlign:'left',  padding:'4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11}}>MONTH</th>
-                  <th style={{textAlign:'right', padding:'4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11}}>REVENUE</th>
-                  <th style={{textAlign:'right', padding:'4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11}}>EXPENSES</th>
-                  <th style={{textAlign:'right', padding:'4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11}}>PROFIT / (LOSS)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.monthly.map((m, i) => {
-                  const [yr, mo] = m.month.split('-');
-                  const lbl = `${monthNames[parseInt(mo)-1]} ${yr}`;
-                  return (
-                    <tr key={m.month} style={{background: i%2===1 ? 'var(--bg-deep)' : 'transparent'}}>
-                      <td style={{padding:'6px 0', color:'var(--ink-1)'}}>{lbl}</td>
-                      <td style={{textAlign:'right', fontFamily:'monospace'}}>{fmtAUD(m.revenue)}</td>
-                      <td style={{textAlign:'right', fontFamily:'monospace', color:'var(--ink-2)'}}>({fmtAUD(m.expenses)})</td>
-                      <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:600, color: m.profit>=0 ? '#345526' : 'var(--rust)'}}>
-                        {fmtAUD(m.profit)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <Table pageSize={0}
+              columns={[
+                { key:'month', label:'Month', w:'1fr', render:m => { const [yr, mo] = m.month.split('-'); return `${monthNames[parseInt(mo)-1]} ${yr}`; } },
+                { key:'revenue', label:'Revenue', w:'1fr', align:'right', render:m => <span className="mono">{fmtAUD(m.revenue)}</span> },
+                { key:'expenses', label:'Expenses', w:'1fr', align:'right', render:m => <span className="mono" style={{color:'var(--ink-2)'}}>({fmtAUD(m.expenses)})</span> },
+                { key:'profit', label:'Profit / (loss)', w:'1fr', align:'right', render:m => <span className="mono" style={{fontWeight:600, color: m.profit>=0 ? '#345526' : 'var(--rust)'}}>{fmtAUD(m.profit)}</span> },
+              ]}
+              rows={data.monthly}
+            />
           </div>
         )}
       </>}
@@ -11697,31 +11711,15 @@ function YoYView() {
         ];
         return (
           <div className="card" style={{padding:'18px 22px'}}>
-            <table style={{width:'100%', borderCollapse:'collapse', fontSize:13}}>
-              <thead>
-                <tr style={{borderBottom:'2px solid var(--border)'}}>
-                  <th style={{textAlign:'left',  padding:'4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11, width:'40%'}}>&nbsp;</th>
-                  <th style={{textAlign:'right', padding:'4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11}}>FY {data.fyYear}–{String(data.fyYear+1).slice(2)}</th>
-                  <th style={{textAlign:'right', padding:'4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11}}>FY {data.fyYear-1}–{String(data.fyYear).slice(2)}</th>
-                  <th style={{textAlign:'right', padding:'4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11}}>Change</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r,i) => {
-                  const ch = pct(r.curr, r.prev);
-                  const money = r.money !== false;
-                  const chColor = ch ? (((r.pos && ch.val>=0)||(!r.pos&&ch.val<=0)) ? '#2e7d32' : 'var(--rust)') : 'var(--ink-3)';
-                  return (
-                    <tr key={r.label} style={{background: i%2===1?'var(--bg-deep)':'transparent', fontWeight:r.bold?700:400}}>
-                      <td style={{padding:'7px 0', color: r.bold?'var(--ink-1)':'var(--ink-2)'}}>{r.label}</td>
-                      <td style={{textAlign:'right', fontFamily:'monospace', color: r.bold?(r.curr>=0?'#345526':'var(--rust)'):'var(--ink-1)'}}>{money ? fmtAUD(r.curr) : (r.curr||0)}</td>
-                      <td style={{textAlign:'right', fontFamily:'monospace', color:'var(--ink-3)'}}>{money ? fmtAUD(r.prev) : (r.prev||0)}</td>
-                      <td style={{textAlign:'right', fontFamily:'monospace', fontSize:12, color:chColor}}>{ch ? ch.label : '-'}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <Table pageSize={0}
+              columns={[
+                { key:'label', label:'', w:'1.6fr', render:r => <span style={{fontWeight:r.bold?700:400, color: r.bold?'var(--ink-1)':'var(--ink-2)'}}>{r.label}</span> },
+                { key:'curr', label:`FY ${data.fyYear}–${String(data.fyYear+1).slice(2)}`, w:'1fr', align:'right', render:r => <span className="mono" style={{fontWeight:r.bold?700:400, color: r.bold?(r.curr>=0?'#345526':'var(--rust)'):'var(--ink-1)'}}>{r.money !== false ? fmtAUD(r.curr) : (r.curr||0)}</span> },
+                { key:'prev', label:`FY ${data.fyYear-1}–${String(data.fyYear).slice(2)}`, w:'1fr', align:'right', render:r => <span className="mono" style={{fontWeight:r.bold?700:400, color:'var(--ink-3)'}}>{r.money !== false ? fmtAUD(r.prev) : (r.prev||0)}</span> },
+                { key:'change', label:'Change', w:'1fr', align:'right', render:r => { const ch = pct(r.curr, r.prev); const chColor = ch ? (((r.pos && ch.val>=0)||(!r.pos&&ch.val<=0)) ? '#2e7d32' : 'var(--rust)') : 'var(--ink-3)'; return <span className="mono" style={{fontSize:12, fontWeight:r.bold?700:400, color:chColor}}>{ch ? ch.label : '-'}</span>; } },
+              ]}
+              rows={rows}
+            />
           </div>
         );
       })()}
@@ -11821,38 +11819,21 @@ function CashFlowView() {
 
           {/* Table */}
           <div className="card" style={{padding:'18px 22px'}}>
-            <table style={{width:'100%', borderCollapse:'collapse', fontSize:13}}>
-              <thead>
-                <tr style={{borderBottom:'2px solid var(--border)'}}>
-                  {['Month','Cash In','Cash Out','Net','Running Balance'].map(h => (
-                    <th key={h} style={{textAlign:h==='Month'?'left':'right', padding:'4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11}}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r,i) => {
-                  const [yr,mo] = r.month.split('-');
-                  return (
-                    <tr key={r.month} style={{background:i%2===1?'var(--bg-deep)':'transparent'}}>
-                      <td style={{padding:'6px 0'}}>{monthNames[parseInt(mo)-1]} {yr}</td>
-                      <td style={{textAlign:'right', fontFamily:'monospace', color:'#345526'}}>{fmtAUD(r.revenue)}</td>
-                      <td style={{textAlign:'right', fontFamily:'monospace', color:'var(--rust)'}}>({fmtAUD(r.expenses)})</td>
-                      <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:600, color:r.net>=0?'#345526':'var(--rust)'}}>{fmtAUD(r.net)}</td>
-                      <td style={{textAlign:'right', fontFamily:'monospace', color:r.balance>=0?'var(--ink-1)':'var(--rust)'}}>{fmtAUD(r.balance)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              <tfoot>
-                <tr style={{borderTop:'2px solid var(--border)'}}>
-                  <td style={{padding:'8px 0', fontWeight:700}}>Total</td>
-                  <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:700, color:'#345526'}}>{fmtAUD(data.totalRevenue)}</td>
-                  <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:700, color:'var(--rust)'}}>({fmtAUD(data.totalExpenses)})</td>
-                  <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:700, color:data.grossProfit>=0?'#345526':'var(--rust)'}}>{fmtAUD(data.grossProfit)}</td>
-                  <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:700}}>{fmtAUD(openingBal + data.grossProfit)}</td>
-                </tr>
-              </tfoot>
-            </table>
+            <Table pageSize={0} emptyMessage="No cash movement in this period."
+              columns={[
+                { key:'month', label:'Month', w:'1fr', render:r => { const [yr,mo] = r.month.split('-'); return `${monthNames[parseInt(mo)-1]} ${yr}`; } },
+                { key:'revenue', label:'Cash in', w:'1fr', align:'right', render:r => <span className="mono" style={{color:'#345526'}}>{fmtAUD(r.revenue)}</span> },
+                { key:'expenses', label:'Cash out', w:'1fr', align:'right', render:r => <span className="mono" style={{color:'var(--rust)'}}>({fmtAUD(r.expenses)})</span> },
+                { key:'net', label:'Net', w:'1fr', align:'right', render:r => <span className="mono" style={{fontWeight:600, color:r.net>=0?'#345526':'var(--rust)'}}>{fmtAUD(r.net)}</span> },
+                { key:'balance', label:'Running balance', w:'1fr', align:'right', render:r => <span className="mono" style={{color:r.balance>=0?'var(--ink-1)':'var(--rust)'}}>{fmtAUD(r.balance)}</span> },
+              ]}
+              rows={rows}
+              footer={['Total',
+                <span className="mono" style={{color:'#345526'}}>{fmtAUD(data.totalRevenue)}</span>,
+                <span className="mono" style={{color:'var(--rust)'}}>({fmtAUD(data.totalExpenses)})</span>,
+                <span className="mono" style={{color:data.grossProfit>=0?'#345526':'var(--rust)'}}>{fmtAUD(data.grossProfit)}</span>,
+                <span className="mono">{fmtAUD(openingBal + data.grossProfit)}</span>]}
+            />
           </div>
         </>);
       })()}
@@ -11984,36 +11965,18 @@ function VehicleLogView() {
       ) : (
         <div className="card" style={{padding:'18px 22px'}}>
           <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--rust)', marginBottom:12, letterSpacing:1}}>TRIPS - FY {fy}–{String(fy+1).slice(2)}</div>
-          <table style={{width:'100%', borderCollapse:'collapse', fontSize:13}}>
-            <thead>
-              <tr style={{borderBottom:'2px solid var(--border)'}}>
-                {['Date','From','To','km','Purpose',''].map(h => (
-                  <th key={h} style={{textAlign:h==='km'?'right':'left', padding:'4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11}}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {fyEntries.map((e,i) => (
-                <tr key={e.id} style={{background:i%2===1?'var(--bg-deep)':'transparent'}}>
-                  <td style={{padding:'6px 0', fontFamily:'monospace', fontSize:11}}>{fmtDate(e.date)}</td>
-                  <td style={{padding:'6px 0'}}>{e.from||'-'}</td>
-                  <td style={{padding:'6px 0'}}>{e.to||'-'}</td>
-                  <td style={{textAlign:'right', fontFamily:'monospace'}}>{(Number(e.km)||0).toFixed(1)}</td>
-                  <td style={{padding:'6px 0', color:'var(--ink-2)'}}>{e.purpose||'-'}</td>
-                  <td style={{textAlign:'right'}}>
-                    <button className="btn" style={{padding:'2px 8px', fontSize:11, color:'var(--rust)', background:'transparent', border:'none', cursor:'pointer'}} onClick={() => deleteEntry(e.id)}><Icon name="x" size={12}/></button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr style={{borderTop:'2px solid var(--border)'}}>
-                <td colSpan={3} style={{padding:'8px 0', fontWeight:700}}>Total</td>
-                <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:700}}>{totalKm.toFixed(1)}</td>
-                <td colSpan={2} style={{textAlign:'right', fontFamily:'monospace', color:'#345526', fontWeight:700}}>≈ {fmtAUD(deduction)} deduction</td>
-              </tr>
-            </tfoot>
-          </table>
+          <Table pageSize={0} emptyMessage="No trips logged this financial year."
+            columns={[
+              { key:'date', label:'Date', w:'100px', sort:e => e.date, render:e => <span className="mono" style={{fontSize:11}}>{fmtDate(e.date)}</span> },
+              { key:'from', label:'From', w:'1fr', sort:true, render:e => e.from || '-' },
+              { key:'to', label:'To', w:'1fr', sort:true, render:e => e.to || '-' },
+              { key:'km', label:'km', w:'80px', align:'right', sort:e => Number(e.km) || 0, render:e => <span className="mono">{(Number(e.km)||0).toFixed(1)}</span> },
+              { key:'purpose', label:'Purpose', w:'1.4fr', render:e => <span style={{color:'var(--ink-2)'}}>{e.purpose || '-'}</span> },
+              { key:'del', label:'', w:'44px', align:'right', render:e => <button className="btn" aria-label="Delete trip" style={{padding:'2px 8px', fontSize:11, color:'var(--rust)', background:'transparent', border:'none', cursor:'pointer'}} onClick={() => deleteEntry(e.id)}><Icon name="x" size={12}/></button> },
+            ]}
+            rows={fyEntries}
+            footer={['Total', null, null, <span className="mono">{totalKm.toFixed(1)}</span>, <span className="mono" style={{color:'#345526'}}>≈ {fmtAUD(deduction)} deduction</span>, null]}
+          />
         </div>
       )}
     </>
@@ -12261,29 +12224,20 @@ function PaymentPlansView() {
           <div className="card" style={{padding:'18px 22px'}}>
             <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--rust)', marginBottom:12, letterSpacing:1}}>ACTIVE PLANS</div>
             <div style={{overflowX:'auto'}}>
-              <table style={{width:'100%', borderCollapse:'collapse', fontSize:13}}>
-                <thead>
-                  <tr style={{borderBottom:'2px solid var(--border)'}}>
-                    {['Order #','Customer','Frequency','Method','Next Due','Amount','Remaining','Status'].map(h => (
-                      <th key={h} style={{textAlign: (h==='Amount'||h==='Remaining')?'right':'left', padding:'4px 6px 4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11, whiteSpace:'nowrap'}}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.items.map(item => (
-                    <tr key={item.orderId} style={{borderBottom:'1px solid var(--line)', cursor:'pointer'}} onClick={() => goToOrder(item.orderId)} title="Click to copy order # and open Orders">
-                      <td style={{padding:'7px 6px 7px 0', color:'var(--rust)', fontFamily:'monospace', whiteSpace:'nowrap'}}>{item.orderId}</td>
-                      <td style={{padding:'7px 6px'}}>{item.customer}</td>
-                      <td style={{padding:'7px 6px', textTransform:'capitalize'}}>{item.frequency}</td>
-                      <td style={{padding:'7px 6px', textTransform:'capitalize'}}>{item.collectionMethod === 'auto' ? 'Auto-charge' : item.collectionMethod === 'customer' ? 'Customer pays' : 'Staff collects'}</td>
-                      <td style={{padding:'7px 6px', whiteSpace:'nowrap'}}>{item.nextDue ? fmtDate(item.nextDue.dueDate) : '-'}</td>
-                      <td style={{padding:'7px 6px', textAlign:'right', fontFamily:'monospace'}}>{item.nextDue ? fmtAUD(item.nextDue.amount) : '-'}</td>
-                      <td style={{padding:'7px 6px', textAlign:'right', fontFamily:'monospace'}}>{fmtAUD(item.remaining)}</td>
-                      <td style={{padding:'7px 6px'}}><span className={`tag ${STATUS_MAP[item.status]?.cls || 'tag-outline'}`} style={{fontSize:10}}>{STATUS_MAP[item.status]?.label || item.status}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <Table pageSize={0} emptyMessage="No active plans."
+                columns={[
+                  { key:'orderId', label:'Order #', w:'100px', sort:true, render:item => <span className="mono" style={{color:'var(--rust)'}}>{item.orderId}</span> },
+                  { key:'customer', label:'Customer', w:'1.4fr', sort:true },
+                  { key:'frequency', label:'Frequency', w:'100px', sort:true, render:item => <span style={{textTransform:'capitalize'}}>{item.frequency}</span> },
+                  { key:'collectionMethod', label:'Method', w:'120px', sort:true, render:item => item.collectionMethod === 'auto' ? 'Auto-charge' : item.collectionMethod === 'customer' ? 'Customer pays' : 'Staff collects' },
+                  { key:'nextDue', label:'Next due', w:'110px', sort:item => item.nextDue ? item.nextDue.dueDate : '', render:item => item.nextDue ? fmtDate(item.nextDue.dueDate) : '-' },
+                  { key:'amount', label:'Amount', w:'100px', align:'right', render:item => <span className="mono">{item.nextDue ? fmtAUD(item.nextDue.amount) : '-'}</span> },
+                  { key:'remaining', label:'Remaining', w:'110px', align:'right', sort:true, render:item => <span className="mono">{fmtAUD(item.remaining)}</span> },
+                  { key:'status', label:'Status', w:'120px', sort:true, render:item => <span className={`tag ${STATUS_MAP[item.status]?.cls || 'tag-outline'}`} style={{fontSize:10}}>{STATUS_MAP[item.status]?.label || item.status}</span> },
+                ]}
+                rows={data.items}
+                onRowClick={item => goToOrder(item.orderId)}
+              />
             </div>
           </div>
         )}
@@ -12343,37 +12297,19 @@ function ReceivablesView() {
         ) : (
           <div className="card" style={{padding:'18px 22px'}}>
             <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--rust)', marginBottom:12, letterSpacing:1}}>OUTSTANDING ITEMS</div>
-            <table style={{width:'100%', borderCollapse:'collapse', fontSize:13}}>
-              <thead>
-                <tr style={{borderBottom:'2px solid var(--border)'}}>
-                  {['Ref','Customer','Description','Date','Age','Status','Amount'].map(h => (
-                    <th key={h} style={{textAlign: h==='Amount'?'right':'left', padding:'4px 6px 4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11}}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {data.items.map((it,i) => {
-                  const ageColor = it.ageDays > 90 ? 'var(--rust)' : it.ageDays > 60 ? '#c67c00' : 'var(--ink-2)';
-                  return (
-                    <tr key={i} style={{background: i%2===1?'var(--bg-deep)':'transparent'}}>
-                      <td style={{padding:'6px 6px 6px 0', fontFamily:'monospace', fontSize:11}}>{it.ref}</td>
-                      <td style={{padding:'6px 6px 6px 0', color:'var(--ink-1)'}}>{it.customer}</td>
-                      <td style={{padding:'6px 6px 6px 0', color:'var(--ink-2)'}}>{it.description}</td>
-                      <td style={{padding:'6px 6px 6px 0', fontFamily:'monospace', fontSize:11}}>{fmtDate(it.date)}</td>
-                      <td style={{padding:'6px 6px 6px 0', fontFamily:'monospace', fontSize:11, color:ageColor}}>{it.ageDays != null ? `${it.ageDays}d` : '-'}</td>
-                      <td style={{padding:'6px 6px 6px 0', color:'var(--ink-3)', fontSize:11}}>{it.status}</td>
-                      <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:600, color:'var(--rust)'}}>{fmtAUD(it.amount)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              <tfoot>
-                <tr style={{borderTop:'2px solid var(--border)'}}>
-                  <td colSpan={6} style={{padding:'8px 0', fontWeight:700}}>Total Outstanding</td>
-                  <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:700, fontSize:15, color:'var(--rust)'}}>{fmtAUD(data.total)}</td>
-                </tr>
-              </tfoot>
-            </table>
+            <Table pageSize={0} emptyMessage="Nothing outstanding."
+              columns={[
+                { key:'ref', label:'Ref', w:'100px', sort:true, render:it => <span className="mono" style={{fontSize:11}}>{it.ref}</span> },
+                { key:'customer', label:'Customer', w:'1.3fr', sort:true },
+                { key:'description', label:'Description', w:'1.6fr', render:it => <span style={{color:'var(--ink-2)'}}>{it.description}</span> },
+                { key:'date', label:'Date', w:'100px', sort:true, render:it => <span className="mono" style={{fontSize:11}}>{fmtDate(it.date)}</span> },
+                { key:'ageDays', label:'Age', w:'70px', sort:true, render:it => <span className="mono" style={{fontSize:11, color: it.ageDays > 90 ? 'var(--rust)' : it.ageDays > 60 ? '#c67c00' : 'var(--ink-2)'}}>{it.ageDays != null ? `${it.ageDays}d` : '-'}</span> },
+                { key:'status', label:'Status', w:'110px', sort:true, render:it => <span style={{color:'var(--ink-3)', fontSize:11}}>{it.status}</span> },
+                { key:'amount', label:'Amount', w:'110px', align:'right', sort:true, render:it => <span className="mono" style={{fontWeight:600, color:'var(--rust)'}}>{fmtAUD(it.amount)}</span> },
+              ]}
+              rows={data.items}
+              footer={['Total Outstanding', null, null, null, null, null, <span className="mono" style={{fontSize:15, color:'var(--rust)'}}>{fmtAUD(data.total)}</span>]}
+            />
           </div>
         )}
       </>}
@@ -12441,40 +12377,19 @@ function StockView() {
         ) : (
           <div className="card" style={{padding:'18px 22px'}}>
             <div className="mono" style={{fontSize:11, fontWeight:700, color:'var(--rust)', marginBottom:12, letterSpacing:1}}>STOCK ON HAND</div>
-            <table style={{width:'100%', borderCollapse:'collapse', fontSize:13}}>
-              <thead>
-                <tr style={{borderBottom:'2px solid var(--border)'}}>
-                  <th style={{textAlign:'left',  padding:'4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11, width:70}}>SKU</th>
-                  <th style={{textAlign:'left',  padding:'4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11}}>Product</th>
-                  <th style={{textAlign:'right', padding:'4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11, width:50}}>Qty</th>
-                  <th style={{textAlign:'right', padding:'4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11, width:80}}>Sell $</th>
-                  {data.hasCostPrices && <th style={{textAlign:'right', padding:'4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11, width:80}}>Cost $</th>}
-                  <th style={{textAlign:'right', padding:'4px 0', fontWeight:600, color:'var(--ink-2)', fontSize:11, width:90}}>Value</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.lines.map((ln,i) => (
-                  <tr key={i} style={{background: i%2===1?'var(--bg-deep)':'transparent'}}>
-                    <td style={{padding:'5px 0', fontFamily:'monospace', fontSize:11, color:'var(--ink-3)'}}>{ln.sku}</td>
-                    <td style={{padding:'5px 0'}}>{ln.name}</td>
-                    <td style={{textAlign:'right', fontFamily:'monospace'}}>{ln.qty}</td>
-                    <td style={{textAlign:'right', fontFamily:'monospace'}}>{fmtAUD(ln.sellPrice)}</td>
-                    {data.hasCostPrices && <td style={{textAlign:'right', fontFamily:'monospace'}}>{ln.costPrice ? fmtAUD(ln.costPrice) : <span style={{color:'var(--ink-3)'}}>-</span>}</td>}
-                    <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:600}}>{fmtAUD(ln.hasCost ? ln.costValue : ln.sellValue)}</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr style={{borderTop:'2px solid var(--border)'}}>
-                  <td colSpan={data.hasCostPrices ? 5 : 4} style={{padding:'8px 0', fontWeight:700}}>
-                    Total {data.hasCostPrices ? 'at cost' : 'at selling price'}
-                  </td>
-                  <td style={{textAlign:'right', fontFamily:'monospace', fontWeight:700, fontSize:15, color:'#345526'}}>
-                    {fmtAUD(data.hasCostPrices ? data.totalCostValue : data.totalSellValue)}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
+            <Table pageSize={0} emptyMessage="No stock on hand."
+              columns={[
+                { key:'sku', label:'SKU', w:'90px', sort:true, render:ln => <span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>{ln.sku}</span> },
+                { key:'name', label:'Product', w:'2fr', sort:true },
+                { key:'qty', label:'Qty', w:'60px', align:'right', sort:true, render:ln => <span className="mono">{ln.qty}</span> },
+                { key:'sellPrice', label:'Sell $', w:'100px', align:'right', sort:true, render:ln => <span className="mono">{fmtAUD(ln.sellPrice)}</span> },
+                ...(data.hasCostPrices ? [{ key:'costPrice', label:'Cost $', w:'100px', align:'right', sort:true, render:ln => ln.costPrice ? <span className="mono">{fmtAUD(ln.costPrice)}</span> : <span style={{color:'var(--ink-3)'}}>-</span> }] : []),
+                { key:'value', label:'Value', w:'110px', align:'right', sort:ln => ln.hasCost ? ln.costValue : ln.sellValue, render:ln => <span className="mono" style={{fontWeight:600}}>{fmtAUD(ln.hasCost ? ln.costValue : ln.sellValue)}</span> },
+              ]}
+              rows={data.lines}
+              footer={[`Total ${data.hasCostPrices ? 'at cost' : 'at selling price'}`, ...Array(data.hasCostPrices ? 4 : 3).fill(null),
+                <span className="mono" style={{fontSize:15, color:'#345526'}}>{fmtAUD(data.hasCostPrices ? data.totalCostValue : data.totalSellValue)}</span>]}
+            />
           </div>
         )}
       </>}
@@ -12748,32 +12663,12 @@ function SellerSettings({ sessionInfo = {} }) {
         {txns.length > 0 && (
           <div style={{marginTop:8}}>
             <div style={{fontSize:11, color:'var(--ink-2)', marginBottom:8}}>RECENT TRANSACTIONS</div>
-            <table style={{width:'100%', fontSize:12, borderCollapse:'collapse'}}>
-              <thead>
-                <tr style={{color:'var(--ink-2)'}}>
-                  <th style={{textAlign:'left', padding:'4px 8px 4px 0', fontWeight:500}}>Date</th>
-                  <th style={{textAlign:'left', padding:'4px 8px', fontWeight:500}}>Description</th>
-                  <th style={{textAlign:'center', padding:'4px 8px', fontWeight:500}}>Type</th>
-                  <th style={{textAlign:'right', padding:'4px 0 4px 8px', fontWeight:500}}>Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {txns.map(t => (
-                  <tr key={t.id} style={{borderTop:'1px solid var(--line)'}}>
-                    <td style={{padding:'6px 8px 6px 0', color:'var(--ink-2)'}}>{new Date(t.date).toLocaleDateString('en-AU')}</td>
-                    <td style={{padding:'6px 8px'}}>{t.description}</td>
-                    <td style={{padding:'6px 8px', textAlign:'center'}}>
-                      <span style={{fontSize:10, fontWeight:600, padding:'2px 6px', borderRadius:3, background: t.type==='sale_credit'?'#e8f5e9':'#fce4ec', color: t.type==='sale_credit'?'#2e7d32':'#c62828'}}>
-                        {t.type==='sale_credit'?'CREDIT':'DEBIT'}
-                      </span>
-                    </td>
-                    <td style={{padding:'6px 0 6px 8px', textAlign:'right', color: t.type==='sale_credit'?'var(--eucalyptus)':'var(--rust)', fontWeight:600}}>
-                      {t.type==='sale_credit'?'+':'-'}${t.amount.toFixed(2)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <Table pageSize={0} rows={txns} columns={[
+                    { key:'date', label:'Date', w:'100px', sort:true, render:t => <span style={{color:'var(--ink-2)'}}>{new Date(t.date).toLocaleDateString('en-AU')}</span> },
+                    { key:'description', label:'Description', w:'2fr' },
+                    { key:'type', label:'Type', w:'90px', align:'center', render:t => <span style={{fontSize:10, fontWeight:600, padding:'2px 6px', borderRadius:3, background: t.type==='sale_credit'?'#e8f5e9':'#fce4ec', color: t.type==='sale_credit'?'#2e7d32':'#c62828'}}>{t.type==='sale_credit'?'CREDIT':'DEBIT'}</span> },
+                                        { key:'amount', label:'Amount', w:'100px', align:'right', sort:true, render:t => <span style={{fontWeight:600, color: t.type==='sale_credit'?'var(--eucalyptus)':'var(--rust)'}}>{t.type==='sale_credit'?'+':'-'}${t.amount.toFixed(2)}</span> },
+                  ]} />
           </div>
         )}
         {billing && txns.length === 0 && <div style={{fontSize:13, color:'var(--ink-2)'}}>No transactions yet.</div>}
@@ -12831,78 +12726,28 @@ function AdminSellerBilling({ sessionInfo = {} }) {
         {isOwner && <button className="btn btn-rust btn-sm" disabled={chargeBusy} onClick={chargeNow}>{chargeBusy?'Running…':'Run billing now'}</button>}
       </div>
       {chargeMsg && <div style={{marginBottom:16, fontSize:13, color: chargeMsg.includes('failed')?'var(--rust)':'var(--eucalyptus)'}}>{chargeMsg}</div>}
-      {sellers.length === 0 && <div style={{fontSize:13, color:'var(--ink-2)'}}>No sellers found.</div>}
-      <table style={{width:'100%', fontSize:13, borderCollapse:'collapse'}}>
-        <thead>
-          <tr style={{color:'var(--ink-2)', borderBottom:'1px solid var(--line)'}}>
-            <th style={{textAlign:'left', padding:'8px 12px 8px 0', fontWeight:500}}>Seller</th>
-            <th style={{textAlign:'center', padding:'8px 12px', fontWeight:500}}>Listings</th>
-            <th style={{textAlign:'right', padding:'8px 12px', fontWeight:500}}>Balance</th>
-            <th style={{textAlign:'center', padding:'8px 12px', fontWeight:500}}>Card</th>
-            <th style={{textAlign:'center', padding:'8px 0', fontWeight:500}}>History</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sellers.map(s => (
-            <React.Fragment key={s.id}>
-              <tr style={{borderTop:'1px solid var(--line)'}}>
-                <td style={{padding:'10px 12px 10px 0'}}>
-                  <div style={{fontWeight:600}}>{s.name}</div>
-                  <div style={{fontSize:11, color:'var(--ink-2)'}}>{s.email}</div>
-                </td>
-                <td style={{textAlign:'center', padding:'10px 12px'}}>{s.activeListings}</td>
-                <td style={{textAlign:'right', padding:'10px 12px', fontWeight:700, color: s.balance >= 0 ? 'var(--eucalyptus)' : 'var(--rust)'}}>
-                  ${s.balance.toFixed(2)}
-                </td>
-                <td style={{textAlign:'center', padding:'10px 12px'}}>
-                  {s.hasCard ? <span style={{color:'var(--eucalyptus)', fontSize:11, fontWeight:600}}>{s.cardBrand ? s.cardBrand.toUpperCase() : 'CARD'} ···· {s.cardLast4}</span> : <span style={{color:'var(--rust)', fontSize:11}}>No card</span>}
-                </td>
-                <td style={{textAlign:'center', padding:'10px 0'}}>
-                  <button className="btn btn-sm" style={{fontSize:11, padding:'3px 10px'}} onClick={()=>toggleExpand(s.id)}>{expandedId===s.id?'Hide':'View'}</button>
-                </td>
-              </tr>
-              {expandedId === s.id && (
-                <tr>
-                  <td colSpan={5} style={{padding:'0 0 12px 0', background:'var(--paper-2, #faf9f7)'}}>
-                    {txnLoading[s.id] && <div style={{padding:'12px 16px', fontSize:12, color:'var(--ink-2)'}}>Loading…</div>}
-                    {!txnLoading[s.id] && txnMap[s.id] && txnMap[s.id].length === 0 && <div style={{padding:'12px 16px', fontSize:12, color:'var(--ink-2)'}}>No transactions.</div>}
-                    {!txnLoading[s.id] && txnMap[s.id] && txnMap[s.id].length > 0 && (
-                      <table style={{width:'100%', fontSize:12, borderCollapse:'collapse'}}>
-                        <thead>
-                          <tr style={{color:'var(--ink-2)'}}>
-                            <th style={{textAlign:'left', padding:'6px 16px', fontWeight:500}}>Date</th>
-                            <th style={{textAlign:'left', padding:'6px 8px', fontWeight:500}}>Description</th>
-                            <th style={{textAlign:'center', padding:'6px 8px', fontWeight:500}}>Type</th>
-                            <th style={{textAlign:'center', padding:'6px 8px', fontWeight:500}}>Status</th>
-                            <th style={{textAlign:'right', padding:'6px 16px', fontWeight:500}}>Amount</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {txnMap[s.id].map(t => (
-                            <tr key={t.id} style={{borderTop:'1px solid var(--line)'}}>
-                              <td style={{padding:'6px 16px', color:'var(--ink-2)'}}>{new Date(t.date).toLocaleDateString('en-AU')}</td>
-                              <td style={{padding:'6px 8px'}}>{t.description}</td>
-                              <td style={{padding:'6px 8px', textAlign:'center'}}>
-                                <span style={{fontSize:10, fontWeight:600, padding:'2px 6px', borderRadius:3, background: t.type==='sale_credit'?'#e8f5e9':'#fce4ec', color: t.type==='sale_credit'?'#2e7d32':'#c62828'}}>
-                                  {t.type==='sale_credit'?'CREDIT':t.type==='listing_fee'?'FEE':'PAYOUT'}
-                                </span>
-                              </td>
-                              <td style={{padding:'6px 8px', textAlign:'center', color: t.status==='ok'?'var(--eucalyptus)':'var(--rust)'}}>{t.status}</td>
-                              <td style={{padding:'6px 16px', textAlign:'right', fontWeight:600, color: t.type==='sale_credit'?'var(--eucalyptus)':'var(--rust)'}}>
-                                {t.type==='sale_credit'?'+':'-'}${t.amount.toFixed(2)}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </td>
-                </tr>
-              )}
-            </React.Fragment>
-          ))}
-        </tbody>
-      </table>
+      <Table pageSize={0} emptyMessage="No sellers found."
+        columns={[
+          { key:'name', label:'Seller', w:'2fr', sort:true, render:s => <><div style={{fontWeight:600}}>{s.name}</div><div style={{fontSize:11, color:'var(--ink-2)'}}>{s.email}</div></> },
+          { key:'activeListings', label:'Listings', w:'90px', align:'center', sort:true },
+          { key:'balance', label:'Balance', w:'110px', align:'right', sort:true, render:s => <span style={{fontWeight:700, color: s.balance >= 0 ? 'var(--eucalyptus)' : 'var(--rust)'}}>${s.balance.toFixed(2)}</span> },
+          { key:'card', label:'Card', w:'150px', align:'center', render:s => s.hasCard ? <span style={{color:'var(--eucalyptus)', fontSize:11, fontWeight:600}}>{s.cardBrand ? s.cardBrand.toUpperCase() : 'CARD'} ···· {s.cardLast4}</span> : <span style={{color:'var(--rust)', fontSize:11}}>No card</span> },
+          { key:'history', label:'History', w:'90px', align:'center', render:s => <button className="btn btn-sm" style={{fontSize:11, padding:'3px 10px'}} onClick={e => { e.stopPropagation(); toggleExpand(s.id); }}>{expandedId===s.id?'Hide':'View'}</button> },
+        ]}
+        rows={sellers}
+        expand={s => expandedId !== s.id ? null : (
+          txnLoading[s.id] ? <div style={{padding:'12px 16px', fontSize:12, color:'var(--ink-2)'}}>Loading…</div>
+          : !txnMap[s.id] ? null
+          : txnMap[s.id].length === 0 ? <div style={{padding:'12px 16px', fontSize:12, color:'var(--ink-2)'}}>No transactions.</div>
+          : <div style={{padding:'12px 16px 0'}}><Table pageSize={0} rows={txnMap[s.id]} columns={[
+                    { key:'date', label:'Date', w:'100px', sort:true, render:t => <span style={{color:'var(--ink-2)'}}>{new Date(t.date).toLocaleDateString('en-AU')}</span> },
+                    { key:'description', label:'Description', w:'2fr' },
+                    { key:'type', label:'Type', w:'90px', align:'center', render:t => <span style={{fontSize:10, fontWeight:600, padding:'2px 6px', borderRadius:3, background: t.type==='sale_credit'?'#e8f5e9':'#fce4ec', color: t.type==='sale_credit'?'#2e7d32':'#c62828'}}>{t.type==='sale_credit'?'CREDIT':t.type==='listing_fee'?'FEE':'PAYOUT'}</span> },
+                    { key:'status', label:'Status', w:'80px', align:'center', render:t => <span style={{color: t.status==='ok'?'var(--eucalyptus)':'var(--rust)'}}>{t.status}</span> },
+                    { key:'amount', label:'Amount', w:'100px', align:'right', sort:true, render:t => <span style={{fontWeight:600, color: t.type==='sale_credit'?'var(--eucalyptus)':'var(--rust)'}}>{t.type==='sale_credit'?'+':'-'}${t.amount.toFixed(2)}</span> },
+                  ]} /></div>
+        )}
+      />
     </div>
   );
 }
@@ -13943,29 +13788,17 @@ function AdminAuditLog() {
         <div style={{color:'var(--ink-2)', fontSize:13}}>No audit entries found.</div>
       ) : (
         <div style={{overflowX:'auto'}}>
-          <table style={{width:'100%', borderCollapse:'collapse', fontSize:12}}>
-            <thead>
-              <tr style={{borderBottom:'1px solid var(--line)'}}>
-                {['Timestamp','Actor','IP','Action','Status','Detail'].map(h => (
-                  <th key={h} className="mono" style={{textAlign:'left', padding:'6px 10px', fontSize:10, color:'var(--ink-3)', fontWeight:500, whiteSpace:'nowrap'}}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((e, i) => (
-                <tr key={i} style={{borderBottom:'1px solid var(--line)', background: i % 2 === 0 ? 'transparent' : 'var(--bg-elev)'}}>
-                  <td className="mono" style={{padding:'5px 10px', whiteSpace:'nowrap', color:'var(--ink-2)', fontSize:11}}>{e.timestamp ? new Date(e.timestamp).toLocaleString('en-AU') : '-'}</td>
-                  <td style={{padding:'5px 10px', whiteSpace:'nowrap'}}>{e.actor || '-'}</td>
-                  <td className="mono" style={{padding:'5px 10px', whiteSpace:'nowrap', color:'var(--ink-2)'}}>{e.ip || '-'}</td>
-                  <td style={{padding:'5px 10px', whiteSpace:'nowrap', color: actionColor(e.action || '')}}>{e.action || '-'}</td>
-                  <td style={{padding:'5px 10px', whiteSpace:'nowrap'}}>
-                    <span style={{fontSize:10, padding:'2px 6px', borderRadius:2, background: e.status === 'ok' ? '#d4edda' : '#f8d7da', color: e.status === 'ok' ? '#155724' : '#721c24'}}>{e.status || '-'}</span>
-                  </td>
-                  <td className="mono" style={{padding:'5px 10px', color:'var(--ink-2)', maxWidth:320, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontSize:11}} title={JSON.stringify(e.changed || {})}>{e.reason || JSON.stringify(e.changed || {})}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <Table pageSize={0}
+            columns={[
+              { key:'timestamp', label:'Timestamp', w:'170px', sort:true, render:e => <span className="mono" style={{color:'var(--ink-2)', fontSize:11}}>{e.timestamp ? new Date(e.timestamp).toLocaleString('en-AU') : '-'}</span> },
+              { key:'actor', label:'Actor', w:'120px', sort:true, render:e => e.actor || '-' },
+              { key:'ip', label:'IP', w:'120px', render:e => <span className="mono" style={{color:'var(--ink-2)'}}>{e.ip || '-'}</span> },
+              { key:'action', label:'Action', w:'170px', sort:true, render:e => <span style={{color: actionColor(e.action || '')}}>{e.action || '-'}</span> },
+              { key:'status', label:'Status', w:'80px', sort:true, render:e => <span style={{fontSize:10, padding:'2px 6px', borderRadius:2, background: e.status === 'ok' ? '#d4edda' : '#f8d7da', color: e.status === 'ok' ? '#155724' : '#721c24'}}>{e.status || '-'}</span> },
+              { key:'detail', label:'Detail', w:'2fr', render:e => <span className="mono" style={{color:'var(--ink-2)', fontSize:11}} title={JSON.stringify(e.changed || {})}>{e.reason || JSON.stringify(e.changed || {})}</span> },
+            ]}
+            rows={entries}
+          />
         </div>
       )}
     </div>
