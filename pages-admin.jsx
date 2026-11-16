@@ -749,8 +749,31 @@ function StatTile({ label, value, delta, tone }) {
 
 const TABLE_PAGE_SIZE = 50;
 
+// Flexible ("fr") columns get a real minimum width. Without one, the header
+// row and every data row each size the column from their own content (a
+// header label versus an ellipsised cell that can shrink to nothing), so on a
+// narrow screen the cells drift out from under their headings. With fixed
+// minimums every row resolves the same widths, and the table scrolls
+// sideways instead of squeezing.
+const TABLE_FR_MIN_PX = 90;
+const TABLE_GAP_PX = 12;
+function tableTrack(w) {
+  const m = String(w).match(/^([\d.]+)fr$/);
+  return m ? `minmax(${Math.round(TABLE_FR_MIN_PX * Number(m[1]))}px, ${w})` : w;
+}
+function tableMinWidth(widths) {
+  const sum = widths.reduce((t, w) => {
+    const fr = String(w).match(/^([\d.]+)fr$/);
+    const px = String(w).match(/^([\d.]+)px$/);
+    return t + (fr ? Math.round(TABLE_FR_MIN_PX * Number(fr[1])) : px ? Number(px[1]) : TABLE_FR_MIN_PX);
+  }, 0);
+  return sum + TABLE_GAP_PX * Math.max(0, widths.length - 1) + 36;
+}
+
 function Table({ columns, rows, onRowClick, emptyMessage, loading, defaultSort }) {
-  const tpl = columns.map(c => c.w || '1fr').join(' ');
+  const widths = columns.map(c => c.w || '1fr');
+  const tpl = widths.map(tableTrack).join(' ');
+  const minW = Math.max(560, tableMinWidth(widths));
   const [sort, setSort] = useState(defaultSort || null); // { key, dir: 'asc' | 'desc' }
   const [page, setPage] = useState(0);
   const safeRows = rows || [];
@@ -794,7 +817,7 @@ function Table({ columns, rows, onRowClick, emptyMessage, loading, defaultSort }
   return (
     <div style={{background:'var(--paper)', border:'1px solid var(--line-strong)'}}>
       <div className="admin-table-scroll" style={{overflowX:'auto'}}>
-        <div style={{minWidth:560}}>
+        <div style={{minWidth:minW}}>
           <div role="row" style={{display:'grid', gridTemplateColumns:tpl, gap:12, padding:'10px 18px', background:'var(--bg-elev)', borderBottom:'2px solid var(--ink)', fontFamily:'JetBrains Mono, monospace', fontSize:10, letterSpacing:'.1em', color:'var(--ink-2)'}}>
             {columns.map((c,i) => {
               const key = c.key || c.label;
