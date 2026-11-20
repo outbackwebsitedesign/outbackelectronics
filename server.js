@@ -5647,6 +5647,29 @@ function buildDeviceCertPdf(cert, shop, sigImage) {
       y = rowsAt([['Requested by', [cert.requestedBy, cert.requestRef && `reference ${cert.requestRef}`].filter(Boolean).join(', ')]], y, 50, 78, 417) + 4;
     }
 
+    // Fit to one page: shrink the check rows, findings, actions and limitations
+    // text only as far as needed to keep everything on the first page.
+    const limits = `This certificate records the result of an inspection of the device described above, carried out by ${us} on ${inspected}. It reflects the device's condition at that time only and is not a guarantee of its future security. It does not cover accounts, passwords or services that may have been compromised through other devices or channels. The customer has been advised to change the passwords of important accounts, keep two-step verification turned on, install apps only from the official app store, and never give remote access to anyone who contacts them unexpectedly.`;
+    const VERIFY_H = 34, SIG_H = 66;
+    const checkNote = (key, desc) => String(((cert.checks || {})[key] || {}).note || '').trim() || desc;
+    const neededAt = (k) => {
+      let h = 2 + 14 + 19;
+      doc.font('Helvetica').fontSize(8.3 * k);
+      const pad = 5 * k;
+      for (const [key, label, desc] of DEVICE_CERT_CHECKS) {
+        h += Math.max(doc.heightOfString(label, { width: 178 }), doc.heightOfString(checkNote(key, desc), { width: 240 })) + pad;
+      }
+      h += 4;
+      doc.fontSize(8.8 * k);
+      for (const t of [cert.findings, cert.actionsTaken]) if (String(t || '').trim()) h += doc.heightOfString(t, { width: 495 }) + 20;
+      doc.fontSize(7.8 * k);
+      h += doc.heightOfString(limits, { width: 479 }) + 12 + SIG_H + VERIFY_H + 10;
+      return h;
+    };
+    let k = 1;
+    while (k > 0.78 && y + neededAt(k) > pageBottom) k = Math.round((k - 0.02) * 100) / 100;
+    const checkSize = 8.3 * k, rowPad = 5 * k, paraSize = 8.8 * k, limSize = 7.8 * k;
+
     // Checks
     y = title('Inspection Checks', 50, y + 2);
     doc.rect(50, y, 495, 16).fill('#f6f3ee');
@@ -5656,11 +5679,11 @@ function buildDeviceCertPdf(cert, shop, sigImage) {
     const resultColour = { pass: '#2e7d32', fixed: '#2e7d32', fail: RUST, na: '#888' };
     for (const [key, label, desc] of DEVICE_CERT_CHECKS) {
       const c = (cert.checks || {})[key] || {};
-      const note = String(c.note || '').trim() || desc;
-      doc.font('Helvetica').fontSize(8.3);
-      const h = Math.max(doc.heightOfString(label, { width: 178 }), doc.heightOfString(note, { width: 240 })) + 5;
+      const note = checkNote(key, desc);
+      doc.font('Helvetica').fontSize(checkSize);
+      const h = Math.max(doc.heightOfString(label, { width: 178 }), doc.heightOfString(note, { width: 240 })) + rowPad;
       if (y + h > pageBottom - 40) { doc.addPage(); y = 50; }
-      doc.font('Helvetica-Bold').fontSize(8.3).fillColor('#222').text(label, 58, y, { width: 178 });
+      doc.font('Helvetica-Bold').fontSize(checkSize).fillColor('#222').text(label, 58, y, { width: 178 });
       doc.font('Helvetica-Bold').fillColor(resultColour[c.result] || '#888').text(DEVICE_CERT_RESULTS[c.result] || '-', 240, y, { width: 55 });
       doc.font('Helvetica').fillColor(c.note ? '#222' : '#888').text(note, 300, y, { width: 240 });
       y += h;
@@ -5670,24 +5693,22 @@ function buildDeviceCertPdf(cert, shop, sigImage) {
 
     const para = (label, text) => {
       if (!String(text || '').trim()) return;
-      doc.font('Helvetica').fontSize(8.8);
+      doc.font('Helvetica').fontSize(paraSize);
       const h = doc.heightOfString(text, { width: 495 }) + 16;
       if (y + h > pageBottom - 40) { doc.addPage(); y = 50; }
       y = title(label, 50, y);
-      doc.font('Helvetica').fontSize(8.8).fillColor('#222').text(text, 50, y, { width: 495, align: 'justify' });
+      doc.font('Helvetica').fontSize(paraSize).fillColor('#222').text(text, 50, y, { width: 495, align: 'justify' });
       y = doc.y + 6;
     };
     para('Findings', cert.findings);
     para('Actions Taken', cert.actionsTaken);
 
     // Limitations, signatures and verification stay together.
-    const limits = `This certificate records the result of an inspection of the device described above, carried out by ${us} on ${inspected}. It reflects the device's condition at that time only and is not a guarantee of its future security. It does not cover accounts, passwords or services that may have been compromised through other devices or channels. The customer has been advised to change the passwords of important accounts, keep two-step verification turned on, install apps only from the official app store, and never give remote access to anyone who contacts them unexpectedly.`;
-    doc.font('Helvetica').fontSize(7.8);
+    doc.font('Helvetica').fontSize(limSize);
     const limH = doc.heightOfString(limits, { width: 479 }) + 12;
-    const VERIFY_H = 34, SIG_H = 66;
     if (y + limH + SIG_H + VERIFY_H + 10 > pageBottom) { doc.addPage(); y = 50; }
     doc.rect(50, y, 495, limH).fill('#f6f3ee');
-    doc.font('Helvetica').fontSize(7.8).fillColor('#5c5348').text(limits, 58, y + 6, { width: 479, align: 'justify' });
+    doc.font('Helvetica').fontSize(limSize).fillColor('#5c5348').text(limits, 58, y + 6, { width: 479, align: 'justify' });
     y += limH + 8;
 
     const colW = 232, rightX = 50 + colW + 31, sigTop = y + 34;
