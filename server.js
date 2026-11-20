@@ -5651,6 +5651,8 @@ function buildDeviceCertPdf(cert, shop, sigImage) {
     // text only as far as needed to keep everything on the first page.
     const limits = `This certificate records the result of an inspection of the device described above, carried out by ${us} on ${inspected}. It reflects the device's condition at that time only and is not a guarantee of its future security. It does not cover accounts, passwords or services that may have been compromised through other devices or channels. The customer has been advised to change the passwords of important accounts, keep two-step verification turned on, install apps only from the official app store, and never give remote access to anyone who contacts them unexpectedly.`;
     const VERIFY_H = 34, SIG_H = 66;
+    // Blank lines between paragraphs become a small gap instead of a full empty line.
+    const paraText = (t) => String(t || '').trim().split(/\n\s*\n+/).map(x => x.trim()).filter(Boolean).join('\n');
     const checkNote = (key, desc) => String(((cert.checks || {})[key] || {}).note || '').trim() || desc;
     const neededAt = (k) => {
       let h = 2 + 14 + 19;
@@ -5661,7 +5663,7 @@ function buildDeviceCertPdf(cert, shop, sigImage) {
       }
       h += 4;
       doc.fontSize(8.8 * k);
-      for (const t of [cert.findings, cert.actionsTaken]) if (String(t || '').trim()) h += doc.heightOfString(t, { width: 495 }) + 20;
+      for (const t of [cert.findings, cert.actionsTaken]) if (paraText(t)) h += doc.heightOfString(paraText(t), { width: 495, paragraphGap: 3 * k }) + 20;
       doc.fontSize(7.8 * k);
       h += doc.heightOfString(limits, { width: 479 }) + 12 + SIG_H + VERIFY_H + 10;
       return h;
@@ -5692,12 +5694,13 @@ function buildDeviceCertPdf(cert, shop, sigImage) {
     y += 4;
 
     const para = (label, text) => {
-      if (!String(text || '').trim()) return;
+      text = paraText(text);
+      if (!text) return;
       doc.font('Helvetica').fontSize(paraSize);
-      const h = doc.heightOfString(text, { width: 495 }) + 16;
+      const h = doc.heightOfString(text, { width: 495, paragraphGap: 3 * k }) + 16;
       if (y + h > pageBottom - 40) { doc.addPage(); y = 50; }
       y = title(label, 50, y);
-      doc.font('Helvetica').fontSize(paraSize).fillColor('#222').text(text, 50, y, { width: 495, align: 'justify' });
+      doc.font('Helvetica').fontSize(paraSize).fillColor('#222').text(text, 50, y, { width: 495, align: 'justify', paragraphGap: 3 * k });
       y = doc.y + 6;
     };
     para('Findings', cert.findings);
