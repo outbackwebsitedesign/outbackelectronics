@@ -84,7 +84,7 @@ const PUBLIC_CSP = "default-src 'self'; " +
 const HSTS_VALUE = 'max-age=31536000; includeSubDomains';
 const PERMISSIONS_POLICY = 'camera=(), microphone=(), geolocation=(), payment=(), usb=()';
 const PUBLIC_RATE_WINDOW_MS = 1000 * 60 * 10;
-const PUBLIC_RATE_LIMITS = { analytics: 120, checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10, 'forgot-password': 5, 'reset-password': 10, 'gift-card/apply': 10, 'gift-card/balance': 5, 'warranty/order-lookup': 10, 'cart/get': 20, 'cart/validate': 60, 'cart/activity': 60, 'weather_register': 3, 'stock-notify': 5, 'membership': 10, 'order-token': 30, 'bookings/request': 10, 'tutorials/view': 60, 'review/submit': 8, 'review/upload-photo': 20, 'public-chat': 20, 'sponsorship/enquire': 5 };
+const PUBLIC_RATE_LIMITS = { analytics: 120, checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10, 'forgot-password': 5, 'reset-password': 10, 'gift-card/apply': 10, 'gift-card/balance': 5, 'warranty/order-lookup': 10, 'cart/get': 20, 'cart/validate': 60, 'cart/activity': 60, 'weather_register': 3, 'stock-notify': 5, 'membership': 10, 'order-token': 30, 'bookings/request': 10, 'tutorials/view': 60, 'review/submit': 8, 'review/upload-photo': 20, 'public-chat': 20, 'sponsorship/enquire': 5, 'certificate/verify': 20 };
 
 fs.mkdirSync(path.join(__dirname, 'assets/uploads'), { recursive: true });
 fs.mkdirSync(path.join(__dirname, 'assets/uploads/software'), { recursive: true });
@@ -136,6 +136,7 @@ const QUOTES_DB_PATH    = path.join(__dirname, 'quotes.db');
 const HDD_REPORTS_DB_PATH = path.join(__dirname, 'hdd-reports.db');
 const SAFETY_NOTICES_DB_PATH = path.join(__dirname, 'safety-notices.db');
 const DEVICE_LOANS_DB_PATH = path.join(__dirname, 'device-loans.db');
+const DEVICE_CERTS_DB_PATH = path.join(__dirname, 'device-certificates.db');
 // PC builder: the parts library and saved builds share one file, they are only
 // ever read and written together by the admin PC Builder section.
 const PC_BUILDER_DB_PATH = path.join(__dirname, 'pc-builder.db');
@@ -1270,6 +1271,53 @@ function staffSignaturePath(staffId) {
   if (!staffId || !/^[A-Za-z0-9_-]+$/.test(String(staffId))) return null;
   const p = path.join(__dirname, 'assets/signatures', `${staffId}.png`);
   return fs.existsSync(p) ? p : null;
+}
+
+// Device security certificates: a record that a device was inspected for
+// compromise (typically after a bank suspends a customer's banking app) and
+// either cleared or not. A certificate is a draft until issued; issuing signs
+// it with the technician's saved signature, gives it a verification code the
+// bank can check on the website, and locks it. An issued certificate is never
+// edited, only voided with a reason.
+const DEVICE_CERTS_LOCK = 'device-certificates';
+const DEVICE_CERT_CHECKS = [
+  ['osUpdated', 'Operating system and security updates', 'Updated to the latest version and security patch available for the device.'],
+  ['malwareScan', 'Malware scan', 'Device scanned for malware and potentially harmful apps.'],
+  ['remoteAccess', 'Remote-access apps', 'Checked for remote-control apps (e.g. AnyDesk, TeamViewer, QuickSupport) and screen-sharing tools.'],
+  ['accessibility', 'Accessibility services', 'Apps granted accessibility or screen-reading access reviewed (a common banking-malware technique).'],
+  ['deviceAdmin', 'Device admin apps and profiles', 'Device administrator apps, MDM and configuration profiles reviewed.'],
+  ['unknownApps', 'Apps from outside the official store', 'Sideloaded apps and permission to install unknown apps reviewed.'],
+  ['rootJailbreak', 'Root / jailbreak', 'Checked that the device is not rooted or jailbroken.'],
+  ['forwarding', 'Call and SMS forwarding', 'Checked that calls and text messages (including one-time codes) are not being diverted.'],
+  ['accounts', 'Account security', 'Linked Google / Apple account reviewed for unknown devices and sessions; password change and two-step verification advised or completed.'],
+  ['screenLock', 'Screen lock', 'Secure screen lock (PIN, password or biometric) enabled.'],
+];
+const DEVICE_CERT_RESULTS = { pass: 'Pass', fixed: 'Fixed', fail: 'Fail', na: 'N/A' };
+const DEVICE_CERT_OUTCOMES = { cleared: 'Cleared', remediated: 'Cleared after remediation', notCleared: 'Not cleared' };
+function readDeviceCerts() {
+  try { const p = JSON.parse(cachedReadFile(DEVICE_CERTS_DB_PATH)); return Array.isArray(p.certificates) ? p.certificates : []; } catch { return []; }
+}
+function writeDeviceCerts(certificates) { atomicWriteFile(DEVICE_CERTS_DB_PATH, JSON.stringify({ certificates }, null, 2)); }
+function nextDeviceCertId(certs) {
+  const maxN = certs.reduce((max, r) => { const m = String(r.id || '').match(/^DSC-(\d+)$/); return m ? Math.max(max, parseInt(m[1])) : max; }, 0);
+  return `DSC-${String(maxN + 1).padStart(4, '0')}`;
+}
+// Unambiguous characters only (no 0/O, 1/I/L), shown as XXXX-XXXX.
+function newVerifyCode() {
+  const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  const bytes = crypto.randomBytes(8);
+  const chars = [...bytes].map(b => alphabet[b % alphabet.length]).join('');
+  return `${chars.slice(0, 4)}-${chars.slice(4)}`;
+}
+// Why a certificate can't be issued as it stands, or '' when it can.
+function deviceCertIssueProblem(cert) {
+  const unanswered = DEVICE_CERT_CHECKS.filter(([k]) => !DEVICE_CERT_RESULTS[(cert.checks || {})[k]?.result]).map(([, label]) => label);
+  if (unanswered.length) return `Record a result for every check (${unanswered.join(', ')}).`;
+  if (!DEVICE_CERT_OUTCOMES[cert.outcome]) return 'Choose the outcome.';
+  const failed = DEVICE_CERT_CHECKS.filter(([k]) => cert.checks[k].result === 'fail').map(([, label]) => label);
+  if (cert.outcome !== 'notCleared' && failed.length) return `A certificate can't clear a device with a failed check (${failed.join(', ')}). Fix it, or set the outcome to Not cleared.`;
+  if (cert.outcome === 'remediated' && !DEVICE_CERT_CHECKS.some(([k]) => cert.checks[k].result === 'fixed') && !String(cert.actionsTaken || '').trim()) return 'Say what was fixed: mark the checks that were fixed, or fill in the actions taken.';
+  return '';
 }
 
 function readReviews() {
@@ -3172,7 +3220,7 @@ const MAIN_SPA_ROUTES = new Set([
   'cart',
   'register',
   'about', 'repairs', 'humanly-ai', 'capability-statement',
-  'review', 'reviews', 'sponsorship',
+  'review', 'reviews', 'sponsorship', 'verify',
 ]);
 
 // ── Email ─────────────────────────────────────────────────────────────────────
@@ -5521,6 +5569,173 @@ function buildDeviceLoanPdf(loan, shop, sigImage) {
   });
 }
 
+// The printed certificate, normally one page. Drafts and voided certificates
+// carry a large watermark so they can never pass for an issued one.
+function buildDeviceCertPdf(cert, shop, sigImage) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: 'A4', margin: 50, bufferPages: true });
+    const chunks = [];
+    doc.on('data', c => chunks.push(c));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const RUST = '#b5451b';
+    const pageBottom = doc.page.height - 50;
+    const shopName = String(shop.tradingName || '').trim();
+    const us = shopName || 'the inspecting business';
+    const shopAddress = [shop.streetAddress, shop.suburb, shop.state, shop.postcode].filter(Boolean).join(' ');
+    const website = String(shop.siteUrl || '').trim().replace(/\/+$/, '');
+    const logoPath = path.join(__dirname, 'assets', 'logo.png');
+    const hasLogo = fs.existsSync(logoPath);
+    const fmtDate = (v) => new Date(v).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
+    const issued = cert.status === 'issued' || cert.status === 'void';
+    const inspected = fmtDate(cert.inspectedAt || cert.createdAt || Date.now());
+
+    doc.rect(0, 0, doc.page.width, 92).fill(RUST);
+    if (hasLogo) { try { doc.image(logoPath, 50, 20, { width: 62 }); } catch {} }
+    doc.fillColor('#fff').font('Helvetica-Bold').fontSize(17).text(shopName, hasLogo ? 124 : 50, 24, { width: 200, height: 22, ellipsis: true });
+    doc.font('Helvetica').fontSize(9).fillColor('#fde6d6')
+      .text(shopAddress, hasLogo ? 124 : 50, 48, { width: 220 })
+      .text([shop.phone, shop.email].filter(Boolean).join('  ·  '), hasLogo ? 124 : 50, 61, { width: 220 })
+      .text(shop.abn ? `ABN ${shop.abn}` : '', hasLogo ? 124 : 50, 74, { width: 220 });
+    // Smaller than the other documents' titles: it is longer, and must never run into the business name.
+    doc.font('Helvetica-Bold').fontSize(12.5).fillColor('#fff').text('DEVICE SECURITY CERTIFICATE', 330, 27, { width: 215, align: 'right' });
+    doc.font('Helvetica').fontSize(9).fillColor('#fde6d6')
+      .text(`Certificate #: ${cert.id || 'DRAFT'}`, 0, 50, { width: 545, align: 'right' })
+      .text(`Inspected: ${inspected}${issued && cert.issuedAt ? `   ·   Issued: ${fmtDate(cert.issuedAt)}` : ''}`, 0, 63, { width: 545, align: 'right' });
+
+    let y = 106;
+    // Outcome banner
+    const OUT = {
+      cleared:    ['CLEARED', '#2e7d32', '#e8f3e6', `No signs of compromise were found on this device at the time of inspection.`],
+      remediated: ['CLEARED AFTER REMEDIATION', '#2e7d32', '#e8f3e6', `Security issues were found and dealt with. No remaining signs of compromise were found at the time of inspection.`],
+      notCleared: ['NOT CLEARED', RUST, '#fbe9e4', `This device could not be cleared. It should not be used for banking or other sensitive services until the issues below are resolved.`],
+    }[cert.outcome] || ['OUTCOME NOT YET RECORDED', '#7a5d10', '#fff4d6', 'This inspection has not been completed.'];
+    doc.rect(50, y, 495, 44).fill(OUT[2]);
+    doc.rect(50, y, 4, 44).fill(OUT[1]);
+    doc.font('Helvetica-Bold').fontSize(13).fillColor(OUT[1]).text(OUT[0], 64, y + 8, { width: 470 });
+    doc.font('Helvetica').fontSize(8.8).fillColor('#333').text(OUT[3], 64, y + 26, { width: 470 });
+    y += 54;
+
+    const title = (label, x, yy) => { doc.font('Helvetica-Bold').fontSize(10.5).fillColor(RUST).text(label, x, yy); return yy + 14; };
+    const rowsAt = (rows, yy, x, labelW, valW) => {
+      for (const [label, val] of rows.filter(r => r[1])) {
+        doc.font('Helvetica').fontSize(9).fillColor('#888').text(label, x, yy, { width: labelW });
+        doc.font('Helvetica').fillColor('#222').text(val, x + labelW, yy, { width: valW });
+        yy = Math.max(doc.y, yy + 11);
+      }
+      return yy;
+    };
+    title('Customer', 50, y);
+    title('Device', 305, y);
+    const yL = rowsAt([
+      ['Name', cert.customerName || ''],
+      ['Phone', cert.customerPhone || ''],
+      ['Email', cert.customerEmail || ''],
+      ['Repair job', cert.repairJobId || ''],
+      ['Order', cert.orderId || ''],
+    ], y + 14, 50, 62, 180);
+    const yR = rowsAt([
+      ['Device', cert.device || ''],
+      ['Serial / IMEI', cert.deviceSerial || ''],
+      ['OS version', cert.osVersion || ''],
+      ['Security patch', cert.patchLevel || ''],
+      ['Factory reset', cert.factoryReset === 'yes' ? 'Yes, performed during inspection' : cert.factoryReset === 'no' ? 'No' : ''],
+    ], y + 14, 305, 78, 162);
+    y = Math.max(yL, yR) + 4;
+    if (cert.requestedBy || cert.requestRef) {
+      y = rowsAt([['Requested by', [cert.requestedBy, cert.requestRef && `reference ${cert.requestRef}`].filter(Boolean).join(', ')]], y, 50, 78, 417) + 4;
+    }
+
+    // Checks
+    y = title('Inspection Checks', 50, y + 2);
+    doc.rect(50, y, 495, 16).fill('#f6f3ee');
+    doc.font('Helvetica-Bold').fontSize(8).fillColor('#5c5348')
+      .text('CHECK', 58, y + 4.5, { width: 180 }).text('RESULT', 240, y + 4.5, { width: 55 }).text('NOTES', 300, y + 4.5, { width: 240 });
+    y += 19;
+    const resultColour = { pass: '#2e7d32', fixed: '#2e7d32', fail: RUST, na: '#888' };
+    for (const [key, label, desc] of DEVICE_CERT_CHECKS) {
+      const c = (cert.checks || {})[key] || {};
+      const note = String(c.note || '').trim() || desc;
+      doc.font('Helvetica').fontSize(8.3);
+      const h = Math.max(doc.heightOfString(label, { width: 178 }), doc.heightOfString(note, { width: 240 })) + 5;
+      if (y + h > pageBottom - 40) { doc.addPage(); y = 50; }
+      doc.font('Helvetica-Bold').fontSize(8.3).fillColor('#222').text(label, 58, y, { width: 178 });
+      doc.font('Helvetica-Bold').fillColor(resultColour[c.result] || '#888').text(DEVICE_CERT_RESULTS[c.result] || '-', 240, y, { width: 55 });
+      doc.font('Helvetica').fillColor(c.note ? '#222' : '#888').text(note, 300, y, { width: 240 });
+      y += h;
+      doc.moveTo(50, y - 2).lineTo(545, y - 2).strokeColor('#eee').lineWidth(0.5).stroke();
+    }
+    y += 4;
+
+    const para = (label, text) => {
+      if (!String(text || '').trim()) return;
+      doc.font('Helvetica').fontSize(8.8);
+      const h = doc.heightOfString(text, { width: 495 }) + 16;
+      if (y + h > pageBottom - 40) { doc.addPage(); y = 50; }
+      y = title(label, 50, y);
+      doc.font('Helvetica').fontSize(8.8).fillColor('#222').text(text, 50, y, { width: 495, align: 'justify' });
+      y = doc.y + 6;
+    };
+    para('Findings', cert.findings);
+    para('Actions Taken', cert.actionsTaken);
+
+    // Limitations, signatures and verification stay together.
+    const limits = `This certificate records the result of an inspection of the device described above, carried out by ${us} on ${inspected}. It reflects the device's condition at that time only and is not a guarantee of its future security. It does not cover accounts, passwords or services that may have been compromised through other devices or channels. The customer has been advised to change the passwords of important accounts, keep two-step verification turned on, install apps only from the official app store, and never give remote access to anyone who contacts them unexpectedly.`;
+    doc.font('Helvetica').fontSize(7.8);
+    const limH = doc.heightOfString(limits, { width: 479 }) + 12;
+    const VERIFY_H = 34, SIG_H = 66;
+    if (y + limH + SIG_H + VERIFY_H + 10 > pageBottom) { doc.addPage(); y = 50; }
+    doc.rect(50, y, 495, limH).fill('#f6f3ee');
+    doc.font('Helvetica').fontSize(7.8).fillColor('#5c5348').text(limits, 58, y + 6, { width: 479, align: 'justify' });
+    y += limH + 8;
+
+    const colW = 232, rightX = 50 + colW + 31, sigTop = y + 34;
+    const line = (label, x, yy, w) => {
+      doc.moveTo(x, yy).lineTo(x + w, yy).strokeColor('#999').lineWidth(0.8).stroke();
+      doc.font('Helvetica').fontSize(7.8).fillColor('#888').text(label, x, yy + 4, { width: w });
+    };
+    if (sigImage && issued) { try { drawSignatureOnLine(doc, sigImage, 50, sigTop); } catch {} }
+    line(`Inspected and certified by${shopName ? ` (for ${shopName})` : ''}`, 50, sigTop, colW);
+    line('Customer acknowledges receipt of this certificate and advice', rightX, sigTop, colW);
+    doc.font('Helvetica').fontSize(9).fillColor('#222')
+      .text(`${cert.signedBy || ''}${issued && cert.issuedAt ? `   ·   ${fmtDate(cert.issuedAt)}` : ''}`, 50, sigTop + 16, { width: colW });
+    doc.font('Helvetica').fontSize(9).fillColor('#222').text(cert.customerName || '', rightX, sigTop + 16, { width: colW });
+    y = sigTop + 32;
+
+    // Verification
+    doc.rect(50, y, 495, VERIFY_H - 6).strokeColor('#ccc').lineWidth(0.8).stroke();
+    const verifyText = issued && cert.verifyCode
+      ? `Verify this certificate${website ? ` at ${website}/verify` : ` with ${us}`}   ·   Certificate ${cert.id}   ·   Code ${cert.verifyCode}`
+      : 'Draft: not issued, and not valid as a certificate.';
+    doc.font('Helvetica-Bold').fontSize(8.6).fillColor('#222').text(verifyText, 58, y + 5, { width: 479, align: 'center' });
+    const contact = [shop.phone, shop.email].filter(Boolean).join(' or ');
+    if (contact) doc.font('Helvetica').fontSize(7.6).fillColor('#666').text(`Questions about this certificate: contact ${us} on ${contact}.`, 58, y + 16, { width: 479, align: 'center' });
+
+    // Watermark and footer on every page
+    const range = doc.bufferedPageRange();
+    for (let i = 0; i < range.count; i++) {
+      doc.switchToPage(range.start + i);
+      const keepBottom = doc.page.margins.bottom;
+      doc.page.margins.bottom = 0;
+      if (cert.status !== 'issued') {
+        doc.save();
+        doc.rotate(-35, { origin: [297, 420] });
+        doc.font('Helvetica-Bold').fontSize(110).fillColor(cert.status === 'void' ? RUST : '#999').opacity(0.18)
+          .text(cert.status === 'void' ? 'VOID' : 'DRAFT', 0, 360, { width: 595, align: 'center', lineBreak: false });
+        doc.restore();
+        doc.opacity(1);
+      }
+      doc.font('Helvetica').fontSize(7.5).fillColor('#999')
+        .text(`${shopName ? `${shopName}  ·  ` : ''}Device Security Certificate ${cert.id || 'DRAFT'}`, 50, pageBottom + 16, { width: 300, lineBreak: false })
+        .text(`Page ${i + 1} of ${range.count}`, 245, pageBottom + 16, { width: 300, align: 'right', lineBreak: false });
+      doc.page.margins.bottom = keepBottom;
+    }
+    doc.flushPages();
+    doc.end();
+  });
+}
+
 function buildBASPdf(data, shop) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 50 });
@@ -6663,6 +6878,28 @@ const mainServer = http.createServer(async (req, res) => {
       out.push({ quote: r.body, name: (r.customerName || '').split(' ')[0] || 'Customer', loc: r.productName || 'Verified order', rating: r.rating });
     }
     return json(res, 200, { testimonials: out.slice(0, 12) });
+  }
+
+  // Lets a bank confirm a device security certificate is genuine and current.
+  // Needs both the certificate number and its code, and returns no customer
+  // details: just what the certificate says about the device.
+  if (req.method === 'GET' && url.pathname === '/api/certificate/verify') {
+    if (publicRateLimited(getIp(req), 'certificate/verify')) return json(res, 429, { error: 'too_many_requests', message: 'Too many attempts, please try again later.' });
+    const id = String(url.searchParams.get('id') || '').trim().toUpperCase();
+    const code = String(url.searchParams.get('code') || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const cert = readDeviceCerts().find(c => c.id === id && c.status !== 'draft');
+    const stored = cert ? String(cert.verifyCode || '').replace(/[^A-Z0-9]/g, '') : '';
+    const match = cert && stored.length === code.length && crypto.timingSafeEqual(Buffer.from(stored), Buffer.from(code));
+    if (!match) return json(res, 200, { found: false });
+    const serial = String(cert.deviceSerial || '').replace(/\s/g, '');
+    return json(res, 200, {
+      found: true, id: cert.id, status: cert.status,
+      outcome: DEVICE_CERT_OUTCOMES[cert.outcome] || '',
+      device: cert.device, serialEnding: serial ? serial.slice(-4) : '',
+      inspectedAt: cert.inspectedAt, issuedAt: cert.issuedAt,
+      voidedAt: cert.status === 'void' ? cert.voidedAt : null,
+      issuedBy: shopName(),
+    });
   }
 
   if (req.method === 'GET' && url.pathname === '/api/sponsorship') {
@@ -8809,6 +9046,15 @@ const adminServer = http.createServer(async (req, res) => {
     const session = requireRole(req, res, 'staff'); if (!session) return;
     return json(res, 200, { items: readSafetyNotices() });
   }
+  if (req.method === 'GET' && url.pathname === '/api/admin/device-certificates') {
+    const session = requireRole(req, res, 'staff'); if (!session) return;
+    return json(res, 200, {
+      items: readDeviceCerts(),
+      checks: DEVICE_CERT_CHECKS.map(([key, label, desc]) => ({ key, label, desc })),
+      results: DEVICE_CERT_RESULTS, outcomes: DEVICE_CERT_OUTCOMES,
+      signatureOnFile: !!staffSignaturePath(session.staffId),
+    });
+  }
   if (req.method === 'GET' && url.pathname === '/api/admin/device-loans') {
     const session = requireRole(req, res, 'staff'); if (!session) return;
     const data = readDeviceLoans();
@@ -10794,6 +11040,115 @@ const adminServer = http.createServer(async (req, res) => {
     res.writeHead(200, {
       'Content-Type': 'application/pdf',
       'Content-Disposition': `inline; filename="dangerous-device-notice-${safeRef}.pdf"`,
+      'Content-Length': buffer.length,
+      'X-Content-Type-Options': 'nosniff',
+    });
+    res.end(buffer);
+    return;
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/device-certificates/save') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const missing = [!String(body.customerName || '').trim() && 'customer name', !String(body.device || '').trim() && 'the device'].filter(Boolean);
+    if (missing.length) return json(res, 422, { error: 'missing_fields', message: `Fill in ${missing.join(' and ')}.` });
+    const result = await withFileLock(DEVICE_CERTS_LOCK, async () => {
+      const certs = readDeviceCerts();
+      const existing = body.id ? certs.find(c => c.id === body.id) : null;
+      if (existing && existing.status !== 'draft') return { error: 'An issued certificate can\'t be edited. Void it and issue a new one if something needs to change.' };
+      const str = (v, max = 500) => String(v ?? '').trim().slice(0, max);
+      const checks = {};
+      for (const [k] of DEVICE_CERT_CHECKS) {
+        const c = (body.checks || {})[k] || {};
+        checks[k] = { result: DEVICE_CERT_RESULTS[c.result] ? c.result : '', note: str(c.note, 300) };
+      }
+      const cert = {
+        ...(existing || {}),
+        customerName: str(body.customerName, 120), customerPhone: str(body.customerPhone, 40), customerEmail: str(body.customerEmail, 200),
+        repairJobId: str(body.repairJobId, 40), orderId: str(body.orderId, 40),
+        device: str(body.device, 160), deviceSerial: str(body.deviceSerial, 120), osVersion: str(body.osVersion, 80), patchLevel: str(body.patchLevel, 80),
+        factoryReset: ['yes', 'no'].includes(body.factoryReset) ? body.factoryReset : '',
+        requestedBy: str(body.requestedBy, 120), requestRef: str(body.requestRef, 80),
+        inspectedAt: str(body.inspectedAt, 10) || new Date().toISOString().slice(0, 10),
+        checks, findings: str(body.findings, 3000), actionsTaken: str(body.actionsTaken, 3000), notes: str(body.notes, 3000),
+        outcome: DEVICE_CERT_OUTCOMES[body.outcome] ? body.outcome : '',
+        status: 'draft',
+        updatedAt: new Date().toISOString(),
+      };
+      if (!existing) { cert.id = nextDeviceCertId(certs); cert.createdAt = cert.updatedAt; cert.createdBy = session.username; certs.push(cert); }
+      else certs[certs.indexOf(existing)] = cert;
+      writeDeviceCerts(certs);
+      return { cert };
+    });
+    if (result.error) return json(res, 409, { error: 'locked', message: result.error });
+    return json(res, 200, { ok: true, item: result.cert });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/device-certificates/issue') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    if (!staffSignaturePath(session.staffId)) return json(res, 422, { error: 'signature_required', message: 'You have no saved signature. Add one in Settings (your staff profile) before issuing a certificate.' });
+    const result = await withFileLock(DEVICE_CERTS_LOCK, async () => {
+      const certs = readDeviceCerts();
+      const cert = certs.find(c => c.id === body.id);
+      if (!cert) return { status: 404, error: 'Certificate not found. Save it first.' };
+      if (cert.status !== 'draft') return { status: 409, error: 'This certificate has already been issued.' };
+      const problem = deviceCertIssueProblem(cert);
+      if (problem) return { status: 422, error: problem };
+      // Signed by whoever issues it, from the session, never the request.
+      cert.status = 'issued';
+      cert.issuedAt = new Date().toISOString();
+      cert.signedBy = session.username;
+      cert.signedByStaffId = session.staffId || null;
+      cert.verifyCode = newVerifyCode();
+      writeDeviceCerts(certs);
+      return { cert };
+    });
+    if (result.error) return json(res, result.status, { error: 'cannot_issue', message: result.error });
+    auditAdminAction({ req, session, action: 'device-certificate.issue', result: { status: 'ok', changed: { id: result.cert.id, outcome: result.cert.outcome } } });
+    return json(res, 200, { ok: true, item: result.cert });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/device-certificates/void') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const reason = String(body.reason || '').trim().slice(0, 500);
+    if (!reason) return json(res, 422, { error: 'reason_required', message: 'Give a reason for voiding the certificate.' });
+    const result = await withFileLock(DEVICE_CERTS_LOCK, async () => {
+      const certs = readDeviceCerts();
+      const cert = certs.find(c => c.id === body.id);
+      if (!cert || cert.status !== 'issued') return { error: 'Only an issued certificate can be voided.' };
+      Object.assign(cert, { status: 'void', voidedAt: new Date().toISOString(), voidedBy: session.username, voidReason: reason });
+      writeDeviceCerts(certs);
+      return { cert };
+    });
+    if (result.error) return json(res, 409, { error: 'cannot_void', message: result.error });
+    auditAdminAction({ req, session, action: 'device-certificate.void', result: { status: 'ok', changed: { id: result.cert.id, reason } } });
+    return json(res, 200, { ok: true, item: result.cert });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/device-certificates/delete') {
+    const session = requireRole(req, res, 'manager'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const result = await withFileLock(DEVICE_CERTS_LOCK, async () => {
+      const certs = readDeviceCerts();
+      const cert = certs.find(c => c.id === body.id);
+      if (cert && cert.status !== 'draft') return { error: 'Issued certificates are kept as a record. Void it instead.' };
+      writeDeviceCerts(certs.filter(c => c.id !== body.id));
+      return {};
+    });
+    if (result.error) return json(res, 409, { error: 'cannot_delete', message: result.error });
+    return json(res, 200, { ok: true });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/device-certificates/pdf') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    // A saved certificate prints exactly as stored; an unsaved form prints as a draft.
+    const saved = body.id ? readDeviceCerts().find(c => c.id === body.id) : null;
+    const cert = saved || { ...body, status: 'draft' };
+    const { shop } = readSettings();
+    const sig = cert.status !== 'draft' ? await signatureForPdf(staffSignaturePath(cert.signedByStaffId)) : null;
+    const buffer = await buildDeviceCertPdf(cert, shop, sig);
+    const safeRef = String(cert.id || 'draft').replace(/[^a-zA-Z0-9_-]+/g, '-');
+    res.writeHead(200, {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="device-security-certificate-${safeRef}.pdf"`,
       'Content-Length': buffer.length,
       'X-Content-Type-Options': 'nosniff',
     });

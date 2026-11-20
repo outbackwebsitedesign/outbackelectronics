@@ -2216,6 +2216,85 @@ function SponsorshipPage({ go }) {
   );
 }
 
+// ============================================================
+// VERIFY A DEVICE SECURITY CERTIFICATE
+// ============================================================
+// For a bank (or anyone handed a certificate) to confirm it is genuine and
+// still current. Shows only what the certificate says about the device, never
+// the customer's details.
+function VerifyCertificatePage() {
+  const shop = useShop();
+  const params = new URLSearchParams(typeof location !== 'undefined' ? location.search : '');
+  const [id, setId] = useState(params.get('id') || '');
+  const [code, setCode] = useState(params.get('code') || '');
+  const [state, setState] = useState(null); // null | 'checking' | result object | { error }
+  const fmt = d => d ? new Date(d).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+
+  const check = async (e) => {
+    if (e) e.preventDefault();
+    if (!id.trim() || !code.trim()) return;
+    setState('checking');
+    try {
+      const r = await fetch(`/api/certificate/verify?id=${encodeURIComponent(id.trim())}&code=${encodeURIComponent(code.trim())}`);
+      const d = await r.json().catch(() => ({}));
+      setState(r.ok ? d : { error: d.message || 'Could not check the certificate right now.' });
+    } catch { setState({ error: 'Could not check the certificate right now.' }); }
+  };
+  useEffect(() => { if (id && code) check(); }, []);
+
+  const r = state && typeof state === 'object' ? state : null;
+  return (
+    <>
+      <PageHead crumbs={['Outback', 'Verify a certificate']} title="Verify a device security certificate"
+        lead="Enter the certificate number and verification code printed at the bottom of the certificate." />
+      <section className="container" style={{ paddingTop: 32, paddingBottom: 64 }}>
+        <div className="grid-2" style={{ gap: 32, alignItems: 'start' }}>
+          <form className="card" style={{ padding: 24 }} onSubmit={check}>
+            <label className="field"><span className="label">Certificate number</span><input className="input" value={id} onChange={e => setId(e.target.value)} placeholder="e.g. DSC-0001" required /></label>
+            <label className="field"><span className="label">Verification code</span><input className="input" value={code} onChange={e => setCode(e.target.value)} placeholder="e.g. ABCD-EFGH" required autoComplete="off" /></label>
+            <button className="btn btn-rust" style={{ width: '100%', justifyContent: 'center' }} type="submit" disabled={state === 'checking'}>{state === 'checking' ? 'Checking…' : 'Verify →'}</button>
+          </form>
+          <div aria-live="polite">
+            {r && r.error && <div className="card-paper" style={{ padding: 24 }}>{r.error}</div>}
+            {r && r.found === false && (
+              <div className="card-paper" style={{ padding: 24, borderLeft: '4px solid var(--rust)' }}>
+                <div className="mono" style={{ fontSize: 12, color: 'var(--rust)' }}>NO MATCH</div>
+                <p style={{ marginTop: 8, lineHeight: 1.7 }}>No issued certificate matches that number and code. Check both were entered exactly as printed{shop.phone || shop.email ? <>, or contact us on {[shop.phone, shop.email].filter(Boolean).join(' or ')}</> : ''}.</p>
+              </div>
+            )}
+            {r && r.found && (
+              <div className="card-paper" style={{ padding: 24, borderLeft: `4px solid ${r.status === 'void' ? 'var(--rust)' : 'var(--eucalyptus)'}` }}>
+                <div className="mono" style={{ fontSize: 12, color: r.status === 'void' ? 'var(--rust)' : 'var(--eucalyptus)' }}>
+                  {r.status === 'void' ? `VOID · WITHDRAWN ${fmt(r.voidedAt).toUpperCase()}` : '✓ GENUINE CERTIFICATE'}
+                </div>
+                <h2 className="serif" style={{ fontSize: 30, marginTop: 8 }}>{r.outcome}</h2>
+                <table style={{ width: '100%', marginTop: 14, fontSize: 14, borderCollapse: 'collapse' }}>
+                  <tbody>
+                    {[
+                      ['Certificate', r.id],
+                      ['Device', r.device],
+                      ['Serial / IMEI ending', r.serialEnding && `…${r.serialEnding}`],
+                      ['Inspected', fmt(r.inspectedAt)],
+                      ['Issued', fmt(r.issuedAt)],
+                      ['Issued by', r.issuedBy],
+                    ].filter(([, v]) => v).map(([k, v]) => (
+                      <tr key={k} style={{ borderTop: '1px solid var(--line)' }}>
+                        <td style={{ padding: '8px 0', color: 'var(--ink-2)', width: '45%' }}>{k}</td>
+                        <td style={{ padding: '8px 0' }}>{v}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {r.status === 'void' && <p style={{ marginTop: 12, fontSize: 13, color: 'var(--ink-2)' }}>This certificate has been withdrawn and should not be relied on.</p>}
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
+
 window.OE_PAGES = Object.assign(window.OE_PAGES || {}, {
   quote: QuotePage,
   book: BookingPage,
@@ -2230,6 +2309,7 @@ window.OE_PAGES = Object.assign(window.OE_PAGES || {}, {
   'capability-statement': CapabilityStatementPage,
   'humanly-ai': HumanlyAIPage,
   sponsorship: SponsorshipPage,
+  verify: VerifyCertificatePage,
   repairs: null, // resolved dynamically - alias to services
 });
 window.dispatchEvent(new Event('oe:pages-updated'));

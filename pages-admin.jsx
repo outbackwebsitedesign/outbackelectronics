@@ -472,6 +472,7 @@ const NAV_ICONS = {
   'safety-notices': <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
   'device-loans': <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="6" y="2" width="12" height="20" rx="2"/><line x1="11" y1="18" x2="13" y2="18"/><path d="M2 9l2 2 2-2M4 11V7a3 3 0 013-3"/></svg>,
   'hdd-reports': <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="2" y="7" width="20" height="10" rx="2"/><line x1="6" y1="12" x2="6.01" y2="12"/><line x1="10" y1="12" x2="18" y2="12"/><path d="M6 17v3M18 17v3"/></svg>,
+  'security-certificates': <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 2l8 3v6c0 5-3.4 9.4-8 11-4.6-1.6-8-6-8-11V5z"/><polyline points="9 12 11 14 15 10"/></svg>,
   messages:     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>,
   quotes:       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>,
   'pc-builder': <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="6" y="2" width="12" height="20" rx="1"/><line x1="9" y1="6" x2="15" y2="6"/><line x1="9" y1="9" x2="15" y2="9"/><circle cx="12" cy="16" r="2.5"/></svg>,
@@ -509,6 +510,7 @@ const ADMIN_SECTIONS = [
     { id:'payment-plans', label:'Payment Plans', minRole:'technician' },
     { id:'repairs',   label:'Repair Jobs',   minRole:'staff', excludeRoles:['seller'] },
     { id:'hdd-reports', label:'HDD Condition Reports', minRole:'staff', excludeRoles:['seller'] },
+    { id:'security-certificates', label:'Security Certificates', minRole:'staff', excludeRoles:['seller'] },
     { id:'safety-notices', label:'Dangerous Device Notices', minRole:'staff', excludeRoles:['seller'] },
     { id:'device-loans', label:'Device Loans', minRole:'staff', excludeRoles:['seller'] },
     { id:'quotes',    label:'Quotes',  minRole:'staff', excludeRoles:['seller'] },
@@ -13809,6 +13811,322 @@ function AdminAuditLog() {
 // back to the customer, usually because they declined the quoted repair. Clause 7
 // of the Repair Intake Terms reserves the right to require this before release.
 // ============================================================
+// DEVICE SECURITY CERTIFICATES
+// ============================================================
+// Inspection certificates for devices a bank (or anyone) wants cleared after a
+// suspected compromise. Drafts are editable; issuing signs with the issuer's
+// saved signature, adds a verification code the bank can check at /verify, and
+// locks the certificate. Issued certificates can only be voided.
+const CERT_STATUS_TAG = { draft: ['DRAFT', 'tag-outline'], issued: ['ISSUED', 'tag-euc'], void: ['VOID', 'tag-rust'] };
+const CERT_OUTCOME_TAG = { cleared: 'tag-euc', remediated: 'tag-ochre', notCleared: 'tag-rust' };
+
+function AdminDeviceCertificates({ sessionInfo = {} }) {
+  const [certs, setCerts] = useState([]);
+  const [meta, setMeta] = useState({ checks: [], results: {}, outcomes: {} });
+  const [signatureOnFile, setSignatureOnFile] = useState(true);
+  const [repairJobs, setRepairJobs] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [tab, setTab] = useState('draft');
+  const [search, setSearch] = useState('');
+  const [edit, setEdit] = useState(null);
+  const [linkType, setLinkType] = useState('repair');
+  const [busy, setBusy] = useState(false);
+  const [voidReason, setVoidReason] = useState('');
+  const snapRef = React.useRef('');
+  const isManager = (ROLE_LEVELS[sessionInfo.role] ?? 0) >= ROLE_LEVELS.manager;
+
+  useEffect(() => {
+    fetch('/api/admin/device-certificates', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => { setCerts(d.items || []); setMeta({ checks: d.checks || [], results: d.results || {}, outcomes: d.outcomes || {} }); setSignatureOnFile(!!d.signatureOnFile); })
+      .catch(() => adminToast('Could not load certificates.'));
+    fetch('/api/admin/repairs', { credentials: 'include' }).then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setRepairJobs((d.columns || []).flatMap(c => c.cards || []))).catch(() => {});
+    fetch('/api/admin/orders', { credentials: 'include' }).then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setOrders(d.items || [])).catch(() => {});
+  }, []);
+
+  const counts = { draft: 0, issued: 0, void: 0 };
+  certs.forEach(c => { counts[c.status] = (counts[c.status] || 0) + 1; });
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return certs.filter(c => tab === 'all' || c.status === tab)
+      .filter(c => !q || [c.id, c.customerName, c.device, c.deviceSerial, c.requestedBy, c.requestRef].some(v => String(v || '').toLowerCase().includes(q)));
+  }, [certs, tab, search]);
+
+  const f = edit || {};
+  const set = (k, v) => setEdit(e => ({ ...e, [k]: v }));
+  const setCheck = (k, field, v) => setEdit(e => ({ ...e, checks: { ...(e.checks || {}), [k]: { ...((e.checks || {})[k] || {}), [field]: v } } }));
+  const open = (c) => {
+    const form = c ? JSON.parse(JSON.stringify(c)) : {
+      customerName: '', customerPhone: '', customerEmail: '', repairJobId: '', orderId: '',
+      device: '', deviceSerial: '', osVersion: '', patchLevel: '', factoryReset: '',
+      requestedBy: '', requestRef: '', inspectedAt: new Date().toISOString().slice(0, 10),
+      checks: {}, findings: '', actionsTaken: '', outcome: '', notes: '', status: 'draft',
+    };
+    snapRef.current = JSON.stringify(form);
+    setLinkType(c ? (c.orderId ? 'order' : c.repairJobId ? 'repair' : 'none') : 'repair');
+    setVoidReason('');
+    setEdit(form);
+  };
+  const dirty = !!edit && f.status === 'draft' && JSON.stringify(edit) !== snapRef.current;
+  const applyJob = (jobId) => {
+    const j = repairJobs.find(x => x.id === jobId);
+    setEdit(e => ({ ...e, repairJobId: jobId, orderId: '', ...(j ? { customerName: j.customer || j.name || e.customerName, customerPhone: j.phone || e.customerPhone, customerEmail: j.email || e.customerEmail, device: e.device || j.device || '' } : {}) }));
+  };
+  const applyOrder = (orderId) => {
+    const o = orders.find(x => x.id === orderId);
+    // An order's items are what was billed, not the device, so only the customer fills in.
+    setEdit(e => ({ ...e, orderId, repairJobId: '', ...(o ? { customerName: o.cust || e.customerName, customerPhone: o.phone || e.customerPhone, customerEmail: o.email || e.customerEmail } : {}) }));
+  };
+
+  // Mirrors the server's rule, so the reason is shown before trying to issue.
+  const issueProblem = (() => {
+    if (!f.customerName || !f.device) return 'Fill in the customer and the device.';
+    const unanswered = meta.checks.filter(c => !meta.results[(f.checks || {})[c.key]?.result]);
+    if (unanswered.length) return `Record a result for every check (${unanswered.length} left).`;
+    if (!meta.outcomes[f.outcome]) return 'Choose the outcome.';
+    const failed = meta.checks.filter(c => f.checks[c.key].result === 'fail');
+    if (f.outcome !== 'notCleared' && failed.length) return `A failed check (${failed.map(c => c.label).join(', ')}) means the outcome must be Not cleared.`;
+    if (f.outcome === 'remediated' && !meta.checks.some(c => f.checks[c.key].result === 'fixed') && !String(f.actionsTaken || '').trim()) return 'Say what was fixed.';
+    if (!signatureOnFile) return 'Add your saved signature in Settings first.';
+    return '';
+  })();
+
+  const post = async (path, body) => {
+    const r = await fetch(path, { method: 'POST', headers: postHeaders(), credentials: 'include', body: JSON.stringify(body) }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : {};
+    if (!r || !r.ok) { adminToast(d.message || 'Something went wrong, please try again.'); return null; }
+    return d;
+  };
+  const upsert = item => setCerts(cs => cs.some(x => x.id === item.id) ? cs.map(x => x.id === item.id ? item : x) : [...cs, item]);
+  const saveDraft = async () => {
+    setBusy(true);
+    const d = await post('/api/admin/device-certificates/save', f);
+    setBusy(false);
+    if (!d) return null;
+    upsert(d.item); snapRef.current = JSON.stringify(d.item); setEdit(JSON.parse(JSON.stringify(d.item)));
+    return d.item;
+  };
+  const printCert = async (payload) => {
+    const r = await fetch('/api/admin/device-certificates/pdf', { method: 'POST', headers: postHeaders(), credentials: 'include', body: JSON.stringify(payload) }).catch(() => null);
+    if (!r || !r.ok) { adminToast('Failed to generate the certificate.'); return; }
+    window.open(URL.createObjectURL(await r.blob()), '_blank');
+  };
+  const issue = async () => {
+    if (!(await adminConfirm(`Issue this certificate as "${meta.outcomes[f.outcome]}"? It will be signed with your saved signature and can't be edited afterwards, only voided.`, { title: 'Issue certificate', confirmLabel: 'Issue & print' }))) return;
+    const saved = await saveDraft();
+    if (!saved) return;
+    setBusy(true);
+    const d = await post('/api/admin/device-certificates/issue', { id: saved.id });
+    setBusy(false);
+    if (!d) return;
+    upsert(d.item); snapRef.current = JSON.stringify(d.item); setEdit(JSON.parse(JSON.stringify(d.item)));
+    adminToast(`Issued ${d.item.id}.`, 'success');
+    printCert({ id: d.item.id });
+  };
+  const voidCert = async () => {
+    if (!voidReason.trim()) { adminToast('Give a reason for voiding it.'); return; }
+    if (!(await adminConfirm(`Void ${f.id}? Anyone verifying it will see it has been withdrawn.`, { title: 'Void certificate', confirmLabel: 'Void', danger: true }))) return;
+    const d = await post('/api/admin/device-certificates/void', { id: f.id, reason: voidReason });
+    if (!d) return;
+    upsert(d.item); snapRef.current = JSON.stringify(d.item); setEdit(JSON.parse(JSON.stringify(d.item)));
+  };
+  const deleteDraft = async () => {
+    if (!(await adminConfirm(`Delete draft ${f.id}? This cannot be undone.`, { title: 'Delete draft', confirmLabel: 'Delete', danger: true }))) return;
+    const d = await post('/api/admin/device-certificates/delete', { id: f.id });
+    if (!d) return;
+    setCerts(cs => cs.filter(x => x.id !== f.id)); setEdit(null);
+  };
+
+  const readOnly = f.status && f.status !== 'draft';
+  const tabs = [['draft', `Drafts (${counts.draft})`], ['issued', `Issued (${counts.issued})`], ['void', `Void (${counts.void})`], ['all', `All (${certs.length})`]];
+  const fmt = d => d ? new Date(d).toLocaleDateString('en-AU') : '-';
+
+  return (
+    <div style={{ padding: 32, display: 'grid', gap: 20 }}>
+      <div style={{ padding: 16, background: 'var(--paper)', border: '1px solid var(--line)', borderLeft: '3px solid var(--rust)', fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
+        For a device a bank (or the customer) needs checked, for example after a bank suspends a banking app over suspected malware or remote access.
+        Record each check, then issue: the certificate is signed with your saved signature, locked, and carries a code the bank can check on the website's Verify page.
+        Banks don't publish one standard, so confirm with the customer's bank what it needs before you start.
+      </div>
+      {!signatureOnFile && (
+        <div role="alert" style={{ padding: '12px 14px', border: '1px solid var(--rust)', background: 'var(--bg-elev)', fontSize: 13 }}>
+          <strong style={{ color: 'var(--rust)' }}>No saved signature.</strong> Certificates are signed with your saved signature, so you can't issue one until you add it in Settings.
+        </div>
+      )}
+      <div className="row-flex" style={{ justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 10 }}>
+        <div className="tabs" style={{ margin: 0 }}>
+          {tabs.map(([k, label]) => (
+            <div key={k} role="button" tabIndex={0} className={`tab ${tab === k ? 'active' : ''}`} style={{ cursor: 'pointer' }}
+              onClick={() => setTab(k)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setTab(k); } }}>{label}</div>
+          ))}
+        </div>
+        <div className="row-flex" style={{ gap: 8 }}>
+          <input className="input" style={{ maxWidth: 240 }} placeholder="Search certificates…" value={search} onChange={e => setSearch(e.target.value)} />
+          <button className="btn btn-rust btn-sm" onClick={() => open(null)}>+ New certificate</button>
+        </div>
+      </div>
+
+      <Table emptyMessage={certs.length === 0 ? 'No certificates yet.' : 'No certificates here.'}
+        defaultSort={{ key: 'date', dir: 'desc' }}
+        columns={[
+          { key: 'id', label: '#', w: '100px', sort: true, render: c => <span className="mono" style={{ fontSize: 11, color: 'var(--rust)' }}>{c.id}</span> },
+          { key: 'customerName', label: 'Customer', w: '1.3fr', sort: true, render: c => <span style={{ fontWeight: 600 }}>{c.customerName}</span> },
+          { key: 'device', label: 'Device', w: '1.5fr', sort: true },
+          { key: 'requestedBy', label: 'Requested by', w: '1.2fr', render: c => <span style={{ color: 'var(--ink-2)' }}>{c.requestedBy || '-'}</span> },
+          { key: 'outcome', label: 'Outcome', w: '190px', render: c => c.outcome ? <span className={`tag ${CERT_OUTCOME_TAG[c.outcome] || 'tag-outline'}`}>{(meta.outcomes[c.outcome] || c.outcome).toUpperCase()}</span> : <span style={{ color: 'var(--ink-3)' }}>-</span> },
+          { key: 'status', label: 'Status', w: '90px', sort: true, render: c => { const [t, cls] = CERT_STATUS_TAG[c.status] || ['?', 'tag-outline']; return <span className={`tag ${cls}`}>{t}</span>; } },
+          { key: 'date', label: 'Date', w: '100px', sort: c => c.issuedAt || c.createdAt || '', render: c => <span className="mono" style={{ fontSize: 11 }}>{fmt(c.issuedAt || c.createdAt)}</span> },
+          { key: 'print', label: '', w: '80px', render: c => <button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); printCert({ id: c.id }); }}>Print</button> },
+        ]}
+        rows={visible} onRowClick={c => open(c)} />
+
+      {edit && (
+        <Drawer open={true} onClose={() => setEdit(null)} dirty={dirty} title={f.id ? `Certificate ${f.id}` : 'New security certificate'}
+          footer={<div className="row-flex" style={{ justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+            {f.id && f.status === 'draft' && isManager ? <button className="btn btn-ghost btn-sm" style={{ color: 'var(--rust)' }} onClick={deleteDraft}>Delete draft</button> : <span />}
+            <div className="row-flex" style={{ gap: 8 }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setEdit(null)}>Close</button>
+              {readOnly
+                ? <button className="btn btn-sm" onClick={() => printCert({ id: f.id })}>Print</button>
+                : (<>
+                  <button className="btn btn-ghost btn-sm" disabled={busy} onClick={saveDraft}>Save draft</button>
+                  <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => printCert(f.id && !dirty ? { id: f.id } : f)}>Preview</button>
+                  <button className="btn btn-sm" disabled={busy || !!issueProblem} title={issueProblem} onClick={issue}>Issue & print</button>
+                </>)}
+            </div>
+          </div>}>
+          {readOnly ? (
+            <div style={{ display: 'grid', gap: 14, fontSize: 13.5, lineHeight: 1.6 }}>
+              <div className="card-paper" style={{ padding: 16 }}>
+                <div className="row-flex" style={{ gap: 8, marginBottom: 8 }}>
+                  <span className={`tag ${CERT_STATUS_TAG[f.status][1]}`}>{CERT_STATUS_TAG[f.status][0]}</span>
+                  <span className={`tag ${CERT_OUTCOME_TAG[f.outcome] || 'tag-outline'}`}>{(meta.outcomes[f.outcome] || '').toUpperCase()}</span>
+                </div>
+                <div><strong>{f.customerName}</strong>{f.customerPhone ? ` · ${f.customerPhone}` : ''}</div>
+                <div>{f.device}{f.deviceSerial ? ` · ${f.deviceSerial}` : ''}</div>
+                {f.requestedBy && <div>Requested by {f.requestedBy}{f.requestRef ? `, ref ${f.requestRef}` : ''}</div>}
+                <div style={{ marginTop: 8 }}>Issued {fmt(f.issuedAt)} by {f.signedBy}</div>
+                <div className="mono" style={{ marginTop: 8, fontSize: 13 }}>Verification code: <strong>{f.verifyCode}</strong></div>
+                {f.status === 'void' && <div style={{ marginTop: 8, color: 'var(--rust)' }}>Voided {fmt(f.voidedAt)} by {f.voidedBy}: {f.voidReason}</div>}
+              </div>
+              <div className="eyebrow">Checks</div>
+              {meta.checks.map(c => (
+                <div key={c.key} style={{ display: 'grid', gridTemplateColumns: '1fr 70px', gap: 8, borderBottom: '1px solid var(--line)', paddingBottom: 6 }}>
+                  <div>{c.label}{f.checks?.[c.key]?.note && <div style={{ fontSize: 12, color: 'var(--ink-2)' }}>{f.checks[c.key].note}</div>}</div>
+                  <strong>{meta.results[f.checks?.[c.key]?.result] || '-'}</strong>
+                </div>
+              ))}
+              {f.findings && <><div className="eyebrow">Findings</div><div style={{ whiteSpace: 'pre-wrap' }}>{f.findings}</div></>}
+              {f.actionsTaken && <><div className="eyebrow">Actions taken</div><div style={{ whiteSpace: 'pre-wrap' }}>{f.actionsTaken}</div></>}
+              {f.status === 'issued' && isManager && (
+                <div style={{ marginTop: 10, borderTop: '1px solid var(--line)', paddingTop: 12 }}>
+                  <label className="field"><span className="label">Void this certificate (reason)</span>
+                    <input className="input" value={voidReason} onChange={e => setVoidReason(e.target.value)} placeholder="e.g. Malware found again on 3 Dec, device re-inspected" /></label>
+                  <button className="btn btn-ghost btn-sm" style={{ color: 'var(--rust)' }} onClick={voidCert}>Void certificate</button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gap: 14 }}>
+              {issueProblem && <div className="notice" style={{ fontSize: 12.5 }}>Can't issue yet: {issueProblem}</div>}
+              <div className="grid-2" style={{ gap: 12 }}>
+                <label className="field"><span className="label">Link to</span>
+                  <select className="select" value={linkType} onChange={e => { setLinkType(e.target.value); setEdit(x => ({ ...x, repairJobId: '', orderId: '' })); }}>
+                    <option value="repair">Repair job</option><option value="order">Order</option><option value="none">Nothing</option>
+                  </select>
+                </label>
+                {linkType === 'repair' && (
+                  <label className="field"><span className="label">Repair job (fills the customer in)</span>
+                    <select className="select" value={f.repairJobId || ''} onChange={e => applyJob(e.target.value)}>
+                      <option value="">Select a job…</option>
+                      {repairJobs.map(j => <option key={j.id} value={j.id}>{j.id}{j.customer ? ` - ${j.customer}` : ''}</option>)}
+                    </select>
+                  </label>
+                )}
+                {linkType === 'order' && (
+                  <label className="field"><span className="label">Order (fills the customer in)</span>
+                    <select className="select" value={f.orderId || ''} onChange={e => applyOrder(e.target.value)}>
+                      <option value="">Select an order…</option>
+                      {orders.map(o => <option key={o.id} value={o.id}>{o.id}{o.cust ? ` - ${o.cust}` : ''}</option>)}
+                    </select>
+                  </label>
+                )}
+              </div>
+              <div className="grid-2" style={{ gap: 12 }}>
+                <label className="field"><span className="label">Customer name<ReqMark /></span><input className="input" value={f.customerName} onChange={e => set('customerName', e.target.value)} /></label>
+                <label className="field"><span className="label">Phone</span><input className="input" value={f.customerPhone} onChange={e => set('customerPhone', e.target.value)} /></label>
+              </div>
+              <label className="field"><span className="label">Email</span><input className="input" value={f.customerEmail} onChange={e => set('customerEmail', e.target.value)} /></label>
+
+              <div className="eyebrow" style={{ marginTop: 6 }}>Device</div>
+              <div className="grid-2" style={{ gap: 12 }}>
+                <label className="field"><span className="label">Make and model<ReqMark /></span><input className="input" value={f.device} onChange={e => set('device', e.target.value)} placeholder="e.g. Samsung Galaxy A54" /></label>
+                <label className="field"><span className="label">Serial / IMEI</span><input className="input" value={f.deviceSerial} onChange={e => set('deviceSerial', e.target.value)} placeholder="The bank may match this to the registered device" /></label>
+              </div>
+              <div className="grid-2" style={{ gap: 12 }}>
+                <label className="field"><span className="label">OS version</span><input className="input" value={f.osVersion} onChange={e => set('osVersion', e.target.value)} placeholder="e.g. Android 14 / One UI 6.1" /></label>
+                <label className="field"><span className="label">Security patch level</span><input className="input" value={f.patchLevel} onChange={e => set('patchLevel', e.target.value)} placeholder="e.g. 1 October 2026" /></label>
+              </div>
+              <div className="grid-2" style={{ gap: 12 }}>
+                <label className="field"><span className="label">Factory reset performed?</span>
+                  <select className="select" value={f.factoryReset} onChange={e => set('factoryReset', e.target.value)}>
+                    <option value="">Not stated</option><option value="yes">Yes</option><option value="no">No</option>
+                  </select>
+                </label>
+                <label className="field"><span className="label">Inspection date</span><input className="input" type="date" value={f.inspectedAt} onChange={e => set('inspectedAt', e.target.value)} /></label>
+              </div>
+
+              <div className="eyebrow" style={{ marginTop: 6 }}>Requested by</div>
+              <div className="grid-2" style={{ gap: 12 }}>
+                <label className="field"><span className="label">Bank or organisation</span><input className="input" value={f.requestedBy} onChange={e => set('requestedBy', e.target.value)} placeholder="e.g. Commonwealth Bank fraud team" /></label>
+                <label className="field"><span className="label">Their reference / case number</span><input className="input" value={f.requestRef} onChange={e => set('requestRef', e.target.value)} /></label>
+              </div>
+
+              <div className="eyebrow" style={{ marginTop: 6 }}>Checks</div>
+              {meta.checks.map(c => {
+                const cur = (f.checks || {})[c.key] || {};
+                return (
+                  <div key={c.key} style={{ border: '1px solid var(--line)', background: 'var(--paper)', padding: '10px 12px', display: 'grid', gap: 8 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                      <div style={{ minWidth: 0, flex: '1 1 220px' }}>
+                        <div style={{ fontWeight: 600, fontSize: 13.5 }}>{c.label}</div>
+                        <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>{c.desc}</div>
+                      </div>
+                      <div className="row-flex" role="radiogroup" aria-label={c.label} style={{ gap: 4 }}>
+                        {Object.entries(meta.results).map(([k, label]) => (
+                          <button key={k} type="button" role="radio" aria-checked={cur.result === k}
+                            className={`btn btn-sm ${cur.result === k ? '' : 'btn-ghost'}`}
+                            style={cur.result === k && k === 'fail' ? { background: 'var(--rust)', borderColor: 'var(--rust)' } : undefined}
+                            onClick={() => setCheck(c.key, 'result', k)}>{label}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <input className="input" style={{ fontSize: 13 }} value={cur.note || ''} onChange={e => setCheck(c.key, 'note', e.target.value)}
+                      placeholder="Note (printed). Leave blank to print the standard description." />
+                  </div>
+                );
+              })}
+
+              <label className="field"><span className="label">Findings (printed)</span><textarea className="textarea" rows={3} value={f.findings} onChange={e => set('findings', e.target.value)} placeholder="What was found, e.g. AnyDesk installed 12 Nov with accessibility access" /></label>
+              <label className="field"><span className="label">Actions taken (printed)</span><textarea className="textarea" rows={3} value={f.actionsTaken} onChange={e => set('actionsTaken', e.target.value)} placeholder="What was removed or changed" /></label>
+              <label className="field"><span className="label">Outcome</span>
+                <select className="select" value={f.outcome} onChange={e => set('outcome', e.target.value)}>
+                  <option value="">Choose…</option>
+                  {Object.entries(meta.outcomes).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+                </select>
+              </label>
+              <label className="field"><span className="label">Internal notes (not printed)</span><textarea className="textarea" rows={2} value={f.notes} onChange={e => set('notes', e.target.value)} /></label>
+            </div>
+          )}
+        </Drawer>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
 // DEVICE LOANS
 // ============================================================
 // Courtesy phones lent while a customer's own device is in for repair. Each
@@ -14459,6 +14777,7 @@ const ADMIN_VIEWS = {
   'payment-plans': { c: PaymentPlansView, t:'Payment Plans', staticSubtitle:'active instalment plans · due dates · status' },
   repairs:    { c: AdminRepairs,    t:'Repair Jobs' },
   'hdd-reports': { c: AdminHddReports, t:'HDD Condition Reports', staticSubtitle:'S.M.A.R.T. summary · condition notes · printable PDF' },
+  'security-certificates': { c: AdminDeviceCertificates, t:'Security Certificates', staticSubtitle:'device inspected · cleared or not · signed · bank can verify' },
   'safety-notices': { c: AdminSafetyNotices, t:'Dangerous Device Notices', staticSubtitle:'severe electrical fault · customer acknowledgement · printable PDF' },
   'device-loans': { c: AdminDeviceLoans, t:'Device Loans', staticSubtitle:'courtesy phones during repair · signed agreement · returns' },
   quotes:     { c: AdminQuotes,     t:'Quotes' },
@@ -14492,7 +14811,7 @@ const ADMIN_VIEWS = {
 };
 
 const ADMIN_ALL_IDS = new Set([
-  'overview','orders','payment-plans','repairs','hdd-reports','safety-notices','device-loans','quotes','messages','pc-builder','reviews','ewaste','bookings','availability',
+  'overview','orders','payment-plans','repairs','hdd-reports','security-certificates','safety-notices','device-loans','quotes','messages','pc-builder','reviews','ewaste','bookings','availability',
   'products','services','software','tutorials','ai',
   'groups','customers','sellers','clients','sponsorship',
   'memberships','gift-cards','rewards','expenses','tax-reports','policies','seller-billing','settings','audit-log',
