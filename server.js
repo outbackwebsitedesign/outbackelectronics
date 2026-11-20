@@ -5659,7 +5659,7 @@ function buildDeviceCertPdf(cert, shop, sigImage) {
       doc.font('Helvetica').fontSize(8.3 * k);
       const pad = 5 * k;
       for (const [key, label, desc] of DEVICE_CERT_CHECKS) {
-        h += Math.max(doc.heightOfString(label, { width: 178 }), doc.heightOfString(checkNote(key, desc), { width: 240 })) + pad;
+        h += Math.max(doc.heightOfString(label, { width: 150 }), doc.heightOfString(checkNote(key, desc), { width: 274 })) + pad;
       }
       h += 4;
       doc.fontSize(8.8 * k);
@@ -5669,25 +5669,25 @@ function buildDeviceCertPdf(cert, shop, sigImage) {
       return h;
     };
     let k = 1;
-    while (k > 0.78 && y + neededAt(k) > pageBottom) k = Math.round((k - 0.02) * 100) / 100;
+    while (k > 0.7 && y + neededAt(k) > pageBottom) k = Math.round((k - 0.02) * 100) / 100;
     const checkSize = 8.3 * k, rowPad = 5 * k, paraSize = 8.8 * k, limSize = 7.8 * k;
 
     // Checks
     y = title('Inspection Checks', 50, y + 2);
     doc.rect(50, y, 495, 16).fill('#f6f3ee');
     doc.font('Helvetica-Bold').fontSize(8).fillColor('#5c5348')
-      .text('CHECK', 58, y + 4.5, { width: 180 }).text('RESULT', 240, y + 4.5, { width: 55 }).text('NOTES', 300, y + 4.5, { width: 240 });
+      .text('CHECK', 58, y + 4.5, { width: 150 }).text('RESULT', 212, y + 4.5, { width: 50 }).text('NOTES', 266, y + 4.5, { width: 274 });
     y += 19;
     const resultColour = { pass: '#2e7d32', fixed: '#2e7d32', fail: RUST, na: '#888' };
     for (const [key, label, desc] of DEVICE_CERT_CHECKS) {
       const c = (cert.checks || {})[key] || {};
       const note = checkNote(key, desc);
       doc.font('Helvetica').fontSize(checkSize);
-      const h = Math.max(doc.heightOfString(label, { width: 178 }), doc.heightOfString(note, { width: 240 })) + rowPad;
+      const h = Math.max(doc.heightOfString(label, { width: 150 }), doc.heightOfString(note, { width: 274 })) + rowPad;
       if (y + h > pageBottom - 40) { doc.addPage(); y = 50; }
-      doc.font('Helvetica-Bold').fontSize(checkSize).fillColor('#222').text(label, 58, y, { width: 178 });
-      doc.font('Helvetica-Bold').fillColor(resultColour[c.result] || '#888').text(DEVICE_CERT_RESULTS[c.result] || '-', 240, y, { width: 55 });
-      doc.font('Helvetica').fillColor(c.note ? '#222' : '#888').text(note, 300, y, { width: 240 });
+      doc.font('Helvetica-Bold').fontSize(checkSize).fillColor('#222').text(label, 58, y, { width: 150 });
+      doc.font('Helvetica-Bold').fillColor(resultColour[c.result] || '#888').text(DEVICE_CERT_RESULTS[c.result] || '-', 212, y, { width: 50 });
+      doc.font('Helvetica').fillColor(c.note ? '#222' : '#888').text(note, 266, y, { width: 274 });
       y += h;
       doc.moveTo(50, y - 2).lineTo(545, y - 2).strokeColor('#eee').lineWidth(0.5).stroke();
     }
