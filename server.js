@@ -84,7 +84,7 @@ const PUBLIC_CSP = "default-src 'self'; " +
 const HSTS_VALUE = 'max-age=31536000; includeSubDomains';
 const PERMISSIONS_POLICY = 'camera=(), microphone=(), geolocation=(), payment=(), usb=()';
 const PUBLIC_RATE_WINDOW_MS = 1000 * 60 * 10;
-const PUBLIC_RATE_LIMITS = { analytics: 120, checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10, 'forgot-password': 5, 'reset-password': 10, 'gift-card/apply': 10, 'gift-card/balance': 5, 'warranty/order-lookup': 10, 'cart/get': 20, 'cart/validate': 60, 'cart/activity': 60, 'weather_register': 3, 'stock-notify': 5, 'membership': 10, 'order-token': 30, 'bookings/request': 10, 'tutorials/view': 60, 'review/submit': 8, 'review/upload-photo': 20, 'public-chat': 20, 'sponsorship/enquire': 5, 'certificate/verify': 20 };
+const PUBLIC_RATE_LIMITS = { analytics: 120, checkout: 20, 'quote/request': 5, 'contact/quick-message': 5, 'register': 5, 'shipping/quote': 30, 'warranty/register': 10, 'forgot-password': 5, 'reset-password': 10, 'gift-card/apply': 10, 'gift-card/balance': 5, 'warranty/order-lookup': 10, 'cart/get': 20, 'cart/validate': 60, 'cart/activity': 60, 'weather_register': 3, 'stock-notify': 5, 'membership': 10, 'order-token': 30, 'bookings/request': 10, 'tutorials/view': 60, 'review/submit': 8, 'review/upload-photo': 20, 'public-chat': 20, 'sponsorship/enquire': 5, 'certificate/verify': 20, 'sign/view': 60, 'sign/submit': 10 };
 
 fs.mkdirSync(path.join(__dirname, 'assets/uploads'), { recursive: true });
 fs.mkdirSync(path.join(__dirname, 'assets/uploads/software'), { recursive: true });
@@ -135,6 +135,7 @@ const REPAIRS_DB_PATH   = path.join(__dirname, 'repairs.db');
 const QUOTES_DB_PATH    = path.join(__dirname, 'quotes.db');
 const HDD_REPORTS_DB_PATH = path.join(__dirname, 'hdd-reports.db');
 const SAFETY_NOTICES_DB_PATH = path.join(__dirname, 'safety-notices.db');
+const CUSTOMER_SIGS_DB_PATH = path.join(__dirname, 'customer-signatures.db');
 const DEVICE_LOANS_DB_PATH = path.join(__dirname, 'device-loans.db');
 const DEVICE_CERTS_DB_PATH = path.join(__dirname, 'device-certificates.db');
 // PC builder: the parts library and saved builds share one file, they are only
@@ -1318,6 +1319,99 @@ function deviceCertIssueProblem(cert) {
   if (cert.outcome !== 'notCleared' && failed.length) return `A certificate can't clear a device with a failed check (${failed.join(', ')}). Fix it, or set the outcome to Not cleared.`;
   if (cert.outcome === 'remediated' && !DEVICE_CERT_CHECKS.some(([k]) => cert.checks[k].result === 'fixed') && !String(cert.actionsTaken || '').trim()) return 'Say what was fixed: mark the checks that were fixed, or fill in the actions taken.';
   return '';
+}
+
+// Customer e-signatures: a customer signs a certificate, loan agreement or
+// dangerous device notice on their own phone from a private link. The link
+// opens any number of times until the customer signs, then closes. Requests
+// live in their own store (not on the document) so an admin save of the
+// document can never wipe a signature the customer added meanwhile. Each
+// signed request keeps a snapshot of the document as it stood when signed.
+const CUSTOMER_SIGS_LOCK = 'customer-signatures';
+const SIGN_KINDS = {
+  cert: { label: 'Device security certificate', agree: 'I acknowledge that I have received this certificate and the advice in it.' },
+  loan: { label: 'Loan agreement', agree: 'I have read this loan agreement, including the condition recorded in it, and agree to its terms.' },
+  ddn:  { label: 'Dangerous device notice', agree: 'I have read this notice and understand the risks described in it.' },
+};
+function readCustomerSigs() {
+  try { const p = JSON.parse(cachedReadFile(CUSTOMER_SIGS_DB_PATH)); return Array.isArray(p.requests) ? p.requests : []; } catch { return []; }
+}
+function writeCustomerSigs(requests) { atomicWriteFile(CUSTOMER_SIGS_DB_PATH, JSON.stringify({ requests }, null, 2)); }
+function signDocFor(kind, id) {
+  if (!id) return null;
+  if (kind === 'cert') return readDeviceCerts().find(c => c.id === id) || null;
+  if (kind === 'loan') return readDeviceLoans().loans.find(l => l.id === id) || null;
+  if (kind === 'ddn') return readSafetyNotices().find(n => n.id === id) || null;
+  return null;
+}
+// Why a document cannot be sent for signing yet, or '' when it can.
+function signDocProblem(kind, doc) {
+  if (!doc) return 'Save the document first.';
+  if (kind === 'cert' && doc.status !== 'issued') return doc.status === 'void' ? 'This certificate is void.' : 'Issue the certificate first.';
+  return '';
+}
+// The current request for a document: the newest one not cancelled.
+function currentSignRequest(kind, id, requests = readCustomerSigs()) {
+  const mine = requests.filter(r => r.kind === kind && r.docId === id && !r.revokedAt);
+  return mine.length ? mine[mine.length - 1] : null;
+}
+function signRequestStatus(r) {
+  if (!r) return 'none';
+  return r.signedAt ? 'signed' : 'pending';
+}
+function signLinkFor(r) { return `${String(getSiteUrl() || '').replace(/\/+$/, '')}/sign?t=${r.token}`; }
+// What the admin sees about a request: never the image or the token's history.
+function signRequestSummary(r) {
+  if (!r) return { status: 'none' };
+  const status = signRequestStatus(r);
+  return { status, url: status === 'pending' ? signLinkFor(r) : '', createdAt: r.createdAt, createdBy: r.createdBy, signedAt: r.signedAt || null, signedName: r.signedName || '' };
+}
+// The customer's signature for a printed document, or null if not signed.
+function customerSigForPdf(kind, id) {
+  const r = id ? currentSignRequest(kind, id) : null;
+  if (!r || !r.signedAt || !r.image) return null;
+  try { return { image: Buffer.from(r.image, 'base64'), name: r.signedName || '', signedAt: r.signedAt }; } catch { return null; }
+}
+// Draws the customer's e-signature on their line, noting it was signed electronically.
+function drawCustomerSig(doc, cs, x, lineY, width) {
+  if (!cs) return;
+  try { drawSignatureOnLine(doc, cs.image, x, lineY); } catch {}
+  const when = new Date(cs.signedAt);
+  const stamp = `Signed electronically ${when.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Australia/Brisbane' })} ${when.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', timeZone: 'Australia/Brisbane' })}`;
+  doc.font('Helvetica-Oblique').fontSize(6.5).fillColor('#888').text(stamp, x, lineY - 9, { width, align: 'right', lineBreak: false });
+}
+// A saved document's PDF exactly as the admin would print it, including the
+// customer's signature when they have signed.
+async function savedDocPdf(kind, id) {
+  const { shop } = readSettings();
+  const cs = customerSigForPdf(kind, id);
+  if (kind === 'cert') {
+    const cert = readDeviceCerts().find(c => c.id === id);
+    if (!cert) return null;
+    const sig = cert.status !== 'draft' ? await signatureForPdf(staffSignaturePath(cert.signedByStaffId)) : null;
+    return { buffer: await buildDeviceCertPdf(cert, shop, sig, cs), filename: `device-security-certificate-${cert.id}.pdf` };
+  }
+  if (kind === 'loan') {
+    const data = readDeviceLoans();
+    const saved = data.loans.find(l => l.id === id);
+    if (!saved) return null;
+    const device = data.devices.find(d => d.id === saved.deviceId);
+    const loan = device ? { ...saved, loanDevice: device.name, loanDeviceSerial: device.serial || '' } : saved;
+    const sigPath = staffSignaturePath(loan.signedByStaffId);
+    return { buffer: await buildDeviceLoanPdf(loan, shop, sigPath ? await signatureForPdf(sigPath) : null, cs), filename: `loan-agreement-${loan.id}.pdf` };
+  }
+  if (kind === 'ddn') {
+    const notice = readSafetyNotices().find(n => n.id === id);
+    if (!notice) return null;
+    return { buffer: await buildSafetyNoticePdf(notice, shop, await signatureForPdf(staffSignaturePath(notice.signedByStaffId)), cs), filename: `dangerous-device-notice-${notice.id}.pdf` };
+  }
+  return null;
+}
+// Finds a live request by its link token, or null.
+function signRequestByToken(token) {
+  const t = String(token || '');
+  if (!/^[A-Za-z0-9_-]{32}$/.test(t)) return null;
+  return readCustomerSigs().find(r => r.token === t && !r.revokedAt) || null;
 }
 
 function readReviews() {
@@ -3220,7 +3314,7 @@ const MAIN_SPA_ROUTES = new Set([
   'cart',
   'register',
   'about', 'repairs', 'humanly-ai', 'capability-statement',
-  'review', 'reviews', 'sponsorship', 'verify',
+  'review', 'reviews', 'sponsorship', 'verify', 'sign',
 ]);
 
 // ── Email ─────────────────────────────────────────────────────────────────────
@@ -5147,7 +5241,7 @@ function drawSignatureOnLine(doc, img, x, lineY) {
   doc.image(img, x, lineY - 31, { fit: [160, 29], align: 'left', valign: 'bottom' });
 }
 
-function buildSafetyNoticePdf(notice, shop, sigImage) {
+function buildSafetyNoticePdf(notice, shop, sigImage, custSig = null) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 50, bufferPages: true });
     const chunks = [];
@@ -5304,12 +5398,13 @@ function buildSafetyNoticePdf(notice, shop, sigImage) {
       doc.font('Helvetica-Oblique').fontSize(16).fillColor('#222').text(notice.signedBy, rightX, sigTop - 26, { width: colW });
     }
 
+    drawCustomerSig(doc, custSig, 50, sigTop, colW);
     sigLine('Signature', 50, sigTop, colW);
     sigLine('Signature', rightX, sigTop, colW);
 
     const nameY = sigTop + NAME_OFF;
     doc.font('Helvetica').fontSize(9).fillColor('#222')
-      .text(notice.customerName || '', 50, nameY - 12, { width: colW });
+      .text((custSig && custSig.name) || notice.customerName || '', 50, nameY - 12, { width: colW });
     doc.font('Helvetica').fontSize(9).fillColor('#222')
       .text(notice.signedBy || '', rightX, nameY - 12, { width: colW });
     sigLine('Print name', 50, nameY, colW);
@@ -5319,6 +5414,7 @@ function buildSafetyNoticePdf(notice, shop, sigImage) {
     // Our side is filled in; the customer dates their own line by hand.
     doc.font('Helvetica').fontSize(9).fillColor('#222')
       .text(fmtDate(notice.signedAt || notice.createdAt || Date.now()), rightX, dateY - 12, { width: colW });
+    if (custSig) doc.font('Helvetica').fontSize(9).fillColor('#222').text(fmtDate(custSig.signedAt), 50, dateY - 12, { width: colW });
     sigLine('Date', 50, dateY, colW);
     sigLine('Date', rightX, dateY, colW);
 
@@ -5357,7 +5453,7 @@ function loanLiabilityItems(loan) {
 
 // The courtesy loan agreement. One page in the normal case: details, terms,
 // signatures, and a return box filled in by hand when the device comes back.
-function buildDeviceLoanPdf(loan, shop, sigImage) {
+function buildDeviceLoanPdf(loan, shop, sigImage, custSig = null) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 50, bufferPages: true });
     const chunks = [];
@@ -5524,6 +5620,7 @@ function buildDeviceLoanPdf(loan, shop, sigImage) {
     // Our side is always the signer's saved signature; the route refuses to
     // print without one, so there is no hand-sign fallback here.
     if (sigImage) { try { drawSignatureOnLine(doc, sigImage, rightX, sigTop); } catch {} }
+    drawCustomerSig(doc, custSig, 50, sigTop, colW);
     sigLine('Customer signature', 50, sigTop);
     sigLine(shopName ? `Signed for ${shopName}` : 'Signed for the business', rightX, sigTop);
     // Print name and date share one line on each side.
@@ -5533,7 +5630,8 @@ function buildDeviceLoanPdf(loan, shop, sigImage) {
       doc.moveTo(x, yy).lineTo(x + w, yy).strokeColor('#999').lineWidth(0.8).stroke();
       doc.font('Helvetica').fontSize(8).fillColor('#888').text(label, x, yy + 5, { width: w });
     };
-    doc.font('Helvetica').fontSize(9).fillColor('#222').text(loan.customerName || '', 50, nameY - 12, { width: nameW });
+    doc.font('Helvetica').fontSize(9).fillColor('#222').text((custSig && custSig.name) || loan.customerName || '', 50, nameY - 12, { width: nameW });
+    if (custSig) doc.font('Helvetica').fontSize(9).fillColor('#222').text(fmtDate(custSig.signedAt), dateX(50), nameY - 12, { width: dateW });
     doc.font('Helvetica').fontSize(9).fillColor('#222').text(loan.signedBy || '', rightX, nameY - 12, { width: nameW });
     doc.font('Helvetica').fontSize(9).fillColor('#222').text(fmtDate(loan.signedAt || loan.createdAt || Date.now()), dateX(rightX), nameY - 12, { width: dateW });
     shortLine('Print name', 50, nameY, nameW);
@@ -5571,7 +5669,7 @@ function buildDeviceLoanPdf(loan, shop, sigImage) {
 
 // The printed certificate, normally one page. Drafts and voided certificates
 // carry a large watermark so they can never pass for an issued one.
-function buildDeviceCertPdf(cert, shop, sigImage) {
+function buildDeviceCertPdf(cert, shop, sigImage, custSig = null) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 50, bufferPages: true });
     const chunks = [];
@@ -5721,10 +5819,11 @@ function buildDeviceCertPdf(cert, shop, sigImage) {
     };
     if (sigImage && issued) { try { drawSignatureOnLine(doc, sigImage, 50, sigTop); } catch {} }
     line(`Inspected and certified by${shopName ? ` (for ${shopName})` : ''}`, 50, sigTop, colW);
+    drawCustomerSig(doc, custSig, rightX, sigTop, colW);
     line('Customer acknowledges receipt of this certificate and advice', rightX, sigTop, colW);
     doc.font('Helvetica').fontSize(9).fillColor('#222')
       .text(`${cert.signedBy || ''}${issued && cert.issuedAt ? `   ·   ${fmtDate(cert.issuedAt)}` : ''}`, 50, sigTop + 16, { width: colW });
-    doc.font('Helvetica').fontSize(9).fillColor('#222').text(cert.customerName || '', rightX, sigTop + 16, { width: colW });
+    doc.font('Helvetica').fontSize(9).fillColor('#222').text(`${(custSig && custSig.name) || cert.customerName || ''}${custSig ? `   ·   ${fmtDate(custSig.signedAt)}` : ''}`, rightX, sigTop + 16, { width: colW });
     y = sigTop + 32;
 
     // Verification
@@ -6907,6 +7006,82 @@ const mainServer = http.createServer(async (req, res) => {
   // Lets a bank confirm a device security certificate is genuine and current.
   // Needs both the certificate number and its code, and returns no customer
   // details: just what the certificate says about the device.
+  // Customer signing page: view the document and sign it on their own device.
+  if (req.method === 'GET' && url.pathname === '/api/sign/doc') {
+    if (publicRateLimited(getIp(req), 'sign/view')) return json(res, 429, { error: 'too_many_requests', message: 'Too many attempts, please try again later.' });
+    const r = signRequestByToken(url.searchParams.get('t'));
+    const doc = r && signDocFor(r.kind, r.docId);
+    if (!r || !doc || signDocProblem(r.kind, doc)) return json(res, 404, { error: 'not_found', message: 'This signing link is not valid. It may have been replaced by a newer link.' });
+    // Once signed the link is closed: nothing about the document is shown.
+    if (r.signedAt) return json(res, 410, { error: 'signed', message: 'This document has been signed, so this link is now closed. Contact us if you need a copy.' });
+    return json(res, 200, {
+      kind: r.kind, label: SIGN_KINDS[r.kind].label, agree: SIGN_KINDS[r.kind].agree,
+      id: r.docId, customerName: doc.customerName || '',
+    });
+  }
+  if (req.method === 'GET' && url.pathname === '/api/sign/pdf') {
+    if (publicRateLimited(getIp(req), 'sign/view')) return json(res, 429, { error: 'too_many_requests', message: 'Too many attempts, please try again later.' });
+    const r = signRequestByToken(url.searchParams.get('t'));
+    const doc = r && signDocFor(r.kind, r.docId);
+    // A signed link is closed and no longer shows the document.
+    if (!r || !doc || signDocProblem(r.kind, doc) || r.signedAt) return json(res, 404, { error: 'not_found', message: 'This signing link is not valid.' });
+    const pdf = await savedDocPdf(r.kind, r.docId);
+    if (!pdf) return json(res, 404, { error: 'not_found' });
+    res.writeHead(200, {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="${pdf.filename.replace(/[^a-zA-Z0-9_.-]+/g, '-')}"`,
+      'Content-Length': pdf.buffer.length,
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Robots-Tag': 'noindex',
+    });
+    res.end(pdf.buffer);
+    return;
+  }
+  if (req.method === 'POST' && url.pathname === '/api/sign/submit') {
+    if (publicRateLimited(getIp(req), 'sign/submit')) return json(res, 429, { error: 'too_many_requests', message: 'Too many attempts, please try again later.' });
+    let body; try { body = await readJson(req, 1.5e6); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const name = String(body.name || '').trim().slice(0, 120);
+    if (!name) return json(res, 422, { error: 'name_required', message: 'Please type your full name.' });
+    if (body.agree !== true) return json(res, 422, { error: 'agree_required', message: 'Please tick the box to confirm.' });
+    const m = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(String(body.image || ''));
+    if (!m) return json(res, 422, { error: 'signature_required', message: 'Please sign in the box.' });
+    // Re-encode the drawing so only a clean, trimmed PNG is ever stored.
+    let png;
+    try {
+      const raw = Buffer.from(m[1], 'base64');
+      if (raw.length > 1e6) throw new Error('too_big');
+      const meta = await sharp(raw).metadata();
+      if (meta.format !== 'png' || meta.width > 2000 || meta.height > 1000) throw new Error('bad');
+      const stats = await sharp(raw).stats();
+      // A blank pad has the same value everywhere in every channel.
+      if (stats.channels.every(c => c.min === c.max)) return json(res, 422, { error: 'signature_required', message: 'Please sign in the box.' });
+      png = await sharp(raw).trim({ threshold: 10 }).resize({ width: 800, height: 300, fit: 'inside', withoutEnlargement: true }).png().toBuffer();
+    } catch { return json(res, 422, { error: 'signature_invalid', message: 'That signature could not be read. Please clear it and sign again.' }); }
+    const result = await withFileLock(CUSTOMER_SIGS_LOCK, async () => {
+      const requests = readCustomerSigs();
+      const t = String(body.t || '');
+      const r = /^[A-Za-z0-9_-]{32}$/.test(t) ? requests.find(x => x.token === t && !x.revokedAt) : null;
+      const doc = r && signDocFor(r.kind, r.docId);
+      if (!r || !doc || signDocProblem(r.kind, doc)) return { status: 404, error: 'not_found', message: 'This signing link is not valid. It may have been replaced by a newer link.' };
+      if (r.signedAt) return { status: 410, error: 'signed', message: 'This document has already been signed, so this link is now closed.' };
+      Object.assign(r, {
+        signedAt: new Date().toISOString(), signedName: name, image: png.toString('base64'),
+        ip: getIp(req), userAgent: String(req.headers['user-agent'] || '').slice(0, 300),
+        agreedTo: SIGN_KINDS[r.kind].agree, docSnapshot: doc,
+      });
+      writeCustomerSigs(requests);
+      return { ok: true, r };
+    });
+    if (result.error) return json(res, result.status, { error: result.error, message: result.message });
+    const { r } = result;
+    sendEmail({
+      to: getNotifyEmail(),
+      subject: `${SIGN_KINDS[r.kind].label} ${r.docId} signed by ${r.signedName}`,
+      html: `<p>${escHtml(r.signedName)} signed ${escHtml(SIGN_KINDS[r.kind].label.toLowerCase())} ${escHtml(r.docId)} on ${escHtml(new Date(r.signedAt).toLocaleString('en-AU', { timeZone: 'Australia/Brisbane' }))}.</p><p>The signed copy can be printed from the admin dashboard.</p>`,
+    }).catch(() => {});
+    return json(res, 200, { ok: true, signedAt: r.signedAt });
+  }
   if (req.method === 'GET' && url.pathname === '/api/certificate/verify') {
     if (publicRateLimited(getIp(req), 'certificate/verify')) return json(res, 429, { error: 'too_many_requests', message: 'Too many attempts, please try again later.' });
     const id = String(url.searchParams.get('id') || '').trim().toUpperCase();
@@ -11059,7 +11234,7 @@ const adminServer = http.createServer(async (req, res) => {
     // preview rather than printing a blank signer name.
     const notice = { ...body, signedBy: body.signedBy || session.username, signedByStaffId: body.signedByStaffId || session.staffId || null };
     const { shop } = readSettings();
-    const buffer = await buildSafetyNoticePdf(notice, shop, await signatureForPdf(staffSignaturePath(notice.signedByStaffId)));
+    const buffer = await buildSafetyNoticePdf(notice, shop, await signatureForPdf(staffSignaturePath(notice.signedByStaffId)), body.id ? customerSigForPdf('ddn', body.id) : null);
     const safeRef = String(body.id || 'draft').replace(/[^a-zA-Z0-9_-]+/g, '-');
     res.writeHead(200, {
       'Content-Type': 'application/pdf',
@@ -11160,6 +11335,64 @@ const adminServer = http.createServer(async (req, res) => {
     if (result.error) return json(res, 409, { error: 'cannot_delete', message: result.error });
     return json(res, 200, { ok: true });
   }
+  // Customer e-signature links for certificates, loan agreements and notices.
+  if (req.method === 'GET' && url.pathname === '/api/admin/customer-signing') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    const kind = url.searchParams.get('kind');
+    if (!SIGN_KINDS[kind]) return json(res, 400, { error: 'invalid_kind' });
+    const requests = readCustomerSigs();
+    const id = url.searchParams.get('id');
+    if (id) return json(res, 200, { item: signRequestSummary(currentSignRequest(kind, id, requests)) });
+    // Without an id: the status of every document of that kind, for list views.
+    const items = {};
+    for (const r of requests) if (r.kind === kind && !r.revokedAt) items[r.docId] = signRequestStatus(r);
+    return json(res, 200, { items });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/customer-signing/link') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const kind = String(body.kind || ''), id = String(body.id || '');
+    if (!SIGN_KINDS[kind]) return json(res, 400, { error: 'invalid_kind' });
+    const problem = signDocProblem(kind, signDocFor(kind, id));
+    if (problem) return json(res, 422, { error: 'not_ready', message: problem });
+    const result = await withFileLock(CUSTOMER_SIGS_LOCK, async () => {
+      const requests = readCustomerSigs();
+      const cur = currentSignRequest(kind, id, requests);
+      if (cur && cur.signedAt && !body.again) return { status: 409, error: 'already_signed', message: 'The customer has already signed this document.' };
+      // A new link replaces any earlier one, signed or not.
+      const now = new Date().toISOString();
+      for (const r of requests) if (r.kind === kind && r.docId === id && !r.revokedAt) { r.revokedAt = now; r.revokedBy = session.username; }
+      const r = {
+        token: crypto.randomBytes(24).toString('base64url'), kind, docId: id,
+        createdAt: now, createdBy: session.username,
+      };
+      requests.push(r);
+      writeCustomerSigs(requests);
+      return { item: r };
+    });
+    if (result.error) return json(res, result.status, { error: result.error, message: result.message });
+    auditAdminAction({ req, session, action: 'customer-signing.link', result: { status: 'ok', changed: { kind, id } } });
+    return json(res, 200, { ok: true, item: signRequestSummary(result.item) });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/customer-signing/cancel') {
+    const session = requireRole(req, res, 'technician'); if (!session) return;
+    let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
+    const kind = String(body.kind || ''), id = String(body.id || '');
+    if (!SIGN_KINDS[kind]) return json(res, 400, { error: 'invalid_kind' });
+    const result = await withFileLock(CUSTOMER_SIGS_LOCK, async () => {
+      const requests = readCustomerSigs();
+      const cur = currentSignRequest(kind, id, requests);
+      if (!cur) return { status: 404, error: 'not_found', message: 'There is no signing link for this document.' };
+      // Removing a signature the customer already gave needs a manager.
+      if (cur.signedAt && !(ROLE_LEVELS[session.role] >= ROLE_LEVELS.manager)) return { status: 403, error: 'forbidden', message: 'Only a manager can remove a customer\'s signature.' };
+      cur.revokedAt = new Date().toISOString(); cur.revokedBy = session.username;
+      writeCustomerSigs(requests);
+      return { ok: true, wasSigned: !!cur.signedAt };
+    });
+    if (result.error) return json(res, result.status, { error: result.error, message: result.message });
+    auditAdminAction({ req, session, action: result.wasSigned ? 'customer-signing.remove-signature' : 'customer-signing.cancel', result: { status: 'ok', changed: { kind, id } } });
+    return json(res, 200, { ok: true });
+  }
   if (req.method === 'POST' && url.pathname === '/api/admin/device-certificates/pdf') {
     const session = requireRole(req, res, 'technician'); if (!session) return;
     let body; try { body = await readJson(req); } catch { return json(res, 400, { error: 'invalid_json' }); }
@@ -11168,7 +11401,7 @@ const adminServer = http.createServer(async (req, res) => {
     const cert = saved || { ...body, status: 'draft' };
     const { shop } = readSettings();
     const sig = cert.status !== 'draft' ? await signatureForPdf(staffSignaturePath(cert.signedByStaffId)) : null;
-    const buffer = await buildDeviceCertPdf(cert, shop, sig);
+    const buffer = await buildDeviceCertPdf(cert, shop, sig, saved ? customerSigForPdf('cert', saved.id) : null);
     const safeRef = String(cert.id || 'draft').replace(/[^a-zA-Z0-9_-]+/g, '-');
     res.writeHead(200, {
       'Content-Type': 'application/pdf',
@@ -11274,7 +11507,7 @@ const adminServer = http.createServer(async (req, res) => {
       return json(res, 422, { error: 'signature_required', message: `${who} no saved signature. Add one in Settings (your staff profile) before printing a loan agreement.` });
     }
     const { shop } = readSettings();
-    const buffer = await buildDeviceLoanPdf(loan, shop, await signatureForPdf(sig));
+    const buffer = await buildDeviceLoanPdf(loan, shop, await signatureForPdf(sig), saved ? customerSigForPdf('loan', saved.id) : null);
     const safeRef = String(body.id || 'draft').replace(/[^a-zA-Z0-9_-]+/g, '-');
     res.writeHead(200, {
       'Content-Type': 'application/pdf',

@@ -2222,6 +2222,150 @@ function SponsorshipPage({ go }) {
 // For a bank (or anyone handed a certificate) to confirm it is genuine and
 // still current. Shows only what the certificate says about the device, never
 // the customer's details.
+// Customer signing page, reached from a private link (/sign?t=...). The link
+// opens any number of times until the customer signs, then it closes.
+function SignaturePadPublic({ onChange }) {
+  const canvasRef = React.useRef(null);
+  const drawing = React.useRef(false);
+  const last = React.useRef(null);
+  const hasInk = React.useRef(false);
+  useEffect(() => {
+    const c = canvasRef.current;
+    const fit = () => {
+      const ratio = window.devicePixelRatio || 1;
+      const w = c.clientWidth, h = c.clientHeight;
+      c.width = Math.round(w * ratio); c.height = Math.round(h * ratio);
+      const ctx = c.getContext('2d');
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      ctx.lineWidth = 2.4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#111';
+      hasInk.current = false; onChange(null);
+    };
+    fit();
+    // Resizing clears the canvas, so only refit when the width really changes.
+    let width = c.clientWidth;
+    const onResize = () => { if (c.clientWidth !== width) { width = c.clientWidth; fit(); } };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  const pos = (e) => { const r = canvasRef.current.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  const down = (e) => { e.preventDefault(); canvasRef.current.setPointerCapture(e.pointerId); drawing.current = true; last.current = pos(e); };
+  const move = (e) => {
+    if (!drawing.current) return;
+    e.preventDefault();
+    const p = pos(e), ctx = canvasRef.current.getContext('2d');
+    ctx.beginPath(); ctx.moveTo(last.current.x, last.current.y); ctx.lineTo(p.x, p.y); ctx.stroke();
+    last.current = p; hasInk.current = true;
+  };
+  const up = () => {
+    if (!drawing.current) return;
+    drawing.current = false;
+    if (hasInk.current) onChange(canvasRef.current.toDataURL('image/png'));
+  };
+  const clear = () => {
+    const c = canvasRef.current;
+    c.getContext('2d').clearRect(0, 0, c.width, c.height);
+    hasInk.current = false; onChange(null);
+  };
+  return (
+    <div>
+      <canvas ref={canvasRef} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onPointerLeave={up}
+        aria-label="Signature pad: sign with your finger or mouse"
+        style={{ width: '100%', height: 180, display: 'block', background: '#fff', border: '1px solid var(--line)', borderRadius: 8, touchAction: 'none', cursor: 'crosshair' }} />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, fontSize: 13, color: 'var(--ink-2)' }}>
+        <span>Sign above with your finger</span>
+        <button type="button" className="btn btn-ghost" onClick={clear} style={{ padding: '4px 12px' }}>Clear</button>
+      </div>
+    </div>
+  );
+}
+
+function SignDocumentPage() {
+  const shop = useShop();
+  const token = new URLSearchParams(typeof location !== 'undefined' ? location.search : '').get('t') || '';
+  const [info, setInfo] = useState(null); // null loading | doc info | { error }
+  const [name, setName] = useState('');
+  const [agree, setAgree] = useState(false);
+  const [image, setImage] = useState(null);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+  const [done, setDone] = useState(false);
+  const contact = [shop.phone, shop.email].filter(Boolean).join(' or ');
+
+  useEffect(() => {
+    if (!token) { setInfo({ error: 'This signing link is incomplete. Please open the full link you were sent.' }); return; }
+    fetch(`/api/sign/doc?t=${encodeURIComponent(token)}`)
+      .then(async r => { const d = await r.json().catch(() => ({})); setInfo(r.ok ? d : { error: d.message || 'This signing link is not valid.' }); if (r.ok) setName(d.customerName || ''); })
+      .catch(() => setInfo({ error: 'Could not load the document right now. Please try again.' }));
+  }, []);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (!name.trim()) return setError('Please type your full name.');
+    if (!agree) return setError('Please tick the box to confirm.');
+    if (!image) return setError('Please sign in the box.');
+    setSending(true);
+    try {
+      const r = await fetch('/api/sign/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() },
+        body: JSON.stringify({ t: token, name: name.trim(), agree, image }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.message || 'Could not save your signature. Please try again.');
+      setDone(true);
+    } catch (err) { setError(err.message); }
+    setSending(false);
+  };
+
+  // A hint about a missing step goes as soon as the customer changes anything.
+  useEffect(() => { setError(''); }, [name, agree, image]);
+  const pdfUrl = `/api/sign/pdf?t=${encodeURIComponent(token)}`;
+  return (
+    <>
+      <PageHead crumbs={['Outback', 'Sign a document']} title={info && info.label ? `Sign your ${info.label.toLowerCase()}` : 'Sign a document'}
+        lead={info && info.id ? `${info.label} ${info.id}${info.customerName ? ` for ${info.customerName}` : ''}` : ''} />
+      <section className="container" style={{ paddingTop: 24, paddingBottom: 64, maxWidth: 680 }}>
+        {!info && <div className="card-paper" style={{ padding: 24 }}>Loading…</div>}
+        {info && info.error && (
+          <div className="card-paper" style={{ padding: 24, borderLeft: '4px solid var(--rust)' }}>
+            <p style={{ lineHeight: 1.7 }}>{info.error}</p>
+            {contact && <p style={{ marginTop: 8, lineHeight: 1.7, color: 'var(--ink-2)' }}>Contact us on {contact}.</p>}
+          </div>
+        )}
+        {done && (
+          <div className="card-paper" style={{ padding: 24, borderLeft: '4px solid var(--eucalyptus)' }}>
+            <div className="mono" style={{ fontSize: 12, color: 'var(--eucalyptus)' }}>✓ SIGNED</div>
+            <p style={{ marginTop: 8, lineHeight: 1.7 }}>Thank you, {name.trim()}. Your signature has been saved and this link is now closed.{contact ? ` If you need a copy, contact us on ${contact}.` : ''}</p>
+          </div>
+        )}
+        {info && !info.error && !done && (
+          <form className="card" style={{ padding: 24, display: 'grid', gap: 18 }} onSubmit={submit}>
+            <div>
+              <div style={{ fontWeight: 600, marginBottom: 6 }}>1. Read the document</div>
+              <a className="btn btn-ghost" href={pdfUrl} target="_blank" rel="noopener" style={{ width: '100%', justifyContent: 'center' }}>Open {info.label.toLowerCase()} (PDF) ↗</a>
+            </div>
+            <label className="field" style={{ margin: 0 }}>
+              <span className="label">2. Your full name</span>
+              <input className="input" value={name} onChange={e => setName(e.target.value)} autoComplete="name" required maxLength={120} />
+            </label>
+            <div>
+              <div style={{ fontWeight: 600, marginBottom: 6 }}>3. Sign</div>
+              <SignaturePadPublic onChange={setImage} />
+            </div>
+            <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', lineHeight: 1.6, cursor: 'pointer' }}>
+              <input type="checkbox" checked={agree} onChange={e => setAgree(e.target.checked)} style={{ marginTop: 5, width: 18, height: 18, flex: 'none' }} />
+              <span>{info.agree} I agree that signing here is the same as signing a printed copy.</span>
+            </label>
+            {error && <div role="alert" style={{ color: 'var(--rust)' }}>{error}</div>}
+            <button className="btn btn-rust" type="submit" disabled={sending} style={{ width: '100%', justifyContent: 'center' }}>{sending ? 'Saving…' : 'Sign document'}</button>
+          </form>
+        )}
+      </section>
+    </>
+  );
+}
+
 function VerifyCertificatePage() {
   const shop = useShop();
   const params = new URLSearchParams(typeof location !== 'undefined' ? location.search : '');
@@ -2310,6 +2454,7 @@ window.OE_PAGES = Object.assign(window.OE_PAGES || {}, {
   'humanly-ai': HumanlyAIPage,
   sponsorship: SponsorshipPage,
   verify: VerifyCertificatePage,
+  sign: SignDocumentPage,
   repairs: null, // resolved dynamically - alias to services
 });
 window.dispatchEvent(new Event('oe:pages-updated'));

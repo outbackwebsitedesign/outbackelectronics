@@ -13820,8 +13820,104 @@ function AdminAuditLog() {
 const CERT_STATUS_TAG = { draft: ['DRAFT', 'tag-outline'], issued: ['ISSUED', 'tag-euc'], void: ['VOID', 'tag-rust'] };
 const CERT_OUTCOME_TAG = { cleared: 'tag-euc', remediated: 'tag-ochre', notCleared: 'tag-rust' };
 
+// Customer e-signature for a saved certificate, loan agreement or notice: a
+// private link the customer opens on their phone to sign. The link opens any
+// number of times (so staff can check it first) until the customer signs.
+const SIGN_DOC_LABELS = { cert: 'device security certificate', loan: 'loan agreement', ddn: 'dangerous device notice' };
+function useSignStatuses(kind, reloadKey) {
+  const [items, setItems] = useState({});
+  useEffect(() => {
+    fetch(`/api/admin/customer-signing?kind=${kind}`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : { items: {} }).then(d => setItems(d.items || {})).catch(() => {});
+  }, [kind, reloadKey]);
+  return items;
+}
+function SignStatusTag({ status }) {
+  if (status === 'signed') return <span className="tag tag-euc">SIGNED</span>;
+  if (status === 'pending') return <span className="tag tag-outline">LINK SENT</span>;
+  return <span style={{ color: 'var(--ink-3)' }}>-</span>;
+}
+function CustomerSigning({ kind, id, customerName = '', phone = '', email = '', dirty = false, isManager = false, onChange }) {
+  const [st, setSt] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const fmtWhen = d => d ? new Date(d).toLocaleString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+  const load = () => fetch(`/api/admin/customer-signing?kind=${kind}&id=${encodeURIComponent(id)}`, { credentials: 'include' })
+    .then(r => r.ok ? r.json() : null).then(d => setSt(d ? d.item : { status: 'error' })).catch(() => setSt({ status: 'error' }));
+  useEffect(() => { setSt(null); load(); }, [kind, id]);
+  const post = async (path, body) => {
+    setBusy(true);
+    const r = await fetch(`/api/admin/customer-signing/${path}`, { method: 'POST', headers: postHeaders(), credentials: 'include', body: JSON.stringify({ kind, id, ...body }) }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : {};
+    setBusy(false);
+    if (!r || !r.ok) { adminToast(d.message || 'Could not update the signing link.'); return false; }
+    await load(); onChange && onChange();
+    return true;
+  };
+  const create = () => post('link', {});
+  const again = async () => {
+    if (!(await adminConfirm('This removes the customer\'s current signature and makes a new link for them to sign again.', { title: 'New signing link', confirmLabel: 'Remove signature & make link' }))) return;
+    post('link', { again: true });
+  };
+  const cancel = async () => {
+    const signed = st && st.status === 'signed';
+    if (!(await adminConfirm(signed ? 'Remove the customer\'s signature from this document? Printed copies will show a blank customer line again.' : 'Cancel this signing link? It will stop working straight away.', { title: signed ? 'Remove signature' : 'Cancel link', confirmLabel: signed ? 'Remove signature' : 'Cancel link' }))) return;
+    post('cancel', {});
+  };
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(st.url); adminToast('Link copied', 'success'); }
+    catch { window.prompt('Copy this link:', st.url); }
+  };
+  const label = SIGN_DOC_LABELS[kind];
+  const first = String(customerName || '').trim().split(/\s+/)[0];
+  const shop = adminShopName();
+  const message = st && st.url ? `Hi${first ? ` ${first}` : ''}, please read and sign your ${label}${shop ? ` from ${shop}` : ''} here: ${st.url}` : '';
+  const smsTo = String(phone || '').replace(/[^\d+]/g, '');
+
+  return (
+    <div className="card-paper" style={{ padding: 14, fontSize: 13, lineHeight: 1.6 }}>
+      <div style={{ fontWeight: 600, marginBottom: 6 }}>Customer signature</div>
+      {!st && <div style={{ color: 'var(--ink-2)' }}>Loading…</div>}
+      {st && st.status === 'error' && <div style={{ color: 'var(--rust)' }}>Could not load the signing status.</div>}
+      {st && st.status === 'none' && (
+        <>
+          <div style={{ color: 'var(--ink-2)', marginBottom: 8 }}>Send the customer a link to read and sign this {label} on their phone. You can open the link yourself to check it first; it keeps working until they sign.</div>
+          {dirty && <div className="notice" style={{ fontSize: 12.5, marginBottom: 8 }}>Save your changes first, so the customer signs the latest version.</div>}
+          <button className="btn btn-sm" disabled={busy || dirty} onClick={create}>{busy ? 'Creating…' : 'Create signing link'}</button>
+        </>
+      )}
+      {st && st.status === 'pending' && (
+        <>
+          <div style={{ marginBottom: 8 }}><span className="tag tag-outline">WAITING FOR CUSTOMER</span> <span style={{ color: 'var(--ink-2)' }}>Link made {fmtWhen(st.createdAt)}{st.createdBy ? ` by ${st.createdBy}` : ''}</span></div>
+          {dirty && <div className="notice" style={{ fontSize: 12.5, marginBottom: 8 }}>You have unsaved changes. The customer sees the saved version until you save.</div>}
+          <input className="input" readOnly value={st.url} onFocus={e => e.target.select()} style={{ fontFamily: 'var(--mono, monospace)', fontSize: 12, marginBottom: 8 }} />
+          <div className="row-flex" style={{ gap: 6, flexWrap: 'wrap' }}>
+            <button className="btn btn-sm" onClick={copy}>Copy link</button>
+            <a className="btn btn-ghost btn-sm" style={{ textDecoration: 'none' }} href={st.url} target="_blank" rel="noopener">Open to check ↗</a>
+            {smsTo && <a className="btn btn-ghost btn-sm" style={{ textDecoration: 'none' }} href={`sms:${smsTo}?&body=${encodeURIComponent(message)}`}>Text to {phone}</a>}
+            {email && <a className="btn btn-ghost btn-sm" style={{ textDecoration: 'none' }} href={`mailto:${email}?subject=${encodeURIComponent(`Please sign your ${label}`)}&body=${encodeURIComponent(message)}`}>Email</a>}
+            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--rust)' }} disabled={busy} onClick={cancel}>Cancel link</button>
+          </div>
+        </>
+      )}
+      {st && st.status === 'signed' && (
+        <>
+          <div><span className="tag tag-euc">✓ SIGNED</span> by <strong>{st.signedName}</strong> on {fmtWhen(st.signedAt)}. The link is now closed, and printed copies include their signature.</div>
+          {isManager && (
+            <div className="row-flex" style={{ gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+              <button className="btn btn-ghost btn-sm" disabled={busy} onClick={again}>Ask to sign again</button>
+              <button className="btn btn-ghost btn-sm" style={{ color: 'var(--rust)' }} disabled={busy} onClick={cancel}>Remove signature</button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function AdminDeviceCertificates({ sessionInfo = {} }) {
   const [certs, setCerts] = useState([]);
+  const [signKey, setSignKey] = useState(0);
+  const certSigns = useSignStatuses('cert', `${signKey}:${certs.length}`);
   const [meta, setMeta] = useState({ checks: [], results: {}, outcomes: {} });
   const [signatureOnFile, setSignatureOnFile] = useState(true);
   const [repairJobs, setRepairJobs] = useState([]);
@@ -13978,6 +14074,7 @@ function AdminDeviceCertificates({ sessionInfo = {} }) {
           { key: 'outcome', label: 'Outcome', w: '190px', render: c => c.outcome ? <span className={`tag ${CERT_OUTCOME_TAG[c.outcome] || 'tag-outline'}`}>{(meta.outcomes[c.outcome] || c.outcome).toUpperCase()}</span> : <span style={{ color: 'var(--ink-3)' }}>-</span> },
           { key: 'status', label: 'Status', w: '90px', sort: true, render: c => { const [t, cls] = CERT_STATUS_TAG[c.status] || ['?', 'tag-outline']; return <span className={`tag ${cls}`}>{t}</span>; } },
           { key: 'date', label: 'Date', w: '100px', sort: c => c.issuedAt || c.createdAt || '', render: c => <span className="mono" style={{ fontSize: 11 }}>{fmt(c.issuedAt || c.createdAt)}</span> },
+          { key: 'signed', label: 'Customer', w: '110px', render: c => <SignStatusTag status={certSigns[c.id]} /> },
           { key: 'print', label: '', w: '80px', render: c => <button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); printCert({ id: c.id }); }}>Print</button> },
         ]}
         rows={visible} onRowClick={c => open(c)} />
@@ -14011,6 +14108,7 @@ function AdminDeviceCertificates({ sessionInfo = {} }) {
                 <div className="mono" style={{ marginTop: 8, fontSize: 13 }}>Verification code: <strong>{f.verifyCode}</strong></div>
                 {f.status === 'void' && <div style={{ marginTop: 8, color: 'var(--rust)' }}>Voided {fmt(f.voidedAt)} by {f.voidedBy}: {f.voidReason}</div>}
               </div>
+              {f.status === 'issued' && <CustomerSigning kind="cert" id={f.id} customerName={f.customerName} phone={f.customerPhone} email={f.customerEmail} isManager={isManager} onChange={() => setSignKey(k => k + 1)} />}
               <div className="eyebrow">Checks</div>
               {meta.checks.map(c => (
                 <div key={c.key} style={{ display: 'grid', gridTemplateColumns: '1fr 70px', gap: 8, borderBottom: '1px solid var(--line)', paddingBottom: 6 }}>
@@ -14144,6 +14242,8 @@ const loanItemsTotal = l => (Number(l.loanDeviceValue) || 0) + (l.accessoriesSup
 
 function AdminDeviceLoans({ sessionInfo = {} }) {
   const [loans, setLoans] = useState([]);
+  const [signKey, setSignKey] = useState(0);
+  const loanSigns = useSignStatuses('loan', `${signKey}:${loans.length}`);
   const [devices, setDevices] = useState([]);
   const [signatureOnFile, setSignatureOnFile] = useState(true);
   const [repairJobs, setRepairJobs] = useState([]);
@@ -14342,6 +14442,7 @@ function AdminDeviceLoans({ sessionInfo = {} }) {
             { key: 'ownDevice', label: 'Their device', w: '1.3fr', render: r => <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>{r.ownDevice}{(r.repairJobId || r.orderId) ? ` (${r.repairJobId || r.orderId})` : ''}</span> },
             { key: 'dates', label: 'Lent / due', w: '150px', render: r => <span className="mono" style={{ fontSize: 11 }}>{r.loanDate || '-'}<br />{r.returnedAt ? `back ${r.returnedAt}` : (r.expectedReturn ? `due ${r.expectedReturn}` : 'at collection')}</span> },
             { key: 'status', label: 'Status', w: '150px', render: r => { const [t, c] = loanStatus(r); return <span className={`tag ${c}`}>{t}</span>; } },
+            { key: 'signed', label: 'Customer', w: '110px', render: r => <SignStatusTag status={loanSigns[r.id]} /> },
             { key: 'print', label: '', w: '80px', render: r => <button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); printLoan({ id: r.id }); }}>Print</button> },
           ]}
           rows={visible} onRowClick={r => openLoan(r)} />
@@ -14359,6 +14460,7 @@ function AdminDeviceLoans({ sessionInfo = {} }) {
           </div>}>
           <div style={{ display: 'grid', gap: 14 }}>
             {printBlock && <div className="notice" style={{ fontSize: 12.5 }}>Can't print yet: {printBlock}</div>}
+            {f.id && <CustomerSigning kind="loan" id={f.id} customerName={f.customerName} phone={f.customerPhone} email={f.customerEmail} dirty={dirty} isManager={canDelete} onChange={() => setSignKey(k => k + 1)} />}
 
             <div className="grid-2" style={{ gap: 12 }}>
               <label className="field"><span className="label">Link to</span>
@@ -14501,6 +14603,9 @@ function AdminDeviceLoans({ sessionInfo = {} }) {
 
 function AdminSafetyNotices({ sessionInfo = {} }) {
   const [notices, setNotices] = useState([]);
+  const [signKey, setSignKey] = useState(0);
+  const ddnSigns = useSignStatuses('ddn', `${signKey}:${notices.length}`);
+  const ddnManager = (ROLE_LEVELS[sessionInfo.role] ?? 0) >= ROLE_LEVELS.manager;
   const [edit, setEdit] = useState(null);
   const [form, setForm] = useState({});
   const [repairJobs, setRepairJobs] = useState([]);
@@ -14635,6 +14740,7 @@ function AdminSafetyNotices({ sessionInfo = {} }) {
           { key:'deviceDescription', label:'Device', w:'1.6fr', render:r => <span style={{fontSize:13, color:'var(--ink-2)'}}>{r.deviceDescription || '-'}</span> },
           { key:'repairJobId', label:'Linked to', w:'130px', render:r => <span className="mono" style={{fontSize:11}}>{r.repairJobId || r.orderId || '-'}</span> },
           { key:'createdAt', label:'Raised', w:'130px', render:r => <span className="mono" style={{fontSize:11}}>{r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-AU') : '-'}</span> },
+          { key:'signed', label:'Customer', w:'110px', render:r => <SignStatusTag status={ddnSigns[r.id]} /> },
           { key:'print', label:'', w:'90px', render:r => (
             <button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); printPdf(r); }}>Print</button>
           ) },
@@ -14658,6 +14764,7 @@ function AdminSafetyNotices({ sessionInfo = {} }) {
           </div>}
         >
           <div style={{display:'grid', gap:14}}>
+            {form.id && <CustomerSigning kind="ddn" id={form.id} customerName={form.customerName} phone={form.customerPhone} email={form.customerEmail} dirty={JSON.stringify(form) !== JSON.stringify(edit)} isManager={ddnManager} onChange={() => setSignKey(k => k + 1)} />}
             <div className="grid-2" style={{gap:12}}>
               <label className="field"><span className="label">Link to</span>
                 <select className="select" value={linkType}
