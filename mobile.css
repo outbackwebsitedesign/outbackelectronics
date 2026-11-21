@@ -113,7 +113,7 @@
   .grid-3,
   .grid-4,
   .quote-layout {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: minmax(0, 1fr) !important;
     gap: 20px !important;
   }
 
@@ -147,6 +147,7 @@
   .hero-section { padding-top: 28px !important; padding-bottom: 32px !important; }
   .hero-actions { flex-direction: column; align-items: flex-start; gap: 10px !important; }
   .hero-actions .btn { width: 100%; justify-content: center; }
+  .hero-actions.hero-signup { flex-direction: row; align-items: center; gap: 6px 10px !important; }
   .hero-stats { gap: 20px !important; }
 
   /* Thread list in community page */
@@ -165,7 +166,7 @@
   .policy-nav a.active { border-bottom-color: var(--rust); border-left: none; }
 
   /* Cart, bottom margin clears the fixed checkout bar */
-  .cart-layout { grid-template-columns: 1fr !important; gap: 24px !important; margin-bottom: 84px; }
+  .cart-layout { grid-template-columns: minmax(0, 1fr) !important; gap: 24px !important; margin-bottom: 84px; }
   .cart-header-row { display: none !important; }
   .cart-item-row {
     grid-template-columns: 1fr auto !important;
@@ -210,10 +211,11 @@
   .membership-tiers { grid-template-columns: 1fr !important; gap: 16px !important; }
 
   /* Shop - 2-col product grid on mobile */
-  .shop-layout .grid-3 { grid-template-columns: repeat(2, 1fr) !important; gap: 12px !important; }
+  .shop-layout .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 12px !important; }
+  .shop-layout .grid-3 > * { min-width: 0; }
 
   /* Shop, filters collapsed, full-width products by default */
-  .shop-layout { grid-template-columns: 1fr !important; gap: 0 !important; }
+  .shop-layout { grid-template-columns: minmax(0, 1fr) !important; gap: 0 !important; }
   .shop-filters { display: none; }
   .shop-filters.open {
     display: block;

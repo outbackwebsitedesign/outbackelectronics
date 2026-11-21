@@ -359,7 +359,7 @@ function BookingPage({ go, pageParams }) {
   return (
     <>
       <PageHead crumbs={['Outback','Book']} title={pageCopy.title} lead={pageCopy.lead} />
-      <section className="container" style={{paddingTop: 32, paddingBottom: 60, display:'grid', gridTemplateColumns:'1fr 320px', gap: 48}}>
+      <section className="container quote-layout" style={{paddingTop: 32, paddingBottom: 60, display:'grid', gridTemplateColumns:'1fr 320px', gap: 48}}>
         <form onSubmit={async (e) => {
           e.preventDefault();
           setSubmitError(null);

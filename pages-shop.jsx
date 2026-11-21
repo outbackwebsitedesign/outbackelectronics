@@ -122,24 +122,25 @@ function HomePage({ go, addToCart, portalUser }) {
               {/* Hero copy is editable in admin (Settings, Site Content). The
                   server resolves defaults and {{placeholders}} and hands the
                   finished strings to both this and the server-rendered shell. */}
-              <span className="eyebrow hero-eyebrow">{siteContent.heroEyebrow}</span>
-              <h1 className="serif hero-headline" style={{fontSize: 92, marginTop: 14, lineHeight: 0.95}}>
-                {(siteContent.heroHeadline || '').split('\n').map((line, i, arr) =>
+              {siteContent.heroEyebrow && <span className="eyebrow hero-eyebrow">{siteContent.heroEyebrow}</span>}
+              {/* With no headline saved, the shop's Tagline (Settings, Shop) leads. */}
+              {(siteContent.heroHeadline || shop.tagline) && <h1 className="serif hero-headline" style={{fontSize: 92, marginTop: siteContent.heroEyebrow ? 14 : 0, lineHeight: 0.95}}>
+                {(siteContent.heroHeadline || shop.tagline || '').split('\n').map((line, i, arr) =>
                   i < arr.length - 1
                     ? <React.Fragment key={i}>{line}<br/></React.Fragment>
                     : <span key={i} className="italic" style={{color:'var(--rust)'}}>{line}</span>
                 )}
-              </h1>
-              <p className="hero-sub" style={{marginTop: 22, fontSize: 18, maxWidth: 520, color:'var(--ink-2)'}}>
+              </h1>}
+              {siteContent.heroSub && <p className="hero-sub" style={{marginTop: 22, fontSize: 18, maxWidth: 520, color:'var(--ink-2)'}}>
                 {siteContent.heroSub}
-              </p>
+              </p>}
               <div className="row-flex hero-actions" style={{marginTop: 28}}>
                 <button className="btn btn-rust" onClick={() => go('shop')}>Browse the Shop →</button>
                 <button className="btn btn-ghost" onClick={() => go('services')}>Book a Repair</button>
                 {shop.phone && <span className="mono" style={{fontSize:12, color:'var(--ink-2)'}}>OR · CALL {shop.phone}</span>}
               </div>
               {portalUser === null && (
-                <div className="hero-actions" style={{marginTop:18, display:'flex', alignItems:'center', gap:10, padding:'12px 16px', border:'1px solid var(--line)', background:'var(--paper)', maxWidth:'fit-content', animationDelay:'380ms'}}>
+                <div className="hero-actions hero-signup" style={{marginTop:18, display:'flex', flexWrap:'wrap', alignItems:'center', gap:10, padding:'12px 16px', border:'1px solid var(--line)', background:'var(--paper)', maxWidth:'fit-content', animationDelay:'380ms'}}>
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{color:'var(--ink-3)', flexShrink:0}}><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>
                   <span style={{fontSize:13, color:'var(--ink-2)'}}>New customer?</span>
                   <a href={`${shop._portalUrl || 'https://portal.outbackelectronics.com.au'}/?tab=register`} style={{fontSize:13, color:'var(--rust)', fontWeight:600, textDecoration:'none'}}>Create a free account</a>

@@ -2993,7 +2993,7 @@ function ssrHomeBody(b) {
   const sc = getSiteContent();
   // Matches the SPA: every line but the last is a plain line, the last renders
   // italic in the accent colour.
-  const headline = String(sc.heroHeadline || '').split('\n').map((line, i, arr) =>
+  const headline = String(sc.heroHeadline || b.tagline || '').split('\n').map((line, i, arr) =>
     i < arr.length - 1
       ? `${escHtml(line)}<br />`
       : `<span class="italic" style="color:var(--rust);">${escHtml(line)}</span>`
