@@ -4139,13 +4139,88 @@ function auspostTrackingRequest(trackingNumber) {
   });
 }
 
+// Parcel tracking through TrackingMore (trackingmore.com), a tracking service
+// that covers Australia Post without an eParcel contract. Its free plan counts
+// each new tracking number once a month; looking a number up again is free.
+// The key lives in Settings, Integrations (the "TrackingMore" row).
+const TRACKINGMORE_COURIER = 'australia-post';
+const TRACKINGMORE_STATUS_LABELS = {
+  pending: 'Waiting for the first scan', notfound: 'Not found yet', inforeceived: 'Label created, awaiting pickup',
+  transit: 'In transit', pickup: 'Out for delivery or ready to collect', delivered: 'Delivered',
+  undelivered: 'Delivery attempted', exception: 'Delivery problem', expired: 'Tracking expired',
+};
+function getTrackingMoreKey() {
+  try {
+    const entry = readSettings().integrations.find(r => r[0] === 'TrackingMore' && r[2] !== false);
+    return entry?.[3]?.apiKey || process.env.TRACKINGMORE_API_KEY || '';
+  } catch { return process.env.TRACKINGMORE_API_KEY || ''; }
+}
+function trackingMoreRequest(apiKey, method, path, body) {
+  return new Promise((resolve) => {
+    const payload = body ? JSON.stringify(body) : null;
+    const req = https.request({
+      hostname: 'api.trackingmore.com', path: `/v4/${path}`, method,
+      headers: { 'Tracking-Api-Key': apiKey, 'Content-Type': 'application/json', 'Accept': 'application/json', ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}) },
+    }, (res) => {
+      let data = '';
+      res.on('data', d => { data += d; });
+      res.on('end', () => { let json = null; try { json = JSON.parse(data); } catch {} resolve({ status: res.statusCode, body: json }); });
+    });
+    req.on('error', () => resolve({ status: 0, body: null }));
+    req.setTimeout(10000, () => { req.destroy(); resolve({ status: 0, body: null }); });
+    if (payload) req.write(payload);
+    req.end();
+  });
+}
+function trackingMoreError(resp) {
+  const code = Number(resp.body?.meta?.code) || resp.status;
+  if (!resp.status) return 'Could not reach TrackingMore. Try again shortly.';
+  if (code === 401 || resp.status === 401) return 'TrackingMore refused the API key. Check it in Settings, Integrations.';
+  if (code === 4190) return 'The TrackingMore plan has used its tracking allowance for this month.';
+  if (code === 429) return 'TrackingMore is busy. Try again in a minute.';
+  if (code === 4120 || code === 4121 || code === 4122) return 'TrackingMore does not recognise this as an Australia Post tracking number. Check the number.';
+  return `TrackingMore returned an error${resp.body?.meta?.message ? `: ${resp.body.meta.message}` : ` (status ${resp.status})`}.`;
+}
+// Turns a TrackingMore tracking record into { status, raw, events }, newest event first.
+function parseTrackingMore(t) {
+  const status = String(t.delivery_status || '').toLowerCase();
+  const seen = new Set();
+  const events = [...(t.origin_info?.trackinfo || []), ...(t.destination_info?.trackinfo || [])]
+    .map(e => ({ description: String(e.tracking_detail || e.checkpoint_delivery_status || '').trim(), date: String(e.checkpoint_date || ''), location: String(e.location || '').trim() }))
+    .filter(e => e.description && !seen.has(e.date + e.description) && seen.add(e.date + e.description))
+    .sort((a, b) => (Date.parse(b.date) || 0) - (Date.parse(a.date) || 0));
+  return { status, raw: TRACKINGMORE_STATUS_LABELS[status] || (status ? status.charAt(0).toUpperCase() + status.slice(1) : 'No updates yet'), events, source: 'trackingmore' };
+}
+async function trackingMoreLookup(apiKey, order, trackingNumber) {
+  const q = `trackings/get?${new URLSearchParams({ tracking_numbers: trackingNumber, courier_code: TRACKINGMORE_COURIER })}`;
+  let resp = await trackingMoreRequest(apiKey, 'GET', q);
+  const found = resp.status === 200 && Array.isArray(resp.body?.data) ? resp.body.data.find(t => String(t.tracking_number || '').toUpperCase() === trackingNumber.toUpperCase()) : null;
+  if (found) return parseTrackingMore(found);
+  if (resp.status !== 200 && Number(resp.body?.meta?.code) !== 4102) return { error: trackingMoreError(resp) };
+  // Not registered yet: add it (this is what counts against the monthly allowance).
+  resp = await trackingMoreRequest(apiKey, 'POST', 'trackings/create', { tracking_number: trackingNumber, courier_code: TRACKINGMORE_COURIER, order_number: order.id || undefined, customer_name: order.cust || undefined });
+  const code = Number(resp.body?.meta?.code);
+  if ((resp.status === 200 || resp.status === 201) && resp.body?.data) return parseTrackingMore(resp.body.data);
+  if (code === 4101) return { status: 'pending', raw: TRACKINGMORE_STATUS_LABELS.pending, events: [], source: 'trackingmore' };
+  return { error: trackingMoreError(resp) };
+}
+// Whether a tracking status means the parcel has arrived ("undelivered" does not).
+function isDeliveredStatus(status) {
+  const s = String(status || '').toLowerCase();
+  return /\bdelivered\b|\bcomplete/.test(s) && !/undelivered|not delivered/.test(s);
+}
+
 // Returns the tracking result, or { error } saying why it could not be fetched.
+// TrackingMore is used when its key is set; otherwise Australia Post directly,
+// which only works for eParcel or StarTrack contract accounts.
 async function checkOrderTracking(order, trackingNumber = order.trackingNumber) {
   if (!trackingNumber) return { error: 'Add the tracking number first.' };
+  const tmKey = getTrackingMoreKey();
+  if (tmKey) return trackingMoreLookup(tmKey, order, String(trackingNumber).trim());
   const resp = await auspostTrackingRequest(trackingNumber);
-  if (!resp) return { error: 'No Australia Post API key is set in Settings, Integrations.' };
+  if (!resp) return { error: 'Parcel tracking is not set up. Add a TrackingMore API key in Settings, Integrations.' };
   if (!resp.status) return { error: 'Could not reach Australia Post. Try again shortly.' };
-  if (resp.status === 401 || resp.status === 403) return { error: 'Australia Post refused the API key for tracking. Tracking needs an eParcel or StarTrack contract account; the postage calculator key does not include it. Use the tracking link instead.' };
+  if (resp.status === 401 || resp.status === 403) return { error: 'Australia Post refused the API key for tracking (it needs an eParcel or StarTrack contract). Add a free TrackingMore API key in Settings, Integrations instead.' };
   if (resp.status === 404) return { error: 'Australia Post has no record of this tracking number yet.' };
   if (resp.status !== 200 || !resp.body) return { error: `Australia Post returned an error (status ${resp.status}).` };
   const shipments = resp.body.shipments || [];
@@ -4168,7 +4243,7 @@ async function pollShippedOrders() {
     const idx = orders.findIndex(o => o.id === order.id);
     if (idx < 0) continue;
     orders[idx] = { ...orders[idx], lastTrackingStatus: tracking.raw, lastTrackingCheck: new Date().toISOString(), trackingEvents: tracking.events };
-    if (tracking.status.includes('delivered') || tracking.status.includes('complete')) {
+    if (isDeliveredStatus(tracking.status)) {
       orders[idx].fulfilment = 'fulfilled';
       changed = true;
       if (order.email) {
@@ -9993,7 +10068,7 @@ const adminServer = http.createServer(async (req, res) => {
     if (tracking.error) return json(res, 502, { error: 'tracking_unavailable', message: tracking.error });
     const nowStr = new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
     const update = { lastTrackingStatus: tracking.raw, lastTrackingCheck: new Date().toISOString(), trackingEvents: tracking.events };
-    if (tracking.status.includes('delivered') || tracking.status.includes('complete')) {
+    if (isDeliveredStatus(tracking.status)) {
       update.fulfilment = 'fulfilled';
       if (order.email && order.fulfilment !== 'fulfilled') {
         const tmpl = emailOrderDelivered({ orderId: order.id, customerName: order.cust, trackingNumber: order.trackingNumber });
@@ -14031,6 +14106,12 @@ function migrateEnvToSettings() {
     s.integrations.push(['AusPost', 'digitalapi.auspost.com.au', !!(AUSPOST_API_KEY), {
       apiKey: '',
     }]);
+    changed = true;
+  }
+
+  // Parcel tracking. Added disconnected; Connect it and paste the key to use it.
+  if (!s.integrations.find(r => r[0] === 'TrackingMore')) {
+    s.integrations.push(['TrackingMore', 'api.trackingmore.com', !!process.env.TRACKINGMORE_API_KEY, { apiKey: '', notes: 'Parcel tracking for Australia Post. Free plan: 50 new parcels a month.' }]);
     changed = true;
   }
 

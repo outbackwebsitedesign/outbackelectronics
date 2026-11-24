@@ -684,10 +684,31 @@ function OrderDetail({ o, onPay, onPayInstallment, paying, onCollapse }) {
               );
             })}
           </div>
+          {/* Parcel progress, kept up to date by the shop's tracking check. */}
+          {o.trackingNumber && o.lastTrackingStatus && (
+            <div style={{marginTop:14, padding:'12px 14px', border:'1px solid var(--line)', background:'var(--paper)'}}>
+              <div className="mono" style={{fontSize:10, color:'var(--ink-3)', letterSpacing:'.08em'}}>PARCEL · {o.trackingNumber}</div>
+              <div style={{fontSize:15, fontWeight:600, marginTop:4}}>{o.lastTrackingStatus}</div>
+              {(o.trackingEvents || []).length > 0 && (
+                <ol style={{listStyle:'none', margin:'10px 0 0', padding:0, display:'grid', gap:8}}>
+                  {(o.trackingEvents || []).slice(0, 6).map((e, i) => (
+                    <li key={i} style={{display:'grid', gridTemplateColumns:'12px minmax(0,1fr)', gap:10, alignItems:'start'}}>
+                      <span style={{width:8, height:8, borderRadius:'50%', marginTop:5, background: i === 0 ? 'var(--rust)' : 'var(--line)'}} />
+                      <span style={{fontSize:13, lineHeight:1.5}}>
+                        {e.description}
+                        <span style={{display:'block', fontSize:11.5, color:'var(--ink-3)'}}>{[e.location, e.date ? new Date(e.date).toLocaleString('en-AU', { day:'numeric', month:'short', hour:'numeric', minute:'2-digit' }) : ''].filter(Boolean).join(' · ')}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+              {o.lastTrackingCheck && <div style={{fontSize:11, color:'var(--ink-3)', marginTop:8}}>Updated {new Date(o.lastTrackingCheck).toLocaleString('en-AU', { day:'numeric', month:'short', hour:'numeric', minute:'2-digit' })}</div>}
+            </div>
+          )}
           {trackingUrl && (
             <div style={{marginTop:12, textAlign:'center'}}>
               <a href={trackingUrl} target="_blank" rel="noreferrer" style={{fontSize:13, color:'var(--rust)', fontWeight:600}}>
-                Track with Australia Post ↗
+                {o.lastTrackingStatus ? 'Full details on Australia Post ↗' : 'Track with Australia Post ↗'}
               </a>
             </div>
           )}

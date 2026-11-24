@@ -2126,22 +2126,27 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
         if (f === 'shipped') return (
           <div style={{padding:'14px', background:'var(--bg-elev)', border:'1px solid var(--line)', marginBottom:14}}>
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8}}>
-              <div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>AUSPOST TRACKING</div>
+              <div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>PARCEL TRACKING</div>
               <button className="btn btn-ghost btn-sm" style={{fontSize:11}} onClick={checkTracking} disabled={trackingBusy}>{trackingBusy ? 'Checking…' : 'Check now'}</button>
             </div>
-            {trackingResult && !trackingResult.error && (
-              <div style={{marginBottom:8}}>
-                <div style={{fontSize:13, fontWeight:600, marginBottom:4}}>{trackingResult.raw}</div>
-                {(trackingResult.events || []).slice(0,3).map((e,i) => (
-                  <div key={i} style={{fontSize:11, color:'var(--ink-2)', padding:'3px 0', borderTop: i > 0 ? '1px solid var(--line)' : 'none'}}>
-                    {e.date && <span className="mono" style={{color:'var(--ink-3)', marginRight:8}}>{e.date}</span>}
-                    {e.description}{e.location ? ` - ${e.location}` : ''}
-                  </div>
-                ))}
-              </div>
-            )}
+            {(() => {
+              // The fresh result after Check now, else what was saved by the last check.
+              const shown = trackingResult && !trackingResult.error ? trackingResult
+                : form.lastTrackingStatus ? { raw: form.lastTrackingStatus, events: form.trackingEvents || [], saved: true } : null;
+              const when = d => { const t = Date.parse(d); return Number.isFinite(t) ? new Date(t).toLocaleString('en-AU', { day:'numeric', month:'short', hour:'numeric', minute:'2-digit' }) : d; };
+              return shown && (
+                <div style={{marginBottom:8}}>
+                  <div style={{fontSize:13, fontWeight:600, marginBottom:4}}>{shown.saved ? 'Last known: ' : ''}{shown.raw}</div>
+                  {(shown.events || []).slice(0,3).map((e,i) => (
+                    <div key={i} style={{fontSize:11, color:'var(--ink-2)', padding:'3px 0', borderTop: i > 0 ? '1px solid var(--line)' : 'none'}}>
+                      {e.date && <span className="mono" style={{color:'var(--ink-3)', marginRight:8}}>{when(e.date)}</span>}
+                      {e.description}{e.location ? ` - ${e.location}` : ''}
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
             {trackingResult?.error && <div style={{fontSize:12, color:'var(--rust)', marginBottom:8}}>{trackingResult.error}</div>}
-            {form.lastTrackingStatus && !trackingResult && <div style={{fontSize:12, color:'var(--ink-2)', marginBottom:8}}>Last known: <strong>{form.lastTrackingStatus}</strong></div>}
             <button className="btn btn-sm" style={{background:'#345526', color:'#fff', border:'none'}} onClick={() => saveNow({ fulfilment:'fulfilled' })}>Mark as Delivered manually <Icon name="chevronRight" size={11}/></button>
           </div>
         );

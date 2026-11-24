@@ -152,6 +152,7 @@ All optional, and all degrade gracefully when unset (feature disabled, no crash)
 |-------------|----------|
 | Stripe | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PUBLISHABLE_KEY` |
 | Australia Post | `AUSPOST_API_KEY` |
+| Parcel tracking (TrackingMore) | Settings → Integrations (env fallback: `TRACKINGMORE_API_KEY`); Australia Post's own tracking API needs an eParcel contract |
 | SMTP | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `NOTIFY_EMAIL` |
 | Discourse SSO | `DISCOURSE_CONNECT_SECRET`, `FORUM_PUBLIC_URL` |
 | Icecat | Settings → Integrations (env fallback: `ICECAT_USERNAME`, `ICECAT_APP_KEY`) |
