@@ -652,7 +652,8 @@ function AdminSidebar({ section, setSection, onSignOut, role, username }) {
       <button
         onClick={() => setMobileOpen(o => !o)}
         style={{
-          display:'none', position:'fixed', top:14, left:14, zIndex:300,
+          // Below drawers (200) so it never covers a drawer's form.
+          display:'none', position:'fixed', top:14, left:14, zIndex:190,
           width:40, height:40, background:'#0f0d0a', border:'1px solid #2a241c',
           color:'var(--ochre)', cursor:'pointer', alignItems:'center', justifyContent:'center',
         }}
@@ -1465,15 +1466,18 @@ function ExpenseRow({ e, isEditing, expenseForm, setExpenseForm, setExpenseEdit,
     <div key={e.id} role="button" tabIndex={0} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 12px', background:'var(--bg-elev)', border:'1px solid var(--line)', marginBottom:6, cursor:'pointer', gap:10}}
       onClick={() => { setExpenseEdit(e.id); setExpenseForm({...e}); }}
       onKeyDown={e2 => { if (e2.key==='Enter'||e2.key===' ') { e2.preventDefault(); setExpenseEdit(e.id); setExpenseForm({...e}); } }}>
+      {/* Name on its own line, then the details in one wrapping row, so every
+          expense lines up the same way whatever the name's length. */}
       <div style={{flex:1, minWidth:0}}>
-        <span style={{fontSize:13, fontWeight:500}}>{e.description}</span>
-        {Number(e.quantity) > 1 && <span className="mono" style={{fontSize:10, color:'var(--ink-3)', marginLeft:8}}>×{e.quantity}</span>}
-        {e.category && <span className="mono" style={{fontSize:10, color:'var(--ink-3)', marginLeft:8}}>{e.category.toUpperCase()}</span>}
-        {e.partStatus && (() => { const s = PART_STATUS_COLORS[e.partStatus]; return <span className="tag" style={{background:s?.bg,color:s?.fg,borderColor:s?.bg,marginLeft:8,fontSize:10}}>{e.partStatus.toUpperCase()}</span>; })()}
+        <div style={{fontSize:13, fontWeight:500}}>{e.description}{Number(e.quantity) > 1 && <span className="mono" style={{fontSize:10, color:'var(--ink-3)', marginLeft:8}}>×{e.quantity}</span>}</div>
+        <div style={{display:'flex', flexWrap:'wrap', alignItems:'center', gap:'4px 8px', marginTop:3}}>
+          {e.category && <span className="mono" style={{fontSize:10, color:'var(--ink-3)'}}>{e.category.toUpperCase()}</span>}
+          {e.partStatus && (() => { const s = PART_STATUS_COLORS[e.partStatus]; return <span className="tag" style={{background:s?.bg,color:s?.fg,borderColor:s?.bg,fontSize:10}}>{e.partStatus.toUpperCase()}</span>; })()}
+          <span className="mono" style={{fontSize:10, color:'var(--ink-3)'}}>{e.date}</span>
+        </div>
         {e.notes && <div style={{fontSize:11, color:'var(--ink-3)', marginTop:2}}>{e.notes}</div>}
       </div>
       <div style={{display:'flex', gap:12, alignItems:'center', flexShrink:0}}>
-        <span className="mono" style={{fontSize:11, color:'var(--ink-3)'}}>{e.date}</span>
         {e.partStatus === 'returned'
           ? <span className="mono" style={{fontWeight:600}}>
               <span style={{textDecoration:'line-through', color:'var(--ink-3)', marginRight:6}}>-${expTotal(e).toLocaleString('en-AU',{minimumFractionDigits:2})}</span>
@@ -1749,7 +1753,7 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
 
   const checkTracking = async () => {
     setTrackingBusy(true); setTrackingResult(null);
-    const r = await fetch('/api/admin/orders/check-tracking', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: form.id }) }).catch(()=>null);
+    const r = await fetch('/api/admin/orders/check-tracking', { method:'POST', headers:postHeaders(), credentials:'include', body: JSON.stringify({ id: form.id, trackingNumber: form.trackingNumber || '' }) }).catch(()=>null);
     setTrackingBusy(false);
     if (!r) { setTrackingResult({ error: 'Network error.' }); return; }
     const d = await r.json().catch(()=>({}));
@@ -2246,7 +2250,7 @@ function OrderDrawer({ edit, expenses, customers, services = [], onClose, onRowU
           </div>
         )}
         {linkedExpenses.length > 0 && (
-          <div style={{display:'flex', gap:24, padding:'10px 14px', background: profit >= 0 ? '#d8e7d0' : '#f3d5c5', marginTop:4, flexWrap:'wrap'}}>
+          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(96px, 1fr))', gap:'10px 16px', padding:'10px 14px', background: profit >= 0 ? '#d8e7d0' : '#f3d5c5', marginTop:4}}>
             <div><div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>ORDER TOTAL</div><div className="mono" style={{fontSize:14, fontWeight:600, color:'var(--ink-1)'}}>${(Number(form.total)||0).toLocaleString('en-AU',{minimumFractionDigits:2})}</div></div>
             <div><div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>PAID</div><div className="mono" style={{fontSize:14, fontWeight:600, color:'var(--ink-1)'}}>${amountPaid.toLocaleString('en-AU',{minimumFractionDigits:2})}</div></div>
             <div><div className="mono" style={{fontSize:10, color:'var(--ink-2)'}}>PARTS COST</div><div className="mono" style={{fontSize:14, fontWeight:600, color:'var(--rust)'}}>-${partsCost.toLocaleString('en-AU',{minimumFractionDigits:2})}</div></div>

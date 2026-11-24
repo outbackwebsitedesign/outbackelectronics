@@ -4128,23 +4128,29 @@ function auspostTrackingRequest(trackingNumber) {
       let data = '';
       res.on('data', d => { data += d; });
       res.on('end', () => {
-        try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
-        catch { resolve(null); }
+        let body = null;
+        try { body = JSON.parse(data); } catch {}
+        resolve({ status: res.statusCode, body });
       });
     });
-    req.on('error', () => resolve(null));
-    req.setTimeout(8000, () => { req.destroy(); resolve(null); });
+    req.on('error', () => resolve({ status: 0, body: null }));
+    req.setTimeout(8000, () => { req.destroy(); resolve({ status: 0, body: null }); });
     req.end();
   });
 }
 
-async function checkOrderTracking(order) {
-  if (!order.trackingNumber) return null;
-  const resp = await auspostTrackingRequest(order.trackingNumber);
-  if (!resp || resp.status !== 200 || !resp.body) return null;
+// Returns the tracking result, or { error } saying why it could not be fetched.
+async function checkOrderTracking(order, trackingNumber = order.trackingNumber) {
+  if (!trackingNumber) return { error: 'Add the tracking number first.' };
+  const resp = await auspostTrackingRequest(trackingNumber);
+  if (!resp) return { error: 'No Australia Post API key is set in Settings, Integrations.' };
+  if (!resp.status) return { error: 'Could not reach Australia Post. Try again shortly.' };
+  if (resp.status === 401 || resp.status === 403) return { error: 'Australia Post refused the API key for tracking. Tracking needs an eParcel or StarTrack contract account; the postage calculator key does not include it. Use the tracking link instead.' };
+  if (resp.status === 404) return { error: 'Australia Post has no record of this tracking number yet.' };
+  if (resp.status !== 200 || !resp.body) return { error: `Australia Post returned an error (status ${resp.status}).` };
   const shipments = resp.body.shipments || [];
   const shipment = shipments[0];
-  if (!shipment) return null;
+  if (!shipment) return { error: 'Australia Post has no record of this tracking number yet.' };
   const status = (shipment.status || '').toLowerCase();
   const events = (shipment.events || []).map(e => ({ description: e.description, date: e.date, location: e.location }));
   return { status, events, raw: shipment.status };
@@ -4158,7 +4164,7 @@ async function pollShippedOrders() {
   const nowStr = new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
   for (const order of shipped) {
     const tracking = await checkOrderTracking(order);
-    if (!tracking) continue;
+    if (tracking.error) continue;
     const idx = orders.findIndex(o => o.id === order.id);
     if (idx < 0) continue;
     orders[idx] = { ...orders[idx], lastTrackingStatus: tracking.raw, lastTrackingCheck: new Date().toISOString(), trackingEvents: tracking.events };
@@ -4177,13 +4183,12 @@ async function pollShippedOrders() {
 
 setInterval(() => { pollShippedOrders().catch(() => {}); }, 2 * 60 * 60 * 1000);
 
+// The shop's postcode from Settings, Shop, or '' when it is not set.
 function getShopPostcode() {
   try {
-    const s = readSettings();
-    const addr = s.shop?.address || '';
-    const m = addr.match(/\b(\d{4})\b/);
-    return m ? m[1] : '2731';
-  } catch { return '2731'; }
+    const pc = String(getBusinessIdentity().postcode || '').trim();
+    return /^\d{4}$/.test(pc) ? pc : '';
+  } catch { return ''; }
 }
 
 // Computes a live AusPost parcel quote for a set of cart line items. Shared by
@@ -4223,6 +4228,7 @@ async function fetchAuspostServices(toPostcode, items, catalogProducts) {
   if (!auspostKey) return { hasPhysical: true, error: 'auspost_not_configured' };
 
   const fromPostcode = getShopPostcode();
+  if (!fromPostcode) { console.error('[shipping] no shop postcode in Settings, Shop'); return { hasPhysical: true, error: 'auspost_not_configured' }; }
   const params = new URLSearchParams({
     from_postcode: fromPostcode,
     to_postcode: String(toPostcode).trim(),
@@ -9981,9 +9987,10 @@ const adminServer = http.createServer(async (req, res) => {
     const idx = orders.findIndex(o => o.id === body.id);
     if (idx < 0) return json(res, 404, { error: 'not_found' });
     const order = orders[idx];
-    if (!order.trackingNumber) return json(res, 400, { error: 'no_tracking_number' });
-    const tracking = await checkOrderTracking(order);
-    if (!tracking) return json(res, 502, { error: 'tracking_unavailable', message: 'Could not reach Australia Post tracking. Check your AusPost API key in Settings → Integrations.' });
+    // The number in the form is checked even before the order is saved.
+    const trackingNumber = String(body.trackingNumber || order.trackingNumber || '').trim();
+    const tracking = await checkOrderTracking(order, trackingNumber);
+    if (tracking.error) return json(res, 502, { error: 'tracking_unavailable', message: tracking.error });
     const nowStr = new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
     const update = { lastTrackingStatus: tracking.raw, lastTrackingCheck: new Date().toISOString(), trackingEvents: tracking.events };
     if (tracking.status.includes('delivered') || tracking.status.includes('complete')) {
